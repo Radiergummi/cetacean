@@ -119,8 +119,11 @@ func (c *Cache) ListNodes() []swarm.Node {
 
 func (c *Cache) SetService(s swarm.Service) {
 	c.mu.Lock()
+	if old, ok := c.services[s.ID]; ok {
+		c.removeFromStack("service", old.ID, old.Spec.Labels)
+	}
 	c.services[s.ID] = s
-	c.rebuildStacks()
+	c.addToStack("service", s.ID, s.Spec.Labels)
 	c.mu.Unlock()
 	c.notify(Event{Type: "service", Action: "update", ID: s.ID, Resource: s})
 }
@@ -134,8 +137,10 @@ func (c *Cache) GetService(id string) (swarm.Service, bool) {
 
 func (c *Cache) DeleteService(id string) {
 	c.mu.Lock()
+	if old, ok := c.services[id]; ok {
+		c.removeFromStack("service", id, old.Spec.Labels)
+	}
 	delete(c.services, id)
-	c.rebuildStacks()
 	c.mu.Unlock()
 	c.notify(Event{Type: "service", Action: "remove", ID: id})
 }
@@ -230,8 +235,11 @@ func (c *Cache) ListTasks() []swarm.Task {
 
 func (c *Cache) SetConfig(cfg swarm.Config) {
 	c.mu.Lock()
+	if old, ok := c.configs[cfg.ID]; ok {
+		c.removeFromStack("config", old.ID, old.Spec.Labels)
+	}
 	c.configs[cfg.ID] = cfg
-	c.rebuildStacks()
+	c.addToStack("config", cfg.ID, cfg.Spec.Labels)
 	c.mu.Unlock()
 	c.notify(Event{Type: "config", Action: "update", ID: cfg.ID, Resource: cfg})
 }
@@ -245,8 +253,10 @@ func (c *Cache) GetConfig(id string) (swarm.Config, bool) {
 
 func (c *Cache) DeleteConfig(id string) {
 	c.mu.Lock()
+	if old, ok := c.configs[id]; ok {
+		c.removeFromStack("config", id, old.Spec.Labels)
+	}
 	delete(c.configs, id)
-	c.rebuildStacks()
 	c.mu.Unlock()
 	c.notify(Event{Type: "config", Action: "remove", ID: id})
 }
@@ -265,8 +275,11 @@ func (c *Cache) ListConfigs() []swarm.Config {
 
 func (c *Cache) SetSecret(s swarm.Secret) {
 	c.mu.Lock()
+	if old, ok := c.secrets[s.ID]; ok {
+		c.removeFromStack("secret", old.ID, old.Spec.Labels)
+	}
 	c.secrets[s.ID] = s
-	c.rebuildStacks()
+	c.addToStack("secret", s.ID, s.Spec.Labels)
 	c.mu.Unlock()
 	c.notify(Event{Type: "secret", Action: "update", ID: s.ID, Resource: s})
 }
@@ -280,8 +293,10 @@ func (c *Cache) GetSecret(id string) (swarm.Secret, bool) {
 
 func (c *Cache) DeleteSecret(id string) {
 	c.mu.Lock()
+	if old, ok := c.secrets[id]; ok {
+		c.removeFromStack("secret", id, old.Spec.Labels)
+	}
 	delete(c.secrets, id)
-	c.rebuildStacks()
 	c.mu.Unlock()
 	c.notify(Event{Type: "secret", Action: "remove", ID: id})
 }
@@ -300,8 +315,11 @@ func (c *Cache) ListSecrets() []swarm.Secret {
 
 func (c *Cache) SetNetwork(n network.Summary) {
 	c.mu.Lock()
+	if old, ok := c.networks[n.ID]; ok {
+		c.removeFromStack("network", old.ID, old.Labels)
+	}
 	c.networks[n.ID] = n
-	c.rebuildStacks()
+	c.addToStack("network", n.ID, n.Labels)
 	c.mu.Unlock()
 	c.notify(Event{Type: "network", Action: "update", ID: n.ID, Resource: n})
 }
@@ -315,8 +333,10 @@ func (c *Cache) GetNetwork(id string) (network.Summary, bool) {
 
 func (c *Cache) DeleteNetwork(id string) {
 	c.mu.Lock()
+	if old, ok := c.networks[id]; ok {
+		c.removeFromStack("network", id, old.Labels)
+	}
 	delete(c.networks, id)
-	c.rebuildStacks()
 	c.mu.Unlock()
 	c.notify(Event{Type: "network", Action: "remove", ID: id})
 }
@@ -335,8 +355,11 @@ func (c *Cache) ListNetworks() []network.Summary {
 
 func (c *Cache) SetVolume(v volume.Volume) {
 	c.mu.Lock()
+	if old, ok := c.volumes[v.Name]; ok {
+		c.removeFromStack("volume", old.Name, old.Labels)
+	}
 	c.volumes[v.Name] = v
-	c.rebuildStacks()
+	c.addToStack("volume", v.Name, v.Labels)
 	c.mu.Unlock()
 	c.notify(Event{Type: "volume", Action: "update", ID: v.Name, Resource: v})
 }
@@ -350,8 +373,10 @@ func (c *Cache) GetVolume(name string) (volume.Volume, bool) {
 
 func (c *Cache) DeleteVolume(name string) {
 	c.mu.Lock()
+	if old, ok := c.volumes[name]; ok {
+		c.removeFromStack("volume", name, old.Labels)
+	}
 	delete(c.volumes, name)
-	c.rebuildStacks()
 	c.mu.Unlock()
 	c.notify(Event{Type: "volume", Action: "remove", ID: name})
 }
@@ -419,6 +444,80 @@ func (c *Cache) GetStackDetail(name string) (StackDetail, bool) {
 		}
 	}
 	return detail, true
+}
+
+const stackLabel = "com.docker.stack.namespace"
+
+// addToStack incrementally adds a resource to the appropriate stack. Must be called with c.mu held for writing.
+func (c *Cache) addToStack(resource, id string, labels map[string]string) {
+	ns, ok := labels[stackLabel]
+	if !ok {
+		return
+	}
+	s, exists := c.stacks[ns]
+	if !exists {
+		s = Stack{Name: ns}
+	}
+	switch resource {
+	case "service":
+		s.Services = appendUnique(s.Services, id)
+	case "config":
+		s.Configs = appendUnique(s.Configs, id)
+	case "secret":
+		s.Secrets = appendUnique(s.Secrets, id)
+	case "network":
+		s.Networks = appendUnique(s.Networks, id)
+	case "volume":
+		s.Volumes = appendUnique(s.Volumes, id)
+	}
+	c.stacks[ns] = s
+}
+
+// removeFromStack incrementally removes a resource from its stack. Must be called with c.mu held for writing.
+func (c *Cache) removeFromStack(resource, id string, labels map[string]string) {
+	ns, ok := labels[stackLabel]
+	if !ok {
+		return
+	}
+	s, exists := c.stacks[ns]
+	if !exists {
+		return
+	}
+	switch resource {
+	case "service":
+		s.Services = removeStr(s.Services, id)
+	case "config":
+		s.Configs = removeStr(s.Configs, id)
+	case "secret":
+		s.Secrets = removeStr(s.Secrets, id)
+	case "network":
+		s.Networks = removeStr(s.Networks, id)
+	case "volume":
+		s.Volumes = removeStr(s.Volumes, id)
+	}
+	if len(s.Services)+len(s.Configs)+len(s.Secrets)+len(s.Networks)+len(s.Volumes) == 0 {
+		delete(c.stacks, ns)
+	} else {
+		c.stacks[ns] = s
+	}
+}
+
+func appendUnique(sl []string, v string) []string {
+	for _, s := range sl {
+		if s == v {
+			return sl
+		}
+	}
+	return append(sl, v)
+}
+
+func removeStr(sl []string, v string) []string {
+	for i, s := range sl {
+		if s == v {
+			return append(sl[:i], sl[i+1:]...)
+		}
+	}
+	return sl
 }
 
 // rebuildStacks must be called with c.mu held for writing.
