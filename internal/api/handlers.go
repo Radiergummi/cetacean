@@ -62,7 +62,14 @@ func (h *Handlers) HandleCluster(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 	nodes := h.cache.ListNodes()
 	nodes = searchFilter(nodes, r.URL.Query().Get("search"), func(n swarm.Node) string { return n.Description.Hostname })
-	writeJSON(w, nodes)
+	p := parsePagination(r)
+	nodes = sortItems(nodes, p.Sort, p.Dir, map[string]func(swarm.Node) string{
+		"hostname":     func(n swarm.Node) string { return n.Description.Hostname },
+		"role":         func(n swarm.Node) string { return string(n.Spec.Role) },
+		"status":       func(n swarm.Node) string { return string(n.Status.State) },
+		"availability": func(n swarm.Node) string { return string(n.Spec.Availability) },
+	})
+	writeJSON(w, applyPagination(nodes, p))
 }
 
 func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
@@ -90,7 +97,17 @@ func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 	services := h.cache.ListServices()
 	services = searchFilter(services, r.URL.Query().Get("search"), func(s swarm.Service) string { return s.Spec.Name })
-	writeJSON(w, services)
+	p := parsePagination(r)
+	services = sortItems(services, p.Sort, p.Dir, map[string]func(swarm.Service) string{
+		"name": func(s swarm.Service) string { return s.Spec.Name },
+		"mode": func(s swarm.Service) string {
+			if s.Spec.Mode.Global != nil {
+				return "Global"
+			}
+			return "Replicated"
+		},
+	})
+	writeJSON(w, applyPagination(services, p))
 }
 
 func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
@@ -128,7 +145,14 @@ func (h *Handlers) HandleServiceLogs(w http.ResponseWriter, r *http.Request) {
 // --- Tasks ---
 
 func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, h.cache.ListTasks())
+	tasks := h.cache.ListTasks()
+	p := parsePagination(r)
+	tasks = sortItems(tasks, p.Sort, p.Dir, map[string]func(swarm.Task) string{
+		"state":   func(t swarm.Task) string { return string(t.Status.State) },
+		"service": func(t swarm.Task) string { return t.ServiceID },
+		"node":    func(t swarm.Task) string { return t.NodeID },
+	})
+	writeJSON(w, applyPagination(tasks, p))
 }
 
 func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
@@ -288,7 +312,11 @@ func (h *Handlers) serveLogsSSE(w http.ResponseWriter, r *http.Request, fetch lo
 func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
 	stacks := h.cache.ListStacks()
 	stacks = searchFilter(stacks, r.URL.Query().Get("search"), func(s cache.Stack) string { return s.Name })
-	writeJSON(w, stacks)
+	p := parsePagination(r)
+	stacks = sortItems(stacks, p.Sort, p.Dir, map[string]func(cache.Stack) string{
+		"name": func(s cache.Stack) string { return s.Name },
+	})
+	writeJSON(w, applyPagination(stacks, p))
 }
 
 func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
@@ -306,7 +334,11 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 	configs := h.cache.ListConfigs()
 	configs = searchFilter(configs, r.URL.Query().Get("search"), func(c swarm.Config) string { return c.Spec.Name })
-	writeJSON(w, configs)
+	p := parsePagination(r)
+	configs = sortItems(configs, p.Sort, p.Dir, map[string]func(swarm.Config) string{
+		"name": func(c swarm.Config) string { return c.Spec.Name },
+	})
+	writeJSON(w, applyPagination(configs, p))
 }
 
 // --- Secrets ---
@@ -314,7 +346,11 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 	secrets := h.cache.ListSecrets()
 	secrets = searchFilter(secrets, r.URL.Query().Get("search"), func(s swarm.Secret) string { return s.Spec.Name })
-	writeJSON(w, secrets)
+	p := parsePagination(r)
+	secrets = sortItems(secrets, p.Sort, p.Dir, map[string]func(swarm.Secret) string{
+		"name": func(s swarm.Secret) string { return s.Spec.Name },
+	})
+	writeJSON(w, applyPagination(secrets, p))
 }
 
 // --- Networks ---
@@ -322,7 +358,12 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 	networks := h.cache.ListNetworks()
 	networks = searchFilter(networks, r.URL.Query().Get("search"), func(n network.Summary) string { return n.Name })
-	writeJSON(w, networks)
+	p := parsePagination(r)
+	networks = sortItems(networks, p.Sort, p.Dir, map[string]func(network.Summary) string{
+		"name":   func(n network.Summary) string { return n.Name },
+		"driver": func(n network.Summary) string { return n.Driver },
+	})
+	writeJSON(w, applyPagination(networks, p))
 }
 
 // --- Volumes ---
@@ -330,5 +371,10 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 	volumes := h.cache.ListVolumes()
 	volumes = searchFilter(volumes, r.URL.Query().Get("search"), func(v volume.Volume) string { return v.Name })
-	writeJSON(w, volumes)
+	p := parsePagination(r)
+	volumes = sortItems(volumes, p.Sort, p.Dir, map[string]func(volume.Volume) string{
+		"name":   func(v volume.Volume) string { return v.Name },
+		"driver": func(v volume.Volume) string { return v.Driver },
+	})
+	writeJSON(w, applyPagination(volumes, p))
 }

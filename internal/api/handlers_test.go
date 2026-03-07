@@ -46,10 +46,13 @@ func TestHandleListNodes(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var nodes []swarm.Node
-	json.NewDecoder(w.Body).Decode(&nodes)
-	if len(nodes) != 2 {
-		t.Errorf("expected 2 nodes, got %d", len(nodes))
+	var resp PagedResponse[swarm.Node]
+	json.NewDecoder(w.Body).Decode(&resp)
+	if len(resp.Items) != 2 {
+		t.Errorf("expected 2 nodes, got %d", len(resp.Items))
+	}
+	if resp.Total != 2 {
+		t.Errorf("expected total 2, got %d", resp.Total)
 	}
 }
 
@@ -139,6 +142,70 @@ func TestHandleNodeTasks(t *testing.T) {
 	}
 }
 
+func TestHandleListServices_Paginated(t *testing.T) {
+	c := cache.New(nil)
+	for _, name := range []string{"charlie", "alpha", "bravo"} {
+		svc := swarm.Service{ID: name}
+		svc.Spec.Name = name
+		c.SetService(svc)
+	}
+	h := NewHandlers(c, nil)
+
+	req := httptest.NewRequest("GET", "/api/services?limit=2&sort=name", nil)
+	w := httptest.NewRecorder()
+	h.HandleListServices(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp PagedResponse[swarm.Service]
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp.Total != 3 {
+		t.Fatalf("expected total 3, got %d", resp.Total)
+	}
+	if len(resp.Items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(resp.Items))
+	}
+	if resp.Items[0].Spec.Name != "alpha" {
+		t.Errorf("expected first item alpha, got %s", resp.Items[0].Spec.Name)
+	}
+	if resp.Items[1].Spec.Name != "bravo" {
+		t.Errorf("expected second item bravo, got %s", resp.Items[1].Spec.Name)
+	}
+}
+
+func TestHandleListNodes_Paginated(t *testing.T) {
+	c := cache.New(nil)
+	n1 := swarm.Node{ID: "n1"}
+	n1.Description.Hostname = "zulu"
+	n2 := swarm.Node{ID: "n2"}
+	n2.Description.Hostname = "alpha"
+	c.SetNode(n1)
+	c.SetNode(n2)
+	h := NewHandlers(c, nil)
+
+	req := httptest.NewRequest("GET", "/api/nodes?limit=1&sort=hostname", nil)
+	w := httptest.NewRecorder()
+	h.HandleListNodes(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp PagedResponse[swarm.Node]
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp.Total != 2 {
+		t.Fatalf("expected total 2, got %d", resp.Total)
+	}
+	if len(resp.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(resp.Items))
+	}
+	if resp.Items[0].Description.Hostname != "alpha" {
+		t.Errorf("expected alpha, got %s", resp.Items[0].Description.Hostname)
+	}
+}
+
 func TestHandleListServices_Search(t *testing.T) {
 	c := cache.New(nil)
 	svc1 := swarm.Service{ID: "s1"}
@@ -157,12 +224,12 @@ func TestHandleListServices_Search(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var services []swarm.Service
-	json.NewDecoder(w.Body).Decode(&services)
-	if len(services) != 1 {
-		t.Fatalf("expected 1 service, got %d", len(services))
+	var resp PagedResponse[swarm.Service]
+	json.NewDecoder(w.Body).Decode(&resp)
+	if len(resp.Items) != 1 {
+		t.Fatalf("expected 1 service, got %d", len(resp.Items))
 	}
-	if services[0].Spec.Name != "web-frontend" {
-		t.Errorf("expected web-frontend, got %s", services[0].Spec.Name)
+	if resp.Items[0].Spec.Name != "web-frontend" {
+		t.Errorf("expected web-frontend, got %s", resp.Items[0].Spec.Name)
 	}
 }
