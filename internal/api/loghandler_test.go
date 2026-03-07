@@ -305,6 +305,78 @@ func TestHandleServiceLogs_JSON_StreamFilterStdout(t *testing.T) {
 	}
 }
 
+func TestHandleServiceLogs_SSE_LastEventID(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	var frames bytes.Buffer
+	frames.Write(buildFrame(1, "2024-01-01T00:00:05.000000000Z after reconnect\n"))
+
+	// Track what "since" value the mock receives
+	var capturedSince string
+	mock := &capturingLogStreamer{
+		data: frames.Bytes(),
+		onCall: func(since string) { capturedSince = since },
+	}
+	h := NewHandlers(c, mock)
+
+	// Simulate EventSource reconnect with Last-Event-ID header
+	req := httptest.NewRequest("GET", "/api/services/svc1/logs", nil)
+	req.SetPathValue("id", "svc1")
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("Last-Event-ID", "2024-01-01T00:00:03.000000000Z")
+	w := httptest.NewRecorder()
+	h.HandleServiceLogs(w, req)
+
+	if capturedSince != "2024-01-01T00:00:03.000000000Z" {
+		t.Errorf("since = %q, want Last-Event-ID value", capturedSince)
+	}
+}
+
+func TestHandleServiceLogs_SSE_LastEventID_OverriddenByAfter(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	var capturedSince string
+	mock := &capturingLogStreamer{
+		data: buildFrame(1, "2024-01-01T00:00:05.000000000Z line\n"),
+		onCall: func(since string) { capturedSince = since },
+	}
+	h := NewHandlers(c, mock)
+
+	// Both ?after= and Last-Event-ID present — ?after= should win
+	req := httptest.NewRequest("GET", "/api/services/svc1/logs?after=explicit-value", nil)
+	req.SetPathValue("id", "svc1")
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("Last-Event-ID", "header-value")
+	w := httptest.NewRecorder()
+	h.HandleServiceLogs(w, req)
+
+	if capturedSince != "explicit-value" {
+		t.Errorf("since = %q, want explicit ?after= value", capturedSince)
+	}
+}
+
+// capturingLogStreamer captures the since param passed to log calls.
+type capturingLogStreamer struct {
+	data   []byte
+	onCall func(since string)
+}
+
+func (m *capturingLogStreamer) ServiceLogs(_ context.Context, _ string, _ string, _ bool, since, _ string) (io.ReadCloser, error) {
+	if m.onCall != nil {
+		m.onCall(since)
+	}
+	return io.NopCloser(bytes.NewReader(m.data)), nil
+}
+
+func (m *capturingLogStreamer) TaskLogs(_ context.Context, _ string, _ string, _ bool, since, _ string) (io.ReadCloser, error) {
+	if m.onCall != nil {
+		m.onCall(since)
+	}
+	return io.NopCloser(bytes.NewReader(m.data)), nil
+}
+
 func TestHandleServiceLogs_SSE_StreamFilter(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{ID: "svc1"})

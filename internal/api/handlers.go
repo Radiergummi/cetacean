@@ -226,6 +226,10 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 }
 
 func (h *Handlers) serveLogsSSE(w http.ResponseWriter, r *http.Request, fetch logFetcher, since, streamFilter string) {
+	// EventSource sends Last-Event-ID on reconnect; use it as fallback for since
+	if since == "" {
+		since = r.Header.Get("Last-Event-ID")
+	}
 	logs, err := fetch(r.Context(), "0", true, since, "")
 	if err != nil {
 		http.Error(w, "failed to get logs", http.StatusInternalServerError)

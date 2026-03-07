@@ -345,6 +345,10 @@ export default function LogViewer({ serviceId, taskId }: Props) {
 
         <div className="w-px h-5 bg-border mx-0.5" />
 
+        <StreamFilterToggle value={streamFilter} onChange={setStreamFilter} />
+
+        <div className="w-px h-5 bg-border mx-0.5" />
+
         <ToolbarButton onClick={copyLogs} title="Copy" icon={<Copy className="w-3.5 h-3.5" />} />
         <ToolbarButton
           onClick={downloadLogs}
@@ -655,6 +659,35 @@ function formatShortDate(iso: string): string {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+const STREAM_OPTIONS = ["all", "stdout", "stderr"] as const;
+
+function StreamFilterToggle({
+  value,
+  onChange,
+}: {
+  value: "all" | "stdout" | "stderr";
+  onChange: (v: "all" | "stdout" | "stderr") => void;
+}) {
+  return (
+    <div className="flex items-center h-8 rounded-md border bg-background overflow-hidden">
+      {STREAM_OPTIONS.map((opt) => (
+        <button
+          key={opt}
+          onClick={() => onChange(opt)}
+          className={`px-2 h-full text-xs ${
+            value === opt
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted"
+          }`}
+          title={opt === "all" ? "All streams" : opt}
+        >
+          {opt === "all" ? "All" : opt}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function ToolbarButton({
