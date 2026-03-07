@@ -18,6 +18,7 @@ interface Props {
   unit?: string;
   refreshKey?: number;
   thresholds?: Threshold[];
+  syncKey?: string;
 }
 
 type State = "loading" | "data" | "empty" | "error";
@@ -64,6 +65,7 @@ export default function TimeSeriesChart({
   unit,
   refreshKey,
   thresholds,
+  syncKey,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<uPlot | null>(null);
@@ -204,6 +206,7 @@ export default function TimeSeriesChart({
           plugins: [thresholdPlugin, tooltipPlugin, legendPlugin],
           cursor: {
             drag: { x: false, y: false },
+            sync: syncKey ? { key: syncKey } : undefined,
           },
           series: [
             {},

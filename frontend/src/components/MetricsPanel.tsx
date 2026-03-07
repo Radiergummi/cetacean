@@ -88,7 +88,13 @@ export default function MetricsPanel({ charts }: Props) {
       {!collapsed && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {charts.map((chart) => (
-            <TimeSeriesChart key={chart.query} {...chart} range={range} refreshKey={refreshKey} />
+            <TimeSeriesChart
+              key={chart.query}
+              {...chart}
+              range={range}
+              refreshKey={refreshKey}
+              syncKey="metrics"
+            />
           ))}
         </div>
       )}

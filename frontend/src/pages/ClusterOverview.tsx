@@ -1,14 +1,21 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { TrendingUp, TrendingDown } from "lucide-react";
 import { api, type ClusterSnapshot } from "../api/client";
 import { useSSE } from "../hooks/useSSE";
 import PageHeader from "../components/PageHeader";
 
 export default function ClusterOverview() {
   const [snapshot, setSnapshot] = useState<ClusterSnapshot | null>(null);
+  const prevRef = useRef<ClusterSnapshot | null>(null);
 
   const fetchSnapshot = useCallback(() => {
-    api.cluster().then(setSnapshot);
+    api.cluster().then((s) => {
+      setSnapshot((prev) => {
+        if (prev) prevRef.current = prev;
+        return s;
+      });
+    });
   }, []);
 
   useEffect(() => {
@@ -38,31 +45,53 @@ export default function ClusterOverview() {
     );
   }
 
+  const prev = prevRef.current;
   const tasksRunning = snapshot.tasksByState?.["running"] || 0;
   const tasksFailed = snapshot.tasksByState?.["failed"] || 0;
   const tasksOther = snapshot.taskCount - tasksRunning - tasksFailed;
+  const prevRunning = prev?.tasksByState?.["running"] || 0;
+  const prevFailed = prev?.tasksByState?.["failed"] || 0;
+  const prevOther = prev ? prev.taskCount - prevRunning - prevFailed : 0;
 
   return (
     <div>
       <PageHeader title="Cluster Overview" />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="Nodes Ready" value={snapshot.nodesReady} color="green" to="/nodes" />
+        <StatCard
+          label="Nodes Ready"
+          value={snapshot.nodesReady}
+          prev={prev?.nodesReady}
+          color="green"
+          to="/nodes"
+        />
         <StatCard
           label="Nodes Down"
           value={snapshot.nodesDown}
+          prev={prev?.nodesDown}
           color={snapshot.nodesDown > 0 ? "red" : undefined}
           to="/nodes"
         />
-        <StatCard label="Services" value={snapshot.serviceCount} to="/services" />
-        <StatCard label="Stacks" value={snapshot.stackCount} to="/stacks" />
-        <StatCard label="Tasks Running" value={tasksRunning} color="green" />
+        <StatCard
+          label="Services"
+          value={snapshot.serviceCount}
+          prev={prev?.serviceCount}
+          to="/services"
+        />
+        <StatCard label="Stacks" value={snapshot.stackCount} prev={prev?.stackCount} to="/stacks" />
+        <StatCard
+          label="Tasks Running"
+          value={tasksRunning}
+          prev={prev ? prevRunning : undefined}
+          color="green"
+        />
         <StatCard
           label="Tasks Failed"
           value={tasksFailed}
+          prev={prev ? prevFailed : undefined}
           color={tasksFailed > 0 ? "red" : undefined}
         />
-        <StatCard label="Tasks Other" value={tasksOther} />
-        <StatCard label="Tasks Total" value={snapshot.taskCount} />
+        <StatCard label="Tasks Other" value={tasksOther} prev={prev ? prevOther : undefined} />
+        <StatCard label="Tasks Total" value={snapshot.taskCount} prev={prev?.taskCount} />
       </div>
     </div>
   );
@@ -71,11 +100,13 @@ export default function ClusterOverview() {
 function StatCard({
   label,
   value,
+  prev,
   color,
   to,
 }: {
   label: string;
   value: number;
+  prev?: number;
   color?: string;
   to?: string;
 }) {
@@ -85,6 +116,7 @@ function StatCard({
     color === "red" && value > 0
       ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900"
       : "bg-card";
+  const delta = prev != null ? value - prev : 0;
 
   return (
     <div
@@ -94,7 +126,17 @@ function StatCard({
       <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1.5">
         {label}
       </div>
-      <div className={`text-3xl font-semibold tabular-nums ${valueColor}`}>{value}</div>
+      <div className="flex items-center gap-2">
+        <span className={`text-3xl font-semibold tabular-nums ${valueColor}`}>{value}</span>
+        {delta !== 0 && (
+          <span
+            className={`flex items-center gap-0.5 text-xs font-medium ${delta > 0 ? "text-green-600" : "text-red-600"}`}
+          >
+            {delta > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+            {delta > 0 ? `+${delta}` : delta}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

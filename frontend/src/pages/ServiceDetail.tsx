@@ -111,8 +111,8 @@ export default function ServiceDetail() {
       </Section>
 
       {/* Environment variables */}
-      {cs.Env && cs.Env.length > 0 && (
-        <Section title="Environment Variables">
+      <Section title="Environment Variables">
+        {cs.Env && cs.Env.length > 0 ? (
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full">
               <thead className="sticky top-0 z-10 bg-background">
@@ -136,12 +136,14 @@ export default function ServiceDetail() {
               </tbody>
             </table>
           </div>
-        </Section>
-      )}
+        ) : (
+          <SectionEmpty />
+        )}
+      </Section>
 
       {/* Healthcheck */}
-      {cs.Healthcheck && (
-        <Section title="Healthcheck">
+      <Section title="Healthcheck">
+        {cs.Healthcheck ? (
           <KVTable
             rows={[
               cs.Healthcheck.Test && ["Test", cs.Healthcheck.Test.join(" ")],
@@ -154,12 +156,14 @@ export default function ServiceDetail() {
               ],
             ]}
           />
-        </Section>
-      )}
+        ) : (
+          <SectionEmpty />
+        )}
+      </Section>
 
       {/* Labels */}
-      {nonStackLabels.length > 0 && (
-        <Section title="Labels">
+      <Section title="Labels">
+        {nonStackLabels.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {nonStackLabels.map(([k, v]) => (
               <span
@@ -171,12 +175,14 @@ export default function ServiceDetail() {
               </span>
             ))}
           </div>
-        </Section>
-      )}
+        ) : (
+          <SectionEmpty />
+        )}
+      </Section>
 
       {/* Ports */}
-      {service.Endpoint?.Ports && service.Endpoint.Ports.length > 0 && (
-        <Section title="Ports">
+      <Section title="Ports">
+        {service.Endpoint?.Ports && service.Endpoint.Ports.length > 0 ? (
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full">
               <thead className="sticky top-0 z-10 bg-background">
@@ -199,12 +205,14 @@ export default function ServiceDetail() {
               </tbody>
             </table>
           </div>
-        </Section>
-      )}
+        ) : (
+          <SectionEmpty />
+        )}
+      </Section>
 
       {/* Mounts */}
-      {cs.Mounts && cs.Mounts.length > 0 && (
-        <Section title="Mounts">
+      <Section title="Mounts">
+        {cs.Mounts && cs.Mounts.length > 0 ? (
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full">
               <thead className="sticky top-0 z-10 bg-background">
@@ -227,12 +235,14 @@ export default function ServiceDetail() {
               </tbody>
             </table>
           </div>
-        </Section>
-      )}
+        ) : (
+          <SectionEmpty />
+        )}
+      </Section>
 
       {/* Configs */}
-      {cs.Configs && cs.Configs.length > 0 && (
-        <Section title="Configs">
+      <Section title="Configs">
+        {cs.Configs && cs.Configs.length > 0 ? (
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full">
               <thead className="sticky top-0 z-10 bg-background">
@@ -251,12 +261,14 @@ export default function ServiceDetail() {
               </tbody>
             </table>
           </div>
-        </Section>
-      )}
+        ) : (
+          <SectionEmpty />
+        )}
+      </Section>
 
       {/* Secrets */}
-      {cs.Secrets && cs.Secrets.length > 0 && (
-        <Section title="Secrets">
+      <Section title="Secrets">
+        {cs.Secrets && cs.Secrets.length > 0 ? (
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full">
               <thead className="sticky top-0 z-10 bg-background">
@@ -275,8 +287,10 @@ export default function ServiceDetail() {
               </tbody>
             </table>
           </div>
-        </Section>
-      )}
+        ) : (
+          <SectionEmpty />
+        )}
+      </Section>
 
       {/* Deploy: Resources, Placement, Restart, Update, Rollback */}
       <Section title="Deploy Configuration">
@@ -498,6 +512,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       {children}
     </div>
   );
+}
+
+function SectionEmpty() {
+  return <p className="text-sm text-muted-foreground">None</p>;
 }
 
 function KVTable({ rows }: { rows: (false | undefined | null | 0 | "" | [string, string])[] }) {
