@@ -58,6 +58,7 @@ type Cache struct {
 	volumes        map[string]volume.Volume
 	stacks         map[string]Stack
 	onChange       OnChangeFunc
+	history        *History
 }
 
 func New(onChange OnChangeFunc) *Cache {
@@ -73,12 +74,42 @@ func New(onChange OnChangeFunc) *Cache {
 		volumes:        make(map[string]volume.Volume),
 		stacks:         make(map[string]Stack),
 		onChange:       onChange,
+		history:        NewHistory(10000),
 	}
 }
 
+func (c *Cache) History() *History { return c.history }
+
 func (c *Cache) notify(e Event) {
+	c.history.Append(HistoryEntry{
+		Type:       e.Type,
+		Action:     e.Action,
+		ResourceID: e.ID,
+		Name:       extractName(e),
+	})
 	if c.onChange != nil {
 		c.onChange(e)
+	}
+}
+
+func extractName(e Event) string {
+	switch r := e.Resource.(type) {
+	case swarm.Node:
+		return r.Description.Hostname
+	case swarm.Service:
+		return r.Spec.Name
+	case swarm.Task:
+		return r.ID
+	case swarm.Config:
+		return r.Spec.Name
+	case swarm.Secret:
+		return r.Spec.Name
+	case network.Summary:
+		return r.Name
+	case volume.Volume:
+		return r.Name
+	default:
+		return ""
 	}
 }
 
@@ -446,135 +477,6 @@ func (c *Cache) GetStackDetail(name string) (StackDetail, bool) {
 	return detail, true
 }
 
-const stackLabel = "com.docker.stack.namespace"
-
-// addToStack incrementally adds a resource to the appropriate stack. Must be called with c.mu held for writing.
-func (c *Cache) addToStack(resource, id string, labels map[string]string) {
-	ns, ok := labels[stackLabel]
-	if !ok {
-		return
-	}
-	s, exists := c.stacks[ns]
-	if !exists {
-		s = Stack{Name: ns}
-	}
-	switch resource {
-	case "service":
-		s.Services = appendUnique(s.Services, id)
-	case "config":
-		s.Configs = appendUnique(s.Configs, id)
-	case "secret":
-		s.Secrets = appendUnique(s.Secrets, id)
-	case "network":
-		s.Networks = appendUnique(s.Networks, id)
-	case "volume":
-		s.Volumes = appendUnique(s.Volumes, id)
-	}
-	c.stacks[ns] = s
-}
-
-// removeFromStack incrementally removes a resource from its stack. Must be called with c.mu held for writing.
-func (c *Cache) removeFromStack(resource, id string, labels map[string]string) {
-	ns, ok := labels[stackLabel]
-	if !ok {
-		return
-	}
-	s, exists := c.stacks[ns]
-	if !exists {
-		return
-	}
-	switch resource {
-	case "service":
-		s.Services = removeStr(s.Services, id)
-	case "config":
-		s.Configs = removeStr(s.Configs, id)
-	case "secret":
-		s.Secrets = removeStr(s.Secrets, id)
-	case "network":
-		s.Networks = removeStr(s.Networks, id)
-	case "volume":
-		s.Volumes = removeStr(s.Volumes, id)
-	}
-	if len(s.Services)+len(s.Configs)+len(s.Secrets)+len(s.Networks)+len(s.Volumes) == 0 {
-		delete(c.stacks, ns)
-	} else {
-		c.stacks[ns] = s
-	}
-}
-
-func appendUnique(sl []string, v string) []string {
-	for _, s := range sl {
-		if s == v {
-			return sl
-		}
-	}
-	return append(sl, v)
-}
-
-func removeStr(sl []string, v string) []string {
-	for i, s := range sl {
-		if s == v {
-			return append(sl[:i], sl[i+1:]...)
-		}
-	}
-	return sl
-}
-
-// rebuildStacks must be called with c.mu held for writing.
-func (c *Cache) rebuildStacks() {
-	stacks := make(map[string]*Stack)
-
-	ensure := func(name string) *Stack {
-		if s, ok := stacks[name]; ok {
-			return s
-		}
-		s := &Stack{Name: name}
-		stacks[name] = s
-		return s
-	}
-
-	for id, svc := range c.services {
-		if ns, ok := svc.Spec.Labels[stackLabel]; ok {
-			s := ensure(ns)
-			s.Services = append(s.Services, id)
-		}
-	}
-
-	for id, cfg := range c.configs {
-		if ns, ok := cfg.Spec.Labels[stackLabel]; ok {
-			s := ensure(ns)
-			s.Configs = append(s.Configs, id)
-		}
-	}
-
-	for id, sec := range c.secrets {
-		if ns, ok := sec.Spec.Labels[stackLabel]; ok {
-			s := ensure(ns)
-			s.Secrets = append(s.Secrets, id)
-		}
-	}
-
-	for id, net := range c.networks {
-		if ns, ok := net.Labels[stackLabel]; ok {
-			s := ensure(ns)
-			s.Networks = append(s.Networks, id)
-		}
-	}
-
-	for name, vol := range c.volumes {
-		if ns, ok := vol.Labels[stackLabel]; ok {
-			s := ensure(ns)
-			s.Volumes = append(s.Volumes, name)
-		}
-	}
-
-	result := make(map[string]Stack, len(stacks))
-	for name, s := range stacks {
-		result[name] = *s
-	}
-	c.stacks = result
-}
-
 // --- Filtered task lists ---
 
 func (c *Cache) ListTasksByService(serviceID string) []swarm.Task {
@@ -728,5 +630,86 @@ func (c *Cache) ReplaceVolumes(volumes []volume.Volume) {
 func (c *Cache) RebuildStacks() {
 	c.mu.Lock()
 	c.rebuildStacks()
+	c.mu.Unlock()
+}
+
+// FullSyncData holds all resource lists for an atomic full sync.
+type FullSyncData struct {
+	Nodes    []swarm.Node
+	Services []swarm.Service
+	Tasks    []swarm.Task
+	Configs  []swarm.Config
+	Secrets  []swarm.Secret
+	Networks []network.Summary
+	Volumes  []volume.Volume
+}
+
+// ReplaceAll atomically replaces all resource maps and rebuilds derived state.
+// This ensures API consumers never see a half-synced cache.
+func (c *Cache) ReplaceAll(data FullSyncData) {
+	// Build all maps outside the lock.
+	nodes := make(map[string]swarm.Node, len(data.Nodes))
+	for _, n := range data.Nodes {
+		nodes[n.ID] = n
+	}
+
+	services := make(map[string]swarm.Service, len(data.Services))
+	for _, s := range data.Services {
+		services[s.ID] = s
+	}
+
+	tasks := make(map[string]swarm.Task, len(data.Tasks))
+	byService := make(map[string]map[string]struct{})
+	byNode := make(map[string]map[string]struct{})
+	for _, t := range data.Tasks {
+		tasks[t.ID] = t
+		if t.ServiceID != "" {
+			if byService[t.ServiceID] == nil {
+				byService[t.ServiceID] = make(map[string]struct{})
+			}
+			byService[t.ServiceID][t.ID] = struct{}{}
+		}
+		if t.NodeID != "" {
+			if byNode[t.NodeID] == nil {
+				byNode[t.NodeID] = make(map[string]struct{})
+			}
+			byNode[t.NodeID][t.ID] = struct{}{}
+		}
+	}
+
+	configs := make(map[string]swarm.Config, len(data.Configs))
+	for _, cfg := range data.Configs {
+		configs[cfg.ID] = cfg
+	}
+
+	secrets := make(map[string]swarm.Secret, len(data.Secrets))
+	for _, s := range data.Secrets {
+		secrets[s.ID] = s
+	}
+
+	networks := make(map[string]network.Summary, len(data.Networks))
+	for _, n := range data.Networks {
+		networks[n.ID] = n
+	}
+
+	volumes := make(map[string]volume.Volume, len(data.Volumes))
+	for _, v := range data.Volumes {
+		volumes[v.Name] = v
+	}
+
+	stacks := rebuildStacksFromMaps(services, configs, secrets, networks, volumes)
+
+	// Single atomic swap under one lock.
+	c.mu.Lock()
+	c.nodes = nodes
+	c.services = services
+	c.tasks = tasks
+	c.tasksByService = byService
+	c.tasksByNode = byNode
+	c.configs = configs
+	c.secrets = secrets
+	c.networks = networks
+	c.volumes = volumes
+	c.stacks = stacks
 	c.mu.Unlock()
 }

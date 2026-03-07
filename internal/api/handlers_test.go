@@ -233,3 +233,41 @@ func TestHandleListServices_Search(t *testing.T) {
 		t.Errorf("expected web-frontend, got %s", resp.Items[0].Spec.Name)
 	}
 }
+
+func TestHandleHistory(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "s1", Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "nginx"}}})
+	c.SetService(swarm.Service{ID: "s2", Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "redis"}}})
+
+	h := NewHandlers(c, nil)
+	req := httptest.NewRequest("GET", "/api/history?type=service", nil)
+	w := httptest.NewRecorder()
+	h.HandleHistory(w, req)
+
+	var entries []cache.HistoryEntry
+	json.NewDecoder(w.Body).Decode(&entries)
+	if len(entries) != 2 {
+		t.Errorf("got %d entries, want 2", len(entries))
+	}
+	// Newest first
+	if len(entries) > 0 && entries[0].Name != "redis" {
+		t.Errorf("first entry name=%s, want redis", entries[0].Name)
+	}
+}
+
+func TestHandleHistory_FilterByResource(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "s1", Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "nginx"}}})
+	c.SetNode(swarm.Node{ID: "n1", Description: swarm.NodeDescription{Hostname: "worker-01"}})
+
+	h := NewHandlers(c, nil)
+	req := httptest.NewRequest("GET", "/api/history?resourceId=s1", nil)
+	w := httptest.NewRecorder()
+	h.HandleHistory(w, req)
+
+	var entries []cache.HistoryEntry
+	json.NewDecoder(w.Body).Decode(&entries)
+	if len(entries) != 1 {
+		t.Errorf("got %d entries, want 1", len(entries))
+	}
+}

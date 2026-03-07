@@ -30,6 +30,9 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 	mux.HandleFunc("GET /api/tasks/{id}", h.HandleGetTask)
 	mux.HandleFunc("GET /api/tasks/{id}/logs", h.HandleTaskLogs)
 
+	// History
+	mux.HandleFunc("GET /api/history", h.HandleHistory)
+
 	// Stacks
 	mux.HandleFunc("GET /api/stacks", h.HandleListStacks)
 	mux.HandleFunc("GET /api/stacks/{name}", h.HandleGetStack)
