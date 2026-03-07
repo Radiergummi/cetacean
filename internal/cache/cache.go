@@ -24,6 +24,15 @@ type Stack struct {
 	Volumes  []string `json:"volumes"`
 }
 
+type StackDetail struct {
+	Name     string            `json:"name"`
+	Services []swarm.Service   `json:"services"`
+	Configs  []swarm.Config    `json:"configs"`
+	Secrets  []swarm.Secret    `json:"secrets"`
+	Networks []network.Summary `json:"networks"`
+	Volumes  []volume.Volume   `json:"volumes"`
+}
+
 type ClusterSnapshot struct {
 	NodeCount    int            `json:"nodeCount"`
 	ServiceCount int            `json:"serviceCount"`
@@ -37,11 +46,13 @@ type ClusterSnapshot struct {
 type OnChangeFunc func(Event)
 
 type Cache struct {
-	mu       sync.RWMutex
-	nodes    map[string]swarm.Node
-	services map[string]swarm.Service
-	tasks    map[string]swarm.Task
-	configs  map[string]swarm.Config
+	mu             sync.RWMutex
+	nodes          map[string]swarm.Node
+	services       map[string]swarm.Service
+	tasks          map[string]swarm.Task
+	tasksByService map[string]map[string]struct{} // serviceID -> set of taskIDs
+	tasksByNode    map[string]map[string]struct{} // nodeID -> set of taskIDs
+	configs        map[string]swarm.Config
 	secrets  map[string]swarm.Secret
 	networks map[string]network.Summary
 	volumes  map[string]volume.Volume
@@ -53,8 +64,10 @@ func New(onChange OnChangeFunc) *Cache {
 	return &Cache{
 		nodes:    make(map[string]swarm.Node),
 		services: make(map[string]swarm.Service),
-		tasks:    make(map[string]swarm.Task),
-		configs:  make(map[string]swarm.Config),
+		tasks:          make(map[string]swarm.Task),
+		tasksByService: make(map[string]map[string]struct{}),
+		tasksByNode:    make(map[string]map[string]struct{}),
+		configs:        make(map[string]swarm.Config),
 		secrets:  make(map[string]swarm.Secret),
 		networks: make(map[string]network.Summary),
 		volumes:  make(map[string]volume.Volume),
@@ -141,7 +154,11 @@ func (c *Cache) ListServices() []swarm.Service {
 
 func (c *Cache) SetTask(t swarm.Task) {
 	c.mu.Lock()
+	if old, ok := c.tasks[t.ID]; ok {
+		c.removeTaskIndex(old)
+	}
 	c.tasks[t.ID] = t
+	c.addTaskIndex(t)
 	c.mu.Unlock()
 	c.notify(Event{Type: "task", Action: "update", ID: t.ID, Resource: t})
 }
@@ -155,9 +172,48 @@ func (c *Cache) GetTask(id string) (swarm.Task, bool) {
 
 func (c *Cache) DeleteTask(id string) {
 	c.mu.Lock()
+	if old, ok := c.tasks[id]; ok {
+		c.removeTaskIndex(old)
+	}
 	delete(c.tasks, id)
 	c.mu.Unlock()
 	c.notify(Event{Type: "task", Action: "remove", ID: id})
+}
+
+// addTaskIndex adds a task to the secondary indexes. Must be called with c.mu held for writing.
+func (c *Cache) addTaskIndex(t swarm.Task) {
+	if t.ServiceID != "" {
+		if c.tasksByService[t.ServiceID] == nil {
+			c.tasksByService[t.ServiceID] = make(map[string]struct{})
+		}
+		c.tasksByService[t.ServiceID][t.ID] = struct{}{}
+	}
+	if t.NodeID != "" {
+		if c.tasksByNode[t.NodeID] == nil {
+			c.tasksByNode[t.NodeID] = make(map[string]struct{})
+		}
+		c.tasksByNode[t.NodeID][t.ID] = struct{}{}
+	}
+}
+
+// removeTaskIndex removes a task from the secondary indexes. Must be called with c.mu held for writing.
+func (c *Cache) removeTaskIndex(t swarm.Task) {
+	if t.ServiceID != "" {
+		if m := c.tasksByService[t.ServiceID]; m != nil {
+			delete(m, t.ID)
+			if len(m) == 0 {
+				delete(c.tasksByService, t.ServiceID)
+			}
+		}
+	}
+	if t.NodeID != "" {
+		if m := c.tasksByNode[t.NodeID]; m != nil {
+			delete(m, t.ID)
+			if len(m) == 0 {
+				delete(c.tasksByNode, t.NodeID)
+			}
+		}
+	}
 }
 
 func (c *Cache) ListTasks() []swarm.Task {
@@ -329,6 +385,42 @@ func (c *Cache) ListStacks() []Stack {
 	return out
 }
 
+func (c *Cache) GetStackDetail(name string) (StackDetail, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	s, ok := c.stacks[name]
+	if !ok {
+		return StackDetail{}, false
+	}
+	detail := StackDetail{Name: s.Name}
+	for _, id := range s.Services {
+		if svc, ok := c.services[id]; ok {
+			detail.Services = append(detail.Services, svc)
+		}
+	}
+	for _, id := range s.Configs {
+		if cfg, ok := c.configs[id]; ok {
+			detail.Configs = append(detail.Configs, cfg)
+		}
+	}
+	for _, id := range s.Secrets {
+		if sec, ok := c.secrets[id]; ok {
+			detail.Secrets = append(detail.Secrets, sec)
+		}
+	}
+	for _, id := range s.Networks {
+		if net, ok := c.networks[id]; ok {
+			detail.Networks = append(detail.Networks, net)
+		}
+	}
+	for _, name := range s.Volumes {
+		if vol, ok := c.volumes[name]; ok {
+			detail.Volumes = append(detail.Volumes, vol)
+		}
+	}
+	return detail, true
+}
+
 // rebuildStacks must be called with c.mu held for writing.
 func (c *Cache) rebuildStacks() {
 	stacks := make(map[string]*Stack)
@@ -389,9 +481,10 @@ func (c *Cache) rebuildStacks() {
 func (c *Cache) ListTasksByService(serviceID string) []swarm.Task {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	var out []swarm.Task
-	for _, t := range c.tasks {
-		if t.ServiceID == serviceID {
+	ids := c.tasksByService[serviceID]
+	out := make([]swarm.Task, 0, len(ids))
+	for id := range ids {
+		if t, ok := c.tasks[id]; ok {
 			out = append(out, t)
 		}
 	}
@@ -401,9 +494,10 @@ func (c *Cache) ListTasksByService(serviceID string) []swarm.Task {
 func (c *Cache) ListTasksByNode(nodeID string) []swarm.Task {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	var out []swarm.Task
-	for _, t := range c.tasks {
-		if t.NodeID == nodeID {
+	ids := c.tasksByNode[nodeID]
+	out := make([]swarm.Task, 0, len(ids))
+	for id := range ids {
+		if t, ok := c.tasks[id]; ok {
 			out = append(out, t)
 		}
 	}
@@ -440,4 +534,97 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 		NodesReady:   nodesReady,
 		NodesDown:    nodesDown,
 	}
+}
+
+// --- Bulk replace (for full sync) ---
+
+func (c *Cache) ReplaceNodes(nodes []swarm.Node) {
+	m := make(map[string]swarm.Node, len(nodes))
+	for _, n := range nodes {
+		m[n.ID] = n
+	}
+	c.mu.Lock()
+	c.nodes = m
+	c.mu.Unlock()
+}
+
+func (c *Cache) ReplaceServices(services []swarm.Service) {
+	m := make(map[string]swarm.Service, len(services))
+	for _, s := range services {
+		m[s.ID] = s
+	}
+	c.mu.Lock()
+	c.services = m
+	c.rebuildStacks()
+	c.mu.Unlock()
+}
+
+func (c *Cache) ReplaceTasks(tasks []swarm.Task) {
+	m := make(map[string]swarm.Task, len(tasks))
+	byService := make(map[string]map[string]struct{})
+	byNode := make(map[string]map[string]struct{})
+	for _, t := range tasks {
+		m[t.ID] = t
+		if t.ServiceID != "" {
+			if byService[t.ServiceID] == nil {
+				byService[t.ServiceID] = make(map[string]struct{})
+			}
+			byService[t.ServiceID][t.ID] = struct{}{}
+		}
+		if t.NodeID != "" {
+			if byNode[t.NodeID] == nil {
+				byNode[t.NodeID] = make(map[string]struct{})
+			}
+			byNode[t.NodeID][t.ID] = struct{}{}
+		}
+	}
+	c.mu.Lock()
+	c.tasks = m
+	c.tasksByService = byService
+	c.tasksByNode = byNode
+	c.mu.Unlock()
+}
+
+func (c *Cache) ReplaceConfigs(configs []swarm.Config) {
+	m := make(map[string]swarm.Config, len(configs))
+	for _, cfg := range configs {
+		m[cfg.ID] = cfg
+	}
+	c.mu.Lock()
+	c.configs = m
+	c.rebuildStacks()
+	c.mu.Unlock()
+}
+
+func (c *Cache) ReplaceSecrets(secrets []swarm.Secret) {
+	m := make(map[string]swarm.Secret, len(secrets))
+	for _, s := range secrets {
+		m[s.ID] = s
+	}
+	c.mu.Lock()
+	c.secrets = m
+	c.rebuildStacks()
+	c.mu.Unlock()
+}
+
+func (c *Cache) ReplaceNetworks(networks []network.Summary) {
+	m := make(map[string]network.Summary, len(networks))
+	for _, n := range networks {
+		m[n.ID] = n
+	}
+	c.mu.Lock()
+	c.networks = m
+	c.rebuildStacks()
+	c.mu.Unlock()
+}
+
+func (c *Cache) ReplaceVolumes(volumes []volume.Volume) {
+	m := make(map[string]volume.Volume, len(volumes))
+	for _, v := range volumes {
+		m[v.Name] = v
+	}
+	c.mu.Lock()
+	c.volumes = m
+	c.rebuildStacks()
+	c.mu.Unlock()
 }
