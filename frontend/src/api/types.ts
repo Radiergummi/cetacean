@@ -229,3 +229,48 @@ export interface StackDetail {
   networks: Network[];
   volumes: Volume[];
 }
+
+export interface NetworkTopology {
+  nodes: TopoServiceNode[];
+  edges: TopoEdge[];
+  networks: TopoNetwork[];
+}
+
+export interface TopoServiceNode {
+  id: string;
+  name: string;
+  stack?: string;
+  replicas: number;
+}
+
+export interface TopoEdge {
+  source: string;
+  target: string;
+  networks: string[];
+}
+
+export interface TopoNetwork {
+  id: string;
+  name: string;
+  driver: string;
+}
+
+export interface PlacementTopology {
+  nodes: TopoClusterNode[];
+}
+
+export interface TopoClusterNode {
+  id: string;
+  hostname: string;
+  role: string;
+  state: string;
+  tasks: TopoTask[];
+}
+
+export interface TopoTask {
+  id: string;
+  serviceId: string;
+  serviceName: string;
+  state: string;
+  slot: number;
+}

@@ -10,6 +10,8 @@ import type {
   Volume,
   PagedResponse,
   HistoryEntry,
+  NetworkTopology,
+  PlacementTopology,
 } from "./types";
 
 const BASE = "/api";
@@ -123,6 +125,8 @@ export const api = {
     const query = qs.toString();
     return fetchJSON<HistoryEntry[]>(`/history${query ? `?${query}` : ""}`);
   },
+  topologyNetworks: () => fetchJSON<NetworkTopology>("/topology/networks"),
+  topologyPlacement: () => fetchJSON<PlacementTopology>("/topology/placement"),
   nodeTasks: (id: string) => fetchJSON<Task[]>(`/nodes/${id}/tasks`),
   metricsQuery: (query: string, time?: string) => {
     const params = new URLSearchParams({ query });
