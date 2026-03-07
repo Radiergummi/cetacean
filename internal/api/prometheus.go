@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type PrometheusProxy struct {
@@ -14,7 +15,7 @@ type PrometheusProxy struct {
 func NewPrometheusProxy(baseURL string) *PrometheusProxy {
 	return &PrometheusProxy{
 		baseURL: strings.TrimRight(baseURL, "/"),
-		client:  &http.Client{},
+		client:  &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
