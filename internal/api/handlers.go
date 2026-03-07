@@ -2,15 +2,19 @@ package api
 
 import (
 	"context"
-	json "github.com/goccy/go-json"
+	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
-	"github.com/docker/docker/pkg/stdcopy"
+	json "github.com/goccy/go-json"
 
 	"cetacean/internal/cache"
 )
+
+const defaultLogLimit = 500
+const maxLogLimit = 10000
 
 type DockerLogStreamer interface {
 	ServiceLogs(ctx context.Context, serviceID string, tail string, follow bool, since, until string) (io.ReadCloser, error)
@@ -116,42 +120,9 @@ func (h *Handlers) HandleServiceLogs(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-
-	q := r.URL.Query()
-	tail := q.Get("tail")
-	if tail == "" {
-		tail = "200"
-	}
-	follow := q.Get("follow") == "true"
-	since := q.Get("since")
-	until := q.Get("until")
-
-	logs, err := h.dockerClient.ServiceLogs(r.Context(), id, tail, follow, since, until)
-	if err != nil {
-		http.Error(w, "failed to get logs", http.StatusInternalServerError)
-		return
-	}
-	defer logs.Close() //nolint:errcheck // best-effort close
-
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	if follow {
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		fw := flushWriter{w: w, flusher: w.(http.Flusher)}
-		_, _ = stdcopy.StdCopy(&fw, &fw, logs)
-	} else {
-		_, _ = stdcopy.StdCopy(w, w, logs)
-	}
-}
-
-type flushWriter struct {
-	w       io.Writer
-	flusher http.Flusher
-}
-
-func (fw *flushWriter) Write(p []byte) (int, error) {
-	n, err := fw.w.Write(p)
-	fw.flusher.Flush()
-	return n, err
+	h.serveLogs(w, r, func(ctx context.Context, tail string, follow bool, since, until string) (LogStream, error) {
+		return h.dockerClient.ServiceLogs(ctx, id, tail, follow, since, until)
+	})
 }
 
 // --- Tasks ---
@@ -177,31 +148,105 @@ func (h *Handlers) HandleTaskLogs(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	h.serveLogs(w, r, func(ctx context.Context, tail string, follow bool, since, until string) (LogStream, error) {
+		return h.dockerClient.TaskLogs(ctx, id, tail, follow, since, until)
+	})
+}
 
+// LogStream is an alias for the io.ReadCloser returned by Docker log APIs.
+type LogStream = io.ReadCloser
+
+// LogResponse is the JSON response for paginated log fetches.
+type LogResponse struct {
+	Lines  []LogLine `json:"lines"`
+	Oldest string    `json:"oldest"`
+	Newest string    `json:"newest"`
+}
+
+type logFetcher func(ctx context.Context, tail string, follow bool, since, until string) (LogStream, error)
+
+func wantsSSE(r *http.Request) bool {
+	return strings.Contains(r.Header.Get("Accept"), "text/event-stream")
+}
+
+func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFetcher) {
 	q := r.URL.Query()
-	tail := q.Get("tail")
-	if tail == "" {
-		tail = "200"
-	}
-	follow := q.Get("follow") == "true"
-	since := q.Get("since")
-	until := q.Get("until")
+	since := q.Get("after")
+	until := q.Get("before")
 
-	logs, err := h.dockerClient.TaskLogs(r.Context(), id, tail, follow, since, until)
+	if wantsSSE(r) {
+		h.serveLogsSSE(w, r, fetch, since)
+		return
+	}
+
+	limit := defaultLogLimit
+	if v := q.Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	if limit > maxLogLimit {
+		limit = maxLogLimit
+	}
+
+	logs, err := fetch(r.Context(), strconv.Itoa(limit), false, since, until)
 	if err != nil {
 		http.Error(w, "failed to get logs", http.StatusInternalServerError)
 		return
 	}
-	defer logs.Close() //nolint:errcheck // best-effort close
+	defer logs.Close() //nolint:errcheck
 
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	if follow {
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		fw := flushWriter{w: w, flusher: w.(http.Flusher)}
-		_, _ = stdcopy.StdCopy(&fw, &fw, logs)
-	} else {
-		_, _ = stdcopy.StdCopy(w, w, logs)
+	lines, err := ParseDockerLogs(logs)
+	if err != nil {
+		http.Error(w, "failed to parse logs", http.StatusInternalServerError)
+		return
 	}
+	if lines == nil {
+		lines = []LogLine{}
+	}
+
+	resp := LogResponse{Lines: lines}
+	if len(lines) > 0 {
+		resp.Oldest = lines[0].Timestamp
+		resp.Newest = lines[len(lines)-1].Timestamp
+	}
+	writeJSON(w, resp)
+}
+
+func (h *Handlers) serveLogsSSE(w http.ResponseWriter, r *http.Request, fetch logFetcher, since string) {
+	logs, err := fetch(r.Context(), "0", true, since, "")
+	if err != nil {
+		http.Error(w, "failed to get logs", http.StatusInternalServerError)
+		return
+	}
+	defer logs.Close() //nolint:errcheck
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	ch := make(chan LogLine, 64)
+	done := make(chan error, 1)
+	go func() {
+		done <- StreamDockerLogs(logs, ch)
+		close(ch)
+	}()
+
+	for line := range ch {
+		data, _ := json.Marshal(line)
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		flusher.Flush()
+	}
+
+	// Drain error (EOF is normal)
+	<-done
 }
 
 // --- Stacks ---
