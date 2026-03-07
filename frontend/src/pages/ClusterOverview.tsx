@@ -2,12 +2,16 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { api, type ClusterSnapshot } from "../api/client";
+import type { HistoryEntry } from "../api/types";
 import { useSSE } from "../hooks/useSSE";
 import PageHeader from "../components/PageHeader";
+import ActivityFeed from "../components/ActivityFeed";
 
 export default function ClusterOverview() {
   const [snapshot, setSnapshot] = useState<ClusterSnapshot | null>(null);
   const prevRef = useRef<ClusterSnapshot | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
 
   const fetchSnapshot = useCallback(() => {
     api.cluster().then((s) => {
@@ -20,6 +24,11 @@ export default function ClusterOverview() {
 
   useEffect(() => {
     fetchSnapshot();
+    api
+      .history({ limit: 20 })
+      .then(setHistory)
+      .catch(() => {})
+      .finally(() => setHistoryLoading(false));
   }, [fetchSnapshot]);
 
   useSSE(
@@ -92,6 +101,11 @@ export default function ClusterOverview() {
         />
         <StatCard label="Tasks Other" value={tasksOther} prev={prev ? prevOther : undefined} />
         <StatCard label="Tasks Total" value={snapshot.taskCount} prev={prev?.taskCount} />
+      </div>
+
+      <div className="mt-6">
+        <h2 className="text-lg font-semibold mb-3">Recent Activity</h2>
+        <ActivityFeed entries={history} loading={historyLoading} />
       </div>
     </div>
   );

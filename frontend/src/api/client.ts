@@ -9,6 +9,7 @@ import type {
   Network,
   Volume,
   PagedResponse,
+  HistoryEntry,
 } from "./types";
 
 const BASE = "/api";
@@ -113,6 +114,14 @@ export const api = {
     if (opts?.stream) params.set("stream", opts.stream);
     const qs = params.toString();
     return `${BASE}/tasks/${id}/logs${qs ? `?${qs}` : ""}`;
+  },
+  history: (params?: { type?: string; resourceId?: string; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.type) qs.set("type", params.type);
+    if (params?.resourceId) qs.set("resourceId", params.resourceId);
+    if (params?.limit) qs.set("limit", String(params.limit));
+    const query = qs.toString();
+    return fetchJSON<HistoryEntry[]>(`/history${query ? `?${query}` : ""}`);
   },
   nodeTasks: (id: string) => fetchJSON<Task[]>(`/nodes/${id}/tasks`),
   metricsQuery: (query: string, time?: string) => {

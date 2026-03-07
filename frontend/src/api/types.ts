@@ -211,6 +211,16 @@ export interface PagedResponse<T> {
   total: number;
 }
 
+export interface HistoryEntry {
+  id: number;
+  timestamp: string;
+  type: string;
+  action: string;
+  resourceId: string;
+  name: string;
+  summary?: string;
+}
+
 export interface StackDetail {
   name: string;
   services: Service[];
