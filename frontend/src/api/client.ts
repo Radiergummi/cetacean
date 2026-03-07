@@ -8,6 +8,7 @@ import type {
   Secret,
   Network,
   Volume,
+  PagedResponse,
 } from "./types";
 
 const BASE = "/api";
@@ -40,19 +41,38 @@ export interface ClusterSnapshot {
   nodesDown: number;
 }
 
+export interface ListParams {
+  limit?: number;
+  offset?: number;
+  sort?: string;
+  dir?: "asc" | "desc";
+  search?: string;
+}
+
+function buildListURL(path: string, params?: ListParams): string {
+  const qs = new URLSearchParams();
+  if (params?.limit) qs.set("limit", String(params.limit));
+  if (params?.offset) qs.set("offset", String(params.offset));
+  if (params?.sort) qs.set("sort", params.sort);
+  if (params?.dir) qs.set("dir", params.dir);
+  if (params?.search) qs.set("search", params.search);
+  const query = qs.toString();
+  return `${path}${query ? `?${query}` : ""}`;
+}
+
 export const api = {
   cluster: () => fetchJSON<ClusterSnapshot>("/cluster"),
-  nodes: () => fetchJSON<Node[]>("/nodes"),
+  nodes: (params?: ListParams) => fetchJSON<PagedResponse<Node>>(buildListURL("/nodes", params)),
   node: (id: string) => fetchJSON<Node>(`/nodes/${id}`),
-  services: () => fetchJSON<Service[]>("/services"),
+  services: (params?: ListParams) => fetchJSON<PagedResponse<Service>>(buildListURL("/services", params)),
   service: (id: string) => fetchJSON<Service>(`/services/${id}`),
-  tasks: () => fetchJSON<Task[]>("/tasks"),
-  stacks: () => fetchJSON<Stack[]>("/stacks"),
+  tasks: (params?: ListParams) => fetchJSON<PagedResponse<Task>>(buildListURL("/tasks", params)),
+  stacks: (params?: ListParams) => fetchJSON<PagedResponse<Stack>>(buildListURL("/stacks", params)),
   stack: (name: string) => fetchJSON<StackDetail>(`/stacks/${name}`),
-  configs: () => fetchJSON<Config[]>("/configs"),
-  secrets: () => fetchJSON<Secret[]>("/secrets"),
-  networks: () => fetchJSON<Network[]>("/networks"),
-  volumes: () => fetchJSON<Volume[]>("/volumes"),
+  configs: (params?: ListParams) => fetchJSON<PagedResponse<Config>>(buildListURL("/configs", params)),
+  secrets: (params?: ListParams) => fetchJSON<PagedResponse<Secret>>(buildListURL("/secrets", params)),
+  networks: (params?: ListParams) => fetchJSON<PagedResponse<Network>>(buildListURL("/networks", params)),
+  volumes: (params?: ListParams) => fetchJSON<PagedResponse<Volume>>(buildListURL("/volumes", params)),
   task: (id: string) => fetchJSON<Task>(`/tasks/${id}`),
   taskLogs: (
     id: string,
