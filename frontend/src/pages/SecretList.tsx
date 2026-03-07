@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useViewMode } from "../hooks/useViewMode";
 import { useSearchParam } from "../hooks/useSearchParam";
@@ -26,13 +27,17 @@ const columns: Column<Secret>[] = [
 ];
 
 export default function SecretList() {
+  const [search, setSearch] = useSearchParam("q");
   const {
     data: secrets,
     loading,
     error,
     retry,
-  } = useSwarmResource(api.secrets, "secret", (s: Secret) => s.ID);
-  const [search, setSearch] = useSearchParam("q");
+  } = useSwarmResource(
+    useCallback(() => api.secrets({ search }), [search]),
+    "secret",
+    (s: Secret) => s.ID,
+  );
   const [viewMode, setViewMode] = useViewMode("secrets");
 
   if (loading)
@@ -44,10 +49,6 @@ export default function SecretList() {
     );
   if (error) return <FetchError message={error.message} onRetry={retry} />;
 
-  const filtered = secrets.filter((s) =>
-    (s.Spec.Name || s.ID).toLowerCase().includes(search.toLowerCase()),
-  );
-
   return (
     <div>
       <PageHeader title="Secrets" />
@@ -58,13 +59,13 @@ export default function SecretList() {
         <SearchInput value={search} onChange={setSearch} placeholder="Search secrets..." />
         <ViewToggle mode={viewMode} onChange={setViewMode} />
       </div>
-      {filtered.length === 0 ? (
+      {secrets.length === 0 ? (
         <EmptyState message={search ? "No secrets match your search" : "No secrets found"} />
       ) : viewMode === "table" ? (
-        <DataTable columns={columns} data={filtered} keyFn={(s) => s.ID} />
+        <DataTable columns={columns} data={secrets} keyFn={(s) => s.ID} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((secret) => (
+          {secrets.map((secret) => (
             <div key={secret.ID} className="rounded-lg border bg-card p-4">
               <div className="font-medium mb-2 truncate">{secret.Spec.Name || secret.ID}</div>
               <div className="space-y-1 text-xs text-muted-foreground">

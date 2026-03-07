@@ -64,15 +64,20 @@ export const api = {
   cluster: () => fetchJSON<ClusterSnapshot>("/cluster"),
   nodes: (params?: ListParams) => fetchJSON<PagedResponse<Node>>(buildListURL("/nodes", params)),
   node: (id: string) => fetchJSON<Node>(`/nodes/${id}`),
-  services: (params?: ListParams) => fetchJSON<PagedResponse<Service>>(buildListURL("/services", params)),
+  services: (params?: ListParams) =>
+    fetchJSON<PagedResponse<Service>>(buildListURL("/services", params)),
   service: (id: string) => fetchJSON<Service>(`/services/${id}`),
   tasks: (params?: ListParams) => fetchJSON<PagedResponse<Task>>(buildListURL("/tasks", params)),
   stacks: (params?: ListParams) => fetchJSON<PagedResponse<Stack>>(buildListURL("/stacks", params)),
   stack: (name: string) => fetchJSON<StackDetail>(`/stacks/${name}`),
-  configs: (params?: ListParams) => fetchJSON<PagedResponse<Config>>(buildListURL("/configs", params)),
-  secrets: (params?: ListParams) => fetchJSON<PagedResponse<Secret>>(buildListURL("/secrets", params)),
-  networks: (params?: ListParams) => fetchJSON<PagedResponse<Network>>(buildListURL("/networks", params)),
-  volumes: (params?: ListParams) => fetchJSON<PagedResponse<Volume>>(buildListURL("/volumes", params)),
+  configs: (params?: ListParams) =>
+    fetchJSON<PagedResponse<Config>>(buildListURL("/configs", params)),
+  secrets: (params?: ListParams) =>
+    fetchJSON<PagedResponse<Secret>>(buildListURL("/secrets", params)),
+  networks: (params?: ListParams) =>
+    fetchJSON<PagedResponse<Network>>(buildListURL("/networks", params)),
+  volumes: (params?: ListParams) =>
+    fetchJSON<PagedResponse<Volume>>(buildListURL("/volumes", params)),
   task: (id: string) => fetchJSON<Task>(`/tasks/${id}`),
   taskLogs: (
     id: string,

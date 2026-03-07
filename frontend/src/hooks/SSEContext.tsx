@@ -34,16 +34,30 @@ export function SSEProvider({ children }: { children: ReactNode }) {
     es.onopen = () => setConnected(true);
     es.onerror = () => setConnected(false);
 
+    const dispatch = (data: SSEEvent) => {
+      for (const entry of listenersRef.current.values()) {
+        if (entry.types.size === 0 || entry.types.has(data.type)) {
+          entry.fn(data);
+        }
+      }
+    };
+
     const handler = (e: MessageEvent) => {
       try {
-        const data = JSON.parse(e.data) as SSEEvent;
-        for (const entry of listenersRef.current.values()) {
-          if (entry.types.size === 0 || entry.types.has(data.type)) {
-            entry.fn(data);
-          }
-        }
+        dispatch(JSON.parse(e.data) as SSEEvent);
       } catch {
         // ignore malformed events
+      }
+    };
+
+    const batchHandler = (e: MessageEvent) => {
+      try {
+        const events = JSON.parse(e.data) as SSEEvent[];
+        for (const event of events) {
+          dispatch(event);
+        }
+      } catch {
+        // ignore parse errors
       }
     };
 
@@ -61,6 +75,7 @@ export function SSEProvider({ children }: { children: ReactNode }) {
     for (const type of eventTypes) {
       es.addEventListener(type, handler);
     }
+    es.addEventListener("batch", batchHandler);
 
     return () => es.close();
   }, []);

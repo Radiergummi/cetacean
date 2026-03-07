@@ -66,7 +66,8 @@ function wrapper({ children }: { children: ReactNode }) {
 
 describe("ConfigList", () => {
   it("renders config list", async () => {
-    mockConfigs.mockResolvedValue([fakeConfig("c1", "app-config"), fakeConfig("c2", "db-config")]);
+    const items = [fakeConfig("c1", "app-config"), fakeConfig("c2", "db-config")];
+    mockConfigs.mockResolvedValue({ items, total: 2 });
     render(<ConfigList />, { wrapper });
 
     await waitFor(() => {
@@ -76,7 +77,15 @@ describe("ConfigList", () => {
   });
 
   it("filters by search", async () => {
-    mockConfigs.mockResolvedValue([fakeConfig("c1", "app-config"), fakeConfig("c2", "db-config")]);
+    mockConfigs
+      .mockResolvedValueOnce({
+        items: [fakeConfig("c1", "app-config"), fakeConfig("c2", "db-config")],
+        total: 2,
+      })
+      .mockResolvedValueOnce({
+        items: [fakeConfig("c2", "db-config")],
+        total: 1,
+      });
     render(<ConfigList />, { wrapper });
 
     await waitFor(() => {
@@ -87,12 +96,14 @@ describe("ConfigList", () => {
       target: { value: "db" },
     });
 
-    expect(screen.queryByText("app-config")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("app-config")).not.toBeInTheDocument();
+    });
     expect(screen.getByText("db-config")).toBeInTheDocument();
   });
 
   it("shows empty state", async () => {
-    mockConfigs.mockResolvedValue([]);
+    mockConfigs.mockResolvedValue({ items: [], total: 0 });
     render(<ConfigList />, { wrapper });
 
     await waitFor(() => {
