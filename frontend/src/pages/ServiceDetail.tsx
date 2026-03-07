@@ -10,6 +10,7 @@ import TaskStateFilter from "../components/TaskStateFilter";
 import LogViewer from "../components/LogViewer";
 import PageHeader from "../components/PageHeader";
 import { LoadingDetail } from "../components/LoadingSkeleton";
+import TimeAgo, { timeAgo } from "../components/TimeAgo";
 
 export default function ServiceDetail() {
   const { id } = useParams<{ id: string }>();
@@ -70,12 +71,8 @@ export default function ServiceDetail() {
               : undefined
           }
         />
-        {service.CreatedAt && (
-          <InfoCard label="Created" value={new Date(service.CreatedAt).toLocaleString()} />
-        )}
-        {service.UpdatedAt && (
-          <InfoCard label="Updated" value={new Date(service.UpdatedAt).toLocaleString()} />
-        )}
+        {service.CreatedAt && <InfoCard label="Created" value={timeAgo(service.CreatedAt)} />}
+        {service.UpdatedAt && <InfoCard label="Updated" value={timeAgo(service.UpdatedAt)} />}
       </div>
 
       {/* Container configuration */}
@@ -101,7 +98,7 @@ export default function ServiceDetail() {
         <Section title="Environment Variables">
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-background">
                 <tr className="border-b bg-muted/50">
                   <th className="text-left p-3 text-sm font-medium">Variable</th>
                   <th className="text-left p-3 text-sm font-medium">Value</th>
@@ -146,23 +143,16 @@ export default function ServiceDetail() {
       {/* Labels */}
       {nonStackLabels.length > 0 && (
         <Section title="Labels">
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="text-left p-3 text-sm font-medium">Key</th>
-                  <th className="text-left p-3 text-sm font-medium">Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {nonStackLabels.map(([k, v]) => (
-                  <tr key={k} className="border-b">
-                    <td className="p-3 text-sm font-mono text-xs">{k}</td>
-                    <td className="p-3 text-sm font-mono text-xs break-all">{v}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="flex flex-wrap gap-2">
+            {nonStackLabels.map(([k, v]) => (
+              <span
+                key={k}
+                className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-mono"
+              >
+                <span className="text-muted-foreground">{k}=</span>
+                {v}
+              </span>
+            ))}
           </div>
         </Section>
       )}
@@ -172,7 +162,7 @@ export default function ServiceDetail() {
         <Section title="Ports">
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-background">
                 <tr className="border-b bg-muted/50">
                   <th className="text-left p-3 text-sm font-medium">Published</th>
                   <th className="text-left p-3 text-sm font-medium">Target</th>
@@ -200,7 +190,7 @@ export default function ServiceDetail() {
         <Section title="Mounts">
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-background">
                 <tr className="border-b bg-muted/50">
                   <th className="text-left p-3 text-sm font-medium">Type</th>
                   <th className="text-left p-3 text-sm font-medium">Source</th>
@@ -228,7 +218,7 @@ export default function ServiceDetail() {
         <Section title="Configs">
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-background">
                 <tr className="border-b bg-muted/50">
                   <th className="text-left p-3 text-sm font-medium">Name</th>
                   <th className="text-left p-3 text-sm font-medium">Target</th>
@@ -252,7 +242,7 @@ export default function ServiceDetail() {
         <Section title="Secrets">
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-background">
                 <tr className="border-b bg-muted/50">
                   <th className="text-left p-3 text-sm font-medium">Name</th>
                   <th className="text-left p-3 text-sm font-medium">Target</th>
@@ -405,7 +395,7 @@ export default function ServiceDetail() {
           </div>
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-background">
                 <tr className="border-b bg-muted/50">
                   <th className="text-left p-3 text-sm font-medium">ID</th>
                   <th className="text-left p-3 text-sm font-medium">Slot</th>
@@ -445,9 +435,11 @@ export default function ServiceDetail() {
                       <td className="p-3 text-sm">{task.DesiredState}</td>
                       <td className="p-3 text-sm text-red-600 dark:text-red-400">{errorMsg}</td>
                       <td className="p-3 text-sm text-muted-foreground">
-                        {task.Status.Timestamp
-                          ? new Date(task.Status.Timestamp).toLocaleString()
-                          : "\u2014"}
+                        {task.Status.Timestamp ? (
+                          <TimeAgo date={task.Status.Timestamp} />
+                        ) : (
+                          "\u2014"
+                        )}
                       </td>
                     </tr>
                   );

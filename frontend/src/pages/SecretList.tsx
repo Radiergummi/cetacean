@@ -9,6 +9,7 @@ import ViewToggle from "../components/ViewToggle";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
 import { LoadingPage } from "../components/LoadingSkeleton";
+import TimeAgo from "../components/TimeAgo";
 
 export default function SecretList() {
   const {
@@ -42,7 +43,7 @@ export default function SecretList() {
       ) : viewMode === "table" ? (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-background">
               <tr className="border-b bg-muted/50">
                 <th className="text-left p-3 text-sm font-medium">Name</th>
                 <th className="text-left p-3 text-sm font-medium">Created</th>
@@ -54,10 +55,10 @@ export default function SecretList() {
                 <tr key={secret.ID} className="border-b">
                   <td className="p-3 text-sm">{secret.Spec.Name || secret.ID}</td>
                   <td className="p-3 text-sm">
-                    {secret.CreatedAt ? new Date(secret.CreatedAt).toLocaleString() : "\u2014"}
+                    {secret.CreatedAt ? <TimeAgo date={secret.CreatedAt} /> : "\u2014"}
                   </td>
                   <td className="p-3 text-sm">
-                    {secret.UpdatedAt ? new Date(secret.UpdatedAt).toLocaleString() : "\u2014"}
+                    {secret.UpdatedAt ? <TimeAgo date={secret.UpdatedAt} /> : "\u2014"}
                   </td>
                 </tr>
               ))}
@@ -71,12 +72,10 @@ export default function SecretList() {
               <div className="font-medium mb-2 truncate">{secret.Spec.Name || secret.ID}</div>
               <div className="space-y-1 text-xs text-muted-foreground">
                 <div>
-                  Created:{" "}
-                  {secret.CreatedAt ? new Date(secret.CreatedAt).toLocaleString() : "\u2014"}
+                  Created: {secret.CreatedAt ? <TimeAgo date={secret.CreatedAt} /> : "\u2014"}
                 </div>
                 <div>
-                  Updated:{" "}
-                  {secret.UpdatedAt ? new Date(secret.UpdatedAt).toLocaleString() : "\u2014"}
+                  Updated: {secret.UpdatedAt ? <TimeAgo date={secret.UpdatedAt} /> : "\u2014"}
                 </div>
               </div>
             </div>

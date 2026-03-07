@@ -9,6 +9,7 @@ import ViewToggle from "../components/ViewToggle";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
 import { LoadingPage } from "../components/LoadingSkeleton";
+import TimeAgo from "../components/TimeAgo";
 
 export default function ConfigList() {
   const {
@@ -39,7 +40,7 @@ export default function ConfigList() {
       ) : viewMode === "table" ? (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-background">
               <tr className="border-b bg-muted/50">
                 <th className="text-left p-3 text-sm font-medium">Name</th>
                 <th className="text-left p-3 text-sm font-medium">Created</th>
@@ -51,10 +52,10 @@ export default function ConfigList() {
                 <tr key={cfg.ID} className="border-b">
                   <td className="p-3 text-sm">{cfg.Spec.Name || cfg.ID}</td>
                   <td className="p-3 text-sm">
-                    {cfg.CreatedAt ? new Date(cfg.CreatedAt).toLocaleString() : "\u2014"}
+                    {cfg.CreatedAt ? <TimeAgo date={cfg.CreatedAt} /> : "\u2014"}
                   </td>
                   <td className="p-3 text-sm">
-                    {cfg.UpdatedAt ? new Date(cfg.UpdatedAt).toLocaleString() : "\u2014"}
+                    {cfg.UpdatedAt ? <TimeAgo date={cfg.UpdatedAt} /> : "\u2014"}
                   </td>
                 </tr>
               ))}
@@ -67,12 +68,8 @@ export default function ConfigList() {
             <div key={cfg.ID} className="rounded-lg border bg-card p-4">
               <div className="font-medium mb-2 truncate">{cfg.Spec.Name || cfg.ID}</div>
               <div className="space-y-1 text-xs text-muted-foreground">
-                <div>
-                  Created: {cfg.CreatedAt ? new Date(cfg.CreatedAt).toLocaleString() : "\u2014"}
-                </div>
-                <div>
-                  Updated: {cfg.UpdatedAt ? new Date(cfg.UpdatedAt).toLocaleString() : "\u2014"}
-                </div>
+                <div>Created: {cfg.CreatedAt ? <TimeAgo date={cfg.CreatedAt} /> : "\u2014"}</div>
+                <div>Updated: {cfg.UpdatedAt ? <TimeAgo date={cfg.UpdatedAt} /> : "\u2014"}</div>
               </div>
             </div>
           ))}

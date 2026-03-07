@@ -9,6 +9,7 @@ import TaskStateFilter from "../components/TaskStateFilter";
 import PageHeader from "../components/PageHeader";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import NodeResourceGauges from "../components/NodeResourceGauges";
+import TimeAgo from "../components/TimeAgo";
 
 export default function NodeDetail() {
   const { id } = useParams<{ id: string }>();
@@ -59,7 +60,18 @@ export default function NodeDetail() {
           value={`${node.Description.Platform.OS} ${node.Description.Platform.Architecture}`}
         />
         <InfoCard label="Address" value={addr} />
+        <InfoCard
+          label="CPUs"
+          value={`${(node.Description.Resources.NanoCPUs / 1_000_000_000).toFixed(0)}`}
+        />
+        <InfoCard label="Memory" value={formatBytes(node.Description.Resources.MemoryBytes)} />
       </div>
+      {node.ManagerStatus && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <InfoCard label="Manager" value={node.ManagerStatus.Leader ? "Leader" : "Reachable"} />
+          <InfoCard label="Manager Address" value={node.ManagerStatus.Addr} />
+        </div>
+      )}
 
       {tasks.length > 0 && (
         <div className="mb-6">
@@ -71,7 +83,7 @@ export default function NodeDetail() {
           </div>
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-background">
                 <tr className="border-b bg-muted/50">
                   <th className="text-left p-3 text-sm font-medium">ID</th>
                   <th className="text-left p-3 text-sm font-medium">Service</th>
@@ -109,9 +121,11 @@ export default function NodeDetail() {
                       <td className="p-3 text-sm">{task.DesiredState}</td>
                       <td className="p-3 text-sm text-red-600">{errorMsg}</td>
                       <td className="p-3 text-sm text-muted-foreground">
-                        {task.Status.Timestamp
-                          ? new Date(task.Status.Timestamp).toLocaleString()
-                          : "\u2014"}
+                        {task.Status.Timestamp ? (
+                          <TimeAgo date={task.Status.Timestamp} />
+                        ) : (
+                          "\u2014"
+                        )}
                       </td>
                     </tr>
                   );
@@ -148,4 +162,10 @@ export default function NodeDetail() {
       />
     </div>
   );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
+  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(0)} MB`;
+  return `${(bytes / 1024).toFixed(0)} KB`;
 }

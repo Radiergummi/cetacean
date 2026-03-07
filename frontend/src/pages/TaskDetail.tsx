@@ -7,6 +7,7 @@ import TaskStatusBadge from "../components/TaskStatusBadge";
 import LogViewer from "../components/LogViewer";
 import PageHeader from "../components/PageHeader";
 import { LoadingDetail } from "../components/LoadingSkeleton";
+import { timeAgo } from "../components/TimeAgo";
 
 export default function TaskDetail() {
   const { id } = useParams<{ id: string }>();
@@ -53,9 +54,7 @@ export default function TaskDetail() {
         <InfoCard label="Image" value={task.Spec.ContainerSpec.Image.split("@")[0]} />
         <InfoCard
           label="Timestamp"
-          value={
-            task.Status.Timestamp ? new Date(task.Status.Timestamp).toLocaleString() : undefined
-          }
+          value={task.Status.Timestamp ? timeAgo(task.Status.Timestamp) : undefined}
         />
         {containerId && <InfoCard label="Container" value={containerId.slice(0, 12)} />}
         {exitCode != null && exitCode !== 0 && (

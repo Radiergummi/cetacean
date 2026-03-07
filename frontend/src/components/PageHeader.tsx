@@ -8,10 +8,11 @@ interface Crumb {
 
 interface Props {
   title: string;
+  subtitle?: string;
   breadcrumbs?: Crumb[];
 }
 
-export default function PageHeader({ title, breadcrumbs }: Props) {
+export default function PageHeader({ title, subtitle, breadcrumbs }: Props) {
   return (
     <div className="mb-6">
       {breadcrumbs && breadcrumbs.length > 0 && (
@@ -31,6 +32,7 @@ export default function PageHeader({ title, breadcrumbs }: Props) {
         </nav>
       )}
       <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+      {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
     </div>
   );
 }

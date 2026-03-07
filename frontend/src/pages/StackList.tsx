@@ -53,7 +53,7 @@ export default function StackList() {
       ) : viewMode === "table" ? (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-background">
               <tr className="border-b bg-muted/50">
                 <SortableHeader
                   label="Name"

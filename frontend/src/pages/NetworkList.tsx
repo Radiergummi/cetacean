@@ -37,7 +37,7 @@ export default function NetworkList() {
       ) : viewMode === "table" ? (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-background">
               <tr className="border-b bg-muted/50">
                 <th className="text-left p-3 text-sm font-medium">Name</th>
                 <th className="text-left p-3 text-sm font-medium">Driver</th>

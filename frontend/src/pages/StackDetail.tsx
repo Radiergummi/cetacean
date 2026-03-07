@@ -17,10 +17,24 @@ export default function StackDetail() {
 
   if (!stack) return <LoadingDetail />;
 
+  const parts: string[] = [];
+  if (stack.services?.length)
+    parts.push(`${stack.services.length} service${stack.services.length !== 1 ? "s" : ""}`);
+  if (stack.configs?.length)
+    parts.push(`${stack.configs.length} config${stack.configs.length !== 1 ? "s" : ""}`);
+  if (stack.secrets?.length)
+    parts.push(`${stack.secrets.length} secret${stack.secrets.length !== 1 ? "s" : ""}`);
+  if (stack.networks?.length)
+    parts.push(`${stack.networks.length} network${stack.networks.length !== 1 ? "s" : ""}`);
+  if (stack.volumes?.length)
+    parts.push(`${stack.volumes.length} volume${stack.volumes.length !== 1 ? "s" : ""}`);
+  const subtitle = parts.join(", ");
+
   return (
     <div>
       <PageHeader
         title={stack.name}
+        subtitle={subtitle}
         breadcrumbs={[{ label: "Stacks", to: "/stacks" }, { label: stack.name }]}
       />
       <div className="space-y-6">
@@ -31,7 +45,7 @@ export default function StackDetail() {
             </h2>
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full">
-                <thead>
+                <thead className="sticky top-0 z-10 bg-background">
                   <tr className="border-b bg-muted/50">
                     <th className="text-left p-3 text-sm font-medium">Name</th>
                     <th className="text-left p-3 text-sm font-medium">Image</th>
@@ -108,7 +122,7 @@ export default function StackDetail() {
             </h2>
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full">
-                <thead>
+                <thead className="sticky top-0 z-10 bg-background">
                   <tr className="border-b bg-muted/50">
                     <th className="text-left p-3 text-sm font-medium">Name</th>
                     <th className="text-left p-3 text-sm font-medium">Driver</th>
