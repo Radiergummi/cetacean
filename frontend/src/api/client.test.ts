@@ -83,7 +83,10 @@ describe("api client", () => {
   });
 
   it("builds service logs stream URL with stream filter", () => {
-    const url = api.serviceLogsStreamURL("svc1", { after: "2024-01-01T00:00:00Z", stream: "stdout" });
+    const url = api.serviceLogsStreamURL("svc1", {
+      after: "2024-01-01T00:00:00Z",
+      stream: "stdout",
+    });
     expect(url).toBe("/api/services/svc1/logs?after=2024-01-01T00%3A00%3A00Z&stream=stdout");
   });
 

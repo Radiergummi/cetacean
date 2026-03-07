@@ -175,7 +175,9 @@ describe("LogViewer", () => {
     mockServiceLogs.mockResolvedValue(
       logResponse([{ message: "initial line", timestamp: "2024-01-01T00:00:00Z" }]),
     );
-    mockServiceLogsStreamURL.mockReturnValue("/api/services/svc1/logs?after=2024-01-01T00%3A00%3A00Z");
+    mockServiceLogsStreamURL.mockReturnValue(
+      "/api/services/svc1/logs?after=2024-01-01T00%3A00%3A00Z",
+    );
 
     render(<LogViewer serviceId="svc1" />);
 

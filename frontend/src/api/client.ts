@@ -54,7 +54,10 @@ export const api = {
   networks: () => fetchJSON<Network[]>("/networks"),
   volumes: () => fetchJSON<Volume[]>("/volumes"),
   task: (id: string) => fetchJSON<Task>(`/tasks/${id}`),
-  taskLogs: (id: string, opts?: { limit?: number; after?: string; before?: string; stream?: string }) => {
+  taskLogs: (
+    id: string,
+    opts?: { limit?: number; after?: string; before?: string; stream?: string },
+  ) => {
     const params = new URLSearchParams({ limit: String(opts?.limit || 500) });
     if (opts?.after) params.set("after", opts.after);
     if (opts?.before) params.set("before", opts.before);
@@ -62,7 +65,10 @@ export const api = {
     return fetchJSON<LogResponse>(`/tasks/${id}/logs?${params}`);
   },
   serviceTasks: (id: string) => fetchJSON<Task[]>(`/services/${id}/tasks`),
-  serviceLogs: (id: string, opts?: { limit?: number; after?: string; before?: string; stream?: string }) => {
+  serviceLogs: (
+    id: string,
+    opts?: { limit?: number; after?: string; before?: string; stream?: string },
+  ) => {
     const params = new URLSearchParams({ limit: String(opts?.limit || 500) });
     if (opts?.after) params.set("after", opts.after);
     if (opts?.before) params.set("before", opts.before);

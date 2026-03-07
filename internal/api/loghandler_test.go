@@ -315,7 +315,7 @@ func TestHandleServiceLogs_SSE_LastEventID(t *testing.T) {
 	// Track what "since" value the mock receives
 	var capturedSince string
 	mock := &capturingLogStreamer{
-		data: frames.Bytes(),
+		data:   frames.Bytes(),
 		onCall: func(since string) { capturedSince = since },
 	}
 	h := NewHandlers(c, mock)
@@ -339,7 +339,7 @@ func TestHandleServiceLogs_SSE_LastEventID_OverriddenByAfter(t *testing.T) {
 
 	var capturedSince string
 	mock := &capturingLogStreamer{
-		data: buildFrame(1, "2024-01-01T00:00:05.000000000Z line\n"),
+		data:   buildFrame(1, "2024-01-01T00:00:05.000000000Z line\n"),
 		onCall: func(since string) { capturedSince = since },
 	}
 	h := NewHandlers(c, mock)
