@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 interface Column<T> {
-  header: string;
+  header: ReactNode;
   cell: (item: T) => ReactNode;
   className?: string;
 }
@@ -20,9 +20,9 @@ export default function DataTable<T>({ columns, data, keyFn, rowClassName, onRow
       <table className="w-full">
         <thead className="sticky top-0 z-10 bg-background">
           <tr className="border-b bg-muted/50">
-            {columns.map((col) => (
+            {columns.map((col, i) => (
               <th
-                key={col.header}
+                key={i}
                 className={`text-left p-3 text-sm font-medium ${col.className ?? ""}`}
               >
                 {col.header}
@@ -37,8 +37,8 @@ export default function DataTable<T>({ columns, data, keyFn, rowClassName, onRow
               className={`border-b ${onRowClick ? "cursor-pointer hover:bg-muted/50" : ""} ${rowClassName?.(item) ?? ""}`}
               onClick={onRowClick ? () => onRowClick(item) : undefined}
             >
-              {columns.map((col) => (
-                <td key={col.header} className={`p-3 text-sm ${col.className ?? ""}`}>
+              {columns.map((col, i) => (
+                <td key={i} className={`p-3 text-sm ${col.className ?? ""}`}>
                   {col.cell(item)}
                 </td>
               ))}

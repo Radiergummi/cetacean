@@ -9,6 +9,14 @@ import ViewToggle from "../components/ViewToggle";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
 import { SkeletonTable } from "../components/LoadingSkeleton";
+import DataTable from "../components/DataTable";
+import type { Column } from "../components/DataTable";
+
+const columns: Column<Volume>[] = [
+  { header: "Name", cell: (v) => v.Name },
+  { header: "Driver", cell: (v) => v.Driver },
+  { header: "Scope", cell: (v) => v.Scope },
+];
 
 export default function VolumeList() {
   const {
@@ -41,26 +49,7 @@ export default function VolumeList() {
       {filtered.length === 0 ? (
         <EmptyState message={search ? "No volumes match your search" : "No volumes found"} />
       ) : viewMode === "table" ? (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full">
-            <thead className="sticky top-0 z-10 bg-background">
-              <tr className="border-b bg-muted/50">
-                <th className="text-left p-3 text-sm font-medium">Name</th>
-                <th className="text-left p-3 text-sm font-medium">Driver</th>
-                <th className="text-left p-3 text-sm font-medium">Scope</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((vol) => (
-                <tr key={vol.Name} className="border-b">
-                  <td className="p-3 text-sm">{vol.Name}</td>
-                  <td className="p-3 text-sm">{vol.Driver}</td>
-                  <td className="p-3 text-sm">{vol.Scope}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable columns={columns} data={filtered} keyFn={(v) => v.Name} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((vol) => (

@@ -1,3 +1,4 @@
+import type React from "react";
 import { useParams, Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { api } from "../api/client";
@@ -54,6 +55,17 @@ export default function StackDetail() {
     parts.push(`${stack.volumes.length} volume${stack.volumes.length !== 1 ? "s" : ""}`);
   const subtitle = parts.join(", ");
 
+  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div>
+      <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
+        {title}
+      </h2>
+      {children}
+    </div>
+  );
+
+  const SectionEmpty = () => <p className="text-sm text-muted-foreground">None</p>;
+
   return (
     <div>
       <PageHeader
@@ -62,11 +74,8 @@ export default function StackDetail() {
         breadcrumbs={[{ label: "Stacks", to: "/stacks" }, { label: stack.name }]}
       />
       <div className="space-y-6">
-        {stack.services?.length > 0 && (
-          <div>
-            <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-              Services
-            </h2>
+        <Section title="Services">
+          {stack.services?.length > 0 ? (
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full">
                 <thead className="sticky top-0 z-10 bg-background">
@@ -117,14 +126,13 @@ export default function StackDetail() {
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
+          ) : (
+            <SectionEmpty />
+          )}
+        </Section>
 
-        {stack.configs?.length > 0 && (
-          <div>
-            <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-              Configs
-            </h2>
+        <Section title="Configs">
+          {stack.configs?.length > 0 ? (
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full">
                 <tbody>
@@ -136,14 +144,13 @@ export default function StackDetail() {
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
+          ) : (
+            <SectionEmpty />
+          )}
+        </Section>
 
-        {stack.secrets?.length > 0 && (
-          <div>
-            <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-              Secrets
-            </h2>
+        <Section title="Secrets">
+          {stack.secrets?.length > 0 ? (
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full">
                 <tbody>
@@ -155,14 +162,13 @@ export default function StackDetail() {
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
+          ) : (
+            <SectionEmpty />
+          )}
+        </Section>
 
-        {stack.networks?.length > 0 && (
-          <div>
-            <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-              Networks
-            </h2>
+        <Section title="Networks">
+          {stack.networks?.length > 0 ? (
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full">
                 <thead className="sticky top-0 z-10 bg-background">
@@ -181,14 +187,13 @@ export default function StackDetail() {
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
+          ) : (
+            <SectionEmpty />
+          )}
+        </Section>
 
-        {stack.volumes?.length > 0 && (
-          <div>
-            <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-              Volumes
-            </h2>
+        <Section title="Volumes">
+          {stack.volumes?.length > 0 ? (
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full">
                 <tbody>
@@ -200,8 +205,10 @@ export default function StackDetail() {
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
+          ) : (
+            <SectionEmpty />
+          )}
+        </Section>
       </div>
     </div>
   );

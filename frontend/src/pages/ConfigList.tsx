@@ -9,7 +9,21 @@ import ViewToggle from "../components/ViewToggle";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
 import { SkeletonTable } from "../components/LoadingSkeleton";
+import DataTable from "../components/DataTable";
+import type { Column } from "../components/DataTable";
 import TimeAgo from "../components/TimeAgo";
+
+const columns: Column<Config>[] = [
+  { header: "Name", cell: (c) => c.Spec.Name || c.ID },
+  {
+    header: "Created",
+    cell: (c) => (c.CreatedAt ? <TimeAgo date={c.CreatedAt} /> : "\u2014"),
+  },
+  {
+    header: "Updated",
+    cell: (c) => (c.UpdatedAt ? <TimeAgo date={c.UpdatedAt} /> : "\u2014"),
+  },
+];
 
 export default function ConfigList() {
   const {
@@ -44,30 +58,7 @@ export default function ConfigList() {
       {filtered.length === 0 ? (
         <EmptyState message={search ? "No configs match your search" : "No configs found"} />
       ) : viewMode === "table" ? (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full">
-            <thead className="sticky top-0 z-10 bg-background">
-              <tr className="border-b bg-muted/50">
-                <th className="text-left p-3 text-sm font-medium">Name</th>
-                <th className="text-left p-3 text-sm font-medium">Created</th>
-                <th className="text-left p-3 text-sm font-medium">Updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((cfg) => (
-                <tr key={cfg.ID} className="border-b">
-                  <td className="p-3 text-sm">{cfg.Spec.Name || cfg.ID}</td>
-                  <td className="p-3 text-sm">
-                    {cfg.CreatedAt ? <TimeAgo date={cfg.CreatedAt} /> : "\u2014"}
-                  </td>
-                  <td className="p-3 text-sm">
-                    {cfg.UpdatedAt ? <TimeAgo date={cfg.UpdatedAt} /> : "\u2014"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable columns={columns} data={filtered} keyFn={(c) => c.ID} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((cfg) => (

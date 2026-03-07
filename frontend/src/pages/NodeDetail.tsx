@@ -74,14 +74,16 @@ export default function NodeDetail() {
         </div>
       )}
 
-      {tasks.length > 0 && (
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
-              Tasks
-            </h2>
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
+            Tasks
+          </h2>
+          {tasks.length > 0 && (
             <TaskStateFilter tasks={tasks} active={stateFilter} onChange={setStateFilter} />
-          </div>
+          )}
+        </div>
+        {tasks.length > 0 ? (
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full">
               <thead className="sticky top-0 z-10 bg-background">
@@ -132,8 +134,10 @@ export default function NodeDetail() {
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="text-sm text-muted-foreground">None</p>
+        )}
+      </div>
 
       <MetricsPanel
         charts={[

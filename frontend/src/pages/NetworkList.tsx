@@ -9,6 +9,14 @@ import ViewToggle from "../components/ViewToggle";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
 import { SkeletonTable } from "../components/LoadingSkeleton";
+import DataTable from "../components/DataTable";
+import type { Column } from "../components/DataTable";
+
+const columns: Column<Network>[] = [
+  { header: "Name", cell: (n) => n.Name },
+  { header: "Driver", cell: (n) => n.Driver },
+  { header: "Scope", cell: (n) => n.Scope },
+];
 
 export default function NetworkList() {
   const {
@@ -41,26 +49,7 @@ export default function NetworkList() {
       {filtered.length === 0 ? (
         <EmptyState message={search ? "No networks match your search" : "No networks found"} />
       ) : viewMode === "table" ? (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full">
-            <thead className="sticky top-0 z-10 bg-background">
-              <tr className="border-b bg-muted/50">
-                <th className="text-left p-3 text-sm font-medium">Name</th>
-                <th className="text-left p-3 text-sm font-medium">Driver</th>
-                <th className="text-left p-3 text-sm font-medium">Scope</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((net) => (
-                <tr key={net.Id} className="border-b">
-                  <td className="p-3 text-sm">{net.Name}</td>
-                  <td className="p-3 text-sm">{net.Driver}</td>
-                  <td className="p-3 text-sm">{net.Scope}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable columns={columns} data={filtered} keyFn={(n) => n.Id} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((net) => (

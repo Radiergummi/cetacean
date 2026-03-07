@@ -9,7 +9,21 @@ import ViewToggle from "../components/ViewToggle";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
 import { SkeletonTable } from "../components/LoadingSkeleton";
+import DataTable from "../components/DataTable";
+import type { Column } from "../components/DataTable";
 import TimeAgo from "../components/TimeAgo";
+
+const columns: Column<Secret>[] = [
+  { header: "Name", cell: (s) => s.Spec.Name || s.ID },
+  {
+    header: "Created",
+    cell: (s) => (s.CreatedAt ? <TimeAgo date={s.CreatedAt} /> : "\u2014"),
+  },
+  {
+    header: "Updated",
+    cell: (s) => (s.UpdatedAt ? <TimeAgo date={s.UpdatedAt} /> : "\u2014"),
+  },
+];
 
 export default function SecretList() {
   const {
@@ -47,30 +61,7 @@ export default function SecretList() {
       {filtered.length === 0 ? (
         <EmptyState message={search ? "No secrets match your search" : "No secrets found"} />
       ) : viewMode === "table" ? (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full">
-            <thead className="sticky top-0 z-10 bg-background">
-              <tr className="border-b bg-muted/50">
-                <th className="text-left p-3 text-sm font-medium">Name</th>
-                <th className="text-left p-3 text-sm font-medium">Created</th>
-                <th className="text-left p-3 text-sm font-medium">Updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((secret) => (
-                <tr key={secret.ID} className="border-b">
-                  <td className="p-3 text-sm">{secret.Spec.Name || secret.ID}</td>
-                  <td className="p-3 text-sm">
-                    {secret.CreatedAt ? <TimeAgo date={secret.CreatedAt} /> : "\u2014"}
-                  </td>
-                  <td className="p-3 text-sm">
-                    {secret.UpdatedAt ? <TimeAgo date={secret.UpdatedAt} /> : "\u2014"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable columns={columns} data={filtered} keyFn={(s) => s.ID} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((secret) => (

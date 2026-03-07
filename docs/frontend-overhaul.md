@@ -40,7 +40,7 @@ Comprehensive plan for improving the Cetacean frontend from a basic prototype to
 
 ---
 
-## 2. Charts and Metrics -- MOSTLY DONE
+## 2. Charts and Metrics -- DONE
 
 ### 2.1 Fix "No Data" Issue -- DONE
 - [x] **Fixed Prometheus config**: Switched from broken `dockerswarm_sd_configs` (permission denied) to `dns_sd_configs` for cAdvisor and node-exporter discovery
@@ -62,19 +62,19 @@ Comprehensive plan for improving the Cetacean frontend from a basic prototype to
 - [x] **Legend click-to-isolate**: Click a label to isolate that series
 
 ### 2.4 MetricsPanel Improvements
-- [ ] **Synchronized time range**: Vertical cursor line across sibling charts on hover
+- [x] **Synchronized time range**: Vertical cursor line across sibling charts on hover
 - [x] **Collapse/expand**: Allow collapsing the MetricsPanel section
 - [x] **Time range in URL**: Persist in URL query params
 
 ---
 
-## 3. Visual Polish and UX Foundations -- PARTIAL
+## 3. Visual Polish and UX Foundations -- DONE
 
-### 3.1 Loading States
+### 3.1 Loading States -- DONE
 - [x] **ClusterOverview skeleton**: 8 gray placeholder cards in 2x4 grid while loading
 - [x] **List page skeletons**: Skeleton table rows for list pages
-- [ ] **Detail page skeletons**: Skeleton info cards + table for detail pages
-- [ ] **Reusable Skeleton component**: `<Skeleton width height shape>` component
+- [x] **Detail page skeletons**: Skeleton info cards + table for detail pages
+- [x] **Reusable Skeleton component**: `LoadingSkeleton.tsx` with `LoadingPage`, `SkeletonTable`, `LoadingDetail`
 
 ### 3.2 Error States -- DONE
 - [x] **Error boundary**: Wrap routes in error boundary with friendly "Something went wrong" page
@@ -82,25 +82,26 @@ Comprehensive plan for improving the Cetacean frontend from a basic prototype to
 - [x] **Retry in useSwarmResource**: Add `retry()` to hook return value
 
 ### 3.3 Empty States -- DONE
+
 - [x] **Empty table component**: Centered icon + "No results" + guidance text when table has 0 rows
-- [ ] **Empty detail sections**: Show muted line instead of hiding empty sections
+- [x] **Empty detail sections**: Show muted "None" instead of hiding empty sections
 
 ### 3.4 Navigation -- DONE
 - [x] **Active route highlighting**: Current nav link is bold/dark, others muted. Uses `useLocation()` with prefix matching for detail pages
 - [x] **Breadcrumbs**: `PageHeader` component with breadcrumbs on all detail pages (ServiceDetail, NodeDetail, StackDetail)
 - [x] **Back navigation**: Breadcrumb links serve as back navigation
 
-### 3.5 Table UX Improvements -- MOSTLY DONE
+### 3.5 Table UX Improvements -- DONE
 - [x] **Full-row clickability**: ServiceList, NodeList, and StackList have clickable rows with `cursor-pointer hover:bg-muted/50`
 - [x] **Sortable columns**: Sort indicators (chevron) on column headers, click to toggle (ServiceList, NodeList, StackList)
 - [x] **Status indicator bar**: 3px colored left border on table rows with status
 - [x] **Sticky table headers**: `sticky top-0` on `<thead>`
 
-### 3.6 Stat Cards (ClusterOverview) -- MOSTLY DONE
+### 3.6 Stat Cards (ClusterOverview) -- DONE
 - [x] **Color thresholds**: Red-tinted background for failed/down cards when value > 0 (with dark mode variant)
 - [x] **Clickable tiles**: Nodes Ready/Down → /nodes, Services → /services, Stacks → /stacks
 - [x] **Tabular nums**: Numbers use `tabular-nums` for consistent alignment
-- [ ] **Trend indicator**: Up/down arrow for changed values (requires tracking previous snapshot)
+- [x] **Trend indicator**: Up/down arrow for changed values via `useRef` previous snapshot tracking
 
 ---
 
@@ -120,26 +121,26 @@ Comprehensive plan for improving the Cetacean frontend from a basic prototype to
 
 ---
 
-## 5. Component Consolidation -- MOSTLY DONE
+## 5. Component Consolidation -- DONE
 
 ### 5.1 Deduplicate Components -- DONE
 - [x] **Unified TaskStatusBadge**: Single component with `STATE_COLORS` map handles task states (running, failed, preparing, shutdown) AND node states (ready, down, pending). Removed duplicate `StatusBadge` from NodeList
 - [x] **InfoCard**: Shared component used by ServiceDetail and NodeDetail
 
-### 5.2 Shared Patterns -- MOSTLY DONE
+### 5.2 Shared Patterns -- DONE
 - [x] **PageHeader component**: `<PageHeader title breadcrumbs>` used across all 11 pages (7 list + 3 detail + overview)
 - [x] **EmptyState component**: Reusable centered empty state with icon
 - [x] **FetchError component**: Reusable error alert with retry button
 - [x] **SortableHeader component**: Reusable sortable column header with indicators
-- [ ] **DataTable component**: Extract table wrapper pattern (overflow, border, sticky header)
+- [x] **DataTable component**: Generic table wrapper used by ConfigList, SecretList, NetworkList, VolumeList (overflow, border, sticky header)
 
 ---
 
-## 6. Minor UX Improvements -- TODO
+## 6. Minor UX Improvements -- DONE
 
 ### 6.1 Service Detail
 - [x] **Labels section**: Show service labels as key-value badges
-- [ ] **Environment hints**: Show constraint info (placement constraints) if present
+- [x] **Environment hints**: Placement constraints shown in Deploy Configuration section
 - [x] **Update status detail**: Show started/completed timestamps and message, not just state
 
 ### 6.2 Node Detail
@@ -168,10 +169,7 @@ Comprehensive plan for improving the Cetacean frontend from a basic prototype to
 
 ## What's Left
 
-1. **Empty detail sections** (3.3) — show muted line instead of hiding empty sections
-2. **DataTable component** (5.2) — extract table wrapper pattern
-3. **Synchronized chart hover** (2.4) — vertical cursor line across sibling charts
-4. **Trend indicator** (3.6) — up/down arrow on stat cards (requires tracking previous snapshot)
+1. **SSE log streaming** (1.5) — optional: `GET /api/services/{id}/logs/stream` with `Follow: true`
 
 ## Completed (post-initial overhaul)
 
@@ -188,3 +186,9 @@ Comprehensive plan for improving the Cetacean frontend from a basic prototype to
 - [x] **Stream filter** (1.2) — stdout/stderr toggle buttons
 - [x] **Clear button** (1.3) — clear log view without refetching
 - [x] **Update status detail** (6.1) — show timestamps and message
+- [x] **Synchronized chart hover** (2.4) — uPlot `cursor.sync` with shared "metrics" key
+- [x] **Trend indicators** (3.6) — StatCard tracks previous values via useRef, shows TrendingUp/Down arrows
+- [x] **Detail page skeletons** (3.1) — LoadingDetail component used across all detail pages
+- [x] **Placement constraints** (6.1) — Deploy Configuration section with constraints, preferences, max replicas
+- [x] **DataTable component** (5.2) — generic table wrapper adopted by ConfigList, SecretList, NetworkList, VolumeList
+- [x] **Empty detail sections** (3.3) — SectionEmpty pattern extended to NodeDetail, StackDetail, and ServiceDetail Tasks

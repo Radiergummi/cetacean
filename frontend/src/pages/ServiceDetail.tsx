@@ -416,65 +416,66 @@ export default function ServiceDetail() {
       </Section>
 
       {/* Tasks */}
-      {tasks.length > 0 && (
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
-              Tasks
-            </h2>
-            <TaskStateFilter tasks={tasks} active={stateFilter} onChange={setStateFilter} />
-          </div>
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full">
-              <thead className="sticky top-0 z-10 bg-background">
-                <tr className="border-b bg-muted/50">
-                  <th className="text-left p-3 text-sm font-medium">ID</th>
-                  <th className="text-left p-3 text-sm font-medium">Slot</th>
-                  <th className="text-left p-3 text-sm font-medium">State</th>
-                  <th className="text-left p-3 text-sm font-medium">Node</th>
-                  <th className="text-left p-3 text-sm font-medium">Desired</th>
-                  <th className="text-left p-3 text-sm font-medium">Error</th>
-                  <th className="text-left p-3 text-sm font-medium">Timestamp</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTasks.map((task) => {
-                  const exitCode = task.Status.ContainerStatus?.ExitCode;
-                  const errorMsg =
-                    task.Status.Err || (exitCode && exitCode !== 0 ? `exit ${exitCode}` : "");
-                  return (
-                    <tr key={task.ID} className={`border-b ${statusBorder(task.Status.State)}`}>
-                      <td className="p-3 text-sm font-mono text-xs">
-                        <Link to={`/tasks/${task.ID}`} className="text-link hover:underline">
-                          {task.ID.slice(0, 12)}
-                        </Link>
-                      </td>
-                      <td className="p-3 text-sm">{task.Slot}</td>
-                      <td className="p-3 text-sm">
-                        <TaskStatusBadge state={task.Status.State} />
-                      </td>
-                      <td className="p-3 text-sm">
-                        <Link to={`/nodes/${task.NodeID}`} className="text-link hover:underline">
-                          {task.NodeID.slice(0, 12)}
-                        </Link>
-                      </td>
-                      <td className="p-3 text-sm">{task.DesiredState}</td>
-                      <td className="p-3 text-sm text-red-600 dark:text-red-400">{errorMsg}</td>
-                      <td className="p-3 text-sm text-muted-foreground">
-                        {task.Status.Timestamp ? (
-                          <TimeAgo date={task.Status.Timestamp} />
-                        ) : (
-                          "\u2014"
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      <Section title="Tasks">
+        {tasks.length > 0 ? (
+          <>
+            <div className="flex items-center justify-end mb-3 -mt-1">
+              <TaskStateFilter tasks={tasks} active={stateFilter} onChange={setStateFilter} />
+            </div>
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full">
+                <thead className="sticky top-0 z-10 bg-background">
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left p-3 text-sm font-medium">ID</th>
+                    <th className="text-left p-3 text-sm font-medium">Slot</th>
+                    <th className="text-left p-3 text-sm font-medium">State</th>
+                    <th className="text-left p-3 text-sm font-medium">Node</th>
+                    <th className="text-left p-3 text-sm font-medium">Desired</th>
+                    <th className="text-left p-3 text-sm font-medium">Error</th>
+                    <th className="text-left p-3 text-sm font-medium">Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredTasks.map((task) => {
+                    const exitCode = task.Status.ContainerStatus?.ExitCode;
+                    const errorMsg =
+                      task.Status.Err || (exitCode && exitCode !== 0 ? `exit ${exitCode}` : "");
+                    return (
+                      <tr key={task.ID} className={`border-b ${statusBorder(task.Status.State)}`}>
+                        <td className="p-3 text-sm font-mono text-xs">
+                          <Link to={`/tasks/${task.ID}`} className="text-link hover:underline">
+                            {task.ID.slice(0, 12)}
+                          </Link>
+                        </td>
+                        <td className="p-3 text-sm">{task.Slot}</td>
+                        <td className="p-3 text-sm">
+                          <TaskStatusBadge state={task.Status.State} />
+                        </td>
+                        <td className="p-3 text-sm">
+                          <Link to={`/nodes/${task.NodeID}`} className="text-link hover:underline">
+                            {task.NodeID.slice(0, 12)}
+                          </Link>
+                        </td>
+                        <td className="p-3 text-sm">{task.DesiredState}</td>
+                        <td className="p-3 text-sm text-red-600 dark:text-red-400">{errorMsg}</td>
+                        <td className="p-3 text-sm text-muted-foreground">
+                          {task.Status.Timestamp ? (
+                            <TimeAgo date={task.Status.Timestamp} />
+                          ) : (
+                            "\u2014"
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : (
+          <SectionEmpty />
+        )}
+      </Section>
 
       <div className="mb-6">
         <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
