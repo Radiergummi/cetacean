@@ -16,10 +16,13 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 	// Nodes
 	mux.HandleFunc("GET /api/nodes", h.HandleListNodes)
 	mux.HandleFunc("GET /api/nodes/{id}", h.HandleGetNode)
+	mux.HandleFunc("GET /api/nodes/{id}/tasks", h.HandleNodeTasks)
 
 	// Services
 	mux.HandleFunc("GET /api/services", h.HandleListServices)
 	mux.HandleFunc("GET /api/services/{id}", h.HandleGetService)
+	mux.HandleFunc("GET /api/services/{id}/tasks", h.HandleServiceTasks)
+	mux.HandleFunc("GET /api/services/{id}/logs", h.HandleServiceLogs)
 
 	// Tasks
 	mux.HandleFunc("GET /api/tasks", h.HandleListTasks)
@@ -47,5 +50,13 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 	// SPA fallback (must be last)
 	mux.Handle("/", spa)
 
-	return mux
+	return securityHeaders(mux)
+}
+
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		next.ServeHTTP(w, r)
+	})
 }

@@ -81,16 +81,68 @@ func TestCache_OnChange_Called(t *testing.T) {
 	}
 }
 
+func TestCache_ListTasksByService(t *testing.T) {
+	c := New(nil)
+	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1"})
+	c.SetTask(swarm.Task{ID: "t2", ServiceID: "svc2"})
+	c.SetTask(swarm.Task{ID: "t3", ServiceID: "svc1"})
+
+	tasks := c.ListTasksByService("svc1")
+	if len(tasks) != 2 {
+		t.Fatalf("expected 2 tasks, got %d", len(tasks))
+	}
+}
+
+func TestCache_ListTasksByNode(t *testing.T) {
+	c := New(nil)
+	c.SetTask(swarm.Task{ID: "t1", NodeID: "node1"})
+	c.SetTask(swarm.Task{ID: "t2", NodeID: "node2"})
+
+	tasks := c.ListTasksByNode("node1")
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(tasks))
+	}
+	if tasks[0].ID != "t1" {
+		t.Errorf("expected t1, got %s", tasks[0].ID)
+	}
+}
+
 func TestCache_Snapshot(t *testing.T) {
 	c := New(nil)
-	c.SetNode(swarm.Node{ID: "n1"})
+
+	n1 := swarm.Node{ID: "n1"}
+	n1.Status.State = swarm.NodeStateReady
+	n2 := swarm.Node{ID: "n2"}
+	n2.Status.State = swarm.NodeStateDown
+	c.SetNode(n1)
+	c.SetNode(n2)
+
 	c.SetService(swarm.Service{ID: "s1"})
 
+	t1 := swarm.Task{ID: "t1"}
+	t1.Status.State = swarm.TaskStateRunning
+	t2 := swarm.Task{ID: "t2"}
+	t2.Status.State = swarm.TaskStateFailed
+	c.SetTask(t1)
+	c.SetTask(t2)
+
 	snap := c.Snapshot()
-	if snap.NodeCount != 1 {
-		t.Errorf("expected 1 node, got %d", snap.NodeCount)
+	if snap.NodeCount != 2 {
+		t.Errorf("expected 2 nodes, got %d", snap.NodeCount)
 	}
 	if snap.ServiceCount != 1 {
 		t.Errorf("expected 1 service, got %d", snap.ServiceCount)
+	}
+	if snap.NodesReady != 1 {
+		t.Errorf("expected 1 ready node, got %d", snap.NodesReady)
+	}
+	if snap.NodesDown != 1 {
+		t.Errorf("expected 1 down node, got %d", snap.NodesDown)
+	}
+	if snap.TasksByState["running"] != 1 {
+		t.Errorf("expected 1 running task, got %d", snap.TasksByState["running"])
+	}
+	if snap.TasksByState["failed"] != 1 {
+		t.Errorf("expected 1 failed task, got %d", snap.TasksByState["failed"])
 	}
 }

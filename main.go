@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"cetacean/internal/api"
 	"cetacean/internal/cache"
@@ -54,7 +55,7 @@ func main() {
 	log.Println("initial sync complete, starting HTTP server")
 
 	// API
-	handlers := api.NewHandlers(stateCache)
+	handlers := api.NewHandlers(stateCache, dockerClient)
 	promProxy := api.NewPrometheusProxy(cfg.PrometheusURL)
 
 	// SPA
@@ -67,8 +68,11 @@ func main() {
 	router := api.NewRouter(handlers, broadcaster, promProxy, spa)
 
 	server := &http.Server{
-		Addr:    cfg.ListenAddr,
-		Handler: router,
+		Addr:         cfg.ListenAddr,
+		Handler:      router,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 0, // SSE requires no write timeout; per-request timeouts used instead
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Graceful shutdown
@@ -78,7 +82,9 @@ func main() {
 		<-sigCh
 		log.Println("shutting down...")
 		cancel()
-		server.Close()
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+		server.Shutdown(shutdownCtx)
 	}()
 
 	log.Printf("cetacean listening on %s", cfg.ListenAddr)

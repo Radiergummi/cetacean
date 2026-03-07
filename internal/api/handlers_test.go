@@ -15,7 +15,7 @@ func TestHandleCluster(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{ID: "n1"})
 	c.SetService(swarm.Service{ID: "s1"})
-	h := NewHandlers(c)
+	h := NewHandlers(c, nil)
 
 	req := httptest.NewRequest("GET", "/api/cluster", nil)
 	w := httptest.NewRecorder()
@@ -36,7 +36,7 @@ func TestHandleListNodes(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{ID: "n1"})
 	c.SetNode(swarm.Node{ID: "n2"})
-	h := NewHandlers(c)
+	h := NewHandlers(c, nil)
 
 	req := httptest.NewRequest("GET", "/api/nodes", nil)
 	w := httptest.NewRecorder()
@@ -56,7 +56,7 @@ func TestHandleListNodes(t *testing.T) {
 func TestHandleGetNode_Found(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{ID: "n1"})
-	h := NewHandlers(c)
+	h := NewHandlers(c, nil)
 
 	req := httptest.NewRequest("GET", "/api/nodes/n1", nil)
 	req.SetPathValue("id", "n1")
@@ -70,7 +70,7 @@ func TestHandleGetNode_Found(t *testing.T) {
 
 func TestHandleGetNode_NotFound(t *testing.T) {
 	c := cache.New(nil)
-	h := NewHandlers(c)
+	h := NewHandlers(c, nil)
 
 	req := httptest.NewRequest("GET", "/api/nodes/missing", nil)
 	req.SetPathValue("id", "missing")
@@ -79,5 +79,90 @@ func TestHandleGetNode_NotFound(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestHandleServiceTasks(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+	t1 := swarm.Task{ID: "t1", ServiceID: "svc1"}
+	t2 := swarm.Task{ID: "t2", ServiceID: "svc2"}
+	c.SetTask(t1)
+	c.SetTask(t2)
+	h := NewHandlers(c, nil)
+
+	req := httptest.NewRequest("GET", "/api/services/svc1/tasks", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleServiceTasks(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var tasks []swarm.Task
+	json.NewDecoder(w.Body).Decode(&tasks)
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(tasks))
+	}
+	if tasks[0].ID != "t1" {
+		t.Errorf("expected task t1, got %s", tasks[0].ID)
+	}
+}
+
+func TestHandleNodeTasks(t *testing.T) {
+	c := cache.New(nil)
+	n := swarm.Node{ID: "node1"}
+	c.SetNode(n)
+	t1 := swarm.Task{ID: "t1", NodeID: "node1"}
+	t2 := swarm.Task{ID: "t2", NodeID: "node2"}
+	c.SetTask(t1)
+	c.SetTask(t2)
+	h := NewHandlers(c, nil)
+
+	req := httptest.NewRequest("GET", "/api/nodes/node1/tasks", nil)
+	req.SetPathValue("id", "node1")
+	w := httptest.NewRecorder()
+	h.HandleNodeTasks(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var tasks []swarm.Task
+	json.NewDecoder(w.Body).Decode(&tasks)
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(tasks))
+	}
+	if tasks[0].ID != "t1" {
+		t.Errorf("expected task t1, got %s", tasks[0].ID)
+	}
+}
+
+func TestHandleListServices_Search(t *testing.T) {
+	c := cache.New(nil)
+	svc1 := swarm.Service{ID: "s1"}
+	svc1.Spec.Name = "web-frontend"
+	svc2 := swarm.Service{ID: "s2"}
+	svc2.Spec.Name = "api-backend"
+	c.SetService(svc1)
+	c.SetService(svc2)
+	h := NewHandlers(c, nil)
+
+	req := httptest.NewRequest("GET", "/api/services?search=web", nil)
+	w := httptest.NewRecorder()
+	h.HandleListServices(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var services []swarm.Service
+	json.NewDecoder(w.Body).Decode(&services)
+	if len(services) != 1 {
+		t.Fatalf("expected 1 service, got %d", len(services))
+	}
+	if services[0].Spec.Name != "web-frontend" {
+		t.Errorf("expected web-frontend, got %s", services[0].Spec.Name)
 	}
 }

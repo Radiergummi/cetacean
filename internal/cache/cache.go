@@ -25,10 +25,13 @@ type Stack struct {
 }
 
 type ClusterSnapshot struct {
-	NodeCount    int `json:"nodeCount"`
-	ServiceCount int `json:"serviceCount"`
-	TaskCount    int `json:"taskCount"`
-	StackCount   int `json:"stackCount"`
+	NodeCount    int            `json:"nodeCount"`
+	ServiceCount int            `json:"serviceCount"`
+	TaskCount    int            `json:"taskCount"`
+	StackCount   int            `json:"stackCount"`
+	TasksByState map[string]int `json:"tasksByState"`
+	NodesReady   int            `json:"nodesReady"`
+	NodesDown    int            `json:"nodesDown"`
 }
 
 type OnChangeFunc func(Event)
@@ -381,15 +384,60 @@ func (c *Cache) rebuildStacks() {
 	c.stacks = result
 }
 
+// --- Filtered task lists ---
+
+func (c *Cache) ListTasksByService(serviceID string) []swarm.Task {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var out []swarm.Task
+	for _, t := range c.tasks {
+		if t.ServiceID == serviceID {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+func (c *Cache) ListTasksByNode(nodeID string) []swarm.Task {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var out []swarm.Task
+	for _, t := range c.tasks {
+		if t.NodeID == nodeID {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
 // --- Snapshot ---
 
 func (c *Cache) Snapshot() ClusterSnapshot {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
+	tasksByState := make(map[string]int)
+	for _, t := range c.tasks {
+		tasksByState[string(t.Status.State)]++
+	}
+
+	var nodesReady, nodesDown int
+	for _, n := range c.nodes {
+		switch n.Status.State {
+		case swarm.NodeStateReady:
+			nodesReady++
+		case swarm.NodeStateDown:
+			nodesDown++
+		}
+	}
+
 	return ClusterSnapshot{
 		NodeCount:    len(c.nodes),
 		ServiceCount: len(c.services),
 		TaskCount:    len(c.tasks),
 		StackCount:   len(c.stacks),
+		TasksByState: tasksByState,
+		NodesReady:   nodesReady,
+		NodesDown:    nodesDown,
 	}
 }

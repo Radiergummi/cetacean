@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/docker/docker/api/types"
 	containertypes "github.com/docker/docker/api/types/container"
@@ -134,4 +135,16 @@ func (c *Client) Events(ctx context.Context) (<-chan events.Message, <-chan erro
 
 func (c *Client) ContainerInspect(ctx context.Context, id string) (containertypes.InspectResponse, error) {
 	return c.docker.ContainerInspect(ctx, id)
+}
+
+func (c *Client) ServiceLogs(ctx context.Context, serviceID string, tail string) (io.ReadCloser, error) {
+	if tail == "" {
+		tail = "200"
+	}
+	return c.docker.ServiceLogs(ctx, serviceID, containertypes.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Tail:       tail,
+		Timestamps: true,
+	})
 }
