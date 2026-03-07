@@ -156,12 +156,13 @@ export default function LogViewer({ serviceId, taskId }: Props) {
   const searchRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  const streamParam = streamFilter === "all" ? undefined : streamFilter;
+
   const fetchLogs = useCallback(() => {
     setLoading(true);
     setError(null);
-    const req = isTask
-      ? api.taskLogs(logId, limit, timeRange.since, timeRange.until)
-      : api.serviceLogs(logId, limit, timeRange.since, timeRange.until);
+    const opts = { limit, after: timeRange.since, before: timeRange.until, stream: streamParam };
+    const req = isTask ? api.taskLogs(logId, opts) : api.serviceLogs(logId, opts);
     req
       .then((resp) => {
         setLines((resp.lines ?? []).map(toLogLine));
@@ -171,7 +172,7 @@ export default function LogViewer({ serviceId, taskId }: Props) {
         setError("Failed to load logs");
         setLoading(false);
       });
-  }, [logId, isTask, limit, timeRange]);
+  }, [logId, isTask, limit, timeRange, streamParam]);
 
   useEffect(() => {
     fetchLogs();
@@ -183,9 +184,10 @@ export default function LogViewer({ serviceId, taskId }: Props) {
 
     const lastTs = lines.length > 0 ? lines[lines.length - 1].timestamp : undefined;
     const after = lastTs || new Date().toISOString();
+    const streamOpts = { after, stream: streamParam };
     const url = isTask
-      ? api.taskLogsStreamURL(logId, after)
-      : api.serviceLogsStreamURL(logId, after);
+      ? api.taskLogsStreamURL(logId, streamOpts)
+      : api.serviceLogsStreamURL(logId, streamOpts);
 
     const es = new EventSource(url);
     abortRef.current = { abort: () => es.close() } as AbortController;

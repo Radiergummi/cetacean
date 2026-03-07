@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	json "github.com/goccy/go-json"
 
@@ -173,9 +174,10 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	q := r.URL.Query()
 	since := q.Get("after")
 	until := q.Get("before")
+	streamFilter := q.Get("stream") // "", "stdout", or "stderr"
 
 	if wantsSSE(r) {
-		h.serveLogsSSE(w, r, fetch, since)
+		h.serveLogsSSE(w, r, fetch, since, streamFilter)
 		return
 	}
 
@@ -205,6 +207,16 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 		lines = []LogLine{}
 	}
 
+	if streamFilter != "" {
+		filtered := lines[:0]
+		for _, l := range lines {
+			if l.Stream == streamFilter {
+				filtered = append(filtered, l)
+			}
+		}
+		lines = filtered
+	}
+
 	resp := LogResponse{Lines: lines}
 	if len(lines) > 0 {
 		resp.Oldest = lines[0].Timestamp
@@ -213,7 +225,7 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	writeJSON(w, resp)
 }
 
-func (h *Handlers) serveLogsSSE(w http.ResponseWriter, r *http.Request, fetch logFetcher, since string) {
+func (h *Handlers) serveLogsSSE(w http.ResponseWriter, r *http.Request, fetch logFetcher, since, streamFilter string) {
 	logs, err := fetch(r.Context(), "0", true, since, "")
 	if err != nil {
 		http.Error(w, "failed to get logs", http.StatusInternalServerError)
@@ -239,14 +251,33 @@ func (h *Handlers) serveLogsSSE(w http.ResponseWriter, r *http.Request, fetch lo
 		close(ch)
 	}()
 
-	for line := range ch {
-		data, _ := json.Marshal(line)
-		fmt.Fprintf(w, "data: %s\n\n", data)
-		flusher.Flush()
-	}
+	keepalive := time.NewTicker(15 * time.Second)
+	defer keepalive.Stop()
 
-	// Drain error (EOF is normal)
-	<-done
+	for {
+		select {
+		case line, ok := <-ch:
+			if !ok {
+				<-done
+				return
+			}
+			if streamFilter != "" && line.Stream != streamFilter {
+				continue
+			}
+			data, _ := json.Marshal(line)
+			if line.Timestamp != "" {
+				fmt.Fprintf(w, "id: %s\n", line.Timestamp)
+			}
+			fmt.Fprintf(w, "data: %s\n\n", data)
+			flusher.Flush()
+		case <-keepalive.C:
+			fmt.Fprint(w, ": keepalive\n\n")
+			flusher.Flush()
+		case <-r.Context().Done():
+			<-done
+			return
+		}
+	}
 }
 
 // --- Stacks ---

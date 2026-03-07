@@ -54,28 +54,32 @@ export const api = {
   networks: () => fetchJSON<Network[]>("/networks"),
   volumes: () => fetchJSON<Volume[]>("/volumes"),
   task: (id: string) => fetchJSON<Task>(`/tasks/${id}`),
-  taskLogs: (id: string, limit?: number, after?: string, before?: string) => {
-    const params = new URLSearchParams({ limit: String(limit || 500) });
-    if (after) params.set("after", after);
-    if (before) params.set("before", before);
+  taskLogs: (id: string, opts?: { limit?: number; after?: string; before?: string; stream?: string }) => {
+    const params = new URLSearchParams({ limit: String(opts?.limit || 500) });
+    if (opts?.after) params.set("after", opts.after);
+    if (opts?.before) params.set("before", opts.before);
+    if (opts?.stream) params.set("stream", opts.stream);
     return fetchJSON<LogResponse>(`/tasks/${id}/logs?${params}`);
   },
   serviceTasks: (id: string) => fetchJSON<Task[]>(`/services/${id}/tasks`),
-  serviceLogs: (id: string, limit?: number, after?: string, before?: string) => {
-    const params = new URLSearchParams({ limit: String(limit || 500) });
-    if (after) params.set("after", after);
-    if (before) params.set("before", before);
+  serviceLogs: (id: string, opts?: { limit?: number; after?: string; before?: string; stream?: string }) => {
+    const params = new URLSearchParams({ limit: String(opts?.limit || 500) });
+    if (opts?.after) params.set("after", opts.after);
+    if (opts?.before) params.set("before", opts.before);
+    if (opts?.stream) params.set("stream", opts.stream);
     return fetchJSON<LogResponse>(`/services/${id}/logs?${params}`);
   },
-  serviceLogsStreamURL: (id: string, after?: string) => {
+  serviceLogsStreamURL: (id: string, opts?: { after?: string; stream?: string }) => {
     const params = new URLSearchParams();
-    if (after) params.set("after", after);
+    if (opts?.after) params.set("after", opts.after);
+    if (opts?.stream) params.set("stream", opts.stream);
     const qs = params.toString();
     return `${BASE}/services/${id}/logs${qs ? `?${qs}` : ""}`;
   },
-  taskLogsStreamURL: (id: string, after?: string) => {
+  taskLogsStreamURL: (id: string, opts?: { after?: string; stream?: string }) => {
     const params = new URLSearchParams();
-    if (after) params.set("after", after);
+    if (opts?.after) params.set("after", opts.after);
+    if (opts?.stream) params.set("stream", opts.stream);
     const qs = params.toString();
     return `${BASE}/tasks/${id}/logs${qs ? `?${qs}` : ""}`;
   },

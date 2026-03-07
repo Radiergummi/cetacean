@@ -119,17 +119,20 @@ func TestHandleServiceLogs_SSE(t *testing.T) {
 	}
 
 	body := w.Body.String()
-	// Each line should be: data: {"timestamp":...}\n\n
+	// Each event is: id: <ts>\ndata: <json>\n\n
 	events := strings.Split(strings.TrimSpace(body), "\n\n")
 	if len(events) != 2 {
 		t.Fatalf("got %d events, want 2; body:\n%s", len(events), body)
 	}
 
-	// Parse first event
-	first := strings.TrimPrefix(events[0], "data: ")
+	// Parse first event — extract data line
 	var line LogLine
-	if err := json.Unmarshal([]byte(first), &line); err != nil {
-		t.Fatal(err)
+	for _, raw := range strings.Split(events[0], "\n") {
+		if strings.HasPrefix(raw, "data: ") {
+			if err := json.Unmarshal([]byte(strings.TrimPrefix(raw, "data: ")), &line); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 	if line.Message != "hello" {
 		t.Errorf("message = %q", line.Message)
@@ -209,5 +212,121 @@ func TestHandleServiceLogs_DefaultsToJSON(t *testing.T) {
 
 	if ct := w.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
 		t.Fatalf("Content-Type = %q, want application/json", ct)
+	}
+}
+
+func TestHandleServiceLogs_SSE_EventIDs(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	var frames bytes.Buffer
+	frames.Write(buildFrame(1, "2024-01-01T00:00:00.000000000Z line1\n"))
+	frames.Write(buildFrame(1, "2024-01-01T00:00:01.000000000Z line2\n"))
+
+	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()})
+
+	req := httptest.NewRequest("GET", "/api/services/svc1/logs", nil)
+	req.SetPathValue("id", "svc1")
+	req.Header.Set("Accept", "text/event-stream")
+	w := httptest.NewRecorder()
+	h.HandleServiceLogs(w, req)
+
+	body := w.Body.String()
+	// Each event should have an id: field with the timestamp
+	events := strings.Split(strings.TrimSpace(body), "\n\n")
+	if len(events) != 2 {
+		t.Fatalf("got %d events, want 2; body:\n%s", len(events), body)
+	}
+
+	// First event should have id: 2024-01-01T00:00:00.000000000Z
+	if !strings.Contains(events[0], "id: 2024-01-01T00:00:00.000000000Z") {
+		t.Errorf("event[0] missing id field:\n%s", events[0])
+	}
+	if !strings.Contains(events[1], "id: 2024-01-01T00:00:01.000000000Z") {
+		t.Errorf("event[1] missing id field:\n%s", events[1])
+	}
+}
+
+func TestHandleServiceLogs_JSON_StreamFilter(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	var frames bytes.Buffer
+	frames.Write(buildFrame(1, "2024-01-01T00:00:00.000000000Z stdout line\n"))
+	frames.Write(buildFrame(2, "2024-01-01T00:00:01.000000000Z stderr line\n"))
+	frames.Write(buildFrame(1, "2024-01-01T00:00:02.000000000Z another stdout\n"))
+
+	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()})
+
+	// Filter to stderr only
+	req := httptest.NewRequest("GET", "/api/services/svc1/logs?stream=stderr", nil)
+	req.SetPathValue("id", "svc1")
+	req.Header.Set("Accept", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleServiceLogs(w, req)
+
+	var resp LogResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Lines) != 1 {
+		t.Fatalf("got %d lines, want 1", len(resp.Lines))
+	}
+	if resp.Lines[0].Message != "stderr line" {
+		t.Errorf("message = %q", resp.Lines[0].Message)
+	}
+}
+
+func TestHandleServiceLogs_JSON_StreamFilterStdout(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	var frames bytes.Buffer
+	frames.Write(buildFrame(1, "2024-01-01T00:00:00.000000000Z stdout line\n"))
+	frames.Write(buildFrame(2, "2024-01-01T00:00:01.000000000Z stderr line\n"))
+
+	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()})
+
+	req := httptest.NewRequest("GET", "/api/services/svc1/logs?stream=stdout", nil)
+	req.SetPathValue("id", "svc1")
+	req.Header.Set("Accept", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleServiceLogs(w, req)
+
+	var resp LogResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Lines) != 1 {
+		t.Fatalf("got %d lines, want 1", len(resp.Lines))
+	}
+	if resp.Lines[0].Stream != "stdout" {
+		t.Errorf("stream = %q", resp.Lines[0].Stream)
+	}
+}
+
+func TestHandleServiceLogs_SSE_StreamFilter(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	var frames bytes.Buffer
+	frames.Write(buildFrame(1, "2024-01-01T00:00:00.000000000Z stdout line\n"))
+	frames.Write(buildFrame(2, "2024-01-01T00:00:01.000000000Z stderr line\n"))
+
+	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()})
+
+	req := httptest.NewRequest("GET", "/api/services/svc1/logs?stream=stderr", nil)
+	req.SetPathValue("id", "svc1")
+	req.Header.Set("Accept", "text/event-stream")
+	w := httptest.NewRecorder()
+	h.HandleServiceLogs(w, req)
+
+	body := w.Body.String()
+	events := strings.Split(strings.TrimSpace(body), "\n\n")
+	if len(events) != 1 {
+		t.Fatalf("got %d events, want 1; body:\n%s", len(events), body)
+	}
+	if !strings.Contains(events[0], "stderr line") {
+		t.Errorf("expected stderr line in event:\n%s", events[0])
 	}
 }

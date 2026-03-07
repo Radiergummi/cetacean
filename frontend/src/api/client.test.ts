@@ -46,11 +46,21 @@ describe("api client", () => {
   });
 
   it("fetches service logs as JSON", async () => {
-    const resp = { lines: [{ timestamp: "t1", message: "hello", stream: "stdout" }], oldest: "t1", newest: "t1" };
+    const resp = {
+      lines: [{ timestamp: "t1", message: "hello", stream: "stdout" }],
+      oldest: "t1",
+      newest: "t1",
+    };
     mockFetch.mockReturnValue(jsonResponse(resp));
-    const result = await api.serviceLogs("svc1", 100);
+    const result = await api.serviceLogs("svc1", { limit: 100 });
     expect(result).toEqual(resp);
     expect(mockFetch).toHaveBeenCalledWith("/api/services/svc1/logs?limit=100");
+  });
+
+  it("fetches service logs with stream filter", async () => {
+    mockFetch.mockReturnValue(jsonResponse({ lines: [], oldest: "", newest: "" }));
+    await api.serviceLogs("svc1", { limit: 100, stream: "stderr" });
+    expect(mockFetch).toHaveBeenCalledWith("/api/services/svc1/logs?limit=100&stream=stderr");
   });
 
   it("builds metrics query params", async () => {
@@ -68,8 +78,13 @@ describe("api client", () => {
   });
 
   it("builds service logs stream URL with after param", () => {
-    const url = api.serviceLogsStreamURL("svc1", "2024-01-01T00:00:00Z");
+    const url = api.serviceLogsStreamURL("svc1", { after: "2024-01-01T00:00:00Z" });
     expect(url).toBe("/api/services/svc1/logs?after=2024-01-01T00%3A00%3A00Z");
+  });
+
+  it("builds service logs stream URL with stream filter", () => {
+    const url = api.serviceLogsStreamURL("svc1", { after: "2024-01-01T00:00:00Z", stream: "stdout" });
+    expect(url).toBe("/api/services/svc1/logs?after=2024-01-01T00%3A00%3A00Z&stream=stdout");
   });
 
   it("builds task logs stream URL without params", () => {
