@@ -18,15 +18,15 @@ Comprehensive plan for improving the Cetacean frontend from a basic prototype to
 - [x] **Case sensitivity toggle**: "Aa" button in search bar
 - [x] **Clear button**: X button to clear search
 - [x] **Keyboard shortcut**: Ctrl+F focuses search when log viewer is focused
-- [ ] **Regex toggle**: Button to enable regex search mode
-- [ ] **Stream filter**: Toggle buttons for stdout/stderr filtering
+- [x] **Regex toggle**: Button to enable regex search mode
+- [x] **Stream filter**: Toggle buttons for stdout/stderr filtering
 
 ### 1.3 Log Controls -- DONE
 - [x] **Tail line count selector**: Dropdown (100, 500, 1000, 5000)
 - [x] **Refresh button**: Manual reload
 - [x] **Copy button**: Copy filtered log lines to clipboard
 - [x] **Download button**: Download as `.log` file
-- [ ] **Clear button**: Clear the current log view without refetching
+- [x] **Clear button**: Clear the current log view without refetching
 
 ### 1.4 Log Loading UX -- DONE
 - [x] **Remove "View Logs" gate**: Logs load automatically on mount
@@ -58,13 +58,13 @@ Comprehensive plan for improving the Cetacean frontend from a basic prototype to
 - [x] **Y-axis formatting**: Bytes (KB/MB/GB), percentages (%), cores (3 decimals)
 - [x] **Better colors**: Indigo primary with area fill, 6-color palette for multi-series
 - [x] **Legend**: Series labels shown below chart (via uPlot)
-- [ ] **Tooltips**: Crosshair cursor showing all series values at hovered timestamp
-- [ ] **Legend click-to-isolate**: Click a label to isolate that series
+- [x] **Tooltips**: Crosshair cursor showing all series values at hovered timestamp
+- [x] **Legend click-to-isolate**: Click a label to isolate that series
 
 ### 2.4 MetricsPanel Improvements
 - [ ] **Synchronized time range**: Vertical cursor line across sibling charts on hover
-- [ ] **Collapse/expand**: Allow collapsing the MetricsPanel section
-- [ ] **Time range in URL**: Persist in URL query params
+- [x] **Collapse/expand**: Allow collapsing the MetricsPanel section
+- [x] **Time range in URL**: Persist in URL query params
 
 ---
 
@@ -72,7 +72,7 @@ Comprehensive plan for improving the Cetacean frontend from a basic prototype to
 
 ### 3.1 Loading States
 - [x] **ClusterOverview skeleton**: 8 gray placeholder cards in 2x4 grid while loading
-- [ ] **List page skeletons**: Skeleton table rows for list pages
+- [x] **List page skeletons**: Skeleton table rows for list pages
 - [ ] **Detail page skeletons**: Skeleton info cards + table for detail pages
 - [ ] **Reusable Skeleton component**: `<Skeleton width height shape>` component
 
@@ -93,8 +93,8 @@ Comprehensive plan for improving the Cetacean frontend from a basic prototype to
 ### 3.5 Table UX Improvements -- MOSTLY DONE
 - [x] **Full-row clickability**: ServiceList, NodeList, and StackList have clickable rows with `cursor-pointer hover:bg-muted/50`
 - [x] **Sortable columns**: Sort indicators (chevron) on column headers, click to toggle (ServiceList, NodeList, StackList)
-- [ ] **Status indicator bar**: 3px colored left border on table rows with status
-- [ ] **Sticky table headers**: `sticky top-0` on `<thead>`
+- [x] **Status indicator bar**: 3px colored left border on table rows with status
+- [x] **Sticky table headers**: `sticky top-0` on `<thead>`
 
 ### 3.6 Stat Cards (ClusterOverview) -- MOSTLY DONE
 - [x] **Color thresholds**: Red-tinted background for failed/down cards when value > 0 (with dark mode variant)
@@ -138,24 +138,24 @@ Comprehensive plan for improving the Cetacean frontend from a basic prototype to
 ## 6. Minor UX Improvements -- TODO
 
 ### 6.1 Service Detail
-- [ ] **Labels section**: Show service labels as key-value badges (collapsible if >5)
+- [x] **Labels section**: Show service labels as key-value badges
 - [ ] **Environment hints**: Show constraint info (placement constraints) if present
-- [ ] **Update status detail**: Show started/completed timestamps and message, not just state
+- [x] **Update status detail**: Show started/completed timestamps and message, not just state
 
 ### 6.2 Node Detail
-- [ ] **Resource info**: Show CPU count and memory from `Description.Resources`
-- [ ] **Manager status**: Show leader/reachability info if `ManagerStatus` exists
+- [x] **Resource info**: Show CPU count and memory from `Description.Resources`
+- [x] **Manager status**: Show leader/reachability info if `ManagerStatus` exists
 
 ### 6.3 Stack Detail
-- [ ] **Resource counts in header**: "3 services, 1 config, 2 secrets" summary
-- [ ] **Service health**: Running/total task counts next to each service
+- [x] **Resource counts in header**: "3 services, 1 config, 2 secrets" summary
+- [x] **Service health**: Running/total task counts next to each service
 
 ### 6.4 Timestamps
-- [ ] **Relative timestamps**: "2 minutes ago" with full date on hover (`title` attribute)
+- [x] **Relative timestamps**: "2 minutes ago" with full date on hover (`title` attribute)
 
 ### 6.5 URL State
-- [ ] **Search in URL**: `?search=nginx` for shareable filtered views
-- [ ] **Sort in URL**: Column and direction in URL params
+- [x] **Search in URL**: `?search=nginx` for shareable filtered views
+- [x] **Sort in URL**: Column and direction in URL params
 
 ---
 
@@ -166,16 +166,25 @@ Comprehensive plan for improving the Cetacean frontend from a basic prototype to
 
 ---
 
-## What's Left (in priority order)
+## What's Left
 
 1. **Empty detail sections** (3.3) — show muted line instead of hiding empty sections
-2. **Relative timestamps** (6.4) — "2 minutes ago" with hover
-3. **URL state** (6.5) — search and sort in URL params
-4. **Detail page enrichment** (6.1-6.3) — labels, resources, manager status, stack health
-5. **Chart tooltips** (2.3) — crosshair cursor with formatted values
-6. **MetricsPanel improvements** (2.4) — collapse, URL time range, synchronized hover
-7. **DataTable component** (5.2) — extract table wrapper pattern
-8. **Log streaming** (1.5) — SSE-based live tail (backend + frontend)
-9. **List page skeletons** (3.1) — skeleton table rows for loading states
-10. **Status indicator bar** (3.5) — 3px colored left border on table rows
-11. **Sticky table headers** (3.5) — `sticky top-0` on `<thead>`
+2. **DataTable component** (5.2) — extract table wrapper pattern
+3. **Synchronized chart hover** (2.4) — vertical cursor line across sibling charts
+4. **Trend indicator** (3.6) — up/down arrow on stat cards (requires tracking previous snapshot)
+
+## Completed (post-initial overhaul)
+
+- [x] **Relative timestamps** (6.4) — TimeAgo component with hover tooltip
+- [x] **URL state** (6.5) — search (?q=), sort (?sort=&dir=), time range (?range=) in URL
+- [x] **Detail page enrichment** (6.1-6.3) — labels, resources, manager status, stack health with task counts
+- [x] **Chart tooltips** (2.3) — crosshair tooltip with formatted values
+- [x] **MetricsPanel improvements** (2.4) — collapse/expand, time range in URL
+- [x] **Legend click-to-isolate** (2.3) — click legend label to isolate series
+- [x] **List page skeletons** (3.1) — SkeletonTable component with contextual column counts
+- [x] **Status indicator bar** (3.5) — 3px colored left border on table rows
+- [x] **Sticky table headers** (3.5) — sticky top-0 on all thead elements
+- [x] **Log regex toggle** (1.2) — .* button enables regex search
+- [x] **Stream filter** (1.2) — stdout/stderr toggle buttons
+- [x] **Clear button** (1.3) — clear log view without refetching
+- [x] **Update status detail** (6.1) — show timestamps and message
