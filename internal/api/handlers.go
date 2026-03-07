@@ -28,10 +28,33 @@ type DockerLogStreamer interface {
 type Handlers struct {
 	cache        *cache.Cache
 	dockerClient DockerLogStreamer
+	ready        <-chan struct{}
 }
 
-func NewHandlers(c *cache.Cache, dc DockerLogStreamer) *Handlers {
-	return &Handlers{cache: c, dockerClient: dc}
+func NewHandlers(c *cache.Cache, dc DockerLogStreamer, ready <-chan struct{}) *Handlers {
+	return &Handlers{cache: c, dockerClient: dc, ready: ready}
+}
+
+func (h *Handlers) isReady() bool {
+	select {
+	case <-h.ready:
+		return true
+	default:
+		return false
+	}
+}
+
+func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, map[string]string{"status": "ok"})
+}
+
+func (h *Handlers) HandleReady(w http.ResponseWriter, r *http.Request) {
+	if !h.isReady() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		writeJSON(w, map[string]string{"status": "not_ready"})
+		return
+	}
+	writeJSON(w, map[string]string{"status": "ready"})
 }
 
 func writeJSON(w http.ResponseWriter, v interface{}) {

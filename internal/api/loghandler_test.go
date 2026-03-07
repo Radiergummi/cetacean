@@ -44,7 +44,7 @@ func TestHandleServiceLogs_JSON(t *testing.T) {
 	frames.Write(buildFrame(1, "2024-01-01T00:00:00.000000000Z line1\n"))
 	frames.Write(buildFrame(2, "2024-01-01T00:00:01.000000000Z line2\n"))
 
-	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()})
+	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()}, closedReady())
 
 	req := httptest.NewRequest("GET", "/api/services/svc1/logs?limit=100", nil)
 	req.SetPathValue("id", "svc1")
@@ -82,7 +82,7 @@ func TestHandleServiceLogs_JSON(t *testing.T) {
 
 func TestHandleServiceLogs_JSON_NotFound(t *testing.T) {
 	c := cache.New(nil)
-	h := NewHandlers(c, &mockLogStreamer{})
+	h := NewHandlers(c, &mockLogStreamer{}, closedReady())
 
 	req := httptest.NewRequest("GET", "/api/services/missing/logs", nil)
 	req.SetPathValue("id", "missing")
@@ -103,7 +103,7 @@ func TestHandleServiceLogs_SSE(t *testing.T) {
 	frames.Write(buildFrame(1, "2024-01-01T00:00:00.000000000Z hello\n"))
 	frames.Write(buildFrame(2, "2024-01-01T00:00:01.000000000Z world\n"))
 
-	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()})
+	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()}, closedReady())
 
 	req := httptest.NewRequest("GET", "/api/services/svc1/logs", nil)
 	req.SetPathValue("id", "svc1")
@@ -149,7 +149,7 @@ func TestHandleTaskLogs_JSON(t *testing.T) {
 	var frames bytes.Buffer
 	frames.Write(buildFrame(1, "2024-01-01T00:00:00.000000000Z task log\n"))
 
-	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()})
+	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()}, closedReady())
 
 	req := httptest.NewRequest("GET", "/api/tasks/t1/logs?limit=50", nil)
 	req.SetPathValue("id", "t1")
@@ -177,7 +177,7 @@ func TestHandleServiceLogs_JSON_Empty(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{ID: "svc1"})
 
-	h := NewHandlers(c, &mockLogStreamer{data: nil})
+	h := NewHandlers(c, &mockLogStreamer{data: nil}, closedReady())
 
 	req := httptest.NewRequest("GET", "/api/services/svc1/logs", nil)
 	req.SetPathValue("id", "svc1")
@@ -202,7 +202,7 @@ func TestHandleServiceLogs_DefaultsToJSON(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{ID: "svc1"})
 
-	h := NewHandlers(c, &mockLogStreamer{data: nil})
+	h := NewHandlers(c, &mockLogStreamer{data: nil}, closedReady())
 
 	req := httptest.NewRequest("GET", "/api/services/svc1/logs", nil)
 	req.SetPathValue("id", "svc1")
@@ -223,7 +223,7 @@ func TestHandleServiceLogs_SSE_EventIDs(t *testing.T) {
 	frames.Write(buildFrame(1, "2024-01-01T00:00:00.000000000Z line1\n"))
 	frames.Write(buildFrame(1, "2024-01-01T00:00:01.000000000Z line2\n"))
 
-	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()})
+	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()}, closedReady())
 
 	req := httptest.NewRequest("GET", "/api/services/svc1/logs", nil)
 	req.SetPathValue("id", "svc1")
@@ -256,7 +256,7 @@ func TestHandleServiceLogs_JSON_StreamFilter(t *testing.T) {
 	frames.Write(buildFrame(2, "2024-01-01T00:00:01.000000000Z stderr line\n"))
 	frames.Write(buildFrame(1, "2024-01-01T00:00:02.000000000Z another stdout\n"))
 
-	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()})
+	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()}, closedReady())
 
 	// Filter to stderr only
 	req := httptest.NewRequest("GET", "/api/services/svc1/logs?stream=stderr", nil)
@@ -285,7 +285,7 @@ func TestHandleServiceLogs_JSON_StreamFilterStdout(t *testing.T) {
 	frames.Write(buildFrame(1, "2024-01-01T00:00:00.000000000Z stdout line\n"))
 	frames.Write(buildFrame(2, "2024-01-01T00:00:01.000000000Z stderr line\n"))
 
-	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()})
+	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()}, closedReady())
 
 	req := httptest.NewRequest("GET", "/api/services/svc1/logs?stream=stdout", nil)
 	req.SetPathValue("id", "svc1")
@@ -318,7 +318,7 @@ func TestHandleServiceLogs_SSE_LastEventID(t *testing.T) {
 		data:   frames.Bytes(),
 		onCall: func(since string) { capturedSince = since },
 	}
-	h := NewHandlers(c, mock)
+	h := NewHandlers(c, mock, closedReady())
 
 	// Simulate EventSource reconnect with Last-Event-ID header
 	req := httptest.NewRequest("GET", "/api/services/svc1/logs", nil)
@@ -342,7 +342,7 @@ func TestHandleServiceLogs_SSE_LastEventID_OverriddenByAfter(t *testing.T) {
 		data:   buildFrame(1, "2024-01-01T00:00:05.000000000Z line\n"),
 		onCall: func(since string) { capturedSince = since },
 	}
-	h := NewHandlers(c, mock)
+	h := NewHandlers(c, mock, closedReady())
 
 	// Both ?after= and Last-Event-ID present — ?after= should win
 	req := httptest.NewRequest("GET", "/api/services/svc1/logs?after=explicit-value", nil)
@@ -385,7 +385,7 @@ func TestHandleServiceLogs_SSE_StreamFilter(t *testing.T) {
 	frames.Write(buildFrame(1, "2024-01-01T00:00:00.000000000Z stdout line\n"))
 	frames.Write(buildFrame(2, "2024-01-01T00:00:01.000000000Z stderr line\n"))
 
-	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()})
+	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()}, closedReady())
 
 	req := httptest.NewRequest("GET", "/api/services/svc1/logs?stream=stderr", nil)
 	req.SetPathValue("id", "svc1")

@@ -8,6 +8,10 @@ import (
 func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Handler) http.Handler {
 	mux := http.NewServeMux()
 
+	// Health
+	mux.HandleFunc("GET /api/health", h.HandleHealth)
+	mux.HandleFunc("GET /api/ready", h.HandleReady)
+
 	// SSE
 	mux.Handle("GET /api/events", b)
 

@@ -50,12 +50,8 @@ func main() {
 
 	go watcher.Run(ctx)
 
-	// Wait for initial sync
-	<-watcher.Ready()
-	log.Println("initial sync complete, starting HTTP server")
-
-	// API
-	handlers := api.NewHandlers(stateCache, dockerClient)
+	// API — pass ready channel so /api/ready reports sync status
+	handlers := api.NewHandlers(stateCache, dockerClient, watcher.Ready())
 	promProxy := api.NewPrometheusProxy(cfg.PrometheusURL)
 
 	// SPA

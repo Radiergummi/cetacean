@@ -11,11 +11,48 @@ import (
 	"cetacean/internal/cache"
 )
 
+func closedReady() <-chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
+}
+
+func TestHandleHealth(t *testing.T) {
+	h := NewHandlers(cache.New(nil), nil, closedReady())
+	req := httptest.NewRequest("GET", "/api/health", nil)
+	w := httptest.NewRecorder()
+	h.HandleHealth(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("status=%d, want 200", w.Code)
+	}
+}
+
+func TestHandleReady_NotReady(t *testing.T) {
+	ch := make(chan struct{}) // not closed = not ready
+	h := NewHandlers(cache.New(nil), nil, ch)
+	req := httptest.NewRequest("GET", "/api/ready", nil)
+	w := httptest.NewRecorder()
+	h.HandleReady(w, req)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("status=%d, want 503", w.Code)
+	}
+}
+
+func TestHandleReady_Ready(t *testing.T) {
+	h := NewHandlers(cache.New(nil), nil, closedReady())
+	req := httptest.NewRequest("GET", "/api/ready", nil)
+	w := httptest.NewRecorder()
+	h.HandleReady(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("status=%d, want 200", w.Code)
+	}
+}
+
 func TestHandleCluster(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{ID: "n1"})
 	c.SetService(swarm.Service{ID: "s1"})
-	h := NewHandlers(c, nil)
+	h := NewHandlers(c, nil, closedReady())
 
 	req := httptest.NewRequest("GET", "/api/cluster", nil)
 	w := httptest.NewRecorder()
@@ -36,7 +73,7 @@ func TestHandleListNodes(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{ID: "n1"})
 	c.SetNode(swarm.Node{ID: "n2"})
-	h := NewHandlers(c, nil)
+	h := NewHandlers(c, nil, closedReady())
 
 	req := httptest.NewRequest("GET", "/api/nodes", nil)
 	w := httptest.NewRecorder()
@@ -59,7 +96,7 @@ func TestHandleListNodes(t *testing.T) {
 func TestHandleGetNode_Found(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{ID: "n1"})
-	h := NewHandlers(c, nil)
+	h := NewHandlers(c, nil, closedReady())
 
 	req := httptest.NewRequest("GET", "/api/nodes/n1", nil)
 	req.SetPathValue("id", "n1")
@@ -73,7 +110,7 @@ func TestHandleGetNode_Found(t *testing.T) {
 
 func TestHandleGetNode_NotFound(t *testing.T) {
 	c := cache.New(nil)
-	h := NewHandlers(c, nil)
+	h := NewHandlers(c, nil, closedReady())
 
 	req := httptest.NewRequest("GET", "/api/nodes/missing", nil)
 	req.SetPathValue("id", "missing")
@@ -92,7 +129,7 @@ func TestHandleServiceTasks(t *testing.T) {
 	t2 := swarm.Task{ID: "t2", ServiceID: "svc2"}
 	c.SetTask(t1)
 	c.SetTask(t2)
-	h := NewHandlers(c, nil)
+	h := NewHandlers(c, nil, closedReady())
 
 	req := httptest.NewRequest("GET", "/api/services/svc1/tasks", nil)
 	req.SetPathValue("id", "svc1")
@@ -121,7 +158,7 @@ func TestHandleNodeTasks(t *testing.T) {
 	t2 := swarm.Task{ID: "t2", NodeID: "node2"}
 	c.SetTask(t1)
 	c.SetTask(t2)
-	h := NewHandlers(c, nil)
+	h := NewHandlers(c, nil, closedReady())
 
 	req := httptest.NewRequest("GET", "/api/nodes/node1/tasks", nil)
 	req.SetPathValue("id", "node1")
@@ -149,7 +186,7 @@ func TestHandleListServices_Paginated(t *testing.T) {
 		svc.Spec.Name = name
 		c.SetService(svc)
 	}
-	h := NewHandlers(c, nil)
+	h := NewHandlers(c, nil, closedReady())
 
 	req := httptest.NewRequest("GET", "/api/services?limit=2&sort=name", nil)
 	w := httptest.NewRecorder()
@@ -183,7 +220,7 @@ func TestHandleListNodes_Paginated(t *testing.T) {
 	n2.Description.Hostname = "alpha"
 	c.SetNode(n1)
 	c.SetNode(n2)
-	h := NewHandlers(c, nil)
+	h := NewHandlers(c, nil, closedReady())
 
 	req := httptest.NewRequest("GET", "/api/nodes?limit=1&sort=hostname", nil)
 	w := httptest.NewRecorder()
@@ -214,7 +251,7 @@ func TestHandleListServices_Search(t *testing.T) {
 	svc2.Spec.Name = "api-backend"
 	c.SetService(svc1)
 	c.SetService(svc2)
-	h := NewHandlers(c, nil)
+	h := NewHandlers(c, nil, closedReady())
 
 	req := httptest.NewRequest("GET", "/api/services?search=web", nil)
 	w := httptest.NewRecorder()
@@ -239,7 +276,7 @@ func TestHandleHistory(t *testing.T) {
 	c.SetService(swarm.Service{ID: "s1", Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "nginx"}}})
 	c.SetService(swarm.Service{ID: "s2", Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "redis"}}})
 
-	h := NewHandlers(c, nil)
+	h := NewHandlers(c, nil, closedReady())
 	req := httptest.NewRequest("GET", "/api/history?type=service", nil)
 	w := httptest.NewRecorder()
 	h.HandleHistory(w, req)
@@ -260,7 +297,7 @@ func TestHandleHistory_FilterByResource(t *testing.T) {
 	c.SetService(swarm.Service{ID: "s1", Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "nginx"}}})
 	c.SetNode(swarm.Node{ID: "n1", Description: swarm.NodeDescription{Hostname: "worker-01"}})
 
-	h := NewHandlers(c, nil)
+	h := NewHandlers(c, nil, closedReady())
 	req := httptest.NewRequest("GET", "/api/history?resourceId=s1", nil)
 	w := httptest.NewRecorder()
 	h.HandleHistory(w, req)
