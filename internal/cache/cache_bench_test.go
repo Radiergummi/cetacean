@@ -180,7 +180,7 @@ func BenchmarkListTasks(b *testing.B) {
 	}
 }
 
-// --- Filtered task lists (linear scan) ---
+// --- Filtered task lists (indexed) ---
 
 func BenchmarkListTasksByService(b *testing.B) {
 	for _, n := range sizes {

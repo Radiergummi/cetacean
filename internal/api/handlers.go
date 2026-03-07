@@ -2,7 +2,7 @@ package api
 
 import (
 	"context"
-	"encoding/json"
+	json "github.com/goccy/go-json"
 	"io"
 	"net/http"
 	"strings"
@@ -126,10 +126,10 @@ func (h *Handlers) HandleServiceLogs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to get logs", http.StatusInternalServerError)
 		return
 	}
-	defer logs.Close()
+	defer logs.Close() //nolint:errcheck // best-effort close
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	stdcopy.StdCopy(w, w, logs)
+	_, _ = stdcopy.StdCopy(w, w, logs)
 }
 
 // --- Tasks ---
@@ -167,12 +167,12 @@ func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	stack, ok := h.cache.GetStack(name)
+	detail, ok := h.cache.GetStackDetail(name)
 	if !ok {
 		http.NotFound(w, r)
 		return
 	}
-	writeJSON(w, stack)
+	writeJSON(w, detail)
 }
 
 // --- Configs ---

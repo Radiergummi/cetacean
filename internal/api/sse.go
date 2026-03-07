@@ -1,7 +1,7 @@
 package api
 
 import (
-	"encoding/json"
+	json "github.com/goccy/go-json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -15,6 +15,8 @@ type sseClient struct {
 	types  map[string]bool // nil means all types
 	done   chan struct{}
 }
+
+const maxSSEClients = 256
 
 type Broadcaster struct {
 	mu      sync.RWMutex
@@ -79,6 +81,11 @@ func (b *Broadcaster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	b.mu.Lock()
 	if b.closed {
 		b.mu.Unlock()
+		return
+	}
+	if len(b.clients) >= maxSSEClients {
+		b.mu.Unlock()
+		http.Error(w, "too many SSE connections", http.StatusServiceUnavailable)
 		return
 	}
 	b.clients[client] = struct{}{}
