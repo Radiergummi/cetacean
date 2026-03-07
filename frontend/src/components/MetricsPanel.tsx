@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { RefreshCw, Play, Square, ChevronDown, ChevronRight } from "lucide-react";
 import TimeSeriesChart from "./TimeSeriesChart";
 import type { Threshold } from "./TimeSeriesChart";
@@ -17,7 +18,20 @@ interface Props {
 const RANGES = ["1h", "6h", "24h", "7d"] as const;
 
 export default function MetricsPanel({ charts }: Props) {
-  const [range, setRange] = useState<string>("1h");
+  const [params, setParams] = useSearchParams();
+  const [range, setRangeState] = useState<string>(params.get("range") ?? "1h");
+  const setRange = (r: string) => {
+    setRangeState(r);
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (r === "1h") next.delete("range");
+        else next.set("range", r);
+        return next;
+      },
+      { replace: true },
+    );
+  };
   const [refreshKey, setRefreshKey] = useState(0);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [collapsed, setCollapsed] = useState(false);

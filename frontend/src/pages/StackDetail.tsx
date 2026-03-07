@@ -1,19 +1,43 @@
 import { useParams, Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { api } from "../api/client";
-import type { StackDetail as StackDetailType } from "../api/types";
+import type { StackDetail as StackDetailType, Task } from "../api/types";
 import PageHeader from "../components/PageHeader";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 
 export default function StackDetail() {
   const { name } = useParams<{ name: string }>();
   const [stack, setStack] = useState<StackDetailType | null>(null);
+  const [taskCounts, setTaskCounts] = useState<Record<string, { running: number; total: number }>>(
+    {},
+  );
 
   useEffect(() => {
     if (name) {
       api.stack(name).then(setStack);
     }
   }, [name]);
+
+  useEffect(() => {
+    if (!stack?.services?.length) return;
+    Promise.all(
+      stack.services.map((svc) =>
+        api
+          .serviceTasks(svc.ID)
+          .then((tasks: Task[]) => [svc.ID, tasks] as const)
+          .catch(() => [svc.ID, []] as const),
+      ),
+    ).then((results) => {
+      const counts: Record<string, { running: number; total: number }> = {};
+      for (const [id, tasks] of results) {
+        counts[id] = {
+          running: tasks.filter((t) => t.Status.State === "running").length,
+          total: tasks.length,
+        };
+      }
+      setTaskCounts(counts);
+    });
+  }, [stack]);
 
   if (!stack) return <LoadingDetail />;
 
@@ -50,6 +74,7 @@ export default function StackDetail() {
                     <th className="text-left p-3 text-sm font-medium">Name</th>
                     <th className="text-left p-3 text-sm font-medium">Image</th>
                     <th className="text-left p-3 text-sm font-medium">Mode</th>
+                    <th className="text-left p-3 text-sm font-medium">Tasks</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -68,6 +93,24 @@ export default function StackDetail() {
                       </td>
                       <td className="p-3 text-sm">
                         {svc.Spec.Mode.Replicated ? "replicated" : "global"}
+                      </td>
+                      <td className="p-3 text-sm tabular-nums">
+                        {taskCounts[svc.ID] ? (
+                          <span>
+                            <span
+                              className={
+                                taskCounts[svc.ID].running === taskCounts[svc.ID].total
+                                  ? "text-green-600"
+                                  : "text-yellow-600"
+                              }
+                            >
+                              {taskCounts[svc.ID].running}
+                            </span>
+                            /{taskCounts[svc.ID].total}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                     </tr>
                   ))}

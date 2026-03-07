@@ -22,7 +22,7 @@ function logResponse(lines: { message: string; timestamp?: string; stream?: stri
   const mapped = lines.map((l) => ({
     timestamp: l.timestamp ?? "",
     message: l.message,
-    stream: l.stream ?? "stdout",
+    stream: (l.stream ?? "stdout") as "stdout" | "stderr",
   }));
   return {
     lines: mapped,
@@ -175,7 +175,9 @@ describe("LogViewer", () => {
     mockServiceLogs.mockResolvedValue(
       logResponse([{ message: "initial line", timestamp: "2024-01-01T00:00:00Z" }]),
     );
-    mockServiceLogsStreamURL.mockReturnValue("/api/services/svc1/logs?after=2024-01-01T00%3A00%3A00Z");
+    mockServiceLogsStreamURL.mockReturnValue(
+      "/api/services/svc1/logs?after=2024-01-01T00%3A00%3A00Z",
+    );
 
     render(<LogViewer serviceId="svc1" />);
 
@@ -191,7 +193,11 @@ describe("LogViewer", () => {
 
     // Simulate receiving an SSE event
     MockEventSource.instances[0].emit(
-      JSON.stringify({ timestamp: "2024-01-01T00:00:01Z", message: "streamed line", stream: "stdout" }),
+      JSON.stringify({
+        timestamp: "2024-01-01T00:00:01Z",
+        message: "streamed line",
+        stream: "stdout",
+      }),
     );
 
     await waitFor(() => {

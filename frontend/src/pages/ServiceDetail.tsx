@@ -62,7 +62,23 @@ export default function ServiceDetail() {
               : "global"
           }
         />
-        <InfoCard label="Update Status" value={service.UpdateStatus?.State} />
+        <InfoCard
+          label="Update Status"
+          value={
+            service.UpdateStatus
+              ? [
+                  service.UpdateStatus.State,
+                  service.UpdateStatus.Message && `— ${service.UpdateStatus.Message}`,
+                  service.UpdateStatus.StartedAt &&
+                    `started ${timeAgo(service.UpdateStatus.StartedAt)}`,
+                  service.UpdateStatus.CompletedAt &&
+                    `completed ${timeAgo(service.UpdateStatus.CompletedAt)}`,
+                ]
+                  .filter(Boolean)
+                  .join(" ")
+              : undefined
+          }
+        />
         <InfoCard
           label="Stack"
           value={labels["com.docker.stack.namespace"]}

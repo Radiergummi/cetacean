@@ -178,10 +178,30 @@ export default function TimeSeriesChart({
           },
         };
 
+        const legendPlugin: uPlot.Plugin = {
+          hooks: {
+            init: [
+              (u: uPlot) => {
+                const labels = u.root.querySelectorAll(".u-legend .u-series");
+                labels.forEach((el, i) => {
+                  if (i === 0) return; // skip time series
+                  el.addEventListener("click", () => {
+                    const allHidden = u.series.slice(1).every((s, j) => j === i - 1 || !s.show);
+                    for (let j = 1; j < u.series.length; j++) {
+                      u.setSeries(j, { show: allHidden ? true : j === i });
+                    }
+                  });
+                  (el as HTMLElement).style.cursor = "pointer";
+                });
+              },
+            ],
+          },
+        };
+
         const opts: uPlot.Options = {
           width: containerRef.current.clientWidth || 600,
           height: 200,
-          plugins: [thresholdPlugin, tooltipPlugin],
+          plugins: [thresholdPlugin, tooltipPlugin, legendPlugin],
           cursor: {
             drag: { x: false, y: false },
           },
