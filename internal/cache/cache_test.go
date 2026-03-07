@@ -1,0 +1,96 @@
+package cache
+
+import (
+	"testing"
+
+	"github.com/docker/docker/api/types/swarm"
+)
+
+func TestCache_SetGetNode(t *testing.T) {
+	c := New(nil)
+	node := swarm.Node{ID: "node1"}
+	node.Description.Hostname = "host1"
+
+	c.SetNode(node)
+
+	got, ok := c.GetNode("node1")
+	if !ok {
+		t.Fatal("expected node to exist")
+	}
+	if got.Description.Hostname != "host1" {
+		t.Errorf("expected host1, got %s", got.Description.Hostname)
+	}
+}
+
+func TestCache_DeleteNode(t *testing.T) {
+	c := New(nil)
+	c.SetNode(swarm.Node{ID: "node1"})
+	c.DeleteNode("node1")
+
+	_, ok := c.GetNode("node1")
+	if ok {
+		t.Fatal("expected node to be deleted")
+	}
+}
+
+func TestCache_ListNodes(t *testing.T) {
+	c := New(nil)
+	c.SetNode(swarm.Node{ID: "n1"})
+	c.SetNode(swarm.Node{ID: "n2"})
+
+	nodes := c.ListNodes()
+	if len(nodes) != 2 {
+		t.Fatalf("expected 2 nodes, got %d", len(nodes))
+	}
+}
+
+func TestCache_SetService_DerivedStack(t *testing.T) {
+	c := New(nil)
+	svc := swarm.Service{ID: "svc1"}
+	svc.Spec.Name = "mystack_web"
+	svc.Spec.Labels = map[string]string{
+		"com.docker.stack.namespace": "mystack",
+	}
+
+	c.SetService(svc)
+
+	stack, ok := c.GetStack("mystack")
+	if !ok {
+		t.Fatal("expected stack to be derived")
+	}
+	if len(stack.Services) != 1 || stack.Services[0] != "svc1" {
+		t.Errorf("expected stack to contain svc1, got %v", stack.Services)
+	}
+}
+
+func TestCache_OnChange_Called(t *testing.T) {
+	var called bool
+	var gotEvent Event
+	c := New(func(e Event) {
+		called = true
+		gotEvent = e
+	})
+
+	c.SetNode(swarm.Node{ID: "node1"})
+
+	if !called {
+		t.Fatal("expected onChange to be called")
+	}
+	if gotEvent.Type != "node" || gotEvent.Action != "update" || gotEvent.ID != "node1" {
+		t.Errorf("unexpected event: %+v", gotEvent)
+	}
+}
+
+func TestCache_Snapshot(t *testing.T) {
+	c := New(nil)
+	c.SetNode(swarm.Node{ID: "n1"})
+	c.SetService(swarm.Service{ID: "s1"})
+
+	snap := c.Snapshot()
+	if snap.NodeCount != 1 {
+		t.Errorf("expected 1 node, got %d", snap.NodeCount)
+	}
+	if snap.ServiceCount != 1 {
+		t.Errorf("expected 1 service, got %d", snap.ServiceCount)
+	}
+}
