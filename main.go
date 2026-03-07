@@ -3,8 +3,9 @@ package main
 import (
 	"context"
 	"embed"
+	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -23,8 +24,19 @@ var frontendDist embed.FS
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("configuration error: %v", err)
+		fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
+		os.Exit(1)
 	}
+
+	// Set up structured logging
+	var logHandler slog.Handler
+	opts := &slog.HandlerOptions{Level: cfg.SlogLevel()}
+	if cfg.LogFormat == "text" {
+		logHandler = slog.NewTextHandler(os.Stdout, opts)
+	} else {
+		logHandler = slog.NewJSONHandler(os.Stdout, opts)
+	}
+	slog.SetDefault(slog.New(logHandler))
 
 	// SSE broadcaster
 	broadcaster := api.NewBroadcaster()
@@ -38,7 +50,8 @@ func main() {
 	// Docker client + watcher
 	dockerClient, err := docker.NewClient(cfg.DockerHost)
 	if err != nil {
-		log.Fatalf("docker client error: %v", err)
+		slog.Error("docker client failed", "error", err)
+		os.Exit(1)
 	}
 	defer dockerClient.Close() //nolint:errcheck // best-effort shutdown close
 
@@ -57,7 +70,8 @@ func main() {
 	// SPA
 	distFS, err := fs.Sub(frontendDist, "frontend/dist")
 	if err != nil {
-		log.Fatalf("failed to create sub FS: %v", err)
+		slog.Error("failed to create sub FS", "error", err)
+		os.Exit(1)
 	}
 	spa := api.NewSPAHandler(distFS)
 
@@ -76,17 +90,18 @@ func main() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
-		log.Println("shutting down...")
+		slog.Info("shutting down")
 		cancel()
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer shutdownCancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
-			log.Printf("shutdown error: %v", err)
+			slog.Error("shutdown error", "error", err)
 		}
 	}()
 
-	log.Printf("cetacean listening on %s", cfg.ListenAddr)
+	slog.Info("server started", "addr", cfg.ListenAddr)
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
-		log.Fatalf("server error: %v", err)
+		slog.Error("server error", "error", err)
+		os.Exit(1)
 	}
 }

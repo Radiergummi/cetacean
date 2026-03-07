@@ -3,7 +3,7 @@ package docker
 import (
 	"context"
 	"io"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -37,17 +37,42 @@ type DockerClient interface {
 	Close() error
 }
 
+// Store is the interface the watcher uses to mutate cached state.
+type Store interface {
+	// Incremental updates (from event stream).
+	SetNode(swarm.Node)
+	DeleteNode(string)
+	SetService(swarm.Service)
+	DeleteService(string)
+	SetTask(swarm.Task)
+	DeleteTask(string)
+	SetConfig(swarm.Config)
+	DeleteConfig(string)
+	SetSecret(swarm.Secret)
+	DeleteSecret(string)
+	SetNetwork(network.Summary)
+	DeleteNetwork(string)
+	SetVolume(volume.Volume)
+	DeleteVolume(string)
+
+	// Atomic bulk replacement (from full sync).
+	ReplaceAll(cache.FullSyncData)
+
+	// Read snapshot for logging.
+	Snapshot() cache.ClusterSnapshot
+}
+
 type Watcher struct {
 	client   DockerClient
-	cache    *cache.Cache
+	store    Store
 	syncOnce sync.Once
 	ready    chan struct{}
 }
 
-func NewWatcher(client DockerClient, cache *cache.Cache) *Watcher {
+func NewWatcher(client DockerClient, store Store) *Watcher {
 	return &Watcher{
 		client: client,
-		cache:  cache,
+		store:  store,
 		ready:  make(chan struct{}),
 	}
 }
@@ -71,7 +96,7 @@ func (w *Watcher) Run(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				log.Println("periodic full re-sync")
+				slog.Info("periodic full re-sync")
 				w.fullSync(ctx)
 			}
 		}
@@ -83,30 +108,35 @@ func (w *Watcher) Run(ctx context.Context) {
 			return
 		}
 		w.watchEvents(ctx)
-		log.Println("event stream disconnected, reconnecting in 1s...")
+		slog.Warn("event stream disconnected, reconnecting in 1s")
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(1 * time.Second):
 		}
-		log.Println("re-syncing after reconnect")
+		slog.Info("re-syncing after reconnect")
 		w.fullSync(ctx)
 	}
 }
 
 func (w *Watcher) fullSync(ctx context.Context) {
-	log.Println("starting full sync")
+	slog.Info("starting full sync")
 
 	type result struct {
 		name string
 		err  error
 	}
+
+	var data cache.FullSyncData
+	var mu sync.Mutex
 	ch := make(chan result, 7)
 
 	go func() {
 		nodes, err := w.client.ListNodes(ctx)
 		if err == nil {
-			w.cache.ReplaceNodes(nodes)
+			mu.Lock()
+			data.Nodes = nodes
+			mu.Unlock()
 		}
 		ch <- result{"nodes", err}
 	}()
@@ -114,7 +144,9 @@ func (w *Watcher) fullSync(ctx context.Context) {
 	go func() {
 		services, err := w.client.ListServices(ctx)
 		if err == nil {
-			w.cache.ReplaceServices(services)
+			mu.Lock()
+			data.Services = services
+			mu.Unlock()
 		}
 		ch <- result{"services", err}
 	}()
@@ -122,7 +154,9 @@ func (w *Watcher) fullSync(ctx context.Context) {
 	go func() {
 		tasks, err := w.client.ListTasks(ctx)
 		if err == nil {
-			w.cache.ReplaceTasks(tasks)
+			mu.Lock()
+			data.Tasks = tasks
+			mu.Unlock()
 		}
 		ch <- result{"tasks", err}
 	}()
@@ -130,7 +164,9 @@ func (w *Watcher) fullSync(ctx context.Context) {
 	go func() {
 		configs, err := w.client.ListConfigs(ctx)
 		if err == nil {
-			w.cache.ReplaceConfigs(configs)
+			mu.Lock()
+			data.Configs = configs
+			mu.Unlock()
 		}
 		ch <- result{"configs", err}
 	}()
@@ -138,7 +174,9 @@ func (w *Watcher) fullSync(ctx context.Context) {
 	go func() {
 		secrets, err := w.client.ListSecrets(ctx)
 		if err == nil {
-			w.cache.ReplaceSecrets(secrets)
+			mu.Lock()
+			data.Secrets = secrets
+			mu.Unlock()
 		}
 		ch <- result{"secrets", err}
 	}()
@@ -146,7 +184,9 @@ func (w *Watcher) fullSync(ctx context.Context) {
 	go func() {
 		networks, err := w.client.ListNetworks(ctx)
 		if err == nil {
-			w.cache.ReplaceNetworks(networks)
+			mu.Lock()
+			data.Networks = networks
+			mu.Unlock()
 		}
 		ch <- result{"networks", err}
 	}()
@@ -154,7 +194,9 @@ func (w *Watcher) fullSync(ctx context.Context) {
 	go func() {
 		volumes, err := w.client.ListVolumes(ctx)
 		if err == nil {
-			w.cache.ReplaceVolumes(volumes)
+			mu.Lock()
+			data.Volumes = volumes
+			mu.Unlock()
 		}
 		ch <- result{"volumes", err}
 	}()
@@ -162,19 +204,39 @@ func (w *Watcher) fullSync(ctx context.Context) {
 	for i := 0; i < 7; i++ {
 		r := <-ch
 		if r.err != nil {
-			log.Printf("full sync %s failed: %v", r.name, r.err)
+			slog.Warn("full sync resource failed", "resource", r.name, "error", r.err)
 		}
 	}
 
-	w.cache.RebuildStacks()
+	w.store.ReplaceAll(data)
 
-	snap := w.cache.Snapshot()
-	log.Printf("full sync complete: %d nodes, %d services, %d tasks, %d stacks",
-		snap.NodeCount, snap.ServiceCount, snap.TaskCount, snap.StackCount)
+	snap := w.store.Snapshot()
+	slog.Info("full sync complete", "nodes", snap.NodeCount, "services", snap.ServiceCount, "tasks", snap.TaskCount, "stacks", snap.StackCount)
+}
+
+const (
+	debounceWindow = 50 * time.Millisecond
+	workerCount    = 4
+)
+
+// eventKey identifies a unique resource for coalescing.
+type eventKey struct {
+	resourceType events.Type
+	id           string
+}
+
+// coalesced holds the latest action for a given resource.
+type coalesced struct {
+	action string
 }
 
 func (w *Watcher) watchEvents(ctx context.Context) {
 	msgCh, errCh := w.client.Events(ctx)
+
+	pending := make(map[eventKey]coalesced)
+	timer := time.NewTimer(debounceWindow)
+	timer.Stop()
+	timerRunning := false
 
 	for {
 		select {
@@ -182,100 +244,180 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 			return
 		case err := <-errCh:
 			if err != nil {
-				log.Printf("event stream error: %v", err)
+				slog.Warn("event stream error", "error", err)
+			}
+			// Flush any pending events before returning.
+			if len(pending) > 0 {
+				w.processBatch(ctx, pending)
 			}
 			return
 		case msg := <-msgCh:
-			w.handleEvent(ctx, msg)
+			key, action := w.eventKeyFromMsg(msg)
+			if key.id == "" {
+				continue // unrecognized event, skip
+			}
+			pending[key] = coalesced{action: action}
+			if !timerRunning {
+				timer.Reset(debounceWindow)
+				timerRunning = true
+			}
+		case <-timer.C:
+			timerRunning = false
+			if len(pending) > 0 {
+				batch := pending
+				pending = make(map[eventKey]coalesced)
+				w.processBatch(ctx, batch)
+			}
 		}
 	}
 }
 
-func (w *Watcher) handleEvent(ctx context.Context, msg events.Message) {
+// eventKeyFromMsg normalizes a Docker event into a coalescing key.
+// Container events are mapped to task events using the swarm task ID attribute.
+func (w *Watcher) eventKeyFromMsg(msg events.Message) (eventKey, string) {
 	switch msg.Type {
-	case events.NodeEventType:
-		if msg.Action == "remove" {
-			w.cache.DeleteNode(msg.Actor.ID)
-		} else {
-			node, err := w.client.InspectNode(ctx, msg.Actor.ID)
-			if err != nil {
-				log.Printf("inspect node %s failed: %v", msg.Actor.ID, err)
-				return
-			}
-			w.cache.SetNode(node)
-		}
-
-	case events.ServiceEventType:
-		if msg.Action == "remove" {
-			w.cache.DeleteService(msg.Actor.ID)
-		} else {
-			svc, err := w.client.InspectService(ctx, msg.Actor.ID)
-			if err != nil {
-				log.Printf("inspect service %s failed: %v", msg.Actor.ID, err)
-				return
-			}
-			w.cache.SetService(svc)
-		}
-
-	case events.ConfigEventType:
-		if msg.Action == "remove" {
-			w.cache.DeleteConfig(msg.Actor.ID)
-		} else {
-			cfg, err := w.client.InspectConfig(ctx, msg.Actor.ID)
-			if err != nil {
-				log.Printf("inspect config %s failed: %v", msg.Actor.ID, err)
-				return
-			}
-			w.cache.SetConfig(cfg)
-		}
-
-	case events.SecretEventType:
-		if msg.Action == "remove" {
-			w.cache.DeleteSecret(msg.Actor.ID)
-		} else {
-			sec, err := w.client.InspectSecret(ctx, msg.Actor.ID)
-			if err != nil {
-				log.Printf("inspect secret %s failed: %v", msg.Actor.ID, err)
-				return
-			}
-			w.cache.SetSecret(sec)
-		}
-
-	case events.NetworkEventType:
-		if msg.Action == "remove" || msg.Action == "destroy" {
-			w.cache.DeleteNetwork(msg.Actor.ID)
-		} else {
-			net, err := w.client.InspectNetwork(ctx, msg.Actor.ID)
-			if err != nil {
-				log.Printf("inspect network %s failed: %v", msg.Actor.ID, err)
-				return
-			}
-			w.cache.SetNetwork(net)
-		}
-
-	case events.VolumeEventType:
-		if msg.Action == "destroy" {
-			w.cache.DeleteVolume(msg.Actor.ID)
-		} else {
-			vol, err := w.client.InspectVolume(ctx, msg.Actor.ID)
-			if err != nil {
-				log.Printf("inspect volume %s failed: %v", msg.Actor.ID, err)
-				return
-			}
-			w.cache.SetVolume(vol)
-		}
-
 	case events.ContainerEventType:
-		// Container events indicate task state changes.
 		taskID := msg.Actor.Attributes["com.docker.swarm.task.id"]
-		if taskID != "" {
-			svcName := msg.Actor.Attributes["com.docker.swarm.service.name"]
-			task, err := w.client.InspectTask(ctx, taskID)
-			if err != nil {
-				log.Printf("inspect task %s (svc: %s) failed: %v", taskID, svcName, err)
-				return
-			}
-			w.cache.SetTask(task)
+		if taskID == "" {
+			return eventKey{}, ""
 		}
+		// Treat container events as task updates.
+		return eventKey{resourceType: "task", id: taskID}, "update"
+	case events.NetworkEventType:
+		action := string(msg.Action)
+		if action == "destroy" {
+			action = "remove"
+		}
+		return eventKey{resourceType: msg.Type, id: msg.Actor.ID}, action
+	case events.VolumeEventType:
+		action := string(msg.Action)
+		if action == "destroy" {
+			action = "remove"
+		}
+		return eventKey{resourceType: msg.Type, id: msg.Actor.ID}, action
+	default:
+		return eventKey{resourceType: msg.Type, id: msg.Actor.ID}, string(msg.Action)
+	}
+}
+
+// processBatch handles a coalesced batch of events with a worker pool.
+func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced) {
+	// Process removes synchronously first — they're cheap (no Inspect).
+	for key, ev := range batch {
+		if ev.action == "remove" {
+			w.applyRemove(key)
+			delete(batch, key)
+		}
+	}
+
+	if len(batch) == 0 {
+		return
+	}
+
+	// Fan out inspects across workers.
+	work := make(chan eventKey, len(batch))
+	for key := range batch {
+		work <- key
+	}
+	close(work)
+
+	var wg sync.WaitGroup
+	workers := workerCount
+	if len(batch) < workers {
+		workers = len(batch)
+	}
+	wg.Add(workers)
+	for range workers {
+		go func() {
+			defer wg.Done()
+			for key := range work {
+				w.inspectAndApply(ctx, key)
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func (w *Watcher) applyRemove(key eventKey) {
+	switch key.resourceType {
+	case events.NodeEventType:
+		w.store.DeleteNode(key.id)
+	case events.ServiceEventType:
+		w.store.DeleteService(key.id)
+	case events.ConfigEventType:
+		w.store.DeleteConfig(key.id)
+	case events.SecretEventType:
+		w.store.DeleteSecret(key.id)
+	case events.NetworkEventType:
+		w.store.DeleteNetwork(key.id)
+	case events.VolumeEventType:
+		w.store.DeleteVolume(key.id)
+	case "task":
+		w.store.DeleteTask(key.id)
+	}
+}
+
+// handleEvent processes a single Docker event synchronously (inspect + apply).
+// Used by tests; the production path uses watchEvents with debouncing.
+func (w *Watcher) handleEvent(ctx context.Context, msg events.Message) {
+	key, action := w.eventKeyFromMsg(msg)
+	if key.id == "" {
+		return
+	}
+	if action == "remove" {
+		w.applyRemove(key)
+	} else {
+		w.inspectAndApply(ctx, key)
+	}
+}
+
+func (w *Watcher) inspectAndApply(ctx context.Context, key eventKey) {
+	var err error
+	switch key.resourceType {
+	case events.NodeEventType:
+		var node swarm.Node
+		node, err = w.client.InspectNode(ctx, key.id)
+		if err == nil {
+			w.store.SetNode(node)
+		}
+	case events.ServiceEventType:
+		var svc swarm.Service
+		svc, err = w.client.InspectService(ctx, key.id)
+		if err == nil {
+			w.store.SetService(svc)
+		}
+	case events.ConfigEventType:
+		var cfg swarm.Config
+		cfg, err = w.client.InspectConfig(ctx, key.id)
+		if err == nil {
+			w.store.SetConfig(cfg)
+		}
+	case events.SecretEventType:
+		var sec swarm.Secret
+		sec, err = w.client.InspectSecret(ctx, key.id)
+		if err == nil {
+			w.store.SetSecret(sec)
+		}
+	case events.NetworkEventType:
+		var net network.Summary
+		net, err = w.client.InspectNetwork(ctx, key.id)
+		if err == nil {
+			w.store.SetNetwork(net)
+		}
+	case events.VolumeEventType:
+		var vol volume.Volume
+		vol, err = w.client.InspectVolume(ctx, key.id)
+		if err == nil {
+			w.store.SetVolume(vol)
+		}
+	case "task":
+		var task swarm.Task
+		task, err = w.client.InspectTask(ctx, key.id)
+		if err == nil {
+			w.store.SetTask(task)
+		}
+	}
+	if err != nil {
+		slog.Warn("inspect failed", "type", string(key.resourceType), "id", key.id, "error", err)
 	}
 }
