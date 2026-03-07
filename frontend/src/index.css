@@ -134,3 +134,11 @@
     background: oklch(from var(--muted) l c h / 30%);
   }
 }
+
+/* uPlot cursor crosshair line */
+.u-cursor-x {
+  border-right: 1px solid oklch(from var(--foreground) l c h / 30%) !important;
+}
+.u-cursor-y {
+  display: none !important;
+}
