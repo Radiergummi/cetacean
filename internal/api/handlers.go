@@ -13,7 +13,8 @@ import (
 )
 
 type DockerLogStreamer interface {
-	ServiceLogs(ctx context.Context, serviceID string, tail string) (io.ReadCloser, error)
+	ServiceLogs(ctx context.Context, serviceID string, tail string, follow bool, since, until string) (io.ReadCloser, error)
+	TaskLogs(ctx context.Context, taskID string, tail string, follow bool, since, until string) (io.ReadCloser, error)
 }
 
 type Handlers struct {
@@ -27,7 +28,7 @@ func NewHandlers(c *cache.Cache, dc DockerLogStreamer) *Handlers {
 
 func writeJSON(w http.ResponseWriter, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(v)
 }
 
 func (h *Handlers) HandleCluster(w http.ResponseWriter, r *http.Request) {
@@ -116,12 +117,16 @@ func (h *Handlers) HandleServiceLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tail := r.URL.Query().Get("tail")
+	q := r.URL.Query()
+	tail := q.Get("tail")
 	if tail == "" {
 		tail = "200"
 	}
+	follow := q.Get("follow") == "true"
+	since := q.Get("since")
+	until := q.Get("until")
 
-	logs, err := h.dockerClient.ServiceLogs(r.Context(), id, tail)
+	logs, err := h.dockerClient.ServiceLogs(r.Context(), id, tail, follow, since, until)
 	if err != nil {
 		http.Error(w, "failed to get logs", http.StatusInternalServerError)
 		return
@@ -129,7 +134,24 @@ func (h *Handlers) HandleServiceLogs(w http.ResponseWriter, r *http.Request) {
 	defer logs.Close() //nolint:errcheck // best-effort close
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	_, _ = stdcopy.StdCopy(w, w, logs)
+	if follow {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		fw := flushWriter{w: w, flusher: w.(http.Flusher)}
+		_, _ = stdcopy.StdCopy(&fw, &fw, logs)
+	} else {
+		_, _ = stdcopy.StdCopy(w, w, logs)
+	}
+}
+
+type flushWriter struct {
+	w       io.Writer
+	flusher http.Flusher
+}
+
+func (fw *flushWriter) Write(p []byte) (int, error) {
+	n, err := fw.w.Write(p)
+	fw.flusher.Flush()
+	return n, err
 }
 
 // --- Tasks ---
@@ -146,6 +168,40 @@ func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, task)
+}
+
+func (h *Handlers) HandleTaskLogs(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	_, ok := h.cache.GetTask(id)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	q := r.URL.Query()
+	tail := q.Get("tail")
+	if tail == "" {
+		tail = "200"
+	}
+	follow := q.Get("follow") == "true"
+	since := q.Get("since")
+	until := q.Get("until")
+
+	logs, err := h.dockerClient.TaskLogs(r.Context(), id, tail, follow, since, until)
+	if err != nil {
+		http.Error(w, "failed to get logs", http.StatusInternalServerError)
+		return
+	}
+	defer logs.Close() //nolint:errcheck // best-effort close
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	if follow {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		fw := flushWriter{w: w, flusher: w.(http.Flusher)}
+		_, _ = stdcopy.StdCopy(&fw, &fw, logs)
+	} else {
+		_, _ = stdcopy.StdCopy(w, w, logs)
+	}
 }
 
 // --- Stacks ---

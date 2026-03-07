@@ -53,26 +53,26 @@ type Cache struct {
 	tasksByService map[string]map[string]struct{} // serviceID -> set of taskIDs
 	tasksByNode    map[string]map[string]struct{} // nodeID -> set of taskIDs
 	configs        map[string]swarm.Config
-	secrets  map[string]swarm.Secret
-	networks map[string]network.Summary
-	volumes  map[string]volume.Volume
-	stacks   map[string]Stack
-	onChange OnChangeFunc
+	secrets        map[string]swarm.Secret
+	networks       map[string]network.Summary
+	volumes        map[string]volume.Volume
+	stacks         map[string]Stack
+	onChange       OnChangeFunc
 }
 
 func New(onChange OnChangeFunc) *Cache {
 	return &Cache{
-		nodes:    make(map[string]swarm.Node),
-		services: make(map[string]swarm.Service),
+		nodes:          make(map[string]swarm.Node),
+		services:       make(map[string]swarm.Service),
 		tasks:          make(map[string]swarm.Task),
 		tasksByService: make(map[string]map[string]struct{}),
 		tasksByNode:    make(map[string]map[string]struct{}),
 		configs:        make(map[string]swarm.Config),
-		secrets:  make(map[string]swarm.Secret),
-		networks: make(map[string]network.Summary),
-		volumes:  make(map[string]volume.Volume),
-		stacks:   make(map[string]Stack),
-		onChange: onChange,
+		secrets:        make(map[string]swarm.Secret),
+		networks:       make(map[string]network.Summary),
+		volumes:        make(map[string]volume.Volume),
+		stacks:         make(map[string]Stack),
+		onChange:       onChange,
 	}
 }
 

@@ -1,21 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useSSEConnection } from "../hooks/SSEContext";
 
 export default function ConnectionStatus() {
-  const [connected, setConnected] = useState(true)
-
-  useEffect(() => {
-    const es = new EventSource('/api/events')
-    es.onopen = () => setConnected(true)
-    es.onerror = () => setConnected(false)
-    return () => es.close()
-  }, [])
+  const connected = useSSEConnection();
 
   return (
-    <div className="flex items-center gap-1.5" title={connected ? 'Connected' : 'Reconnecting...'}>
-      <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
+    <div className="flex items-center gap-1.5" title={connected ? "Connected" : "Reconnecting..."}>
+      <div
+        className={`w-2 h-2 rounded-full ${connected ? "bg-green-500" : "bg-red-500 animate-pulse"}`}
+      />
       <span className="text-xs text-muted-foreground hidden sm:inline">
-        {connected ? 'Live' : 'Reconnecting'}
+        {connected ? "Live" : "Reconnecting"}
       </span>
     </div>
-  )
+  );
 }

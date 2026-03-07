@@ -1,96 +1,241 @@
-import { useEffect, useRef, useState } from 'react'
-import uPlot from 'uplot'
-import 'uplot/dist/uPlot.min.css'
-import { api } from '../api/client'
+import { useEffect, useRef, useState, useCallback } from "react";
+import { RefreshCw, BarChart3 } from "lucide-react";
+import uPlot from "uplot";
+import "uplot/dist/uPlot.min.css";
+import { api } from "../api/client";
+
+export interface Threshold {
+  label: string;
+  value: number;
+  color: string;
+  dash?: number[];
+}
 
 interface Props {
-  title: string
-  query: string
-  range: string
-  unit?: string
-  refreshKey?: number
+  title: string;
+  query: string;
+  range: string;
+  unit?: string;
+  refreshKey?: number;
+  thresholds?: Threshold[];
 }
+
+type State = "loading" | "data" | "empty" | "error";
 
 const RANGE_SECONDS: Record<string, number> = {
-  '1h': 3600,
-  '6h': 21600,
-  '24h': 86400,
-  '7d': 604800,
+  "1h": 3600,
+  "6h": 21600,
+  "24h": 86400,
+  "7d": 604800,
+};
+
+const CHART_COLORS = [
+  "#6366f1", // indigo
+  "#f59e0b", // amber
+  "#10b981", // emerald
+  "#ef4444", // red
+  "#8b5cf6", // violet
+  "#06b6d4", // cyan
+];
+
+function formatValue(v: number, unit?: string): string {
+  if (unit === "bytes" || unit === "bytes/s") {
+    if (v >= 1e9) return `${(v / 1e9).toFixed(1)} GB${unit === "bytes/s" ? "/s" : ""}`;
+    if (v >= 1e6) return `${(v / 1e6).toFixed(1)} MB${unit === "bytes/s" ? "/s" : ""}`;
+    if (v >= 1e3) return `${(v / 1e3).toFixed(1)} KB${unit === "bytes/s" ? "/s" : ""}`;
+    return `${v.toFixed(0)} B${unit === "bytes/s" ? "/s" : ""}`;
+  }
+  if (unit === "%") return `${v.toFixed(1)}%`;
+  if (unit === "cores") return `${v.toFixed(3)}`;
+  return v.toFixed(2);
 }
 
-export default function TimeSeriesChart({ title, query, range, unit, refreshKey }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const chartRef = useRef<uPlot | null>(null)
-  const [error, setError] = useState<string | null>(null)
+export default function TimeSeriesChart({
+  title,
+  query,
+  range,
+  unit,
+  refreshKey,
+  thresholds,
+}: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<uPlot | null>(null);
+  const [state, setState] = useState<State>("loading");
+  const [errorMsg, setErrorMsg] = useState("");
 
-  useEffect(() => {
-    let cancelled = false
+  const fetchData = useCallback(() => {
+    setState("loading");
 
-    const rangeSec = RANGE_SECONDS[range] || 3600
-    const now = Math.floor(Date.now() / 1000)
-    const start = now - rangeSec
-    const step = Math.max(Math.floor(rangeSec / 300), 15)
+    const rangeSec = RANGE_SECONDS[range] || 3600;
+    const now = Math.floor(Date.now() / 1000);
+    const start = now - rangeSec;
+    const step = Math.max(Math.floor(rangeSec / 300), 15);
 
-    api.metricsQueryRange(query, String(start), String(now), String(step))
+    let cancelled = false;
+
+    api
+      .metricsQueryRange(query, String(start), String(now), String(step))
       .then((resp: any) => {
-        if (cancelled) return
+        if (cancelled) return;
 
         if (!resp.data?.result?.length) {
-          setError('No data')
-          return
+          setState("empty");
+          return;
         }
-        setError(null)
 
-        const series = resp.data.result
-        const timestamps = series[0].values.map((v: any) => Number(v[0]))
+        const series = resp.data.result;
+        const timestamps = series[0].values.map((v: any) => Number(v[0]));
         const data: uPlot.AlignedData = [
           timestamps,
           ...series.map((s: any) => s.values.map((v: any) => Number(v[1]))),
-        ]
+        ];
 
-        if (chartRef.current) chartRef.current.destroy()
+        if (chartRef.current) chartRef.current.destroy();
+        if (!containerRef.current) return;
 
-        if (!containerRef.current) return
+        const thresholdPlugin: uPlot.Plugin = {
+          hooks: {
+            draw: [
+              (u: uPlot) => {
+                if (!thresholds?.length) return;
+                const ctx = u.ctx;
+                const yAxis = u.scales.y;
+                if (yAxis.min == null || yAxis.max == null) return;
+                const plotLeft = u.bbox.left;
+                const plotWidth = u.bbox.width;
+
+                for (const t of thresholds) {
+                  const yPos = u.valToPos(t.value, "y", true);
+                  if (yPos < u.bbox.top || yPos > u.bbox.top + u.bbox.height) continue;
+
+                  ctx.save();
+                  ctx.strokeStyle = t.color;
+                  ctx.lineWidth = 1.5;
+                  if (t.dash) ctx.setLineDash(t.dash);
+                  ctx.beginPath();
+                  ctx.moveTo(plotLeft, yPos);
+                  ctx.lineTo(plotLeft + plotWidth, yPos);
+                  ctx.stroke();
+
+                  ctx.fillStyle = t.color;
+                  ctx.font = "10px sans-serif";
+                  ctx.textAlign = "right";
+                  ctx.fillText(
+                    `${t.label}: ${formatValue(t.value, unit)}`,
+                    plotLeft + plotWidth - 4,
+                    yPos - 4,
+                  );
+                  ctx.restore();
+                }
+              },
+            ],
+          },
+        };
 
         const opts: uPlot.Options = {
           width: containerRef.current.clientWidth || 600,
           height: 200,
+          plugins: [thresholdPlugin],
+          cursor: {
+            drag: { x: false, y: false },
+          },
           series: [
             {},
             ...series.map((_s: any, i: number) => ({
-              label: `series-${i}`,
-              stroke: `hsl(${i * 60}, 70%, 50%)`,
+              label: _s.metric?.__name__ || `series ${i + 1}`,
+              stroke: CHART_COLORS[i % CHART_COLORS.length],
+              width: 1.5,
+              fill: CHART_COLORS[i % CHART_COLORS.length] + "1a",
             })),
           ],
           axes: [
-            {},
-            { label: unit || '' },
+            {
+              stroke: "#888",
+              grid: { stroke: "#88888820" },
+              ticks: { stroke: "#88888820" },
+            },
+            {
+              stroke: "#888",
+              grid: { stroke: "#88888820" },
+              ticks: { stroke: "#88888820" },
+              values: (_u: uPlot, vals: number[]) => vals.map((v) => formatValue(v, unit)),
+            },
           ],
-        }
+        };
 
-        chartRef.current = new uPlot(opts, data, containerRef.current)
+        chartRef.current = new uPlot(opts, data, containerRef.current);
+        setState("data");
       })
       .catch(() => {
-        if (!cancelled) setError('Failed to load metrics')
-      })
+        if (!cancelled) {
+          setErrorMsg("Failed to load metrics");
+          setState("error");
+        }
+      });
 
     return () => {
-      cancelled = true
+      cancelled = true;
+    };
+  }, [query, range]);
+
+  useEffect(() => {
+    const cancel = fetchData();
+    return () => {
+      cancel?.();
       if (chartRef.current) {
-        chartRef.current.destroy()
-        chartRef.current = null
+        chartRef.current.destroy();
+        chartRef.current = null;
       }
-    }
-  }, [query, range, refreshKey])
+    };
+  }, [fetchData, refreshKey]);
+
+  // Resize observer
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      if (chartRef.current && el.clientWidth > 0) {
+        chartRef.current.setSize({ width: el.clientWidth, height: 200 });
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   return (
     <div className="rounded-lg border bg-card p-4">
-      <div className="text-sm font-medium mb-2">{title}</div>
-      {error ? (
-        <div className="text-sm text-muted-foreground h-[200px] flex items-center justify-center">{error}</div>
-      ) : (
-        <div ref={containerRef} />
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-medium">{title}</span>
+        {unit && <span className="text-xs text-muted-foreground">{unit}</span>}
+      </div>
+
+      {state === "loading" && <div className="h-[200px] rounded bg-muted/50" />}
+
+      {state === "error" && (
+        <div className="h-[200px] rounded bg-destructive/5 border border-destructive/20 flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-sm text-destructive mb-2">{errorMsg}</p>
+            <button
+              onClick={fetchData}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-destructive/30 text-destructive hover:bg-destructive/10"
+            >
+              <RefreshCw className="w-3 h-3" />
+              Retry
+            </button>
+          </div>
+        </div>
       )}
+
+      {state === "empty" && (
+        <div className="h-[200px] rounded bg-muted/30 flex items-center justify-center">
+          <div className="text-center text-muted-foreground">
+            <BarChart3 className="w-8 h-8 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">No data for this time range</p>
+          </div>
+        </div>
+      )}
+
+      <div ref={containerRef} className={state === "data" ? "" : "hidden"} />
     </div>
-  )
+  );
 }

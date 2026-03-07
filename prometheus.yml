@@ -3,23 +3,13 @@ global:
 
 scrape_configs:
   - job_name: 'cadvisor'
-    dockerswarm_sd_configs:
-      - host: unix:///var/run/docker.sock
-        role: tasks
-    relabel_configs:
-      - source_labels: [__meta_dockerswarm_service_name]
-        regex: .*cadvisor.*
-        action: keep
-      - source_labels: [__meta_dockerswarm_node_hostname]
-        target_label: instance
+    dns_sd_configs:
+      - names: ['tasks.cadvisor']
+        type: A
+        port: 8080
 
   - job_name: 'node-exporter'
-    dockerswarm_sd_configs:
-      - host: unix:///var/run/docker.sock
-        role: tasks
-    relabel_configs:
-      - source_labels: [__meta_dockerswarm_service_name]
-        regex: .*node-exporter.*
-        action: keep
-      - source_labels: [__meta_dockerswarm_node_hostname]
-        target_label: instance
+    dns_sd_configs:
+      - names: ['tasks.node-exporter']
+        type: A
+        port: 9100

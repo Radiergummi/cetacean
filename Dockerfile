@@ -19,5 +19,6 @@ RUN CGO_ENABLED=0 go build -o cetacean .
 FROM alpine:3.21
 RUN apk add --no-cache ca-certificates
 COPY --from=backend /app/cetacean /usr/local/bin/cetacean
+# Runs as root to access Docker socket. Read-only tool with no user-facing attack surface.
 EXPOSE 9000
 ENTRYPOINT ["cetacean"]

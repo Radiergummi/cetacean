@@ -51,3 +51,15 @@ func TestPrometheusProxy_ForwardsQueryRange(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 }
+
+func TestPrometheusProxy_BlocksForbiddenPath(t *testing.T) {
+	proxy := NewPrometheusProxy("http://localhost:9090")
+
+	req := httptest.NewRequest("GET", "/api/metrics/admin/tsdb/delete", nil)
+	w := httptest.NewRecorder()
+	proxy.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", w.Code)
+	}
+}

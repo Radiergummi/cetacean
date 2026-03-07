@@ -40,7 +40,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("docker client error: %v", err)
 	}
-	defer dockerClient.Close()
+	defer dockerClient.Close() //nolint:errcheck // best-effort shutdown close
 
 	watcher := docker.NewWatcher(dockerClient, stateCache)
 

@@ -2,23 +2,49 @@ package docker
 
 import (
 	"context"
+	"io"
 	"log"
 	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/events"
+	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/api/types/swarm"
+	"github.com/docker/docker/api/types/volume"
 
 	"cetacean/internal/cache"
 )
 
+// DockerClient abstracts the Docker API methods used by the Watcher.
+type DockerClient interface {
+	ListNodes(ctx context.Context) ([]swarm.Node, error)
+	ListServices(ctx context.Context) ([]swarm.Service, error)
+	ListTasks(ctx context.Context) ([]swarm.Task, error)
+	ListConfigs(ctx context.Context) ([]swarm.Config, error)
+	ListSecrets(ctx context.Context) ([]swarm.Secret, error)
+	ListNetworks(ctx context.Context) ([]network.Summary, error)
+	ListVolumes(ctx context.Context) ([]volume.Volume, error)
+	InspectNode(ctx context.Context, id string) (swarm.Node, error)
+	InspectService(ctx context.Context, id string) (swarm.Service, error)
+	InspectTask(ctx context.Context, id string) (swarm.Task, error)
+	InspectConfig(ctx context.Context, id string) (swarm.Config, error)
+	InspectSecret(ctx context.Context, id string) (swarm.Secret, error)
+	InspectNetwork(ctx context.Context, id string) (network.Summary, error)
+	InspectVolume(ctx context.Context, name string) (volume.Volume, error)
+	Events(ctx context.Context) (<-chan events.Message, <-chan error)
+	ServiceLogs(ctx context.Context, serviceID string, tail string, follow bool, since, until string) (io.ReadCloser, error)
+	TaskLogs(ctx context.Context, taskID string, tail string, follow bool, since, until string) (io.ReadCloser, error)
+	Close() error
+}
+
 type Watcher struct {
-	client   *Client
+	client   DockerClient
 	cache    *cache.Cache
 	syncOnce sync.Once
 	ready    chan struct{}
 }
 
-func NewWatcher(client *Client, cache *cache.Cache) *Watcher {
+func NewWatcher(client DockerClient, cache *cache.Cache) *Watcher {
 	return &Watcher{
 		client: client,
 		cache:  cache,
@@ -80,9 +106,7 @@ func (w *Watcher) fullSync(ctx context.Context) {
 	go func() {
 		nodes, err := w.client.ListNodes(ctx)
 		if err == nil {
-			for _, n := range nodes {
-				w.cache.SetNode(n)
-			}
+			w.cache.ReplaceNodes(nodes)
 		}
 		ch <- result{"nodes", err}
 	}()
@@ -90,9 +114,7 @@ func (w *Watcher) fullSync(ctx context.Context) {
 	go func() {
 		services, err := w.client.ListServices(ctx)
 		if err == nil {
-			for _, s := range services {
-				w.cache.SetService(s)
-			}
+			w.cache.ReplaceServices(services)
 		}
 		ch <- result{"services", err}
 	}()
@@ -100,9 +122,7 @@ func (w *Watcher) fullSync(ctx context.Context) {
 	go func() {
 		tasks, err := w.client.ListTasks(ctx)
 		if err == nil {
-			for _, t := range tasks {
-				w.cache.SetTask(t)
-			}
+			w.cache.ReplaceTasks(tasks)
 		}
 		ch <- result{"tasks", err}
 	}()
@@ -110,9 +130,7 @@ func (w *Watcher) fullSync(ctx context.Context) {
 	go func() {
 		configs, err := w.client.ListConfigs(ctx)
 		if err == nil {
-			for _, c := range configs {
-				w.cache.SetConfig(c)
-			}
+			w.cache.ReplaceConfigs(configs)
 		}
 		ch <- result{"configs", err}
 	}()
@@ -120,9 +138,7 @@ func (w *Watcher) fullSync(ctx context.Context) {
 	go func() {
 		secrets, err := w.client.ListSecrets(ctx)
 		if err == nil {
-			for _, s := range secrets {
-				w.cache.SetSecret(s)
-			}
+			w.cache.ReplaceSecrets(secrets)
 		}
 		ch <- result{"secrets", err}
 	}()
@@ -130,9 +146,7 @@ func (w *Watcher) fullSync(ctx context.Context) {
 	go func() {
 		networks, err := w.client.ListNetworks(ctx)
 		if err == nil {
-			for _, n := range networks {
-				w.cache.SetNetwork(n)
-			}
+			w.cache.ReplaceNetworks(networks)
 		}
 		ch <- result{"networks", err}
 	}()
@@ -140,9 +154,7 @@ func (w *Watcher) fullSync(ctx context.Context) {
 	go func() {
 		volumes, err := w.client.ListVolumes(ctx)
 		if err == nil {
-			for _, v := range volumes {
-				w.cache.SetVolume(v)
-			}
+			w.cache.ReplaceVolumes(volumes)
 		}
 		ch <- result{"volumes", err}
 	}()
@@ -237,6 +249,18 @@ func (w *Watcher) handleEvent(ctx context.Context, msg events.Message) {
 				return
 			}
 			w.cache.SetNetwork(net)
+		}
+
+	case events.VolumeEventType:
+		if msg.Action == "destroy" {
+			w.cache.DeleteVolume(msg.Actor.ID)
+		} else {
+			vol, err := w.client.InspectVolume(ctx, msg.Actor.ID)
+			if err != nil {
+				log.Printf("inspect volume %s failed: %v", msg.Actor.ID, err)
+				return
+			}
+			w.cache.SetVolume(vol)
 		}
 
 	case events.ContainerEventType:

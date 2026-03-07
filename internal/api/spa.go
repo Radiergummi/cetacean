@@ -22,7 +22,7 @@ func NewSPAHandler(fsys fs.FS) http.Handler {
 			fileServer.ServeHTTP(w, r)
 			return
 		}
-		f.Close()
+		_ = f.Close()
 		fileServer.ServeHTTP(w, r)
 	})
 }

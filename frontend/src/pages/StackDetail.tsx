@@ -1,49 +1,34 @@
-import { useParams, Link } from 'react-router-dom'
-import { useState, useEffect } from 'react'
-import { api } from '../api/client'
+import { useParams, Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { api } from "../api/client";
+import type { StackDetail as StackDetailType } from "../api/types";
+import PageHeader from "../components/PageHeader";
+import { LoadingDetail } from "../components/LoadingSkeleton";
 
 export default function StackDetail() {
-  const { name } = useParams<{ name: string }>()
-  const [stack, setStack] = useState<any>(null)
-  const [services, setServices] = useState<any[]>([])
-  const [configs, setConfigs] = useState<any[]>([])
-  const [secrets, setSecrets] = useState<any[]>([])
-  const [networks, setNetworks] = useState<any[]>([])
+  const { name } = useParams<{ name: string }>();
+  const [stack, setStack] = useState<StackDetailType | null>(null);
 
   useEffect(() => {
     if (name) {
-      api.stack(name).then(async (s) => {
-        setStack(s)
-        const svcIds = new Set(s.services || [])
-        const cfgIds = new Set(s.configs || [])
-        const secIds = new Set(s.secrets || [])
-        const netIds = new Set(s.networks || [])
-
-        if (svcIds.size > 0) {
-          api.services().then(all => setServices(all.filter((svc: any) => svcIds.has(svc.ID))))
-        }
-        if (cfgIds.size > 0) {
-          api.configs().then(all => setConfigs(all.filter((c: any) => cfgIds.has(c.ID))))
-        }
-        if (secIds.size > 0) {
-          api.secrets().then(all => setSecrets(all.filter((s: any) => secIds.has(s.ID))))
-        }
-        if (netIds.size > 0) {
-          api.networks().then(all => setNetworks(all.filter((n: any) => netIds.has(n.Id))))
-        }
-      })
+      api.stack(name).then(setStack);
     }
-  }, [name])
+  }, [name]);
 
-  if (!stack) return <div>Loading...</div>
+  if (!stack) return <LoadingDetail />;
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Stack: {stack.name}</h1>
+      <PageHeader
+        title={stack.name}
+        breadcrumbs={[{ label: "Stacks", to: "/stacks" }, { label: stack.name }]}
+      />
       <div className="space-y-6">
-        {services.length > 0 && (
+        {stack.services?.length > 0 && (
           <div>
-            <h2 className="text-lg font-semibold mb-2">Services</h2>
+            <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
+              Services
+            </h2>
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full">
                 <thead>
@@ -54,18 +39,21 @@ export default function StackDetail() {
                   </tr>
                 </thead>
                 <tbody>
-                  {services.map((svc: any) => (
+                  {stack.services.map((svc) => (
                     <tr key={svc.ID} className="border-b last:border-b-0">
                       <td className="p-3 text-sm">
-                        <Link to={`/services/${svc.ID}`} className="text-blue-600 hover:underline">
-                          {svc.Spec?.Name || svc.ID}
+                        <Link
+                          to={`/services/${svc.ID}`}
+                          className="text-link hover:underline font-medium"
+                        >
+                          {svc.Spec.Name || svc.ID}
                         </Link>
                       </td>
                       <td className="p-3 text-sm font-mono text-xs">
-                        {svc.Spec?.TaskTemplate?.ContainerSpec?.Image?.split('@')[0] || '\u2014'}
+                        {svc.Spec.TaskTemplate.ContainerSpec.Image.split("@")[0]}
                       </td>
                       <td className="p-3 text-sm">
-                        {svc.Spec?.Mode?.Replicated ? 'replicated' : 'global'}
+                        {svc.Spec.Mode.Replicated ? "replicated" : "global"}
                       </td>
                     </tr>
                   ))}
@@ -75,15 +63,17 @@ export default function StackDetail() {
           </div>
         )}
 
-        {configs.length > 0 && (
+        {stack.configs?.length > 0 && (
           <div>
-            <h2 className="text-lg font-semibold mb-2">Configs</h2>
+            <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
+              Configs
+            </h2>
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full">
                 <tbody>
-                  {configs.map((c: any) => (
+                  {stack.configs.map((c) => (
                     <tr key={c.ID} className="border-b last:border-b-0">
-                      <td className="p-3 text-sm">{c.Spec?.Name || c.ID}</td>
+                      <td className="p-3 text-sm">{c.Spec.Name || c.ID}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -92,15 +82,17 @@ export default function StackDetail() {
           </div>
         )}
 
-        {secrets.length > 0 && (
+        {stack.secrets?.length > 0 && (
           <div>
-            <h2 className="text-lg font-semibold mb-2">Secrets</h2>
+            <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
+              Secrets
+            </h2>
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full">
                 <tbody>
-                  {secrets.map((s: any) => (
+                  {stack.secrets.map((s) => (
                     <tr key={s.ID} className="border-b last:border-b-0">
-                      <td className="p-3 text-sm">{s.Spec?.Name || s.ID}</td>
+                      <td className="p-3 text-sm">{s.Spec.Name || s.ID}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -109,9 +101,11 @@ export default function StackDetail() {
           </div>
         )}
 
-        {networks.length > 0 && (
+        {stack.networks?.length > 0 && (
           <div>
-            <h2 className="text-lg font-semibold mb-2">Networks</h2>
+            <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
+              Networks
+            </h2>
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full">
                 <thead>
@@ -121,7 +115,7 @@ export default function StackDetail() {
                   </tr>
                 </thead>
                 <tbody>
-                  {networks.map((n: any) => (
+                  {stack.networks.map((n) => (
                     <tr key={n.Id} className="border-b last:border-b-0">
                       <td className="p-3 text-sm">{n.Name}</td>
                       <td className="p-3 text-sm">{n.Driver}</td>
@@ -133,28 +127,25 @@ export default function StackDetail() {
           </div>
         )}
 
-        <ResourceList title="Volumes" items={stack.volumes} />
+        {stack.volumes?.length > 0 && (
+          <div>
+            <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
+              Volumes
+            </h2>
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full">
+                <tbody>
+                  {stack.volumes.map((v) => (
+                    <tr key={v.Name} className="border-b last:border-b-0">
+                      <td className="p-3 text-sm">{v.Name}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     </div>
-  )
-}
-
-function ResourceList({ title, items }: { title: string; items?: string[] }) {
-  if (!items || items.length === 0) return null
-  return (
-    <div>
-      <h2 className="text-lg font-semibold mb-2">{title}</h2>
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full">
-          <tbody>
-            {items.map((item) => (
-              <tr key={item} className="border-b last:border-b-0">
-                <td className="p-3 text-sm">{item}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
+  );
 }

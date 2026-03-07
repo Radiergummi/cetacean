@@ -1,39 +1,50 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { useSSE } from './useSSE'
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useSSE } from "./useSSE";
 
 export function useSwarmResource<T>(
   fetchFn: () => Promise<T[]>,
   sseType: string,
   getId: (item: T) => string,
 ) {
-  const [data, setData] = useState<T[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
-  const getIdRef = useRef(getId)
-  getIdRef.current = getId
+  const [data, setData] = useState<T[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  const getIdRef = useRef(getId);
+  const fetchFnRef = useRef(fetchFn);
+  getIdRef.current = getId;
+  fetchFnRef.current = fetchFn;
 
-  useEffect(() => {
-    fetchFn()
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    fetchFnRef
+      .current()
       .then(setData)
       .catch(setError)
-      .finally(() => setLoading(false))
-  }, [])
+      .finally(() => setLoading(false));
+  }, []);
 
-  useSSE([sseType], useCallback((event) => {
-    if (event.action === 'remove') {
-      setData(prev => prev.filter(item => getIdRef.current(item) !== event.id))
-    } else if (event.resource) {
-      setData(prev => {
-        const idx = prev.findIndex(item => getIdRef.current(item) === event.id)
-        if (idx >= 0) {
-          const next = [...prev]
-          next[idx] = event.resource
-          return next
-        }
-        return [...prev, event.resource]
-      })
-    }
-  }, []))
+  useEffect(load, []);
 
-  return { data, loading, error }
+  useSSE(
+    [sseType],
+    useCallback((event) => {
+      if (event.action === "remove") {
+        setData((prev) => prev.filter((item) => getIdRef.current(item) !== event.id));
+      } else if (event.resource) {
+        setData((prev) => {
+          const resource = event.resource as T;
+          const idx = prev.findIndex((item) => getIdRef.current(item) === event.id);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = resource;
+            return next;
+          }
+          return [...prev, resource];
+        });
+      }
+    }, []),
+  );
+
+  return { data, loading, error, retry: load };
 }

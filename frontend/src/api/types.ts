@@ -1,129 +1,216 @@
 export interface Node {
-  ID: string
-  Version: { Index: number }
+  ID: string;
+  Version: { Index: number };
   Spec: {
-    Role: string
-    Availability: string
-    Labels: Record<string, string>
-  }
+    Role: string;
+    Availability: string;
+    Labels: Record<string, string>;
+  };
   Description: {
-    Hostname: string
-    Platform: { Architecture: string; OS: string }
-    Resources: { NanoCPUs: number; MemoryBytes: number }
-    Engine: { EngineVersion: string }
-  }
+    Hostname: string;
+    Platform: { Architecture: string; OS: string };
+    Resources: { NanoCPUs: number; MemoryBytes: number };
+    Engine: { EngineVersion: string };
+  };
   Status: {
-    State: string
-    Addr: string
-  }
+    State: string;
+    Addr: string;
+  };
   ManagerStatus?: {
-    Leader: boolean
-    Reachability: string
-    Addr: string
-  }
+    Leader: boolean;
+    Reachability: string;
+    Addr: string;
+  };
 }
 
 export interface Service {
-  ID: string
-  Version: { Index: number }
+  ID: string;
+  Version: { Index: number };
+  CreatedAt?: string;
+  UpdatedAt?: string;
   Spec: {
-    Name: string
-    Labels: Record<string, string>
+    Name: string;
+    Labels: Record<string, string>;
     TaskTemplate: {
       ContainerSpec: {
-        Image: string
-      }
-    }
+        Image: string;
+        Command?: string[];
+        Args?: string[];
+        Env?: string[];
+        Dir?: string;
+        User?: string;
+        Hostname?: string;
+        Init?: boolean;
+        StopSignal?: string;
+        StopGracePeriod?: number;
+        ReadOnly?: boolean;
+        Healthcheck?: {
+          Test?: string[];
+          Interval?: number;
+          Timeout?: number;
+          Retries?: number;
+          StartPeriod?: number;
+        };
+        Configs?: Array<{
+          ConfigID: string;
+          ConfigName: string;
+          File?: { Name: string; UID: string; GID: string; Mode: number };
+        }>;
+        Secrets?: Array<{
+          SecretID: string;
+          SecretName: string;
+          File?: { Name: string; UID: string; GID: string; Mode: number };
+        }>;
+        Mounts?: Array<{
+          Type: string;
+          Source: string;
+          Target: string;
+          ReadOnly?: boolean;
+        }>;
+      };
+      Resources?: {
+        Limits?: { NanoCPUs?: number; MemoryBytes?: number; Pids?: number };
+        Reservations?: { NanoCPUs?: number; MemoryBytes?: number };
+      };
+      RestartPolicy?: {
+        Condition?: string;
+        Delay?: number;
+        MaxAttempts?: number;
+        Window?: number;
+      };
+      Placement?: {
+        Constraints?: string[];
+        Preferences?: Array<{ Spread?: { SpreadDescriptor: string } }>;
+        MaxReplicas?: number;
+      };
+      LogDriver?: { Name: string; Options?: Record<string, string> };
+    };
     Mode: {
-      Replicated?: { Replicas: number }
-      Global?: Record<string, never>
-    }
-  }
+      Replicated?: { Replicas: number };
+      Global?: Record<string, never>;
+    };
+    UpdateConfig?: {
+      Parallelism: number;
+      Delay?: number;
+      FailureAction?: string;
+      Monitor?: number;
+      MaxFailureRatio?: number;
+      Order?: string;
+    };
+    RollbackConfig?: {
+      Parallelism: number;
+      Delay?: number;
+      FailureAction?: string;
+      Monitor?: number;
+      MaxFailureRatio?: number;
+      Order?: string;
+    };
+    EndpointSpec?: {
+      Mode?: string;
+      Ports?: Array<{
+        Protocol: string;
+        TargetPort: number;
+        PublishedPort: number;
+        PublishMode: string;
+      }>;
+    };
+  };
+  Endpoint?: {
+    Ports?: Array<{
+      Protocol: string;
+      TargetPort: number;
+      PublishedPort: number;
+      PublishMode: string;
+    }>;
+  };
   UpdateStatus?: {
-    State: string
-    StartedAt: string
-    CompletedAt: string
-    Message: string
-  }
+    State: string;
+    StartedAt: string;
+    CompletedAt: string;
+    Message: string;
+  };
 }
 
 export interface Task {
-  ID: string
-  Version: { Index: number }
-  ServiceID: string
-  NodeID: string
-  Slot: number
+  ID: string;
+  Version: { Index: number };
+  ServiceID: string;
+  NodeID: string;
+  Slot: number;
   Status: {
-    Timestamp: string
-    State: string
-    Message: string
+    Timestamp: string;
+    State: string;
+    Message: string;
+    Err?: string;
     ContainerStatus?: {
-      ContainerID: string
-      ExitCode: number
-    }
-  }
-  DesiredState: string
+      ContainerID: string;
+      ExitCode: number;
+    };
+  };
+  DesiredState: string;
   Spec: {
     ContainerSpec: {
-      Image: string
-    }
-  }
+      Image: string;
+    };
+  };
 }
 
 export interface Config {
-  ID: string
-  Version: { Index: number }
-  CreatedAt: string
-  UpdatedAt: string
+  ID: string;
+  Version: { Index: number };
+  CreatedAt: string;
+  UpdatedAt: string;
   Spec: {
-    Name: string
-    Labels: Record<string, string>
-  }
+    Name: string;
+    Labels: Record<string, string>;
+  };
 }
 
 export interface Secret {
-  ID: string
-  Version: { Index: number }
-  CreatedAt: string
-  UpdatedAt: string
+  ID: string;
+  Version: { Index: number };
+  CreatedAt: string;
+  UpdatedAt: string;
   Spec: {
-    Name: string
-    Labels: Record<string, string>
-  }
+    Name: string;
+    Labels: Record<string, string>;
+  };
 }
 
 export interface Network {
-  Id: string
-  Name: string
-  Driver: string
-  Scope: string
+  Id: string;
+  Name: string;
+  Driver: string;
+  Scope: string;
   IPAM: {
-    Config: Array<{ Subnet: string; Gateway: string }>
-  }
-  Labels: Record<string, string>
+    Config: Array<{ Subnet: string; Gateway: string }>;
+  };
+  Labels: Record<string, string>;
 }
 
 export interface Volume {
-  Name: string
-  Driver: string
-  Labels: Record<string, string>
-  Mountpoint: string
-  Scope: string
-  CreatedAt: string
+  Name: string;
+  Driver: string;
+  Labels: Record<string, string>;
+  Mountpoint: string;
+  Scope: string;
+  CreatedAt: string;
 }
 
 export interface Stack {
-  name: string
-  services: string[]
-  configs: string[]
-  secrets: string[]
-  networks: string[]
-  volumes: string[]
+  name: string;
+  services: string[];
+  configs: string[];
+  secrets: string[];
+  networks: string[];
+  volumes: string[];
 }
 
-export interface ClusterOverview {
-  nodeCount: number
-  serviceCount: number
-  taskCount: number
-  stackCount: number
+export interface StackDetail {
+  name: string;
+  services: Service[];
+  configs: Config[];
+  secrets: Secret[];
+  networks: Network[];
+  volumes: Volume[];
 }

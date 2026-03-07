@@ -19,10 +19,23 @@ func NewPrometheusProxy(baseURL string) *PrometheusProxy {
 	}
 }
 
+// maxPrometheusResponseBytes limits proxy response size to 10MB.
+const maxPrometheusResponseBytes = 10 << 20
+
+var allowedPrometheusPaths = map[string]bool{
+	"/query":       true,
+	"/query_range": true,
+}
+
 func (p *PrometheusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Map /api/metrics/query → /api/v1/query
 	// Map /api/metrics/query_range → /api/v1/query_range
 	path := strings.TrimPrefix(r.URL.Path, "/api/metrics")
+	if !allowedPrometheusPaths[path] {
+		http.Error(w, "forbidden prometheus endpoint", http.StatusForbidden)
+		return
+	}
+
 	targetURL := p.baseURL + "/api/v1" + path
 	if r.URL.RawQuery != "" {
 		targetURL += "?" + r.URL.RawQuery
@@ -41,11 +54,7 @@ func (p *PrometheusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	for k, v := range resp.Header {
-		for _, val := range v {
-			w.Header().Add(k, val)
-		}
-	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
-	io.Copy(w, resp.Body)
+	io.Copy(w, io.LimitReader(resp.Body, maxPrometheusResponseBytes))
 }

@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/docker/docker/api/types"
-	containertypes "github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
@@ -38,23 +37,23 @@ func (c *Client) Close() error {
 }
 
 func (c *Client) ListNodes(ctx context.Context) ([]swarm.Node, error) {
-	return c.docker.NodeList(ctx, types.NodeListOptions{})
+	return c.docker.NodeList(ctx, swarm.NodeListOptions{})
 }
 
 func (c *Client) ListServices(ctx context.Context) ([]swarm.Service, error) {
-	return c.docker.ServiceList(ctx, types.ServiceListOptions{})
+	return c.docker.ServiceList(ctx, swarm.ServiceListOptions{})
 }
 
 func (c *Client) ListTasks(ctx context.Context) ([]swarm.Task, error) {
-	return c.docker.TaskList(ctx, types.TaskListOptions{})
+	return c.docker.TaskList(ctx, swarm.TaskListOptions{})
 }
 
 func (c *Client) ListConfigs(ctx context.Context) ([]swarm.Config, error) {
-	return c.docker.ConfigList(ctx, types.ConfigListOptions{})
+	return c.docker.ConfigList(ctx, swarm.ConfigListOptions{})
 }
 
 func (c *Client) ListSecrets(ctx context.Context) ([]swarm.Secret, error) {
-	return c.docker.SecretList(ctx, types.SecretListOptions{})
+	return c.docker.SecretList(ctx, swarm.SecretListOptions{})
 }
 
 func (c *Client) ListNetworks(ctx context.Context) ([]network.Summary, error) {
@@ -79,12 +78,12 @@ func (c *Client) InspectNode(ctx context.Context, id string) (swarm.Node, error)
 }
 
 func (c *Client) InspectService(ctx context.Context, id string) (swarm.Service, error) {
-	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, types.ServiceInspectOptions{})
+	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
 	return svc, err
 }
 
 func (c *Client) InspectTask(ctx context.Context, id string) (swarm.Task, error) {
-	tasks, err := c.docker.TaskList(ctx, types.TaskListOptions{
+	tasks, err := c.docker.TaskList(ctx, swarm.TaskListOptions{
 		Filters: filters.NewArgs(filters.Arg("id", id)),
 	})
 	if err != nil {
@@ -128,23 +127,42 @@ func (c *Client) Events(ctx context.Context) (<-chan events.Message, <-chan erro
 			filters.Arg("type", string(events.SecretEventType)),
 			filters.Arg("type", string(events.ConfigEventType)),
 			filters.Arg("type", string(events.NetworkEventType)),
+			filters.Arg("type", string(events.VolumeEventType)),
 			filters.Arg("type", string(events.ContainerEventType)),
 		),
 	})
 }
 
-func (c *Client) ContainerInspect(ctx context.Context, id string) (containertypes.InspectResponse, error) {
-	return c.docker.ContainerInspect(ctx, id)
+func (c *Client) InspectVolume(ctx context.Context, name string) (volume.Volume, error) {
+	return c.docker.VolumeInspect(ctx, name)
 }
 
-func (c *Client) ServiceLogs(ctx context.Context, serviceID string, tail string) (io.ReadCloser, error) {
+func (c *Client) ServiceLogs(ctx context.Context, serviceID string, tail string, follow bool, since, until string) (io.ReadCloser, error) {
 	if tail == "" {
 		tail = "200"
 	}
-	return c.docker.ServiceLogs(ctx, serviceID, containertypes.LogsOptions{
+	return c.docker.ServiceLogs(ctx, serviceID, container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Tail:       tail,
 		Timestamps: true,
+		Follow:     follow,
+		Since:      since,
+		Until:      until,
+	})
+}
+
+func (c *Client) TaskLogs(ctx context.Context, taskID string, tail string, follow bool, since, until string) (io.ReadCloser, error) {
+	if tail == "" {
+		tail = "200"
+	}
+	return c.docker.TaskLogs(ctx, taskID, container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Tail:       tail,
+		Timestamps: true,
+		Follow:     follow,
+		Since:      since,
+		Until:      until,
 	})
 }
