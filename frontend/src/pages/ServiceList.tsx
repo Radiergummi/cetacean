@@ -124,7 +124,7 @@ export default function ServiceList() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sorted.map((svc) => (
+          {services.map((svc) => (
             <Link
               key={svc.ID}
               to={`/services/${svc.ID}`}

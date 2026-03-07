@@ -128,7 +128,7 @@ export default function StackList() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sorted.map((stack) => (
+          {stacks.map((stack) => (
             <Link
               key={stack.name}
               to={`/stacks/${stack.name}`}

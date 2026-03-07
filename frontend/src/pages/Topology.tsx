@@ -114,6 +114,9 @@ function NetworkView({ data }: { data: NetworkTopology }) {
   const simulationRef = useRef<d3Force.Simulation<SimNode, SimLink> | null>(null);
   const { tooltip, show, hide } = useTooltip();
 
+  const prevNodeIdsRef = useRef<string>("");
+  const simNodesRef = useRef<SimNode[]>([]);
+
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg || data.nodes.length === 0) return;
@@ -122,7 +125,40 @@ function NetworkView({ data }: { data: NetworkTopology }) {
     const width = rect.width || 800;
     const height = rect.height || 600;
 
+    const newNodeIds = data.nodes.map((n) => n.id).sort().join(",");
+    const nodeSetChanged = newNodeIds !== prevNodeIdsRef.current;
+    prevNodeIdsRef.current = newNodeIds;
+
+    // If the simulation exists and node set hasn't changed, update in-place
+    if (simulationRef.current && !nodeSetChanged) {
+      const existingNodes = simNodesRef.current;
+      const nodeMap = new Map(existingNodes.map((n) => [n.id, n]));
+      for (const n of data.nodes) {
+        const existing = nodeMap.get(n.id);
+        if (existing) {
+          existing.name = n.name;
+          existing.stack = n.stack;
+          existing.replicas = n.replicas;
+        }
+      }
+      const simLinks: SimLink[] = data.edges.map((e) => ({
+        source: e.source,
+        target: e.target,
+        networks: e.networks,
+      }));
+      const linkForce = simulationRef.current.force("link") as d3Force.ForceLink<SimNode, SimLink>;
+      linkForce.links(simLinks);
+      simulationRef.current.alpha(0.1).restart();
+      return;
+    }
+
+    // Clean up existing simulation if node set changed
+    if (simulationRef.current) {
+      simulationRef.current.stop();
+    }
+
     const simNodes: SimNode[] = data.nodes.map((n) => ({ ...n }));
+    simNodesRef.current = simNodes;
     const simLinks: SimLink[] = data.edges.map((e) => ({
       source: e.source,
       target: e.target,
@@ -196,6 +232,7 @@ function NetworkView({ data }: { data: NetworkTopology }) {
     return () => {
       clearTimeout(timer);
       simulation.stop();
+      simulationRef.current = null;
     };
   }, [data]);
 
@@ -418,9 +455,12 @@ export default function Topology() {
   const [placementData, setPlacementData] = useState<PlacementTopology | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const initialLoadRef = useRef(true);
 
   const fetchData = useCallback(async () => {
-    setLoading((prev) => prev || networkData === null);
+    if (initialLoadRef.current) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const [net, place] = await Promise.all([
@@ -433,8 +473,9 @@ export default function Topology() {
       setError(e instanceof Error ? e.message : "Failed to load topology");
     } finally {
       setLoading(false);
+      initialLoadRef.current = false;
     }
-  }, [networkData]);
+  }, []);
 
   useEffect(() => {
     fetchData();

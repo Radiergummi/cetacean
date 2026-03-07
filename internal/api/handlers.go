@@ -44,7 +44,7 @@ func searchFilter[T any](items []T, query string, name func(T) string) []T {
 		return items
 	}
 	q := strings.ToLower(query)
-	filtered := items[:0]
+	var filtered []T
 	for _, item := range items {
 		if strings.Contains(strings.ToLower(name(item)), q) {
 			filtered = append(filtered, item)

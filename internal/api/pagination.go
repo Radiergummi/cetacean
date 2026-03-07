@@ -45,6 +45,9 @@ func parsePagination(r *http.Request) PageParams {
 	if v := r.URL.Query().Get("dir"); v != "" {
 		p.Dir = v
 	}
+	if p.Dir != "desc" {
+		p.Dir = "asc"
+	}
 
 	return p
 }
