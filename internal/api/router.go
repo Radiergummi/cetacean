@@ -49,6 +49,10 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 	// Volumes
 	mux.HandleFunc("GET /api/volumes", h.HandleListVolumes)
 
+	// Topology
+	mux.HandleFunc("GET /api/topology/networks", h.HandleNetworkTopology)
+	mux.HandleFunc("GET /api/topology/placement", h.HandlePlacementTopology)
+
 	// Prometheus proxy
 	mux.Handle("GET /api/metrics/", promProxy)
 
