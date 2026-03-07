@@ -13,6 +13,35 @@ export function LoadingPage() {
   );
 }
 
+export function SkeletonTable({ columns, rows = 5 }: { columns: number; rows?: number }) {
+  return (
+    <div className="overflow-x-auto rounded-lg border animate-pulse">
+      <table className="w-full">
+        <thead>
+          <tr className="border-b bg-muted/50">
+            {Array.from({ length: columns }).map((_, i) => (
+              <th key={i} className="p-3">
+                <div className="h-4 w-20 bg-muted rounded" />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: rows }).map((_, i) => (
+            <tr key={i} className="border-b">
+              {Array.from({ length: columns }).map((_, j) => (
+                <td key={j} className="p-3">
+                  <div className={`h-4 bg-muted/60 rounded ${j === 0 ? "w-32" : "w-20"}`} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function LoadingDetail() {
   return (
     <div className="space-y-6 animate-pulse">

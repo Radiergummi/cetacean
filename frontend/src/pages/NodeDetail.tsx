@@ -9,6 +9,7 @@ import TaskStateFilter from "../components/TaskStateFilter";
 import PageHeader from "../components/PageHeader";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import NodeResourceGauges from "../components/NodeResourceGauges";
+import { statusBorder } from "../lib/statusBorder";
 import TimeAgo from "../components/TimeAgo";
 
 export default function NodeDetail() {
@@ -95,13 +96,11 @@ export default function NodeDetail() {
               </thead>
               <tbody>
                 {filteredTasks.map((task) => {
-                  const isFailed =
-                    task.Status.State === "failed" || task.Status.State === "rejected";
                   const exitCode = task.Status.ContainerStatus?.ExitCode;
                   const errorMsg =
                     task.Status.Err || (exitCode && exitCode !== 0 ? `exit ${exitCode}` : "");
                   return (
-                    <tr key={task.ID} className={`border-b ${isFailed ? "bg-red-50" : ""}`}>
+                    <tr key={task.ID} className={`border-b ${statusBorder(task.Status.State)}`}>
                       <td className="p-3 text-sm font-mono text-xs">
                         <Link to={`/tasks/${task.ID}`} className="text-link hover:underline">
                           {task.ID.slice(0, 12)}

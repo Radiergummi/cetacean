@@ -1,6 +1,6 @@
-import { useState } from "react";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useViewMode } from "../hooks/useViewMode";
+import { useSearchParam } from "../hooks/useSearchParam";
 import { api } from "../api/client";
 import type { Volume } from "../api/types";
 import SearchInput from "../components/SearchInput";
@@ -8,7 +8,7 @@ import PageHeader from "../components/PageHeader";
 import ViewToggle from "../components/ViewToggle";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
-import { LoadingPage } from "../components/LoadingSkeleton";
+import { SkeletonTable } from "../components/LoadingSkeleton";
 
 export default function VolumeList() {
   const {
@@ -17,10 +17,16 @@ export default function VolumeList() {
     error,
     retry,
   } = useSwarmResource(api.volumes, "volume", (v: Volume) => v.Name);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useSearchParam("q");
   const [viewMode, setViewMode] = useViewMode("volumes");
 
-  if (loading) return <LoadingPage />;
+  if (loading)
+    return (
+      <div>
+        <PageHeader title="Volumes" />
+        <SkeletonTable columns={3} />
+      </div>
+    );
   if (error) return <FetchError message={error.message} onRetry={retry} />;
 
   const filtered = volumes.filter((v) => v.Name.toLowerCase().includes(search.toLowerCase()));

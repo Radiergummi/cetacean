@@ -1,9 +1,10 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useSort } from "../hooks/useSort";
 import { useViewMode } from "../hooks/useViewMode";
 import { useNodeMetrics } from "../hooks/useNodeMetrics";
+import { useSearchParam } from "../hooks/useSearchParam";
 import { api } from "../api/client";
 import type { Node } from "../api/types";
 import SearchInput from "../components/SearchInput";
@@ -15,8 +16,9 @@ import ResourceGauge from "../components/ResourceGauge";
 import Sparkline from "../components/Sparkline";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
-import { LoadingPage } from "../components/LoadingSkeleton";
+import { SkeletonTable } from "../components/LoadingSkeleton";
 import NodeResourceGauges from "../components/NodeResourceGauges";
+import { statusBorder } from "../lib/statusBorder";
 
 const sortAccessors = {
   hostname: (n: Node) => n.Description.Hostname,
@@ -33,7 +35,7 @@ export default function NodeList() {
     error,
     retry,
   } = useSwarmResource(api.nodes, "node", (n: Node) => n.ID);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useSearchParam("q");
   const [viewMode, setViewMode] = useViewMode("nodes");
   const navigate = useNavigate();
   const { getForNode } = useNodeMetrics();
@@ -43,7 +45,13 @@ export default function NodeList() {
   );
   const { sorted, sortKey, sortDir, toggle } = useSort(filtered, sortAccessors, "hostname");
 
-  if (loading) return <LoadingPage />;
+  if (loading)
+    return (
+      <div>
+        <PageHeader title="Nodes" />
+        <SkeletonTable columns={7} />
+      </div>
+    );
   if (error) return <FetchError message={error.message} onRetry={retry} />;
 
   return (
@@ -102,7 +110,7 @@ export default function NodeList() {
                 return (
                   <tr
                     key={node.ID}
-                    className="border-b cursor-pointer hover:bg-muted/50"
+                    className={`border-b cursor-pointer hover:bg-muted/50 ${statusBorder(node.Status.State)}`}
                     onClick={() => navigate(`/nodes/${node.ID}`)}
                   >
                     <td className="p-3">

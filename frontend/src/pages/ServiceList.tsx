@@ -1,8 +1,9 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useSort } from "../hooks/useSort";
 import { useViewMode } from "../hooks/useViewMode";
+import { useSearchParam } from "../hooks/useSearchParam";
 import { api } from "../api/client";
 import type { Service } from "../api/types";
 import SearchInput from "../components/SearchInput";
@@ -11,7 +12,7 @@ import SortableHeader from "../components/SortableHeader";
 import ViewToggle from "../components/ViewToggle";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
-import { LoadingPage } from "../components/LoadingSkeleton";
+import { SkeletonTable } from "../components/LoadingSkeleton";
 
 const sortAccessors = {
   name: (s: Service) => s.Spec.Name,
@@ -28,7 +29,7 @@ export default function ServiceList() {
     error,
     retry,
   } = useSwarmResource(api.services, "service", (s: Service) => s.ID);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useSearchParam("q");
   const [viewMode, setViewMode] = useViewMode("services");
   const navigate = useNavigate();
   const filtered = useMemo(
@@ -37,7 +38,13 @@ export default function ServiceList() {
   );
   const { sorted, sortKey, sortDir, toggle } = useSort(filtered, sortAccessors, "name");
 
-  if (loading) return <LoadingPage />;
+  if (loading)
+    return (
+      <div>
+        <PageHeader title="Services" />
+        <SkeletonTable columns={5} />
+      </div>
+    );
   if (error) return <FetchError message={error.message} onRetry={retry} />;
 
   return (

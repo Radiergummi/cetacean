@@ -1,8 +1,9 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useSort } from "../hooks/useSort";
 import { useViewMode } from "../hooks/useViewMode";
+import { useSearchParam } from "../hooks/useSearchParam";
 import { api } from "../api/client";
 import type { Stack } from "../api/types";
 import SearchInput from "../components/SearchInput";
@@ -11,7 +12,7 @@ import SortableHeader from "../components/SortableHeader";
 import ViewToggle from "../components/ViewToggle";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
-import { LoadingPage } from "../components/LoadingSkeleton";
+import { SkeletonTable } from "../components/LoadingSkeleton";
 
 const sortAccessors = {
   name: (s: Stack) => s.name,
@@ -29,7 +30,7 @@ export default function StackList() {
     error,
     retry,
   } = useSwarmResource(api.stacks, "stack", (s: Stack) => s.name);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useSearchParam("q");
   const [viewMode, setViewMode] = useViewMode("stacks");
   const navigate = useNavigate();
   const filtered = useMemo(
@@ -38,7 +39,13 @@ export default function StackList() {
   );
   const { sorted, sortKey, sortDir, toggle } = useSort(filtered, sortAccessors, "name");
 
-  if (loading) return <LoadingPage />;
+  if (loading)
+    return (
+      <div>
+        <PageHeader title="Stacks" />
+        <SkeletonTable columns={6} />
+      </div>
+    );
   if (error) return <FetchError message={error.message} onRetry={retry} />;
 
   return (

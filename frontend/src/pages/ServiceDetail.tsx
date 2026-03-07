@@ -10,6 +10,7 @@ import TaskStateFilter from "../components/TaskStateFilter";
 import LogViewer from "../components/LogViewer";
 import PageHeader from "../components/PageHeader";
 import { LoadingDetail } from "../components/LoadingSkeleton";
+import { statusBorder } from "../lib/statusBorder";
 import TimeAgo, { timeAgo } from "../components/TimeAgo";
 
 export default function ServiceDetail() {
@@ -408,16 +409,11 @@ export default function ServiceDetail() {
               </thead>
               <tbody>
                 {filteredTasks.map((task) => {
-                  const isFailed =
-                    task.Status.State === "failed" || task.Status.State === "rejected";
                   const exitCode = task.Status.ContainerStatus?.ExitCode;
                   const errorMsg =
                     task.Status.Err || (exitCode && exitCode !== 0 ? `exit ${exitCode}` : "");
                   return (
-                    <tr
-                      key={task.ID}
-                      className={`border-b ${isFailed ? "bg-red-50 dark:bg-red-950/20" : ""}`}
-                    >
+                    <tr key={task.ID} className={`border-b ${statusBorder(task.Status.State)}`}>
                       <td className="p-3 text-sm font-mono text-xs">
                         <Link to={`/tasks/${task.ID}`} className="text-link hover:underline">
                           {task.ID.slice(0, 12)}

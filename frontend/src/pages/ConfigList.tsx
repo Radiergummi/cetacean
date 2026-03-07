@@ -1,6 +1,6 @@
-import { useState } from "react";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useViewMode } from "../hooks/useViewMode";
+import { useSearchParam } from "../hooks/useSearchParam";
 import { api } from "../api/client";
 import type { Config } from "../api/types";
 import SearchInput from "../components/SearchInput";
@@ -8,7 +8,7 @@ import PageHeader from "../components/PageHeader";
 import ViewToggle from "../components/ViewToggle";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
-import { LoadingPage } from "../components/LoadingSkeleton";
+import { SkeletonTable } from "../components/LoadingSkeleton";
 import TimeAgo from "../components/TimeAgo";
 
 export default function ConfigList() {
@@ -18,10 +18,16 @@ export default function ConfigList() {
     error,
     retry,
   } = useSwarmResource(api.configs, "config", (c: Config) => c.ID);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useSearchParam("q");
   const [viewMode, setViewMode] = useViewMode("configs");
 
-  if (loading) return <LoadingPage />;
+  if (loading)
+    return (
+      <div>
+        <PageHeader title="Configs" />
+        <SkeletonTable columns={3} />
+      </div>
+    );
   if (error) return <FetchError message={error.message} onRetry={retry} />;
 
   const filtered = configs.filter((c) =>

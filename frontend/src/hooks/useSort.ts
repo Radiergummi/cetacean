@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 
 export type SortDir = "asc" | "desc";
 
@@ -10,16 +11,41 @@ export function useSort<T>(
   defaultKey?: string,
   defaultDir: SortDir = "asc",
 ) {
-  const [sortKey, setSortKey] = useState<string | undefined>(defaultKey);
-  const [sortDir, setSortDir] = useState<SortDir>(defaultDir);
+  const [params, setParams] = useSearchParams();
+  const initialKey = params.get("sort") ?? defaultKey;
+  const initialDir = (
+    params.get("dir") === "desc" ? "desc" : params.get("dir") === "asc" ? "asc" : defaultDir
+  ) as SortDir;
+
+  const [sortKey, setSortKey] = useState<string | undefined>(initialKey);
+  const [sortDir, setSortDir] = useState<SortDir>(initialDir);
 
   const toggle = (key: string) => {
+    let newKey: string;
+    let newDir: SortDir;
     if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      newDir = sortDir === "asc" ? "desc" : "asc";
+      newKey = key;
     } else {
-      setSortKey(key);
-      setSortDir("asc");
+      newKey = key;
+      newDir = "asc";
     }
+    setSortKey(newKey);
+    setSortDir(newDir);
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (newKey === defaultKey && newDir === defaultDir) {
+          next.delete("sort");
+          next.delete("dir");
+        } else {
+          next.set("sort", newKey);
+          next.set("dir", newDir);
+        }
+        return next;
+      },
+      { replace: true },
+    );
   };
 
   const sorted = useMemo(() => {
