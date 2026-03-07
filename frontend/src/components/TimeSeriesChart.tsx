@@ -22,6 +22,13 @@ interface Props {
 
 type State = "loading" | "data" | "empty" | "error";
 
+interface TooltipData {
+  time: string;
+  series: { label: string; color: string; value: string }[];
+  left: number;
+  top: number;
+}
+
 const RANGE_SECONDS: Record<string, number> = {
   "1h": 3600,
   "6h": 21600,
@@ -62,6 +69,9 @@ export default function TimeSeriesChart({
   const chartRef = useRef<uPlot | null>(null);
   const [state, setState] = useState<State>("loading");
   const [errorMsg, setErrorMsg] = useState("");
+  const [tooltip, setTooltip] = useState<TooltipData | null>(null);
+  const tooltipRef = useRef(setTooltip);
+  tooltipRef.current = setTooltip;
 
   const fetchData = useCallback(() => {
     setState("loading");
@@ -132,10 +142,46 @@ export default function TimeSeriesChart({
           },
         };
 
+        const tooltipPlugin: uPlot.Plugin = {
+          hooks: {
+            setCursor: [
+              (u: uPlot) => {
+                const { idx } = u.cursor;
+                if (idx == null) {
+                  tooltipRef.current(null);
+                  return;
+                }
+                const ts = u.data[0][idx];
+                const items: TooltipData["series"] = [];
+                for (let i = 1; i < u.series.length; i++) {
+                  const s = u.series[i];
+                  if (!s.show) continue;
+                  const v = u.data[i][idx];
+                  if (v == null) continue;
+                  items.push({
+                    label: String(s.label ?? `series ${i}`),
+                    color: String(s.stroke ?? "#888"),
+                    value: formatValue(v, unit),
+                  });
+                }
+                const left = u.valToPos(ts, "x");
+                const plotLeft = u.bbox.left / devicePixelRatio;
+                const plotWidth = u.bbox.width / devicePixelRatio;
+                tooltipRef.current({
+                  time: new Date(ts * 1000).toLocaleTimeString(),
+                  series: items,
+                  left: plotLeft + (left > plotWidth / 2 ? left - 140 : left + 12),
+                  top: u.bbox.top / devicePixelRatio + 8,
+                });
+              },
+            ],
+          },
+        };
+
         const opts: uPlot.Options = {
           width: containerRef.current.clientWidth || 600,
           height: 200,
-          plugins: [thresholdPlugin],
+          plugins: [thresholdPlugin, tooltipPlugin],
           cursor: {
             drag: { x: false, y: false },
           },
@@ -235,7 +281,28 @@ export default function TimeSeriesChart({
         </div>
       )}
 
-      <div ref={containerRef} className={state === "data" ? "" : "hidden"} />
+      <div className="relative">
+        <div ref={containerRef} className={state === "data" ? "" : "hidden"} />
+        {tooltip && state === "data" && (
+          <div
+            className="absolute pointer-events-none z-20 rounded-md border bg-popover px-3 py-2 text-xs shadow-md"
+            style={{ left: tooltip.left, top: tooltip.top }}
+          >
+            <div className="text-muted-foreground mb-1">{tooltip.time}</div>
+            {tooltip.series.map((s) => (
+              <div key={s.label} className="flex items-center gap-1.5">
+                <span
+                  className="inline-block w-2 h-2 rounded-full shrink-0"
+                  style={{ background: s.color }}
+                />
+                <span>
+                  {s.label}: <b>{s.value}</b>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

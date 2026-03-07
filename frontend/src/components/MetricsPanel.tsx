@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { RefreshCw, Play, Square } from "lucide-react";
+import { RefreshCw, Play, Square, ChevronDown, ChevronRight } from "lucide-react";
 import TimeSeriesChart from "./TimeSeriesChart";
 import type { Threshold } from "./TimeSeriesChart";
 
@@ -20,6 +20,7 @@ export default function MetricsPanel({ charts }: Props) {
   const [range, setRange] = useState<string>("1h");
   const [refreshKey, setRefreshKey] = useState(0);
   const [autoRefresh, setAutoRefresh] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     if (!autoRefresh) return;
@@ -30,40 +31,53 @@ export default function MetricsPanel({ charts }: Props) {
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2 mb-4">
-        <span className="text-sm text-muted-foreground">Time range:</span>
-        {RANGES.map((r) => (
-          <button
-            key={r}
-            onClick={() => setRange(r)}
-            className={`px-3 py-1 text-sm rounded ${
-              range === r ? "bg-primary text-primary-foreground" : "bg-muted"
-            }`}
-          >
-            {r}
-          </button>
-        ))}
         <button
-          onClick={() => setRefreshKey((k) => k + 1)}
-          className="h-8 w-8 flex items-center justify-center rounded-md border hover:bg-muted"
-          title="Refresh"
+          onClick={() => setCollapsed((c) => !c)}
+          className="flex items-center gap-1 text-sm font-medium hover:text-foreground text-muted-foreground"
         >
-          <RefreshCw className="w-3.5 h-3.5" />
+          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          Metrics
         </button>
-        <button
-          onClick={() => setAutoRefresh((v) => !v)}
-          title={autoRefresh ? "Pause auto-refresh" : "Auto-refresh (30s)"}
-          className={`h-8 w-8 flex items-center justify-center rounded-md border ${
-            autoRefresh ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"
-          }`}
-        >
-          {autoRefresh ? <Square className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-        </button>
+        {!collapsed && (
+          <>
+            <span className="text-sm text-muted-foreground">Time range:</span>
+            {RANGES.map((r) => (
+              <button
+                key={r}
+                onClick={() => setRange(r)}
+                className={`px-3 py-1 text-sm rounded ${
+                  range === r ? "bg-primary text-primary-foreground" : "bg-muted"
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+            <button
+              onClick={() => setRefreshKey((k) => k + 1)}
+              className="h-8 w-8 flex items-center justify-center rounded-md border hover:bg-muted"
+              title="Refresh"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setAutoRefresh((v) => !v)}
+              title={autoRefresh ? "Pause auto-refresh" : "Auto-refresh (30s)"}
+              className={`h-8 w-8 flex items-center justify-center rounded-md border ${
+                autoRefresh ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"
+              }`}
+            >
+              {autoRefresh ? <Square className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+            </button>
+          </>
+        )}
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {charts.map((chart) => (
-          <TimeSeriesChart key={chart.query} {...chart} range={range} refreshKey={refreshKey} />
-        ))}
-      </div>
+      {!collapsed && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {charts.map((chart) => (
+            <TimeSeriesChart key={chart.query} {...chart} range={range} refreshKey={refreshKey} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
