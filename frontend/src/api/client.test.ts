@@ -45,11 +45,12 @@ describe("api client", () => {
     await expect(api.nodes()).rejects.toThrow("404 Not Found");
   });
 
-  it("fetches service logs as text", async () => {
-    mockFetch.mockReturnValue(jsonResponse("log line 1\nlog line 2"));
+  it("fetches service logs as JSON", async () => {
+    const resp = { lines: [{ timestamp: "t1", message: "hello", stream: "stdout" }], oldest: "t1", newest: "t1" };
+    mockFetch.mockReturnValue(jsonResponse(resp));
     const result = await api.serviceLogs("svc1", 100);
-    expect(result).toBe("log line 1\nlog line 2");
-    expect(mockFetch).toHaveBeenCalledWith("/api/services/svc1/logs?tail=100");
+    expect(result).toEqual(resp);
+    expect(mockFetch).toHaveBeenCalledWith("/api/services/svc1/logs?limit=100");
   });
 
   it("builds metrics query params", async () => {
@@ -66,17 +67,13 @@ describe("api client", () => {
     );
   });
 
-  it("builds service logs stream URL with follow and since", async () => {
-    mockFetch.mockReturnValue(jsonResponse(""));
-    const abort = new AbortController();
-    await api.serviceLogsStream("svc1", {
-      tail: 0,
-      since: "2024-01-01T00:00:00Z",
-      signal: abort.signal,
-    });
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/services/svc1/logs?follow=true&tail=0&since=2024-01-01T00%3A00%3A00Z",
-      { signal: abort.signal },
-    );
+  it("builds service logs stream URL with after param", () => {
+    const url = api.serviceLogsStreamURL("svc1", "2024-01-01T00:00:00Z");
+    expect(url).toBe("/api/services/svc1/logs?after=2024-01-01T00%3A00%3A00Z");
+  });
+
+  it("builds task logs stream URL without params", () => {
+    const url = api.taskLogsStreamURL("t1");
+    expect(url).toBe("/api/tasks/t1/logs");
   });
 });

@@ -18,6 +18,18 @@ async function fetchJSON<T>(path: string): Promise<T> {
   return res.json();
 }
 
+export interface LogLine {
+  timestamp: string;
+  message: string;
+  stream: "stdout" | "stderr";
+}
+
+export interface LogResponse {
+  lines: LogLine[];
+  oldest: string;
+  newest: string;
+}
+
 export interface ClusterSnapshot {
   nodeCount: number;
   serviceCount: number;
@@ -42,37 +54,30 @@ export const api = {
   networks: () => fetchJSON<Network[]>("/networks"),
   volumes: () => fetchJSON<Volume[]>("/volumes"),
   task: (id: string) => fetchJSON<Task>(`/tasks/${id}`),
-  taskLogs: (id: string, tail?: number, since?: string, until?: string) => {
-    const params = new URLSearchParams({ tail: String(tail || 200) });
-    if (since) params.set("since", since);
-    if (until) params.set("until", until);
-    return fetch(`${BASE}/tasks/${id}/logs?${params}`).then((r) => {
-      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-      return r.text();
-    });
-  },
-  taskLogsStream: (id: string, opts: { tail?: number; since?: string; signal?: AbortSignal }) => {
-    const params = new URLSearchParams({ follow: "true", tail: String(opts.tail ?? 0) });
-    if (opts.since) params.set("since", opts.since);
-    return fetch(`${BASE}/tasks/${id}/logs?${params}`, { signal: opts.signal });
+  taskLogs: (id: string, limit?: number, after?: string, before?: string) => {
+    const params = new URLSearchParams({ limit: String(limit || 500) });
+    if (after) params.set("after", after);
+    if (before) params.set("before", before);
+    return fetchJSON<LogResponse>(`/tasks/${id}/logs?${params}`);
   },
   serviceTasks: (id: string) => fetchJSON<Task[]>(`/services/${id}/tasks`),
-  serviceLogs: (id: string, tail?: number, since?: string, until?: string) => {
-    const params = new URLSearchParams({ tail: String(tail || 200) });
-    if (since) params.set("since", since);
-    if (until) params.set("until", until);
-    return fetch(`${BASE}/services/${id}/logs?${params}`).then((r) => {
-      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-      return r.text();
-    });
+  serviceLogs: (id: string, limit?: number, after?: string, before?: string) => {
+    const params = new URLSearchParams({ limit: String(limit || 500) });
+    if (after) params.set("after", after);
+    if (before) params.set("before", before);
+    return fetchJSON<LogResponse>(`/services/${id}/logs?${params}`);
   },
-  serviceLogsStream: (
-    id: string,
-    opts: { tail?: number; since?: string; signal?: AbortSignal },
-  ) => {
-    const params = new URLSearchParams({ follow: "true", tail: String(opts.tail ?? 0) });
-    if (opts.since) params.set("since", opts.since);
-    return fetch(`${BASE}/services/${id}/logs?${params}`, { signal: opts.signal });
+  serviceLogsStreamURL: (id: string, after?: string) => {
+    const params = new URLSearchParams();
+    if (after) params.set("after", after);
+    const qs = params.toString();
+    return `${BASE}/services/${id}/logs${qs ? `?${qs}` : ""}`;
+  },
+  taskLogsStreamURL: (id: string, after?: string) => {
+    const params = new URLSearchParams();
+    if (after) params.set("after", after);
+    const qs = params.toString();
+    return `${BASE}/tasks/${id}/logs${qs ? `?${qs}` : ""}`;
   },
   nodeTasks: (id: string) => fetchJSON<Task[]>(`/nodes/${id}/tasks`),
   metricsQuery: (query: string, time?: string) => {

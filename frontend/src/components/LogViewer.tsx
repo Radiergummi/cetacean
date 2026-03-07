@@ -13,16 +13,15 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { api } from "../api/client";
+import type { LogLine as ApiLogLine } from "../api/client";
 
 interface Props {
   serviceId?: string;
   taskId?: string;
 }
 
-interface LogLine {
+interface LogLine extends ApiLogLine {
   index: number;
-  timestamp: string;
-  message: string;
   level: Level;
 }
 
@@ -34,7 +33,7 @@ interface TimeRange {
   label: string;
 }
 
-const TAIL_OPTIONS = [100, 500, 1000, 5000] as const;
+const LIMIT_OPTIONS = [100, 500, 1000, 5000] as const;
 
 const PRESETS: { label: string; getValue: () => TimeRange }[] = [
   { label: "All", getValue: () => ({ label: "All" }) },
@@ -99,25 +98,8 @@ function detectLevel(msg: string): Level {
   return "default";
 }
 
-function parseLine(line: string, index: number): LogLine {
-  const spaceIdx = line.indexOf(" ");
-  let timestamp = "";
-  let message = line;
-
-  if (spaceIdx > 0 && /^\d{4}-\d{2}-\d{2}T/.test(line)) {
-    timestamp = line.slice(0, spaceIdx);
-    message = line.slice(spaceIdx + 1);
-  }
-
-  return { index, timestamp, message, level: detectLevel(message) };
-}
-
-function parseLines(raw: string): LogLine[] {
-  if (!raw.trim()) return [];
-  return raw
-    .split("\n")
-    .filter(Boolean)
-    .map((line, i) => parseLine(line, i));
+function toLogLine(api: ApiLogLine, index: number): LogLine {
+  return { ...api, index, level: detectLevel(api.message) };
 }
 
 function formatTime(ts: string): string {
@@ -160,9 +142,11 @@ export default function LogViewer({ serviceId, taskId }: Props) {
   const [lines, setLines] = useState<LogLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tail, setTail] = useState<number>(500);
+  const [limit, setLimit] = useState<number>(500);
   const [search, setSearch] = useState("");
   const [caseSensitive, setCaseSensitive] = useState(false);
+  const [useRegex, setUseRegex] = useState(false);
+  const [streamFilter, setStreamFilter] = useState<"all" | "stdout" | "stderr">("all");
   const [wrapLines, setWrapLines] = useState(true);
   const [following, setFollowing] = useState(true);
   const [live, setLive] = useState(false);
@@ -175,48 +159,55 @@ export default function LogViewer({ serviceId, taskId }: Props) {
   const fetchLogs = useCallback(() => {
     setLoading(true);
     setError(null);
-    const fetch = isTask
-      ? api.taskLogs(logId, tail, timeRange.since, timeRange.until)
-      : api.serviceLogs(logId, tail, timeRange.since, timeRange.until);
-    fetch
-      .then((raw) => {
-        setLines(parseLines(raw));
+    const req = isTask
+      ? api.taskLogs(logId, limit, timeRange.since, timeRange.until)
+      : api.serviceLogs(logId, limit, timeRange.since, timeRange.until);
+    req
+      .then((resp) => {
+        setLines((resp.lines ?? []).map(toLogLine));
         setLoading(false);
       })
       .catch(() => {
         setError("Failed to load logs");
         setLoading(false);
       });
-  }, [logId, isTask, tail, timeRange]);
+  }, [logId, isTask, limit, timeRange]);
 
   useEffect(() => {
     fetchLogs();
   }, [fetchLogs]);
 
-  // Live streaming
+  // Live streaming via SSE
   useEffect(() => {
     if (!live) return;
 
-    const abort = new AbortController();
-    abortRef.current = abort;
+    const lastTs = lines.length > 0 ? lines[lines.length - 1].timestamp : undefined;
+    const after = lastTs || new Date().toISOString();
+    const url = isTask
+      ? api.taskLogsStreamURL(logId, after)
+      : api.serviceLogsStreamURL(logId, after);
 
-    // Use the timestamp of the last line as "since", or fallback to now
-    setLines((prev) => {
-      const lastTs = prev.length > 0 ? prev[prev.length - 1].timestamp : "";
-      const since = lastTs || new Date().toISOString();
+    const es = new EventSource(url);
+    abortRef.current = { abort: () => es.close() } as AbortController;
 
-      startStream(logId, isTask, since, abort.signal, (newLine) => {
-        setLines((current) => [...current, parseLine(newLine, current.length)]);
-      });
+    es.onmessage = (event) => {
+      try {
+        const parsed: ApiLogLine = JSON.parse(event.data);
+        setLines((current) => [...current, toLogLine(parsed, current.length)]);
+      } catch {
+        // skip malformed events
+      }
+    };
 
-      return prev;
-    });
+    es.onerror = () => {
+      // EventSource auto-reconnects on transient errors
+    };
 
     return () => {
-      abort.abort();
+      es.close();
       abortRef.current = null;
     };
-  }, [live, logId, isTask]);
+  }, [live, logId, isTask]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-scroll to bottom when following
   useEffect(() => {
@@ -233,13 +224,27 @@ export default function LogViewer({ serviceId, taskId }: Props) {
   }, []);
 
   const filtered = useMemo(() => {
-    if (!search) return lines;
-    const q = caseSensitive ? search : search.toLowerCase();
-    return lines.filter((l) => {
-      const text = caseSensitive ? l.message : l.message.toLowerCase();
-      return text.includes(q);
-    });
-  }, [lines, search, caseSensitive]);
+    let result = lines;
+    if (streamFilter !== "all") {
+      result = result.filter((l) => l.stream === streamFilter);
+    }
+    if (search) {
+      if (useRegex) {
+        try {
+          const re = new RegExp(search, caseSensitive ? "g" : "gi");
+          result = result.filter((l) => re.test(l.message));
+        } catch {
+          // invalid regex, fall through to literal match
+          const q = caseSensitive ? search : search.toLowerCase();
+          result = result.filter((l) => (caseSensitive ? l.message : l.message.toLowerCase()).includes(q));
+        }
+      } else {
+        const q = caseSensitive ? search : search.toLowerCase();
+        result = result.filter((l) => (caseSensitive ? l.message : l.message.toLowerCase()).includes(q));
+      }
+    }
+    return result;
+  }, [lines, search, caseSensitive, useRegex, streamFilter]);
 
   const copyLogs = () => {
     const text = filtered
@@ -292,11 +297,11 @@ export default function LogViewer({ serviceId, taskId }: Props) {
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-1.5">
         <select
-          value={tail}
-          onChange={(e) => setTail(Number(e.target.value))}
+          value={limit}
+          onChange={(e) => setLimit(Number(e.target.value))}
           className="h-8 px-2 text-xs border rounded-md bg-background"
         >
-          {TAIL_OPTIONS.map((n) => (
+          {LIMIT_OPTIONS.map((n) => (
             <option key={n} value={n}>
               {n} lines
             </option>
@@ -364,6 +369,13 @@ export default function LogViewer({ serviceId, taskId }: Props) {
               title="Case sensitive"
             >
               Aa
+            </button>
+            <button
+              onClick={() => setUseRegex(!useRegex)}
+              className={`px-1 py-0.5 text-[10px] rounded font-mono font-bold ${useRegex ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              title="Regex"
+            >
+              .*
             </button>
             {search && (
               <button
@@ -613,42 +625,6 @@ function formatShortDate(iso: string): string {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-async function startStream(
-  logId: string,
-  isTask: boolean,
-  since: string,
-  signal: AbortSignal,
-  onLine: (line: string) => void,
-) {
-  try {
-    const streamFn = isTask ? api.taskLogsStream : api.serviceLogsStream;
-    const resp = await streamFn(logId, { tail: 0, since, signal });
-    if (!resp.ok || !resp.body) return;
-
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const parts = buffer.split("\n");
-      buffer = parts.pop() || "";
-
-      for (const part of parts) {
-        if (part.trim()) onLine(part);
-      }
-    }
-
-    // Flush remaining buffer
-    if (buffer.trim()) onLine(buffer);
-  } catch {
-    // AbortError is expected when stopping live mode
-  }
 }
 
 function ToolbarButton({

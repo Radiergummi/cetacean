@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import LogViewer from "./LogViewer";
 
@@ -9,23 +9,70 @@ Element.prototype.scrollIntoView = vi.fn();
 vi.mock("../api/client", () => ({
   api: {
     serviceLogs: vi.fn(),
-    serviceLogsStream: vi.fn(),
+    serviceLogsStreamURL: vi.fn(),
+    taskLogsStreamURL: vi.fn(),
   },
 }));
 
 import { api } from "../api/client";
 const mockServiceLogs = vi.mocked(api.serviceLogs);
-const mockServiceLogsStream = vi.mocked(api.serviceLogsStream);
+const mockServiceLogsStreamURL = vi.mocked(api.serviceLogsStreamURL);
+
+function logResponse(lines: { message: string; timestamp?: string; stream?: string }[]) {
+  const mapped = lines.map((l) => ({
+    timestamp: l.timestamp ?? "",
+    message: l.message,
+    stream: l.stream ?? "stdout",
+  }));
+  return {
+    lines: mapped,
+    oldest: mapped[0]?.timestamp ?? "",
+    newest: mapped[mapped.length - 1]?.timestamp ?? "",
+  };
+}
+
+// Mock EventSource
+class MockEventSource {
+  onmessage: ((event: MessageEvent) => void) | null = null;
+  onerror: (() => void) | null = null;
+  readyState = 0;
+  url: string;
+  closed = false;
+  static instances: MockEventSource[] = [];
+
+  constructor(url: string) {
+    this.url = url;
+    MockEventSource.instances.push(this);
+  }
+
+  close() {
+    this.closed = true;
+  }
+
+  // Test helper: simulate receiving an SSE event
+  emit(data: string) {
+    this.onmessage?.({ data } as MessageEvent);
+  }
+}
 
 beforeEach(() => {
   mockServiceLogs.mockReset();
-  mockServiceLogsStream.mockReset();
+  mockServiceLogsStreamURL.mockReset();
+  MockEventSource.instances = [];
+  vi.stubGlobal("EventSource", MockEventSource);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe("LogViewer", () => {
   it("renders log lines after fetch", async () => {
     mockServiceLogs.mockResolvedValue(
-      "2024-01-01T00:00:00Z INFO Server started\n2024-01-01T00:00:01Z ERROR Connection failed",
+      logResponse([
+        { message: "INFO Server started", timestamp: "2024-01-01T00:00:00Z" },
+        { message: "ERROR Connection failed", timestamp: "2024-01-01T00:00:01Z" },
+      ]),
     );
     render(<LogViewer serviceId="svc1" />);
 
@@ -45,7 +92,7 @@ describe("LogViewer", () => {
   });
 
   it("shows empty state when no logs", async () => {
-    mockServiceLogs.mockResolvedValue("");
+    mockServiceLogs.mockResolvedValue({ lines: [], oldest: "", newest: "" });
     render(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => {
@@ -54,7 +101,9 @@ describe("LogViewer", () => {
   });
 
   it("filters logs by search", async () => {
-    mockServiceLogs.mockResolvedValue("line one\nline two\nline three");
+    mockServiceLogs.mockResolvedValue(
+      logResponse([{ message: "line one" }, { message: "line two" }, { message: "line three" }]),
+    );
     render(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => {
@@ -67,12 +116,11 @@ describe("LogViewer", () => {
 
     expect(screen.queryByText("line one")).not.toBeInTheDocument();
     expect(screen.getByText(/two/)).toBeInTheDocument();
-    // Shows filter count
     expect(screen.getByText("1/3")).toBeInTheDocument();
   });
 
   it("shows 'No matching log lines' when search has no results", async () => {
-    mockServiceLogs.mockResolvedValue("line one");
+    mockServiceLogs.mockResolvedValue(logResponse([{ message: "line one" }]));
     render(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => {
@@ -86,17 +134,17 @@ describe("LogViewer", () => {
     expect(screen.getByText("No matching log lines")).toBeInTheDocument();
   });
 
-  it("fetches with selected tail count", async () => {
-    mockServiceLogs.mockResolvedValue("line one");
+  it("fetches with selected limit", async () => {
+    mockServiceLogs.mockResolvedValue(logResponse([{ message: "line one" }]));
     render(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => {
-      expect(mockServiceLogs).toHaveBeenCalledWith("svc1", 500);
+      expect(mockServiceLogs).toHaveBeenCalledWith("svc1", 500, undefined, undefined);
     });
   });
 
-  it("re-fetches when tail count changes", async () => {
-    mockServiceLogs.mockResolvedValue("line one");
+  it("re-fetches when limit changes", async () => {
+    mockServiceLogs.mockResolvedValue(logResponse([{ message: "line one" }]));
     render(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => {
@@ -108,12 +156,12 @@ describe("LogViewer", () => {
     });
 
     await waitFor(() => {
-      expect(mockServiceLogs).toHaveBeenCalledWith("svc1", 100);
+      expect(mockServiceLogs).toHaveBeenCalledWith("svc1", 100, undefined, undefined);
     });
   });
 
   it("shows live tail button", async () => {
-    mockServiceLogs.mockResolvedValue("line one");
+    mockServiceLogs.mockResolvedValue(logResponse([{ message: "line one" }]));
     render(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => {
@@ -123,18 +171,11 @@ describe("LogViewer", () => {
     expect(screen.getByTitle("Live tail")).toBeInTheDocument();
   });
 
-  it("starts streaming when live is toggled on", async () => {
-    mockServiceLogs.mockResolvedValue("2024-01-01T00:00:00Z initial line");
-
-    // Mock a stream that sends one line then closes
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream({
-      start(controller) {
-        controller.enqueue(encoder.encode("2024-01-01T00:00:01Z streamed line\n"));
-        controller.close();
-      },
-    });
-    mockServiceLogsStream.mockResolvedValue(new Response(stream, { status: 200 }));
+  it("starts SSE streaming when live is toggled on", async () => {
+    mockServiceLogs.mockResolvedValue(
+      logResponse([{ message: "initial line", timestamp: "2024-01-01T00:00:00Z" }]),
+    );
+    mockServiceLogsStreamURL.mockReturnValue("/api/services/svc1/logs?after=2024-01-01T00%3A00%3A00Z");
 
     render(<LogViewer serviceId="svc1" />);
 
@@ -144,28 +185,23 @@ describe("LogViewer", () => {
 
     fireEvent.click(screen.getByTitle("Live tail"));
 
-    // Live indicator should appear
     expect(screen.getByText("Live")).toBeInTheDocument();
+    expect(MockEventSource.instances).toHaveLength(1);
+    expect(MockEventSource.instances[0].url).toContain("/api/services/svc1/logs");
 
-    // Streamed line should appear
+    // Simulate receiving an SSE event
+    MockEventSource.instances[0].emit(
+      JSON.stringify({ timestamp: "2024-01-01T00:00:01Z", message: "streamed line", stream: "stdout" }),
+    );
+
     await waitFor(() => {
       expect(screen.getByText(/streamed line/)).toBeInTheDocument();
     });
-
-    // Stream was called with since param
-    expect(mockServiceLogsStream).toHaveBeenCalledWith(
-      "svc1",
-      expect.objectContaining({ tail: 0, since: "2024-01-01T00:00:00Z" }),
-    );
   });
 
   it("stops streaming when live is toggled off", async () => {
-    mockServiceLogs.mockResolvedValue("line one");
-
-    // Create a stream that never closes (simulates long-running follow)
-    mockServiceLogsStream.mockResolvedValue(
-      new Response(new ReadableStream({ start() {} }), { status: 200 }),
-    );
+    mockServiceLogs.mockResolvedValue(logResponse([{ message: "line one" }]));
+    mockServiceLogsStreamURL.mockReturnValue("/api/services/svc1/logs");
 
     render(<LogViewer serviceId="svc1" />);
 
@@ -173,12 +209,12 @@ describe("LogViewer", () => {
       expect(screen.getByText("line one")).toBeInTheDocument();
     });
 
-    // Start live
     fireEvent.click(screen.getByTitle("Live tail"));
     expect(screen.getByText("Live")).toBeInTheDocument();
+    expect(MockEventSource.instances[0].closed).toBe(false);
 
-    // Stop live
     fireEvent.click(screen.getByTitle("Stop live"));
     expect(screen.queryByText("Live")).not.toBeInTheDocument();
+    expect(MockEventSource.instances[0].closed).toBe(true);
   });
 });
