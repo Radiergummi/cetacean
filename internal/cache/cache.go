@@ -534,35 +534,35 @@ func (c *Cache) rebuildStacks() {
 	}
 
 	for id, svc := range c.services {
-		if ns, ok := svc.Spec.Labels["com.docker.stack.namespace"]; ok {
+		if ns, ok := svc.Spec.Labels[stackLabel]; ok {
 			s := ensure(ns)
 			s.Services = append(s.Services, id)
 		}
 	}
 
 	for id, cfg := range c.configs {
-		if ns, ok := cfg.Spec.Labels["com.docker.stack.namespace"]; ok {
+		if ns, ok := cfg.Spec.Labels[stackLabel]; ok {
 			s := ensure(ns)
 			s.Configs = append(s.Configs, id)
 		}
 	}
 
 	for id, sec := range c.secrets {
-		if ns, ok := sec.Spec.Labels["com.docker.stack.namespace"]; ok {
+		if ns, ok := sec.Spec.Labels[stackLabel]; ok {
 			s := ensure(ns)
 			s.Secrets = append(s.Secrets, id)
 		}
 	}
 
 	for id, net := range c.networks {
-		if ns, ok := net.Labels["com.docker.stack.namespace"]; ok {
+		if ns, ok := net.Labels[stackLabel]; ok {
 			s := ensure(ns)
 			s.Networks = append(s.Networks, id)
 		}
 	}
 
 	for name, vol := range c.volumes {
-		if ns, ok := vol.Labels["com.docker.stack.namespace"]; ok {
+		if ns, ok := vol.Labels[stackLabel]; ok {
 			s := ensure(ns)
 			s.Volumes = append(s.Volumes, name)
 		}
@@ -654,7 +654,6 @@ func (c *Cache) ReplaceServices(services []swarm.Service) {
 	}
 	c.mu.Lock()
 	c.services = m
-	c.rebuildStacks()
 	c.mu.Unlock()
 }
 
@@ -691,7 +690,6 @@ func (c *Cache) ReplaceConfigs(configs []swarm.Config) {
 	}
 	c.mu.Lock()
 	c.configs = m
-	c.rebuildStacks()
 	c.mu.Unlock()
 }
 
@@ -702,7 +700,6 @@ func (c *Cache) ReplaceSecrets(secrets []swarm.Secret) {
 	}
 	c.mu.Lock()
 	c.secrets = m
-	c.rebuildStacks()
 	c.mu.Unlock()
 }
 
@@ -713,7 +710,6 @@ func (c *Cache) ReplaceNetworks(networks []network.Summary) {
 	}
 	c.mu.Lock()
 	c.networks = m
-	c.rebuildStacks()
 	c.mu.Unlock()
 }
 
@@ -724,6 +720,13 @@ func (c *Cache) ReplaceVolumes(volumes []volume.Volume) {
 	}
 	c.mu.Lock()
 	c.volumes = m
+	c.mu.Unlock()
+}
+
+// RebuildStacks rebuilds all derived stack data from the current resource maps.
+// Call this once after all Replace* calls complete during a full sync.
+func (c *Cache) RebuildStacks() {
+	c.mu.Lock()
 	c.rebuildStacks()
 	c.mu.Unlock()
 }

@@ -8,8 +8,10 @@ import TaskStatusBadge from "../components/TaskStatusBadge";
 import TaskStateFilter from "../components/TaskStateFilter";
 import PageHeader from "../components/PageHeader";
 import { LoadingDetail } from "../components/LoadingSkeleton";
+import FetchError from "../components/FetchError";
 import NodeResourceGauges from "../components/NodeResourceGauges";
 import { statusBorder } from "../lib/statusBorder";
+import { formatBytes } from "../lib/formatBytes";
 import TimeAgo from "../components/TimeAgo";
 
 export default function NodeDetail() {
@@ -18,9 +20,14 @@ export default function NodeDetail() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [stateFilter, setStateFilter] = useState<string | null>(null);
 
+  const [error, setError] = useState(false);
+
   useEffect(() => {
     if (id) {
-      api.node(id).then(setNode);
+      api
+        .node(id)
+        .then(setNode)
+        .catch(() => setError(true));
       api
         .nodeTasks(id)
         .then(setTasks)
@@ -35,6 +42,7 @@ export default function NodeDetail() {
     );
   }, [tasks, stateFilter]);
 
+  if (error) return <FetchError message="Failed to load node" />;
   if (!node) return <LoadingDetail />;
 
   const addr = node.Status.Addr || "";
@@ -167,8 +175,3 @@ export default function NodeDetail() {
   );
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
-  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(0)} MB`;
-  return `${(bytes / 1024).toFixed(0)} KB`;
-}

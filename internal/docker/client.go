@@ -2,7 +2,6 @@ package docker
 
 import (
 	"context"
-	"fmt"
 	"io"
 
 	"github.com/docker/docker/api/types/container"
@@ -83,16 +82,8 @@ func (c *Client) InspectService(ctx context.Context, id string) (swarm.Service, 
 }
 
 func (c *Client) InspectTask(ctx context.Context, id string) (swarm.Task, error) {
-	tasks, err := c.docker.TaskList(ctx, swarm.TaskListOptions{
-		Filters: filters.NewArgs(filters.Arg("id", id)),
-	})
-	if err != nil {
-		return swarm.Task{}, err
-	}
-	if len(tasks) == 0 {
-		return swarm.Task{}, fmt.Errorf("task %s not found", id)
-	}
-	return tasks[0], nil
+	task, _, err := c.docker.TaskInspectWithRaw(ctx, id)
+	return task, err
 }
 
 func (c *Client) InspectConfig(ctx context.Context, id string) (swarm.Config, error) {
@@ -106,17 +97,7 @@ func (c *Client) InspectSecret(ctx context.Context, id string) (swarm.Secret, er
 }
 
 func (c *Client) InspectNetwork(ctx context.Context, id string) (network.Summary, error) {
-	resp, err := c.docker.NetworkInspect(ctx, id, network.InspectOptions{})
-	if err != nil {
-		return network.Summary{}, err
-	}
-	return network.Summary{
-		ID:     resp.ID,
-		Name:   resp.Name,
-		Driver: resp.Driver,
-		Scope:  resp.Scope,
-		Labels: resp.Labels,
-	}, nil
+	return c.docker.NetworkInspect(ctx, id, network.InspectOptions{})
 }
 
 func (c *Client) Events(ctx context.Context) (<-chan events.Message, <-chan error) {

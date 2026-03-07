@@ -166,6 +166,8 @@ func (w *Watcher) fullSync(ctx context.Context) {
 		}
 	}
 
+	w.cache.RebuildStacks()
+
 	snap := w.cache.Snapshot()
 	log.Printf("full sync complete: %d nodes, %d services, %d tasks, %d stacks",
 		snap.NodeCount, snap.ServiceCount, snap.TaskCount, snap.StackCount)

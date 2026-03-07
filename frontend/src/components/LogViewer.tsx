@@ -404,23 +404,6 @@ export default function LogViewer({ serviceId, taskId }: Props) {
           </span>
         )}
 
-        <div className="w-px h-5 bg-border mx-0.5" />
-
-        {/* Stream filter */}
-        {(["all", "stdout", "stderr"] as const).map((s) => (
-          <button
-            key={s}
-            onClick={() => setStreamFilter(s)}
-            className={`px-2 py-1 text-[10px] rounded-md font-mono ${
-              streamFilter === s
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {s}
-          </button>
-        ))}
-
         {/* Clear */}
         <ToolbarButton
           onClick={() => setLines([])}

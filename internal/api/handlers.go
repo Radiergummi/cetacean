@@ -9,6 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/api/types/swarm"
+	"github.com/docker/docker/api/types/volume"
 	json "github.com/goccy/go-json"
 
 	"cetacean/internal/cache"
@@ -36,6 +39,20 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
+func searchFilter[T any](items []T, query string, name func(T) string) []T {
+	if query == "" {
+		return items
+	}
+	q := strings.ToLower(query)
+	filtered := items[:0]
+	for _, item := range items {
+		if strings.Contains(strings.ToLower(name(item)), q) {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
+}
+
 func (h *Handlers) HandleCluster(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, h.cache.Snapshot())
 }
@@ -44,16 +61,7 @@ func (h *Handlers) HandleCluster(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 	nodes := h.cache.ListNodes()
-	if q := r.URL.Query().Get("search"); q != "" {
-		q = strings.ToLower(q)
-		filtered := nodes[:0]
-		for _, n := range nodes {
-			if strings.Contains(strings.ToLower(n.Description.Hostname), q) {
-				filtered = append(filtered, n)
-			}
-		}
-		nodes = filtered
-	}
+	nodes = searchFilter(nodes, r.URL.Query().Get("search"), func(n swarm.Node) string { return n.Description.Hostname })
 	writeJSON(w, nodes)
 }
 
@@ -81,16 +89,7 @@ func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 	services := h.cache.ListServices()
-	if q := r.URL.Query().Get("search"); q != "" {
-		q = strings.ToLower(q)
-		filtered := services[:0]
-		for _, s := range services {
-			if strings.Contains(strings.ToLower(s.Spec.Name), q) {
-				filtered = append(filtered, s)
-			}
-		}
-		services = filtered
-	}
+	services = searchFilter(services, r.URL.Query().Get("search"), func(s swarm.Service) string { return s.Spec.Name })
 	writeJSON(w, services)
 }
 
@@ -288,16 +287,7 @@ func (h *Handlers) serveLogsSSE(w http.ResponseWriter, r *http.Request, fetch lo
 
 func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
 	stacks := h.cache.ListStacks()
-	if q := r.URL.Query().Get("search"); q != "" {
-		q = strings.ToLower(q)
-		filtered := stacks[:0]
-		for _, s := range stacks {
-			if strings.Contains(strings.ToLower(s.Name), q) {
-				filtered = append(filtered, s)
-			}
-		}
-		stacks = filtered
-	}
+	stacks = searchFilter(stacks, r.URL.Query().Get("search"), func(s cache.Stack) string { return s.Name })
 	writeJSON(w, stacks)
 }
 
@@ -315,16 +305,7 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 	configs := h.cache.ListConfigs()
-	if q := r.URL.Query().Get("search"); q != "" {
-		q = strings.ToLower(q)
-		filtered := configs[:0]
-		for _, c := range configs {
-			if strings.Contains(strings.ToLower(c.Spec.Name), q) {
-				filtered = append(filtered, c)
-			}
-		}
-		configs = filtered
-	}
+	configs = searchFilter(configs, r.URL.Query().Get("search"), func(c swarm.Config) string { return c.Spec.Name })
 	writeJSON(w, configs)
 }
 
@@ -332,16 +313,7 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 	secrets := h.cache.ListSecrets()
-	if q := r.URL.Query().Get("search"); q != "" {
-		q = strings.ToLower(q)
-		filtered := secrets[:0]
-		for _, s := range secrets {
-			if strings.Contains(strings.ToLower(s.Spec.Name), q) {
-				filtered = append(filtered, s)
-			}
-		}
-		secrets = filtered
-	}
+	secrets = searchFilter(secrets, r.URL.Query().Get("search"), func(s swarm.Secret) string { return s.Spec.Name })
 	writeJSON(w, secrets)
 }
 
@@ -349,16 +321,7 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 	networks := h.cache.ListNetworks()
-	if q := r.URL.Query().Get("search"); q != "" {
-		q = strings.ToLower(q)
-		filtered := networks[:0]
-		for _, n := range networks {
-			if strings.Contains(strings.ToLower(n.Name), q) {
-				filtered = append(filtered, n)
-			}
-		}
-		networks = filtered
-	}
+	networks = searchFilter(networks, r.URL.Query().Get("search"), func(n network.Summary) string { return n.Name })
 	writeJSON(w, networks)
 }
 
@@ -366,15 +329,6 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 	volumes := h.cache.ListVolumes()
-	if q := r.URL.Query().Get("search"); q != "" {
-		q = strings.ToLower(q)
-		filtered := volumes[:0]
-		for _, v := range volumes {
-			if strings.Contains(strings.ToLower(v.Name), q) {
-				filtered = append(filtered, v)
-			}
-		}
-		volumes = filtered
-	}
+	volumes = searchFilter(volumes, r.URL.Query().Get("search"), func(v volume.Volume) string { return v.Name })
 	writeJSON(w, volumes)
 }

@@ -11,6 +11,7 @@ import LogViewer from "../components/LogViewer";
 import PageHeader from "../components/PageHeader";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import { statusBorder } from "../lib/statusBorder";
+import { formatBytes } from "../lib/formatBytes";
 import TimeAgo, { timeAgo } from "../components/TimeAgo";
 
 export default function ServiceDetail() {
@@ -563,12 +564,6 @@ function formatCpu(nanoCpus: number): string {
   return `${(nanoCpus / 1_000_000_000).toFixed(2)} cores`;
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${bytes} B`;
-}
 
 function cpuThresholds(service: Service): Threshold[] {
   const res = service.Spec.TaskTemplate.Resources;
