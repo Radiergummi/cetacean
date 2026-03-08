@@ -38,7 +38,14 @@ function PlainBody<T>({ columns, data, keyFn, rowClassName, onRowClick }: Props<
   );
 }
 
-function VirtualBody<T>({ columns, data, keyFn, rowClassName, onRowClick, scrollRef }: Props<T> & { scrollRef: React.RefObject<HTMLDivElement | null> }) {
+function VirtualBody<T>({
+  columns,
+  data,
+  keyFn,
+  rowClassName,
+  onRowClick,
+  scrollRef,
+}: Props<T> & { scrollRef: React.RefObject<HTMLDivElement | null> }) {
   const virtualizer = useVirtualizer({
     count: data.length,
     getScrollElement: () => scrollRef.current,
@@ -76,7 +83,10 @@ function VirtualBody<T>({ columns, data, keyFn, rowClassName, onRowClick, scroll
       })}
       {virtualItems.length > 0 && (
         <tr>
-          <td style={{ height: totalSize - virtualItems[virtualItems.length - 1].end, padding: 0 }} colSpan={columns.length} />
+          <td
+            style={{ height: totalSize - virtualItems[virtualItems.length - 1].end, padding: 0 }}
+            colSpan={columns.length}
+          />
         </tr>
       )}
     </tbody>
@@ -88,7 +98,10 @@ export default function DataTable<T>({ columns, data, keyFn, rowClassName, onRow
   const useVirtual = data.length > VIRTUAL_THRESHOLD;
 
   return (
-    <div ref={scrollRef} className={`overflow-x-auto rounded-lg border ${useVirtual ? "max-h-[calc(100vh-16rem)] overflow-y-auto" : ""}`}>
+    <div
+      ref={scrollRef}
+      className={`overflow-x-auto rounded-lg border ${useVirtual ? "max-h-[calc(100vh-16rem)] overflow-y-auto" : ""}`}
+    >
       <table className="w-full">
         <thead className="sticky top-0 z-10 bg-background">
           <tr className="border-b bg-muted/50">
@@ -100,9 +113,22 @@ export default function DataTable<T>({ columns, data, keyFn, rowClassName, onRow
           </tr>
         </thead>
         {useVirtual ? (
-          <VirtualBody columns={columns} data={data} keyFn={keyFn} rowClassName={rowClassName} onRowClick={onRowClick} scrollRef={scrollRef} />
+          <VirtualBody
+            columns={columns}
+            data={data}
+            keyFn={keyFn}
+            rowClassName={rowClassName}
+            onRowClick={onRowClick}
+            scrollRef={scrollRef}
+          />
         ) : (
-          <PlainBody columns={columns} data={data} keyFn={keyFn} rowClassName={rowClassName} onRowClick={onRowClick} />
+          <PlainBody
+            columns={columns}
+            data={data}
+            keyFn={keyFn}
+            rowClassName={rowClassName}
+            onRowClick={onRowClick}
+          />
         )}
       </table>
     </div>

@@ -206,9 +206,7 @@ export default function TimeSeriesChart({
           plugins: [thresholdPlugin, tooltipPlugin, legendPlugin],
           cursor: {
             drag: { x: false, y: false },
-            sync: syncKey
-              ? { key: syncKey, setSeries: true, scales: ["x", null] }
-              : undefined,
+            sync: syncKey ? { key: syncKey, setSeries: true, scales: ["x", null] } : undefined,
             x: true,
             y: false,
           },

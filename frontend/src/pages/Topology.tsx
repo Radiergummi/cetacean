@@ -6,11 +6,7 @@ import * as d3Selection from "d3-selection";
 import * as d3Drag from "d3-drag";
 import { Network, Server } from "lucide-react";
 import { api } from "@/api/client";
-import type {
-  NetworkTopology,
-  PlacementTopology,
-  TopoClusterNode,
-} from "@/api/types";
+import type { NetworkTopology, PlacementTopology, TopoClusterNode } from "@/api/types";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import { LoadingPage } from "@/components/LoadingSkeleton";
@@ -110,7 +106,13 @@ function NetworkView({ data }: { data: NetworkTopology }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const navigate = useNavigate();
   const [positions, setPositions] = useState<Map<string, { x: number; y: number }>>(new Map());
-  const [links, setLinks] = useState<Array<{ source: { x: number; y: number; id: string }; target: { x: number; y: number; id: string }; networks: string[] }>>([]);
+  const [links, setLinks] = useState<
+    Array<{
+      source: { x: number; y: number; id: string };
+      target: { x: number; y: number; id: string };
+      networks: string[];
+    }>
+  >([]);
   const simulationRef = useRef<d3Force.Simulation<SimNode, SimLink> | null>(null);
   const { tooltip, show, hide } = useTooltip();
 
@@ -125,7 +127,10 @@ function NetworkView({ data }: { data: NetworkTopology }) {
     const width = rect.width || 800;
     const height = rect.height || 600;
 
-    const newNodeIds = data.nodes.map((n) => n.id).sort().join(",");
+    const newNodeIds = data.nodes
+      .map((n) => n.id)
+      .sort()
+      .join(",");
     const nodeSetChanged = newNodeIds !== prevNodeIdsRef.current;
     prevNodeIdsRef.current = newNodeIds;
 
@@ -249,7 +254,12 @@ function NetworkView({ data }: { data: NetworkTopology }) {
   const hasUnstacked = data.nodes.some((n) => !n.stack);
 
   if (data.nodes.length === 0) {
-    return <EmptyState message="No overlay networks found" icon={<Network className="w-10 h-10 mb-3 opacity-40" />} />;
+    return (
+      <EmptyState
+        message="No overlay networks found"
+        icon={<Network className="w-10 h-10 mb-3 opacity-40" />}
+      />
+    );
   }
 
   return (
@@ -292,13 +302,17 @@ function NetworkView({ data }: { data: NetworkTopology }) {
                 style={{ cursor: "pointer" }}
                 onClick={() => navigate(`/services/${node.id}`)}
                 onMouseMove={(e) =>
-                  show(e.clientX, e.clientY, (
+                  show(
+                    e.clientX,
+                    e.clientY,
                     <div>
                       <div className="font-medium">{node.name}</div>
-                      {node.stack && <div className="text-muted-foreground">Stack: {node.stack}</div>}
+                      {node.stack && (
+                        <div className="text-muted-foreground">Stack: {node.stack}</div>
+                      )}
                       <div className="text-muted-foreground">Replicas: {node.replicas}</div>
-                    </div>
-                  ))
+                    </div>,
+                  )
                 }
                 onMouseLeave={hide}
               >
@@ -357,7 +371,12 @@ function PlacementView({ data }: { data: PlacementTopology }) {
   const navigate = useNavigate();
 
   if (data.nodes.length === 0) {
-    return <EmptyState message="No nodes found in the cluster" icon={<Server className="w-10 h-10 mb-3 opacity-40" />} />;
+    return (
+      <EmptyState
+        message="No nodes found in the cluster"
+        icon={<Server className="w-10 h-10 mb-3 opacity-40" />}
+      />
+    );
   }
 
   // Collect all unique service names for the legend
@@ -427,14 +446,22 @@ function PlacementNodeCard({
               <div
                 key={task.id}
                 className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-medium text-white cursor-default"
-                style={{ backgroundColor: taskStateColor(task.state), borderColor: serviceColor(task.serviceName), borderWidth: 2 }}
+                style={{
+                  backgroundColor: taskStateColor(task.state),
+                  borderColor: serviceColor(task.serviceName),
+                  borderWidth: 2,
+                }}
                 onMouseMove={(e) =>
-                  show(e.clientX, e.clientY, (
+                  show(
+                    e.clientX,
+                    e.clientY,
                     <div>
-                      <div className="font-medium">{task.serviceName}.{task.slot}</div>
+                      <div className="font-medium">
+                        {task.serviceName}.{task.slot}
+                      </div>
                       <div className="text-muted-foreground">State: {task.state}</div>
-                    </div>
-                  ))
+                    </div>,
+                  )
                 }
                 onMouseLeave={hide}
               >
@@ -463,10 +490,7 @@ export default function Topology() {
     }
     setError(null);
     try {
-      const [net, place] = await Promise.all([
-        api.topologyNetworks(),
-        api.topologyPlacement(),
-      ]);
+      const [net, place] = await Promise.all([api.topologyNetworks(), api.topologyPlacement()]);
       setNetworkData(net);
       setPlacementData(place);
     } catch (e) {
@@ -545,9 +569,7 @@ export default function Topology() {
         </div>
       )}
 
-      {!loading && !error && tab === "network" && networkData && (
-        <NetworkView data={networkData} />
-      )}
+      {!loading && !error && tab === "network" && networkData && <NetworkView data={networkData} />}
 
       {!loading && !error && tab === "placement" && placementData && (
         <PlacementView data={placementData} />
