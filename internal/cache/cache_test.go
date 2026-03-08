@@ -720,3 +720,57 @@ func TestCache_ListVolumes(t *testing.T) {
 		t.Fatalf("expected 2 volumes, got %d", len(vols))
 	}
 }
+
+func TestSnapshot_ResourceTotals(t *testing.T) {
+	c := New(nil)
+	c.SetNode(swarm.Node{
+		ID: "n1",
+		Status: swarm.NodeStatus{State: swarm.NodeStateReady},
+		Description: swarm.NodeDescription{
+			Resources: swarm.Resources{
+				NanoCPUs:    4000000000, // 4 cores
+				MemoryBytes: 8589934592, // 8 GB
+			},
+		},
+	})
+	c.SetNode(swarm.Node{
+		ID: "n2",
+		Status: swarm.NodeStatus{State: swarm.NodeStateReady},
+		Description: swarm.NodeDescription{
+			Resources: swarm.Resources{
+				NanoCPUs:    2000000000, // 2 cores
+				MemoryBytes: 4294967296, // 4 GB
+			},
+		},
+	})
+
+	snap := c.Snapshot()
+	if snap.TotalCPU != 6 {
+		t.Errorf("TotalCPU=%d, want 6", snap.TotalCPU)
+	}
+	if snap.TotalMemory != 12884901888 {
+		t.Errorf("TotalMemory=%d, want 12884901888", snap.TotalMemory)
+	}
+}
+
+func TestReplaceAll_PartialSync(t *testing.T) {
+	c := New(nil)
+	// Pre-populate with a node
+	c.SetNode(swarm.Node{ID: "existing"})
+
+	// Partial sync — only services succeeded
+	c.ReplaceAll(FullSyncData{
+		Services:    []swarm.Service{{ID: "s1"}},
+		HasServices: true,
+		// HasNodes is false — nodes should be preserved
+	})
+
+	// Node should still exist
+	if _, ok := c.GetNode("existing"); !ok {
+		t.Error("existing node was lost during partial sync")
+	}
+	// Service should be updated
+	if _, ok := c.GetService("s1"); !ok {
+		t.Error("new service not found after partial sync")
+	}
+}

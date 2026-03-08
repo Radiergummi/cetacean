@@ -41,6 +41,8 @@ type ClusterSnapshot struct {
 	TasksByState map[string]int `json:"tasksByState"`
 	NodesReady   int            `json:"nodesReady"`
 	NodesDown    int            `json:"nodesDown"`
+	TotalCPU     int            `json:"totalCPU"`
+	TotalMemory  int64          `json:"totalMemory"`
 }
 
 type OnChangeFunc func(Event)
@@ -517,6 +519,8 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 	}
 
 	var nodesReady, nodesDown int
+	var totalNanoCPUs int64
+	var totalMemory int64
 	for _, n := range c.nodes {
 		switch n.Status.State {
 		case swarm.NodeStateReady:
@@ -524,6 +528,8 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 		case swarm.NodeStateDown:
 			nodesDown++
 		}
+		totalNanoCPUs += n.Description.Resources.NanoCPUs
+		totalMemory += n.Description.Resources.MemoryBytes
 	}
 
 	return ClusterSnapshot{
@@ -534,6 +540,8 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 		TasksByState: tasksByState,
 		NodesReady:   nodesReady,
 		NodesDown:    nodesDown,
+		TotalCPU:     int(totalNanoCPUs / 1e9),
+		TotalMemory:  totalMemory,
 	}
 }
 
@@ -642,74 +650,116 @@ type FullSyncData struct {
 	Secrets  []swarm.Secret
 	Networks []network.Summary
 	Volumes  []volume.Volume
+
+	HasNodes, HasServices, HasTasks   bool
+	HasConfigs, HasSecrets            bool
+	HasNetworks, HasVolumes           bool
 }
 
-// ReplaceAll atomically replaces all resource maps and rebuilds derived state.
-// This ensures API consumers never see a half-synced cache.
+// ReplaceAll atomically replaces resource maps for which Has* flags are true,
+// then rebuilds derived state. Resource types that failed to sync (Has* = false)
+// are preserved from the existing cache.
 func (c *Cache) ReplaceAll(data FullSyncData) {
-	// Build all maps outside the lock.
-	nodes := make(map[string]swarm.Node, len(data.Nodes))
-	for _, n := range data.Nodes {
-		nodes[n.ID] = n
-	}
-
-	services := make(map[string]swarm.Service, len(data.Services))
-	for _, s := range data.Services {
-		services[s.ID] = s
-	}
-
-	tasks := make(map[string]swarm.Task, len(data.Tasks))
-	byService := make(map[string]map[string]struct{})
-	byNode := make(map[string]map[string]struct{})
-	for _, t := range data.Tasks {
-		tasks[t.ID] = t
-		if t.ServiceID != "" {
-			if byService[t.ServiceID] == nil {
-				byService[t.ServiceID] = make(map[string]struct{})
-			}
-			byService[t.ServiceID][t.ID] = struct{}{}
-		}
-		if t.NodeID != "" {
-			if byNode[t.NodeID] == nil {
-				byNode[t.NodeID] = make(map[string]struct{})
-			}
-			byNode[t.NodeID][t.ID] = struct{}{}
+	// Build new maps outside the lock for resource types that succeeded.
+	var nodes map[string]swarm.Node
+	if data.HasNodes {
+		nodes = make(map[string]swarm.Node, len(data.Nodes))
+		for _, n := range data.Nodes {
+			nodes[n.ID] = n
 		}
 	}
 
-	configs := make(map[string]swarm.Config, len(data.Configs))
-	for _, cfg := range data.Configs {
-		configs[cfg.ID] = cfg
+	var services map[string]swarm.Service
+	if data.HasServices {
+		services = make(map[string]swarm.Service, len(data.Services))
+		for _, s := range data.Services {
+			services[s.ID] = s
+		}
 	}
 
-	secrets := make(map[string]swarm.Secret, len(data.Secrets))
-	for _, s := range data.Secrets {
-		secrets[s.ID] = s
+	var tasks map[string]swarm.Task
+	var byService map[string]map[string]struct{}
+	var byNode map[string]map[string]struct{}
+	if data.HasTasks {
+		tasks = make(map[string]swarm.Task, len(data.Tasks))
+		byService = make(map[string]map[string]struct{})
+		byNode = make(map[string]map[string]struct{})
+		for _, t := range data.Tasks {
+			tasks[t.ID] = t
+			if t.ServiceID != "" {
+				if byService[t.ServiceID] == nil {
+					byService[t.ServiceID] = make(map[string]struct{})
+				}
+				byService[t.ServiceID][t.ID] = struct{}{}
+			}
+			if t.NodeID != "" {
+				if byNode[t.NodeID] == nil {
+					byNode[t.NodeID] = make(map[string]struct{})
+				}
+				byNode[t.NodeID][t.ID] = struct{}{}
+			}
+		}
 	}
 
-	networks := make(map[string]network.Summary, len(data.Networks))
-	for _, n := range data.Networks {
-		networks[n.ID] = n
+	var configs map[string]swarm.Config
+	if data.HasConfigs {
+		configs = make(map[string]swarm.Config, len(data.Configs))
+		for _, cfg := range data.Configs {
+			configs[cfg.ID] = cfg
+		}
 	}
 
-	volumes := make(map[string]volume.Volume, len(data.Volumes))
-	for _, v := range data.Volumes {
-		volumes[v.Name] = v
+	var secrets map[string]swarm.Secret
+	if data.HasSecrets {
+		secrets = make(map[string]swarm.Secret, len(data.Secrets))
+		for _, s := range data.Secrets {
+			secrets[s.ID] = s
+		}
 	}
 
-	stacks := rebuildStacksFromMaps(services, configs, secrets, networks, volumes)
+	var networks map[string]network.Summary
+	if data.HasNetworks {
+		networks = make(map[string]network.Summary, len(data.Networks))
+		for _, n := range data.Networks {
+			networks[n.ID] = n
+		}
+	}
 
-	// Single atomic swap under one lock.
+	var volumes map[string]volume.Volume
+	if data.HasVolumes {
+		volumes = make(map[string]volume.Volume, len(data.Volumes))
+		for _, v := range data.Volumes {
+			volumes[v.Name] = v
+		}
+	}
+
+	// Single atomic swap under one lock — only replace types that succeeded.
 	c.mu.Lock()
-	c.nodes = nodes
-	c.services = services
-	c.tasks = tasks
-	c.tasksByService = byService
-	c.tasksByNode = byNode
-	c.configs = configs
-	c.secrets = secrets
-	c.networks = networks
-	c.volumes = volumes
-	c.stacks = stacks
+	if data.HasNodes {
+		c.nodes = nodes
+	}
+	if data.HasServices {
+		c.services = services
+	}
+	if data.HasTasks {
+		c.tasks = tasks
+		c.tasksByService = byService
+		c.tasksByNode = byNode
+	}
+	if data.HasConfigs {
+		c.configs = configs
+	}
+	if data.HasSecrets {
+		c.secrets = secrets
+	}
+	if data.HasNetworks {
+		c.networks = networks
+	}
+	if data.HasVolumes {
+		c.volumes = volumes
+	}
+
+	// Rebuild stacks from the current (possibly partially updated) maps.
+	c.rebuildStacks()
 	c.mu.Unlock()
 }

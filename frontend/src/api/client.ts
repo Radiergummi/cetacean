@@ -42,6 +42,8 @@ export interface ClusterSnapshot {
   tasksByState: Record<string, number>;
   nodesReady: number;
   nodesDown: number;
+  totalCPU: number;
+  totalMemory: number;
 }
 
 export interface ListParams {

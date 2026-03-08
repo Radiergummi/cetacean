@@ -43,7 +43,7 @@ export default function ClusterOverview() {
       <div>
         <PageHeader title="Cluster Overview" />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {Array.from({ length: 8 }).map((_, i) => (
+          {Array.from({ length: 10 }).map((_, i) => (
             <div key={i} className="rounded-lg border bg-card p-6">
               <div className="h-4 w-20 bg-muted rounded mb-2" />
               <div className="h-8 w-12 bg-muted rounded" />
@@ -101,6 +101,16 @@ export default function ClusterOverview() {
         />
         <StatCard label="Tasks Other" value={tasksOther} prev={prev ? prevOther : undefined} />
         <StatCard label="Tasks Total" value={snapshot.taskCount} prev={prev?.taskCount} />
+        <StatCard
+          label="Total CPU"
+          value={snapshot.totalCPU}
+          formatted={snapshot.totalCPU + " cores"}
+        />
+        <StatCard
+          label="Total Memory"
+          value={snapshot.totalMemory}
+          formatted={(snapshot.totalMemory / 1024 ** 3).toFixed(1) + " GB"}
+        />
       </div>
 
       <div className="mt-6">
@@ -117,12 +127,14 @@ function StatCard({
   prev,
   color,
   to,
+  formatted,
 }: {
   label: string;
   value: number;
   prev?: number;
   color?: string;
   to?: string;
+  formatted?: string;
 }) {
   const navigate = useNavigate();
   const valueColor = color === "green" ? "text-green-600" : color === "red" ? "text-red-600" : "";
@@ -141,7 +153,7 @@ function StatCard({
         {label}
       </div>
       <div className="flex items-center gap-2">
-        <span className={`text-3xl font-semibold tabular-nums ${valueColor}`}>{value}</span>
+        <span className={`text-3xl font-semibold tabular-nums ${valueColor}`}>{formatted ?? value}</span>
         {delta !== 0 && (
           <span
             className={`flex items-center gap-0.5 text-xs font-medium ${delta > 0 ? "text-green-600" : "text-red-600"}`}
