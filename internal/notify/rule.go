@@ -2,12 +2,10 @@ package notify
 
 import (
 	"regexp"
-	"strings"
 	"time"
 
 	"cetacean/internal/cache"
-
-	"github.com/docker/docker/api/types/swarm"
+	"cetacean/internal/filter"
 )
 
 type Rule struct {
@@ -20,6 +18,7 @@ type Rule struct {
 
 	nameRe      *regexp.Regexp
 	cooldownDur time.Duration
+	condProg    filter.Program
 }
 
 type Match struct {
@@ -44,6 +43,13 @@ func (r *Rule) compile() error {
 		}
 		r.cooldownDur = d
 	}
+	if r.Match.Condition != "" {
+		prog, err := filter.Compile(r.Match.Condition)
+		if err != nil {
+			return err
+		}
+		r.condProg = prog
+	}
 	return nil
 }
 
@@ -60,36 +66,20 @@ func (r *Rule) matches(e cache.Event, resourceName string) bool {
 	if r.nameRe != nil && !r.nameRe.MatchString(resourceName) {
 		return false
 	}
-	if r.Match.Condition != "" && !r.matchesCondition(e.Resource) {
+	if r.condProg != nil && !r.matchesCondition(e.Resource) {
 		return false
 	}
 	return true
 }
 
-func (r *Rule) matchesCondition(resource interface{}) bool {
-	// Parse "field == value"
-	parts := strings.SplitN(r.Match.Condition, "==", 2)
-	if len(parts) != 2 {
+func (r *Rule) matchesCondition(resource any) bool {
+	env := filter.ResourceEnv(resource)
+	if env == nil {
 		return false
 	}
-	field := strings.TrimSpace(parts[0])
-	value := strings.TrimSpace(parts[1])
-
-	switch field {
-	case "state":
-		return extractState(resource) == value
-	default:
+	ok, err := filter.Evaluate(r.condProg, env)
+	if err != nil {
 		return false
 	}
-}
-
-func extractState(resource interface{}) string {
-	switch r := resource.(type) {
-	case swarm.Task:
-		return string(r.Status.State)
-	case swarm.Node:
-		return string(r.Status.State)
-	default:
-		return ""
-	}
+	return ok
 }

@@ -15,6 +15,7 @@ import (
 	json "github.com/goccy/go-json"
 
 	"cetacean/internal/cache"
+	"cetacean/internal/filter"
 	"cetacean/internal/notify"
 )
 
@@ -78,6 +79,35 @@ func searchFilter[T any](items []T, query string, name func(T) string) []T {
 	return filtered
 }
 
+const maxFilterLen = 512
+
+func exprFilter[T any](items []T, expr string, env func(T) map[string]any, w http.ResponseWriter) ([]T, bool) {
+	if expr == "" {
+		return items, true
+	}
+	if len(expr) > maxFilterLen {
+		http.Error(w, "filter expression too long", http.StatusBadRequest)
+		return nil, false
+	}
+	prog, err := filter.Compile(expr)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("invalid filter expression: %s", err), http.StatusBadRequest)
+		return nil, false
+	}
+	var filtered []T
+	for _, item := range items {
+		ok, err := filter.Evaluate(prog, env(item))
+		if err != nil {
+			http.Error(w, fmt.Sprintf("filter evaluation error: %s", err), http.StatusBadRequest)
+			return nil, false
+		}
+		if ok {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered, true
+}
+
 func (h *Handlers) HandleCluster(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, h.cache.Snapshot())
 }
@@ -87,6 +117,10 @@ func (h *Handlers) HandleCluster(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 	nodes := h.cache.ListNodes()
 	nodes = searchFilter(nodes, r.URL.Query().Get("search"), func(n swarm.Node) string { return n.Description.Hostname })
+	var ok bool
+	if nodes, ok = exprFilter(nodes, r.URL.Query().Get("filter"), filter.NodeEnv, w); !ok {
+		return
+	}
 	p := parsePagination(r)
 	nodes = sortItems(nodes, p.Sort, p.Dir, map[string]func(swarm.Node) string{
 		"hostname":     func(n swarm.Node) string { return n.Description.Hostname },
@@ -122,6 +156,10 @@ func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 	services := h.cache.ListServices()
 	services = searchFilter(services, r.URL.Query().Get("search"), func(s swarm.Service) string { return s.Spec.Name })
+	var ok bool
+	if services, ok = exprFilter(services, r.URL.Query().Get("filter"), filter.ServiceEnv, w); !ok {
+		return
+	}
 	p := parsePagination(r)
 	services = sortItems(services, p.Sort, p.Dir, map[string]func(swarm.Service) string{
 		"name": func(s swarm.Service) string { return s.Spec.Name },
@@ -171,6 +209,10 @@ func (h *Handlers) HandleServiceLogs(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 	tasks := h.cache.ListTasks()
+	var ok bool
+	if tasks, ok = exprFilter(tasks, r.URL.Query().Get("filter"), filter.TaskEnv, w); !ok {
+		return
+	}
 	p := parsePagination(r)
 	tasks = sortItems(tasks, p.Sort, p.Dir, map[string]func(swarm.Task) string{
 		"state":   func(t swarm.Task) string { return string(t.Status.State) },
@@ -358,6 +400,10 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
 	stacks := h.cache.ListStacks()
 	stacks = searchFilter(stacks, r.URL.Query().Get("search"), func(s cache.Stack) string { return s.Name })
+	var ok bool
+	if stacks, ok = exprFilter(stacks, r.URL.Query().Get("filter"), filter.StackEnv, w); !ok {
+		return
+	}
 	p := parsePagination(r)
 	stacks = sortItems(stacks, p.Sort, p.Dir, map[string]func(cache.Stack) string{
 		"name": func(s cache.Stack) string { return s.Name },
@@ -380,6 +426,10 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 	configs := h.cache.ListConfigs()
 	configs = searchFilter(configs, r.URL.Query().Get("search"), func(c swarm.Config) string { return c.Spec.Name })
+	var ok bool
+	if configs, ok = exprFilter(configs, r.URL.Query().Get("filter"), filter.ConfigEnv, w); !ok {
+		return
+	}
 	p := parsePagination(r)
 	configs = sortItems(configs, p.Sort, p.Dir, map[string]func(swarm.Config) string{
 		"name": func(c swarm.Config) string { return c.Spec.Name },
@@ -392,6 +442,10 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 	secrets := h.cache.ListSecrets()
 	secrets = searchFilter(secrets, r.URL.Query().Get("search"), func(s swarm.Secret) string { return s.Spec.Name })
+	var ok bool
+	if secrets, ok = exprFilter(secrets, r.URL.Query().Get("filter"), filter.SecretEnv, w); !ok {
+		return
+	}
 	p := parsePagination(r)
 	secrets = sortItems(secrets, p.Sort, p.Dir, map[string]func(swarm.Secret) string{
 		"name": func(s swarm.Secret) string { return s.Spec.Name },
@@ -404,6 +458,10 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 	networks := h.cache.ListNetworks()
 	networks = searchFilter(networks, r.URL.Query().Get("search"), func(n network.Summary) string { return n.Name })
+	var ok bool
+	if networks, ok = exprFilter(networks, r.URL.Query().Get("filter"), filter.NetworkEnv, w); !ok {
+		return
+	}
 	p := parsePagination(r)
 	networks = sortItems(networks, p.Sort, p.Dir, map[string]func(network.Summary) string{
 		"name":   func(n network.Summary) string { return n.Name },
@@ -417,6 +475,10 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 	volumes := h.cache.ListVolumes()
 	volumes = searchFilter(volumes, r.URL.Query().Get("search"), func(v volume.Volume) string { return v.Name })
+	var ok bool
+	if volumes, ok = exprFilter(volumes, r.URL.Query().Get("filter"), filter.VolumeEnv, w); !ok {
+		return
+	}
 	p := parsePagination(r)
 	volumes = sortItems(volumes, p.Sort, p.Dir, map[string]func(volume.Volume) string{
 		"name":   func(v volume.Volume) string { return v.Name },
