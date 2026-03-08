@@ -2,16 +2,18 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { api, type ClusterSnapshot } from "../api/client";
-import type { HistoryEntry } from "../api/types";
+import type { HistoryEntry, NotificationRuleStatus } from "../api/types";
 import { useSSE } from "../hooks/useSSE";
 import PageHeader from "../components/PageHeader";
 import ActivityFeed from "../components/ActivityFeed";
+import NotificationRules from "../components/NotificationRules";
 
 export default function ClusterOverview() {
   const [snapshot, setSnapshot] = useState<ClusterSnapshot | null>(null);
   const prevRef = useRef<ClusterSnapshot | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [notifRules, setNotifRules] = useState<NotificationRuleStatus[]>([]);
 
   const fetchSnapshot = useCallback(() => {
     api.cluster().then((s) => {
@@ -29,6 +31,10 @@ export default function ClusterOverview() {
       .then(setHistory)
       .catch(() => {})
       .finally(() => setHistoryLoading(false));
+    api
+      .notificationRules()
+      .then(setNotifRules)
+      .catch(() => {});
   }, [fetchSnapshot]);
 
   useSSE(
@@ -117,6 +123,13 @@ export default function ClusterOverview() {
         <h2 className="text-lg font-semibold mb-3">Recent Activity</h2>
         <ActivityFeed entries={history} loading={historyLoading} />
       </div>
+
+      {notifRules.length > 0 && (
+        <div className="mt-6">
+          <h2 className="text-lg font-semibold mb-3">Notification Rules</h2>
+          <NotificationRules rules={notifRules} />
+        </div>
+      )}
     </div>
   );
 }
@@ -153,7 +166,9 @@ function StatCard({
         {label}
       </div>
       <div className="flex items-center gap-2">
-        <span className={`text-3xl font-semibold tabular-nums ${valueColor}`}>{formatted ?? value}</span>
+        <span className={`text-3xl font-semibold tabular-nums ${valueColor}`}>
+          {formatted ?? value}
+        </span>
         {delta !== 0 && (
           <span
             className={`flex items-center gap-0.5 text-xs font-medium ${delta > 0 ? "text-green-600" : "text-red-600"}`}

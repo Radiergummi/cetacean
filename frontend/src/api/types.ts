@@ -274,3 +274,11 @@ export interface TopoTask {
   state: string;
   slot: number;
 }
+
+export interface NotificationRuleStatus {
+  id: string;
+  name: string;
+  enabled: boolean;
+  lastFired?: string;
+  fireCount: number;
+}

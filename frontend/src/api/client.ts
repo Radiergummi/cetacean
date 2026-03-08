@@ -12,6 +12,7 @@ import type {
   HistoryEntry,
   NetworkTopology,
   PlacementTopology,
+  NotificationRuleStatus,
 } from "./types";
 
 const BASE = "/api";
@@ -139,4 +140,5 @@ export const api = {
     const params = new URLSearchParams({ query, start, end, step });
     return fetchJSON<any>(`/metrics/query_range?${params}`);
   },
+  notificationRules: () => fetchJSON<NotificationRuleStatus[]>("/notifications/rules"),
 };
