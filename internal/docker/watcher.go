@@ -136,6 +136,7 @@ func (w *Watcher) fullSync(ctx context.Context) {
 		if err == nil {
 			mu.Lock()
 			data.Nodes = nodes
+			data.HasNodes = true
 			mu.Unlock()
 		}
 		ch <- result{"nodes", err}
@@ -146,6 +147,7 @@ func (w *Watcher) fullSync(ctx context.Context) {
 		if err == nil {
 			mu.Lock()
 			data.Services = services
+			data.HasServices = true
 			mu.Unlock()
 		}
 		ch <- result{"services", err}
@@ -156,6 +158,7 @@ func (w *Watcher) fullSync(ctx context.Context) {
 		if err == nil {
 			mu.Lock()
 			data.Tasks = tasks
+			data.HasTasks = true
 			mu.Unlock()
 		}
 		ch <- result{"tasks", err}
@@ -166,6 +169,7 @@ func (w *Watcher) fullSync(ctx context.Context) {
 		if err == nil {
 			mu.Lock()
 			data.Configs = configs
+			data.HasConfigs = true
 			mu.Unlock()
 		}
 		ch <- result{"configs", err}
@@ -176,6 +180,7 @@ func (w *Watcher) fullSync(ctx context.Context) {
 		if err == nil {
 			mu.Lock()
 			data.Secrets = secrets
+			data.HasSecrets = true
 			mu.Unlock()
 		}
 		ch <- result{"secrets", err}
@@ -186,6 +191,7 @@ func (w *Watcher) fullSync(ctx context.Context) {
 		if err == nil {
 			mu.Lock()
 			data.Networks = networks
+			data.HasNetworks = true
 			mu.Unlock()
 		}
 		ch <- result{"networks", err}
@@ -196,6 +202,7 @@ func (w *Watcher) fullSync(ctx context.Context) {
 		if err == nil {
 			mu.Lock()
 			data.Volumes = volumes
+			data.HasVolumes = true
 			mu.Unlock()
 		}
 		ch <- result{"volumes", err}
