@@ -15,6 +15,7 @@ import (
 	json "github.com/goccy/go-json"
 
 	"cetacean/internal/cache"
+	"cetacean/internal/docker"
 	"cetacean/internal/filter"
 	"cetacean/internal/notify"
 )
@@ -23,8 +24,7 @@ const defaultLogLimit = 500
 const maxLogLimit = 10000
 
 type DockerLogStreamer interface {
-	ServiceLogs(ctx context.Context, serviceID string, tail string, follow bool, since, until string) (io.ReadCloser, error)
-	TaskLogs(ctx context.Context, taskID string, tail string, follow bool, since, until string) (io.ReadCloser, error)
+	Logs(ctx context.Context, kind docker.LogKind, id string, tail string, follow bool, since, until string) (io.ReadCloser, error)
 }
 
 type Handlers struct {
@@ -201,7 +201,7 @@ func (h *Handlers) HandleServiceLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.serveLogs(w, r, func(ctx context.Context, tail string, follow bool, since, until string) (LogStream, error) {
-		return h.dockerClient.ServiceLogs(ctx, id, tail, follow, since, until)
+		return h.dockerClient.Logs(ctx, docker.ServiceLog, id, tail, follow, since, until)
 	})
 }
 
@@ -240,7 +240,7 @@ func (h *Handlers) HandleTaskLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.serveLogs(w, r, func(ctx context.Context, tail string, follow bool, since, until string) (LogStream, error) {
-		return h.dockerClient.TaskLogs(ctx, id, tail, follow, since, until)
+		return h.dockerClient.Logs(ctx, docker.TaskLog, id, tail, follow, since, until)
 	})
 }
 

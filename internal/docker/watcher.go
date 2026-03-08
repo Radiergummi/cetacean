@@ -17,23 +17,10 @@ import (
 
 // DockerClient abstracts the Docker API methods used by the Watcher.
 type DockerClient interface {
-	ListNodes(ctx context.Context) ([]swarm.Node, error)
-	ListServices(ctx context.Context) ([]swarm.Service, error)
-	ListTasks(ctx context.Context) ([]swarm.Task, error)
-	ListConfigs(ctx context.Context) ([]swarm.Config, error)
-	ListSecrets(ctx context.Context) ([]swarm.Secret, error)
-	ListNetworks(ctx context.Context) ([]network.Summary, error)
-	ListVolumes(ctx context.Context) ([]volume.Volume, error)
-	InspectNode(ctx context.Context, id string) (swarm.Node, error)
-	InspectService(ctx context.Context, id string) (swarm.Service, error)
-	InspectTask(ctx context.Context, id string) (swarm.Task, error)
-	InspectConfig(ctx context.Context, id string) (swarm.Config, error)
-	InspectSecret(ctx context.Context, id string) (swarm.Secret, error)
-	InspectNetwork(ctx context.Context, id string) (network.Summary, error)
-	InspectVolume(ctx context.Context, name string) (volume.Volume, error)
+	FullSync(ctx context.Context) cache.FullSyncData
+	Inspect(ctx context.Context, resourceType events.Type, id string) (any, error)
 	Events(ctx context.Context) (<-chan events.Message, <-chan error)
-	ServiceLogs(ctx context.Context, serviceID string, tail string, follow bool, since, until string) (io.ReadCloser, error)
-	TaskLogs(ctx context.Context, taskID string, tail string, follow bool, since, until string) (io.ReadCloser, error)
+	Logs(ctx context.Context, kind LogKind, id string, tail string, follow bool, since, until string) (io.ReadCloser, error)
 	Close() error
 }
 
@@ -139,99 +126,7 @@ func (w *Watcher) writeSnapshot() {
 func (w *Watcher) fullSync(ctx context.Context) {
 	slog.Info("starting full sync")
 
-	type result struct {
-		name string
-		err  error
-	}
-
-	var data cache.FullSyncData
-	var mu sync.Mutex
-	ch := make(chan result, 7)
-
-	go func() {
-		nodes, err := w.client.ListNodes(ctx)
-		if err == nil {
-			mu.Lock()
-			data.Nodes = nodes
-			data.HasNodes = true
-			mu.Unlock()
-		}
-		ch <- result{"nodes", err}
-	}()
-
-	go func() {
-		services, err := w.client.ListServices(ctx)
-		if err == nil {
-			mu.Lock()
-			data.Services = services
-			data.HasServices = true
-			mu.Unlock()
-		}
-		ch <- result{"services", err}
-	}()
-
-	go func() {
-		tasks, err := w.client.ListTasks(ctx)
-		if err == nil {
-			mu.Lock()
-			data.Tasks = tasks
-			data.HasTasks = true
-			mu.Unlock()
-		}
-		ch <- result{"tasks", err}
-	}()
-
-	go func() {
-		configs, err := w.client.ListConfigs(ctx)
-		if err == nil {
-			mu.Lock()
-			data.Configs = configs
-			data.HasConfigs = true
-			mu.Unlock()
-		}
-		ch <- result{"configs", err}
-	}()
-
-	go func() {
-		secrets, err := w.client.ListSecrets(ctx)
-		if err == nil {
-			mu.Lock()
-			data.Secrets = secrets
-			data.HasSecrets = true
-			mu.Unlock()
-		}
-		ch <- result{"secrets", err}
-	}()
-
-	go func() {
-		networks, err := w.client.ListNetworks(ctx)
-		if err == nil {
-			mu.Lock()
-			data.Networks = networks
-			data.HasNetworks = true
-			mu.Unlock()
-		}
-		ch <- result{"networks", err}
-	}()
-
-	go func() {
-		volumes, err := w.client.ListVolumes(ctx)
-		if err == nil {
-			mu.Lock()
-			data.Volumes = volumes
-			data.HasVolumes = true
-			mu.Unlock()
-		}
-		ch <- result{"volumes", err}
-	}()
-
-	for i := 0; i < 7; i++ {
-		r := <-ch
-		if r.err != nil {
-			slog.Warn("full sync resource failed", "resource", r.name, "error", r.err)
-		}
-	}
-
+	data := w.client.FullSync(ctx)
 	w.store.ReplaceAll(data)
 
 	snap := w.store.Snapshot()
@@ -396,52 +291,25 @@ func (w *Watcher) handleEvent(ctx context.Context, msg events.Message) {
 }
 
 func (w *Watcher) inspectAndApply(ctx context.Context, key eventKey) {
-	var err error
-	switch key.resourceType {
-	case events.NodeEventType:
-		var node swarm.Node
-		node, err = w.client.InspectNode(ctx, key.id)
-		if err == nil {
-			w.store.SetNode(node)
-		}
-	case events.ServiceEventType:
-		var svc swarm.Service
-		svc, err = w.client.InspectService(ctx, key.id)
-		if err == nil {
-			w.store.SetService(svc)
-		}
-	case events.ConfigEventType:
-		var cfg swarm.Config
-		cfg, err = w.client.InspectConfig(ctx, key.id)
-		if err == nil {
-			w.store.SetConfig(cfg)
-		}
-	case events.SecretEventType:
-		var sec swarm.Secret
-		sec, err = w.client.InspectSecret(ctx, key.id)
-		if err == nil {
-			w.store.SetSecret(sec)
-		}
-	case events.NetworkEventType:
-		var net network.Summary
-		net, err = w.client.InspectNetwork(ctx, key.id)
-		if err == nil {
-			w.store.SetNetwork(net)
-		}
-	case events.VolumeEventType:
-		var vol volume.Volume
-		vol, err = w.client.InspectVolume(ctx, key.id)
-		if err == nil {
-			w.store.SetVolume(vol)
-		}
-	case "task":
-		var task swarm.Task
-		task, err = w.client.InspectTask(ctx, key.id)
-		if err == nil {
-			w.store.SetTask(task)
-		}
-	}
+	resource, err := w.client.Inspect(ctx, key.resourceType, key.id)
 	if err != nil {
 		slog.Warn("inspect failed", "type", string(key.resourceType), "id", key.id, "error", err)
+		return
+	}
+	switch v := resource.(type) {
+	case swarm.Node:
+		w.store.SetNode(v)
+	case swarm.Service:
+		w.store.SetService(v)
+	case swarm.Task:
+		w.store.SetTask(v)
+	case swarm.Config:
+		w.store.SetConfig(v)
+	case swarm.Secret:
+		w.store.SetSecret(v)
+	case network.Summary:
+		w.store.SetNetwork(v)
+	case volume.Volume:
+		w.store.SetVolume(v)
 	}
 }

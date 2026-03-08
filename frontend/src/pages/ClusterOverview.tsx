@@ -109,13 +109,13 @@ export default function ClusterOverview() {
         <StatCard label="Tasks Total" value={snapshot.taskCount} prev={prev?.taskCount} />
         <StatCard
           label="Total CPU"
-          value={snapshot.totalCPU}
-          formatted={snapshot.totalCPU + " cores"}
+          value={snapshot.totalCPU ?? 0}
+          formatted={(snapshot.totalCPU ?? 0) + " cores"}
         />
         <StatCard
           label="Total Memory"
-          value={snapshot.totalMemory}
-          formatted={(snapshot.totalMemory / 1024 ** 3).toFixed(1) + " GB"}
+          value={snapshot.totalMemory ?? 0}
+          formatted={((snapshot.totalMemory ?? 0) / 1024 ** 3).toFixed(1) + " GB"}
         />
       </div>
 

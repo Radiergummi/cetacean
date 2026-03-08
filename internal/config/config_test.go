@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"testing"
+	"time"
 )
 
 func TestLoad_Defaults(t *testing.T) {
@@ -72,6 +73,9 @@ func TestLoad_AllEnvVars(t *testing.T) {
 	if cfg.NotificationsFile != "/tmp/rules.json" {
 		t.Errorf("NotificationsFile=%s, want /tmp/rules.json", cfg.NotificationsFile)
 	}
+	if cfg.SSEBatchInterval != 100*time.Millisecond {
+		t.Errorf("SSEBatchInterval=%v, want 100ms", cfg.SSEBatchInterval)
+	}
 }
 
 func TestSlogLevel(t *testing.T) {
@@ -124,5 +128,45 @@ func TestEnvBool(t *testing.T) {
 				t.Errorf("envBool(%q, %v)=%v, want %v", tt.value, tt.fallback, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestEnvDuration(t *testing.T) {
+	tests := []struct {
+		value    string
+		fallback time.Duration
+		want     time.Duration
+	}{
+		{"50ms", 100 * time.Millisecond, 50 * time.Millisecond},
+		{"2s", 100 * time.Millisecond, 2 * time.Second},
+		{"", 100 * time.Millisecond, 100 * time.Millisecond},          // empty → fallback
+		{"invalid", 100 * time.Millisecond, 100 * time.Millisecond},   // bad → fallback
+		{"-5ms", 100 * time.Millisecond, 100 * time.Millisecond},      // negative → fallback
+		{"0", 100 * time.Millisecond, 100 * time.Millisecond},         // zero → fallback
+	}
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			key := "TEST_ENVDUR_" + tt.value
+			if tt.value != "" {
+				t.Setenv(key, tt.value)
+			}
+			got := envDuration(key, tt.fallback)
+			if got != tt.want {
+				t.Errorf("envDuration(%q, %v)=%v, want %v", tt.value, tt.fallback, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLoad_SSEBatchInterval(t *testing.T) {
+	t.Setenv("CETACEAN_PROMETHEUS_URL", "http://prom:9090")
+	t.Setenv("CETACEAN_SSE_BATCH_INTERVAL", "200ms")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.SSEBatchInterval != 200*time.Millisecond {
+		t.Errorf("SSEBatchInterval=%v, want 200ms", cfg.SSEBatchInterval)
 	}
 }

@@ -120,6 +120,97 @@ func TestNotifier_NoMatchNoFire(t *testing.T) {
 	}
 }
 
+func TestNotifier_CircuitBreaker(t *testing.T) {
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusInternalServerError) // always fail
+	}))
+	defer srv.Close()
+
+	rules := []Rule{
+		{ID: "r1", Name: "test", Enabled: true, Match: Match{Type: "task"}, Webhook: srv.URL},
+	}
+	for i := range rules {
+		if err := rules[i].compile(); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	n := New(rules)
+	event := cache.Event{Type: "task", Action: "update", ID: "t1"}
+
+	// Fire 5 events to trip the circuit breaker (threshold=5)
+	for i := 0; i < 6; i++ {
+		n.HandleEvent(event, "web.1")
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	callsBefore := calls.Load()
+
+	// Now the circuit should be open — further events should be blocked
+	n.HandleEvent(event, "web.1")
+	time.Sleep(50 * time.Millisecond)
+
+	if got := calls.Load(); got != callsBefore {
+		t.Errorf("expected no new calls after circuit opens, got %d (was %d)", got, callsBefore)
+	}
+
+	// Verify status reports circuit open
+	statuses := n.RuleStatuses()
+	if !statuses[0].CircuitOpen {
+		t.Error("expected CircuitOpen=true")
+	}
+	if statuses[0].ConsecFailures < 5 {
+		t.Errorf("expected ConsecFailures>=5, got %d", statuses[0].ConsecFailures)
+	}
+}
+
+func TestNotifier_CircuitResetsOnSuccess(t *testing.T) {
+	callCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount <= 3 {
+			w.WriteHeader(http.StatusInternalServerError)
+		} else {
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer srv.Close()
+
+	rules := []Rule{
+		{ID: "r1", Name: "test", Enabled: true, Match: Match{Type: "task"}, Webhook: srv.URL},
+	}
+	for i := range rules {
+		if err := rules[i].compile(); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	n := New(rules)
+	event := cache.Event{Type: "task", Action: "update", ID: "t1"}
+
+	// 3 failures
+	for i := 0; i < 3; i++ {
+		n.HandleEvent(event, "web.1")
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	// Then a success
+	n.HandleEvent(event, "web.1")
+	time.Sleep(50 * time.Millisecond)
+
+	// Circuit should be reset
+	statuses := n.RuleStatuses()
+	if statuses[0].CircuitOpen {
+		t.Error("expected CircuitOpen=false after success")
+	}
+	if statuses[0].ConsecFailures != 0 {
+		t.Errorf("expected ConsecFailures=0 after success, got %d", statuses[0].ConsecFailures)
+	}
+}
+
 func TestNotifier_RuleStatuses(t *testing.T) {
 	rules := []Rule{
 		{ID: "r1", Name: "rule one", Enabled: true, Match: Match{Type: "task"}, Webhook: "http://example.com"},

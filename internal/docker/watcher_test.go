@@ -26,13 +26,7 @@ type mockClient struct {
 	networks []network.Summary
 	volumes  []volume.Volume
 
-	inspectNodeFn    func(ctx context.Context, id string) (swarm.Node, error)
-	inspectServiceFn func(ctx context.Context, id string) (swarm.Service, error)
-	inspectTaskFn    func(ctx context.Context, id string) (swarm.Task, error)
-	inspectConfigFn  func(ctx context.Context, id string) (swarm.Config, error)
-	inspectSecretFn  func(ctx context.Context, id string) (swarm.Secret, error)
-	inspectNetworkFn func(ctx context.Context, id string) (network.Summary, error)
-	inspectVolumeFn  func(ctx context.Context, name string) (volume.Volume, error)
+	inspectFn func(ctx context.Context, resourceType events.Type, id string) (any, error)
 
 	eventsCh chan events.Message
 	errCh    chan error
@@ -48,101 +42,61 @@ func newMockClient() *mockClient {
 	}
 }
 
-func (m *mockClient) ListNodes(ctx context.Context) ([]swarm.Node, error) {
-	if err := m.listErrors["nodes"]; err != nil {
-		return nil, err
+func (m *mockClient) FullSync(ctx context.Context) cache.FullSyncData {
+	var data cache.FullSyncData
+	if m.listErrors["nodes"] == nil {
+		data.Nodes, data.HasNodes = m.nodes, true
 	}
-	return m.nodes, nil
-}
-func (m *mockClient) ListServices(ctx context.Context) ([]swarm.Service, error) {
-	if err := m.listErrors["services"]; err != nil {
-		return nil, err
+	if m.listErrors["services"] == nil {
+		data.Services, data.HasServices = m.services, true
 	}
-	return m.services, nil
-}
-func (m *mockClient) ListTasks(ctx context.Context) ([]swarm.Task, error) {
-	if err := m.listErrors["tasks"]; err != nil {
-		return nil, err
+	if m.listErrors["tasks"] == nil {
+		data.Tasks, data.HasTasks = m.tasks, true
 	}
-	return m.tasks, nil
-}
-func (m *mockClient) ListConfigs(ctx context.Context) ([]swarm.Config, error) {
-	if err := m.listErrors["configs"]; err != nil {
-		return nil, err
+	if m.listErrors["configs"] == nil {
+		data.Configs, data.HasConfigs = m.configs, true
 	}
-	return m.configs, nil
-}
-func (m *mockClient) ListSecrets(ctx context.Context) ([]swarm.Secret, error) {
-	if err := m.listErrors["secrets"]; err != nil {
-		return nil, err
+	if m.listErrors["secrets"] == nil {
+		data.Secrets, data.HasSecrets = m.secrets, true
 	}
-	return m.secrets, nil
-}
-func (m *mockClient) ListNetworks(ctx context.Context) ([]network.Summary, error) {
-	if err := m.listErrors["networks"]; err != nil {
-		return nil, err
+	if m.listErrors["networks"] == nil {
+		data.Networks, data.HasNetworks = m.networks, true
 	}
-	return m.networks, nil
-}
-func (m *mockClient) ListVolumes(ctx context.Context) ([]volume.Volume, error) {
-	if err := m.listErrors["volumes"]; err != nil {
-		return nil, err
+	if m.listErrors["volumes"] == nil {
+		data.Volumes, data.HasVolumes = m.volumes, true
 	}
-	return m.volumes, nil
+	return data
 }
 
-func (m *mockClient) InspectNode(ctx context.Context, id string) (swarm.Node, error) {
-	if m.inspectNodeFn != nil {
-		return m.inspectNodeFn(ctx, id)
+func (m *mockClient) Inspect(ctx context.Context, resourceType events.Type, id string) (any, error) {
+	if m.inspectFn != nil {
+		return m.inspectFn(ctx, resourceType, id)
 	}
-	return swarm.Node{ID: id}, nil
-}
-func (m *mockClient) InspectService(ctx context.Context, id string) (swarm.Service, error) {
-	if m.inspectServiceFn != nil {
-		return m.inspectServiceFn(ctx, id)
+	switch resourceType {
+	case events.NodeEventType:
+		return swarm.Node{ID: id}, nil
+	case events.ServiceEventType:
+		return swarm.Service{ID: id}, nil
+	case events.ConfigEventType:
+		return swarm.Config{ID: id}, nil
+	case events.SecretEventType:
+		return swarm.Secret{ID: id}, nil
+	case events.NetworkEventType:
+		return network.Summary{ID: id}, nil
+	case events.VolumeEventType:
+		return volume.Volume{Name: id}, nil
+	case "task":
+		return swarm.Task{ID: id}, nil
+	default:
+		return nil, fmt.Errorf("unknown type: %s", resourceType)
 	}
-	return swarm.Service{ID: id}, nil
-}
-func (m *mockClient) InspectTask(ctx context.Context, id string) (swarm.Task, error) {
-	if m.inspectTaskFn != nil {
-		return m.inspectTaskFn(ctx, id)
-	}
-	return swarm.Task{ID: id}, nil
-}
-func (m *mockClient) InspectConfig(ctx context.Context, id string) (swarm.Config, error) {
-	if m.inspectConfigFn != nil {
-		return m.inspectConfigFn(ctx, id)
-	}
-	return swarm.Config{ID: id}, nil
-}
-func (m *mockClient) InspectSecret(ctx context.Context, id string) (swarm.Secret, error) {
-	if m.inspectSecretFn != nil {
-		return m.inspectSecretFn(ctx, id)
-	}
-	return swarm.Secret{ID: id}, nil
-}
-func (m *mockClient) InspectNetwork(ctx context.Context, id string) (network.Summary, error) {
-	if m.inspectNetworkFn != nil {
-		return m.inspectNetworkFn(ctx, id)
-	}
-	return network.Summary{ID: id}, nil
-}
-func (m *mockClient) InspectVolume(ctx context.Context, name string) (volume.Volume, error) {
-	if m.inspectVolumeFn != nil {
-		return m.inspectVolumeFn(ctx, name)
-	}
-	return volume.Volume{Name: name}, nil
 }
 
 func (m *mockClient) Events(ctx context.Context) (<-chan events.Message, <-chan error) {
 	return m.eventsCh, m.errCh
 }
 
-func (m *mockClient) ServiceLogs(_ context.Context, _ string, _ string, _ bool, _, _ string) (io.ReadCloser, error) {
-	return io.NopCloser(strings.NewReader("")), nil
-}
-
-func (m *mockClient) TaskLogs(_ context.Context, _ string, _ string, _ bool, _, _ string) (io.ReadCloser, error) {
+func (m *mockClient) Logs(_ context.Context, _ LogKind, _ string, _ string, _ bool, _, _ string) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader("")), nil
 }
 
@@ -152,7 +106,7 @@ func (m *mockClient) Close() error { return nil }
 
 func TestHandleEvent_NodeUpdate(t *testing.T) {
 	mc := newMockClient()
-	mc.inspectNodeFn = func(_ context.Context, id string) (swarm.Node, error) {
+	mc.inspectFn = func(_ context.Context, _ events.Type, id string) (any, error) {
 		n := swarm.Node{ID: id}
 		n.Description.Hostname = "test-host"
 		return n, nil
@@ -193,7 +147,7 @@ func TestHandleEvent_NodeRemove(t *testing.T) {
 
 func TestHandleEvent_ServiceUpdate(t *testing.T) {
 	mc := newMockClient()
-	mc.inspectServiceFn = func(_ context.Context, id string) (swarm.Service, error) {
+	mc.inspectFn = func(_ context.Context, _ events.Type, id string) (any, error) {
 		svc := swarm.Service{ID: id}
 		svc.Spec.Name = "web"
 		return svc, nil
@@ -347,8 +301,8 @@ func TestHandleEvent_NetworkDestroy(t *testing.T) {
 
 func TestHandleEvent_VolumeUpdate(t *testing.T) {
 	mc := newMockClient()
-	mc.inspectVolumeFn = func(_ context.Context, name string) (volume.Volume, error) {
-		return volume.Volume{Name: name, Driver: "local"}, nil
+	mc.inspectFn = func(_ context.Context, _ events.Type, id string) (any, error) {
+		return volume.Volume{Name: id, Driver: "local"}, nil
 	}
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")
@@ -386,7 +340,7 @@ func TestHandleEvent_VolumeDestroy(t *testing.T) {
 
 func TestHandleEvent_ContainerToTask(t *testing.T) {
 	mc := newMockClient()
-	mc.inspectTaskFn = func(_ context.Context, id string) (swarm.Task, error) {
+	mc.inspectFn = func(_ context.Context, _ events.Type, id string) (any, error) {
 		return swarm.Task{ID: id, ServiceID: "svc1"}, nil
 	}
 	c := cache.New(nil)
@@ -415,7 +369,7 @@ func TestHandleEvent_ContainerToTask(t *testing.T) {
 func TestHandleEvent_ContainerWithoutTaskID(t *testing.T) {
 	mc := newMockClient()
 	called := false
-	mc.inspectTaskFn = func(_ context.Context, _ string) (swarm.Task, error) {
+	mc.inspectFn = func(_ context.Context, _ events.Type, _ string) (any, error) {
 		called = true
 		return swarm.Task{}, nil
 	}
@@ -434,8 +388,8 @@ func TestHandleEvent_ContainerWithoutTaskID(t *testing.T) {
 
 func TestHandleEvent_InspectError(t *testing.T) {
 	mc := newMockClient()
-	mc.inspectNodeFn = func(_ context.Context, _ string) (swarm.Node, error) {
-		return swarm.Node{}, fmt.Errorf("connection refused")
+	mc.inspectFn = func(_ context.Context, _ events.Type, _ string) (any, error) {
+		return nil, fmt.Errorf("connection refused")
 	}
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")
@@ -505,9 +459,6 @@ func TestFullSync_PartialFailure(t *testing.T) {
 
 func TestWatchEvents_ProcessesMessages(t *testing.T) {
 	mc := newMockClient()
-	mc.inspectNodeFn = func(_ context.Context, id string) (swarm.Node, error) {
-		return swarm.Node{ID: id}, nil
-	}
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")
 
@@ -593,9 +544,6 @@ func TestRun_ReconnectsAfterEventStreamError(t *testing.T) {
 
 	var syncCount int
 	origNodes := mc.nodes
-	mc.inspectNodeFn = func(_ context.Context, id string) (swarm.Node, error) {
-		return swarm.Node{ID: id}, nil
-	}
 
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")

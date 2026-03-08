@@ -225,6 +225,8 @@ export default function LogViewer({ serviceId, taskId }: Props) {
     setFollowing(atBottom);
   }, []);
 
+  const showAttrs = !isTask && lines.some((l) => l.attrs?.taskId);
+
   const filtered = useMemo(() => {
     let result = lines;
     if (streamFilter !== "all") {
@@ -463,6 +465,14 @@ export default function LogViewer({ serviceId, taskId }: Props) {
                     >
                       {formatTime(line.timestamp)}
                     </td>
+                    {showAttrs && (
+                      <td
+                        className="px-2 py-px text-gray-600 whitespace-nowrap align-top font-mono"
+                        title={line.attrs?.taskId}
+                      >
+                        {line.attrs?.taskId?.slice(0, 8)}
+                      </td>
+                    )}
                     <td
                       className={`px-2 py-px text-gray-200 ${wrapLines ? "whitespace-pre-wrap break-all" : "whitespace-pre"}`}
                     >

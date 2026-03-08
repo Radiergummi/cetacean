@@ -2,7 +2,10 @@ package docker
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"log/slog"
+	"sync"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
@@ -11,6 +14,16 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
+
+	"cetacean/internal/cache"
+)
+
+// LogKind selects between service and task logs.
+type LogKind int
+
+const (
+	ServiceLog LogKind = iota
+	TaskLog
 )
 
 type Client struct {
@@ -118,32 +131,150 @@ func (c *Client) InspectVolume(ctx context.Context, name string) (volume.Volume,
 	return c.docker.VolumeInspect(ctx, name)
 }
 
-func (c *Client) ServiceLogs(ctx context.Context, serviceID string, tail string, follow bool, since, until string) (io.ReadCloser, error) {
-	if tail == "" {
-		tail = "200"
+// FullSync fetches all swarm resources in parallel. Individual resource type
+// failures are logged and their Has* flag stays false so the cache preserves
+// existing data for that type.
+func (c *Client) FullSync(ctx context.Context) cache.FullSyncData {
+	type result struct {
+		name string
+		err  error
 	}
-	return c.docker.ServiceLogs(ctx, serviceID, container.LogsOptions{
-		ShowStdout: true,
-		ShowStderr: true,
-		Tail:       tail,
-		Timestamps: true,
-		Follow:     follow,
-		Since:      since,
-		Until:      until,
+
+	var data cache.FullSyncData
+	var mu sync.Mutex
+	ch := make(chan result, 7)
+
+	fetch := func(name string, fn func() error) {
+		go func() {
+			ch <- result{name, fn()}
+		}()
+	}
+
+	fetch("nodes", func() error {
+		nodes, err := c.ListNodes(ctx)
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		data.Nodes, data.HasNodes = nodes, true
+		mu.Unlock()
+		return nil
 	})
+	fetch("services", func() error {
+		services, err := c.ListServices(ctx)
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		data.Services, data.HasServices = services, true
+		mu.Unlock()
+		return nil
+	})
+	fetch("tasks", func() error {
+		tasks, err := c.ListTasks(ctx)
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		data.Tasks, data.HasTasks = tasks, true
+		mu.Unlock()
+		return nil
+	})
+	fetch("configs", func() error {
+		configs, err := c.ListConfigs(ctx)
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		data.Configs, data.HasConfigs = configs, true
+		mu.Unlock()
+		return nil
+	})
+	fetch("secrets", func() error {
+		secrets, err := c.ListSecrets(ctx)
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		data.Secrets, data.HasSecrets = secrets, true
+		mu.Unlock()
+		return nil
+	})
+	fetch("networks", func() error {
+		networks, err := c.ListNetworks(ctx)
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		data.Networks, data.HasNetworks = networks, true
+		mu.Unlock()
+		return nil
+	})
+	fetch("volumes", func() error {
+		volumes, err := c.ListVolumes(ctx)
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		data.Volumes, data.HasVolumes = volumes, true
+		mu.Unlock()
+		return nil
+	})
+
+	for range 7 {
+		r := <-ch
+		if r.err != nil {
+			slog.Warn("full sync resource failed", "resource", r.name, "error", r.err)
+		}
+	}
+
+	return data
 }
 
-func (c *Client) TaskLogs(ctx context.Context, taskID string, tail string, follow bool, since, until string) (io.ReadCloser, error) {
+// Inspect fetches a single resource by its event type and ID. Returns the
+// typed resource as an any. The caller type-switches to apply it to the store.
+func (c *Client) Inspect(ctx context.Context, resourceType events.Type, id string) (any, error) {
+	switch resourceType {
+	case events.NodeEventType:
+		return c.InspectNode(ctx, id)
+	case events.ServiceEventType:
+		return c.InspectService(ctx, id)
+	case events.ConfigEventType:
+		return c.InspectConfig(ctx, id)
+	case events.SecretEventType:
+		return c.InspectSecret(ctx, id)
+	case events.NetworkEventType:
+		return c.InspectNetwork(ctx, id)
+	case events.VolumeEventType:
+		return c.InspectVolume(ctx, id)
+	case "task":
+		return c.InspectTask(ctx, id)
+	default:
+		return nil, fmt.Errorf("unknown resource type: %s", resourceType)
+	}
+}
+
+// Logs fetches multiplexed logs for a service or task.
+func (c *Client) Logs(ctx context.Context, kind LogKind, id string, tail string, follow bool, since, until string) (io.ReadCloser, error) {
 	if tail == "" {
 		tail = "200"
 	}
-	return c.docker.TaskLogs(ctx, taskID, container.LogsOptions{
+	opts := container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Tail:       tail,
 		Timestamps: true,
+		Details:    true,
 		Follow:     follow,
 		Since:      since,
 		Until:      until,
-	})
+	}
+	switch kind {
+	case ServiceLog:
+		return c.docker.ServiceLogs(ctx, id, opts)
+	case TaskLog:
+		return c.docker.TaskLogs(ctx, id, opts)
+	default:
+		return nil, fmt.Errorf("unknown log kind: %d", kind)
+	}
 }

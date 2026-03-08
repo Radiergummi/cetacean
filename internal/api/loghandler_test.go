@@ -14,6 +14,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"cetacean/internal/cache"
+	"cetacean/internal/docker"
 )
 
 // mockLogStreamer returns pre-built Docker multiplex frames.
@@ -22,14 +23,7 @@ type mockLogStreamer struct {
 	err  error
 }
 
-func (m *mockLogStreamer) ServiceLogs(_ context.Context, _ string, _ string, _ bool, _, _ string) (io.ReadCloser, error) {
-	if m.err != nil {
-		return nil, m.err
-	}
-	return io.NopCloser(bytes.NewReader(m.data)), nil
-}
-
-func (m *mockLogStreamer) TaskLogs(_ context.Context, _ string, _ string, _ bool, _, _ string) (io.ReadCloser, error) {
+func (m *mockLogStreamer) Logs(_ context.Context, _ docker.LogKind, _ string, _ string, _ bool, _, _ string) (io.ReadCloser, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -363,14 +357,7 @@ type capturingLogStreamer struct {
 	onCall func(since string)
 }
 
-func (m *capturingLogStreamer) ServiceLogs(_ context.Context, _ string, _ string, _ bool, since, _ string) (io.ReadCloser, error) {
-	if m.onCall != nil {
-		m.onCall(since)
-	}
-	return io.NopCloser(bytes.NewReader(m.data)), nil
-}
-
-func (m *capturingLogStreamer) TaskLogs(_ context.Context, _ string, _ string, _ bool, since, _ string) (io.ReadCloser, error) {
+func (m *capturingLogStreamer) Logs(_ context.Context, _ docker.LogKind, _ string, _ string, _ bool, since, _ string) (io.ReadCloser, error) {
 	if m.onCall != nil {
 		m.onCall(since)
 	}

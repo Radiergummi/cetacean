@@ -41,7 +41,7 @@ func main() {
 	slog.SetDefault(slog.New(logHandler))
 
 	// SSE broadcaster
-	broadcaster := api.NewBroadcaster()
+	broadcaster := api.NewBroadcaster(cfg.SSEBatchInterval)
 	defer broadcaster.Close()
 
 	// Notification webhooks (optional)

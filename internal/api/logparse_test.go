@@ -103,6 +103,29 @@ func TestParseDockerLogs_NoTimestamp(t *testing.T) {
 	}
 }
 
+func TestParseDockerLogs_WithDetails(t *testing.T) {
+	data := buildFrame(1, "2024-01-01T00:00:00.000000000Z com.docker.swarm.node.id=n1,com.docker.swarm.service.id=s1,com.docker.swarm.task.id=t1 hello\n")
+	lines, err := ParseDockerLogs(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) != 1 {
+		t.Fatalf("got %d lines, want 1", len(lines))
+	}
+	if lines[0].Message != "hello" {
+		t.Errorf("message = %q, want hello", lines[0].Message)
+	}
+	if lines[0].Attrs["taskId"] != "t1" {
+		t.Errorf("taskId = %q, want t1", lines[0].Attrs["taskId"])
+	}
+	if lines[0].Attrs["serviceId"] != "s1" {
+		t.Errorf("serviceId = %q, want s1", lines[0].Attrs["serviceId"])
+	}
+	if lines[0].Attrs["nodeId"] != "n1" {
+		t.Errorf("nodeId = %q, want n1", lines[0].Attrs["nodeId"])
+	}
+}
+
 func TestParseDockerLogs_Empty(t *testing.T) {
 	lines, err := ParseDockerLogs(bytes.NewReader(nil))
 	if err != nil {

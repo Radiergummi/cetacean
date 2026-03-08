@@ -159,10 +159,56 @@ func TestNewSPAHandler_FallbackToIndex(t *testing.T) {
 	}
 }
 
+func TestRequestID_Generated(t *testing.T) {
+	handler := requestID(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := RequestIDFrom(r.Context())
+		if id == "" {
+			t.Error("expected request ID in context")
+		}
+		w.Write([]byte(id))
+	}))
+
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	got := w.Header().Get("X-Request-ID")
+	if got == "" {
+		t.Fatal("expected X-Request-ID response header")
+	}
+	if len(got) != 16 { // 8 bytes = 16 hex chars
+		t.Errorf("request ID length=%d, want 16", len(got))
+	}
+}
+
+func TestRequestID_Forwarded(t *testing.T) {
+	handler := requestID(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(RequestIDFrom(r.Context())))
+	}))
+
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	req.Header.Set("X-Request-ID", "from-proxy-123")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if got := w.Header().Get("X-Request-ID"); got != "from-proxy-123" {
+		t.Errorf("X-Request-ID=%q, want from-proxy-123", got)
+	}
+	if got := w.Body.String(); got != "from-proxy-123" {
+		t.Errorf("context ID=%q, want from-proxy-123", got)
+	}
+}
+
+func TestRequestIDFrom_Empty(t *testing.T) {
+	if got := RequestIDFrom(t.Context()); got != "" {
+		t.Errorf("RequestIDFrom on plain context=%q, want empty", got)
+	}
+}
+
 func TestNewRouter_Smoke(t *testing.T) {
 	c := cache.New(nil)
 	h := NewHandlers(c, nil, closedReady(), nil)
-	b := NewBroadcaster()
+	b := NewBroadcaster(0)
 	defer b.Close()
 	prom := NewPrometheusProxy("http://localhost:9090")
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}
@@ -184,5 +230,9 @@ func TestNewRouter_Smoke(t *testing.T) {
 	// Verify security headers from middleware chain
 	if got := w.Header().Get("X-Content-Type-Options"); got != "nosniff" {
 		t.Errorf("X-Content-Type-Options=%q, want nosniff", got)
+	}
+	// Verify request ID is set
+	if got := w.Header().Get("X-Request-ID"); got == "" {
+		t.Error("expected X-Request-ID header from middleware chain")
 	}
 }

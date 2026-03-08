@@ -191,7 +191,7 @@ func BenchmarkHandleGetStack(b *testing.B) {
 func BenchmarkBroadcast(b *testing.B) {
 	for _, nClients := range []int{10, 100} {
 		b.Run(fmt.Sprintf("clients=%d", nClients), func(b *testing.B) {
-			br := NewBroadcaster()
+			br := NewBroadcaster(0)
 			defer br.Close()
 
 			// Register clients with buffered channels

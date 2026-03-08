@@ -69,6 +69,8 @@ describe("ClusterOverview", () => {
       tasksByState: { running: 39, failed: 2 },
       nodesReady: 3,
       nodesDown: 0,
+      totalCPU: 8,
+      totalMemory: 17179869184,
     });
 
     render(<ClusterOverview />, { wrapper });

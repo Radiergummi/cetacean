@@ -27,11 +27,23 @@ type EventInfo struct {
 }
 
 type RuleStatus struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Enabled   bool      `json:"enabled"`
-	LastFired time.Time `json:"lastFired,omitempty"`
-	FireCount int       `json:"fireCount"`
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	Enabled        bool      `json:"enabled"`
+	LastFired      time.Time `json:"lastFired,omitempty"`
+	FireCount      int       `json:"fireCount"`
+	CircuitOpen    bool      `json:"circuitOpen"`
+	ConsecFailures int       `json:"consecFailures"`
+}
+
+const (
+	circuitThreshold = 5                // consecutive failures before opening
+	circuitTimeout   = 30 * time.Second // how long the circuit stays open
+)
+
+type circuitState struct {
+	failures int
+	openedAt time.Time
 }
 
 type Notifier struct {
@@ -39,6 +51,7 @@ type Notifier struct {
 	mu         sync.RWMutex
 	lastFire   map[string]time.Time
 	fireCounts map[string]int
+	circuits   map[string]*circuitState
 	client     *http.Client
 }
 
@@ -47,6 +60,7 @@ func New(rules []Rule) *Notifier {
 		rules:      rules,
 		lastFire:   make(map[string]time.Time),
 		fireCounts: make(map[string]int),
+		circuits:   make(map[string]*circuitState),
 		client:     &http.Client{Timeout: 10 * time.Second},
 	}
 }
@@ -54,11 +68,43 @@ func New(rules []Rule) *Notifier {
 func (n *Notifier) HandleEvent(e cache.Event, resourceName string) {
 	for i := range n.rules {
 		r := &n.rules[i]
-		if r.matches(e, resourceName) && n.checkCooldown(r) {
+		if r.matches(e, resourceName) && n.checkCooldown(r) && n.circuitAllows(r.ID) {
 			n.recordFire(r.ID)
 			go n.fire(r, e, resourceName)
 		}
 	}
+}
+
+// circuitAllows returns true if the circuit is closed or half-open (ready to retry).
+func (n *Notifier) circuitAllows(ruleID string) bool {
+	n.mu.RLock()
+	cs, ok := n.circuits[ruleID]
+	n.mu.RUnlock()
+	if !ok || cs.failures < circuitThreshold {
+		return true
+	}
+	// Circuit is open — allow a retry after the timeout (half-open)
+	return time.Since(cs.openedAt) >= circuitTimeout
+}
+
+func (n *Notifier) recordSuccess(ruleID string) {
+	n.mu.Lock()
+	delete(n.circuits, ruleID)
+	n.mu.Unlock()
+}
+
+func (n *Notifier) recordFailure(ruleID string) {
+	n.mu.Lock()
+	cs, ok := n.circuits[ruleID]
+	if !ok {
+		cs = &circuitState{}
+		n.circuits[ruleID] = cs
+	}
+	cs.failures++
+	if cs.failures >= circuitThreshold {
+		cs.openedAt = time.Now()
+	}
+	n.mu.Unlock()
 }
 
 func (n *Notifier) checkCooldown(rule *Rule) bool {
@@ -102,14 +148,18 @@ func (n *Notifier) fire(rule *Rule, e cache.Event, resourceName string) {
 
 	resp, err := n.client.Post(rule.Webhook, "application/json", bytes.NewReader(body))
 	if err != nil {
+		n.recordFailure(rule.ID)
 		slog.Error("notify: webhook request", "rule", rule.ID, "url", rule.Webhook, "error", err)
 		return
 	}
 	resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
+		n.recordFailure(rule.ID)
 		slog.Error("notify: webhook response", "rule", rule.ID, "status", resp.StatusCode)
+		return
 	}
+	n.recordSuccess(rule.ID)
 }
 
 func (n *Notifier) RuleStatuses() []RuleStatus {
@@ -118,13 +168,18 @@ func (n *Notifier) RuleStatuses() []RuleStatus {
 
 	statuses := make([]RuleStatus, len(n.rules))
 	for i, r := range n.rules {
-		statuses[i] = RuleStatus{
+		s := RuleStatus{
 			ID:        r.ID,
 			Name:      r.Name,
 			Enabled:   r.Enabled,
 			LastFired: n.lastFire[r.ID],
 			FireCount: n.fireCounts[r.ID],
 		}
+		if cs, ok := n.circuits[r.ID]; ok {
+			s.ConsecFailures = cs.failures
+			s.CircuitOpen = cs.failures >= circuitThreshold && time.Since(cs.openedAt) < circuitTimeout
+		}
+		statuses[i] = s
 	}
 	return statuses
 }

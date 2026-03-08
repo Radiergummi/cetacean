@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -14,8 +15,9 @@ type Config struct {
 	LogLevel      string // "debug", "info", "warn", "error"
 	LogFormat     string // "json", "text"
 	DataDir       string // CETACEAN_DATA_DIR, default "./data"
-	Snapshot          bool   // CETACEAN_SNAPSHOT, default true
-	NotificationsFile string // CETACEAN_NOTIFICATIONS_FILE, optional
+	Snapshot          bool          // CETACEAN_SNAPSHOT, default true
+	NotificationsFile string        // CETACEAN_NOTIFICATIONS_FILE, optional
+	SSEBatchInterval  time.Duration // CETACEAN_SSE_BATCH_INTERVAL, default 100ms
 }
 
 func Load() (*Config, error) {
@@ -28,6 +30,7 @@ func Load() (*Config, error) {
 		DataDir:       envOr("CETACEAN_DATA_DIR", "./data"),
 		Snapshot:          envBool("CETACEAN_SNAPSHOT", true),
 		NotificationsFile: os.Getenv("CETACEAN_NOTIFICATIONS_FILE"),
+		SSEBatchInterval:  envDuration("CETACEAN_SSE_BATCH_INTERVAL", 100*time.Millisecond),
 	}
 
 	if cfg.PrometheusURL == "" {
@@ -53,6 +56,16 @@ func (c *Config) SlogLevel() slog.Level {
 func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return fallback
+}
+
+func envDuration(key string, fallback time.Duration) time.Duration {
+	if v := os.Getenv(key); v != "" {
+		d, err := time.ParseDuration(v)
+		if err == nil && d > 0 {
+			return d
+		}
 	}
 	return fallback
 }

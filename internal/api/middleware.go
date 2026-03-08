@@ -1,12 +1,41 @@
 package api
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
 	"strings"
 	"time"
 )
+
+type ctxKey int
+
+const reqIDKey ctxKey = 0
+
+// RequestIDFrom extracts the request ID from a context.
+func RequestIDFrom(ctx context.Context) string {
+	if id, ok := ctx.Value(reqIDKey).(string); ok {
+		return id
+	}
+	return ""
+}
+
+func requestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := r.Header.Get("X-Request-ID")
+		if id == "" {
+			var buf [8]byte
+			_, _ = rand.Read(buf[:])
+			id = hex.EncodeToString(buf[:])
+		}
+		ctx := context.WithValue(r.Context(), reqIDKey, id)
+		w.Header().Set("X-Request-ID", id)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
 
 type statusWriter struct {
 	http.ResponseWriter
@@ -58,6 +87,7 @@ func requestLogger(next http.Handler) http.Handler {
 		}
 
 		slog.Log(r.Context(), level, "request",
+			"req_id", RequestIDFrom(r.Context()),
 			"method", r.Method,
 			"path", r.URL.Path,
 			"status", sw.status,
@@ -72,6 +102,7 @@ func recovery(next http.Handler) http.Handler {
 		defer func() {
 			if err := recover(); err != nil {
 				slog.Error("panic recovered",
+					"req_id", RequestIDFrom(r.Context()),
 					"error", err,
 					"path", r.URL.Path,
 					"stack", string(debug.Stack()),

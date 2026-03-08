@@ -58,6 +58,15 @@ function formatValue(v: number, unit?: string): string {
   return v.toFixed(2);
 }
 
+function seriesLabel(metric: Record<string, string> | undefined, fallback?: string): string {
+  if (!metric) return fallback ?? "value";
+  const { __name__, ...labels } = metric;
+  const labelStr = Object.values(labels).filter(Boolean).join(", ");
+  if (labelStr) return labelStr;
+  if (__name__) return __name__;
+  return fallback ?? "value";
+}
+
 export default function TimeSeriesChart({
   title,
   query,
@@ -214,7 +223,7 @@ export default function TimeSeriesChart({
           series: [
             {},
             ...series.map((_s: any, i: number) => ({
-              label: _s.metric?.__name__ || `series ${i + 1}`,
+              label: seriesLabel(_s.metric, series.length === 1 ? title : undefined),
               stroke: CHART_COLORS[i % CHART_COLORS.length],
               width: 1.5,
               fill: CHART_COLORS[i % CHART_COLORS.length] + "1a",

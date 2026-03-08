@@ -27,6 +27,7 @@ export interface LogLine {
   timestamp: string;
   message: string;
   stream: "stdout" | "stderr";
+  attrs?: Record<string, string>;
 }
 
 export interface LogResponse {

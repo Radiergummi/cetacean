@@ -22,18 +22,23 @@ type sseClient struct {
 const maxSSEClients = 256
 
 type Broadcaster struct {
-	mu      sync.RWMutex
-	clients map[*sseClient]struct{}
-	closed  bool
-	inbox   chan cache.Event
-	stop    chan struct{}
+	mu            sync.RWMutex
+	clients       map[*sseClient]struct{}
+	closed        bool
+	inbox         chan cache.Event
+	stop          chan struct{}
+	batchInterval time.Duration
 }
 
-func NewBroadcaster() *Broadcaster {
+func NewBroadcaster(batchInterval time.Duration) *Broadcaster {
+	if batchInterval <= 0 {
+		batchInterval = 100 * time.Millisecond
+	}
 	b := &Broadcaster{
-		clients: make(map[*sseClient]struct{}),
-		inbox:   make(chan cache.Event, 256),
-		stop:    make(chan struct{}),
+		clients:       make(map[*sseClient]struct{}),
+		inbox:         make(chan cache.Event, 256),
+		stop:          make(chan struct{}),
+		batchInterval: batchInterval,
 	}
 	go b.fanOut()
 	return b
@@ -130,7 +135,7 @@ func (b *Broadcaster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	flusher.Flush()
 
 	var eventID uint64
-	batchTicker := time.NewTicker(100 * time.Millisecond)
+	batchTicker := time.NewTicker(b.batchInterval)
 	defer batchTicker.Stop()
 	var batch []cache.Event
 

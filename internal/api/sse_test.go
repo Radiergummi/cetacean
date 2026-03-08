@@ -12,7 +12,7 @@ import (
 )
 
 func TestSSE_BroadcastsEvents(t *testing.T) {
-	b := NewBroadcaster()
+	b := NewBroadcaster(0)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/api/events", nil)
@@ -42,7 +42,7 @@ func TestSSE_BroadcastsEvents(t *testing.T) {
 }
 
 func TestSSE_FiltersByType(t *testing.T) {
-	b := NewBroadcaster()
+	b := NewBroadcaster(0)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/api/events?types=service", nil)
@@ -73,7 +73,7 @@ func TestSSE_FiltersByType(t *testing.T) {
 }
 
 func TestSSE_BatchesRapidEvents(t *testing.T) {
-	b := NewBroadcaster()
+	b := NewBroadcaster(0)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/api/events", nil)

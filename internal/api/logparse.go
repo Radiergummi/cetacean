@@ -8,9 +8,10 @@ import (
 
 // LogLine represents a single parsed Docker log line.
 type LogLine struct {
-	Timestamp string `json:"timestamp"`
-	Message   string `json:"message"`
-	Stream    string `json:"stream"`
+	Timestamp string            `json:"timestamp"`
+	Message   string            `json:"message"`
+	Stream    string            `json:"stream"`
+	Attrs     map[string]string `json:"attrs,omitempty"`
 }
 
 // readDockerLogFrames reads Docker multiplexed log frames and calls emit for each parsed line.
@@ -63,19 +64,64 @@ func ParseDockerLogs(r io.Reader) ([]LogLine, error) {
 	return lines, err
 }
 
+// detailKeyMap maps Docker swarm label keys to short attribute names.
+var detailKeyMap = map[string]string{
+	"com.docker.swarm.node.id":    "nodeId",
+	"com.docker.swarm.service.id": "serviceId",
+	"com.docker.swarm.task.id":    "taskId",
+}
+
 func parseLine(line, stream string) LogLine {
-	// Docker timestamps: 2024-01-01T00:00:00.000000000Z <message>
+	// Docker log format with Timestamps+Details: "TIMESTAMP DETAILS MESSAGE"
+	// Extract timestamp first, then parse details from the remainder.
+	var timestamp, rest string
 	if len(line) > 31 && line[4] == '-' && line[10] == 'T' {
-		spaceIdx := strings.IndexByte(line, ' ')
-		if spaceIdx > 0 {
-			return LogLine{
-				Timestamp: line[:spaceIdx],
-				Message:   line[spaceIdx+1:],
-				Stream:    stream,
-			}
+		if spaceIdx := strings.IndexByte(line, ' '); spaceIdx > 0 {
+			timestamp = line[:spaceIdx]
+			rest = line[spaceIdx+1:]
 		}
 	}
-	return LogLine{Timestamp: "", Message: line, Stream: stream}
+	if rest == "" {
+		rest = line
+	}
+
+	attrs, msg := parseDetails(rest)
+	return LogLine{Timestamp: timestamp, Message: msg, Stream: stream, Attrs: attrs}
+}
+
+// parseDetails extracts the comma-separated key=value prefix that Docker
+// prepends when Details=true. Returns the attributes and the remaining line.
+func parseDetails(line string) (map[string]string, string) {
+	// Details are comma-separated key=value pairs before a space + timestamp.
+	// Quick check: details always start with "com.docker." in swarm mode.
+	if !strings.HasPrefix(line, "com.docker.") {
+		return nil, line
+	}
+
+	// Find the end of the details section: first space followed by a timestamp
+	// or message content.
+	spaceIdx := strings.IndexByte(line, ' ')
+	if spaceIdx < 0 {
+		return nil, line
+	}
+
+	attrs := make(map[string]string)
+	for _, pair := range strings.Split(line[:spaceIdx], ",") {
+		eq := strings.IndexByte(pair, '=')
+		if eq < 0 {
+			continue
+		}
+		key, val := pair[:eq], pair[eq+1:]
+		if short, ok := detailKeyMap[key]; ok {
+			attrs[short] = val
+		} else {
+			attrs[key] = val
+		}
+	}
+	if len(attrs) == 0 {
+		return nil, line
+	}
+	return attrs, line[spaceIdx+1:]
 }
 
 // StreamDockerLogs reads Docker multiplexed log frames and sends parsed lines to ch.

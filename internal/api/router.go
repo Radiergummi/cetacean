@@ -73,7 +73,7 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 	// SPA fallback (must be last)
 	mux.Handle("/", spa)
 
-	return recovery(securityHeaders(requestLogger(mux)))
+	return requestID(recovery(securityHeaders(requestLogger(mux))))
 }
 
 func securityHeaders(next http.Handler) http.Handler {

@@ -28,7 +28,7 @@ export default function ActivityFeed({ entries, loading }: ActivityFeedProps) {
 
   return (
     <div className="relative pl-5">
-      <div className="absolute left-[7px] top-1 bottom-1 w-px bg-border" />
+      <div className="absolute left-[11.5px] top-1 bottom-1 w-px bg-border" />
       {entries.map((entry) => (
         <div key={entry.id} className="relative flex items-center gap-3 py-1.5 min-h-8">
           <div
