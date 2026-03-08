@@ -1,0 +1,33 @@
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
+import ActivityFeed from "./ActivityFeed";
+import type { HistoryEntry } from "../api/types";
+
+describe("ActivityFeed", () => {
+  it("shows loading skeleton", () => {
+    const { container } = render(<ActivityFeed entries={[]} loading />);
+    expect(container.querySelectorAll(".bg-muted").length).toBeGreaterThan(0);
+  });
+
+  it("shows empty message when no entries", () => {
+    render(<ActivityFeed entries={[]} />);
+    expect(screen.getByText("No recent activity")).toBeInTheDocument();
+  });
+
+  it("renders entries", () => {
+    const entries: HistoryEntry[] = [
+      {
+        id: 1,
+        timestamp: new Date().toISOString(),
+        type: "service",
+        action: "update",
+        resourceId: "svc1",
+        name: "web-app",
+      },
+    ];
+    render(<ActivityFeed entries={entries} />);
+    expect(screen.getByText("web-app")).toBeInTheDocument();
+    expect(screen.getByText("updated")).toBeInTheDocument();
+    expect(screen.getByText("service")).toBeInTheDocument();
+  });
+});

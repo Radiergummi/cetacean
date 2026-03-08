@@ -29,8 +29,6 @@ export function useSwarmResource<T>(
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(load, []);
-
   useEffect(() => {
     fetchFnRef.current = fetchFn;
     load();
