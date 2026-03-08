@@ -50,6 +50,37 @@ func TestHandleNetworkTopology(t *testing.T) {
 	}
 }
 
+func TestHandleNetworkTopology_WithReplicatedService(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{ID: "net1", Name: "app_net", Driver: "overlay"})
+	replicas := uint64(3)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "web"},
+			Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: &replicas}},
+		},
+		Endpoint: swarm.Endpoint{
+			VirtualIPs: []swarm.EndpointVirtualIP{{NetworkID: "net1"}},
+		},
+	})
+	h := NewHandlers(c, nil, closedReady(), nil)
+	req := httptest.NewRequest("GET", "/api/topology/networks", nil)
+	w := httptest.NewRecorder()
+	h.HandleNetworkTopology(w, req)
+
+	var resp NetworkTopology
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Nodes) != 1 {
+		t.Fatalf("nodes=%d, want 1", len(resp.Nodes))
+	}
+	if resp.Nodes[0].Replicas != 3 {
+		t.Errorf("replicas=%d, want 3", resp.Nodes[0].Replicas)
+	}
+}
+
 func TestHandlePlacementTopology(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{ID: "n1", Description: swarm.NodeDescription{Hostname: "worker-01"}, Spec: swarm.NodeSpec{Role: swarm.NodeRoleWorker}, Status: swarm.NodeStatus{State: swarm.NodeStateReady}})

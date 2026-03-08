@@ -63,3 +63,16 @@ func TestPrometheusProxy_BlocksForbiddenPath(t *testing.T) {
 		t.Fatalf("expected 403, got %d", w.Code)
 	}
 }
+
+func TestPrometheusProxy_UpstreamFailure(t *testing.T) {
+	// Use an invalid URL that will fail to connect
+	proxy := NewPrometheusProxy("http://127.0.0.1:1")
+
+	req := httptest.NewRequest("GET", "/api/metrics/query?query=up", nil)
+	w := httptest.NewRecorder()
+	proxy.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d", w.Code)
+	}
+}
