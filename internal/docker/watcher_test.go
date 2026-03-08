@@ -158,7 +158,7 @@ func TestHandleEvent_NodeUpdate(t *testing.T) {
 		return n, nil
 	}
 	c := cache.New(nil)
-	w := NewWatcher(mc, c)
+	w := NewWatcher(mc, c, "")
 
 	w.handleEvent(context.Background(), events.Message{
 		Type:  events.NodeEventType,
@@ -178,7 +178,7 @@ func TestHandleEvent_NodeRemove(t *testing.T) {
 	mc := newMockClient()
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{ID: "n1"})
-	w := NewWatcher(mc, c)
+	w := NewWatcher(mc, c, "")
 
 	w.handleEvent(context.Background(), events.Message{
 		Type:   events.NodeEventType,
@@ -199,7 +199,7 @@ func TestHandleEvent_ServiceUpdate(t *testing.T) {
 		return svc, nil
 	}
 	c := cache.New(nil)
-	w := NewWatcher(mc, c)
+	w := NewWatcher(mc, c, "")
 
 	w.handleEvent(context.Background(), events.Message{
 		Type:  events.ServiceEventType,
@@ -219,7 +219,7 @@ func TestHandleEvent_ServiceRemove(t *testing.T) {
 	mc := newMockClient()
 	c := cache.New(nil)
 	c.SetService(swarm.Service{ID: "s1"})
-	w := NewWatcher(mc, c)
+	w := NewWatcher(mc, c, "")
 
 	w.handleEvent(context.Background(), events.Message{
 		Type:   events.ServiceEventType,
@@ -235,7 +235,7 @@ func TestHandleEvent_ServiceRemove(t *testing.T) {
 func TestHandleEvent_ConfigUpdate(t *testing.T) {
 	mc := newMockClient()
 	c := cache.New(nil)
-	w := NewWatcher(mc, c)
+	w := NewWatcher(mc, c, "")
 
 	w.handleEvent(context.Background(), events.Message{
 		Type:  events.ConfigEventType,
@@ -251,7 +251,7 @@ func TestHandleEvent_ConfigRemove(t *testing.T) {
 	mc := newMockClient()
 	c := cache.New(nil)
 	c.SetConfig(swarm.Config{ID: "cfg1"})
-	w := NewWatcher(mc, c)
+	w := NewWatcher(mc, c, "")
 
 	w.handleEvent(context.Background(), events.Message{
 		Type:   events.ConfigEventType,
@@ -267,7 +267,7 @@ func TestHandleEvent_ConfigRemove(t *testing.T) {
 func TestHandleEvent_SecretUpdate(t *testing.T) {
 	mc := newMockClient()
 	c := cache.New(nil)
-	w := NewWatcher(mc, c)
+	w := NewWatcher(mc, c, "")
 
 	w.handleEvent(context.Background(), events.Message{
 		Type:  events.SecretEventType,
@@ -283,7 +283,7 @@ func TestHandleEvent_SecretRemove(t *testing.T) {
 	mc := newMockClient()
 	c := cache.New(nil)
 	c.SetSecret(swarm.Secret{ID: "sec1"})
-	w := NewWatcher(mc, c)
+	w := NewWatcher(mc, c, "")
 
 	w.handleEvent(context.Background(), events.Message{
 		Type:   events.SecretEventType,
@@ -299,7 +299,7 @@ func TestHandleEvent_SecretRemove(t *testing.T) {
 func TestHandleEvent_NetworkUpdate(t *testing.T) {
 	mc := newMockClient()
 	c := cache.New(nil)
-	w := NewWatcher(mc, c)
+	w := NewWatcher(mc, c, "")
 
 	w.handleEvent(context.Background(), events.Message{
 		Type:  events.NetworkEventType,
@@ -315,7 +315,7 @@ func TestHandleEvent_NetworkRemove(t *testing.T) {
 	mc := newMockClient()
 	c := cache.New(nil)
 	c.SetNetwork(network.Summary{ID: "net1"})
-	w := NewWatcher(mc, c)
+	w := NewWatcher(mc, c, "")
 
 	w.handleEvent(context.Background(), events.Message{
 		Type:   events.NetworkEventType,
@@ -332,7 +332,7 @@ func TestHandleEvent_NetworkDestroy(t *testing.T) {
 	mc := newMockClient()
 	c := cache.New(nil)
 	c.SetNetwork(network.Summary{ID: "net1"})
-	w := NewWatcher(mc, c)
+	w := NewWatcher(mc, c, "")
 
 	w.handleEvent(context.Background(), events.Message{
 		Type:   events.NetworkEventType,
@@ -351,7 +351,7 @@ func TestHandleEvent_VolumeUpdate(t *testing.T) {
 		return volume.Volume{Name: name, Driver: "local"}, nil
 	}
 	c := cache.New(nil)
-	w := NewWatcher(mc, c)
+	w := NewWatcher(mc, c, "")
 
 	w.handleEvent(context.Background(), events.Message{
 		Type:  events.VolumeEventType,
@@ -371,7 +371,7 @@ func TestHandleEvent_VolumeDestroy(t *testing.T) {
 	mc := newMockClient()
 	c := cache.New(nil)
 	c.SetVolume(volume.Volume{Name: "vol1"})
-	w := NewWatcher(mc, c)
+	w := NewWatcher(mc, c, "")
 
 	w.handleEvent(context.Background(), events.Message{
 		Type:   events.VolumeEventType,
@@ -390,7 +390,7 @@ func TestHandleEvent_ContainerToTask(t *testing.T) {
 		return swarm.Task{ID: id, ServiceID: "svc1"}, nil
 	}
 	c := cache.New(nil)
-	w := NewWatcher(mc, c)
+	w := NewWatcher(mc, c, "")
 
 	w.handleEvent(context.Background(), events.Message{
 		Type: events.ContainerEventType,
@@ -420,7 +420,7 @@ func TestHandleEvent_ContainerWithoutTaskID(t *testing.T) {
 		return swarm.Task{}, nil
 	}
 	c := cache.New(nil)
-	w := NewWatcher(mc, c)
+	w := NewWatcher(mc, c, "")
 
 	w.handleEvent(context.Background(), events.Message{
 		Type:  events.ContainerEventType,
@@ -438,7 +438,7 @@ func TestHandleEvent_InspectError(t *testing.T) {
 		return swarm.Node{}, fmt.Errorf("connection refused")
 	}
 	c := cache.New(nil)
-	w := NewWatcher(mc, c)
+	w := NewWatcher(mc, c, "")
 
 	// Should not panic, should not add to cache
 	w.handleEvent(context.Background(), events.Message{
@@ -462,7 +462,7 @@ func TestFullSync(t *testing.T) {
 	mc.volumes = []volume.Volume{{Name: "vol1"}}
 
 	c := cache.New(nil)
-	w := NewWatcher(mc, c)
+	w := NewWatcher(mc, c, "")
 
 	w.fullSync(context.Background())
 
@@ -486,7 +486,7 @@ func TestFullSync_PartialFailure(t *testing.T) {
 	mc.listErrors["configs"] = fmt.Errorf("timeout")
 
 	c := cache.New(nil)
-	w := NewWatcher(mc, c)
+	w := NewWatcher(mc, c, "")
 
 	w.fullSync(context.Background())
 
@@ -509,7 +509,7 @@ func TestWatchEvents_ProcessesMessages(t *testing.T) {
 		return swarm.Node{ID: id}, nil
 	}
 	c := cache.New(nil)
-	w := NewWatcher(mc, c)
+	w := NewWatcher(mc, c, "")
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -536,7 +536,7 @@ func TestWatchEvents_ProcessesMessages(t *testing.T) {
 func TestWatchEvents_StopsOnContextCancel(t *testing.T) {
 	mc := newMockClient()
 	c := cache.New(nil)
-	w := NewWatcher(mc, c)
+	w := NewWatcher(mc, c, "")
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -559,7 +559,7 @@ func TestWatchEvents_StopsOnContextCancel(t *testing.T) {
 func TestRun_SignalsReady(t *testing.T) {
 	mc := newMockClient()
 	c := cache.New(nil)
-	w := NewWatcher(mc, c)
+	w := NewWatcher(mc, c, "")
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -598,7 +598,7 @@ func TestRun_ReconnectsAfterEventStreamError(t *testing.T) {
 	}
 
 	c := cache.New(nil)
-	w := NewWatcher(mc, c)
+	w := NewWatcher(mc, c, "")
 
 	ctx, cancel := context.WithCancel(context.Background())
 

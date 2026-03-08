@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -55,7 +56,20 @@ func main() {
 	}
 	defer dockerClient.Close() //nolint:errcheck // best-effort shutdown close
 
-	watcher := docker.NewWatcher(dockerClient, stateCache)
+	snapshotPath := ""
+	if cfg.Snapshot {
+		snapshotPath = filepath.Join(cfg.DataDir, "snapshot.json")
+		if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
+			slog.Warn("could not create data dir", "error", err)
+		}
+		if err := stateCache.LoadFromDisk(snapshotPath); err != nil {
+			slog.Info("no snapshot loaded", "error", err)
+		} else {
+			slog.Info("loaded snapshot from disk", "age", stateCache.SnapshotAge())
+		}
+	}
+
+	watcher := docker.NewWatcher(dockerClient, stateCache, snapshotPath)
 
 	// Start watcher in background
 	ctx, cancel := context.WithCancel(context.Background())

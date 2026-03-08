@@ -2,6 +2,7 @@ package cache
 
 import (
 	"sync"
+	"time"
 
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
@@ -43,6 +44,7 @@ type ClusterSnapshot struct {
 	NodesDown    int            `json:"nodesDown"`
 	TotalCPU     int            `json:"totalCPU"`
 	TotalMemory  int64          `json:"totalMemory"`
+	LastSync     time.Time      `json:"lastSync"`
 }
 
 type OnChangeFunc func(Event)
@@ -59,6 +61,7 @@ type Cache struct {
 	networks       map[string]network.Summary
 	volumes        map[string]volume.Volume
 	stacks         map[string]Stack
+	lastSync       time.Time
 	onChange       OnChangeFunc
 	history        *History
 }
@@ -542,6 +545,7 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 		NodesDown:    nodesDown,
 		TotalCPU:     int(totalNanoCPUs / 1e9),
 		TotalMemory:  totalMemory,
+		LastSync:     c.lastSync,
 	}
 }
 
@@ -761,5 +765,6 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 
 	// Rebuild stacks from the current (possibly partially updated) maps.
 	c.rebuildStacks()
+	c.lastSync = time.Now()
 	c.mu.Unlock()
 }

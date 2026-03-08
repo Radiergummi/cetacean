@@ -13,6 +13,8 @@ type Config struct {
 	ListenAddr    string
 	LogLevel      string // "debug", "info", "warn", "error"
 	LogFormat     string // "json", "text"
+	DataDir       string // CETACEAN_DATA_DIR, default "./data"
+	Snapshot      bool   // CETACEAN_SNAPSHOT, default true
 }
 
 func Load() (*Config, error) {
@@ -22,6 +24,8 @@ func Load() (*Config, error) {
 		ListenAddr:    envOr("CETACEAN_LISTEN_ADDR", ":9000"),
 		LogLevel:      envOr("CETACEAN_LOG_LEVEL", "info"),
 		LogFormat:     envOr("CETACEAN_LOG_FORMAT", "json"),
+		DataDir:       envOr("CETACEAN_DATA_DIR", "./data"),
+		Snapshot:      envBool("CETACEAN_SNAPSHOT", true),
 	}
 
 	if cfg.PrometheusURL == "" {
@@ -49,4 +53,16 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func envBool(key string, fallback bool) bool {
+	v := os.Getenv(key)
+	switch strings.ToLower(v) {
+	case "true", "1":
+		return true
+	case "false", "0":
+		return false
+	default:
+		return fallback
+	}
 }

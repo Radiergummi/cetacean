@@ -60,20 +60,25 @@ type Store interface {
 
 	// Read snapshot for logging.
 	Snapshot() cache.ClusterSnapshot
+
+	// Disk snapshot.
+	WriteToDisk(path string) error
 }
 
 type Watcher struct {
-	client   DockerClient
-	store    Store
-	syncOnce sync.Once
-	ready    chan struct{}
+	client       DockerClient
+	store        Store
+	syncOnce     sync.Once
+	ready        chan struct{}
+	snapshotPath string
 }
 
-func NewWatcher(client DockerClient, store Store) *Watcher {
+func NewWatcher(client DockerClient, store Store, snapshotPath string) *Watcher {
 	return &Watcher{
-		client: client,
-		store:  store,
-		ready:  make(chan struct{}),
+		client:       client,
+		store:        store,
+		ready:        make(chan struct{}),
+		snapshotPath: snapshotPath,
 	}
 }
 
@@ -85,6 +90,7 @@ func (w *Watcher) Ready() <-chan struct{} {
 // Run starts the watcher. It blocks until the context is cancelled.
 func (w *Watcher) Run(ctx context.Context) {
 	w.fullSync(ctx)
+	w.writeSnapshot()
 	w.syncOnce.Do(func() { close(w.ready) })
 
 	// Periodic re-sync safety net
@@ -98,6 +104,7 @@ func (w *Watcher) Run(ctx context.Context) {
 			case <-ticker.C:
 				slog.Info("periodic full re-sync")
 				w.fullSync(ctx)
+				w.writeSnapshot()
 			}
 		}
 	}()
@@ -116,6 +123,16 @@ func (w *Watcher) Run(ctx context.Context) {
 		}
 		slog.Info("re-syncing after reconnect")
 		w.fullSync(ctx)
+		w.writeSnapshot()
+	}
+}
+
+func (w *Watcher) writeSnapshot() {
+	if w.snapshotPath == "" {
+		return
+	}
+	if err := w.store.WriteToDisk(w.snapshotPath); err != nil {
+		slog.Warn("snapshot write failed", "error", err)
 	}
 }
 
