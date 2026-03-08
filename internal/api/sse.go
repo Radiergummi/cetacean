@@ -2,9 +2,11 @@ package api
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	json "github.com/goccy/go-json"
 
@@ -23,25 +25,48 @@ type Broadcaster struct {
 	mu      sync.RWMutex
 	clients map[*sseClient]struct{}
 	closed  bool
+	inbox   chan cache.Event
+	stop    chan struct{}
 }
 
 func NewBroadcaster() *Broadcaster {
-	return &Broadcaster{
+	b := &Broadcaster{
 		clients: make(map[*sseClient]struct{}),
+		inbox:   make(chan cache.Event, 256),
+		stop:    make(chan struct{}),
+	}
+	go b.fanOut()
+	return b
+}
+
+// Broadcast enqueues an event for delivery to SSE clients.
+// Blocks if the internal buffer (256) is full.
+func (b *Broadcaster) Broadcast(e cache.Event) {
+	select {
+	case b.inbox <- e:
+	case <-b.stop:
 	}
 }
 
-func (b *Broadcaster) Broadcast(e cache.Event) {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-	for c := range b.clients {
-		if c.types != nil && !c.types[e.Type] {
-			continue
-		}
+// fanOut is the dedicated goroutine that delivers events to SSE clients.
+func (b *Broadcaster) fanOut() {
+	for {
 		select {
-		case c.events <- e:
-		default:
-			// Slow client, drop event
+		case e := <-b.inbox:
+			b.mu.RLock()
+			for c := range b.clients {
+				if c.types != nil && !c.types[e.Type] {
+					continue
+				}
+				select {
+				case c.events <- e:
+				default:
+					// Slow client, drop event
+				}
+			}
+			b.mu.RUnlock()
+		case <-b.stop:
+			return
 		}
 	}
 }
@@ -53,6 +78,7 @@ func (b *Broadcaster) Close() {
 		return
 	}
 	b.closed = true
+	close(b.stop)
 	for c := range b.clients {
 		close(c.done)
 	}
@@ -103,19 +129,48 @@ func (b *Broadcaster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	flusher.Flush()
 
+	var eventID uint64
+	batchTicker := time.NewTicker(100 * time.Millisecond)
+	defer batchTicker.Stop()
+	var batch []cache.Event
+
 	for {
 		select {
+		case e, ok := <-client.events:
+			if !ok {
+				if len(batch) > 0 {
+					writeBatch(w, flusher, batch, &eventID)
+				}
+				return
+			}
+			batch = append(batch, e)
+		case <-batchTicker.C:
+			if len(batch) > 0 {
+				writeBatch(w, flusher, batch, &eventID)
+				batch = batch[:0]
+			}
 		case <-r.Context().Done():
+			if len(batch) > 0 {
+				writeBatch(w, flusher, batch, &eventID)
+			}
 			return
 		case <-client.done:
-			return
-		case e := <-client.events:
-			data, err := json.Marshal(e)
-			if err != nil {
-				continue
+			if len(batch) > 0 {
+				writeBatch(w, flusher, batch, &eventID)
 			}
-			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", e.Type, data)
-			flusher.Flush()
+			return
 		}
 	}
+}
+
+func writeBatch(w io.Writer, flusher http.Flusher, events []cache.Event, eventID *uint64) {
+	*eventID++
+	if len(events) == 1 {
+		data, _ := json.Marshal(events[0])
+		fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", *eventID, events[0].Type, data)
+	} else {
+		data, _ := json.Marshal(events)
+		fmt.Fprintf(w, "id: %d\nevent: batch\ndata: %s\n\n", *eventID, data)
+	}
+	flusher.Flush()
 }

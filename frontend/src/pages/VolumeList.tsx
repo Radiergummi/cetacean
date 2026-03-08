@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useViewMode } from "../hooks/useViewMode";
 import { useSearchParam } from "../hooks/useSearchParam";
@@ -19,13 +20,17 @@ const columns: Column<Volume>[] = [
 ];
 
 export default function VolumeList() {
+  const [search, setSearch] = useSearchParam("q");
   const {
     data: volumes,
     loading,
     error,
     retry,
-  } = useSwarmResource(api.volumes, "volume", (v: Volume) => v.Name);
-  const [search, setSearch] = useSearchParam("q");
+  } = useSwarmResource(
+    useCallback(() => api.volumes({ search }), [search]),
+    "volume",
+    (v: Volume) => v.Name,
+  );
   const [viewMode, setViewMode] = useViewMode("volumes");
 
   if (loading)
@@ -37,8 +42,6 @@ export default function VolumeList() {
     );
   if (error) return <FetchError message={error.message} onRetry={retry} />;
 
-  const filtered = volumes.filter((v) => v.Name.toLowerCase().includes(search.toLowerCase()));
-
   return (
     <div>
       <PageHeader title="Volumes" />
@@ -46,13 +49,13 @@ export default function VolumeList() {
         <SearchInput value={search} onChange={setSearch} placeholder="Search volumes..." />
         <ViewToggle mode={viewMode} onChange={setViewMode} />
       </div>
-      {filtered.length === 0 ? (
+      {volumes.length === 0 ? (
         <EmptyState message={search ? "No volumes match your search" : "No volumes found"} />
       ) : viewMode === "table" ? (
-        <DataTable columns={columns} data={filtered} keyFn={(v) => v.Name} />
+        <DataTable columns={columns} data={volumes} keyFn={(v) => v.Name} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((vol) => (
+          {volumes.map((vol) => (
             <div key={vol.Name} className="rounded-lg border bg-card p-4">
               <div className="font-medium mb-2 truncate">{vol.Name}</div>
               <div className="flex items-center gap-3 text-xs text-muted-foreground">

@@ -28,6 +28,8 @@ class MockEventSource {
 vi.mock("../api/client", () => ({
   api: {
     cluster: vi.fn(),
+    history: vi.fn().mockResolvedValue([]),
+    notificationRules: vi.fn().mockResolvedValue([]),
   },
 }));
 

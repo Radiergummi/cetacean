@@ -69,7 +69,8 @@ function wrapper({ children }: { children: ReactNode }) {
 
 describe("ServiceList", () => {
   it("renders service list", async () => {
-    mockServices.mockResolvedValue([fakeService("s1", "web"), fakeService("s2", "api")]);
+    const items = [fakeService("s1", "web"), fakeService("s2", "api")];
+    mockServices.mockResolvedValue({ items, total: 2 });
     render(<ServiceList />, { wrapper });
 
     await waitFor(() => {
@@ -81,10 +82,15 @@ describe("ServiceList", () => {
   });
 
   it("filters by search", async () => {
-    mockServices.mockResolvedValue([
-      fakeService("s1", "web-frontend"),
-      fakeService("s2", "api-backend"),
-    ]);
+    mockServices
+      .mockResolvedValueOnce({
+        items: [fakeService("s1", "web-frontend"), fakeService("s2", "api-backend")],
+        total: 2,
+      })
+      .mockResolvedValueOnce({
+        items: [fakeService("s2", "api-backend")],
+        total: 1,
+      });
     render(<ServiceList />, { wrapper });
 
     await waitFor(() => {
@@ -95,12 +101,14 @@ describe("ServiceList", () => {
       target: { value: "api" },
     });
 
-    expect(screen.queryByText("web-frontend")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("web-frontend")).not.toBeInTheDocument();
+    });
     expect(screen.getByText("api-backend")).toBeInTheDocument();
   });
 
   it("shows empty state", async () => {
-    mockServices.mockResolvedValue([]);
+    mockServices.mockResolvedValue({ items: [], total: 0 });
     render(<ServiceList />, { wrapper });
 
     await waitFor(() => {

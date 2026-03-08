@@ -84,7 +84,7 @@ func BenchmarkHandleListNodes(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil)
+		h := NewHandlers(c, nil, closedReady(), nil)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			for b.Loop() {
 				req := httptest.NewRequest("GET", "/api/nodes", nil)
@@ -99,7 +99,7 @@ func BenchmarkHandleListNodes_Search(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil)
+		h := NewHandlers(c, nil, closedReady(), nil)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			for b.Loop() {
 				req := httptest.NewRequest("GET", "/api/nodes?search=node-5", nil)
@@ -114,7 +114,7 @@ func BenchmarkHandleListServices(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil)
+		h := NewHandlers(c, nil, closedReady(), nil)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			for b.Loop() {
 				req := httptest.NewRequest("GET", "/api/services", nil)
@@ -129,7 +129,7 @@ func BenchmarkHandleListServices_Search(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil)
+		h := NewHandlers(c, nil, closedReady(), nil)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			for b.Loop() {
 				req := httptest.NewRequest("GET", "/api/services?search=svc-5", nil)
@@ -144,7 +144,7 @@ func BenchmarkHandleListTasks(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil)
+		h := NewHandlers(c, nil, closedReady(), nil)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			for b.Loop() {
 				req := httptest.NewRequest("GET", "/api/tasks", nil)
@@ -159,7 +159,7 @@ func BenchmarkHandleCluster(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil)
+		h := NewHandlers(c, nil, closedReady(), nil)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			for b.Loop() {
 				req := httptest.NewRequest("GET", "/api/cluster", nil)
@@ -174,7 +174,7 @@ func BenchmarkHandleGetStack(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil)
+		h := NewHandlers(c, nil, closedReady(), nil)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			for b.Loop() {
 				req := httptest.NewRequest("GET", "/api/stacks/stack-0", nil)
@@ -228,7 +228,7 @@ func BenchmarkHandleListNodesParallel(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil)
+		h := NewHandlers(c, nil, closedReady(), nil)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {

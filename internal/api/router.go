@@ -8,6 +8,10 @@ import (
 func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Handler) http.Handler {
 	mux := http.NewServeMux()
 
+	// Health
+	mux.HandleFunc("GET /api/health", h.HandleHealth)
+	mux.HandleFunc("GET /api/ready", h.HandleReady)
+
 	// SSE
 	mux.Handle("GET /api/events", b)
 
@@ -30,6 +34,9 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 	mux.HandleFunc("GET /api/tasks/{id}", h.HandleGetTask)
 	mux.HandleFunc("GET /api/tasks/{id}/logs", h.HandleTaskLogs)
 
+	// History
+	mux.HandleFunc("GET /api/history", h.HandleHistory)
+
 	// Stacks
 	mux.HandleFunc("GET /api/stacks", h.HandleListStacks)
 	mux.HandleFunc("GET /api/stacks/{name}", h.HandleGetStack)
@@ -46,6 +53,13 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 	// Volumes
 	mux.HandleFunc("GET /api/volumes", h.HandleListVolumes)
 
+	// Notifications
+	mux.HandleFunc("GET /api/notifications/rules", h.HandleNotificationRules)
+
+	// Topology
+	mux.HandleFunc("GET /api/topology/networks", h.HandleNetworkTopology)
+	mux.HandleFunc("GET /api/topology/placement", h.HandlePlacementTopology)
+
 	// Prometheus proxy
 	mux.Handle("GET /api/metrics/", promProxy)
 
@@ -59,7 +73,7 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 	// SPA fallback (must be last)
 	mux.Handle("/", spa)
 
-	return securityHeaders(mux)
+	return recovery(securityHeaders(requestLogger(mux)))
 }
 
 func securityHeaders(next http.Handler) http.Handler {

@@ -2,6 +2,7 @@ package cache
 
 import (
 	"sync"
+	"time"
 
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
@@ -41,6 +42,9 @@ type ClusterSnapshot struct {
 	TasksByState map[string]int `json:"tasksByState"`
 	NodesReady   int            `json:"nodesReady"`
 	NodesDown    int            `json:"nodesDown"`
+	TotalCPU     int            `json:"totalCPU"`
+	TotalMemory  int64          `json:"totalMemory"`
+	LastSync     time.Time      `json:"lastSync"`
 }
 
 type OnChangeFunc func(Event)
@@ -57,7 +61,9 @@ type Cache struct {
 	networks       map[string]network.Summary
 	volumes        map[string]volume.Volume
 	stacks         map[string]Stack
+	lastSync       time.Time
 	onChange       OnChangeFunc
+	history        *History
 }
 
 func New(onChange OnChangeFunc) *Cache {
@@ -73,12 +79,42 @@ func New(onChange OnChangeFunc) *Cache {
 		volumes:        make(map[string]volume.Volume),
 		stacks:         make(map[string]Stack),
 		onChange:       onChange,
+		history:        NewHistory(10000),
 	}
 }
 
+func (c *Cache) History() *History { return c.history }
+
 func (c *Cache) notify(e Event) {
+	c.history.Append(HistoryEntry{
+		Type:       e.Type,
+		Action:     e.Action,
+		ResourceID: e.ID,
+		Name:       ExtractName(e),
+	})
 	if c.onChange != nil {
 		c.onChange(e)
+	}
+}
+
+func ExtractName(e Event) string {
+	switch r := e.Resource.(type) {
+	case swarm.Node:
+		return r.Description.Hostname
+	case swarm.Service:
+		return r.Spec.Name
+	case swarm.Task:
+		return r.ID
+	case swarm.Config:
+		return r.Spec.Name
+	case swarm.Secret:
+		return r.Spec.Name
+	case network.Summary:
+		return r.Name
+	case volume.Volume:
+		return r.Name
+	default:
+		return ""
 	}
 }
 
@@ -446,135 +482,6 @@ func (c *Cache) GetStackDetail(name string) (StackDetail, bool) {
 	return detail, true
 }
 
-const stackLabel = "com.docker.stack.namespace"
-
-// addToStack incrementally adds a resource to the appropriate stack. Must be called with c.mu held for writing.
-func (c *Cache) addToStack(resource, id string, labels map[string]string) {
-	ns, ok := labels[stackLabel]
-	if !ok {
-		return
-	}
-	s, exists := c.stacks[ns]
-	if !exists {
-		s = Stack{Name: ns}
-	}
-	switch resource {
-	case "service":
-		s.Services = appendUnique(s.Services, id)
-	case "config":
-		s.Configs = appendUnique(s.Configs, id)
-	case "secret":
-		s.Secrets = appendUnique(s.Secrets, id)
-	case "network":
-		s.Networks = appendUnique(s.Networks, id)
-	case "volume":
-		s.Volumes = appendUnique(s.Volumes, id)
-	}
-	c.stacks[ns] = s
-}
-
-// removeFromStack incrementally removes a resource from its stack. Must be called with c.mu held for writing.
-func (c *Cache) removeFromStack(resource, id string, labels map[string]string) {
-	ns, ok := labels[stackLabel]
-	if !ok {
-		return
-	}
-	s, exists := c.stacks[ns]
-	if !exists {
-		return
-	}
-	switch resource {
-	case "service":
-		s.Services = removeStr(s.Services, id)
-	case "config":
-		s.Configs = removeStr(s.Configs, id)
-	case "secret":
-		s.Secrets = removeStr(s.Secrets, id)
-	case "network":
-		s.Networks = removeStr(s.Networks, id)
-	case "volume":
-		s.Volumes = removeStr(s.Volumes, id)
-	}
-	if len(s.Services)+len(s.Configs)+len(s.Secrets)+len(s.Networks)+len(s.Volumes) == 0 {
-		delete(c.stacks, ns)
-	} else {
-		c.stacks[ns] = s
-	}
-}
-
-func appendUnique(sl []string, v string) []string {
-	for _, s := range sl {
-		if s == v {
-			return sl
-		}
-	}
-	return append(sl, v)
-}
-
-func removeStr(sl []string, v string) []string {
-	for i, s := range sl {
-		if s == v {
-			return append(sl[:i], sl[i+1:]...)
-		}
-	}
-	return sl
-}
-
-// rebuildStacks must be called with c.mu held for writing.
-func (c *Cache) rebuildStacks() {
-	stacks := make(map[string]*Stack)
-
-	ensure := func(name string) *Stack {
-		if s, ok := stacks[name]; ok {
-			return s
-		}
-		s := &Stack{Name: name}
-		stacks[name] = s
-		return s
-	}
-
-	for id, svc := range c.services {
-		if ns, ok := svc.Spec.Labels[stackLabel]; ok {
-			s := ensure(ns)
-			s.Services = append(s.Services, id)
-		}
-	}
-
-	for id, cfg := range c.configs {
-		if ns, ok := cfg.Spec.Labels[stackLabel]; ok {
-			s := ensure(ns)
-			s.Configs = append(s.Configs, id)
-		}
-	}
-
-	for id, sec := range c.secrets {
-		if ns, ok := sec.Spec.Labels[stackLabel]; ok {
-			s := ensure(ns)
-			s.Secrets = append(s.Secrets, id)
-		}
-	}
-
-	for id, net := range c.networks {
-		if ns, ok := net.Labels[stackLabel]; ok {
-			s := ensure(ns)
-			s.Networks = append(s.Networks, id)
-		}
-	}
-
-	for name, vol := range c.volumes {
-		if ns, ok := vol.Labels[stackLabel]; ok {
-			s := ensure(ns)
-			s.Volumes = append(s.Volumes, name)
-		}
-	}
-
-	result := make(map[string]Stack, len(stacks))
-	for name, s := range stacks {
-		result[name] = *s
-	}
-	c.stacks = result
-}
-
 // --- Filtered task lists ---
 
 func (c *Cache) ListTasksByService(serviceID string) []swarm.Task {
@@ -615,6 +522,8 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 	}
 
 	var nodesReady, nodesDown int
+	var totalNanoCPUs int64
+	var totalMemory int64
 	for _, n := range c.nodes {
 		switch n.Status.State {
 		case swarm.NodeStateReady:
@@ -622,6 +531,8 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 		case swarm.NodeStateDown:
 			nodesDown++
 		}
+		totalNanoCPUs += n.Description.Resources.NanoCPUs
+		totalMemory += n.Description.Resources.MemoryBytes
 	}
 
 	return ClusterSnapshot{
@@ -632,6 +543,9 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 		TasksByState: tasksByState,
 		NodesReady:   nodesReady,
 		NodesDown:    nodesDown,
+		TotalCPU:     int(totalNanoCPUs / 1e9),
+		TotalMemory:  totalMemory,
+		LastSync:     c.lastSync,
 	}
 }
 
@@ -728,5 +642,129 @@ func (c *Cache) ReplaceVolumes(volumes []volume.Volume) {
 func (c *Cache) RebuildStacks() {
 	c.mu.Lock()
 	c.rebuildStacks()
+	c.mu.Unlock()
+}
+
+// FullSyncData holds all resource lists for an atomic full sync.
+type FullSyncData struct {
+	Nodes    []swarm.Node
+	Services []swarm.Service
+	Tasks    []swarm.Task
+	Configs  []swarm.Config
+	Secrets  []swarm.Secret
+	Networks []network.Summary
+	Volumes  []volume.Volume
+
+	HasNodes, HasServices, HasTasks   bool
+	HasConfigs, HasSecrets            bool
+	HasNetworks, HasVolumes           bool
+}
+
+// ReplaceAll atomically replaces resource maps for which Has* flags are true,
+// then rebuilds derived state. Resource types that failed to sync (Has* = false)
+// are preserved from the existing cache.
+func (c *Cache) ReplaceAll(data FullSyncData) {
+	// Build new maps outside the lock for resource types that succeeded.
+	var nodes map[string]swarm.Node
+	if data.HasNodes {
+		nodes = make(map[string]swarm.Node, len(data.Nodes))
+		for _, n := range data.Nodes {
+			nodes[n.ID] = n
+		}
+	}
+
+	var services map[string]swarm.Service
+	if data.HasServices {
+		services = make(map[string]swarm.Service, len(data.Services))
+		for _, s := range data.Services {
+			services[s.ID] = s
+		}
+	}
+
+	var tasks map[string]swarm.Task
+	var byService map[string]map[string]struct{}
+	var byNode map[string]map[string]struct{}
+	if data.HasTasks {
+		tasks = make(map[string]swarm.Task, len(data.Tasks))
+		byService = make(map[string]map[string]struct{})
+		byNode = make(map[string]map[string]struct{})
+		for _, t := range data.Tasks {
+			tasks[t.ID] = t
+			if t.ServiceID != "" {
+				if byService[t.ServiceID] == nil {
+					byService[t.ServiceID] = make(map[string]struct{})
+				}
+				byService[t.ServiceID][t.ID] = struct{}{}
+			}
+			if t.NodeID != "" {
+				if byNode[t.NodeID] == nil {
+					byNode[t.NodeID] = make(map[string]struct{})
+				}
+				byNode[t.NodeID][t.ID] = struct{}{}
+			}
+		}
+	}
+
+	var configs map[string]swarm.Config
+	if data.HasConfigs {
+		configs = make(map[string]swarm.Config, len(data.Configs))
+		for _, cfg := range data.Configs {
+			configs[cfg.ID] = cfg
+		}
+	}
+
+	var secrets map[string]swarm.Secret
+	if data.HasSecrets {
+		secrets = make(map[string]swarm.Secret, len(data.Secrets))
+		for _, s := range data.Secrets {
+			secrets[s.ID] = s
+		}
+	}
+
+	var networks map[string]network.Summary
+	if data.HasNetworks {
+		networks = make(map[string]network.Summary, len(data.Networks))
+		for _, n := range data.Networks {
+			networks[n.ID] = n
+		}
+	}
+
+	var volumes map[string]volume.Volume
+	if data.HasVolumes {
+		volumes = make(map[string]volume.Volume, len(data.Volumes))
+		for _, v := range data.Volumes {
+			volumes[v.Name] = v
+		}
+	}
+
+	// Single atomic swap under one lock — only replace types that succeeded.
+	c.mu.Lock()
+	if data.HasNodes {
+		c.nodes = nodes
+	}
+	if data.HasServices {
+		c.services = services
+	}
+	if data.HasTasks {
+		c.tasks = tasks
+		c.tasksByService = byService
+		c.tasksByNode = byNode
+	}
+	if data.HasConfigs {
+		c.configs = configs
+	}
+	if data.HasSecrets {
+		c.secrets = secrets
+	}
+	if data.HasNetworks {
+		c.networks = networks
+	}
+	if data.HasVolumes {
+		c.volumes = volumes
+	}
+
+	// Rebuild stacks from the current (possibly partially updated) maps.
+	c.rebuildStacks()
+	c.lastSync = time.Now()
 	c.mu.Unlock()
 }

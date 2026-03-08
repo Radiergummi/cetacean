@@ -1,7 +1,7 @@
-import { useMemo } from "react";
+import { useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useSwarmResource } from "../hooks/useSwarmResource";
-import { useSort } from "../hooks/useSort";
+import { useSortParams } from "../hooks/useSort";
 import { useViewMode } from "../hooks/useViewMode";
 import { useNodeMetrics } from "../hooks/useNodeMetrics";
 import { useSearchParam } from "../hooks/useSearchParam";
@@ -20,30 +20,25 @@ import { SkeletonTable } from "../components/LoadingSkeleton";
 import NodeResourceGauges from "../components/NodeResourceGauges";
 import { statusBorder } from "../lib/statusBorder";
 
-const sortAccessors = {
-  hostname: (n: Node) => n.Description.Hostname,
-  role: (n: Node) => n.Spec.Role,
-  status: (n: Node) => n.Status.State,
-  availability: (n: Node) => n.Spec.Availability,
-  engine: (n: Node) => n.Description.Engine.EngineVersion,
-};
-
 export default function NodeList() {
+  const [search, setSearch] = useSearchParam("q");
+  const { sortKey, sortDir, toggle } = useSortParams("hostname");
   const {
     data: nodes,
     loading,
     error,
     retry,
-  } = useSwarmResource(api.nodes, "node", (n: Node) => n.ID);
-  const [search, setSearch] = useSearchParam("q");
+  } = useSwarmResource(
+    useCallback(
+      () => api.nodes({ search, sort: sortKey, dir: sortDir }),
+      [search, sortKey, sortDir],
+    ),
+    "node",
+    (n: Node) => n.ID,
+  );
   const [viewMode, setViewMode] = useViewMode("nodes");
   const navigate = useNavigate();
   const { getForNode } = useNodeMetrics();
-  const filtered = useMemo(
-    () => nodes.filter((n) => n.Description.Hostname.toLowerCase().includes(search.toLowerCase())),
-    [nodes, search],
-  );
-  const { sorted, sortKey, sortDir, toggle } = useSort(filtered, sortAccessors, "hostname");
 
   if (loading)
     return (
@@ -64,7 +59,7 @@ export default function NodeList() {
         <SearchInput value={search} onChange={setSearch} placeholder="Search nodes..." />
         <ViewToggle mode={viewMode} onChange={setViewMode} />
       </div>
-      {sorted.length === 0 ? (
+      {nodes.length === 0 ? (
         <EmptyState message={search ? "No nodes match your search" : "No nodes found"} />
       ) : viewMode === "table" ? (
         <div className="overflow-x-auto rounded-lg border">
@@ -105,7 +100,7 @@ export default function NodeList() {
               </tr>
             </thead>
             <tbody>
-              {sorted.map((node) => {
+              {nodes.map((node) => {
                 const m = getForNode(node.Status.Addr);
                 return (
                   <tr
@@ -148,7 +143,7 @@ export default function NodeList() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sorted.map((node) => {
+          {nodes.map((node) => {
             const m = getForNode(node.Status.Addr);
             return (
               <Link

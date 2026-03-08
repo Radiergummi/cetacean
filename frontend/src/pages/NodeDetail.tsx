@@ -1,7 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { useState, useEffect, useMemo } from "react";
 import { api } from "../api/client";
-import type { Node, Task } from "../api/types";
+import type { Node, Task, HistoryEntry } from "../api/types";
 import MetricsPanel from "../components/MetricsPanel";
 import InfoCard from "../components/InfoCard";
 import TaskStatusBadge from "../components/TaskStatusBadge";
@@ -10,6 +10,7 @@ import PageHeader from "../components/PageHeader";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import FetchError from "../components/FetchError";
 import NodeResourceGauges from "../components/NodeResourceGauges";
+import ActivityFeed from "../components/ActivityFeed";
 import { statusBorder } from "../lib/statusBorder";
 import { formatBytes } from "../lib/formatBytes";
 import TimeAgo from "../components/TimeAgo";
@@ -19,6 +20,7 @@ export default function NodeDetail() {
   const [node, setNode] = useState<Node | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [stateFilter, setStateFilter] = useState<string | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
 
   const [error, setError] = useState(false);
 
@@ -31,6 +33,10 @@ export default function NodeDetail() {
       api
         .nodeTasks(id)
         .then(setTasks)
+        .catch(() => {});
+      api
+        .history({ resourceId: id, limit: 10 })
+        .then(setHistory)
         .catch(() => {});
     }
   }, [id]);
@@ -147,6 +153,15 @@ export default function NodeDetail() {
         )}
       </div>
 
+      {history.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
+            Recent Activity
+          </h2>
+          <ActivityFeed entries={history} />
+        </div>
+      )}
+
       <MetricsPanel
         charts={[
           {
@@ -174,4 +189,3 @@ export default function NodeDetail() {
     </div>
   );
 }
-

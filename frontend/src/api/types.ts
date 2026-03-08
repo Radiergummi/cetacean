@@ -206,6 +206,21 @@ export interface Stack {
   volumes: string[];
 }
 
+export interface PagedResponse<T> {
+  items: T[];
+  total: number;
+}
+
+export interface HistoryEntry {
+  id: number;
+  timestamp: string;
+  type: string;
+  action: string;
+  resourceId: string;
+  name: string;
+  summary?: string;
+}
+
 export interface StackDetail {
   name: string;
   services: Service[];
@@ -213,4 +228,57 @@ export interface StackDetail {
   secrets: Secret[];
   networks: Network[];
   volumes: Volume[];
+}
+
+export interface NetworkTopology {
+  nodes: TopoServiceNode[];
+  edges: TopoEdge[];
+  networks: TopoNetwork[];
+}
+
+export interface TopoServiceNode {
+  id: string;
+  name: string;
+  stack?: string;
+  replicas: number;
+}
+
+export interface TopoEdge {
+  source: string;
+  target: string;
+  networks: string[];
+}
+
+export interface TopoNetwork {
+  id: string;
+  name: string;
+  driver: string;
+}
+
+export interface PlacementTopology {
+  nodes: TopoClusterNode[];
+}
+
+export interface TopoClusterNode {
+  id: string;
+  hostname: string;
+  role: string;
+  state: string;
+  tasks: TopoTask[];
+}
+
+export interface TopoTask {
+  id: string;
+  serviceId: string;
+  serviceName: string;
+  state: string;
+  slot: number;
+}
+
+export interface NotificationRuleStatus {
+  id: string;
+  name: string;
+  enabled: boolean;
+  lastFired?: string;
+  fireCount: number;
 }

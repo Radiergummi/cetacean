@@ -8,6 +8,11 @@ import type {
   Secret,
   Network,
   Volume,
+  PagedResponse,
+  HistoryEntry,
+  NetworkTopology,
+  PlacementTopology,
+  NotificationRuleStatus,
 } from "./types";
 
 const BASE = "/api";
@@ -38,21 +43,47 @@ export interface ClusterSnapshot {
   tasksByState: Record<string, number>;
   nodesReady: number;
   nodesDown: number;
+  totalCPU: number;
+  totalMemory: number;
+}
+
+export interface ListParams {
+  limit?: number;
+  offset?: number;
+  sort?: string;
+  dir?: "asc" | "desc";
+  search?: string;
+}
+
+function buildListURL(path: string, params?: ListParams): string {
+  const qs = new URLSearchParams();
+  if (params?.limit) qs.set("limit", String(params.limit));
+  if (params?.offset) qs.set("offset", String(params.offset));
+  if (params?.sort) qs.set("sort", params.sort);
+  if (params?.dir) qs.set("dir", params.dir);
+  if (params?.search) qs.set("search", params.search);
+  const query = qs.toString();
+  return `${path}${query ? `?${query}` : ""}`;
 }
 
 export const api = {
   cluster: () => fetchJSON<ClusterSnapshot>("/cluster"),
-  nodes: () => fetchJSON<Node[]>("/nodes"),
+  nodes: (params?: ListParams) => fetchJSON<PagedResponse<Node>>(buildListURL("/nodes", params)),
   node: (id: string) => fetchJSON<Node>(`/nodes/${id}`),
-  services: () => fetchJSON<Service[]>("/services"),
+  services: (params?: ListParams) =>
+    fetchJSON<PagedResponse<Service>>(buildListURL("/services", params)),
   service: (id: string) => fetchJSON<Service>(`/services/${id}`),
-  tasks: () => fetchJSON<Task[]>("/tasks"),
-  stacks: () => fetchJSON<Stack[]>("/stacks"),
+  tasks: (params?: ListParams) => fetchJSON<PagedResponse<Task>>(buildListURL("/tasks", params)),
+  stacks: (params?: ListParams) => fetchJSON<PagedResponse<Stack>>(buildListURL("/stacks", params)),
   stack: (name: string) => fetchJSON<StackDetail>(`/stacks/${name}`),
-  configs: () => fetchJSON<Config[]>("/configs"),
-  secrets: () => fetchJSON<Secret[]>("/secrets"),
-  networks: () => fetchJSON<Network[]>("/networks"),
-  volumes: () => fetchJSON<Volume[]>("/volumes"),
+  configs: (params?: ListParams) =>
+    fetchJSON<PagedResponse<Config>>(buildListURL("/configs", params)),
+  secrets: (params?: ListParams) =>
+    fetchJSON<PagedResponse<Secret>>(buildListURL("/secrets", params)),
+  networks: (params?: ListParams) =>
+    fetchJSON<PagedResponse<Network>>(buildListURL("/networks", params)),
+  volumes: (params?: ListParams) =>
+    fetchJSON<PagedResponse<Volume>>(buildListURL("/volumes", params)),
   task: (id: string) => fetchJSON<Task>(`/tasks/${id}`),
   taskLogs: (
     id: string,
@@ -89,6 +120,16 @@ export const api = {
     const qs = params.toString();
     return `${BASE}/tasks/${id}/logs${qs ? `?${qs}` : ""}`;
   },
+  history: (params?: { type?: string; resourceId?: string; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.type) qs.set("type", params.type);
+    if (params?.resourceId) qs.set("resourceId", params.resourceId);
+    if (params?.limit) qs.set("limit", String(params.limit));
+    const query = qs.toString();
+    return fetchJSON<HistoryEntry[]>(`/history${query ? `?${query}` : ""}`);
+  },
+  topologyNetworks: () => fetchJSON<NetworkTopology>("/topology/networks"),
+  topologyPlacement: () => fetchJSON<PlacementTopology>("/topology/placement"),
   nodeTasks: (id: string) => fetchJSON<Task[]>(`/nodes/${id}/tasks`),
   metricsQuery: (query: string, time?: string) => {
     const params = new URLSearchParams({ query });
@@ -99,4 +140,5 @@ export const api = {
     const params = new URLSearchParams({ query, start, end, step });
     return fetchJSON<any>(`/metrics/query_range?${params}`);
   },
+  notificationRules: () => fetchJSON<NotificationRuleStatus[]>("/notifications/rules"),
 };

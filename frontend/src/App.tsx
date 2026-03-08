@@ -12,6 +12,7 @@ import ConfigList from "./pages/ConfigList";
 import SecretList from "./pages/SecretList";
 import NetworkList from "./pages/NetworkList";
 import VolumeList from "./pages/VolumeList";
+import Topology from "./pages/Topology";
 import ConnectionStatus from "./components/ConnectionStatus";
 import ThemeToggle from "./components/ThemeToggle";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -86,6 +87,7 @@ function NavLinks() {
     { to: "/secrets", label: "Secrets" },
     { to: "/networks", label: "Networks" },
     { to: "/volumes", label: "Volumes" },
+    { to: "/topology", label: "Topology" },
   ];
   return (
     <>
@@ -123,6 +125,7 @@ export default function App() {
             <Route path="/secrets" element={<SecretList />} />
             <Route path="/networks" element={<NetworkList />} />
             <Route path="/volumes" element={<VolumeList />} />
+            <Route path="/topology" element={<Topology />} />
           </Routes>
         </Layout>
       </SSEProvider>

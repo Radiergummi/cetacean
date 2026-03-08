@@ -1,7 +1,7 @@
-import { useMemo } from "react";
+import { useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useSwarmResource } from "../hooks/useSwarmResource";
-import { useSort } from "../hooks/useSort";
+import { useSortParams } from "../hooks/useSort";
 import { useViewMode } from "../hooks/useViewMode";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { api } from "../api/client";
@@ -14,29 +14,24 @@ import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
 import { SkeletonTable } from "../components/LoadingSkeleton";
 
-const sortAccessors = {
-  name: (s: Service) => s.Spec.Name,
-  image: (s: Service) => s.Spec.TaskTemplate.ContainerSpec.Image.split("@")[0],
-  mode: (s: Service) => (s.Spec.Mode.Replicated ? "replicated" : "global"),
-  replicas: (s: Service) => s.Spec.Mode.Replicated?.Replicas ?? 0,
-  update: (s: Service) => s.UpdateStatus?.State ?? "",
-};
-
 export default function ServiceList() {
+  const [search, setSearch] = useSearchParam("q");
+  const { sortKey, sortDir, toggle } = useSortParams("name");
   const {
     data: services,
     loading,
     error,
     retry,
-  } = useSwarmResource(api.services, "service", (s: Service) => s.ID);
-  const [search, setSearch] = useSearchParam("q");
+  } = useSwarmResource(
+    useCallback(
+      () => api.services({ search, sort: sortKey, dir: sortDir }),
+      [search, sortKey, sortDir],
+    ),
+    "service",
+    (s: Service) => s.ID,
+  );
   const [viewMode, setViewMode] = useViewMode("services");
   const navigate = useNavigate();
-  const filtered = useMemo(
-    () => services.filter((s) => s.Spec.Name.toLowerCase().includes(search.toLowerCase())),
-    [services, search],
-  );
-  const { sorted, sortKey, sortDir, toggle } = useSort(filtered, sortAccessors, "name");
 
   if (loading)
     return (
@@ -54,7 +49,7 @@ export default function ServiceList() {
         <SearchInput value={search} onChange={setSearch} placeholder="Search services..." />
         <ViewToggle mode={viewMode} onChange={setViewMode} />
       </div>
-      {sorted.length === 0 ? (
+      {services.length === 0 ? (
         <EmptyState message={search ? "No services match your search" : "No services found"} />
       ) : viewMode === "table" ? (
         <div className="overflow-x-auto rounded-lg border">
@@ -99,7 +94,7 @@ export default function ServiceList() {
               </tr>
             </thead>
             <tbody>
-              {sorted.map((svc) => (
+              {services.map((svc) => (
                 <tr
                   key={svc.ID}
                   className="border-b cursor-pointer hover:bg-muted/50"
@@ -129,7 +124,7 @@ export default function ServiceList() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sorted.map((svc) => (
+          {services.map((svc) => (
             <Link
               key={svc.ID}
               to={`/services/${svc.ID}`}

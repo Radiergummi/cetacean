@@ -50,7 +50,7 @@ function wrapper({ children }: { children: ReactNode }) {
 describe("useSwarmResource", () => {
   it("fetches initial data", async () => {
     const items: Item[] = [{ ID: "1", Name: "svc1" }];
-    const fetchFn = vi.fn().mockResolvedValue(items);
+    const fetchFn = vi.fn().mockResolvedValue({ items, total: 1 });
 
     const { result } = renderHook(() => useSwarmResource(fetchFn, "service", (i: Item) => i.ID), {
       wrapper,
@@ -59,6 +59,7 @@ describe("useSwarmResource", () => {
     expect(result.current.loading).toBe(true);
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.data).toEqual(items);
+    expect(result.current.total).toBe(1);
     expect(result.current.error).toBeNull();
   });
 
@@ -76,7 +77,7 @@ describe("useSwarmResource", () => {
 
   it("updates item on SSE update event", async () => {
     const items: Item[] = [{ ID: "1", Name: "old" }];
-    const fetchFn = vi.fn().mockResolvedValue(items);
+    const fetchFn = vi.fn().mockResolvedValue({ items, total: 1 });
 
     const { result } = renderHook(() => useSwarmResource(fetchFn, "service", (i: Item) => i.ID), {
       wrapper,
@@ -98,7 +99,7 @@ describe("useSwarmResource", () => {
   });
 
   it("adds new item on SSE event with unknown id", async () => {
-    const fetchFn = vi.fn().mockResolvedValue([{ ID: "1", Name: "a" }]);
+    const fetchFn = vi.fn().mockResolvedValue({ items: [{ ID: "1", Name: "a" }], total: 1 });
 
     const { result } = renderHook(() => useSwarmResource(fetchFn, "service", (i: Item) => i.ID), {
       wrapper,
@@ -121,10 +122,13 @@ describe("useSwarmResource", () => {
   });
 
   it("removes item on SSE remove event", async () => {
-    const fetchFn = vi.fn().mockResolvedValue([
-      { ID: "1", Name: "a" },
-      { ID: "2", Name: "b" },
-    ]);
+    const fetchFn = vi.fn().mockResolvedValue({
+      items: [
+        { ID: "1", Name: "a" },
+        { ID: "2", Name: "b" },
+      ],
+      total: 2,
+    });
 
     const { result } = renderHook(() => useSwarmResource(fetchFn, "service", (i: Item) => i.ID), {
       wrapper,
@@ -147,7 +151,7 @@ describe("useSwarmResource", () => {
     const fetchFn = vi
       .fn()
       .mockRejectedValueOnce(new Error("fail"))
-      .mockResolvedValueOnce([{ ID: "1", Name: "ok" }]);
+      .mockResolvedValueOnce({ items: [{ ID: "1", Name: "ok" }], total: 1 });
 
     const { result } = renderHook(() => useSwarmResource(fetchFn, "service", (i: Item) => i.ID), {
       wrapper,

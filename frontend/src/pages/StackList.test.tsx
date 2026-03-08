@@ -67,7 +67,8 @@ function wrapper({ children }: { children: ReactNode }) {
 
 describe("StackList", () => {
   it("renders stack list", async () => {
-    mockStacks.mockResolvedValue([fakeStack("monitoring"), fakeStack("app")]);
+    const items = [fakeStack("monitoring"), fakeStack("app")];
+    mockStacks.mockResolvedValue({ items, total: 2 });
     render(<StackList />, { wrapper });
 
     await waitFor(() => {
@@ -77,7 +78,15 @@ describe("StackList", () => {
   });
 
   it("filters by search", async () => {
-    mockStacks.mockResolvedValue([fakeStack("monitoring"), fakeStack("app")]);
+    mockStacks
+      .mockResolvedValueOnce({
+        items: [fakeStack("monitoring"), fakeStack("app")],
+        total: 2,
+      })
+      .mockResolvedValueOnce({
+        items: [fakeStack("app")],
+        total: 1,
+      });
     render(<StackList />, { wrapper });
 
     await waitFor(() => {
@@ -88,12 +97,14 @@ describe("StackList", () => {
       target: { value: "app" },
     });
 
-    expect(screen.queryByText("monitoring")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("monitoring")).not.toBeInTheDocument();
+    });
     expect(screen.getByText("app")).toBeInTheDocument();
   });
 
   it("shows empty state", async () => {
-    mockStacks.mockResolvedValue([]);
+    mockStacks.mockResolvedValue({ items: [], total: 0 });
     render(<StackList />, { wrapper });
 
     await waitFor(() => {

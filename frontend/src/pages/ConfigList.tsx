@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useViewMode } from "../hooks/useViewMode";
 import { useSearchParam } from "../hooks/useSearchParam";
@@ -26,13 +27,17 @@ const columns: Column<Config>[] = [
 ];
 
 export default function ConfigList() {
+  const [search, setSearch] = useSearchParam("q");
   const {
     data: configs,
     loading,
     error,
     retry,
-  } = useSwarmResource(api.configs, "config", (c: Config) => c.ID);
-  const [search, setSearch] = useSearchParam("q");
+  } = useSwarmResource(
+    useCallback(() => api.configs({ search }), [search]),
+    "config",
+    (c: Config) => c.ID,
+  );
   const [viewMode, setViewMode] = useViewMode("configs");
 
   if (loading)
@@ -44,10 +49,6 @@ export default function ConfigList() {
     );
   if (error) return <FetchError message={error.message} onRetry={retry} />;
 
-  const filtered = configs.filter((c) =>
-    (c.Spec.Name || c.ID).toLowerCase().includes(search.toLowerCase()),
-  );
-
   return (
     <div>
       <PageHeader title="Configs" />
@@ -55,13 +56,13 @@ export default function ConfigList() {
         <SearchInput value={search} onChange={setSearch} placeholder="Search configs..." />
         <ViewToggle mode={viewMode} onChange={setViewMode} />
       </div>
-      {filtered.length === 0 ? (
+      {configs.length === 0 ? (
         <EmptyState message={search ? "No configs match your search" : "No configs found"} />
       ) : viewMode === "table" ? (
-        <DataTable columns={columns} data={filtered} keyFn={(c) => c.ID} />
+        <DataTable columns={columns} data={configs} keyFn={(c) => c.ID} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((cfg) => (
+          {configs.map((cfg) => (
             <div key={cfg.ID} className="rounded-lg border bg-card p-4">
               <div className="font-medium mb-2 truncate">{cfg.Spec.Name || cfg.ID}</div>
               <div className="space-y-1 text-xs text-muted-foreground">

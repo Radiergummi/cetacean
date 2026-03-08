@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSSE } from "./useSSE";
+import type { PagedResponse } from "@/api/types";
 
 export function useSwarmResource<T>(
-  fetchFn: () => Promise<T[]>,
+  fetchFn: () => Promise<PagedResponse<T>>,
   sseType: string,
   getId: (item: T) => string,
 ) {
   const [data, setData] = useState<T[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const getIdRef = useRef(getId);
@@ -19,12 +21,18 @@ export function useSwarmResource<T>(
     setError(null);
     fetchFnRef
       .current()
-      .then(setData)
+      .then((resp) => {
+        setData(resp.items);
+        setTotal(resp.total);
+      })
       .catch(setError)
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(load, []);
+  useEffect(() => {
+    fetchFnRef.current = fetchFn;
+    load();
+  }, [fetchFn]);
 
   useSSE(
     [sseType],
@@ -46,5 +54,5 @@ export function useSwarmResource<T>(
     }, []),
   );
 
-  return { data, loading, error, retry: load };
+  return { data, total, loading, error, retry: load };
 }

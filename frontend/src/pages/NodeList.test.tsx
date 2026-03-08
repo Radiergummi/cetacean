@@ -79,7 +79,8 @@ describe("NodeList", () => {
   });
 
   it("renders node list", async () => {
-    mockNodes.mockResolvedValue([fakeNode("n1", "node-alpha"), fakeNode("n2", "node-beta")]);
+    const items = [fakeNode("n1", "node-alpha"), fakeNode("n2", "node-beta")];
+    mockNodes.mockResolvedValue({ items, total: 2 });
     render(<NodeList />, { wrapper });
 
     await waitFor(() => {
@@ -89,7 +90,15 @@ describe("NodeList", () => {
   });
 
   it("filters by search", async () => {
-    mockNodes.mockResolvedValue([fakeNode("n1", "node-alpha"), fakeNode("n2", "node-beta")]);
+    mockNodes
+      .mockResolvedValueOnce({
+        items: [fakeNode("n1", "node-alpha"), fakeNode("n2", "node-beta")],
+        total: 2,
+      })
+      .mockResolvedValueOnce({
+        items: [fakeNode("n2", "node-beta")],
+        total: 1,
+      });
     render(<NodeList />, { wrapper });
 
     await waitFor(() => {
@@ -100,12 +109,14 @@ describe("NodeList", () => {
       target: { value: "beta" },
     });
 
-    expect(screen.queryByText("node-alpha")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("node-alpha")).not.toBeInTheDocument();
+    });
     expect(screen.getByText("node-beta")).toBeInTheDocument();
   });
 
   it("shows empty state when no results", async () => {
-    mockNodes.mockResolvedValue([]);
+    mockNodes.mockResolvedValue({ items: [], total: 0 });
     render(<NodeList />, { wrapper });
 
     await waitFor(() => {
@@ -124,7 +135,9 @@ describe("NodeList", () => {
   });
 
   it("shows search empty state", async () => {
-    mockNodes.mockResolvedValue([fakeNode("n1", "node-alpha")]);
+    mockNodes
+      .mockResolvedValueOnce({ items: [fakeNode("n1", "node-alpha")], total: 1 })
+      .mockResolvedValueOnce({ items: [], total: 0 });
     render(<NodeList />, { wrapper });
 
     await waitFor(() => {
@@ -135,6 +148,8 @@ describe("NodeList", () => {
       target: { value: "nonexistent" },
     });
 
-    expect(screen.getByText("No nodes match your search")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("No nodes match your search")).toBeInTheDocument();
+    });
   });
 });

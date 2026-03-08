@@ -1,7 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { useState, useEffect, useMemo } from "react";
 import { api } from "../api/client";
-import type { Service, Task } from "../api/types";
+import type { Service, Task, HistoryEntry } from "../api/types";
 import MetricsPanel from "../components/MetricsPanel";
 import type { Threshold } from "../components/TimeSeriesChart";
 import InfoCard from "../components/InfoCard";
@@ -10,6 +10,7 @@ import TaskStateFilter from "../components/TaskStateFilter";
 import LogViewer from "../components/LogViewer";
 import PageHeader from "../components/PageHeader";
 import { LoadingDetail } from "../components/LoadingSkeleton";
+import ActivityFeed from "../components/ActivityFeed";
 import { statusBorder } from "../lib/statusBorder";
 import { formatBytes } from "../lib/formatBytes";
 import TimeAgo, { timeAgo } from "../components/TimeAgo";
@@ -19,6 +20,7 @@ export default function ServiceDetail() {
   const [service, setService] = useState<Service | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [stateFilter, setStateFilter] = useState<string | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
 
   useEffect(() => {
     if (id) {
@@ -26,6 +28,10 @@ export default function ServiceDetail() {
       api
         .serviceTasks(id)
         .then(setTasks)
+        .catch(() => {});
+      api
+        .history({ resourceId: id, limit: 10 })
+        .then(setHistory)
         .catch(() => {});
     }
   }, [id]);
@@ -478,6 +484,12 @@ export default function ServiceDetail() {
         )}
       </Section>
 
+      {history.length > 0 && (
+        <Section title="Recent Activity">
+          <ActivityFeed entries={history} />
+        </Section>
+      )}
+
       <div className="mb-6">
         <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
           Logs
@@ -563,7 +575,6 @@ function formatNs(ns: number): string {
 function formatCpu(nanoCpus: number): string {
   return `${(nanoCpus / 1_000_000_000).toFixed(2)} cores`;
 }
-
 
 function cpuThresholds(service: Service): Threshold[] {
   const res = service.Spec.TaskTemplate.Resources;

@@ -1,7 +1,7 @@
-import { useMemo } from "react";
+import { useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useSwarmResource } from "../hooks/useSwarmResource";
-import { useSort } from "../hooks/useSort";
+import { useSortParams } from "../hooks/useSort";
 import { useViewMode } from "../hooks/useViewMode";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { api } from "../api/client";
@@ -14,30 +14,24 @@ import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
 import { SkeletonTable } from "../components/LoadingSkeleton";
 
-const sortAccessors = {
-  name: (s: Stack) => s.name,
-  services: (s: Stack) => s.services?.length ?? 0,
-  configs: (s: Stack) => s.configs?.length ?? 0,
-  secrets: (s: Stack) => s.secrets?.length ?? 0,
-  networks: (s: Stack) => s.networks?.length ?? 0,
-  volumes: (s: Stack) => s.volumes?.length ?? 0,
-};
-
 export default function StackList() {
+  const [search, setSearch] = useSearchParam("q");
+  const { sortKey, sortDir, toggle } = useSortParams("name");
   const {
     data: stacks,
     loading,
     error,
     retry,
-  } = useSwarmResource(api.stacks, "stack", (s: Stack) => s.name);
-  const [search, setSearch] = useSearchParam("q");
+  } = useSwarmResource(
+    useCallback(
+      () => api.stacks({ search, sort: sortKey, dir: sortDir }),
+      [search, sortKey, sortDir],
+    ),
+    "stack",
+    (s: Stack) => s.name,
+  );
   const [viewMode, setViewMode] = useViewMode("stacks");
   const navigate = useNavigate();
-  const filtered = useMemo(
-    () => stacks.filter((s) => s.name.toLowerCase().includes(search.toLowerCase())),
-    [stacks, search],
-  );
-  const { sorted, sortKey, sortDir, toggle } = useSort(filtered, sortAccessors, "name");
 
   if (loading)
     return (
@@ -55,7 +49,7 @@ export default function StackList() {
         <SearchInput value={search} onChange={setSearch} placeholder="Search stacks..." />
         <ViewToggle mode={viewMode} onChange={setViewMode} />
       </div>
-      {sorted.length === 0 ? (
+      {stacks.length === 0 ? (
         <EmptyState message={search ? "No stacks match your search" : "No stacks found"} />
       ) : viewMode === "table" ? (
         <div className="overflow-x-auto rounded-lg border">
@@ -107,7 +101,7 @@ export default function StackList() {
               </tr>
             </thead>
             <tbody>
-              {sorted.map((stack) => (
+              {stacks.map((stack) => (
                 <tr
                   key={stack.name}
                   className="border-b cursor-pointer hover:bg-muted/50"
@@ -134,7 +128,7 @@ export default function StackList() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sorted.map((stack) => (
+          {stacks.map((stack) => (
             <Link
               key={stack.name}
               to={`/stacks/${stack.name}`}
