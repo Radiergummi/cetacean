@@ -90,14 +90,14 @@ func (c *Cache) notify(e Event) {
 		Type:       e.Type,
 		Action:     e.Action,
 		ResourceID: e.ID,
-		Name:       extractName(e),
+		Name:       ExtractName(e),
 	})
 	if c.onChange != nil {
 		c.onChange(e)
 	}
 }
 
-func extractName(e Event) string {
+func ExtractName(e Event) string {
 	switch r := e.Resource.(type) {
 	case swarm.Node:
 		return r.Description.Hostname

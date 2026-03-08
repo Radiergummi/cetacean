@@ -15,6 +15,7 @@ import (
 	json "github.com/goccy/go-json"
 
 	"cetacean/internal/cache"
+	"cetacean/internal/notify"
 )
 
 const defaultLogLimit = 500
@@ -29,10 +30,11 @@ type Handlers struct {
 	cache        *cache.Cache
 	dockerClient DockerLogStreamer
 	ready        <-chan struct{}
+	notifier     *notify.Notifier
 }
 
-func NewHandlers(c *cache.Cache, dc DockerLogStreamer, ready <-chan struct{}) *Handlers {
-	return &Handlers{cache: c, dockerClient: dc, ready: ready}
+func NewHandlers(c *cache.Cache, dc DockerLogStreamer, ready <-chan struct{}, notifier *notify.Notifier) *Handlers {
+	return &Handlers{cache: c, dockerClient: dc, ready: ready, notifier: notifier}
 }
 
 func (h *Handlers) isReady() bool {
@@ -421,4 +423,14 @@ func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 		"driver": func(v volume.Volume) string { return v.Driver },
 	})
 	writeJSON(w, applyPagination(volumes, p))
+}
+
+// --- Notifications ---
+
+func (h *Handlers) HandleNotificationRules(w http.ResponseWriter, r *http.Request) {
+	if h.notifier == nil {
+		writeJSON(w, []struct{}{})
+		return
+	}
+	writeJSON(w, h.notifier.RuleStatuses())
 }

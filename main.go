@@ -17,6 +17,7 @@ import (
 	"cetacean/internal/cache"
 	"cetacean/internal/config"
 	"cetacean/internal/docker"
+	"cetacean/internal/notify"
 )
 
 //go:embed frontend/dist/*
@@ -43,9 +44,26 @@ func main() {
 	broadcaster := api.NewBroadcaster()
 	defer broadcaster.Close()
 
+	// Notification webhooks (optional)
+	var notifier *notify.Notifier
+	if cfg.NotificationsFile != "" {
+		rules, err := notify.LoadRules(cfg.NotificationsFile)
+		if err != nil {
+			slog.Error("failed to load notification rules", "error", err)
+			os.Exit(1)
+		}
+		if len(rules) > 0 {
+			slog.Info("loaded notification rules", "count", len(rules))
+			notifier = notify.New(rules)
+		}
+	}
+
 	// State cache — broadcasts changes via SSE
 	stateCache := cache.New(func(e cache.Event) {
 		broadcaster.Broadcast(e)
+		if notifier != nil {
+			notifier.HandleEvent(e, cache.ExtractName(e))
+		}
 	})
 
 	// Docker client + watcher
@@ -78,7 +96,7 @@ func main() {
 	go watcher.Run(ctx)
 
 	// API — pass ready channel so /api/ready reports sync status
-	handlers := api.NewHandlers(stateCache, dockerClient, watcher.Ready())
+	handlers := api.NewHandlers(stateCache, dockerClient, watcher.Ready(), notifier)
 	promProxy := api.NewPrometheusProxy(cfg.PrometheusURL)
 
 	// SPA

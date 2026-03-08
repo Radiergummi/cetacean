@@ -29,7 +29,7 @@ func TestHandleNetworkTopology(t *testing.T) {
 		},
 	})
 
-	h := NewHandlers(c, nil, closedReady())
+	h := NewHandlers(c, nil, closedReady(), nil)
 	req := httptest.NewRequest("GET", "/api/topology/networks", nil)
 	w := httptest.NewRecorder()
 	h.HandleNetworkTopology(w, req)
@@ -56,7 +56,7 @@ func TestHandlePlacementTopology(t *testing.T) {
 	c.SetService(swarm.Service{ID: "svc1", Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "nginx"}}})
 	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", NodeID: "n1", Slot: 1, Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
 
-	h := NewHandlers(c, nil, closedReady())
+	h := NewHandlers(c, nil, closedReady(), nil)
 	req := httptest.NewRequest("GET", "/api/topology/placement", nil)
 	w := httptest.NewRecorder()
 	h.HandlePlacementTopology(w, req)

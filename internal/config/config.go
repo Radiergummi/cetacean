@@ -14,7 +14,8 @@ type Config struct {
 	LogLevel      string // "debug", "info", "warn", "error"
 	LogFormat     string // "json", "text"
 	DataDir       string // CETACEAN_DATA_DIR, default "./data"
-	Snapshot      bool   // CETACEAN_SNAPSHOT, default true
+	Snapshot          bool   // CETACEAN_SNAPSHOT, default true
+	NotificationsFile string // CETACEAN_NOTIFICATIONS_FILE, optional
 }
 
 func Load() (*Config, error) {
@@ -25,7 +26,8 @@ func Load() (*Config, error) {
 		LogLevel:      envOr("CETACEAN_LOG_LEVEL", "info"),
 		LogFormat:     envOr("CETACEAN_LOG_FORMAT", "json"),
 		DataDir:       envOr("CETACEAN_DATA_DIR", "./data"),
-		Snapshot:      envBool("CETACEAN_SNAPSHOT", true),
+		Snapshot:          envBool("CETACEAN_SNAPSHOT", true),
+		NotificationsFile: os.Getenv("CETACEAN_NOTIFICATIONS_FILE"),
 	}
 
 	if cfg.PrometheusURL == "" {
