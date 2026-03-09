@@ -11,7 +11,7 @@ import { useSSE } from "@/hooks/useSSE";
 import { computeLayout } from "@/lib/layoutElk";
 import { buildLogicalFlow, buildPhysicalFlow, hashColor } from "@/lib/topologyTransform";
 import ServiceCardNode from "@/components/topology/ServiceCardNode";
-import TaskCardNode from "@/components/topology/TaskCardNode";
+import PhysicalNodeCard from "@/components/topology/PhysicalNodeCard";
 import GroupNode from "@/components/topology/GroupNode";
 import NetworkEdge from "@/components/topology/NetworkEdge";
 import { Network, Server } from "lucide-react";
@@ -21,7 +21,7 @@ const logicalNodeTypes = {
   serviceCard: ServiceCardNode,
 };
 const logicalEdgeTypes = { networkEdge: NetworkEdge };
-const physicalNodeTypes = { nodeGroup: GroupNode, taskCard: TaskCardNode };
+const physicalNodeTypes = { physicalNode: PhysicalNodeCard };
 
 type View = "logical" | "physical";
 
@@ -136,34 +136,7 @@ function LogicalView({ data }: { data: NetworkTopology }) {
 }
 
 function PhysicalView({ data }: { data: PlacementTopology }) {
-  const [hoveredServiceId, setHoveredServiceId] = useState<string | null>(null);
-
-  const onHoverService = useCallback(
-    (serviceId: string | null) => setHoveredServiceId(serviceId),
-    [],
-  );
-
-  const { nodes: rawNodes } = useMemo(() => buildPhysicalFlow(data), [data]);
-  const emptyEdges = useMemo<Edge[]>(() => [], []);
-  const { nodes: layoutNodes, ready } = useElkLayout(rawNodes, emptyEdges);
-
-  const nodesWithHover = useMemo(
-    () =>
-      layoutNodes.map((n) => {
-        if (n.type === "taskCard") {
-          return {
-            ...n,
-            data: {
-              ...n.data,
-              highlighted: n.data.serviceId === hoveredServiceId,
-              onHoverService,
-            },
-          };
-        }
-        return n;
-      }),
-    [layoutNodes, hoveredServiceId, onHoverService],
-  );
+  const { nodes } = useMemo(() => buildPhysicalFlow(data), [data]);
 
   if (data.nodes.length === 0) {
     return (
@@ -174,15 +147,14 @@ function PhysicalView({ data }: { data: PlacementTopology }) {
     );
   }
 
-  if (!ready) return null;
-
   return (
     <div style={{ height: "calc(100vh - 12rem)" }}>
       <ReactFlow
-        nodes={nodesWithHover}
+        nodes={nodes}
         edges={[]}
         nodeTypes={physicalNodeTypes}
         fitView
+        fitViewOptions={{ padding: 0.2 }}
         proOptions={{ hideAttribution: true }}
         nodesDraggable
         nodesConnectable={false}

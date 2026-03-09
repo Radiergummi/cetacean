@@ -56,7 +56,7 @@ describe("buildLogicalFlow", () => {
 });
 
 describe("buildPhysicalFlow", () => {
-  it("creates node groups with task children", () => {
+  it("aggregates tasks by service within each node", () => {
     const data: PlacementTopology = {
       nodes: [
         {
@@ -66,22 +66,9 @@ describe("buildPhysicalFlow", () => {
           state: "ready",
           availability: "active",
           tasks: [
-            {
-              id: "t1",
-              serviceId: "svc1",
-              serviceName: "web",
-              state: "running",
-              slot: 1,
-              image: "nginx:1.25",
-            },
-            {
-              id: "t2",
-              serviceId: "svc1",
-              serviceName: "web",
-              state: "running",
-              slot: 2,
-              image: "nginx:1.25",
-            },
+            { id: "t1", serviceId: "svc1", serviceName: "web", state: "running", slot: 1, image: "nginx:1.25" },
+            { id: "t2", serviceId: "svc1", serviceName: "web", state: "running", slot: 2, image: "nginx:1.25" },
+            { id: "t3", serviceId: "svc2", serviceName: "api", state: "running", slot: 1, image: "node:20" },
           ],
         },
         {
@@ -91,25 +78,24 @@ describe("buildPhysicalFlow", () => {
           state: "ready",
           availability: "active",
           tasks: [
-            {
-              id: "t3",
-              serviceId: "svc1",
-              serviceName: "web",
-              state: "running",
-              slot: 3,
-              image: "nginx:1.25",
-            },
+            { id: "t4", serviceId: "svc1", serviceName: "web", state: "running", slot: 3, image: "nginx:1.25" },
           ],
         },
       ],
     };
-    const { nodes, edges } = buildPhysicalFlow(data);
+    const { nodes } = buildPhysicalFlow(data);
 
-    const groups = nodes.filter((n) => n.type === "nodeGroup");
-    const tasks = nodes.filter((n) => n.type === "taskCard");
-    expect(groups.length).toBe(2);
-    expect(tasks.length).toBe(3);
-    expect(tasks.filter((n) => n.parentId === "n1").length).toBe(2);
-    expect(edges.length).toBe(0);
+    expect(nodes.length).toBe(2);
+    expect(nodes[0].type).toBe("physicalNode");
+
+    const n1Services = nodes[0].data.services;
+    expect(n1Services.length).toBe(2);
+    const webSvc = n1Services.find((s: { serviceId: string }) => s.serviceId === "svc1");
+    expect(webSvc.running).toBe(2);
+    expect(webSvc.total).toBe(2);
+
+    const n2Services = nodes[1].data.services;
+    expect(n2Services.length).toBe(1);
+    expect(n2Services[0].total).toBe(1);
   });
 });

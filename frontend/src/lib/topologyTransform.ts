@@ -143,44 +143,52 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
   return { nodes, edges };
 }
 
-export function buildPhysicalFlow(data: PlacementTopology): { nodes: Node[]; edges: Edge[] } {
+export function buildPhysicalFlow(data: PlacementTopology): { nodes: Node[] } {
   const nodes: Node[] = [];
+  const COLS = 3;
+  const CARD_H = 72; // approx height of one service card in the grid
+  const HEADER_H = 48;
+  const PAD = 32;
+  const GAP = 24;
 
   const sortedClusterNodes = [...data.nodes].sort(byId);
+  let y = 0;
   for (const clusterNode of sortedClusterNodes) {
+    // Aggregate tasks by service
+    const serviceMap = new Map<string, { serviceName: string; image: string; running: number; total: number; states: string[] }>();
+    for (const task of clusterNode.tasks) {
+      let entry = serviceMap.get(task.serviceId);
+      if (!entry) {
+        entry = { serviceName: task.serviceName, image: task.image, running: 0, total: 0, states: [] };
+        serviceMap.set(task.serviceId, entry);
+      }
+      entry.total++;
+      if (task.state === "running" || task.state === "complete") entry.running++;
+      entry.states.push(task.state);
+    }
+
+    const services = [...serviceMap.entries()]
+      .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
+      .map(([serviceId, s]) => ({ serviceId, ...s }));
+
+    const rows = Math.max(1, Math.ceil(services.length / COLS));
+    const nodeHeight = HEADER_H + rows * CARD_H + PAD;
+
     nodes.push({
       id: clusterNode.id,
-      type: "nodeGroup",
-      position: { x: 0, y: 0 },
+      type: "physicalNode",
+      position: { x: 0, y },
       data: {
         label: clusterNode.hostname,
         role: clusterNode.role,
         state: clusterNode.state,
         availability: clusterNode.availability,
-        variant: "node",
+        services,
       },
     });
 
-    const sortedTasks = [...clusterNode.tasks].sort(byId);
-    for (const task of sortedTasks) {
-      nodes.push({
-        id: task.id,
-        type: "taskCard",
-        position: { x: 0, y: 0 },
-        parentId: clusterNode.id,
-        data: {
-          id: task.id,
-          serviceId: task.serviceId,
-          serviceName: task.serviceName,
-          slot: task.slot,
-          state: task.state,
-          image: task.image,
-          highlighted: false,
-          onHoverService: () => {},
-        },
-      });
-    }
+    y += nodeHeight + GAP;
   }
 
-  return { nodes, edges: [] };
+  return { nodes };
 }
