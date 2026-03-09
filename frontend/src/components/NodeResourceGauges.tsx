@@ -4,32 +4,45 @@ import ResourceGauge from "./ResourceGauge";
 
 interface GaugeDef {
   label: string;
-  query: string;
-  formatSubtitle?: (raw: Record<string, any>) => string;
+  query: (addr?: string) => string;
+}
+
+function instanceFilter(addr?: string) {
+  return addr ? `instance=~"${addr}:.*"` : "";
 }
 
 const GAUGES: GaugeDef[] = [
   {
     label: "CPU",
-    query: `100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)`,
+    query: (addr) => {
+      const f = instanceFilter(addr);
+      return `100 - (avg(rate(node_cpu_seconds_total{mode="idle"${f ? `,${f}` : ""}}[5m])) * 100)`;
+    },
   },
   {
     label: "Memory",
-    query: `(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100`,
+    query: (addr) => {
+      const f = instanceFilter(addr);
+      const sel = f ? `{${f}}` : "";
+      return `(1 - node_memory_MemAvailable_bytes${sel} / node_memory_MemTotal_bytes${sel}) * 100`;
+    },
   },
   {
     label: "Disk",
-    query: `max((1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs"}) * 100)`,
+    query: (addr) => {
+      const f = instanceFilter(addr);
+      return `max((1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs"${f ? `,${f}` : ""}} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs"${f ? `,${f}` : ""}}) * 100)`;
+    },
   },
 ];
 
-export default function NodeResourceGauges() {
+export default function NodeResourceGauges({ addr }: { addr?: string }) {
   const [values, setValues] = useState<(number | null)[]>(GAUGES.map(() => null));
 
   const fetchAll = useCallback(() => {
     GAUGES.forEach((g, i) => {
       api
-        .metricsQuery(g.query)
+        .metricsQuery(g.query(addr))
         .then((resp: any) => {
           const val = resp.data?.result?.[0]?.value?.[1];
           setValues((prev) => {
@@ -40,7 +53,7 @@ export default function NodeResourceGauges() {
         })
         .catch(() => {});
     });
-  }, []);
+  }, [addr]);
 
   useEffect(() => {
     fetchAll();
