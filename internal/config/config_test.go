@@ -11,9 +11,12 @@ func TestLoad_Defaults(t *testing.T) {
 	os.Unsetenv("CETACEAN_PROMETHEUS_URL")
 	os.Unsetenv("CETACEAN_LISTEN_ADDR")
 
-	_, err := Load()
-	if err == nil {
-		t.Fatal("expected error when CETACEAN_PROMETHEUS_URL is not set")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.PrometheusURL != "" {
+		t.Errorf("expected empty PrometheusURL, got %s", cfg.PrometheusURL)
 	}
 }
 
