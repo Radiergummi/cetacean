@@ -90,13 +90,13 @@ func main() {
 	watcher := docker.NewWatcher(dockerClient, stateCache, snapshotPath)
 
 	// Start watcher in background
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	go watcher.Run(ctx)
 
 	// API — pass ready channel so /api/ready reports sync status
-	handlers := api.NewHandlers(stateCache, dockerClient, watcher.Ready(), notifier)
+	handlers := api.NewHandlers(stateCache, dockerClient, watcher.Ready(), notifier, api.NewPromClient(cfg.PrometheusURL))
 	promProxy := api.NewPrometheusProxy(cfg.PrometheusURL)
 
 	// SPA
@@ -119,11 +119,8 @@ func main() {
 
 	// Graceful shutdown
 	go func() {
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-		<-sigCh
-		slog.Info("shutting down")
-		cancel()
+		<-ctx.Done()
+		slog.Info("shutting down", "cause", context.Cause(ctx))
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer shutdownCancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {

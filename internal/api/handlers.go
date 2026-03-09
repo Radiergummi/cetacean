@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -32,10 +33,11 @@ type Handlers struct {
 	dockerClient DockerLogStreamer
 	ready        <-chan struct{}
 	notifier     *notify.Notifier
+	promClient   *PromClient
 }
 
-func NewHandlers(c *cache.Cache, dc DockerLogStreamer, ready <-chan struct{}, notifier *notify.Notifier) *Handlers {
-	return &Handlers{cache: c, dockerClient: dc, ready: ready, notifier: notifier}
+func NewHandlers(c *cache.Cache, dc DockerLogStreamer, ready <-chan struct{}, notifier *notify.Notifier, promClient *PromClient) *Handlers {
+	return &Handlers{cache: c, dockerClient: dc, ready: ready, notifier: notifier, promClient: promClient}
 }
 
 func (h *Handlers) isReady() bool {
@@ -433,7 +435,61 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, detail)
 }
 
+const stackNamespaceLabel = "container_label_com_docker_stack_namespace"
+
+func (h *Handlers) HandleStackSummary(w http.ResponseWriter, r *http.Request) {
+	summaries := h.cache.ListStackSummaries()
+
+	if h.promClient != nil && len(summaries) > 0 {
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		memByStack := h.queryStackMetric(ctx,
+			`sum by (`+stackNamespaceLabel+`)(container_memory_usage_bytes)`)
+		cpuByStack := h.queryStackMetric(ctx,
+			`sum by (`+stackNamespaceLabel+`)(rate(container_cpu_usage_seconds_total[5m])) * 100`)
+
+		for i := range summaries {
+			summaries[i].MemoryUsageBytes = int64(memByStack[summaries[i].Name])
+			summaries[i].CPUUsagePercent = cpuByStack[summaries[i].Name]
+		}
+	}
+
+	if summaries == nil {
+		summaries = []cache.StackSummary{}
+	}
+	writeJSON(w, summaries)
+}
+
+func (h *Handlers) queryStackMetric(ctx context.Context, query string) map[string]float64 {
+	results, err := h.promClient.InstantQuery(ctx, query)
+	if err != nil {
+		slog.Warn("prometheus stack metric query failed", "error", err)
+		return nil
+	}
+	out := make(map[string]float64, len(results))
+	for _, r := range results {
+		if name := r.Labels[stackNamespaceLabel]; name != "" {
+			out[name] = r.Value
+		}
+	}
+	return out
+}
+
 // --- Configs ---
+
+func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	cfg, ok := h.cache.GetConfig(id)
+	if !ok {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("config %q not found", id))
+		return
+	}
+	writeJSON(w, map[string]any{
+		"config":   cfg,
+		"services": h.cache.ServicesUsingConfig(id),
+	})
+}
 
 func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 	configs := h.cache.ListConfigs()
@@ -453,6 +509,21 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 
 // --- Secrets ---
 
+func (h *Handlers) HandleGetSecret(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	sec, ok := h.cache.GetSecret(id)
+	if !ok {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("secret %q not found", id))
+		return
+	}
+	// Never expose secret data — clear it before responding.
+	sec.Spec.Data = nil
+	writeJSON(w, map[string]any{
+		"secret":   sec,
+		"services": h.cache.ServicesUsingSecret(id),
+	})
+}
+
 func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 	secrets := h.cache.ListSecrets()
 	secrets = searchFilter(secrets, r.URL.Query().Get("search"), func(s swarm.Secret) string { return s.Spec.Name })
@@ -471,6 +542,19 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 
 // --- Networks ---
 
+func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	net, ok := h.cache.GetNetwork(id)
+	if !ok {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("network %q not found", id))
+		return
+	}
+	writeJSON(w, map[string]any{
+		"network":  net,
+		"services": h.cache.ServicesUsingNetwork(id),
+	})
+}
+
 func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 	networks := h.cache.ListNetworks()
 	networks = searchFilter(networks, r.URL.Query().Get("search"), func(n network.Summary) string { return n.Name })
@@ -488,6 +572,19 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- Volumes ---
+
+func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	vol, ok := h.cache.GetVolume(name)
+	if !ok {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("volume %q not found", name))
+		return
+	}
+	writeJSON(w, map[string]any{
+		"volume":   vol,
+		"services": h.cache.ServicesUsingVolume(name),
+	})
+}
 
 func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 	volumes := h.cache.ListVolumes()

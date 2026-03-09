@@ -39,19 +39,24 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 
 	// Stacks
 	mux.HandleFunc("GET /api/stacks", h.HandleListStacks)
+	mux.HandleFunc("GET /api/stacks/summary", h.HandleStackSummary)
 	mux.HandleFunc("GET /api/stacks/{name}", h.HandleGetStack)
 
 	// Configs
 	mux.HandleFunc("GET /api/configs", h.HandleListConfigs)
+	mux.HandleFunc("GET /api/configs/{id}", h.HandleGetConfig)
 
 	// Secrets
 	mux.HandleFunc("GET /api/secrets", h.HandleListSecrets)
+	mux.HandleFunc("GET /api/secrets/{id}", h.HandleGetSecret)
 
 	// Networks
 	mux.HandleFunc("GET /api/networks", h.HandleListNetworks)
+	mux.HandleFunc("GET /api/networks/{id}", h.HandleGetNetwork)
 
 	// Volumes
 	mux.HandleFunc("GET /api/volumes", h.HandleListVolumes)
+	mux.HandleFunc("GET /api/volumes/{name}", h.HandleGetVolume)
 
 	// Notifications
 	mux.HandleFunc("GET /api/notifications/rules", h.HandleNotificationRules)

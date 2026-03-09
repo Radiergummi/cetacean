@@ -29,7 +29,7 @@ func TestHandleNetworkTopology(t *testing.T) {
 		},
 	})
 
-	h := NewHandlers(c, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, closedReady(), nil, nil)
 	req := httptest.NewRequest("GET", "/api/topology/networks", nil)
 	w := httptest.NewRecorder()
 	h.HandleNetworkTopology(w, req)
@@ -64,7 +64,7 @@ func TestHandleNetworkTopology_WithReplicatedService(t *testing.T) {
 			VirtualIPs: []swarm.EndpointVirtualIP{{NetworkID: "net1"}},
 		},
 	})
-	h := NewHandlers(c, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, closedReady(), nil, nil)
 	req := httptest.NewRequest("GET", "/api/topology/networks", nil)
 	w := httptest.NewRecorder()
 	h.HandleNetworkTopology(w, req)
@@ -87,7 +87,7 @@ func TestHandlePlacementTopology(t *testing.T) {
 	c.SetService(swarm.Service{ID: "svc1", Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "nginx"}}})
 	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", NodeID: "n1", Slot: 1, Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
 
-	h := NewHandlers(c, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, closedReady(), nil, nil)
 	req := httptest.NewRequest("GET", "/api/topology/placement", nil)
 	w := httptest.NewRecorder()
 	h.HandlePlacementTopology(w, req)
@@ -137,7 +137,7 @@ func TestHandleNetworkTopology_EnrichedFields(t *testing.T) {
 		UpdateStatus: &swarm.UpdateStatus{State: swarm.UpdateStateUpdating},
 	})
 
-	h := NewHandlers(c, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, closedReady(), nil, nil)
 	req := httptest.NewRequest("GET", "/api/topology/networks", nil)
 	w := httptest.NewRecorder()
 	h.HandleNetworkTopology(w, req)
@@ -187,7 +187,7 @@ func TestHandlePlacementTopology_EnrichedFields(t *testing.T) {
 		Spec:   swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{Image: "nginx:1.25@sha256:abc"}},
 	})
 
-	h := NewHandlers(c, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, closedReady(), nil, nil)
 	req := httptest.NewRequest("GET", "/api/topology/placement", nil)
 	w := httptest.NewRecorder()
 	h.HandlePlacementTopology(w, req)
