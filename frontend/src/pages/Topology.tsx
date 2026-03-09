@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { ReactFlow, ReactFlowProvider, Background, type Node, type Edge } from "@xyflow/react";
+import { ReactFlow, ReactFlowProvider, Background } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { api } from "@/api/client";
 import type { NetworkTopology, PlacementTopology } from "@/api/types";
