@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"log/slog"
 	"os"
 	"strings"
@@ -18,6 +17,7 @@ type Config struct {
 	Snapshot          bool          // CETACEAN_SNAPSHOT, default true
 	NotificationsFile string        // CETACEAN_NOTIFICATIONS_FILE, optional
 	SSEBatchInterval  time.Duration // CETACEAN_SSE_BATCH_INTERVAL, default 100ms
+	Pprof             bool          // CETACEAN_PPROF, default false
 }
 
 func Load() (*Config, error) {
@@ -31,10 +31,7 @@ func Load() (*Config, error) {
 		Snapshot:          envBool("CETACEAN_SNAPSHOT", true),
 		NotificationsFile: os.Getenv("CETACEAN_NOTIFICATIONS_FILE"),
 		SSEBatchInterval:  envDuration("CETACEAN_SSE_BATCH_INTERVAL", 100*time.Millisecond),
-	}
-
-	if cfg.PrometheusURL == "" {
-		return nil, fmt.Errorf("CETACEAN_PROMETHEUS_URL is required")
+		Pprof:             envBool("CETACEAN_PPROF", false),
 	}
 
 	return cfg, nil

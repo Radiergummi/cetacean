@@ -5,7 +5,7 @@ import (
 	"net/http/pprof"
 )
 
-func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Handler) http.Handler {
+func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Handler, enablePprof bool) http.Handler {
 	mux := http.NewServeMux()
 
 	// Health
@@ -68,12 +68,14 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 	// Prometheus proxy
 	mux.Handle("GET /api/metrics/", promProxy)
 
-	// Profiling
-	mux.HandleFunc("GET /debug/pprof/", pprof.Index)
-	mux.HandleFunc("GET /debug/pprof/cmdline", pprof.Cmdline)
-	mux.HandleFunc("GET /debug/pprof/profile", pprof.Profile)
-	mux.HandleFunc("GET /debug/pprof/symbol", pprof.Symbol)
-	mux.HandleFunc("GET /debug/pprof/trace", pprof.Trace)
+	// Profiling (opt-in via CETACEAN_PPROF=true)
+	if enablePprof {
+		mux.HandleFunc("GET /debug/pprof/", pprof.Index)
+		mux.HandleFunc("GET /debug/pprof/cmdline", pprof.Cmdline)
+		mux.HandleFunc("GET /debug/pprof/profile", pprof.Profile)
+		mux.HandleFunc("GET /debug/pprof/symbol", pprof.Symbol)
+		mux.HandleFunc("GET /debug/pprof/trace", pprof.Trace)
+	}
 
 	// SPA fallback (must be last)
 	mux.Handle("/", spa)

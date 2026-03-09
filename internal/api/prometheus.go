@@ -3,7 +3,7 @@ package api
 import (
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -27,6 +27,14 @@ const maxPrometheusResponseBytes = 10 << 20
 var allowedPrometheusPaths = map[string]bool{
 	"/query":       true,
 	"/query_range": true,
+}
+
+// PrometheusNotConfiguredHandler returns a handler that responds with 503
+// when Prometheus is not configured.
+func PrometheusNotConfiguredHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeError(w, http.StatusServiceUnavailable, "prometheus not configured")
+	})
 }
 
 func (p *PrometheusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -59,6 +67,6 @@ func (p *PrometheusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
 	if _, err := io.Copy(w, io.LimitReader(resp.Body, maxPrometheusResponseBytes)); err != nil {
-		log.Printf("prometheus proxy copy error: %v", err)
+		slog.Warn("prometheus proxy copy error", "error", err)
 	}
 }

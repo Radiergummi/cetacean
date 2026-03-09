@@ -96,8 +96,17 @@ func main() {
 	go watcher.Run(ctx)
 
 	// API — pass ready channel so /api/ready reports sync status
-	handlers := api.NewHandlers(stateCache, dockerClient, watcher.Ready(), notifier, api.NewPromClient(cfg.PrometheusURL))
-	promProxy := api.NewPrometheusProxy(cfg.PrometheusURL)
+	var promClient *api.PromClient
+	var promProxy http.Handler
+	if cfg.PrometheusURL != "" {
+		promClient = api.NewPromClient(cfg.PrometheusURL)
+		promProxy = api.NewPrometheusProxy(cfg.PrometheusURL)
+		slog.Info("prometheus configured", "url", cfg.PrometheusURL)
+	} else {
+		promProxy = api.PrometheusNotConfiguredHandler()
+		slog.Warn("prometheus not configured, metrics disabled")
+	}
+	handlers := api.NewHandlers(stateCache, dockerClient, watcher.Ready(), notifier, promClient)
 
 	// SPA
 	distFS, err := fs.Sub(frontendDist, "frontend/dist")
@@ -107,7 +116,7 @@ func main() {
 	}
 	spa := api.NewSPAHandler(distFS)
 
-	router := api.NewRouter(handlers, broadcaster, promProxy, spa)
+	router := api.NewRouter(handlers, broadcaster, promProxy, spa, cfg.Pprof)
 
 	server := &http.Server{
 		Addr:         cfg.ListenAddr,

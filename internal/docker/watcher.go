@@ -245,14 +245,12 @@ func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced
 	if len(batch) < workers {
 		workers = len(batch)
 	}
-	wg.Add(workers)
 	for range workers {
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for key := range work {
 				w.inspectAndApply(ctx, key)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }
