@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -33,7 +34,7 @@ func (p *PrometheusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Map /api/metrics/query_range → /api/v1/query_range
 	path := strings.TrimPrefix(r.URL.Path, "/api/metrics")
 	if !allowedPrometheusPaths[path] {
-		http.Error(w, "forbidden prometheus endpoint", http.StatusForbidden)
+		writeError(w, http.StatusForbidden, "forbidden prometheus endpoint")
 		return
 	}
 
@@ -44,13 +45,13 @@ func (p *PrometheusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	req, err := http.NewRequestWithContext(r.Context(), "GET", targetURL, nil)
 	if err != nil {
-		http.Error(w, "failed to create request", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to create prometheus request: %s", err))
 		return
 	}
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		http.Error(w, "prometheus request failed", http.StatusBadGateway)
+		writeError(w, http.StatusBadGateway, fmt.Sprintf("prometheus unreachable at %s: %s", p.baseURL, err))
 		return
 	}
 	defer resp.Body.Close()

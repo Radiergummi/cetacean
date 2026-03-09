@@ -107,7 +107,7 @@ func recovery(next http.Handler) http.Handler {
 					"path", r.URL.Path,
 					"stack", string(debug.Stack()),
 				)
-				http.Error(w, "internal server error", http.StatusInternalServerError)
+				writeError(w, http.StatusInternalServerError, "internal server error")
 			}
 		}()
 		next.ServeHTTP(w, r)

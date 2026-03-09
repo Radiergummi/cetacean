@@ -23,6 +23,8 @@ services:
 
   prometheus:
     image: prom/prometheus:v3.3.0
+    ports:
+      - "9090:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -50,7 +52,6 @@ services:
       - /run/docker/containerd/containerd.sock:/run/containerd/containerd.sock:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
-      - /dev/disk/:/dev/disk:ro
     deploy:
       mode: global
       resources:

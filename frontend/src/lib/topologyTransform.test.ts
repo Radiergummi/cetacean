@@ -19,7 +19,7 @@ describe("buildLogicalFlow", () => {
         { id: "s3", name: "monitor", replicas: 1, image: "prom:latest", mode: "replicated" },
       ],
       edges: [{ source: "s1", target: "s2", networks: ["net1"] }],
-      networks: [{ id: "net1", name: "app_net", driver: "overlay" }],
+      networks: [{ id: "net1", name: "app_net", driver: "overlay", scope: "swarm" }],
     };
     const { nodes, edges } = buildLogicalFlow(data);
 
@@ -31,12 +31,12 @@ describe("buildLogicalFlow", () => {
     expect(services.filter((n) => n.parentId === "stack:app").length).toBe(2);
     expect(services.find((n) => n.id === "s3")?.parentId).toBeUndefined();
 
-    // One edge
+    // One edge with all networks collapsed
     expect(edges.length).toBe(1);
-    expect(edges[0].data!.networkName).toBe("app_net");
+    expect((edges[0].data as { networks: Array<{ name: string }> }).networks[0].name).toBe("app_net");
   });
 
-  it("creates separate edges per shared network", () => {
+  it("collapses multiple networks into a single edge per pair", () => {
     const data: NetworkTopology = {
       nodes: [
         { id: "s1", name: "web", replicas: 1, image: "nginx", mode: "replicated" },
@@ -44,13 +44,13 @@ describe("buildLogicalFlow", () => {
       ],
       edges: [{ source: "s1", target: "s2", networks: ["net1", "net2"] }],
       networks: [
-        { id: "net1", name: "frontend", driver: "overlay" },
-        { id: "net2", name: "backend", driver: "overlay" },
+        { id: "net1", name: "backend", driver: "overlay", scope: "swarm" },
+        { id: "net2", name: "frontend", driver: "overlay", scope: "swarm" },
       ],
     };
     const { edges } = buildLogicalFlow(data);
-    expect(edges.length).toBe(2);
-    const names = edges.map((e) => e.data!.networkName).sort();
+    expect(edges.length).toBe(1);
+    const names = (edges[0].data as { networks: Array<{ name: string }> }).networks.map((n) => n.name).sort();
     expect(names).toEqual(["backend", "frontend"]);
   });
 });

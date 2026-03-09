@@ -35,6 +35,8 @@ type TopoNetwork struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
 	Driver string `json:"driver"`
+	Scope  string `json:"scope"`
+	Stack  string `json:"stack,omitempty"`
 }
 
 type PlacementTopology struct {
@@ -67,7 +69,13 @@ func (h *Handlers) HandleNetworkTopology(w http.ResponseWriter, r *http.Request)
 	overlayNets := make(map[string]TopoNetwork)
 	for _, n := range networks {
 		if n.Driver == "overlay" {
-			overlayNets[n.ID] = TopoNetwork{ID: n.ID, Name: n.Name, Driver: n.Driver}
+			overlayNets[n.ID] = TopoNetwork{
+				ID:     n.ID,
+				Name:   n.Name,
+				Driver: n.Driver,
+				Scope:  n.Scope,
+				Stack:  n.Labels["com.docker.stack.namespace"],
+			}
 		}
 	}
 

@@ -9,7 +9,7 @@ import { LoadingPage } from "@/components/LoadingSkeleton";
 import SegmentedControl from "@/components/SegmentedControl";
 import { useSSE } from "@/hooks/useSSE";
 import { computeLayout } from "@/lib/layoutElk";
-import { buildLogicalFlow, buildPhysicalFlow } from "@/lib/topologyTransform";
+import { buildLogicalFlow, buildPhysicalFlow, hashColor } from "@/lib/topologyTransform";
 import ServiceCardNode from "@/components/topology/ServiceCardNode";
 import TaskCardNode from "@/components/topology/TaskCardNode";
 import GroupNode from "@/components/topology/GroupNode";
@@ -25,32 +25,20 @@ const physicalNodeTypes = { nodeGroup: GroupNode, taskCard: TaskCardNode };
 
 type View = "logical" | "physical";
 
-function NetworkLegend({ networks }: { networks: NetworkTopology["networks"] }) {
-  if (networks.length === 0) return null;
-
-  function hashColor(id: string): string {
-    const COLORS = [
-      "#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899",
-      "#06b6d4", "#f97316", "#6366f1", "#14b8a6", "#e11d48", "#84cc16",
-    ];
-    let h = 0;
-    for (let i = 0; i < id.length; i++) {
-      h = (h * 31 + id.charCodeAt(i)) | 0;
-    }
-    return COLORS[Math.abs(h) % COLORS.length];
-  }
+function StackLegend({ stackColors }: { stackColors: Map<string, string> }) {
+  if (stackColors.size === 0) return null;
 
   return (
     <div className="absolute bottom-3 left-3 z-10 rounded-lg border bg-card/90 backdrop-blur-sm p-3 text-xs shadow-sm">
-      <div className="font-medium text-muted-foreground mb-1.5">Networks</div>
+      <div className="font-medium text-muted-foreground mb-1.5">Stacks</div>
       <div className="flex flex-col gap-1">
-        {networks.map((net) => (
-          <span key={net.id} className="flex items-center gap-1.5">
+        {[...stackColors.entries()].map(([stack, color]) => (
+          <span key={stack} className="flex items-center gap-1.5">
             <span
               className="inline-block w-3 h-3 rounded-full shrink-0"
-              style={{ backgroundColor: hashColor(net.id) }}
+              style={{ backgroundColor: color }}
             />
-            {net.name}
+            {stack}
           </span>
         ))}
       </div>
@@ -58,16 +46,29 @@ function NetworkLegend({ networks }: { networks: NetworkTopology["networks"] }) 
   );
 }
 
-/** Hook: run ELK layout async, return positioned nodes + edges */
+/** Hook: run ELK layout async; only re-layout when graph structure changes */
 function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [ready, setReady] = useState(false);
 
+  // Keep refs so layout effect always uses latest data
+  const nodesRef = useRef(rawNodes);
+  const edgesRef = useRef(rawEdges);
+  nodesRef.current = rawNodes;
+  edgesRef.current = rawEdges;
+
+  // Structural fingerprint: only changes when nodes/edges are added/removed
+  const structureKey = useMemo(() => {
+    const nk = rawNodes.map((n) => `${n.id}:${n.parentId ?? ""}`).sort().join(",");
+    const ek = rawEdges.map((e) => `${e.source}>${e.target}`).sort().join(",");
+    return `${nk}|${ek}`;
+  }, [rawNodes, rawEdges]);
+
+  // Full re-layout only when structure changes
   useEffect(() => {
     let cancelled = false;
-    setReady(false);
-    computeLayout(rawNodes, rawEdges).then((result) => {
+    computeLayout(nodesRef.current, edgesRef.current).then((result) => {
       if (!cancelled) {
         setNodes(result.nodes);
         setEdges(result.edges);
@@ -75,7 +76,19 @@ function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
       }
     });
     return () => { cancelled = true; };
-  }, [rawNodes, rawEdges]);
+  }, [structureKey]);
+
+  // Patch node data in-place when only display data changes (replicas, status, etc.)
+  useEffect(() => {
+    if (!ready) return;
+    const dataMap = new Map(rawNodes.map((n) => [n.id, n.data]));
+    setNodes((prev) =>
+      prev.map((n) => {
+        const d = dataMap.get(n.id);
+        return d && d !== n.data ? { ...n, data: d } : n;
+      }),
+    );
+  }, [rawNodes, ready]);
 
   return { nodes, edges, ready };
 }
@@ -83,6 +96,14 @@ function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
 function LogicalView({ data }: { data: NetworkTopology }) {
   const { nodes: rawNodes, edges: rawEdges } = useMemo(() => buildLogicalFlow(data), [data]);
   const { nodes, edges, ready } = useElkLayout(rawNodes, rawEdges);
+
+  const stackColors = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const svc of data.nodes) {
+      if (svc.stack && !map.has(svc.stack)) map.set(svc.stack, hashColor(svc.stack));
+    }
+    return map;
+  }, [data]);
 
   if (data.nodes.length === 0) {
     return (
@@ -109,7 +130,7 @@ function LogicalView({ data }: { data: NetworkTopology }) {
       >
         <Background />
       </ReactFlow>
-      <NetworkLegend networks={data.networks} />
+      <StackLegend stackColors={stackColors} />
     </div>
   );
 }
@@ -251,17 +272,19 @@ export default function Topology() {
         </div>
       )}
 
-      {!loading && !error && view === "logical" && networkData && (
-        <ReactFlowProvider>
-          <LogicalView data={networkData} />
-        </ReactFlowProvider>
-      )}
+      <div className="ring-1 ring-border rounded-lg">
+        {!loading && !error && view === "logical" && networkData && (
+          <ReactFlowProvider>
+            <LogicalView data={networkData} />
+          </ReactFlowProvider>
+        )}
 
-      {!loading && !error && view === "physical" && placementData && (
-        <ReactFlowProvider>
-          <PhysicalView data={placementData} />
-        </ReactFlowProvider>
-      )}
+        {!loading && !error && view === "physical" && placementData && (
+          <ReactFlowProvider>
+            <PhysicalView data={placementData} />
+          </ReactFlowProvider>
+        )}
+      </div>
     </div>
   );
 }

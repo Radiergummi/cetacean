@@ -3,27 +3,21 @@ import type { Node, Edge } from "@xyflow/react";
 
 const elk = new ELK();
 
-const NODE_WIDTH = 240;
-const NODE_HEIGHT = 120;
+const NODE_WIDTH = 224; // matches w-56 (14rem) in ServiceCardNode
+const DEFAULT_NODE_HEIGHT = 120;
 const GROUP_PADDING = 20;
 const GROUP_HEADER = 36;
 
 const isGroup = (type?: string) => type === "stackGroup" || type === "nodeGroup";
 
-/**
- * Convert React Flow nodes/edges into an ELK graph, run layout, and return
- * positioned React Flow nodes and edges with bend points.
- */
 export async function computeLayout(
   nodes: Node[],
   edges: Edge[],
   direction: "RIGHT" | "DOWN" = "RIGHT",
 ): Promise<{ nodes: Node[]; edges: Edge[] }> {
-  // Separate groups from leaf nodes
   const groups = nodes.filter((n) => isGroup(n.type));
   const leaves = nodes.filter((n) => !isGroup(n.type));
 
-  // Build ELK children for each group
   const groupChildren = new Map<string, ElkNode[]>();
   for (const g of groups) {
     groupChildren.set(g.id, []);
@@ -33,14 +27,13 @@ export async function computeLayout(
     const elkNode: ElkNode = {
       id: leaf.id,
       width: NODE_WIDTH,
-      height: NODE_HEIGHT,
+      height: (leaf.data as Record<string, unknown>)?._elkHeight as number ?? DEFAULT_NODE_HEIGHT,
     };
     if (leaf.parentId && groupChildren.has(leaf.parentId)) {
       groupChildren.get(leaf.parentId)!.push(elkNode);
     }
   }
 
-  // Build top-level ELK children
   const topLevelChildren: ElkNode[] = [];
 
   for (const g of groups) {
@@ -48,24 +41,23 @@ export async function computeLayout(
       id: g.id,
       layoutOptions: {
         "elk.padding": `[top=${GROUP_HEADER + GROUP_PADDING},left=${GROUP_PADDING},bottom=${GROUP_PADDING},right=${GROUP_PADDING}]`,
+        "elk.spacing.edgeNode": "20",
       },
       children: groupChildren.get(g.id) ?? [],
     });
   }
 
-  // Add ungrouped leaf nodes at top level
   for (const leaf of leaves) {
     if (!leaf.parentId) {
       topLevelChildren.push({
         id: leaf.id,
         width: NODE_WIDTH,
-        height: NODE_HEIGHT,
+        height: (leaf.data as Record<string, unknown>)?._elkHeight as number ?? DEFAULT_NODE_HEIGHT,
       });
     }
   }
 
-  // Build ELK edges (deduplicate: ELK handles one edge per source-target pair)
-  // We need to map our per-network edges back after layout.
+  // Deduplicate edges for ELK (one per source-target pair)
   const elkEdges: ElkExtendedEdge[] = [];
   const seenPairs = new Set<string>();
   for (const edge of edges) {
@@ -88,7 +80,9 @@ export async function computeLayout(
       "elk.hierarchyHandling": "INCLUDE_CHILDREN",
       "elk.layered.spacing.nodeNodeBetweenLayers": "80",
       "elk.spacing.nodeNode": "30",
+      "elk.spacing.edgeNode": "20",
       "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
+      "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
     },
     children: topLevelChildren,
     edges: elkEdges,
@@ -96,15 +90,14 @@ export async function computeLayout(
 
   const layouted = await elk.layout(elkGraph);
 
-  // Extract positions from ELK result
+  // Build absolute position map for all nodes (ELK positions are relative to parent)
   const positionMap = new Map<string, { x: number; y: number; width: number; height: number }>();
 
-  function extractPositions(elkNode: ElkNode, offsetX = 0, offsetY = 0) {
+  function extractPositions(elkNode: ElkNode, offsetX: number, offsetY: number) {
     const x = (elkNode.x ?? 0) + offsetX;
     const y = (elkNode.y ?? 0) + offsetY;
     positionMap.set(elkNode.id, {
-      x,
-      y,
+      x, y,
       width: elkNode.width ?? 0,
       height: elkNode.height ?? 0,
     });
@@ -115,43 +108,49 @@ export async function computeLayout(
     }
   }
 
-  if (layouted.children) {
-    for (const child of layouted.children) {
-      extractPositions(child);
-    }
+  for (const child of layouted.children ?? []) {
+    extractPositions(child, 0, 0);
   }
 
-  // Extract edge bend points from ELK
+  // Extract edge bend points from ELK.
+  // With INCLUDE_CHILDREN + hierarchyHandling, ELK places ALL edges on the
+  // root node, but edges whose "container" is a group have section coordinates
+  // relative to that group. We must add the group's absolute offset.
   const edgeBendPoints = new Map<string, Array<{ x: number; y: number }>>();
-  function extractEdges(elkNode: ElkNode, offsetX = 0, offsetY = 0) {
-    // Global position of this node — edge coords are relative to this
-    const globalX = (elkNode.x ?? 0) + offsetX;
-    const globalY = (elkNode.y ?? 0) + offsetY;
 
-    if (elkNode.edges) {
-      for (const edge of elkNode.edges) {
-        const points: Array<{ x: number; y: number }> = [];
-        for (const section of edge.sections ?? []) {
-          points.push({ x: section.startPoint.x + globalX, y: section.startPoint.y + globalY });
-          if (section.bendPoints) {
-            for (const bp of section.bendPoints) {
-              points.push({ x: bp.x + globalX, y: bp.y + globalY });
-            }
+  // Build container offset lookup from positionMap
+  const containerOffsets = new Map<string, { x: number; y: number }>();
+  containerOffsets.set("root", { x: 0, y: 0 });
+  for (const g of groups) {
+    const pos = positionMap.get(g.id);
+    if (pos) containerOffsets.set(g.id, { x: pos.x, y: pos.y });
+  }
+
+  if (layouted.edges) {
+    for (const edge of layouted.edges) {
+      const container = (edge as unknown as { container?: string }).container ?? "root";
+      const off = containerOffsets.get(container) ?? { x: 0, y: 0 };
+      const points: Array<{ x: number; y: number }> = [];
+      for (const section of edge.sections ?? []) {
+        points.push({
+          x: section.startPoint.x + off.x,
+          y: section.startPoint.y + off.y,
+        });
+        if (section.bendPoints) {
+          for (const bp of section.bendPoints) {
+            points.push({ x: bp.x + off.x, y: bp.y + off.y });
           }
-          points.push({ x: section.endPoint.x + globalX, y: section.endPoint.y + globalY });
         }
-        edgeBendPoints.set(edge.id, points);
+        points.push({
+          x: section.endPoint.x + off.x,
+          y: section.endPoint.y + off.y,
+        });
       }
-    }
-    if (elkNode.children) {
-      for (const child of elkNode.children) {
-        extractEdges(child, globalX, globalY);
-      }
+      edgeBendPoints.set(edge.id, points);
     }
   }
-  extractEdges(layouted);
 
-  // Map back to React Flow nodes
+  // Map to React Flow nodes
   const resultNodes = nodes.map((node) => {
     const pos = positionMap.get(node.id);
     if (!pos) return node;
@@ -164,7 +163,6 @@ export async function computeLayout(
       };
     }
 
-    // Child nodes: React Flow expects position relative to parent
     if (node.parentId) {
       const parentPos = positionMap.get(node.parentId);
       if (parentPos) {
@@ -175,13 +173,10 @@ export async function computeLayout(
       }
     }
 
-    return {
-      ...node,
-      position: { x: pos.x, y: pos.y },
-    };
+    return { ...node, position: { x: pos.x, y: pos.y } };
   });
 
-  // Map back to React Flow edges, injecting bend points
+  // Map to React Flow edges, injecting ELK bend points
   const resultEdges = edges.map((edge) => {
     const pairKey = `${edge.source}:${edge.target}`;
     const points = edgeBendPoints.get(pairKey);

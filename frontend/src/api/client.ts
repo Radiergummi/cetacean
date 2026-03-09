@@ -20,7 +20,16 @@ const BASE = "/api";
 async function fetchJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
   const url = `${BASE}${path}`;
   const res = signal ? await fetch(url, { signal }) : await fetch(url);
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    let message = `${res.status} ${res.statusText}`;
+    try {
+      const body = await res.json();
+      if (body?.error) message = body.error;
+    } catch {
+      // response wasn't JSON, use status text
+    }
+    throw new Error(message);
+  }
   return res.json();
 }
 

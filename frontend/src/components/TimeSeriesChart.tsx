@@ -307,9 +307,9 @@ export default function TimeSeriesChart({
         chartRef.current = new uPlot(opts, data, containerRef.current);
         setState("data");
       })
-      .catch(() => {
+      .catch((err) => {
         if (!cancelled) {
-          setErrorMsg("Failed to load metrics");
+          setErrorMsg(err instanceof Error ? err.message : "Failed to load metrics");
           setState("error");
         }
       });

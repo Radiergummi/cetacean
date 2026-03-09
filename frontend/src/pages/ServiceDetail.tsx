@@ -86,16 +86,9 @@ export default function ServiceDetail() {
                     label="Update Status"
                     value={
                         service.UpdateStatus
-                            ? [
-                                service.UpdateStatus.State,
-                                service.UpdateStatus.Message && `— ${service.UpdateStatus.Message}`,
-                                service.UpdateStatus.StartedAt &&
-                                `started ${timeAgo(service.UpdateStatus.StartedAt)}`,
-                                service.UpdateStatus.CompletedAt &&
-                                `completed ${timeAgo(service.UpdateStatus.CompletedAt)}`,
-                            ]
-                                .filter(Boolean)
-                                .join(" ")
+                            ? `${service.UpdateStatus.State} ${timeAgo(
+                                service.UpdateStatus.CompletedAt || service.UpdateStatus.StartedAt || "",
+                            )}`
                             : undefined
                     }
                 />

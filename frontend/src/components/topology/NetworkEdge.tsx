@@ -1,21 +1,72 @@
+import { EdgeLabelRenderer, type EdgeProps, getSmoothStepPath } from "@xyflow/react";
 import { useState } from "react";
-import { EdgeLabelRenderer, type EdgeProps } from "@xyflow/react";
+import { useNavigate } from "react-router-dom";
+
+type NetworkInfo = {
+  id: string;
+  name: string;
+  driver: string;
+  scope: string;
+  stack?: string;
+  color?: string;
+};
 
 type NetworkEdgeData = {
-  color: string;
-  networkName: string;
-  networkDriver: string;
-  parallelIndex?: number;
-  parallelCount?: number;
+  networks: NetworkInfo[];
   bendPoints?: Array<{ x: number; y: number }>;
 };
 
-function buildOrthogonalPath(points: Array<{ x: number; y: number }>): string {
-  if (points.length < 2) return "";
-  let d = `M ${points[0].x} ${points[0].y}`;
-  for (let i = 1; i < points.length; i++) {
-    d += ` L ${points[i].x} ${points[i].y}`;
+/** Snap points so each segment is strictly horizontal or vertical */
+function snapToOrthogonal(pts: Array<{ x: number; y: number }>): Array<{ x: number; y: number }> {
+  if (pts.length < 2) return pts;
+  const result = [{ ...pts[0] }];
+  for (let i = 1; i < pts.length; i++) {
+    const prev = result[result.length - 1];
+    const curr = { ...pts[i] };
+    const dx = Math.abs(curr.x - prev.x);
+    const dy = Math.abs(curr.y - prev.y);
+    if (dx >= dy) {
+      curr.y = prev.y;
+    } else {
+      curr.x = prev.x;
+    }
+    result.push(curr);
   }
+  return result;
+}
+
+/** Build an SVG path from orthogonal bend points with rounded corners */
+function buildOrthogonalPath(points: Array<{ x: number; y: number }>, radius = 6): string {
+  if (points.length < 2) return "";
+  if (points.length === 2) {
+    return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
+  }
+
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 1; i < points.length - 1; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    const next = points[i + 1];
+
+    const dPrev = Math.max(Math.abs(curr.x - prev.x), Math.abs(curr.y - prev.y));
+    const dNext = Math.max(Math.abs(next.x - curr.x), Math.abs(next.y - curr.y));
+    const r = Math.min(radius, dPrev / 2, dNext / 2);
+
+    const dx1 = Math.sign(curr.x - prev.x);
+    const dy1 = Math.sign(curr.y - prev.y);
+    const dx2 = Math.sign(next.x - curr.x);
+    const dy2 = Math.sign(next.y - curr.y);
+
+    const ax = curr.x - dx1 * r;
+    const ay = curr.y - dy1 * r;
+    const bx = curr.x + dx2 * r;
+    const by = curr.y + dy2 * r;
+
+    d += ` L ${ax} ${ay}`;
+    d += ` Q ${curr.x} ${curr.y} ${bx} ${by}`;
+  }
+  const last = points[points.length - 1];
+  d += ` L ${last.x} ${last.y}`;
   return d;
 }
 
@@ -25,37 +76,50 @@ export default function NetworkEdge({
   sourceY,
   targetX,
   targetY,
+  sourcePosition,
+  targetPosition,
   data,
 }: EdgeProps & { data: NetworkEdgeData }) {
   const [hovered, setHovered] = useState(false);
+  const navigate = useNavigate();
 
-  // Use ELK bend points if available, fall back to straight line
-  const points = data.bendPoints && data.bendPoints.length >= 2
-    ? data.bendPoints
-    : [{ x: sourceX, y: sourceY }, { x: targetX, y: targetY }];
+  const isStackNetwork = data.networks.some((n) => n.color != null);
+  const color = isStackNetwork
+    ? data.networks.find((n) => n.color)!.color!
+    : "var(--color-muted-foreground)";
+  const strokeWidth = hovered ? 2 : isStackNetwork ? 1.5 : 1;
 
-  // Offset parallel edges slightly so multiple networks between same pair are visible
-  const offset = data.parallelCount && data.parallelCount > 1
-    ? ((data.parallelIndex ?? 0) - ((data.parallelCount - 1) / 2)) * 6
-    : 0;
+  let edgePath: string;
+  let labelX: number;
+  let labelY: number;
 
-  const offsetPoints = offset !== 0
-    ? points.map((p) => ({ x: p.x, y: p.y + offset }))
-    : points;
-
-  const edgePath = buildOrthogonalPath(offsetPoints);
-
-  // Label position at midpoint
-  const mid = offsetPoints[Math.floor(offsetPoints.length / 2)];
+  if (data.bendPoints && data.bendPoints.length >= 2) {
+    const snapped = snapToOrthogonal(data.bendPoints);
+    edgePath = buildOrthogonalPath(snapped, 8);
+    const mid = snapped[Math.floor(snapped.length / 2)];
+    labelX = mid.x;
+    labelY = mid.y;
+  } else {
+    const result = getSmoothStepPath({
+      sourceX,
+      sourceY,
+      targetX,
+      targetY,
+      sourcePosition,
+      targetPosition,
+      borderRadius: 8,
+    });
+    edgePath = result[0];
+    labelX = result[1];
+    labelY = result[2];
+  }
 
   return (
     <>
       <path
         id={id}
         d={edgePath}
-        stroke={data.color}
-        strokeWidth={hovered ? 3 : 2}
-        strokeOpacity={hovered ? 1 : 0.6}
+        style={{ stroke: color, strokeWidth }}
         fill="none"
         className="react-flow__edge-path transition-all"
       />
@@ -67,17 +131,34 @@ export default function NetworkEdge({
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       />
-      {hovered && mid && (
+      {hovered && (
         <EdgeLabelRenderer>
           <div
-            className="absolute rounded bg-popover border shadow-sm px-2 py-1 text-xs pointer-events-none"
+            className="absolute rounded-lg bg-popover border shadow-md px-2.5 py-1.5 text-xs"
             style={{
-              transform: `translate(-50%, -50%) translate(${mid.x}px, ${mid.y}px)`,
+              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
               zIndex: 1000,
             }}
           >
-            <div className="font-medium">{data.networkName}</div>
-            <div className="text-muted-foreground">{data.networkDriver}</div>
+            {data.networks.map((net) => (
+              <div
+                key={net.id}
+                className="flex items-center gap-1.5 py-0.5 cursor-pointer hover:underline"
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  navigate(`/networks`);
+                }}
+              >
+                <span
+                  className="inline-block w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: net.color ?? "var(--color-muted-foreground)" }}
+                />
+                <span className="font-medium">{net.name}</span>
+                <span className="text-muted-foreground">
+                  {net.driver} · {net.scope}
+                </span>
+              </div>
+            ))}
           </div>
         </EdgeLabelRenderer>
       )}

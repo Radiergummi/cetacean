@@ -16,7 +16,7 @@ const COLORS = [
   "#84cc16",
 ];
 
-function hashColor(id: string): string {
+export function hashColor(id: string): string {
   let h = 0;
   for (let i = 0; i < id.length; i++) {
     h = (h * 31 + id.charCodeAt(i)) | 0;
@@ -29,6 +29,19 @@ function stripStackPrefix(name: string, stack?: string): string {
     return name.slice(stack.length + 1);
   }
   return name;
+}
+
+/** Estimate rendered card height for ELK layout (matches ServiceCardNode CSS). */
+function estimateCardHeight(ports?: string[], updateStatus?: string): number {
+  // base: border(4) + p-3(24) + name(20) + mb(4) + image(16) + mb(4) + replicas(16) + mb(4)
+  let h = 92;
+  if (ports && ports.length > 0) h += ports.length * 16;
+  if (updateStatus) h += 20;
+  return h;
+}
+
+function byId(a: { id: string }, b: { id: string }): number {
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
 export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges: Edge[] } {
@@ -48,16 +61,23 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
     stackColorMap.set(stack, hashColor(stack));
   }
 
+  // Normalize edge directions: smaller ID is always source (edges are symmetric
+  // network connections, but stable direction is needed for deterministic layout).
+  const normalizedEdges = data.edges.map((e) =>
+    e.source <= e.target ? e : { ...e, source: e.target, target: e.source },
+  );
+
   // Build connected service set (services that have at least one edge)
   const connectedSources = new Set<string>();
   const connectedTargets = new Set<string>();
-  for (const edge of data.edges) {
+  for (const edge of normalizedEdges) {
     connectedSources.add(edge.source);
     connectedTargets.add(edge.target);
   }
 
-  // Create stack group nodes
-  for (const stack of stacks) {
+  // Create stack group nodes (sorted for deterministic layout)
+  const sortedStacks = [...stacks].sort();
+  for (const stack of sortedStacks) {
     nodes.push({
       id: `stack:${stack}`,
       type: "stackGroup",
@@ -66,8 +86,9 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
     });
   }
 
-  // Create service nodes
-  for (const svc of data.nodes) {
+  // Create service nodes (sorted by ID for deterministic layout)
+  const sortedServices = [...data.nodes].sort(byId);
+  for (const svc of sortedServices) {
     const node: Node = {
       id: svc.id,
       type: "serviceCard",
@@ -83,6 +104,7 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
         stackColor: svc.stack ? stackColorMap.get(svc.stack) : undefined,
         hasSourceEdge: connectedSources.has(svc.id),
         hasTargetEdge: connectedTargets.has(svc.id),
+        _elkHeight: estimateCardHeight(svc.ports, svc.updateStatus),
       },
     };
     if (svc.stack) {
@@ -91,24 +113,30 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
     nodes.push(node);
   }
 
-  // Create edges: one per network per API edge, with parallel offsets
-  for (const edge of data.edges) {
-    const count = edge.networks.length;
-    edge.networks.forEach((netId, index) => {
+  // Create one edge per source-target pair, collecting all shared networks
+  const sortedEdges = [...normalizedEdges].sort((a, b) => {
+    const ka = `${a.source}:${a.target}`;
+    const kb = `${b.source}:${b.target}`;
+    return ka < kb ? -1 : ka > kb ? 1 : 0;
+  });
+  for (const edge of sortedEdges) {
+    const networks = [...edge.networks].sort().map((netId) => {
       const net = networkMap.get(netId);
-      edges.push({
-        id: `net:${netId}:${edge.source}:${edge.target}`,
-        source: edge.source,
-        target: edge.target,
-        type: "networkEdge",
-        data: {
-          color: hashColor(netId),
-          networkName: net?.name ?? netId,
-          networkDriver: net?.driver ?? "unknown",
-          parallelIndex: index,
-          parallelCount: count,
-        },
-      });
+      return {
+        id: netId,
+        name: net?.name ?? netId,
+        driver: net?.driver ?? "unknown",
+        scope: net?.scope ?? "swarm",
+        stack: net?.stack,
+        color: net?.stack ? stackColorMap.get(net.stack) ?? hashColor(netId) : undefined,
+      };
+    });
+    edges.push({
+      id: `edge:${edge.source}:${edge.target}`,
+      source: edge.source,
+      target: edge.target,
+      type: "networkEdge",
+      data: { networks },
     });
   }
 
@@ -118,7 +146,8 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
 export function buildPhysicalFlow(data: PlacementTopology): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
 
-  for (const clusterNode of data.nodes) {
+  const sortedClusterNodes = [...data.nodes].sort(byId);
+  for (const clusterNode of sortedClusterNodes) {
     nodes.push({
       id: clusterNode.id,
       type: "nodeGroup",
@@ -132,7 +161,8 @@ export function buildPhysicalFlow(data: PlacementTopology): { nodes: Node[]; edg
       },
     });
 
-    for (const task of clusterNode.tasks) {
+    const sortedTasks = [...clusterNode.tasks].sort(byId);
+    for (const task of sortedTasks) {
       nodes.push({
         id: task.id,
         type: "taskCard",

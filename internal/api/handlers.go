@@ -65,6 +65,15 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
+func writeError(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"error":  msg,
+		"status": status,
+	})
+}
+
 func searchFilter[T any](items []T, query string, name func(T) string) []T {
 	if query == "" {
 		return items
@@ -86,19 +95,19 @@ func exprFilter[T any](items []T, expr string, env func(T) map[string]any, w htt
 		return items, true
 	}
 	if len(expr) > maxFilterLen {
-		http.Error(w, "filter expression too long", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "filter expression too long")
 		return nil, false
 	}
 	prog, err := filter.Compile(expr)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("invalid filter expression: %s", err), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("invalid filter expression: %s", err))
 		return nil, false
 	}
 	var filtered []T
 	for _, item := range items {
 		ok, err := filter.Evaluate(prog, env(item))
 		if err != nil {
-			http.Error(w, fmt.Sprintf("filter evaluation error: %s", err), http.StatusBadRequest)
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("filter evaluation error: %s", err))
 			return nil, false
 		}
 		if ok {
@@ -135,7 +144,7 @@ func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	node, ok := h.cache.GetNode(id)
 	if !ok {
-		http.NotFound(w, r)
+		writeError(w, http.StatusNotFound, fmt.Sprintf("node %q not found", id))
 		return
 	}
 	writeJSON(w, node)
@@ -145,7 +154,7 @@ func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	_, ok := h.cache.GetNode(id)
 	if !ok {
-		http.NotFound(w, r)
+		writeError(w, http.StatusNotFound, fmt.Sprintf("node %q not found", id))
 		return
 	}
 	writeJSON(w, h.cache.ListTasksByNode(id))
@@ -177,7 +186,7 @@ func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		http.NotFound(w, r)
+		writeError(w, http.StatusNotFound, fmt.Sprintf("service %q not found", id))
 		return
 	}
 	writeJSON(w, svc)
@@ -187,7 +196,7 @@ func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		http.NotFound(w, r)
+		writeError(w, http.StatusNotFound, fmt.Sprintf("service %q not found", id))
 		return
 	}
 	writeJSON(w, h.cache.ListTasksByService(id))
@@ -197,7 +206,7 @@ func (h *Handlers) HandleServiceLogs(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		http.NotFound(w, r)
+		writeError(w, http.StatusNotFound, fmt.Sprintf("service %q not found", id))
 		return
 	}
 	h.serveLogs(w, r, func(ctx context.Context, tail string, follow bool, since, until string) (LogStream, error) {
@@ -226,7 +235,7 @@ func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	task, ok := h.cache.GetTask(id)
 	if !ok {
-		http.NotFound(w, r)
+		writeError(w, http.StatusNotFound, fmt.Sprintf("task %q not found", id))
 		return
 	}
 	writeJSON(w, task)
@@ -236,7 +245,7 @@ func (h *Handlers) HandleTaskLogs(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	_, ok := h.cache.GetTask(id)
 	if !ok {
-		http.NotFound(w, r)
+		writeError(w, http.StatusNotFound, fmt.Sprintf("task %q not found", id))
 		return
 	}
 	h.serveLogs(w, r, func(ctx context.Context, tail string, follow bool, since, until string) (LogStream, error) {
@@ -286,14 +295,14 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 
 	logs, err := fetch(ctx, strconv.Itoa(limit), false, since, until)
 	if err != nil {
-		http.Error(w, "failed to get logs", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to get logs: %s", err))
 		return
 	}
 	defer logs.Close() //nolint:errcheck
 
 	lines, err := ParseDockerLogs(logs)
 	if err != nil {
-		http.Error(w, "failed to parse logs", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to parse logs: %s", err))
 		return
 	}
 	if lines == nil {
@@ -325,7 +334,7 @@ func (h *Handlers) serveLogsSSE(w http.ResponseWriter, r *http.Request, fetch lo
 	}
 	logs, err := fetch(r.Context(), "0", true, since, "")
 	if err != nil {
-		http.Error(w, "failed to get logs", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to stream logs: %s", err))
 		return
 	}
 	defer logs.Close() //nolint:errcheck
@@ -337,7 +346,7 @@ func (h *Handlers) serveLogsSSE(w http.ResponseWriter, r *http.Request, fetch lo
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "streaming not supported")
 		return
 	}
 
@@ -418,7 +427,7 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	detail, ok := h.cache.GetStackDetail(name)
 	if !ok {
-		http.NotFound(w, r)
+		writeError(w, http.StatusNotFound, fmt.Sprintf("stack %q not found", name))
 		return
 	}
 	writeJSON(w, detail)

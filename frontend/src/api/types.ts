@@ -257,6 +257,8 @@ export interface TopoNetwork {
   id: string;
   name: string;
   driver: string;
+  scope: string;
+  stack?: string;
 }
 
 export interface PlacementTopology {
