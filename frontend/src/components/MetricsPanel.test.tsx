@@ -48,7 +48,7 @@ describe("MetricsPanel", () => {
     expect(screen.getByTitle("Refresh")).toBeInTheDocument();
   });
 
-  it("renders auto-refresh checkbox", () => {
+  it("renders auto-refresh button", () => {
     render(<MetricsPanel charts={charts} />, { wrapper });
     expect(screen.getByTitle("Auto-refresh (30s)")).toBeInTheDocument();
   });

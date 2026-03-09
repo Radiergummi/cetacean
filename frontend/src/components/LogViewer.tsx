@@ -221,7 +221,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
       es.close();
       abortRef.current = null;
     };
-  }, [live, logId, isTask]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [live, logId, isTask, streamParam]);
 
   // Auto-scroll to bottom when following (scroll within the container, not the page)
   useEffect(() => {

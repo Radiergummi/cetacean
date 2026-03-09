@@ -26,6 +26,12 @@ const RANGE_SEGMENTS: Segment<string>[] = RANGES.map((r) => ({ value: r, label: 
 export default function MetricsPanel({ charts, header }: Props) {
   const [params, setParams] = useSearchParams();
   const [range, setRangeState] = useState<string>(params.get("range") ?? "1h");
+
+  useEffect(() => {
+    const fromUrl = params.get("range") ?? "1h";
+    setRangeState(fromUrl);
+  }, [params]);
+
   const setRange = (r: string) => {
     setRangeState(r);
     setParams(

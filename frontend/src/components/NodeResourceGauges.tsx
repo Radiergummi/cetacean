@@ -36,24 +36,26 @@ const GAUGES: GaugeDef[] = [
   },
 ];
 
-export default function NodeResourceGauges({ addr }: { addr?: string }) {
+interface Props {
+  instance?: string;
+}
+
+export default function NodeResourceGauges({ instance }: Props) {
   const [values, setValues] = useState<(number | null)[]>(GAUGES.map(() => null));
 
   const fetchAll = useCallback(() => {
-    GAUGES.forEach((g, i) => {
-      api
-        .metricsQuery(g.query(addr))
-        .then((resp: any) => {
-          const val = resp.data?.result?.[0]?.value?.[1];
-          setValues((prev) => {
-            const next = [...prev];
-            next[i] = val != null ? Number(val) : null;
-            return next;
-          });
-        })
-        .catch(() => {});
-    });
-  }, [addr]);
+    Promise.all(
+      GAUGES.map((g) =>
+        api
+          .metricsQuery(g.query(instance))
+          .then((resp: any) => {
+            const val = resp.data?.result?.[0]?.value?.[1];
+            return val != null ? Number(val) : null;
+          })
+          .catch(() => null),
+      ),
+    ).then(setValues);
+  }, [instance]);
 
   useEffect(() => {
     fetchAll();

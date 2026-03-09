@@ -22,7 +22,7 @@ services:
           memory: 256M
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.3.0
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -40,7 +40,7 @@ services:
           memory: 512M
 
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:latest
+    image: gcr.io/cadvisor/cadvisor:v0.51.0
     command:
       - '--store_container_labels=true'
       - '--docker_only=true'
@@ -62,7 +62,7 @@ services:
           memory: 64M
 
   node-exporter:
-    image: prom/node-exporter:latest
+    image: prom/node-exporter:v1.9.0
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro

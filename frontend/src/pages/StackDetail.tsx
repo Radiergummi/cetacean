@@ -5,22 +5,43 @@ import { api } from "../api/client";
 import type { StackDetail as StackDetailType, Task } from "../api/types";
 import PageHeader from "../components/PageHeader";
 import { LoadingDetail } from "../components/LoadingSkeleton";
+import FetchError from "../components/FetchError";
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
+        {title}
+      </h2>
+      {children}
+    </div>
+  );
+}
+
+function SectionEmpty() {
+  return <p className="text-sm text-muted-foreground">None</p>;
+}
 
 export default function StackDetail() {
   const { name } = useParams<{ name: string }>();
   const [stack, setStack] = useState<StackDetailType | null>(null);
+  const [error, setError] = useState(false);
   const [taskCounts, setTaskCounts] = useState<Record<string, { running: number; total: number }>>(
     {},
   );
 
   useEffect(() => {
     if (name) {
-      api.stack(name).then(setStack);
+      api
+        .stack(name)
+        .then(setStack)
+        .catch(() => setError(true));
     }
   }, [name]);
 
   useEffect(() => {
     if (!stack?.services?.length) return;
+    let cancelled = false;
     Promise.all(
       stack.services.map((svc) =>
         api
@@ -29,6 +50,7 @@ export default function StackDetail() {
           .catch(() => [svc.ID, []] as const),
       ),
     ).then((results) => {
+      if (cancelled) return;
       const counts: Record<string, { running: number; total: number }> = {};
       for (const [id, tasks] of results) {
         counts[id] = {
@@ -38,8 +60,12 @@ export default function StackDetail() {
       }
       setTaskCounts(counts);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [stack]);
 
+  if (error) return <FetchError message="Failed to load stack" />;
   if (!stack) return <LoadingDetail />;
 
   const parts: string[] = [];
@@ -54,15 +80,6 @@ export default function StackDetail() {
   if (stack.volumes?.length)
     parts.push(`${stack.volumes.length} volume${stack.volumes.length !== 1 ? "s" : ""}`);
   const subtitle = parts.join(", ");
-
-  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-    <div>
-      <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-        {title}
-      </h2>
-      {children}
-    </div>
-  );
 
   return (
     <div className="flex flex-col gap-6">

@@ -17,6 +17,7 @@ import type {Threshold} from "../components/TimeSeriesChart";
 import {formatBytes} from "../lib/formatBytes";
 import {imageRegistryUrl} from "../lib/imageUrl";
 import {statusColor} from "../lib/statusColor";
+import FetchError from "../components/FetchError";
 
 export default function ServiceDetail() {
     const {id} = useParams<{ id: string }>();
@@ -24,10 +25,11 @@ export default function ServiceDetail() {
     const [tasks, setTasks] = useState<Task[]>([]);
     const [stateFilter, setStateFilter] = useState<string | null>(null);
     const [history, setHistory] = useState<HistoryEntry[]>([]);
+    const [error, setError] = useState(false);
 
     useEffect(() => {
         if (id) {
-            api.service(id).then(setService);
+            api.service(id).then(setService).catch(() => setError(true));
             api
                 .serviceTasks(id)
                 .then(setTasks)
@@ -48,6 +50,7 @@ export default function ServiceDetail() {
         );
     }, [tasks, stateFilter]);
 
+    if (error) return <FetchError message="Failed to load service" />;
     if (!service) {
         return <LoadingDetail/>;
     }

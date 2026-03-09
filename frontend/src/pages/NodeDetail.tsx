@@ -65,7 +65,7 @@ export default function NodeDetail() {
       />
       <div className="rounded-lg border bg-card p-4">
         <ErrorBoundary inline>
-          <NodeResourceGauges addr={addr} />
+          <NodeResourceGauges instance={addr} />
         </ErrorBoundary>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

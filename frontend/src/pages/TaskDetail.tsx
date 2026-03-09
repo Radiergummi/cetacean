@@ -8,18 +8,24 @@ import TaskStatusBadge from "../components/TaskStatusBadge";
 import LogViewer from "../components/LogViewer";
 import PageHeader from "../components/PageHeader";
 import { LoadingDetail } from "../components/LoadingSkeleton";
+import FetchError from "../components/FetchError";
 import { timeAgo } from "../components/TimeAgo";
 
 export default function TaskDetail() {
   const { id } = useParams<{ id: string }>();
   const [task, setTask] = useState<Task | null>(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     if (id) {
-      api.task(id).then(setTask);
+      api
+        .task(id)
+        .then(setTask)
+        .catch(() => setError(true));
     }
   }, [id]);
 
+  if (error) return <FetchError message="Failed to load task" />;
   if (!task) return <LoadingDetail />;
 
   const shortId = task.ID.slice(0, 12);

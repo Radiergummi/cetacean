@@ -241,6 +241,10 @@ export interface TopoServiceNode {
   name: string;
   stack?: string;
   replicas: number;
+  image: string;
+  ports?: string[];
+  mode: string;
+  updateStatus?: string;
 }
 
 export interface TopoEdge {
@@ -264,6 +268,7 @@ export interface TopoClusterNode {
   hostname: string;
   role: string;
   state: string;
+  availability: string;
   tasks: TopoTask[];
 }
 
@@ -273,6 +278,7 @@ export interface TopoTask {
   serviceName: string;
   state: string;
   slot: number;
+  image: string;
 }
 
 export interface NotificationRuleStatus {

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
 export type SortDir = "asc" | "desc";
@@ -19,6 +19,15 @@ export function useSort<T>(
 
   const [sortKey, setSortKey] = useState<string | undefined>(initialKey);
   const [sortDir, setSortDir] = useState<SortDir>(initialDir);
+
+  useEffect(() => {
+    const urlKey = params.get("sort") ?? defaultKey;
+    const urlDir = (
+      params.get("dir") === "desc" ? "desc" : params.get("dir") === "asc" ? "asc" : defaultDir
+    ) as SortDir;
+    setSortKey(urlKey);
+    setSortDir(urlDir);
+  }, [params, defaultKey, defaultDir]);
 
   const toggle = (key: string) => {
     let newKey: string;
