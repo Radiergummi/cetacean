@@ -13,13 +13,15 @@ import (
 
 func TestNotifier_FiresWebhook(t *testing.T) {
 	var calls atomic.Int32
-	var received WebhookPayload
+	payloads := make(chan WebhookPayload, 1)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
+		var p WebhookPayload
+		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 			t.Errorf("decode payload: %v", err)
 		}
+		payloads <- p
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -36,28 +38,31 @@ func TestNotifier_FiresWebhook(t *testing.T) {
 	n := New(rules)
 	n.HandleEvent(cache.Event{Type: "task", Action: "update", ID: "task-123"}, "web.1")
 
-	time.Sleep(100 * time.Millisecond)
-
-	if got := calls.Load(); got != 1 {
-		t.Fatalf("expected 1 webhook call, got %d", got)
-	}
-	if received.Rule != "task failures" {
-		t.Errorf("expected rule name %q, got %q", "task failures", received.Rule)
-	}
-	if received.Event.Type != "task" {
-		t.Errorf("expected event type %q, got %q", "task", received.Event.Type)
-	}
-	if received.Event.Action != "update" {
-		t.Errorf("expected event action %q, got %q", "update", received.Event.Action)
-	}
-	if received.Event.ResourceID != "task-123" {
-		t.Errorf("expected resource ID %q, got %q", "task-123", received.Event.ResourceID)
-	}
-	if received.Event.Name != "web.1" {
-		t.Errorf("expected name %q, got %q", "web.1", received.Event.Name)
-	}
-	if received.Timestamp.IsZero() {
-		t.Error("expected non-zero timestamp")
+	select {
+	case received := <-payloads:
+		if got := calls.Load(); got != 1 {
+			t.Fatalf("expected 1 webhook call, got %d", got)
+		}
+		if received.Rule != "task failures" {
+			t.Errorf("expected rule name %q, got %q", "task failures", received.Rule)
+		}
+		if received.Event.Type != "task" {
+			t.Errorf("expected event type %q, got %q", "task", received.Event.Type)
+		}
+		if received.Event.Action != "update" {
+			t.Errorf("expected event action %q, got %q", "update", received.Event.Action)
+		}
+		if received.Event.ResourceID != "task-123" {
+			t.Errorf("expected resource ID %q, got %q", "task-123", received.Event.ResourceID)
+		}
+		if received.Event.Name != "web.1" {
+			t.Errorf("expected name %q, got %q", "web.1", received.Event.Name)
+		}
+		if received.Timestamp.IsZero() {
+			t.Error("expected non-zero timestamp")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for webhook call")
 	}
 }
 
@@ -168,10 +173,10 @@ func TestNotifier_CircuitBreaker(t *testing.T) {
 }
 
 func TestNotifier_CircuitResetsOnSuccess(t *testing.T) {
-	callCount := 0
+	var callCount atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		callCount++
-		if callCount <= 3 {
+		n := callCount.Add(1)
+		if n <= 3 {
 			w.WriteHeader(http.StatusInternalServerError)
 		} else {
 			w.WriteHeader(http.StatusOK)

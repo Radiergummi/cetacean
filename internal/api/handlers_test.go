@@ -29,6 +29,15 @@ func TestHandleHealth(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("status=%d, want 200", w.Code)
 	}
+	var body map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"status", "version", "commit", "buildDate"} {
+		if body[key] == "" {
+			t.Errorf("missing key %q in health response", key)
+		}
+	}
 }
 
 func TestHandleReady_NotReady(t *testing.T) {

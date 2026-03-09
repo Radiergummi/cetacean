@@ -18,6 +18,7 @@ import (
 	"cetacean/internal/config"
 	"cetacean/internal/docker"
 	"cetacean/internal/notify"
+	"cetacean/internal/version"
 )
 
 //go:embed frontend/dist/*
@@ -137,7 +138,7 @@ func main() {
 		}
 	}()
 
-	slog.Info("server started", "addr", cfg.ListenAddr)
+	slog.Info("server started", "addr", cfg.ListenAddr, "version", version.Version, "commit", version.Commit)
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		slog.Error("server error", "error", err)
 		os.Exit(1)

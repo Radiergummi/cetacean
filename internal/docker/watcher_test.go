@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 
 // mockClient implements DockerClient for testing.
 type mockClient struct {
+	mu       sync.Mutex
 	nodes    []swarm.Node
 	services []swarm.Service
 	tasks    []swarm.Task
@@ -42,7 +44,15 @@ func newMockClient() *mockClient {
 	}
 }
 
+func (m *mockClient) setNodes(nodes []swarm.Node) {
+	m.mu.Lock()
+	m.nodes = nodes
+	m.mu.Unlock()
+}
+
 func (m *mockClient) FullSync(ctx context.Context) cache.FullSyncData {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	var data cache.FullSyncData
 	if m.listErrors["nodes"] == nil {
 		data.Nodes, data.HasNodes = m.nodes, true
@@ -542,37 +552,34 @@ func TestRun_ReconnectsAfterEventStreamError(t *testing.T) {
 	mc := newMockClient()
 	mc.nodes = []swarm.Node{{ID: "n1"}}
 
-	var syncCount int
-	origNodes := mc.nodes
-
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// Track syncs by watching node count changes
 	go func() {
 		<-w.Ready() // first sync done
-		syncCount++
 
-		// Trigger disconnect
+		// Update nodes and trigger disconnect; the mutex in setNodes
+		// synchronizes with FullSync's read during reconnect.
+		mc.setNodes([]swarm.Node{{ID: "n1"}, {ID: "n2"}})
 		mc.errCh <- fmt.Errorf("stream ended")
 
-		// After reconnect sleep (1s) + re-sync, add another node
-		time.Sleep(1500 * time.Millisecond)
-		mc.nodes = append(origNodes, swarm.Node{ID: "n2"})
-		syncCount++
+		// Wait for reconnect (1s sleep + re-sync)
+		time.Sleep(2 * time.Second)
 
-		// Trigger another disconnect to force re-sync with new data
+		// Trigger another disconnect to verify repeated reconnect
 		mc.errCh <- fmt.Errorf("stream ended again")
 
-		time.Sleep(1500 * time.Millisecond)
+		time.Sleep(2 * time.Second)
 		cancel()
 	}()
 
 	w.Run(ctx)
 
-	if syncCount < 2 {
-		t.Errorf("expected at least 2 syncs, got %d", syncCount)
+	// After reconnect syncs, the cache should reflect the updated node list
+	nodes := c.ListNodes()
+	if len(nodes) != 2 {
+		t.Errorf("expected 2 nodes after reconnect syncs, got %d", len(nodes))
 	}
 }

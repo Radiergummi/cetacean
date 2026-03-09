@@ -19,6 +19,7 @@ import (
 	"cetacean/internal/docker"
 	"cetacean/internal/filter"
 	"cetacean/internal/notify"
+	"cetacean/internal/version"
 )
 
 const defaultLogLimit = 500
@@ -50,7 +51,12 @@ func (h *Handlers) isReady() bool {
 }
 
 func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, map[string]string{"status": "ok"})
+	writeJSON(w, map[string]string{
+		"status":    "ok",
+		"version":   version.Version,
+		"commit":    version.Commit,
+		"buildDate": version.Date,
+	})
 }
 
 func (h *Handlers) HandleReady(w http.ResponseWriter, r *http.Request) {

@@ -1,24 +1,36 @@
+# syntax=docker/dockerfile:1
+
 # Stage 1: Build frontend
 FROM node:22-alpine AS frontend
 WORKDIR /app/frontend
-COPY frontend/package*.json ./
-RUN npm ci
-COPY frontend/ ./
+COPY --link frontend/package*.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci
+COPY --link frontend/ ./
 RUN npm run build
 
 # Stage 2: Build Go binary
 FROM golang:1.26-alpine AS backend
+ARG VERSION=dev
+ARG COMMIT=unknown
 WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
+COPY --link go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+COPY --link . .
 COPY --from=frontend /app/frontend/dist ./frontend/dist
-RUN CGO_ENABLED=0 go build -o cetacean .
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build -ldflags "-s -w \
+    -X cetacean/internal/version.Version=${VERSION} \
+    -X cetacean/internal/version.Commit=${COMMIT} \
+    -X cetacean/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -o cetacean .
 
 # Stage 3: Minimal runtime
 FROM alpine:3.21
 RUN apk add --no-cache ca-certificates
 COPY --from=backend /app/cetacean /usr/local/bin/cetacean
-# Runs as root to access Docker socket. Read-only tool with no user-facing attack surface.
 EXPOSE 9000
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
+  CMD wget -qO- http://localhost:9000/api/health || exit 1
 ENTRYPOINT ["cetacean"]
