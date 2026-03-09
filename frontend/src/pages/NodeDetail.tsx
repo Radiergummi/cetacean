@@ -65,7 +65,7 @@ export default function NodeDetail() {
       />
       <div className="rounded-lg border bg-card p-4">
         <ErrorBoundary inline>
-          <NodeResourceGauges />
+          <NodeResourceGauges addr={addr} />
         </ErrorBoundary>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -170,22 +170,22 @@ export default function NodeDetail() {
           charts={[
             {
               title: "CPU Usage",
-              query: `100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)`,
+              query: `100 - (avg(rate(node_cpu_seconds_total{mode="idle",instance=~"${addr}:.*"}[5m])) * 100)`,
               unit: "%",
             },
             {
               title: "Memory Usage",
-              query: `(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100`,
+              query: `(1 - node_memory_MemAvailable_bytes{instance=~"${addr}:.*"} / node_memory_MemTotal_bytes{instance=~"${addr}:.*"}) * 100`,
               unit: "%",
             },
             {
               title: "Disk I/O",
-              query: `sum(rate(node_disk_read_bytes_total[5m]))`,
+              query: `sum(rate(node_disk_read_bytes_total{instance=~"${addr}:.*"}[5m]))`,
               unit: "bytes/s",
             },
             {
               title: "Network I/O",
-              query: `sum(rate(node_network_receive_bytes_total{device!="lo"}[5m]))`,
+              query: `sum(rate(node_network_receive_bytes_total{device!="lo",instance=~"${addr}:.*"}[5m]))`,
               unit: "bytes/s",
             },
           ]}
