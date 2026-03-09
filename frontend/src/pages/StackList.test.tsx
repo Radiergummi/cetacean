@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import type { ReactNode } from "react";
 import { SSEProvider } from "../hooks/SSEContext";
 import StackList from "./StackList";
-import type { Stack } from "../api/types";
+import type { StackSummary } from "../api/types";
 
 class MockEventSource {
   static instance: MockEventSource;
@@ -27,20 +27,28 @@ class MockEventSource {
 
 vi.mock("../api/client", () => ({
   api: {
-    stacks: vi.fn(),
+    stacksSummary: vi.fn(),
   },
 }));
 
 import { api } from "../api/client";
-const mockStacks = vi.mocked(api.stacks);
+const mockSummary = vi.mocked(api.stacksSummary);
 
-const fakeStack = (name: string): Stack => ({
+const fakeSummary = (name: string, overrides?: Partial<StackSummary>): StackSummary => ({
   name,
-  services: ["svc1"],
-  configs: ["cfg1"],
-  secrets: [],
-  networks: ["net1"],
-  volumes: [],
+  serviceCount: 2,
+  configCount: 1,
+  secretCount: 0,
+  networkCount: 1,
+  volumeCount: 0,
+  desiredTasks: 3,
+  tasksByState: { running: 3 },
+  updatingServices: 0,
+  memoryLimitBytes: 1024 * 1024 * 1024,
+  memoryUsageBytes: 512 * 1024 * 1024,
+  cpuLimitCores: 2,
+  cpuUsagePercent: 45,
+  ...overrides,
 });
 
 beforeEach(() => {
@@ -50,7 +58,7 @@ beforeEach(() => {
     setItem: vi.fn(),
     removeItem: vi.fn(),
   });
-  mockStacks.mockReset();
+  mockSummary.mockReset();
 });
 
 afterEach(() => {
@@ -66,9 +74,8 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 describe("StackList", () => {
-  it("renders stack list", async () => {
-    const items = [fakeStack("monitoring"), fakeStack("app")];
-    mockStacks.mockResolvedValue({ items, total: 2 });
+  it("renders stack summaries", async () => {
+    mockSummary.mockResolvedValue([fakeSummary("monitoring"), fakeSummary("app")]);
     render(<StackList />, { wrapper });
 
     await waitFor(() => {
@@ -78,15 +85,7 @@ describe("StackList", () => {
   });
 
   it("filters by search", async () => {
-    mockStacks
-      .mockResolvedValueOnce({
-        items: [fakeStack("monitoring"), fakeStack("app")],
-        total: 2,
-      })
-      .mockResolvedValueOnce({
-        items: [fakeStack("app")],
-        total: 1,
-      });
+    mockSummary.mockResolvedValue([fakeSummary("monitoring"), fakeSummary("app")]);
     render(<StackList />, { wrapper });
 
     await waitFor(() => {
@@ -104,7 +103,7 @@ describe("StackList", () => {
   });
 
   it("shows empty state", async () => {
-    mockStacks.mockResolvedValue({ items: [], total: 0 });
+    mockSummary.mockResolvedValue([]);
     render(<StackList />, { wrapper });
 
     await waitFor(() => {
@@ -113,11 +112,20 @@ describe("StackList", () => {
   });
 
   it("shows error state", async () => {
-    mockStacks.mockRejectedValue(new Error("Failed"));
+    mockSummary.mockRejectedValue(new Error("Failed"));
     render(<StackList />, { wrapper });
 
     await waitFor(() => {
       expect(screen.getByText("Failed")).toBeInTheDocument();
+    });
+  });
+
+  it("shows update badge when services are updating", async () => {
+    mockSummary.mockResolvedValue([fakeSummary("myapp", { updatingServices: 2 })]);
+    render(<StackList />, { wrapper });
+
+    await waitFor(() => {
+      expect(screen.getByText("Updating 2")).toBeInTheDocument();
     });
   });
 });
