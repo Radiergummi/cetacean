@@ -17,8 +17,9 @@ import type {
 
 const BASE = "/api";
 
-async function fetchJSON<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`);
+async function fetchJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const url = `${BASE}${path}`;
+  const res = signal ? await fetch(url, { signal }) : await fetch(url);
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json();
 }
@@ -88,24 +89,24 @@ export const api = {
   task: (id: string) => fetchJSON<Task>(`/tasks/${id}`),
   taskLogs: (
     id: string,
-    opts?: { limit?: number; after?: string; before?: string; stream?: string },
+    opts?: { limit?: number; after?: string; before?: string; stream?: string; signal?: AbortSignal },
   ) => {
     const params = new URLSearchParams({ limit: String(opts?.limit || 500) });
     if (opts?.after) params.set("after", opts.after);
     if (opts?.before) params.set("before", opts.before);
     if (opts?.stream) params.set("stream", opts.stream);
-    return fetchJSON<LogResponse>(`/tasks/${id}/logs?${params}`);
+    return fetchJSON<LogResponse>(`/tasks/${id}/logs?${params}`, opts?.signal);
   },
   serviceTasks: (id: string) => fetchJSON<Task[]>(`/services/${id}/tasks`),
   serviceLogs: (
     id: string,
-    opts?: { limit?: number; after?: string; before?: string; stream?: string },
+    opts?: { limit?: number; after?: string; before?: string; stream?: string; signal?: AbortSignal },
   ) => {
     const params = new URLSearchParams({ limit: String(opts?.limit || 500) });
     if (opts?.after) params.set("after", opts.after);
     if (opts?.before) params.set("before", opts.before);
     if (opts?.stream) params.set("stream", opts.stream);
-    return fetchJSON<LogResponse>(`/services/${id}/logs?${params}`);
+    return fetchJSON<LogResponse>(`/services/${id}/logs?${params}`, opts?.signal);
   },
   serviceLogsStreamURL: (id: string, opts?: { after?: string; stream?: string }) => {
     const params = new URLSearchParams();

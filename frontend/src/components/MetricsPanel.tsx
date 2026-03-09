@@ -1,23 +1,29 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { RefreshCw, Play, Square, ChevronDown, ChevronRight } from "lucide-react";
+import { RefreshCw, Play, Square, ChevronRight } from "lucide-react";
 import TimeSeriesChart from "./TimeSeriesChart";
 import type { Threshold } from "./TimeSeriesChart";
+import SegmentedControl from "./SegmentedControl";
+import type { Segment } from "./SegmentedControl";
 
 interface ChartDef {
   title: string;
   query: string;
   unit?: string;
   thresholds?: Threshold[];
+  yMin?: number;
+  color?: string;
 }
 
 interface Props {
   charts: ChartDef[];
+  header?: React.ReactNode;
 }
 
 const RANGES = ["1h", "6h", "24h", "7d"] as const;
+const RANGE_SEGMENTS: Segment<string>[] = RANGES.map((r) => ({ value: r, label: r }));
 
-export default function MetricsPanel({ charts }: Props) {
+export default function MetricsPanel({ charts, header }: Props) {
   const [params, setParams] = useSearchParams();
   const [range, setRangeState] = useState<string>(params.get("range") ?? "1h");
   const setRange = (r: string) => {
@@ -42,48 +48,44 @@ export default function MetricsPanel({ charts }: Props) {
     return () => clearInterval(interval);
   }, [autoRefresh]);
 
+  const controls = (
+    <div className="flex flex-wrap items-center gap-2">
+      <SegmentedControl segments={RANGE_SEGMENTS} value={range} onChange={setRange} />
+      <button
+        onClick={() => setRefreshKey((k) => k + 1)}
+        className="h-8 w-8 flex items-center justify-center rounded-md border hover:bg-muted"
+        title="Refresh"
+      >
+        <RefreshCw className="w-3.5 h-3.5" />
+      </button>
+      <button
+        onClick={() => setAutoRefresh((v) => !v)}
+        title={autoRefresh ? "Pause auto-refresh" : "Auto-refresh (30s)"}
+        className={`h-8 w-8 flex items-center justify-center rounded-md border ${
+          autoRefresh ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"
+        }`}
+      >
+        {autoRefresh ? <Square className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+      </button>
+    </div>
+  );
+
+  const toggle = (
+    <button
+      type="button"
+      onClick={() => setCollapsed((c) => !c)}
+      className="flex items-center gap-1.5 text-sm font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+    >
+      <ChevronRight className={`h-4 w-4 transition-transform ${collapsed ? "" : "rotate-90"}`} />
+      {header ?? "Metrics"}
+    </button>
+  );
+
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        <button
-          onClick={() => setCollapsed((c) => !c)}
-          className="flex items-center gap-1 text-sm font-medium hover:text-foreground text-muted-foreground"
-        >
-          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          Metrics
-        </button>
-        {!collapsed && (
-          <>
-            <span className="text-sm text-muted-foreground">Time range:</span>
-            {RANGES.map((r) => (
-              <button
-                key={r}
-                onClick={() => setRange(r)}
-                className={`px-3 py-1 text-sm rounded ${
-                  range === r ? "bg-primary text-primary-foreground" : "bg-muted"
-                }`}
-              >
-                {r}
-              </button>
-            ))}
-            <button
-              onClick={() => setRefreshKey((k) => k + 1)}
-              className="h-8 w-8 flex items-center justify-center rounded-md border hover:bg-muted"
-              title="Refresh"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setAutoRefresh((v) => !v)}
-              title={autoRefresh ? "Pause auto-refresh" : "Auto-refresh (30s)"}
-              className={`h-8 w-8 flex items-center justify-center rounded-md border ${
-                autoRefresh ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"
-              }`}
-            >
-              {autoRefresh ? <Square className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-            </button>
-          </>
-        )}
+      <div className="flex items-center gap-2 mb-4 min-h-8">
+        {toggle}
+        {!collapsed && <div className="ml-auto">{controls}</div>}
       </div>
       {!collapsed && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

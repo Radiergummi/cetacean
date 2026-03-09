@@ -2,6 +2,7 @@ import { useParams, Link } from "react-router-dom";
 import { useState, useEffect, useMemo } from "react";
 import { api } from "../api/client";
 import type { Node, Task, HistoryEntry } from "../api/types";
+import ErrorBoundary from "../components/ErrorBoundary";
 import MetricsPanel from "../components/MetricsPanel";
 import InfoCard from "../components/InfoCard";
 import TaskStatusBadge from "../components/TaskStatusBadge";
@@ -11,7 +12,7 @@ import { LoadingDetail } from "../components/LoadingSkeleton";
 import FetchError from "../components/FetchError";
 import NodeResourceGauges from "../components/NodeResourceGauges";
 import ActivityFeed from "../components/ActivityFeed";
-import { statusBorder } from "../lib/statusBorder";
+import { statusColor } from "../lib/statusColor";
 import { formatBytes } from "../lib/formatBytes";
 import TimeAgo from "../components/TimeAgo";
 
@@ -54,7 +55,7 @@ export default function NodeDetail() {
   const addr = node.Status.Addr || "";
 
   return (
-    <div>
+    <div className="flex flex-col gap-6">
       <PageHeader
         title={node.Description.Hostname || node.ID}
         breadcrumbs={[
@@ -62,10 +63,12 @@ export default function NodeDetail() {
           { label: node.Description.Hostname || node.ID },
         ]}
       />
-      <div className="rounded-lg border bg-card p-4 mb-6">
-        <NodeResourceGauges />
+      <div className="rounded-lg border bg-card p-4">
+        <ErrorBoundary inline>
+          <NodeResourceGauges />
+        </ErrorBoundary>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <InfoCard label="Role" value={node.Spec.Role} />
         <InfoCard label="Status" value={node.Status.State} />
         <InfoCard label="Availability" value={node.Spec.Availability} />
@@ -82,22 +85,20 @@ export default function NodeDetail() {
         <InfoCard label="Memory" value={formatBytes(node.Description.Resources.MemoryBytes)} />
       </div>
       {node.ManagerStatus && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <InfoCard label="Manager" value={node.ManagerStatus.Leader ? "Leader" : "Reachable"} />
           <InfoCard label="Manager Address" value={node.ManagerStatus.Addr} />
         </div>
       )}
 
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
-            Tasks
-          </h2>
-          {tasks.length > 0 && (
+      {tasks.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
+              Tasks
+            </h2>
             <TaskStateFilter tasks={tasks} active={stateFilter} onChange={setStateFilter} />
-          )}
-        </div>
-        {tasks.length > 0 ? (
+          </div>
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full">
               <thead className="sticky top-0 z-10 bg-background">
@@ -116,11 +117,14 @@ export default function NodeDetail() {
                   const errorMsg =
                     task.Status.Err || (exitCode && exitCode !== 0 ? `exit ${exitCode}` : "");
                   return (
-                    <tr key={task.ID} className={`border-b ${statusBorder(task.Status.State)}`}>
+                    <tr key={task.ID} className="border-b last:border-b-0">
                       <td className="p-3 text-sm font-mono text-xs">
-                        <Link to={`/tasks/${task.ID}`} className="text-link hover:underline">
-                          {task.ID.slice(0, 12)}
-                        </Link>
+                        <span className="inline-flex items-center gap-2">
+                          <span className={`shrink-0 w-2 h-2 rounded-full ${statusColor(task.Status.State)}`} />
+                          <Link to={`/tasks/${task.ID}`} className="text-link hover:underline">
+                            {task.ID.slice(0, 12)}
+                          </Link>
+                        </span>
                       </td>
                       <td className="p-3 text-sm">
                         <Link
@@ -134,7 +138,7 @@ export default function NodeDetail() {
                         <TaskStatusBadge state={task.Status.State} />
                       </td>
                       <td className="p-3 text-sm">{task.DesiredState}</td>
-                      <td className="p-3 text-sm text-red-600">{errorMsg}</td>
+                      <td className="p-3 text-sm text-red-600 dark:text-red-400">{errorMsg}</td>
                       <td className="p-3 text-sm text-muted-foreground">
                         {task.Status.Timestamp ? (
                           <TimeAgo date={task.Status.Timestamp} />
@@ -148,13 +152,11 @@ export default function NodeDetail() {
               </tbody>
             </table>
           </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">None</p>
-        )}
-      </div>
+        </div>
+      )}
 
       {history.length > 0 && (
-        <div className="mb-6">
+        <div>
           <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
             Recent Activity
           </h2>
@@ -162,30 +164,33 @@ export default function NodeDetail() {
         </div>
       )}
 
-      <MetricsPanel
-        charts={[
-          {
-            title: "CPU Usage",
-            query: `100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)`,
-            unit: "%",
-          },
-          {
-            title: "Memory Usage",
-            query: `(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100`,
-            unit: "%",
-          },
-          {
-            title: "Disk I/O",
-            query: `sum(rate(node_disk_read_bytes_total[5m]))`,
-            unit: "bytes/s",
-          },
-          {
-            title: "Network I/O",
-            query: `sum(rate(node_network_receive_bytes_total{device!="lo"}[5m]))`,
-            unit: "bytes/s",
-          },
-        ]}
-      />
+      <ErrorBoundary inline>
+        <MetricsPanel
+          header="Metrics"
+          charts={[
+            {
+              title: "CPU Usage",
+              query: `100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)`,
+              unit: "%",
+            },
+            {
+              title: "Memory Usage",
+              query: `(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100`,
+              unit: "%",
+            },
+            {
+              title: "Disk I/O",
+              query: `sum(rate(node_disk_read_bytes_total[5m]))`,
+              unit: "bytes/s",
+            },
+            {
+              title: "Network I/O",
+              query: `sum(rate(node_network_receive_bytes_total{device!="lo"}[5m]))`,
+              unit: "bytes/s",
+            },
+          ]}
+        />
+      </ErrorBoundary>
     </div>
   );
 }

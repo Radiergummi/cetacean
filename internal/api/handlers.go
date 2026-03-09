@@ -281,7 +281,10 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 		limit = maxLogLimit
 	}
 
-	logs, err := fetch(r.Context(), strconv.Itoa(limit), false, since, until)
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	logs, err := fetch(ctx, strconv.Itoa(limit), false, since, until)
 	if err != nil {
 		http.Error(w, "failed to get logs", http.StatusInternalServerError)
 		return
@@ -432,7 +435,9 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 	}
 	p := parsePagination(r)
 	configs = sortItems(configs, p.Sort, p.Dir, map[string]func(swarm.Config) string{
-		"name": func(c swarm.Config) string { return c.Spec.Name },
+		"name":    func(c swarm.Config) string { return c.Spec.Name },
+		"created": func(c swarm.Config) string { return c.CreatedAt.String() },
+		"updated": func(c swarm.Config) string { return c.UpdatedAt.String() },
 	})
 	writeJSON(w, applyPagination(configs, p))
 }
@@ -448,7 +453,9 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 	}
 	p := parsePagination(r)
 	secrets = sortItems(secrets, p.Sort, p.Dir, map[string]func(swarm.Secret) string{
-		"name": func(s swarm.Secret) string { return s.Spec.Name },
+		"name":    func(s swarm.Secret) string { return s.Spec.Name },
+		"created": func(s swarm.Secret) string { return s.CreatedAt.String() },
+		"updated": func(s swarm.Secret) string { return s.UpdatedAt.String() },
 	})
 	writeJSON(w, applyPagination(secrets, p))
 }
@@ -466,6 +473,7 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 	networks = sortItems(networks, p.Sort, p.Dir, map[string]func(network.Summary) string{
 		"name":   func(n network.Summary) string { return n.Name },
 		"driver": func(n network.Summary) string { return n.Driver },
+		"scope":  func(n network.Summary) string { return n.Scope },
 	})
 	writeJSON(w, applyPagination(networks, p))
 }
@@ -483,6 +491,7 @@ func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 	volumes = sortItems(volumes, p.Sort, p.Dir, map[string]func(volume.Volume) string{
 		"name":   func(v volume.Volume) string { return v.Name },
 		"driver": func(v volume.Volume) string { return v.Driver },
+		"scope":  func(v volume.Volume) string { return v.Scope },
 	})
 	writeJSON(w, applyPagination(volumes, p))
 }

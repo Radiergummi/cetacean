@@ -96,7 +96,7 @@ describe("LogViewer", () => {
     render(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => {
-      expect(screen.getByText("No logs available")).toBeInTheDocument();
+      expect(screen.getByText("No logs yet — the container hasn't produced any output")).toBeInTheDocument();
     });
   });
 

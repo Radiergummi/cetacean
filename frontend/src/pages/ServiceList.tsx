@@ -8,8 +8,10 @@ import { api } from "../api/client";
 import type { Service } from "../api/types";
 import SearchInput from "../components/SearchInput";
 import PageHeader from "../components/PageHeader";
-import SortableHeader from "../components/SortableHeader";
+import DataTable, { type Column } from "../components/DataTable";
+import SortIndicator from "../components/SortIndicator";
 import ViewToggle from "../components/ViewToggle";
+import ResourceCard from "../components/ResourceCard";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
 import { SkeletonTable } from "../components/LoadingSkeleton";
@@ -33,6 +35,43 @@ export default function ServiceList() {
   const [viewMode, setViewMode] = useViewMode("services");
   const navigate = useNavigate();
 
+  const columns: Column<Service>[] = [
+    {
+      header: <SortIndicator label="Name" active={sortKey === "name"} dir={sortDir} />,
+      cell: (svc) => (
+        <Link
+          to={`/services/${svc.ID}`}
+          className="text-link hover:underline font-medium"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {svc.Spec.Name}
+        </Link>
+      ),
+      onHeaderClick: () => toggle("name"),
+    },
+    {
+      header: "Image",
+      cell: (svc) => (
+        <span className="font-mono text-xs">
+          {svc.Spec.TaskTemplate.ContainerSpec.Image.split("@")[0]}
+        </span>
+      ),
+    },
+    {
+      header: <SortIndicator label="Mode" active={sortKey === "mode"} dir={sortDir} />,
+      cell: (svc) => (svc.Spec.Mode.Replicated ? "replicated" : "global"),
+      onHeaderClick: () => toggle("mode"),
+    },
+    {
+      header: "Replicas",
+      cell: (svc) => svc.Spec.Mode.Replicated?.Replicas ?? "\u2014",
+    },
+    {
+      header: "Update Status",
+      cell: (svc) => svc.UpdateStatus?.State || "\u2014",
+    },
+  ];
+
   if (loading)
     return (
       <div>
@@ -52,96 +91,26 @@ export default function ServiceList() {
       {services.length === 0 ? (
         <EmptyState message={search ? "No services match your search" : "No services found"} />
       ) : viewMode === "table" ? (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full">
-            <thead className="sticky top-0 z-10 bg-background">
-              <tr className="border-b bg-muted/50">
-                <SortableHeader
-                  label="Name"
-                  sortKey="name"
-                  activeSortKey={sortKey}
-                  sortDir={sortDir}
-                  onToggle={toggle}
-                />
-                <SortableHeader
-                  label="Image"
-                  sortKey="image"
-                  activeSortKey={sortKey}
-                  sortDir={sortDir}
-                  onToggle={toggle}
-                />
-                <SortableHeader
-                  label="Mode"
-                  sortKey="mode"
-                  activeSortKey={sortKey}
-                  sortDir={sortDir}
-                  onToggle={toggle}
-                />
-                <SortableHeader
-                  label="Replicas"
-                  sortKey="replicas"
-                  activeSortKey={sortKey}
-                  sortDir={sortDir}
-                  onToggle={toggle}
-                />
-                <SortableHeader
-                  label="Update Status"
-                  sortKey="update"
-                  activeSortKey={sortKey}
-                  sortDir={sortDir}
-                  onToggle={toggle}
-                />
-              </tr>
-            </thead>
-            <tbody>
-              {services.map((svc) => (
-                <tr
-                  key={svc.ID}
-                  className="border-b cursor-pointer hover:bg-muted/50"
-                  onClick={() => navigate(`/services/${svc.ID}`)}
-                >
-                  <td className="p-3">
-                    <Link
-                      to={`/services/${svc.ID}`}
-                      className="text-link hover:underline font-medium"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {svc.Spec.Name}
-                    </Link>
-                  </td>
-                  <td className="p-3 text-sm font-mono text-xs">
-                    {svc.Spec.TaskTemplate.ContainerSpec.Image.split("@")[0]}
-                  </td>
-                  <td className="p-3 text-sm">
-                    {svc.Spec.Mode.Replicated ? "replicated" : "global"}
-                  </td>
-                  <td className="p-3 text-sm">{svc.Spec.Mode.Replicated?.Replicas ?? "\u2014"}</td>
-                  <td className="p-3 text-sm">{svc.UpdateStatus?.State || "\u2014"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={columns}
+          data={services}
+          keyFn={(svc) => svc.ID}
+          onRowClick={(svc) => navigate(`/services/${svc.ID}`)}
+        />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {services.map((svc) => (
-            <Link
+            <ResourceCard
               key={svc.ID}
+              title={svc.Spec.Name}
               to={`/services/${svc.ID}`}
-              className="rounded-lg border bg-card p-4 hover:border-foreground/20 hover:shadow-sm transition-all"
-            >
-              <div className="font-medium mb-2 truncate">{svc.Spec.Name}</div>
-              <div className="text-xs font-mono text-muted-foreground truncate mb-3">
-                {svc.Spec.TaskTemplate.ContainerSpec.Image.split("@")[0]}
-              </div>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <span>{svc.Spec.Mode.Replicated ? "replicated" : "global"}</span>
-                {svc.Spec.Mode.Replicated && (
-                  <span className="tabular-nums">{svc.Spec.Mode.Replicated.Replicas} replicas</span>
-                )}
-                {svc.UpdateStatus?.State && <span>{svc.UpdateStatus.State}</span>}
-              </div>
-            </Link>
+              subtitle={svc.Spec.TaskTemplate.ContainerSpec.Image.split("@")[0]}
+              meta={[
+                svc.Spec.Mode.Replicated ? "replicated" : "global",
+                svc.Spec.Mode.Replicated && <span className="tabular-nums">{svc.Spec.Mode.Replicated.Replicas} replicas</span>,
+                svc.UpdateStatus?.State,
+              ].filter(Boolean) as React.ReactNode[]}
+            />
           ))}
         </div>
       )}

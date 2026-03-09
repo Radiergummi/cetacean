@@ -64,152 +64,139 @@ export default function StackDetail() {
     </div>
   );
 
-  const SectionEmpty = () => <p className="text-sm text-muted-foreground">None</p>;
-
   return (
-    <div>
+    <div className="flex flex-col gap-6">
       <PageHeader
         title={stack.name}
         subtitle={subtitle}
         breadcrumbs={[{ label: "Stacks", to: "/stacks" }, { label: stack.name }]}
       />
-      <div className="space-y-6">
+
+      {stack.services?.length > 0 && (
         <Section title="Services">
-          {stack.services?.length > 0 ? (
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full">
-                <thead className="sticky top-0 z-10 bg-background">
-                  <tr className="border-b bg-muted/50">
-                    <th className="text-left p-3 text-sm font-medium">Name</th>
-                    <th className="text-left p-3 text-sm font-medium">Image</th>
-                    <th className="text-left p-3 text-sm font-medium">Mode</th>
-                    <th className="text-left p-3 text-sm font-medium">Tasks</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stack.services.map((svc) => (
-                    <tr key={svc.ID} className="border-b last:border-b-0">
-                      <td className="p-3 text-sm">
-                        <Link
-                          to={`/services/${svc.ID}`}
-                          className="text-link hover:underline font-medium"
-                        >
-                          {svc.Spec.Name || svc.ID}
-                        </Link>
-                      </td>
-                      <td className="p-3 text-sm font-mono text-xs">
-                        {svc.Spec.TaskTemplate.ContainerSpec.Image.split("@")[0]}
-                      </td>
-                      <td className="p-3 text-sm">
-                        {svc.Spec.Mode.Replicated ? "replicated" : "global"}
-                      </td>
-                      <td className="p-3 text-sm tabular-nums">
-                        {taskCounts[svc.ID] ? (
-                          <span>
-                            <span
-                              className={
-                                taskCounts[svc.ID].running === taskCounts[svc.ID].total
-                                  ? "text-green-600"
-                                  : "text-yellow-600"
-                              }
-                            >
-                              {taskCounts[svc.ID].running}
-                            </span>
-                            /{taskCounts[svc.ID].total}
+          <div className="overflow-x-auto rounded-lg border">
+            <table className="w-full">
+              <thead className="sticky top-0 z-10 bg-background">
+                <tr className="border-b bg-muted/50">
+                  <th className="text-left p-3 text-sm font-medium">Name</th>
+                  <th className="text-left p-3 text-sm font-medium">Image</th>
+                  <th className="text-left p-3 text-sm font-medium">Mode</th>
+                  <th className="text-left p-3 text-sm font-medium">Tasks</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stack.services.map((svc) => (
+                  <tr key={svc.ID} className="border-b last:border-b-0">
+                    <td className="p-3 text-sm">
+                      <Link
+                        to={`/services/${svc.ID}`}
+                        className="text-link hover:underline font-medium"
+                      >
+                        {svc.Spec.Name || svc.ID}
+                      </Link>
+                    </td>
+                    <td className="p-3 text-sm font-mono text-xs">
+                      {svc.Spec.TaskTemplate.ContainerSpec.Image.split("@")[0]}
+                    </td>
+                    <td className="p-3 text-sm">
+                      {svc.Spec.Mode.Replicated ? "replicated" : "global"}
+                    </td>
+                    <td className="p-3 text-sm tabular-nums">
+                      {taskCounts[svc.ID] ? (
+                        <span>
+                          <span
+                            className={
+                              taskCounts[svc.ID].running === taskCounts[svc.ID].total
+                                ? "text-green-600"
+                                : "text-yellow-600"
+                            }
+                          >
+                            {taskCounts[svc.ID].running}
                           </span>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <SectionEmpty />
-          )}
-        </Section>
-
-        <Section title="Configs">
-          {stack.configs?.length > 0 ? (
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full">
-                <tbody>
-                  {stack.configs.map((c) => (
-                    <tr key={c.ID} className="border-b last:border-b-0">
-                      <td className="p-3 text-sm">{c.Spec.Name || c.ID}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <SectionEmpty />
-          )}
-        </Section>
-
-        <Section title="Secrets">
-          {stack.secrets?.length > 0 ? (
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full">
-                <tbody>
-                  {stack.secrets.map((s) => (
-                    <tr key={s.ID} className="border-b last:border-b-0">
-                      <td className="p-3 text-sm">{s.Spec.Name || s.ID}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <SectionEmpty />
-          )}
-        </Section>
-
-        <Section title="Networks">
-          {stack.networks?.length > 0 ? (
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full">
-                <thead className="sticky top-0 z-10 bg-background">
-                  <tr className="border-b bg-muted/50">
-                    <th className="text-left p-3 text-sm font-medium">Name</th>
-                    <th className="text-left p-3 text-sm font-medium">Driver</th>
+                          /{taskCounts[svc.ID].total}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {stack.networks.map((n) => (
-                    <tr key={n.Id} className="border-b last:border-b-0">
-                      <td className="p-3 text-sm">{n.Name}</td>
-                      <td className="p-3 text-sm">{n.Driver}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <SectionEmpty />
-          )}
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Section>
+      )}
 
-        <Section title="Volumes">
-          {stack.volumes?.length > 0 ? (
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full">
-                <tbody>
-                  {stack.volumes.map((v) => (
-                    <tr key={v.Name} className="border-b last:border-b-0">
-                      <td className="p-3 text-sm">{v.Name}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <SectionEmpty />
-          )}
+      {stack.configs?.length > 0 && (
+        <Section title="Configs">
+          <div className="overflow-x-auto rounded-lg border">
+            <table className="w-full">
+              <tbody>
+                {stack.configs.map((c) => (
+                  <tr key={c.ID} className="border-b last:border-b-0">
+                    <td className="p-3 text-sm">{c.Spec.Name || c.ID}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Section>
-      </div>
+      )}
+
+      {stack.secrets?.length > 0 && (
+        <Section title="Secrets">
+          <div className="overflow-x-auto rounded-lg border">
+            <table className="w-full">
+              <tbody>
+                {stack.secrets.map((s) => (
+                  <tr key={s.ID} className="border-b last:border-b-0">
+                    <td className="p-3 text-sm">{s.Spec.Name || s.ID}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      )}
+
+      {stack.networks?.length > 0 && (
+        <Section title="Networks">
+          <div className="overflow-x-auto rounded-lg border">
+            <table className="w-full">
+              <thead className="sticky top-0 z-10 bg-background">
+                <tr className="border-b bg-muted/50">
+                  <th className="text-left p-3 text-sm font-medium">Name</th>
+                  <th className="text-left p-3 text-sm font-medium">Driver</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stack.networks.map((n) => (
+                  <tr key={n.Id} className="border-b last:border-b-0">
+                    <td className="p-3 text-sm">{n.Name}</td>
+                    <td className="p-3 text-sm">{n.Driver}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      )}
+
+      {stack.volumes?.length > 0 && (
+        <Section title="Volumes">
+          <div className="overflow-x-auto rounded-lg border">
+            <table className="w-full">
+              <tbody>
+                {stack.volumes.map((v) => (
+                  <tr key={v.Name} className="border-b last:border-b-0">
+                    <td className="p-3 text-sm">{v.Name}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      )}
     </div>
   );
 }

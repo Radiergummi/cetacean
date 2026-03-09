@@ -2,6 +2,7 @@ import { useParams } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { api } from "../api/client";
 import type { Task } from "../api/types";
+import ErrorBoundary from "../components/ErrorBoundary";
 import InfoCard from "../components/InfoCard";
 import TaskStatusBadge from "../components/TaskStatusBadge";
 import LogViewer from "../components/LogViewer";
@@ -81,10 +82,9 @@ export default function TaskDetail() {
       )}
 
       <div className="mb-6">
-        <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-          Logs
-        </h2>
-        <LogViewer taskId={id!} />
+        <ErrorBoundary inline>
+          <LogViewer taskId={id!} header="Logs" />
+        </ErrorBoundary>
       </div>
     </div>
   );

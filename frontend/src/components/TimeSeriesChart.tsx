@@ -19,14 +19,23 @@ interface Props {
   refreshKey?: number;
   thresholds?: Threshold[];
   syncKey?: string;
+  /** Force y-axis minimum value (e.g. 0 to always start at zero). */
+  yMin?: number;
+  /** Override the default series color. */
+  color?: string;
 }
 
 type State = "loading" | "data" | "empty" | "error";
 
 interface TooltipData {
   time: string;
-  series: { label: string; color: string; value: string }[];
-  left: number;
+  series: { label: string; color: string; value: string; dashed?: boolean }[];
+  /** Cursor x relative to the plot area. */
+  cursorX: number;
+  /** Plot area left offset in CSS pixels. */
+  plotLeft: number;
+  /** Plot area width in CSS pixels. */
+  plotWidth: number;
   top: number;
 }
 
@@ -38,13 +47,30 @@ const RANGE_SECONDS: Record<string, number> = {
 };
 
 const CHART_COLORS = [
-  "#6366f1", // indigo
-  "#f59e0b", // amber
-  "#10b981", // emerald
+  "#4f8cf6", // blue
+  "#f59e0b", // amber/orange
+  "#34d399", // green
   "#ef4444", // red
-  "#8b5cf6", // violet
-  "#06b6d4", // cyan
+  "#a78bfa", // purple
+  "#22d3ee", // cyan
+  "#e879a8", // magenta
+  "#facc15", // yellow
 ];
+
+/** Create a vertical gradient fill for a series color. */
+function gradientFill(color: string): uPlot.Series.Fill {
+  return (u: uPlot, seriesIdx: number) => {
+    const s = u.series[seriesIdx];
+    const yScale = u.scales[s.scale!];
+    if (yScale.min == null || yScale.max == null) return color + "18";
+    const y0 = u.valToPos(yScale.min, s.scale!, true);
+    const y1 = u.valToPos(yScale.max, s.scale!, true);
+    const grad = u.ctx.createLinearGradient(0, y1, 0, y0);
+    grad.addColorStop(0, color + "00");
+    grad.addColorStop(1, color + "30");
+    return grad;
+  };
+}
 
 function formatValue(v: number, unit?: string): string {
   if (unit === "bytes" || unit === "bytes/s") {
@@ -67,6 +93,15 @@ function seriesLabel(metric: Record<string, string> | undefined, fallback?: stri
   return fallback ?? "value";
 }
 
+const TOOLTIP_GAP = 20;
+
+function tooltipLeft(tt: TooltipData, el: HTMLDivElement | null): number {
+  const w = el?.offsetWidth ?? 0;
+  const showLeft = tt.cursorX > tt.plotWidth / 2;
+  if (showLeft) return tt.plotLeft + tt.cursorX - w - TOOLTIP_GAP;
+  return tt.plotLeft + tt.cursorX + TOOLTIP_GAP;
+}
+
 export default function TimeSeriesChart({
   title,
   query,
@@ -75,9 +110,12 @@ export default function TimeSeriesChart({
   refreshKey,
   thresholds,
   syncKey,
+  yMin,
+  color: colorOverride,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<uPlot | null>(null);
+  const tooltipElRef = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<State>("loading");
   const [errorMsg, setErrorMsg] = useState("");
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
@@ -137,15 +175,6 @@ export default function TimeSeriesChart({
                   ctx.moveTo(plotLeft, yPos);
                   ctx.lineTo(plotLeft + plotWidth, yPos);
                   ctx.stroke();
-
-                  ctx.fillStyle = t.color;
-                  ctx.font = "10px sans-serif";
-                  ctx.textAlign = "right";
-                  ctx.fillText(
-                    `${t.label}: ${formatValue(t.value, unit)}`,
-                    plotLeft + plotWidth - 4,
-                    yPos - 4,
-                  );
                   ctx.restore();
                 }
               },
@@ -153,7 +182,7 @@ export default function TimeSeriesChart({
           },
         };
 
-        const tooltipPlugin: uPlot.Plugin = {
+        const crosshairPlugin: uPlot.Plugin = {
           hooks: {
             setCursor: [
               (u: uPlot) => {
@@ -175,35 +204,43 @@ export default function TimeSeriesChart({
                     value: formatValue(v, unit),
                   });
                 }
-                const left = u.valToPos(ts, "x");
+                if (thresholds?.length) {
+                  for (const t of thresholds) {
+                    items.push({
+                      label: t.label,
+                      color: t.color,
+                      value: formatValue(t.value, unit),
+                      dashed: true,
+                    });
+                  }
+                }
+                const cursorX = u.valToPos(ts, "x");
                 const plotLeft = u.bbox.left / devicePixelRatio;
                 const plotWidth = u.bbox.width / devicePixelRatio;
                 tooltipRef.current({
                   time: new Date(ts * 1000).toLocaleTimeString(),
                   series: items,
-                  left: plotLeft + (left > plotWidth / 2 ? left - 140 : left + 12),
+                  cursorX,
+                  plotLeft,
+                  plotWidth,
                   top: u.bbox.top / devicePixelRatio + 8,
                 });
               },
             ],
-          },
-        };
-
-        const legendPlugin: uPlot.Plugin = {
-          hooks: {
-            init: [
+            drawCursor: [
               (u: uPlot) => {
-                const labels = u.root.querySelectorAll(".u-legend .u-series");
-                labels.forEach((el, i) => {
-                  if (i === 0) return; // skip time series
-                  el.addEventListener("click", () => {
-                    const allHidden = u.series.slice(1).every((s, j) => j === i - 1 || !s.show);
-                    for (let j = 1; j < u.series.length; j++) {
-                      u.setSeries(j, { show: allHidden ? true : j === i });
-                    }
-                  });
-                  (el as HTMLElement).style.cursor = "pointer";
-                });
+                const { idx } = u.cursor;
+                if (idx == null) return;
+                const cx = Math.round(u.valToPos(u.data[0][idx], "x", true));
+                const { ctx } = u;
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(cx, u.bbox.top);
+                ctx.lineTo(cx, u.bbox.top + u.bbox.height);
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = "rgba(136,136,136,0.3)";
+                ctx.stroke();
+                ctx.restore();
               },
             ],
           },
@@ -212,34 +249,56 @@ export default function TimeSeriesChart({
         const opts: uPlot.Options = {
           width: containerRef.current.clientWidth || 600,
           height: 200,
-          plugins: [thresholdPlugin, tooltipPlugin, legendPlugin],
+          plugins: [thresholdPlugin, crosshairPlugin],
+          legend: { show: false },
+          padding: [0, 0, 0, 0],
           cursor: {
             drag: { x: false, y: false },
             sync: syncKey ? { key: syncKey, setSeries: true, scales: ["x", null] } : undefined,
-            x: true,
+            x: false,
             y: false,
+            points: {
+              size: 6,
+              fill: "currentColor",
+              stroke: "transparent",
+              width: 0,
+            },
           },
           focus: { alpha: 0.3 },
           series: [
             {},
-            ...series.map((_s: any, i: number) => ({
-              label: seriesLabel(_s.metric, series.length === 1 ? title : undefined),
-              stroke: CHART_COLORS[i % CHART_COLORS.length],
-              width: 1.5,
-              fill: CHART_COLORS[i % CHART_COLORS.length] + "1a",
-            })),
+            ...series.map((_s: any, i: number) => {
+              const color = colorOverride ?? CHART_COLORS[i % CHART_COLORS.length];
+              return {
+                label: seriesLabel(_s.metric, series.length === 1 ? title : undefined),
+                stroke: color,
+                width: 1.5,
+                fill: gradientFill(color),
+                paths: uPlot.paths.spline!(),
+                points: { show: false },
+              };
+            }),
           ],
-          axes: [
-            {
-              stroke: "#888",
-              grid: { stroke: "#88888820" },
-              ticks: { stroke: "#88888820" },
+          scales: {
+            y: {
+              range: (_u: uPlot, dataMin: number, dataMax: number) => {
+                let lo = yMin != null ? Math.min(yMin, dataMin) : dataMin;
+                let hi = dataMax;
+                if (thresholds?.length) {
+                  for (const t of thresholds) {
+                    hi = Math.max(hi, t.value);
+                  }
+                }
+                const pad = (hi - lo) * 0.1 || 1;
+                return [lo, hi + pad];
+              },
             },
+          },
+          axes: [
+            { show: false },
             {
-              stroke: "#888",
-              grid: { stroke: "#88888820" },
-              ticks: { stroke: "#88888820" },
-              values: (_u: uPlot, vals: number[]) => vals.map((v) => formatValue(v, unit)),
+              show: false,
+              grid: { stroke: "rgba(136,136,136,0.08)", width: 1 },
             },
           ],
         };
@@ -284,8 +343,8 @@ export default function TimeSeriesChart({
   }, []);
 
   return (
-    <div className="rounded-lg border bg-card p-4">
-      <div className="flex items-center justify-between mb-2">
+    <div className="rounded-lg border bg-card overflow-hidden">
+      <div className="flex items-center justify-between px-4 pt-4 pb-2">
         <span className="text-sm font-medium">{title}</span>
         {unit && <span className="text-xs text-muted-foreground">{unit}</span>}
       </div>
@@ -320,19 +379,26 @@ export default function TimeSeriesChart({
         <div ref={containerRef} className={state === "data" ? "" : "hidden"} />
         {tooltip && state === "data" && (
           <div
-            className="absolute pointer-events-none z-20 rounded-md border bg-popover px-3 py-2 text-xs shadow-md"
-            style={{ left: tooltip.left, top: tooltip.top }}
+            ref={tooltipElRef}
+            className="absolute pointer-events-none z-20 rounded-md ring-1 ring-border/50 bg-popover/80 backdrop-blur-sm backdrop-saturate-200 px-3 py-2.5 text-xs leading-snug shadow-lg"
+            style={{ left: tooltipLeft(tooltip, tooltipElRef.current), top: tooltip.top }}
           >
-            <div className="text-muted-foreground mb-1">{tooltip.time}</div>
+            <div className="font-semibold mb-1.5 text-foreground">{tooltip.time}</div>
             {tooltip.series.map((s) => (
-              <div key={s.label} className="flex items-center gap-1.5">
-                <span
-                  className="inline-block w-2 h-2 rounded-full shrink-0"
-                  style={{ background: s.color }}
-                />
-                <span>
-                  {s.label}: <b>{s.value}</b>
-                </span>
+              <div key={s.label} className="flex items-center gap-2 whitespace-nowrap">
+                {s.dashed ? (
+                  <span
+                    className="w-3 shrink-0 border-t-2 border-dashed"
+                    style={{ borderColor: s.color }}
+                  />
+                ) : (
+                  <span
+                    className="w-1 shrink-0 h-3 rounded-sm"
+                    style={{ background: s.color }}
+                  />
+                )}
+                <span className="text-muted-foreground">{s.label}</span>
+                <span className="font-semibold ms-auto ps-4 text-foreground">{s.value}</span>
               </div>
             ))}
           </div>

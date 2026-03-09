@@ -55,4 +55,31 @@ describe("ErrorBoundary", () => {
 
     expect(screen.getByText("Content")).toBeInTheDocument();
   });
+
+  it("renders compact inline fallback when inline prop is set", () => {
+    shouldThrow = true;
+    render(
+      <ErrorBoundary inline>
+        <ThrowingComponent />
+      </ErrorBoundary>,
+    );
+    expect(screen.queryByText("Something went wrong")).not.toBeInTheDocument();
+    expect(screen.getByText("Test error")).toBeInTheDocument();
+    expect(screen.getByText("Retry")).toBeInTheDocument();
+  });
+
+  it("recovers from inline error on retry", () => {
+    shouldThrow = true;
+    render(
+      <ErrorBoundary inline>
+        <ThrowingComponent />
+      </ErrorBoundary>,
+    );
+    expect(screen.getByText("Test error")).toBeInTheDocument();
+
+    shouldThrow = false;
+    fireEvent.click(screen.getByText("Retry"));
+
+    expect(screen.getByText("Content")).toBeInTheDocument();
+  });
 });

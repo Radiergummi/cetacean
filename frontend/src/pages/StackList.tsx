@@ -8,8 +8,10 @@ import { api } from "../api/client";
 import type { Stack } from "../api/types";
 import SearchInput from "../components/SearchInput";
 import PageHeader from "../components/PageHeader";
-import SortableHeader from "../components/SortableHeader";
+import DataTable, { type Column } from "../components/DataTable";
+import SortIndicator from "../components/SortIndicator";
 import ViewToggle from "../components/ViewToggle";
+import ResourceCard from "../components/ResourceCard";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
 import { SkeletonTable } from "../components/LoadingSkeleton";
@@ -33,6 +35,27 @@ export default function StackList() {
   const [viewMode, setViewMode] = useViewMode("stacks");
   const navigate = useNavigate();
 
+  const columns: Column<Stack>[] = [
+    {
+      header: <SortIndicator label="Name" active={sortKey === "name"} dir={sortDir} />,
+      cell: (stack) => (
+        <Link
+          to={`/stacks/${stack.name}`}
+          className="text-link hover:underline font-medium"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {stack.name}
+        </Link>
+      ),
+      onHeaderClick: () => toggle("name"),
+    },
+    { header: "Services", cell: (stack) => stack.services?.length || 0 },
+    { header: "Configs", cell: (stack) => stack.configs?.length || 0 },
+    { header: "Secrets", cell: (stack) => stack.secrets?.length || 0 },
+    { header: "Networks", cell: (stack) => stack.networks?.length || 0 },
+    { header: "Volumes", cell: (stack) => stack.volumes?.length || 0 },
+  ];
+
   if (loading)
     return (
       <div>
@@ -52,89 +75,16 @@ export default function StackList() {
       {stacks.length === 0 ? (
         <EmptyState message={search ? "No stacks match your search" : "No stacks found"} />
       ) : viewMode === "table" ? (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full">
-            <thead className="sticky top-0 z-10 bg-background">
-              <tr className="border-b bg-muted/50">
-                <SortableHeader
-                  label="Name"
-                  sortKey="name"
-                  activeSortKey={sortKey}
-                  sortDir={sortDir}
-                  onToggle={toggle}
-                />
-                <SortableHeader
-                  label="Services"
-                  sortKey="services"
-                  activeSortKey={sortKey}
-                  sortDir={sortDir}
-                  onToggle={toggle}
-                />
-                <SortableHeader
-                  label="Configs"
-                  sortKey="configs"
-                  activeSortKey={sortKey}
-                  sortDir={sortDir}
-                  onToggle={toggle}
-                />
-                <SortableHeader
-                  label="Secrets"
-                  sortKey="secrets"
-                  activeSortKey={sortKey}
-                  sortDir={sortDir}
-                  onToggle={toggle}
-                />
-                <SortableHeader
-                  label="Networks"
-                  sortKey="networks"
-                  activeSortKey={sortKey}
-                  sortDir={sortDir}
-                  onToggle={toggle}
-                />
-                <SortableHeader
-                  label="Volumes"
-                  sortKey="volumes"
-                  activeSortKey={sortKey}
-                  sortDir={sortDir}
-                  onToggle={toggle}
-                />
-              </tr>
-            </thead>
-            <tbody>
-              {stacks.map((stack) => (
-                <tr
-                  key={stack.name}
-                  className="border-b cursor-pointer hover:bg-muted/50"
-                  onClick={() => navigate(`/stacks/${stack.name}`)}
-                >
-                  <td className="p-3">
-                    <Link
-                      to={`/stacks/${stack.name}`}
-                      className="text-link hover:underline font-medium"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {stack.name}
-                    </Link>
-                  </td>
-                  <td className="p-3 text-sm">{stack.services?.length || 0}</td>
-                  <td className="p-3 text-sm">{stack.configs?.length || 0}</td>
-                  <td className="p-3 text-sm">{stack.secrets?.length || 0}</td>
-                  <td className="p-3 text-sm">{stack.networks?.length || 0}</td>
-                  <td className="p-3 text-sm">{stack.volumes?.length || 0}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={columns}
+          data={stacks}
+          keyFn={(s) => s.name}
+          onRowClick={(stack) => navigate(`/stacks/${stack.name}`)}
+        />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {stacks.map((stack) => (
-            <Link
-              key={stack.name}
-              to={`/stacks/${stack.name}`}
-              className="rounded-lg border bg-card p-4 hover:border-foreground/20 hover:shadow-sm transition-all"
-            >
-              <div className="font-medium mb-3">{stack.name}</div>
+            <ResourceCard key={stack.name} title={stack.name} to={`/stacks/${stack.name}`}>
               <div className="grid grid-cols-3 gap-2 text-center">
                 <CountBadge label="Services" count={stack.services?.length ?? 0} />
                 <CountBadge label="Configs" count={stack.configs?.length ?? 0} />
@@ -142,7 +92,7 @@ export default function StackList() {
                 <CountBadge label="Networks" count={stack.networks?.length ?? 0} />
                 <CountBadge label="Volumes" count={stack.volumes?.length ?? 0} />
               </div>
-            </Link>
+            </ResourceCard>
           ))}
         </div>
       )}

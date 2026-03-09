@@ -55,20 +55,36 @@ function wrapper({ children }: { children: ReactNode }) {
 describe("useSSEConnection", () => {
   it("starts connected", () => {
     const { result } = renderHook(() => useSSEConnection(), { wrapper });
-    expect(result.current).toBe(true);
+    expect(result.current.connected).toBe(true);
+    expect(result.current.lastEventAt).toBeNull();
   });
 
   it("becomes disconnected on error", () => {
     const { result } = renderHook(() => useSSEConnection(), { wrapper });
     act(() => MockEventSource.instance.simulateError());
-    expect(result.current).toBe(false);
+    expect(result.current.connected).toBe(false);
   });
 
   it("reconnects on open", () => {
     const { result } = renderHook(() => useSSEConnection(), { wrapper });
     act(() => MockEventSource.instance.simulateError());
     act(() => MockEventSource.instance.simulateOpen());
-    expect(result.current).toBe(true);
+    expect(result.current.connected).toBe(true);
+  });
+
+  it("tracks lastEventAt on events", () => {
+    const { result } = renderHook(() => useSSEConnection(), { wrapper });
+    const before = Date.now();
+    act(() =>
+      MockEventSource.instance.simulateEvent("node", {
+        type: "node",
+        action: "update",
+        id: "x",
+        resource: {},
+      }),
+    );
+    expect(result.current.lastEventAt).toBeGreaterThanOrEqual(before);
+    expect(result.current.lastEventAt).toBeLessThanOrEqual(Date.now());
   });
 
   it("throws outside provider", () => {

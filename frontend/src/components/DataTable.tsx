@@ -5,6 +5,7 @@ interface Column<T> {
   header: ReactNode;
   cell: (item: T) => ReactNode;
   className?: string;
+  onHeaderClick?: () => void;
 }
 
 interface Props<T> {
@@ -24,7 +25,7 @@ function PlainBody<T>({ columns, data, keyFn, rowClassName, onRowClick }: Props<
       {data.map((item) => (
         <tr
           key={keyFn(item)}
-          className={`border-b ${onRowClick ? "cursor-pointer hover:bg-muted/50" : ""} ${rowClassName?.(item) ?? ""}`}
+          className={`border-b last:border-b-0 ${onRowClick ? "cursor-pointer hover:bg-muted/50" : ""} ${rowClassName?.(item) ?? ""}`}
           onClick={onRowClick ? () => onRowClick(item) : undefined}
         >
           {columns.map((col, i) => (
@@ -70,7 +71,7 @@ function VirtualBody<T>({
             key={keyFn(item)}
             ref={virtualizer.measureElement}
             data-index={virtualRow.index}
-            className={`border-b ${onRowClick ? "cursor-pointer hover:bg-muted/50" : ""} ${rowClassName?.(item) ?? ""}`}
+            className={`${virtualRow.index < data.length - 1 ? "border-b" : ""} ${onRowClick ? "cursor-pointer hover:bg-muted/50" : ""} ${rowClassName?.(item) ?? ""}`}
             onClick={onRowClick ? () => onRowClick(item) : undefined}
           >
             {columns.map((col, i) => (
@@ -106,7 +107,11 @@ export default function DataTable<T>({ columns, data, keyFn, rowClassName, onRow
         <thead className="sticky top-0 z-10 bg-background">
           <tr className="border-b bg-muted/50">
             {columns.map((col, i) => (
-              <th key={i} className={`text-left p-3 text-sm font-medium ${col.className ?? ""}`}>
+              <th
+                key={i}
+                className={`text-left p-3 text-sm font-medium ${col.className ?? ""} ${col.onHeaderClick ? "cursor-pointer select-none hover:bg-muted/80" : ""}`}
+                onClick={col.onHeaderClick}
+              >
                 {col.header}
               </th>
             ))}

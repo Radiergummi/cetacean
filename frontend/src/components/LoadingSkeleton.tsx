@@ -28,7 +28,7 @@ export function SkeletonTable({ columns, rows = 5 }: { columns: number; rows?: n
         </thead>
         <tbody>
           {Array.from({ length: rows }).map((_, i) => (
-            <tr key={i} className="border-b">
+            <tr key={i} className="border-b last:border-b-0">
               {Array.from({ length: columns }).map((_, j) => (
                 <td key={j} className="p-3">
                   <div className={`h-4 bg-muted/60 rounded ${j === 0 ? "w-32" : "w-20"}`} />

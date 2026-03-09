@@ -9,16 +9,19 @@ import { api } from "../api/client";
 import type { Node } from "../api/types";
 import SearchInput from "../components/SearchInput";
 import PageHeader from "../components/PageHeader";
-import SortableHeader from "../components/SortableHeader";
+import DataTable, { type Column } from "../components/DataTable";
+import SortIndicator from "../components/SortIndicator";
 import ViewToggle from "../components/ViewToggle";
 import TaskStatusBadge from "../components/TaskStatusBadge";
+import ResourceCard from "../components/ResourceCard";
 import ResourceGauge from "../components/ResourceGauge";
 import Sparkline from "../components/Sparkline";
 import EmptyState from "../components/EmptyState";
+import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
 import { SkeletonTable } from "../components/LoadingSkeleton";
 import NodeResourceGauges from "../components/NodeResourceGauges";
-import { statusBorder } from "../lib/statusBorder";
+
 
 export default function NodeList() {
   const [search, setSearch] = useSearchParam("q");
@@ -40,6 +43,60 @@ export default function NodeList() {
   const navigate = useNavigate();
   const { getForNode } = useNodeMetrics();
 
+  const columns: Column<Node>[] = [
+    {
+      header: <SortIndicator label="Hostname" active={sortKey === "hostname"} dir={sortDir} />,
+      cell: (node) => (
+        <Link
+          to={`/nodes/${node.ID}`}
+          className="text-link hover:underline font-medium"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {node.Description.Hostname || node.ID}
+        </Link>
+      ),
+      onHeaderClick: () => toggle("hostname"),
+    },
+    {
+      header: <SortIndicator label="Role" active={sortKey === "role"} dir={sortDir} />,
+      cell: (node) => node.Spec.Role,
+      onHeaderClick: () => toggle("role"),
+    },
+    {
+      header: <SortIndicator label="Status" active={sortKey === "status"} dir={sortDir} />,
+      cell: (node) => <TaskStatusBadge state={node.Status.State} />,
+      onHeaderClick: () => toggle("status"),
+    },
+    {
+      header: "CPU",
+      cell: (node) => {
+        const m = getForNode(node.Status.Addr);
+        return <span className="tabular-nums">{m.cpu != null ? `${Math.round(m.cpu)}%` : "\u2014"}</span>;
+      },
+    },
+    {
+      header: "Memory",
+      cell: (node) => {
+        const m = getForNode(node.Status.Addr);
+        return <span className="tabular-nums">{m.memory != null ? `${Math.round(m.memory)}%` : "\u2014"}</span>;
+      },
+    },
+    {
+      header: "CPU (1h)",
+      cell: (node) => {
+        const m = getForNode(node.Status.Addr);
+        if (m.cpuHistory.length > 1) {
+          return <Sparkline data={m.cpuHistory} />;
+        }
+        return <span className="text-muted-foreground">{"\u2014"}</span>;
+      },
+    },
+    {
+      header: "Engine",
+      cell: (node) => node.Description.Engine.EngineVersion,
+    },
+  ];
+
   if (loading)
     return (
       <div>
@@ -53,7 +110,9 @@ export default function NodeList() {
     <div>
       <PageHeader title="Nodes" />
       <div className="rounded-lg border bg-card p-4 mb-6">
-        <NodeResourceGauges />
+        <ErrorBoundary inline>
+          <NodeResourceGauges />
+        </ErrorBoundary>
       </div>
       <div className="flex items-stretch gap-3 mb-4">
         <SearchInput value={search} onChange={setSearch} placeholder="Search nodes..." />
@@ -62,112 +121,30 @@ export default function NodeList() {
       {nodes.length === 0 ? (
         <EmptyState message={search ? "No nodes match your search" : "No nodes found"} />
       ) : viewMode === "table" ? (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full">
-            <thead className="sticky top-0 z-10 bg-background">
-              <tr className="border-b bg-muted/50">
-                <SortableHeader
-                  label="Hostname"
-                  sortKey="hostname"
-                  activeSortKey={sortKey}
-                  sortDir={sortDir}
-                  onToggle={toggle}
-                />
-                <SortableHeader
-                  label="Role"
-                  sortKey="role"
-                  activeSortKey={sortKey}
-                  sortDir={sortDir}
-                  onToggle={toggle}
-                />
-                <SortableHeader
-                  label="Status"
-                  sortKey="status"
-                  activeSortKey={sortKey}
-                  sortDir={sortDir}
-                  onToggle={toggle}
-                />
-                <th className="text-left p-3 text-sm font-medium">CPU</th>
-                <th className="text-left p-3 text-sm font-medium">Memory</th>
-                <th className="text-left p-3 text-sm font-medium">CPU (1h)</th>
-                <SortableHeader
-                  label="Engine"
-                  sortKey="engine"
-                  activeSortKey={sortKey}
-                  sortDir={sortDir}
-                  onToggle={toggle}
-                />
-              </tr>
-            </thead>
-            <tbody>
-              {nodes.map((node) => {
-                const m = getForNode(node.Status.Addr);
-                return (
-                  <tr
-                    key={node.ID}
-                    className={`border-b cursor-pointer hover:bg-muted/50 ${statusBorder(node.Status.State)}`}
-                    onClick={() => navigate(`/nodes/${node.ID}`)}
-                  >
-                    <td className="p-3">
-                      <Link
-                        to={`/nodes/${node.ID}`}
-                        className="text-link hover:underline font-medium"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {node.Description.Hostname || node.ID}
-                      </Link>
-                    </td>
-                    <td className="p-3 text-sm">{node.Spec.Role}</td>
-                    <td className="p-3 text-sm">
-                      <TaskStatusBadge state={node.Status.State} />
-                    </td>
-                    <td className="p-3 text-sm tabular-nums">
-                      {m.cpu != null ? `${Math.round(m.cpu)}%` : "\u2014"}
-                    </td>
-                    <td className="p-3 text-sm tabular-nums">
-                      {m.memory != null ? `${Math.round(m.memory)}%` : "\u2014"}
-                    </td>
-                    <td className="p-3">
-                      {m.cpuHistory.length > 1 ? (
-                        <Sparkline data={m.cpuHistory} />
-                      ) : (
-                        <span className="text-sm text-muted-foreground">{"\u2014"}</span>
-                      )}
-                    </td>
-                    <td className="p-3 text-sm">{node.Description.Engine.EngineVersion}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={columns}
+          data={nodes}
+          keyFn={(node) => node.ID}
+          onRowClick={(node) => navigate(`/nodes/${node.ID}`)}
+        />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {nodes.map((node) => {
             const m = getForNode(node.Status.Addr);
             return (
-              <Link
+              <ResourceCard
                 key={node.ID}
+                title={node.Description.Hostname || node.ID}
                 to={`/nodes/${node.ID}`}
-                className="rounded-lg border bg-card p-4 hover:border-foreground/20 hover:shadow-sm transition-all"
+                badge={<TaskStatusBadge state={node.Status.State} />}
+                meta={[node.Spec.Role, node.Spec.Availability, `v${node.Description.Engine.EngineVersion}`]}
               >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="font-medium truncate">
-                    {node.Description.Hostname || node.ID}
-                  </span>
-                  <TaskStatusBadge state={node.Status.State} />
-                </div>
-                <div className="flex items-center justify-center gap-4 mb-3">
+                <div className="flex items-center justify-center gap-4">
                   <ResourceGauge label="CPU" value={m.cpu} size="sm" />
                   <ResourceGauge label="Mem" value={m.memory} size="sm" />
                   <ResourceGauge label="Disk" value={m.disk} size="sm" />
                 </div>
-                <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                  <span>{node.Spec.Role}</span>
-                  <span>{node.Spec.Availability}</span>
-                  <span>v{node.Description.Engine.EngineVersion}</span>
-                </div>
-              </Link>
+              </ResourceCard>
             );
           })}
         </div>

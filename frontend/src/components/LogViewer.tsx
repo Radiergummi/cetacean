@@ -11,6 +11,10 @@ import {
   Square,
   Clock,
   ChevronDown,
+  ChevronRight,
+  AlertTriangle,
+  Loader2,
+  FileText,
 } from "lucide-react";
 import { api } from "../api/client";
 import type { LogLine as ApiLogLine } from "../api/client";
@@ -18,6 +22,7 @@ import type { LogLine as ApiLogLine } from "../api/client";
 interface Props {
   serviceId?: string;
   taskId?: string;
+  header?: React.ReactNode;
 }
 
 interface LogLine extends ApiLogLine {
@@ -136,9 +141,10 @@ function toLocalInput(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export default function LogViewer({ serviceId, taskId }: Props) {
+export default function LogViewer({ serviceId, taskId, header }: Props) {
   const logId = (serviceId || taskId)!;
   const isTask = !!taskId;
+  const [collapsed, setCollapsed] = useState(false);
   const [lines, setLines] = useState<LogLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -152,7 +158,6 @@ export default function LogViewer({ serviceId, taskId }: Props) {
   const [live, setLive] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>({ label: "All" });
   const containerRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -161,17 +166,24 @@ export default function LogViewer({ serviceId, taskId }: Props) {
   const fetchLogs = useCallback(() => {
     setLoading(true);
     setError(null);
-    const opts = { limit, after: timeRange.since, before: timeRange.until, stream: streamParam };
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+    const opts = { limit, after: timeRange.since, before: timeRange.until, stream: streamParam, signal: controller.signal };
     const req = isTask ? api.taskLogs(logId, opts) : api.serviceLogs(logId, opts);
     req
       .then((resp) => {
         setLines((resp.lines ?? []).map(toLogLine));
         setLoading(false);
       })
-      .catch(() => {
-        setError("Failed to load logs");
+      .catch((err) => {
+        if (controller.signal.aborted) {
+          setError("Request timed out");
+        } else {
+          setError(err instanceof Error ? err.message : "Failed to load logs");
+        }
         setLoading(false);
-      });
+      })
+      .finally(() => clearTimeout(timeout));
   }, [logId, isTask, limit, timeRange, streamParam]);
 
   useEffect(() => {
@@ -211,10 +223,11 @@ export default function LogViewer({ serviceId, taskId }: Props) {
     };
   }, [live, logId, isTask]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-scroll to bottom when following
+  // Auto-scroll to bottom when following (scroll within the container, not the page)
   useEffect(() => {
-    if (following && bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: "instant" as ScrollBehavior });
+    if (following && containerRef.current) {
+      const el = containerRef.current;
+      el.scrollTop = el.scrollHeight;
     }
   }, [lines, following]);
 
@@ -300,10 +313,26 @@ export default function LogViewer({ serviceId, taskId }: Props) {
     return () => document.removeEventListener("keydown", handler);
   }, []);
 
+  const toggle = header ? (
+    <button
+      type="button"
+      onClick={() => setCollapsed((c) => !c)}
+      className="flex items-center gap-1.5 text-sm font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors cursor-pointer mr-auto"
+    >
+      <ChevronRight className={`h-4 w-4 transition-transform ${collapsed ? "" : "rotate-90"}`} />
+      {header}
+    </button>
+  ) : null;
+
+  if (collapsed) {
+    return <div className="min-h-8 flex items-center">{toggle}</div>;
+  }
+
   return (
     <div className="flex flex-col gap-2">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5 min-h-8">
+        {toggle}
         <select
           value={limit}
           onChange={(e) => setLimit(Number(e.target.value))}
@@ -423,58 +452,72 @@ export default function LogViewer({ serviceId, taskId }: Props) {
 
       {/* Log area */}
       {loading ? (
-        <div className="h-[400px] rounded-lg bg-gray-950 border border-gray-800" />
+        <div className="log-panel flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-muted-foreground">
+            <Loader2 className="w-6 h-6 animate-spin" />
+            <p className="text-sm">Loading logs...</p>
+          </div>
+        </div>
       ) : error ? (
-        <div className="h-[400px] rounded-lg bg-gray-950 border border-gray-800 flex items-center justify-center">
-          <div className="text-center">
-            <p className="text-red-400 text-sm mb-3">{error}</p>
+        <div className="log-panel flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <AlertTriangle className="w-6 h-6 text-red-500 dark:text-red-400" />
+            <div>
+              <p className="text-red-600 dark:text-red-400 text-sm font-medium mb-1">Failed to load logs</p>
+              <p className="text-muted-foreground text-xs mb-3">{error}</p>
+            </div>
             <button
               onClick={fetchLogs}
-              className="px-4 py-1.5 text-sm rounded-md bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30"
+              className="px-4 py-1.5 text-sm rounded-md border hover:bg-muted"
             >
               Retry
             </button>
           </div>
         </div>
+      ) : lines.length === 0 ? (
+        <div className="log-panel flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-muted-foreground">
+            <FileText className="w-6 h-6" />
+            <p className="text-sm">No logs yet — the container hasn't produced any output</p>
+          </div>
+        </div>
       ) : filtered.length === 0 ? (
-        <div className="h-[400px] rounded-lg bg-gray-950 border border-gray-800 flex items-center justify-center">
-          <p className="text-gray-500 text-sm">
-            {search ? "No matching log lines" : "No logs available"}
-          </p>
+        <div className="log-panel flex items-center justify-center">
+          <p className="text-muted-foreground text-sm">No matching log lines</p>
         </div>
       ) : (
         <div className="relative">
           <div
             ref={containerRef}
             onScroll={handleScroll}
-            className="h-[400px] overflow-auto rounded-lg bg-gray-950 border border-gray-800"
+            className="log-panel overflow-auto"
           >
             <table className="w-full border-collapse font-mono text-xs leading-5">
               <tbody>
                 {filtered.map((line) => (
-                  <tr key={line.index} className="hover:bg-white/[0.03] group">
+                  <tr key={line.index} className="hover:bg-muted/50 group">
                     <td className="w-[3px] p-0 align-stretch">
                       <div className={`w-[3px] min-h-full ${LEVEL_BAR[line.level]}`} />
                     </td>
-                    <td className="pl-2 pr-1 py-px text-gray-600 text-right select-none align-top tabular-nums">
+                    <td className="pl-2 pr-1 py-px text-muted-foreground/50 text-right select-none align-top tabular-nums">
                       {line.index + 1}
                     </td>
                     <td
-                      className="px-2 py-px text-gray-500 whitespace-nowrap align-top select-all"
+                      className="px-2 py-px text-muted-foreground whitespace-nowrap align-top select-all"
                       title={line.timestamp}
                     >
                       {formatTime(line.timestamp)}
                     </td>
                     {showAttrs && (
                       <td
-                        className="px-2 py-px text-gray-600 whitespace-nowrap align-top font-mono"
+                        className="px-2 py-px text-muted-foreground/60 whitespace-nowrap align-top font-mono"
                         title={line.attrs?.taskId}
                       >
                         {line.attrs?.taskId?.slice(0, 8)}
                       </td>
                     )}
                     <td
-                      className={`px-2 py-px text-gray-200 ${wrapLines ? "whitespace-pre-wrap break-all" : "whitespace-pre"}`}
+                      className={`px-2 py-px text-foreground ${wrapLines ? "whitespace-pre-wrap break-all" : "whitespace-pre"}`}
                     >
                       <LogMessage line={line} search={search} caseSensitive={caseSensitive} />
                     </td>
@@ -482,16 +525,17 @@ export default function LogViewer({ serviceId, taskId }: Props) {
                 ))}
               </tbody>
             </table>
-            <div ref={bottomRef} />
           </div>
 
           {!following && (
             <button
               onClick={() => {
                 setFollowing(true);
-                bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+                if (containerRef.current) {
+                  containerRef.current.scrollTo({ top: containerRef.current.scrollHeight, behavior: "smooth" });
+                }
               }}
-              className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full bg-gray-800 text-gray-300 border border-gray-700 shadow-lg hover:bg-gray-700 transition-colors"
+              className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full bg-card text-foreground border shadow-lg hover:bg-muted transition-colors"
             >
               <ArrowDown className="w-3 h-3" />
               Jump to bottom
@@ -727,13 +771,13 @@ function LogMessage({
 
   // Auto-format JSON
   if (isJSON(msg)) {
-    return <span className="text-emerald-300">{prettyJSON(msg)}</span>;
+    return <span className="text-emerald-700 dark:text-emerald-300">{prettyJSON(msg)}</span>;
   }
 
   // Color error-level lines
-  if (line.level === "error") return <span className="text-red-300">{msg}</span>;
-  if (line.level === "warn") return <span className="text-yellow-300">{msg}</span>;
-  if (line.level === "debug") return <span className="text-gray-400">{msg}</span>;
+  if (line.level === "error") return <span className="text-red-600 dark:text-red-300">{msg}</span>;
+  if (line.level === "warn") return <span className="text-yellow-700 dark:text-yellow-300">{msg}</span>;
+  if (line.level === "debug") return <span className="text-muted-foreground">{msg}</span>;
 
   return <>{msg}</>;
 }
@@ -757,7 +801,7 @@ function HighlightedText({
           ? part === search
           : part.toLowerCase() === search.toLowerCase();
         return isMatch ? (
-          <mark key={i} className="bg-yellow-500/40 text-yellow-200 rounded-[2px] px-[1px]">
+          <mark key={i} className="bg-yellow-200 dark:bg-yellow-500/40 text-yellow-900 dark:text-yellow-200 rounded-[2px] px-[1px]">
             {part}
           </mark>
         ) : (
