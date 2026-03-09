@@ -1,7 +1,9 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/docker/docker/api/types/swarm"
 )
@@ -13,10 +15,14 @@ type NetworkTopology struct {
 }
 
 type TopoServiceNode struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Stack    string `json:"stack,omitempty"`
-	Replicas int    `json:"replicas"`
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	Stack        string   `json:"stack,omitempty"`
+	Replicas     int      `json:"replicas"`
+	Image        string   `json:"image"`
+	Ports        []string `json:"ports,omitempty"`
+	Mode         string   `json:"mode"`
+	UpdateStatus string   `json:"updateStatus,omitempty"`
 }
 
 type TopoEdge struct {
@@ -36,11 +42,12 @@ type PlacementTopology struct {
 }
 
 type TopoClusterNode struct {
-	ID       string     `json:"id"`
-	Hostname string     `json:"hostname"`
-	Role     string     `json:"role"`
-	State    string     `json:"state"`
-	Tasks    []TopoTask `json:"tasks"`
+	ID           string     `json:"id"`
+	Hostname     string     `json:"hostname"`
+	Role         string     `json:"role"`
+	State        string     `json:"state"`
+	Availability string     `json:"availability"`
+	Tasks        []TopoTask `json:"tasks"`
 }
 
 type TopoTask struct {
@@ -49,6 +56,7 @@ type TopoTask struct {
 	ServiceName string `json:"serviceName"`
 	State       string `json:"state"`
 	Slot        int    `json:"slot"`
+	Image       string `json:"image"`
 }
 
 func (h *Handlers) HandleNetworkTopology(w http.ResponseWriter, r *http.Request) {
@@ -69,11 +77,35 @@ func (h *Handlers) HandleNetworkTopology(w http.ResponseWriter, r *http.Request)
 	for _, svc := range services {
 		replicas := replicaCount(svc)
 		stack := svc.Spec.Labels["com.docker.stack.namespace"]
+
+		var image string
+		if svc.Spec.TaskTemplate.ContainerSpec != nil {
+			image = stripImageDigest(svc.Spec.TaskTemplate.ContainerSpec.Image)
+		}
+		var mode string
+		if svc.Spec.Mode.Replicated != nil {
+			mode = "replicated"
+		} else if svc.Spec.Mode.Global != nil {
+			mode = "global"
+		}
+		var ports []string
+		if svc.Spec.EndpointSpec != nil {
+			ports = formatPorts(svc.Spec.EndpointSpec.Ports)
+		}
+		var updateStatus string
+		if svc.UpdateStatus != nil {
+			updateStatus = string(svc.UpdateStatus.State)
+		}
+
 		nodes = append(nodes, TopoServiceNode{
-			ID:       svc.ID,
-			Name:     svc.Spec.Name,
-			Stack:    stack,
-			Replicas: replicas,
+			ID:           svc.ID,
+			Name:         svc.Spec.Name,
+			Stack:        stack,
+			Replicas:     replicas,
+			Image:        image,
+			Ports:        ports,
+			Mode:         mode,
+			UpdateStatus: updateStatus,
 		})
 
 		nets := make(map[string]struct{})
@@ -125,10 +157,14 @@ func (h *Handlers) HandlePlacementTopology(w http.ResponseWriter, r *http.Reques
 	clusterNodes := h.cache.ListNodes()
 	services := h.cache.ListServices()
 
-	// Build service name lookup.
+	// Build service name and image lookup.
 	svcNames := make(map[string]string, len(services))
+	svcImages := make(map[string]string, len(services))
 	for _, svc := range services {
 		svcNames[svc.ID] = svc.Spec.Name
+		if svc.Spec.TaskTemplate.ContainerSpec != nil {
+			svcImages[svc.ID] = stripImageDigest(svc.Spec.TaskTemplate.ContainerSpec.Image)
+		}
 	}
 
 	topoNodes := make([]TopoClusterNode, 0, len(clusterNodes))
@@ -136,20 +172,29 @@ func (h *Handlers) HandlePlacementTopology(w http.ResponseWriter, r *http.Reques
 		tasks := h.cache.ListTasksByNode(n.ID)
 		topoTasks := make([]TopoTask, 0, len(tasks))
 		for _, t := range tasks {
+			var taskImage string
+			if t.Spec.ContainerSpec != nil {
+				taskImage = stripImageDigest(t.Spec.ContainerSpec.Image)
+			}
+			if taskImage == "" {
+				taskImage = svcImages[t.ServiceID]
+			}
 			topoTasks = append(topoTasks, TopoTask{
 				ID:          t.ID,
 				ServiceID:   t.ServiceID,
 				ServiceName: svcNames[t.ServiceID],
 				State:       string(t.Status.State),
 				Slot:        t.Slot,
+				Image:       taskImage,
 			})
 		}
 		topoNodes = append(topoNodes, TopoClusterNode{
-			ID:       n.ID,
-			Hostname: n.Description.Hostname,
-			Role:     string(n.Spec.Role),
-			State:    string(n.Status.State),
-			Tasks:    topoTasks,
+			ID:           n.ID,
+			Hostname:     n.Description.Hostname,
+			Role:         string(n.Spec.Role),
+			State:        string(n.Status.State),
+			Availability: string(n.Spec.Availability),
+			Tasks:        topoTasks,
 		})
 	}
 
@@ -161,4 +206,22 @@ func replicaCount(svc swarm.Service) int {
 		return int(*svc.Spec.Mode.Replicated.Replicas)
 	}
 	return 0
+}
+
+func stripImageDigest(image string) string {
+	if i := strings.Index(image, "@sha256:"); i != -1 {
+		return image[:i]
+	}
+	return image
+}
+
+func formatPorts(ports []swarm.PortConfig) []string {
+	if len(ports) == 0 {
+		return nil
+	}
+	out := make([]string, len(ports))
+	for i, p := range ports {
+		out[i] = fmt.Sprintf("%d:%d/%s", p.PublishedPort, p.TargetPort, p.Protocol)
+	}
+	return out
 }
