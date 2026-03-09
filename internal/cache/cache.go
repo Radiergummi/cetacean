@@ -798,9 +798,9 @@ type FullSyncData struct {
 	Networks []network.Summary
 	Volumes  []volume.Volume
 
-	HasNodes, HasServices, HasTasks   bool
-	HasConfigs, HasSecrets            bool
-	HasNetworks, HasVolumes           bool
+	HasNodes, HasServices, HasTasks bool
+	HasConfigs, HasSecrets          bool
+	HasNetworks, HasVolumes         bool
 }
 
 // ReplaceAll atomically replaces resource maps for which Has* flags are true,

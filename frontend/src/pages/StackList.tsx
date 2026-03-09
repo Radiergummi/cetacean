@@ -28,17 +28,19 @@ export default function StackList() {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   useSSE(
     ["stack", "service", "task"],
-    useCallback(() => { load(); }, [load]),
+    useCallback(() => {
+      load();
+    }, [load]),
   );
 
   const filtered = search
-    ? summaries.filter((s) =>
-        s.name.toLowerCase().includes(search.toLowerCase()),
-      )
+    ? summaries.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()))
     : summaries;
 
   if (loading)
@@ -117,7 +119,9 @@ function StackCard({ stack }: { stack: StackSummary }) {
       <div className="mb-3">
         <div className="flex justify-between text-xs text-muted-foreground mb-1">
           <span>Tasks</span>
-          <span className="tabular-nums">{running}/{stack.desiredTasks}</span>
+          <span className="tabular-nums">
+            {running}/{stack.desiredTasks}
+          </span>
         </div>
         {totalTasks > 0 ? (
           <div className="h-2 rounded-full bg-muted overflow-hidden flex">
@@ -193,10 +197,15 @@ function ResourceBar({
     <div className="mb-2">
       <div className="flex justify-between text-xs text-muted-foreground mb-0.5">
         <span>{label}</span>
-        <span className="tabular-nums">{format(used)} / {format(limit)}</span>
+        <span className="tabular-nums">
+          {format(used)} / {format(limit)}
+        </span>
       </div>
       <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-        <div className={`h-full rounded-full ${color} transition-all`} style={{ width: `${pct}%` }} />
+        <div
+          className={`h-full rounded-full ${color} transition-all`}
+          style={{ width: `${pct}%` }}
+        />
       </div>
     </div>
   );

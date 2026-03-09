@@ -724,7 +724,7 @@ func TestCache_ListVolumes(t *testing.T) {
 func TestSnapshot_ResourceTotals(t *testing.T) {
 	c := New(nil)
 	c.SetNode(swarm.Node{
-		ID: "n1",
+		ID:     "n1",
 		Status: swarm.NodeStatus{State: swarm.NodeStateReady},
 		Description: swarm.NodeDescription{
 			Resources: swarm.Resources{
@@ -734,7 +734,7 @@ func TestSnapshot_ResourceTotals(t *testing.T) {
 		},
 	})
 	c.SetNode(swarm.Node{
-		ID: "n2",
+		ID:     "n2",
 		Status: swarm.NodeStatus{State: swarm.NodeStateReady},
 		Description: swarm.NodeDescription{
 			Resources: swarm.Resources{
@@ -843,6 +843,18 @@ func TestCache_ListStackSummaries(t *testing.T) {
 	}
 	if s.NetworkCount != 1 {
 		t.Errorf("networkCount=%d, want 1", s.NetworkCount)
+	}
+	if s.SecretCount != 0 {
+		t.Errorf("secretCount=%d, want 0", s.SecretCount)
+	}
+	if s.VolumeCount != 0 {
+		t.Errorf("volumeCount=%d, want 0", s.VolumeCount)
+	}
+	if s.MemoryUsageBytes != 0 {
+		t.Errorf("memoryUsageBytes=%d, want 0 (populated by handler, not cache)", s.MemoryUsageBytes)
+	}
+	if s.CPUUsagePercent != 0 {
+		t.Errorf("cpuUsagePercent=%f, want 0 (populated by handler, not cache)", s.CPUUsagePercent)
 	}
 }
 

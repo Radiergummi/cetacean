@@ -108,7 +108,13 @@ export const api = {
   task: (id: string) => fetchJSON<Task>(`/tasks/${id}`),
   taskLogs: (
     id: string,
-    opts?: { limit?: number; after?: string; before?: string; stream?: string; signal?: AbortSignal },
+    opts?: {
+      limit?: number;
+      after?: string;
+      before?: string;
+      stream?: string;
+      signal?: AbortSignal;
+    },
   ) => {
     const params = new URLSearchParams({ limit: String(opts?.limit || 500) });
     if (opts?.after) params.set("after", opts.after);
@@ -119,7 +125,13 @@ export const api = {
   serviceTasks: (id: string) => fetchJSON<Task[]>(`/services/${id}/tasks`),
   serviceLogs: (
     id: string,
-    opts?: { limit?: number; after?: string; before?: string; stream?: string; signal?: AbortSignal },
+    opts?: {
+      limit?: number;
+      after?: string;
+      before?: string;
+      stream?: string;
+      signal?: AbortSignal;
+    },
   ) => {
     const params = new URLSearchParams({ limit: String(opts?.limit || 500) });
     if (opts?.after) params.set("after", opts.after);
