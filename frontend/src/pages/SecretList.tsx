@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useSortParams } from "../hooks/useSort";
 import { useViewMode } from "../hooks/useViewMode";
@@ -18,7 +19,8 @@ import type { Column } from "../components/DataTable";
 import TimeAgo from "../components/TimeAgo";
 
 export default function SecretList() {
-  const [search, setSearch] = useSearchParam("q");
+  const navigate = useNavigate();
+  const [search, debouncedSearch, setSearch] = useSearchParam("q");
   const { sortKey, sortDir, toggle } = useSortParams("name");
   const {
     data: secrets,
@@ -27,8 +29,8 @@ export default function SecretList() {
     retry,
   } = useSwarmResource(
     useCallback(
-      () => api.secrets({ search, sort: sortKey, dir: sortDir }),
-      [search, sortKey, sortDir],
+      () => api.secrets({ search: debouncedSearch, sort: sortKey, dir: sortDir }),
+      [debouncedSearch, sortKey, sortDir],
     ),
     "secret",
     (s: Secret) => s.ID,
@@ -75,11 +77,11 @@ export default function SecretList() {
       {secrets.length === 0 ? (
         <EmptyState message={search ? "No secrets match your search" : "No secrets found"} />
       ) : viewMode === "table" ? (
-        <DataTable columns={columns} data={secrets} keyFn={(s) => s.ID} />
+        <DataTable columns={columns} data={secrets} keyFn={(s) => s.ID} onRowClick={(s) => navigate(`/secrets/${s.ID}`)} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {secrets.map((secret) => (
-            <ResourceCard key={secret.ID} title={secret.Spec.Name || secret.ID}>
+            <ResourceCard key={secret.ID} title={secret.Spec.Name || secret.ID} to={`/secrets/${secret.ID}`}>
               <div className="space-y-1 text-xs text-muted-foreground">
                 <div>Created: {secret.CreatedAt ? <TimeAgo date={secret.CreatedAt} /> : "\u2014"}</div>
                 <div>Updated: {secret.UpdatedAt ? <TimeAgo date={secret.UpdatedAt} /> : "\u2014"}</div>

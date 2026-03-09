@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useSortParams } from "../hooks/useSort";
 import { useViewMode } from "../hooks/useViewMode";
@@ -17,7 +18,8 @@ import DataTable from "../components/DataTable";
 import type { Column } from "../components/DataTable";
 
 export default function VolumeList() {
-  const [search, setSearch] = useSearchParam("q");
+  const navigate = useNavigate();
+  const [search, debouncedSearch, setSearch] = useSearchParam("q");
   const { sortKey, sortDir, toggle } = useSortParams("name");
   const {
     data: volumes,
@@ -26,8 +28,8 @@ export default function VolumeList() {
     retry,
   } = useSwarmResource(
     useCallback(
-      () => api.volumes({ search, sort: sortKey, dir: sortDir }),
-      [search, sortKey, sortDir],
+      () => api.volumes({ search: debouncedSearch, sort: sortKey, dir: sortDir }),
+      [debouncedSearch, sortKey, sortDir],
     ),
     "volume",
     (v: Volume) => v.Name,
@@ -71,11 +73,11 @@ export default function VolumeList() {
       {volumes.length === 0 ? (
         <EmptyState message={search ? "No volumes match your search" : "No volumes found"} />
       ) : viewMode === "table" ? (
-        <DataTable columns={columns} data={volumes} keyFn={(v) => v.Name} />
+        <DataTable columns={columns} data={volumes} keyFn={(v) => v.Name} onRowClick={(v) => navigate(`/volumes/${v.Name}`)} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {volumes.map((vol) => (
-            <ResourceCard key={vol.Name} title={vol.Name} meta={[vol.Driver, vol.Scope]} />
+            <ResourceCard key={vol.Name} title={vol.Name} to={`/volumes/${vol.Name}`} meta={[vol.Driver, vol.Scope]} />
           ))}
         </div>
       )}

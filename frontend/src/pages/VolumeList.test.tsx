@@ -40,6 +40,7 @@ const fakeVolume = (name: string): Volume => ({
   Labels: {},
   Mountpoint: `/var/lib/docker/volumes/${name}/_data`,
   Scope: "local",
+  Options: {},
   CreatedAt: "2024-01-01T00:00:00Z",
 });
 

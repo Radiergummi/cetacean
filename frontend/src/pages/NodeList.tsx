@@ -24,7 +24,7 @@ import NodeResourceGauges from "../components/NodeResourceGauges";
 
 
 export default function NodeList() {
-  const [search, setSearch] = useSearchParam("q");
+  const [search, debouncedSearch, setSearch] = useSearchParam("q");
   const { sortKey, sortDir, toggle } = useSortParams("hostname");
   const {
     data: nodes,
@@ -33,8 +33,8 @@ export default function NodeList() {
     retry,
   } = useSwarmResource(
     useCallback(
-      () => api.nodes({ search, sort: sortKey, dir: sortDir }),
-      [search, sortKey, sortDir],
+      () => api.nodes({ search: debouncedSearch, sort: sortKey, dir: sortDir }),
+      [debouncedSearch, sortKey, sortDir],
     ),
     "node",
     (n: Node) => n.ID,

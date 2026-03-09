@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useSortParams } from "../hooks/useSort";
 import { useViewMode } from "../hooks/useViewMode";
@@ -17,7 +18,8 @@ import DataTable from "../components/DataTable";
 import type { Column } from "../components/DataTable";
 
 export default function NetworkList() {
-  const [search, setSearch] = useSearchParam("q");
+  const navigate = useNavigate();
+  const [search, debouncedSearch, setSearch] = useSearchParam("q");
   const { sortKey, sortDir, toggle } = useSortParams("name");
   const {
     data: networks,
@@ -26,8 +28,8 @@ export default function NetworkList() {
     retry,
   } = useSwarmResource(
     useCallback(
-      () => api.networks({ search, sort: sortKey, dir: sortDir }),
-      [search, sortKey, sortDir],
+      () => api.networks({ search: debouncedSearch, sort: sortKey, dir: sortDir }),
+      [debouncedSearch, sortKey, sortDir],
     ),
     "network",
     (n: Network) => n.Id,
@@ -71,11 +73,11 @@ export default function NetworkList() {
       {networks.length === 0 ? (
         <EmptyState message={search ? "No networks match your search" : "No networks found"} />
       ) : viewMode === "table" ? (
-        <DataTable columns={columns} data={networks} keyFn={(n) => n.Id} />
+        <DataTable columns={columns} data={networks} keyFn={(n) => n.Id} onRowClick={(n) => navigate(`/networks/${n.Id}`)} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {networks.map((net) => (
-            <ResourceCard key={net.Id} title={net.Name} meta={[net.Driver, net.Scope]} />
+            <ResourceCard key={net.Id} title={net.Name} to={`/networks/${net.Id}`} meta={[net.Driver, net.Scope]} />
           ))}
         </div>
       )}

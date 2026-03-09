@@ -37,9 +37,15 @@ const mockNetworks = vi.mocked(api.networks);
 const fakeNetwork = (id: string, name: string): Network => ({
   Id: id,
   Name: name,
+  Created: "2024-01-01T00:00:00Z",
   Driver: "overlay",
   Scope: "swarm",
+  EnableIPv6: false,
+  Internal: false,
+  Attachable: false,
+  Ingress: false,
   IPAM: { Config: [{ Subnet: "10.0.0.0/24", Gateway: "10.0.0.1" }] },
+  Options: {},
   Labels: {},
 });
 

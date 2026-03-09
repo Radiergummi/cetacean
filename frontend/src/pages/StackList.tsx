@@ -12,7 +12,7 @@ import { SkeletonTable } from "../components/LoadingSkeleton";
 import { formatBytes } from "../lib/formatBytes";
 
 export default function StackList() {
-  const [search, setSearch] = useSearchParam("q");
+  const [search, , setSearch] = useSearchParam("q");
   const [summaries, setSummaries] = useState<StackSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
