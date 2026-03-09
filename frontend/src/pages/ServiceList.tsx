@@ -1,3 +1,4 @@
+import type React from "react";
 import { useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useSwarmResource } from "../hooks/useSwarmResource";
@@ -5,7 +6,7 @@ import { useSortParams } from "../hooks/useSort";
 import { useViewMode } from "../hooks/useViewMode";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { api } from "../api/client";
-import type { Service } from "../api/types";
+import type { ServiceListItem } from "../api/types";
 import SearchInput from "../components/SearchInput";
 import PageHeader from "../components/PageHeader";
 import DataTable, { type Column } from "../components/DataTable";
@@ -16,8 +17,19 @@ import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
 import { SkeletonTable } from "../components/LoadingSkeleton";
 
+function ReplicaHealth({ running, desired }: { running: number; desired: number }) {
+  const healthy = running >= desired && desired > 0;
+  const color = healthy ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400";
+
+  return (
+    <span className={`tabular-nums font-medium ${color}`}>
+      {running}/{desired}
+    </span>
+  );
+}
+
 export default function ServiceList() {
-  const [search, setSearch] = useSearchParam("q");
+  const [search, debouncedSearch, setSearch] = useSearchParam("q");
   const { sortKey, sortDir, toggle } = useSortParams("name");
   const {
     data: services,
@@ -26,16 +38,16 @@ export default function ServiceList() {
     retry,
   } = useSwarmResource(
     useCallback(
-      () => api.services({ search, sort: sortKey, dir: sortDir }),
-      [search, sortKey, sortDir],
+      () => api.services({ search: debouncedSearch, sort: sortKey, dir: sortDir }),
+      [debouncedSearch, sortKey, sortDir],
     ),
     "service",
-    (s: Service) => s.ID,
+    (s: ServiceListItem) => s.ID,
   );
   const [viewMode, setViewMode] = useViewMode("services");
   const navigate = useNavigate();
 
-  const columns: Column<Service>[] = [
+  const columns: Column<ServiceListItem>[] = [
     {
       header: <SortIndicator label="Name" active={sortKey === "name"} dir={sortDir} />,
       cell: (svc) => (
@@ -64,7 +76,11 @@ export default function ServiceList() {
     },
     {
       header: "Replicas",
-      cell: (svc) => svc.Spec.Mode.Replicated?.Replicas ?? "\u2014",
+      cell: (svc) => {
+        const desired = svc.Spec.Mode.Replicated?.Replicas;
+        if (desired == null) return "\u2014";
+        return <ReplicaHealth running={svc.RunningTasks} desired={desired} />;
+      },
     },
     {
       header: "Update Status",
@@ -99,19 +115,26 @@ export default function ServiceList() {
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {services.map((svc) => (
-            <ResourceCard
-              key={svc.ID}
-              title={svc.Spec.Name}
-              to={`/services/${svc.ID}`}
-              subtitle={svc.Spec.TaskTemplate.ContainerSpec.Image.split("@")[0]}
-              meta={[
-                svc.Spec.Mode.Replicated ? "replicated" : "global",
-                svc.Spec.Mode.Replicated && <span className="tabular-nums">{svc.Spec.Mode.Replicated.Replicas} replicas</span>,
-                svc.UpdateStatus?.State,
-              ].filter(Boolean) as React.ReactNode[]}
-            />
-          ))}
+          {services.map((svc) => {
+            const desired = svc.Spec.Mode.Replicated?.Replicas;
+            return (
+              <ResourceCard
+                key={svc.ID}
+                title={svc.Spec.Name}
+                to={`/services/${svc.ID}`}
+                subtitle={svc.Spec.TaskTemplate.ContainerSpec.Image.split("@")[0]}
+                meta={
+                  [
+                    svc.Spec.Mode.Replicated ? "replicated" : "global",
+                    desired != null && (
+                      <ReplicaHealth running={svc.RunningTasks} desired={desired} />
+                    ),
+                    svc.UpdateStatus?.State,
+                  ].filter(Boolean) as React.ReactNode[]
+                }
+              />
+            );
+          })}
         </div>
       )}
     </div>

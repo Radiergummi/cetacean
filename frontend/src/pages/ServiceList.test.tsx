@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import type { ReactNode } from "react";
 import { SSEProvider } from "../hooks/SSEContext";
 import ServiceList from "./ServiceList";
-import type { Service } from "../api/types";
+import type { ServiceListItem } from "../api/types";
 
 class MockEventSource {
   static instance: MockEventSource;
@@ -34,7 +34,7 @@ vi.mock("../api/client", () => ({
 import { api } from "../api/client";
 const mockServices = vi.mocked(api.services);
 
-const fakeService = (id: string, name: string, replicas = 3): Service => ({
+const fakeService = (id: string, name: string, replicas = 3, running = 3): ServiceListItem => ({
   ID: id,
   Version: { Index: 1 },
   Spec: {
@@ -43,6 +43,7 @@ const fakeService = (id: string, name: string, replicas = 3): Service => ({
     TaskTemplate: { ContainerSpec: { Image: "nginx:latest@sha256:abc" } },
     Mode: { Replicated: { Replicas: replicas } },
   },
+  RunningTasks: running,
 });
 
 beforeEach(() => {
@@ -68,8 +69,8 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 describe("ServiceList", () => {
-  it("renders service list", async () => {
-    const items = [fakeService("s1", "web"), fakeService("s2", "api")];
+  it("renders service list with replica health", async () => {
+    const items = [fakeService("s1", "web", 3, 3), fakeService("s2", "api", 2, 1)];
     mockServices.mockResolvedValue({ items, total: 2 });
     render(<ServiceList />, { wrapper });
 
@@ -77,11 +78,14 @@ describe("ServiceList", () => {
       expect(screen.getByText("web")).toBeInTheDocument();
     });
     expect(screen.getByText("api")).toBeInTheDocument();
-    // Image without sha
-    expect(screen.getAllByText("nginx:latest").length).toBeGreaterThan(0);
+    // Healthy: 3/3
+    expect(screen.getByText("3/3")).toBeInTheDocument();
+    // Unhealthy: 1/2
+    expect(screen.getByText("1/2")).toBeInTheDocument();
   });
 
-  it("filters by search", async () => {
+  it("filters by search with debounce", async () => {
+    vi.useFakeTimers();
     mockServices
       .mockResolvedValueOnce({
         items: [fakeService("s1", "web-frontend"), fakeService("s2", "api-backend")],
@@ -93,7 +97,7 @@ describe("ServiceList", () => {
       });
     render(<ServiceList />, { wrapper });
 
-    await waitFor(() => {
+    await vi.waitFor(() => {
       expect(screen.getByText("web-frontend")).toBeInTheDocument();
     });
 
@@ -101,10 +105,16 @@ describe("ServiceList", () => {
       target: { value: "api" },
     });
 
-    await waitFor(() => {
+    // Advance past debounce
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
+
+    await vi.waitFor(() => {
       expect(screen.queryByText("web-frontend")).not.toBeInTheDocument();
     });
     expect(screen.getByText("api-backend")).toBeInTheDocument();
+    vi.useRealTimers();
   });
 
   it("shows empty state", async () => {

@@ -1,6 +1,7 @@
 import type {
   Node,
   Service,
+  ServiceListItem,
   Task,
   Stack,
   StackDetail,
@@ -61,6 +62,7 @@ export interface ClusterSnapshot {
   nodesDown: number;
   totalCPU: number;
   totalMemory: number;
+  prometheusConfigured: boolean;
 }
 
 export interface ListParams {
@@ -87,7 +89,7 @@ export const api = {
   nodes: (params?: ListParams) => fetchJSON<PagedResponse<Node>>(buildListURL("/nodes", params)),
   node: (id: string) => fetchJSON<Node>(`/nodes/${id}`),
   services: (params?: ListParams) =>
-    fetchJSON<PagedResponse<Service>>(buildListURL("/services", params)),
+    fetchJSON<PagedResponse<ServiceListItem>>(buildListURL("/services", params)),
   service: (id: string) => fetchJSON<Service>(`/services/${id}`),
   tasks: (params?: ListParams) => fetchJSON<PagedResponse<Task>>(buildListURL("/tasks", params)),
   stacks: (params?: ListParams) => fetchJSON<PagedResponse<Stack>>(buildListURL("/stacks", params)),

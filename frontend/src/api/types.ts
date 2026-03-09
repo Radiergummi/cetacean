@@ -131,6 +131,10 @@ export interface Service {
   };
 }
 
+export interface ServiceListItem extends Service {
+  RunningTasks: number;
+}
+
 export interface Task {
   ID: string;
   Version: { Index: number };
