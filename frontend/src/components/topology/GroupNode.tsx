@@ -6,15 +6,28 @@ type GroupData = {
   state?: string;
   availability?: string;
   variant: "stack" | "node";
+  color?: string;
 };
 
 export default function GroupNode({ data }: NodeProps & { data: GroupData }) {
   const isNode = data.variant === "node";
 
   return (
-    <div className="border border-dashed rounded-xl bg-muted/10 p-4 min-w-[200px] min-h-[100px]">
+    <div
+      className="w-full h-full rounded-xl bg-muted/10 p-4"
+      style={{
+        borderWidth: 1,
+        borderStyle: "dashed",
+        borderColor: data.color ?? "var(--color-border)",
+      }}
+    >
       <div className="flex items-center gap-2 mb-2">
-        <span className="text-sm font-semibold text-muted-foreground">{data.label}</span>
+        <span
+          className="text-sm font-semibold"
+          style={{ color: data.color ?? "var(--color-muted-foreground)" }}
+        >
+          {data.label}
+        </span>
 
         {isNode && data.role && (
           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">

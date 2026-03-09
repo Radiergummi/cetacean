@@ -10,6 +10,9 @@ type ServiceCardData = {
   runningReplicas?: number;
   ports?: string[];
   updateStatus?: string;
+  stackColor?: string;
+  hasSourceEdge?: boolean;
+  hasTargetEdge?: boolean;
 };
 
 export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCardData }) {
@@ -21,7 +24,12 @@ export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCar
 
   return (
     <div
-      className="w-56 border rounded-lg bg-card shadow-sm p-3 cursor-pointer hover:border-primary/50 transition-colors"
+      className="w-56 rounded-lg bg-card shadow-sm p-3 cursor-pointer hover:shadow-md transition-shadow"
+      style={{
+        borderWidth: 2,
+        borderStyle: "solid",
+        borderColor: data.stackColor ?? "var(--color-border)",
+      }}
       onClick={() => navigate(`/services/${data.id}`)}
     >
       <div className="flex items-center justify-between gap-1 mb-1">
@@ -54,8 +62,12 @@ export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCar
 
       {data.updateStatus && <div className="text-xs text-yellow-500 mt-1">Updating...</div>}
 
-      <Handle type="target" position={Position.Left} />
-      <Handle type="source" position={Position.Right} />
+      {data.hasTargetEdge && (
+        <Handle type="target" position={Position.Left} className="!w-0 !h-0 !border-0 !bg-transparent" />
+      )}
+      {data.hasSourceEdge && (
+        <Handle type="source" position={Position.Right} className="!w-0 !h-0 !border-0 !bg-transparent" />
+      )}
     </div>
   );
 }

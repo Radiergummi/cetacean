@@ -24,16 +24,36 @@ function hashColor(id: string): string {
   return COLORS[Math.abs(h) % COLORS.length];
 }
 
+function stripStackPrefix(name: string, stack?: string): string {
+  if (stack && name.startsWith(stack + "_")) {
+    return name.slice(stack.length + 1);
+  }
+  return name;
+}
+
 export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
 
   const networkMap = new Map(data.networks.map((n) => [n.id, n]));
 
-  // Collect unique stacks
+  // Collect unique stacks and assign colors
   const stacks = new Set<string>();
   for (const svc of data.nodes) {
     if (svc.stack) stacks.add(svc.stack);
+  }
+
+  const stackColorMap = new Map<string, string>();
+  for (const stack of stacks) {
+    stackColorMap.set(stack, hashColor(stack));
+  }
+
+  // Build connected service set (services that have at least one edge)
+  const connectedSources = new Set<string>();
+  const connectedTargets = new Set<string>();
+  for (const edge of data.edges) {
+    connectedSources.add(edge.source);
+    connectedTargets.add(edge.target);
   }
 
   // Create stack group nodes
@@ -42,7 +62,7 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
       id: `stack:${stack}`,
       type: "stackGroup",
       position: { x: 0, y: 0 },
-      data: { label: stack, variant: "stack" },
+      data: { label: stack, variant: "stack", color: stackColorMap.get(stack) },
     });
   }
 
@@ -54,12 +74,15 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
       position: { x: 0, y: 0 },
       data: {
         id: svc.id,
-        name: svc.name,
+        name: stripStackPrefix(svc.name, svc.stack),
         mode: svc.mode,
         image: svc.image,
         replicas: svc.replicas,
         ports: svc.ports,
         updateStatus: svc.updateStatus,
+        stackColor: svc.stack ? stackColorMap.get(svc.stack) : undefined,
+        hasSourceEdge: connectedSources.has(svc.id),
+        hasTargetEdge: connectedTargets.has(svc.id),
       },
     };
     if (svc.stack) {
@@ -68,9 +91,10 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
     nodes.push(node);
   }
 
-  // Create edges: one per network per API edge
+  // Create edges: one per network per API edge, with parallel offsets
   for (const edge of data.edges) {
-    for (const netId of edge.networks) {
+    const count = edge.networks.length;
+    edge.networks.forEach((netId, index) => {
       const net = networkMap.get(netId);
       edges.push({
         id: `net:${netId}:${edge.source}:${edge.target}`,
@@ -81,9 +105,11 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
           color: hashColor(netId),
           networkName: net?.name ?? netId,
           networkDriver: net?.driver ?? "unknown",
+          parallelIndex: index,
+          parallelCount: count,
         },
       });
-    }
+    });
   }
 
   return { nodes, edges };

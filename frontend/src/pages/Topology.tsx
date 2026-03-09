@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { ReactFlow, ReactFlowProvider, Background } from "@xyflow/react";
+import { ReactFlow, ReactFlowProvider, Background, type Node, type Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { api } from "@/api/client";
 import type { NetworkTopology, PlacementTopology } from "@/api/types";
@@ -8,7 +8,7 @@ import EmptyState from "@/components/EmptyState";
 import { LoadingPage } from "@/components/LoadingSkeleton";
 import SegmentedControl from "@/components/SegmentedControl";
 import { useSSE } from "@/hooks/useSSE";
-import { computeLayout } from "@/lib/layoutDagre";
+import { computeLayout } from "@/lib/layoutElk";
 import { buildLogicalFlow, buildPhysicalFlow } from "@/lib/topologyTransform";
 import ServiceCardNode from "@/components/topology/ServiceCardNode";
 import TaskCardNode from "@/components/topology/TaskCardNode";
@@ -28,21 +28,10 @@ type View = "logical" | "physical";
 function NetworkLegend({ networks }: { networks: NetworkTopology["networks"] }) {
   if (networks.length === 0) return null;
 
-  // Use same hash function as topologyTransform to match edge colors
   function hashColor(id: string): string {
     const COLORS = [
-      "#3b82f6",
-      "#ef4444",
-      "#10b981",
-      "#f59e0b",
-      "#8b5cf6",
-      "#ec4899",
-      "#06b6d4",
-      "#f97316",
-      "#6366f1",
-      "#14b8a6",
-      "#e11d48",
-      "#84cc16",
+      "#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899",
+      "#06b6d4", "#f97316", "#6366f1", "#14b8a6", "#e11d48", "#84cc16",
     ];
     let h = 0;
     for (let i = 0; i < id.length; i++) {
@@ -69,9 +58,31 @@ function NetworkLegend({ networks }: { networks: NetworkTopology["networks"] }) 
   );
 }
 
+/** Hook: run ELK layout async, return positioned nodes + edges */
+function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
+  const [nodes, setNodes] = useState<Node[]>([]);
+  const [edges, setEdges] = useState<Edge[]>([]);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setReady(false);
+    computeLayout(rawNodes, rawEdges).then((result) => {
+      if (!cancelled) {
+        setNodes(result.nodes);
+        setEdges(result.edges);
+        setReady(true);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [rawNodes, rawEdges]);
+
+  return { nodes, edges, ready };
+}
+
 function LogicalView({ data }: { data: NetworkTopology }) {
-  const { nodes: rawNodes, edges } = useMemo(() => buildLogicalFlow(data), [data]);
-  const layoutNodes = useMemo(() => computeLayout(rawNodes, edges), [rawNodes, edges]);
+  const { nodes: rawNodes, edges: rawEdges } = useMemo(() => buildLogicalFlow(data), [data]);
+  const { nodes, edges, ready } = useElkLayout(rawNodes, rawEdges);
 
   if (data.nodes.length === 0) {
     return (
@@ -82,10 +93,12 @@ function LogicalView({ data }: { data: NetworkTopology }) {
     );
   }
 
+  if (!ready) return null;
+
   return (
     <div className="relative" style={{ height: "calc(100vh - 12rem)" }}>
       <ReactFlow
-        nodes={layoutNodes}
+        nodes={nodes}
         edges={edges}
         nodeTypes={logicalNodeTypes}
         edgeTypes={logicalEdgeTypes}
@@ -110,7 +123,8 @@ function PhysicalView({ data }: { data: PlacementTopology }) {
   );
 
   const { nodes: rawNodes } = useMemo(() => buildPhysicalFlow(data), [data]);
-  const layoutNodes = useMemo(() => computeLayout(rawNodes, []), [rawNodes]);
+  const emptyEdges = useMemo<Edge[]>(() => [], []);
+  const { nodes: layoutNodes, ready } = useElkLayout(rawNodes, emptyEdges);
 
   const nodesWithHover = useMemo(
     () =>
@@ -138,6 +152,8 @@ function PhysicalView({ data }: { data: PlacementTopology }) {
       />
     );
   }
+
+  if (!ready) return null;
 
   return (
     <div style={{ height: "calc(100vh - 12rem)" }}>
@@ -185,7 +201,6 @@ export default function Topology() {
     fetchData();
   }, [fetchData]);
 
-  // SSE: debounced refetch on cluster state changes
   const refetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const debouncedRefetch = useCallback(() => {
     if (refetchTimerRef.current) return;
