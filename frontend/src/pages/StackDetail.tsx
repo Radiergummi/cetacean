@@ -18,9 +18,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function SectionEmpty() {
-  return <p className="text-sm text-muted-foreground">None</p>;
-}
 
 export default function StackDetail() {
   const { name } = useParams<{ name: string }>();

@@ -33,7 +33,7 @@ describe("buildLogicalFlow", () => {
 
     // One edge
     expect(edges.length).toBe(1);
-    expect(edges[0].data.networkName).toBe("app_net");
+    expect(edges[0].data!.networkName).toBe("app_net");
   });
 
   it("creates separate edges per shared network", () => {
@@ -50,7 +50,7 @@ describe("buildLogicalFlow", () => {
     };
     const { edges } = buildLogicalFlow(data);
     expect(edges.length).toBe(2);
-    const names = edges.map((e) => e.data.networkName).sort();
+    const names = edges.map((e) => e.data!.networkName).sort();
     expect(names).toEqual(["backend", "frontend"]);
   });
 });

@@ -227,6 +227,7 @@ export default function TimeSeriesChart({
                 });
               },
             ],
+            // @ts-expect-error uPlot types don't include drawCursor but it works
             drawCursor: [
               (u: uPlot) => {
                 const { idx } = u.cursor;
