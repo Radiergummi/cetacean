@@ -6,10 +6,13 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import ThemeToggle from "./components/ThemeToggle";
 import {SSEProvider} from "./hooks/SSEContext";
 import ClusterOverview from "./pages/ClusterOverview";
+import ConfigDetail from "./pages/ConfigDetail";
 import ConfigList from "./pages/ConfigList";
+import NetworkDetail from "./pages/NetworkDetail";
 import NetworkList from "./pages/NetworkList";
 import NodeDetail from "./pages/NodeDetail";
 import NodeList from "./pages/NodeList";
+import SecretDetail from "./pages/SecretDetail";
 import SecretList from "./pages/SecretList";
 import ServiceDetail from "./pages/ServiceDetail";
 import ServiceList from "./pages/ServiceList";
@@ -17,7 +20,9 @@ import StackDetail from "./pages/StackDetail";
 import StackList from "./pages/StackList";
 import TaskDetail from "./pages/TaskDetail";
 import Topology from "./pages/Topology";
+import VolumeDetail from "./pages/VolumeDetail";
 import VolumeList from "./pages/VolumeList";
+import NotFound from "./pages/NotFound";
 
 function Layout({children}: { children: React.ReactNode }) {
     const [menuOpen, setMenuOpen] = useState(false);
@@ -125,10 +130,15 @@ export default function App() {
                         <Route path="/services/:id" element={<ServiceDetail/>}/>
                         <Route path="/tasks/:id" element={<TaskDetail/>}/>
                         <Route path="/configs" element={<ConfigList/>}/>
+                        <Route path="/configs/:id" element={<ConfigDetail/>}/>
                         <Route path="/secrets" element={<SecretList/>}/>
+                        <Route path="/secrets/:id" element={<SecretDetail/>}/>
                         <Route path="/networks" element={<NetworkList/>}/>
+                        <Route path="/networks/:id" element={<NetworkDetail/>}/>
                         <Route path="/volumes" element={<VolumeList/>}/>
+                        <Route path="/volumes/:name" element={<VolumeDetail/>}/>
                         <Route path="/topology" element={<Topology/>}/>
+                        <Route path="*" element={<NotFound/>}/>
                     </Routes>
                 </Layout>
             </SSEProvider>
