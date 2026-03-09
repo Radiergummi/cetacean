@@ -8,11 +8,16 @@ import type {
   Secret,
   Network,
   Volume,
+  ConfigDetail,
+  SecretDetail,
+  NetworkDetail,
+  VolumeDetail,
   PagedResponse,
   HistoryEntry,
   NetworkTopology,
   PlacementTopology,
   NotificationRuleStatus,
+  StackSummary,
 } from "./types";
 
 const BASE = "/api";
@@ -86,15 +91,20 @@ export const api = {
   service: (id: string) => fetchJSON<Service>(`/services/${id}`),
   tasks: (params?: ListParams) => fetchJSON<PagedResponse<Task>>(buildListURL("/tasks", params)),
   stacks: (params?: ListParams) => fetchJSON<PagedResponse<Stack>>(buildListURL("/stacks", params)),
+  stacksSummary: () => fetchJSON<StackSummary[]>("/stacks/summary"),
   stack: (name: string) => fetchJSON<StackDetail>(`/stacks/${name}`),
   configs: (params?: ListParams) =>
     fetchJSON<PagedResponse<Config>>(buildListURL("/configs", params)),
+  config: (id: string) => fetchJSON<ConfigDetail>(`/configs/${id}`),
   secrets: (params?: ListParams) =>
     fetchJSON<PagedResponse<Secret>>(buildListURL("/secrets", params)),
+  secret: (id: string) => fetchJSON<SecretDetail>(`/secrets/${id}`),
   networks: (params?: ListParams) =>
     fetchJSON<PagedResponse<Network>>(buildListURL("/networks", params)),
+  network: (id: string) => fetchJSON<NetworkDetail>(`/networks/${id}`),
   volumes: (params?: ListParams) =>
     fetchJSON<PagedResponse<Volume>>(buildListURL("/volumes", params)),
+  volume: (name: string) => fetchJSON<VolumeDetail>(`/volumes/${name}`),
   task: (id: string) => fetchJSON<Task>(`/tasks/${id}`),
   taskLogs: (
     id: string,

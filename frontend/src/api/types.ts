@@ -180,11 +180,18 @@ export interface Secret {
 export interface Network {
   Id: string;
   Name: string;
+  Created: string;
   Driver: string;
   Scope: string;
+  EnableIPv6: boolean;
+  Internal: boolean;
+  Attachable: boolean;
+  Ingress: boolean;
   IPAM: {
-    Config: Array<{ Subnet: string; Gateway: string }>;
+    Driver?: string;
+    Config: Array<{ Subnet: string; Gateway: string; IPRange?: string }>;
   };
+  Options: Record<string, string>;
   Labels: Record<string, string>;
 }
 
@@ -194,6 +201,7 @@ export interface Volume {
   Labels: Record<string, string>;
   Mountpoint: string;
   Scope: string;
+  Options: Record<string, string>;
   CreatedAt: string;
 }
 
@@ -281,6 +289,47 @@ export interface TopoTask {
   state: string;
   slot: number;
   image: string;
+}
+
+export interface ServiceRef {
+  id: string;
+  name: string;
+}
+
+export interface ConfigDetail {
+  config: Config;
+  services: ServiceRef[];
+}
+
+export interface SecretDetail {
+  secret: Secret;
+  services: ServiceRef[];
+}
+
+export interface NetworkDetail {
+  network: Network;
+  services: ServiceRef[];
+}
+
+export interface VolumeDetail {
+  volume: Volume;
+  services: ServiceRef[];
+}
+
+export interface StackSummary {
+  name: string;
+  serviceCount: number;
+  configCount: number;
+  secretCount: number;
+  networkCount: number;
+  volumeCount: number;
+  desiredTasks: number;
+  tasksByState: Record<string, number>;
+  updatingServices: number;
+  memoryLimitBytes: number;
+  cpuLimitCores: number;
+  memoryUsageBytes: number;
+  cpuUsagePercent: number;
 }
 
 export interface NotificationRuleStatus {
