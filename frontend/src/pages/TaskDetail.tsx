@@ -1,7 +1,8 @@
 import { useParams } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { api } from "../api/client";
 import type { Task } from "../api/types";
+import { useSSE } from "../hooks/useSSE";
 import ErrorBoundary from "../components/ErrorBoundary";
 import InfoCard from "../components/InfoCard";
 import TaskStatusBadge from "../components/TaskStatusBadge";
@@ -16,14 +17,16 @@ export default function TaskDetail() {
   const [task, setTask] = useState<Task | null>(null);
   const [error, setError] = useState(false);
 
-  useEffect(() => {
-    if (id) {
-      api
-        .task(id)
-        .then(setTask)
-        .catch(() => setError(true));
-    }
+  const fetchData = useCallback(() => {
+    if (!id) return;
+    api.task(id).then(setTask).catch(() => setError(true));
   }, [id]);
+
+  useEffect(fetchData, [fetchData]);
+
+  useSSE(["task"], (e) => {
+    if (e.id === id) fetchData();
+  });
 
   if (error) return <FetchError message="Failed to load task" />;
   if (!task) return <LoadingDetail />;

@@ -1,7 +1,8 @@
 import { useParams, Link } from "react-router-dom";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "../api/client";
 import type { Node, Task, HistoryEntry } from "../api/types";
+import { useSSE } from "../hooks/useSSE";
 import ErrorBoundary from "../components/ErrorBoundary";
 import MetricsPanel from "../components/MetricsPanel";
 import InfoCard from "../components/InfoCard";
@@ -25,22 +26,19 @@ export default function NodeDetail() {
 
   const [error, setError] = useState(false);
 
-  useEffect(() => {
-    if (id) {
-      api
-        .node(id)
-        .then(setNode)
-        .catch(() => setError(true));
-      api
-        .nodeTasks(id)
-        .then(setTasks)
-        .catch(() => {});
-      api
-        .history({ resourceId: id, limit: 10 })
-        .then(setHistory)
-        .catch(() => {});
-    }
+  const fetchData = useCallback(() => {
+    if (!id) return;
+    api.node(id).then(setNode).catch(() => setError(true));
+    api.nodeTasks(id).then(setTasks).catch(() => {});
+    api.history({ resourceId: id, limit: 10 }).then(setHistory).catch(() => {});
   }, [id]);
+
+  useEffect(fetchData, [fetchData]);
+
+  useSSE(["node", "task"], (e) => {
+    if (e.type === "node" && e.id === id) fetchData();
+    if (e.type === "task") fetchData();
+  });
 
   const filteredTasks = useMemo(() => {
     const filtered = stateFilter ? tasks.filter((t) => t.Status.State === stateFilter) : tasks;

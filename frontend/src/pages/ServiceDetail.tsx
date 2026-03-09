@@ -3,6 +3,7 @@ import {useCallback, useEffect, useMemo, useState} from "react";
 import {Link, useParams} from "react-router-dom";
 import {api} from "../api/client";
 import type {HistoryEntry, Service, Task} from "../api/types";
+import {useSSE} from "../hooks/useSSE";
 import ActivityFeed from "../components/ActivityFeed";
 import ErrorBoundary from "../components/ErrorBoundary";
 import InfoCard from "../components/InfoCard";
@@ -27,21 +28,19 @@ export default function ServiceDetail() {
     const [history, setHistory] = useState<HistoryEntry[]>([]);
     const [error, setError] = useState(false);
 
-    useEffect(() => {
-        if (id) {
-            api.service(id).then(setService).catch(() => setError(true));
-            api
-                .serviceTasks(id)
-                .then(setTasks)
-                .catch(() => {
-                });
-            api
-                .history({resourceId: id, limit: 10})
-                .then(setHistory)
-                .catch(() => {
-                });
-        }
+    const fetchData = useCallback(() => {
+        if (!id) return;
+        api.service(id).then(setService).catch(() => setError(true));
+        api.serviceTasks(id).then(setTasks).catch(() => {});
+        api.history({resourceId: id, limit: 10}).then(setHistory).catch(() => {});
     }, [id]);
+
+    useEffect(fetchData, [fetchData]);
+
+    useSSE(["service", "task"], (e) => {
+        if (e.type === "service" && e.id === id) fetchData();
+        if (e.type === "task") fetchData();
+    });
 
     const filteredTasks = useMemo(() => {
         const filtered = stateFilter ? tasks.filter((t) => t.Status.State === stateFilter) : tasks;
