@@ -34,6 +34,22 @@ type StackDetail struct {
 	Volumes  []volume.Volume   `json:"volumes"`
 }
 
+type StackSummary struct {
+	Name             string         `json:"name"`
+	ServiceCount     int            `json:"serviceCount"`
+	ConfigCount      int            `json:"configCount"`
+	SecretCount      int            `json:"secretCount"`
+	NetworkCount     int            `json:"networkCount"`
+	VolumeCount      int            `json:"volumeCount"`
+	DesiredTasks     int            `json:"desiredTasks"`
+	TasksByState     map[string]int `json:"tasksByState"`
+	UpdatingServices int            `json:"updatingServices"`
+	MemoryLimitBytes int64          `json:"memoryLimitBytes"`
+	CPULimitCores    float64        `json:"cpuLimitCores"`
+	MemoryUsageBytes int64          `json:"memoryUsageBytes"`
+	CPUUsagePercent  float64        `json:"cpuUsagePercent"`
+}
+
 type ClusterSnapshot struct {
 	NodeCount    int            `json:"nodeCount"`
 	ServiceCount int            `json:"serviceCount"`
@@ -482,6 +498,61 @@ func (c *Cache) GetStackDetail(name string) (StackDetail, bool) {
 	return detail, true
 }
 
+func (c *Cache) ListStackSummaries() []StackSummary {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	out := make([]StackSummary, 0, len(c.stacks))
+	for _, stack := range c.stacks {
+		s := StackSummary{
+			Name:         stack.Name,
+			ServiceCount: len(stack.Services),
+			ConfigCount:  len(stack.Configs),
+			SecretCount:  len(stack.Secrets),
+			NetworkCount: len(stack.Networks),
+			VolumeCount:  len(stack.Volumes),
+			TasksByState: make(map[string]int),
+		}
+
+		for _, svcID := range stack.Services {
+			svc, ok := c.services[svcID]
+			if !ok {
+				continue
+			}
+
+			// Desired replicas
+			replicas := 1
+			if svc.Spec.Mode.Replicated != nil && svc.Spec.Mode.Replicated.Replicas != nil {
+				replicas = int(*svc.Spec.Mode.Replicated.Replicas)
+			} else if svc.Spec.Mode.Global != nil {
+				replicas = len(c.nodes)
+			}
+			s.DesiredTasks += replicas
+
+			// Update status
+			if svc.UpdateStatus != nil && svc.UpdateStatus.State == swarm.UpdateStateUpdating {
+				s.UpdatingServices++
+			}
+
+			// Resource limits (multiplied by replica count)
+			if res := svc.Spec.TaskTemplate.Resources; res != nil && res.Limits != nil {
+				s.MemoryLimitBytes += int64(replicas) * res.Limits.MemoryBytes
+				s.CPULimitCores += float64(replicas) * float64(res.Limits.NanoCPUs) / 1e9
+			}
+
+			// Task states
+			for taskID := range c.tasksByService[svcID] {
+				if t, ok := c.tasks[taskID]; ok {
+					s.TasksByState[string(t.Status.State)]++
+				}
+			}
+		}
+
+		out = append(out, s)
+	}
+	return out
+}
+
 // --- Filtered task lists ---
 
 func (c *Cache) ListTasksByService(serviceID string) []swarm.Task {
@@ -508,6 +579,78 @@ func (c *Cache) ListTasksByNode(nodeID string) []swarm.Task {
 		}
 	}
 	return out
+}
+
+// --- Cross-references ---
+
+// ServiceRef is a lightweight reference to a service.
+type ServiceRef struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// ServicesUsingConfig returns services that reference the given config ID.
+func (c *Cache) ServicesUsingConfig(configID string) []ServiceRef {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var refs []ServiceRef
+	for _, svc := range c.services {
+		for _, cfg := range svc.Spec.TaskTemplate.ContainerSpec.Configs {
+			if cfg.ConfigID == configID {
+				refs = append(refs, ServiceRef{ID: svc.ID, Name: svc.Spec.Name})
+				break
+			}
+		}
+	}
+	return refs
+}
+
+// ServicesUsingSecret returns services that reference the given secret ID.
+func (c *Cache) ServicesUsingSecret(secretID string) []ServiceRef {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var refs []ServiceRef
+	for _, svc := range c.services {
+		for _, sec := range svc.Spec.TaskTemplate.ContainerSpec.Secrets {
+			if sec.SecretID == secretID {
+				refs = append(refs, ServiceRef{ID: svc.ID, Name: svc.Spec.Name})
+				break
+			}
+		}
+	}
+	return refs
+}
+
+// ServicesUsingNetwork returns services that reference the given network ID.
+func (c *Cache) ServicesUsingNetwork(networkID string) []ServiceRef {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var refs []ServiceRef
+	for _, svc := range c.services {
+		for _, net := range svc.Spec.TaskTemplate.Networks {
+			if net.Target == networkID {
+				refs = append(refs, ServiceRef{ID: svc.ID, Name: svc.Spec.Name})
+				break
+			}
+		}
+	}
+	return refs
+}
+
+// ServicesUsingVolume returns services that mount the given volume name.
+func (c *Cache) ServicesUsingVolume(volumeName string) []ServiceRef {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var refs []ServiceRef
+	for _, svc := range c.services {
+		for _, m := range svc.Spec.TaskTemplate.ContainerSpec.Mounts {
+			if m.Type == "volume" && m.Source == volumeName {
+				refs = append(refs, ServiceRef{ID: svc.ID, Name: svc.Spec.Name})
+				break
+			}
+		}
+	}
+	return refs
 }
 
 // --- Snapshot ---

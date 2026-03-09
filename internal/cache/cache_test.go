@@ -753,6 +753,101 @@ func TestSnapshot_ResourceTotals(t *testing.T) {
 	}
 }
 
+func TestCache_ListStackSummaries(t *testing.T) {
+	c := New(nil)
+
+	// Service with 2 replicas, memory limit 512MB, CPU limit 0.5 cores
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{
+				Name:   "myapp_web",
+				Labels: map[string]string{"com.docker.stack.namespace": "myapp"},
+			},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{Image: "nginx"},
+				Resources: &swarm.ResourceRequirements{
+					Limits: &swarm.Limit{
+						MemoryBytes: 512 * 1024 * 1024,
+						NanoCPUs:    500_000_000,
+					},
+				},
+			},
+			Mode: swarm.ServiceMode{
+				Replicated: &swarm.ReplicatedService{Replicas: uint64Ptr(2)},
+			},
+		},
+	})
+
+	// Service mid-update
+	c.SetService(swarm.Service{
+		ID: "svc2",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{
+				Name:   "myapp_api",
+				Labels: map[string]string{"com.docker.stack.namespace": "myapp"},
+			},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{Image: "api:latest"},
+			},
+			Mode: swarm.ServiceMode{
+				Replicated: &swarm.ReplicatedService{Replicas: uint64Ptr(1)},
+			},
+		},
+		UpdateStatus: &swarm.UpdateStatus{State: swarm.UpdateStateUpdating},
+	})
+
+	// Tasks: 2 running for svc1, 1 failed for svc2
+	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
+	c.SetTask(swarm.Task{ID: "t2", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
+	c.SetTask(swarm.Task{ID: "t3", ServiceID: "svc2", Status: swarm.TaskStatus{State: swarm.TaskStateFailed}})
+
+	// Config and network in same stack
+	c.SetConfig(swarm.Config{ID: "cfg1", Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{
+		Name: "myapp_config", Labels: map[string]string{"com.docker.stack.namespace": "myapp"},
+	}}})
+	c.SetNetwork(network.Summary{ID: "net1", Name: "myapp_default", Labels: map[string]string{"com.docker.stack.namespace": "myapp"}})
+
+	summaries := c.ListStackSummaries()
+	if len(summaries) != 1 {
+		t.Fatalf("expected 1 stack summary, got %d", len(summaries))
+	}
+
+	s := summaries[0]
+	if s.Name != "myapp" {
+		t.Errorf("name=%q, want myapp", s.Name)
+	}
+	if s.ServiceCount != 2 {
+		t.Errorf("serviceCount=%d, want 2", s.ServiceCount)
+	}
+	if s.DesiredTasks != 3 {
+		t.Errorf("desiredTasks=%d, want 3", s.DesiredTasks)
+	}
+	if s.TasksByState["running"] != 2 {
+		t.Errorf("running=%d, want 2", s.TasksByState["running"])
+	}
+	if s.TasksByState["failed"] != 1 {
+		t.Errorf("failed=%d, want 1", s.TasksByState["failed"])
+	}
+	if s.UpdatingServices != 1 {
+		t.Errorf("updatingServices=%d, want 1", s.UpdatingServices)
+	}
+	if s.MemoryLimitBytes != 2*512*1024*1024 {
+		t.Errorf("memoryLimitBytes=%d, want %d", s.MemoryLimitBytes, 2*512*1024*1024)
+	}
+	if s.CPULimitCores != 1.0 {
+		t.Errorf("cpuLimitCores=%f, want 1.0", s.CPULimitCores)
+	}
+	if s.ConfigCount != 1 {
+		t.Errorf("configCount=%d, want 1", s.ConfigCount)
+	}
+	if s.NetworkCount != 1 {
+		t.Errorf("networkCount=%d, want 1", s.NetworkCount)
+	}
+}
+
+func uint64Ptr(v uint64) *uint64 { return &v }
+
 func TestReplaceAll_PartialSync(t *testing.T) {
 	c := New(nil)
 	// Pre-populate with a node
