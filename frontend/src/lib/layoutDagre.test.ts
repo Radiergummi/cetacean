@@ -19,7 +19,7 @@ describe("computeLayout", () => {
 
   it("handles group nodes with children", () => {
     const nodes: Node[] = [
-      { id: "group", position: { x: 0, y: 0 }, data: { label: "Stack" }, type: "group" },
+      { id: "group", position: { x: 0, y: 0 }, data: { label: "Stack" }, type: "stackGroup" },
       { id: "child", position: { x: 0, y: 0 }, data: {}, parentId: "group" },
     ];
     const result = computeLayout(nodes, []);

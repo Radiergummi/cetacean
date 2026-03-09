@@ -10,8 +10,10 @@ export function computeLayout(nodes: Node[], edges: Edge[], direction: "LR" | "T
   g.setGraph({ rankdir: direction, ranksep: 80, nodesep: 40 });
   g.setDefaultEdgeLabel(() => ({}));
 
+  const isGroup = (type?: string) => type === "stackGroup" || type === "nodeGroup";
+
   for (const node of nodes) {
-    if (node.type === "group") {
+    if (isGroup(node.type)) {
       g.setNode(node.id, { width: NODE_WIDTH + GROUP_PADDING * 2, height: NODE_HEIGHT });
     } else {
       g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
@@ -29,7 +31,7 @@ export function computeLayout(nodes: Node[], edges: Edge[], direction: "LR" | "T
 
   return nodes.map((node) => {
     const pos = g.node(node.id);
-    const width = node.type === "group" ? NODE_WIDTH + GROUP_PADDING * 2 : NODE_WIDTH;
+    const width = isGroup(node.type) ? NODE_WIDTH + GROUP_PADDING * 2 : NODE_WIDTH;
     return {
       ...node,
       position: {
