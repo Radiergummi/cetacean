@@ -1,0 +1,130 @@
+import type { Node, Edge } from "@xyflow/react";
+import type { NetworkTopology, PlacementTopology } from "@/api/types";
+
+const COLORS = [
+  "#3b82f6",
+  "#ef4444",
+  "#10b981",
+  "#f59e0b",
+  "#8b5cf6",
+  "#ec4899",
+  "#06b6d4",
+  "#f97316",
+  "#6366f1",
+  "#14b8a6",
+  "#e11d48",
+  "#84cc16",
+];
+
+function hashColor(id: string): string {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) {
+    h = (h * 31 + id.charCodeAt(i)) | 0;
+  }
+  return COLORS[Math.abs(h) % COLORS.length];
+}
+
+export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges: Edge[] } {
+  const nodes: Node[] = [];
+  const edges: Edge[] = [];
+
+  const networkMap = new Map(data.networks.map((n) => [n.id, n]));
+
+  // Collect unique stacks
+  const stacks = new Set<string>();
+  for (const svc of data.nodes) {
+    if (svc.stack) stacks.add(svc.stack);
+  }
+
+  // Create stack group nodes
+  for (const stack of stacks) {
+    nodes.push({
+      id: `stack:${stack}`,
+      type: "stackGroup",
+      position: { x: 0, y: 0 },
+      data: { label: stack, variant: "stack" },
+    });
+  }
+
+  // Create service nodes
+  for (const svc of data.nodes) {
+    const node: Node = {
+      id: svc.id,
+      type: "serviceCard",
+      position: { x: 0, y: 0 },
+      data: {
+        id: svc.id,
+        name: svc.name,
+        mode: svc.mode,
+        image: svc.image,
+        replicas: svc.replicas,
+        ports: svc.ports,
+        updateStatus: svc.updateStatus,
+      },
+    };
+    if (svc.stack) {
+      node.parentId = `stack:${svc.stack}`;
+    }
+    nodes.push(node);
+  }
+
+  // Create edges: one per network per API edge
+  for (const edge of data.edges) {
+    for (const netId of edge.networks) {
+      const net = networkMap.get(netId);
+      edges.push({
+        id: `net:${netId}:${edge.source}:${edge.target}`,
+        source: edge.source,
+        target: edge.target,
+        type: "networkEdge",
+        data: {
+          color: hashColor(netId),
+          networkName: net?.name ?? netId,
+          networkDriver: net?.driver ?? "unknown",
+        },
+      });
+    }
+  }
+
+  return { nodes, edges };
+}
+
+export function buildPhysicalFlow(data: PlacementTopology): { nodes: Node[]; edges: Edge[] } {
+  const nodes: Node[] = [];
+
+  for (const clusterNode of data.nodes) {
+    nodes.push({
+      id: clusterNode.id,
+      type: "nodeGroup",
+      position: { x: 0, y: 0 },
+      data: {
+        label: clusterNode.hostname,
+        role: clusterNode.role,
+        state: clusterNode.state,
+        availability: clusterNode.availability,
+        variant: "node",
+      },
+    });
+
+    for (const task of clusterNode.tasks) {
+      nodes.push({
+        id: task.id,
+        type: "taskCard",
+        position: { x: 0, y: 0 },
+        parentId: clusterNode.id,
+        data: {
+          id: task.id,
+          serviceId: task.serviceId,
+          serviceName: task.serviceName,
+          slot: task.slot,
+          state: task.state,
+          image: task.image,
+          highlighted: false,
+          onHoverService: () => {},
+        },
+      });
+    }
+  }
+
+  return { nodes, edges: [] };
+}
