@@ -109,6 +109,24 @@ func TestCache_ListTasksByNode(t *testing.T) {
 	}
 }
 
+func TestCache_RunningTaskCount(t *testing.T) {
+	c := New(nil)
+	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
+	c.SetTask(swarm.Task{ID: "t2", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateFailed}})
+	c.SetTask(swarm.Task{ID: "t3", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
+	c.SetTask(swarm.Task{ID: "t4", ServiceID: "svc2", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
+
+	if got := c.RunningTaskCount("svc1"); got != 2 {
+		t.Errorf("RunningTaskCount(svc1) = %d, want 2", got)
+	}
+	if got := c.RunningTaskCount("svc2"); got != 1 {
+		t.Errorf("RunningTaskCount(svc2) = %d, want 1", got)
+	}
+	if got := c.RunningTaskCount("missing"); got != 0 {
+		t.Errorf("RunningTaskCount(missing) = %d, want 0", got)
+	}
+}
+
 func TestCache_Snapshot(t *testing.T) {
 	c := New(nil)
 

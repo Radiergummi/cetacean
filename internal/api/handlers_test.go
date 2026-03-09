@@ -200,7 +200,7 @@ func TestHandleListServices_Paginated(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var resp PagedResponse[swarm.Service]
+	var resp PagedResponse[ServiceListItem]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Total != 3 {
 		t.Fatalf("expected total 3, got %d", resp.Total)
@@ -213,6 +213,31 @@ func TestHandleListServices_Paginated(t *testing.T) {
 	}
 	if resp.Items[1].Spec.Name != "bravo" {
 		t.Errorf("expected second item bravo, got %s", resp.Items[1].Spec.Name)
+	}
+}
+
+func TestHandleListServices_RunningTasks(t *testing.T) {
+	c := cache.New(nil)
+	svc := swarm.Service{ID: "svc1"}
+	svc.Spec.Name = "web"
+	svc.Spec.Mode.Replicated = &swarm.ReplicatedService{Replicas: func() *uint64 { v := uint64(3); return &v }()}
+	c.SetService(svc)
+	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
+	c.SetTask(swarm.Task{ID: "t2", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
+	c.SetTask(swarm.Task{ID: "t3", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateFailed}})
+	h := NewHandlers(c, nil, closedReady(), nil, nil)
+
+	req := httptest.NewRequest("GET", "/api/services", nil)
+	w := httptest.NewRecorder()
+	h.HandleListServices(w, req)
+
+	var resp PagedResponse[ServiceListItem]
+	json.NewDecoder(w.Body).Decode(&resp)
+	if len(resp.Items) != 1 {
+		t.Fatalf("expected 1 service, got %d", len(resp.Items))
+	}
+	if resp.Items[0].RunningTasks != 2 {
+		t.Errorf("RunningTasks = %d, want 2", resp.Items[0].RunningTasks)
 	}
 }
 
@@ -265,7 +290,7 @@ func TestHandleListServices_Search(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var resp PagedResponse[swarm.Service]
+	var resp PagedResponse[ServiceListItem]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 service, got %d", len(resp.Items))
@@ -832,7 +857,7 @@ func TestHandleListServices_SortByMode(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListServices(w, req)
 
-	var resp PagedResponse[swarm.Service]
+	var resp PagedResponse[ServiceListItem]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if len(resp.Items) != 2 {
 		t.Fatalf("expected 2, got %d", len(resp.Items))
@@ -987,7 +1012,7 @@ func TestHandleListServices_Filter(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListServices(w, filterReq("/api/services", `image contains "nginx"`))
 
-	var resp PagedResponse[swarm.Service]
+	var resp PagedResponse[ServiceListItem]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 service, got %d", len(resp.Items))

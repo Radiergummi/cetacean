@@ -568,6 +568,19 @@ func (c *Cache) ListTasksByService(serviceID string) []swarm.Task {
 	return out
 }
 
+// RunningTaskCount returns the number of tasks in "running" state for a service.
+func (c *Cache) RunningTaskCount(serviceID string) int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	count := 0
+	for id := range c.tasksByService[serviceID] {
+		if t, ok := c.tasks[id]; ok && t.Status.State == swarm.TaskStateRunning {
+			count++
+		}
+	}
+	return count
+}
+
 func (c *Cache) ListTasksByNode(nodeID string) []swarm.Task {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

@@ -120,7 +120,11 @@ func exprFilter[T any](items []T, expr string, env func(T) map[string]any, w htt
 }
 
 func (h *Handlers) HandleCluster(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, h.cache.Snapshot())
+	snap := h.cache.Snapshot()
+	writeJSON(w, struct {
+		cache.ClusterSnapshot
+		PrometheusConfigured bool `json:"prometheusConfigured"`
+	}{snap, h.promClient != nil})
 }
 
 // --- Nodes ---
@@ -164,6 +168,11 @@ func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 
 // --- Services ---
 
+type ServiceListItem struct {
+	swarm.Service
+	RunningTasks int `json:"RunningTasks"`
+}
+
 func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 	services := h.cache.ListServices()
 	services = searchFilter(services, r.URL.Query().Get("search"), func(s swarm.Service) string { return s.Spec.Name })
@@ -181,7 +190,17 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 			return "Replicated"
 		},
 	})
-	writeJSON(w, applyPagination(services, p))
+	paged := applyPagination(services, p)
+
+	items := make([]ServiceListItem, len(paged.Items))
+	for i, svc := range paged.Items {
+		items[i] = ServiceListItem{
+			Service:      svc,
+			RunningTasks: h.cache.RunningTaskCount(svc.ID),
+		}
+	}
+
+	writeJSON(w, PagedResponse[ServiceListItem]{Items: items, Total: paged.Total})
 }
 
 func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
