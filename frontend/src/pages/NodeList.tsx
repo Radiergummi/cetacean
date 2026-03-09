@@ -45,7 +45,7 @@ export default function NodeList() {
   const hasPrometheus = usePrometheusConfigured();
   const { getForNode } = useNodeMetrics();
 
-  const columns: Column<Node>[] = [
+  const baseColumns: Column<Node>[] = [
     {
       header: <SortIndicator label="Hostname" active={sortKey === "hostname"} dir={sortDir} />,
       cell: (node) => (
@@ -69,6 +69,9 @@ export default function NodeList() {
       cell: (node) => <TaskStatusBadge state={node.Status.State} />,
       onHeaderClick: () => toggle("status"),
     },
+  ];
+
+  const metricsColumns: Column<Node>[] = hasPrometheus ? [
     {
       header: "CPU",
       cell: (node) => {
@@ -93,6 +96,11 @@ export default function NodeList() {
         return <span className="text-muted-foreground">{"\u2014"}</span>;
       },
     },
+  ] : [];
+
+  const columns: Column<Node>[] = [
+    ...baseColumns,
+    ...metricsColumns,
     {
       header: "Engine",
       cell: (node) => node.Description.Engine.EngineVersion,
@@ -111,11 +119,13 @@ export default function NodeList() {
   return (
     <div>
       <PageHeader title="Nodes" />
-      <div className="rounded-lg border bg-card p-4 mb-6">
-        <ErrorBoundary inline>
-          <NodeResourceGauges />
-        </ErrorBoundary>
-      </div>
+      {hasPrometheus && (
+        <div className="rounded-lg border bg-card p-4 mb-6">
+          <ErrorBoundary inline>
+            <NodeResourceGauges />
+          </ErrorBoundary>
+        </div>
+      )}
       <div className="flex items-stretch gap-3 mb-4">
         <SearchInput value={search} onChange={setSearch} placeholder="Search nodes..." />
         <ViewToggle mode={viewMode} onChange={setViewMode} />
@@ -141,11 +151,13 @@ export default function NodeList() {
                 badge={<TaskStatusBadge state={node.Status.State} />}
                 meta={[node.Spec.Role, node.Spec.Availability, `v${node.Description.Engine.EngineVersion}`]}
               >
-                <div className="flex items-center justify-center gap-4">
-                  <ResourceGauge label="CPU" value={m.cpu} size="sm" />
-                  <ResourceGauge label="Mem" value={m.memory} size="sm" />
-                  <ResourceGauge label="Disk" value={m.disk} size="sm" />
-                </div>
+                {hasPrometheus && (
+                  <div className="flex items-center justify-center gap-4">
+                    <ResourceGauge label="CPU" value={m.cpu} size="sm" />
+                    <ResourceGauge label="Mem" value={m.memory} size="sm" />
+                    <ResourceGauge label="Disk" value={m.disk} size="sm" />
+                  </div>
+                )}
               </ResourceCard>
             );
           })}

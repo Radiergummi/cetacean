@@ -71,6 +71,7 @@ describe("ClusterOverview", () => {
       nodesDown: 0,
       totalCPU: 8,
       totalMemory: 17179869184,
+      prometheusConfigured: true,
     });
 
     render(<ClusterOverview />, { wrapper });

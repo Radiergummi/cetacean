@@ -54,7 +54,7 @@ docker stack deploy -c docker-compose.yml cetacean          # Deploy full stack 
 ### Environment variables
 | Variable | Default | Required |
 |---|---|---|
-| `CETACEAN_PROMETHEUS_URL` | — | Yes |
+| `CETACEAN_PROMETHEUS_URL` | — | No (metrics disabled if unset) |
 | `CETACEAN_DOCKER_HOST` | `unix:///var/run/docker.sock` | No |
 | `CETACEAN_LISTEN_ADDR` | `:9000` | No |
 | `CETACEAN_LOG_FORMAT` | `json` | No |

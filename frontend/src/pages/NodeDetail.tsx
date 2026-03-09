@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "../api/client";
 import type { Node, Task, HistoryEntry } from "../api/types";
 import { useSSE } from "../hooks/useSSE";
+import { usePrometheusConfigured } from "../hooks/usePrometheusConfigured";
 import ErrorBoundary from "../components/ErrorBoundary";
 import MetricsPanel from "../components/MetricsPanel";
 import InfoCard from "../components/InfoCard";
@@ -24,6 +25,7 @@ export default function NodeDetail() {
   const [stateFilter, setStateFilter] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
 
+  const hasPrometheus = usePrometheusConfigured();
   const [error, setError] = useState(false);
 
   const fetchData = useCallback(() => {
@@ -61,11 +63,13 @@ export default function NodeDetail() {
           { label: node.Description.Hostname || node.ID },
         ]}
       />
-      <div className="rounded-lg border bg-card p-4">
-        <ErrorBoundary inline>
-          <NodeResourceGauges instance={addr} />
-        </ErrorBoundary>
-      </div>
+      {hasPrometheus && (
+        <div className="rounded-lg border bg-card p-4">
+          <ErrorBoundary inline>
+            <NodeResourceGauges instance={addr} />
+          </ErrorBoundary>
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <InfoCard label="Role" value={node.Spec.Role} />
         <InfoCard label="Status" value={node.Status.State} />
@@ -162,33 +166,35 @@ export default function NodeDetail() {
         </div>
       )}
 
-      <ErrorBoundary inline>
-        <MetricsPanel
-          header="Metrics"
-          charts={[
-            {
-              title: "CPU Usage",
-              query: `100 - (avg(rate(node_cpu_seconds_total{mode="idle",instance=~"${addr}:.*"}[5m])) * 100)`,
-              unit: "%",
-            },
-            {
-              title: "Memory Usage",
-              query: `(1 - node_memory_MemAvailable_bytes{instance=~"${addr}:.*"} / node_memory_MemTotal_bytes{instance=~"${addr}:.*"}) * 100`,
-              unit: "%",
-            },
-            {
-              title: "Disk I/O",
-              query: `sum(rate(node_disk_read_bytes_total{instance=~"${addr}:.*"}[5m]))`,
-              unit: "bytes/s",
-            },
-            {
-              title: "Network I/O",
-              query: `sum(rate(node_network_receive_bytes_total{device!="lo",instance=~"${addr}:.*"}[5m]))`,
-              unit: "bytes/s",
-            },
-          ]}
-        />
-      </ErrorBoundary>
+      {hasPrometheus && (
+        <ErrorBoundary inline>
+          <MetricsPanel
+            header="Metrics"
+            charts={[
+              {
+                title: "CPU Usage",
+                query: `100 - (avg(rate(node_cpu_seconds_total{mode="idle",instance=~"${addr}:.*"}[5m])) * 100)`,
+                unit: "%",
+              },
+              {
+                title: "Memory Usage",
+                query: `(1 - node_memory_MemAvailable_bytes{instance=~"${addr}:.*"} / node_memory_MemTotal_bytes{instance=~"${addr}:.*"}) * 100`,
+                unit: "%",
+              },
+              {
+                title: "Disk I/O",
+                query: `sum(rate(node_disk_read_bytes_total{instance=~"${addr}:.*"}[5m]))`,
+                unit: "bytes/s",
+              },
+              {
+                title: "Network I/O",
+                query: `sum(rate(node_network_receive_bytes_total{device!="lo",instance=~"${addr}:.*"}[5m]))`,
+                unit: "bytes/s",
+              },
+            ]}
+          />
+        </ErrorBoundary>
+      )}
     </div>
   );
 }

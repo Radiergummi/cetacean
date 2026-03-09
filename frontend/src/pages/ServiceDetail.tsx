@@ -4,6 +4,7 @@ import {Link, useParams} from "react-router-dom";
 import {api} from "../api/client";
 import type {HistoryEntry, Service, Task} from "../api/types";
 import {useSSE} from "../hooks/useSSE";
+import {usePrometheusConfigured} from "../hooks/usePrometheusConfigured";
 import ActivityFeed from "../components/ActivityFeed";
 import ErrorBoundary from "../components/ErrorBoundary";
 import InfoCard from "../components/InfoCard";
@@ -26,6 +27,7 @@ export default function ServiceDetail() {
     const [tasks, setTasks] = useState<Task[]>([]);
     const [stateFilter, setStateFilter] = useState<string | null>(null);
     const [history, setHistory] = useState<HistoryEntry[]>([]);
+    const hasPrometheus = usePrometheusConfigured();
     const [error, setError] = useState(false);
 
     const fetchData = useCallback(() => {
@@ -168,28 +170,30 @@ export default function ServiceDetail() {
                 </Section>
             )}
 
-            <ErrorBoundary inline>
-                <MetricsPanel
-                    header="Metrics"
-                    charts={[
-                        {
-                            title: "CPU Usage",
-                            query: `sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name="${name}"}[5m])) * 100`,
-                            unit: "%",
-                            thresholds: cpuThresholds(service),
-                            yMin: 0,
-                        },
-                        {
-                            title: "Memory Usage",
-                            query: `sum(container_memory_usage_bytes{container_label_com_docker_swarm_service_name="${name}"})`,
-                            unit: "bytes",
-                            thresholds: memoryThresholds(service),
-                            yMin: 0,
-                            color: "#34d399",
-                        },
-                    ]}
-                />
-            </ErrorBoundary>
+            {hasPrometheus && (
+                <ErrorBoundary inline>
+                    <MetricsPanel
+                        header="Metrics"
+                        charts={[
+                            {
+                                title: "CPU Usage",
+                                query: `sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name="${name}"}[5m])) * 100`,
+                                unit: "%",
+                                thresholds: cpuThresholds(service),
+                                yMin: 0,
+                            },
+                            {
+                                title: "Memory Usage",
+                                query: `sum(container_memory_usage_bytes{container_label_com_docker_swarm_service_name="${name}"})`,
+                                unit: "bytes",
+                                thresholds: memoryThresholds(service),
+                                yMin: 0,
+                                color: "#34d399",
+                            },
+                        ]}
+                    />
+                </ErrorBoundary>
+            )}
 
             {/* Container configuration */}
             {hasContainerConfig && (
