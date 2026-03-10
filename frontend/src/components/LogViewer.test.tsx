@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import LogViewer from "./LogViewer";
 
 // Mock scrollIntoView which jsdom doesn't support
@@ -17,6 +18,10 @@ vi.mock("../api/client", () => ({
 import { api } from "../api/client";
 const mockServiceLogs = vi.mocked(api.serviceLogs);
 const mockServiceLogsStreamURL = vi.mocked(api.serviceLogsStreamURL);
+
+function renderWithRouter(ui: React.ReactElement, initialEntries = ["/"]) {
+  return render(<MemoryRouter initialEntries={initialEntries}>{ui}</MemoryRouter>);
+}
 
 function logResponse(lines: { message: string; timestamp?: string; stream?: string }[]) {
   const mapped = lines.map((l) => ({
@@ -74,7 +79,7 @@ describe("LogViewer", () => {
         { message: "ERROR Connection failed", timestamp: "2024-01-01T00:00:01Z" },
       ]),
     );
-    render(<LogViewer serviceId="svc1" />);
+    renderWithRouter(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => {
       expect(screen.getByText(/Server started/)).toBeInTheDocument();
@@ -84,7 +89,7 @@ describe("LogViewer", () => {
 
   it("shows error state on fetch failure", async () => {
     mockServiceLogs.mockRejectedValue(new Error("fail"));
-    render(<LogViewer serviceId="svc1" />);
+    renderWithRouter(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => {
       expect(screen.getByText("Failed to load logs")).toBeInTheDocument();
@@ -93,7 +98,7 @@ describe("LogViewer", () => {
 
   it("shows empty state when no logs", async () => {
     mockServiceLogs.mockResolvedValue({ lines: [], oldest: "", newest: "" });
-    render(<LogViewer serviceId="svc1" />);
+    renderWithRouter(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => {
       expect(screen.getByText("No logs yet — the container hasn't produced any output")).toBeInTheDocument();
@@ -104,7 +109,7 @@ describe("LogViewer", () => {
     mockServiceLogs.mockResolvedValue(
       logResponse([{ message: "line one" }, { message: "line two" }, { message: "line three" }]),
     );
-    render(<LogViewer serviceId="svc1" />);
+    renderWithRouter(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => {
       expect(screen.getByText("line one")).toBeInTheDocument();
@@ -116,12 +121,43 @@ describe("LogViewer", () => {
 
     expect(screen.queryByText("line one")).not.toBeInTheDocument();
     expect(screen.getByText(/two/)).toBeInTheDocument();
-    expect(screen.getByText("1/3")).toBeInTheDocument();
+    expect(screen.getByText("1/1")).toBeInTheDocument();
+  });
+
+  it("navigates between search matches with Enter", async () => {
+    mockServiceLogs.mockResolvedValue(
+      logResponse([
+        { message: "foo bar" },
+        { message: "baz" },
+        { message: "foo qux" },
+      ]),
+    );
+    renderWithRouter(<LogViewer serviceId="svc1" />);
+
+    await waitFor(() => expect(screen.getByText(/foo bar/)).toBeInTheDocument());
+
+    const input = screen.getByPlaceholderText("Filter logs...");
+    fireEvent.change(input, { target: { value: "foo" } });
+
+    // Should show match count starting at 1/2
+    expect(screen.getByText("1/2")).toBeInTheDocument();
+
+    // Press Enter to go to next match
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.getByText("2/2")).toBeInTheDocument();
+
+    // Press Enter to wrap around
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.getByText("1/2")).toBeInTheDocument();
+
+    // Shift+Enter to go back (wraps to end)
+    fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+    expect(screen.getByText("2/2")).toBeInTheDocument();
   });
 
   it("shows 'No matching log lines' when search has no results", async () => {
     mockServiceLogs.mockResolvedValue(logResponse([{ message: "line one" }]));
-    render(<LogViewer serviceId="svc1" />);
+    renderWithRouter(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => {
       expect(screen.getByText("line one")).toBeInTheDocument();
@@ -136,7 +172,7 @@ describe("LogViewer", () => {
 
   it("fetches with selected limit", async () => {
     mockServiceLogs.mockResolvedValue(logResponse([{ message: "line one" }]));
-    render(<LogViewer serviceId="svc1" />);
+    renderWithRouter(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => {
       expect(mockServiceLogs).toHaveBeenCalledWith("svc1", expect.objectContaining({ limit: 500 }));
@@ -145,7 +181,7 @@ describe("LogViewer", () => {
 
   it("re-fetches when limit changes", async () => {
     mockServiceLogs.mockResolvedValue(logResponse([{ message: "line one" }]));
-    render(<LogViewer serviceId="svc1" />);
+    renderWithRouter(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => {
       expect(screen.getByText("line one")).toBeInTheDocument();
@@ -162,7 +198,7 @@ describe("LogViewer", () => {
 
   it("shows live tail button", async () => {
     mockServiceLogs.mockResolvedValue(logResponse([{ message: "line one" }]));
-    render(<LogViewer serviceId="svc1" />);
+    renderWithRouter(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => {
       expect(screen.getByText("line one")).toBeInTheDocument();
@@ -179,7 +215,7 @@ describe("LogViewer", () => {
       "/api/services/svc1/logs?after=2024-01-01T00%3A00%3A00Z",
     );
 
-    render(<LogViewer serviceId="svc1" />);
+    renderWithRouter(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => {
       expect(screen.getByText(/initial line/)).toBeInTheDocument();
@@ -211,7 +247,7 @@ describe("LogViewer", () => {
       abortSignal = opts?.signal;
       return new Promise(() => {}); // never resolves
     });
-    const { unmount } = render(<LogViewer serviceId="svc1" />);
+    const { unmount } = renderWithRouter(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => {
       expect(abortSignal).toBeDefined();
@@ -226,7 +262,7 @@ describe("LogViewer", () => {
     mockServiceLogs.mockResolvedValue(logResponse([{ message: "line one" }]));
     mockServiceLogsStreamURL.mockReturnValue("/api/services/svc1/logs");
 
-    render(<LogViewer serviceId="svc1" />);
+    renderWithRouter(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => {
       expect(screen.getByText("line one")).toBeInTheDocument();
@@ -249,7 +285,7 @@ describe("LogViewer", () => {
         { message: "DEBUG verbose stuff" },
       ]),
     );
-    render(<LogViewer serviceId="svc1" />);
+    renderWithRouter(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => expect(screen.getByText(/starting up/)).toBeInTheDocument());
 
@@ -265,7 +301,7 @@ describe("LogViewer", () => {
       logResponse([{ message: "initial", timestamp: "2024-01-01T00:00:00Z" }]),
     );
     mockServiceLogsStreamURL.mockReturnValue("/api/services/svc1/logs");
-    render(<LogViewer serviceId="svc1" />);
+    renderWithRouter(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => expect(screen.getByText(/initial/)).toBeInTheDocument());
 
@@ -286,5 +322,17 @@ describe("LogViewer", () => {
       expect(screen.getByText(/batch-4/)).toBeInTheDocument();
     });
     expect(screen.getByText(/batch-0/)).toBeInTheDocument();
+  });
+
+  it("reads time range from URL on mount", async () => {
+    mockServiceLogs.mockResolvedValue(logResponse([{ message: "line" }]));
+    renderWithRouter(<LogViewer serviceId="svc1" />, ["/?logRange=5m"]);
+
+    await waitFor(() => {
+      expect(mockServiceLogs).toHaveBeenCalledWith(
+        "svc1",
+        expect.objectContaining({ after: expect.any(String) }),
+      );
+    });
   });
 });

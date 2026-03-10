@@ -64,6 +64,19 @@ export const PRESETS: { label: string; getValue: () => TimeRange }[] = [
   },
 ];
 
+export const RANGE_DURATIONS: Record<string, { label: string; ms: number }> = {
+  "5m": { label: "Last 5m", ms: 5 * 60_000 },
+  "15m": { label: "Last 15m", ms: 15 * 60_000 },
+  "1h": { label: "Last 1h", ms: 60 * 60_000 },
+  "6h": { label: "Last 6h", ms: 6 * 60 * 60_000 },
+  "24h": { label: "Last 24h", ms: 24 * 60 * 60_000 },
+  "7d": { label: "Last 7d", ms: 7 * 24 * 60 * 60_000 },
+};
+
+export const LABEL_TO_RANGE_KEY: Record<string, string> = Object.fromEntries(
+  Object.entries(RANGE_DURATIONS).map(([k, v]) => [v.label, k]),
+);
+
 export const LEVEL_BAR: Record<Level, string> = {
   error: "bg-red-500",
   warn: "bg-yellow-500",

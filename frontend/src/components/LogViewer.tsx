@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Copy,
   Download,
@@ -17,7 +18,7 @@ import {
 import { api } from "../api/client";
 import type { LogLine as ApiLogLine } from "../api/client";
 import type { LogLine, TimeRange, Level } from "./log-utils";
-import { LIMIT_OPTIONS, MAX_LIVE_LINES, toLogLine } from "./log-utils";
+import { LIMIT_OPTIONS, MAX_LIVE_LINES, RANGE_DURATIONS, LABEL_TO_RANGE_KEY, formatShortDate, toLogLine } from "./log-utils";
 import { LogTable } from "./LogTable";
 import { TimeRangeSelector, StreamFilterToggle, LevelFilter, ToolbarButton } from "./LogToolbar";
 
@@ -37,13 +38,54 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
   const [limit, setLimit] = useState<number>(500);
   const [search, setSearch] = useState("");
   const [caseSensitive, setCaseSensitive] = useState(false);
+  const [matchIndex, setMatchIndex] = useState(0);
   const [useRegex, setUseRegex] = useState(false);
   const [streamFilter, setStreamFilter] = useState<"all" | "stdout" | "stderr">("all");
   const [levelFilter, setLevelFilter] = useState<Level | "all">("all");
   const [wrapLines, setWrapLines] = useState(false);
   const [following, setFollowing] = useState(true);
   const [live, setLive] = useState(false);
-  const [timeRange, setTimeRange] = useState<TimeRange>({ label: "All" });
+  const [params, setParams] = useSearchParams();
+
+  const initialTimeRange = useMemo((): TimeRange => {
+    const rangeKey = params.get("logRange");
+    if (rangeKey && RANGE_DURATIONS[rangeKey]) {
+      const { label, ms } = RANGE_DURATIONS[rangeKey];
+      return { since: new Date(Date.now() - ms).toISOString(), label };
+    }
+    const logSince = params.get("logSince");
+    const logUntil = params.get("logUntil");
+    if (logSince || logUntil) {
+      let label = "Custom";
+      if (logSince && logUntil) label = `${formatShortDate(logSince)} – ${formatShortDate(logUntil)}`;
+      else if (logSince) label = `Since ${formatShortDate(logSince)}`;
+      else if (logUntil) label = `Until ${formatShortDate(logUntil)}`;
+      return { since: logSince || undefined, until: logUntil || undefined, label };
+    }
+    return { label: "All" };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [timeRange, setTimeRange] = useState<TimeRange>(initialTimeRange);
+
+  const updateTimeRange = useCallback((tr: TimeRange) => {
+    setTimeRange(tr);
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("logRange");
+      next.delete("logSince");
+      next.delete("logUntil");
+
+      const rangeKey = LABEL_TO_RANGE_KEY[tr.label];
+      if (rangeKey) {
+        next.set("logRange", rangeKey);
+      } else if (tr.since || tr.until) {
+        if (tr.since) next.set("logSince", tr.since);
+        if (tr.until) next.set("logUntil", tr.until);
+      }
+      return next;
+    }, { replace: true });
+  }, [setParams]);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -175,6 +217,10 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
     return result;
   }, [lines, search, caseSensitive, useRegex, streamFilter, levelFilter]);
 
+  useEffect(() => {
+    setMatchIndex(0);
+  }, [filtered]);
+
   const copyLogs = () => {
     const text = filtered
       .map((l) => (l.timestamp ? `${l.timestamp} ${l.message}` : l.message))
@@ -256,7 +302,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
         <TimeRangeSelector
           value={timeRange}
           onChange={(tr) => {
-            setTimeRange(tr);
+            updateTimeRange(tr);
             if (live) {
               abortRef.current?.abort();
               setLive(false);
@@ -309,7 +355,15 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
             placeholder="Filter logs..."
             className="h-8 pl-7 pr-16 text-xs border rounded-md bg-background font-mono w-56"
             onKeyDown={(e) => {
-              if (e.key === "Escape") setSearch("");
+              if (e.key === "Escape") { setSearch(""); return; }
+              if (e.key === "Enter" && search && filtered.length > 0) {
+                e.preventDefault();
+                if (e.shiftKey) {
+                  setMatchIndex((i) => (i - 1 + filtered.length) % filtered.length);
+                } else {
+                  setMatchIndex((i) => (i + 1) % filtered.length);
+                }
+              }
             }}
           />
           <div className="absolute right-1.5 flex items-center gap-0.5">
@@ -340,7 +394,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
 
         {search && (
           <span className="text-xs text-muted-foreground tabular-nums">
-            {filtered.length}/{lines.length}
+            {filtered.length > 0 ? `${matchIndex + 1}/${filtered.length}` : "0/0"}
           </span>
         )}
 
@@ -404,6 +458,8 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
             wrapLines={wrapLines}
             search={search}
             caseSensitive={caseSensitive}
+            highlightIndex={search && filtered.length > 0 ? filtered[matchIndex]?.index : undefined}
+            scrollToFiltered={search && filtered.length > 0 ? matchIndex : undefined}
           />
 
           {!following && (
