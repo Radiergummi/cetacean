@@ -2,11 +2,13 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
@@ -1340,5 +1342,433 @@ func TestHandleStackSummary_PrometheusDown(t *testing.T) {
 	}
 	if summaries[0].MemoryUsageBytes != 0 {
 		t.Errorf("expected 0 memory usage when prometheus is down, got %d", summaries[0].MemoryUsageBytes)
+	}
+}
+
+// --- Secret data redaction tests ---
+
+func TestHandleGetSecret_DataIsRedacted(t *testing.T) {
+	c := cache.New(nil)
+	sec := swarm.Secret{ID: "sec1"}
+	sec.Spec.Name = "my-secret"
+	sec.Spec.Data = []byte("super-secret")
+	c.SetSecret(sec)
+	h := NewHandlers(c, nil, closedReady(), nil, nil)
+
+	req := httptest.NewRequest("GET", "/api/secrets/sec1", nil)
+	req.SetPathValue("id", "sec1")
+	w := httptest.NewRecorder()
+	h.HandleGetSecret(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if strings.Contains(body, "super-secret") {
+		t.Error("response body contains secret data")
+	}
+	var resp struct {
+		Secret   swarm.Secret       `json:"secret"`
+		Services []cache.ServiceRef `json:"services"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Secret.Spec.Data != nil {
+		t.Errorf("expected Spec.Data to be nil, got %v", resp.Secret.Spec.Data)
+	}
+}
+
+func TestHandleListSecrets_DataIsRedacted(t *testing.T) {
+	c := cache.New(nil)
+	sec := swarm.Secret{ID: "sec1"}
+	sec.Spec.Name = "my-secret"
+	sec.Spec.Data = []byte("super-secret")
+	c.SetSecret(sec)
+	h := NewHandlers(c, nil, closedReady(), nil, nil)
+
+	req := httptest.NewRequest("GET", "/api/secrets", nil)
+	w := httptest.NewRecorder()
+	h.HandleListSecrets(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if strings.Contains(body, "super-secret") {
+		t.Error("response body contains secret data")
+	}
+	var resp PagedResponse[swarm.Secret]
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Items) != 1 {
+		t.Fatalf("expected 1 secret, got %d", len(resp.Items))
+	}
+	if resp.Items[0].Spec.Data != nil {
+		t.Errorf("expected Spec.Data to be nil, got %v", resp.Items[0].Spec.Data)
+	}
+}
+
+// --- Detail endpoint tests for config/secret/network/volume ---
+
+func TestHandleGetConfig_Found(t *testing.T) {
+	c := cache.New(nil)
+	cfg := swarm.Config{ID: "cfg1"}
+	cfg.Spec.Name = "app-config"
+	c.SetConfig(cfg)
+
+	svc := swarm.Service{ID: "svc1"}
+	svc.Spec.Name = "web"
+	svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{
+		Configs: []*swarm.ConfigReference{{ConfigID: "cfg1", ConfigName: "app-config"}},
+	}
+	c.SetService(svc)
+	h := NewHandlers(c, nil, closedReady(), nil, nil)
+
+	req := httptest.NewRequest("GET", "/api/configs/cfg1", nil)
+	req.SetPathValue("id", "cfg1")
+	w := httptest.NewRecorder()
+	h.HandleGetConfig(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var resp struct {
+		Config   swarm.Config       `json:"config"`
+		Services []cache.ServiceRef `json:"services"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Config.ID != "cfg1" {
+		t.Errorf("config ID=%s, want cfg1", resp.Config.ID)
+	}
+	if len(resp.Services) != 1 || resp.Services[0].ID != "svc1" {
+		t.Errorf("expected 1 service ref (svc1), got %v", resp.Services)
+	}
+}
+
+func TestHandleGetConfig_NotFound(t *testing.T) {
+	h := NewHandlers(cache.New(nil), nil, closedReady(), nil, nil)
+
+	req := httptest.NewRequest("GET", "/api/configs/missing", nil)
+	req.SetPathValue("id", "missing")
+	w := httptest.NewRecorder()
+	h.HandleGetConfig(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestHandleGetSecret_Found(t *testing.T) {
+	c := cache.New(nil)
+	sec := swarm.Secret{ID: "sec1"}
+	sec.Spec.Name = "tls-cert"
+	c.SetSecret(sec)
+
+	svc := swarm.Service{ID: "svc1"}
+	svc.Spec.Name = "web"
+	svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{
+		Secrets: []*swarm.SecretReference{{SecretID: "sec1", SecretName: "tls-cert"}},
+	}
+	c.SetService(svc)
+	h := NewHandlers(c, nil, closedReady(), nil, nil)
+
+	req := httptest.NewRequest("GET", "/api/secrets/sec1", nil)
+	req.SetPathValue("id", "sec1")
+	w := httptest.NewRecorder()
+	h.HandleGetSecret(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var resp struct {
+		Secret   swarm.Secret       `json:"secret"`
+		Services []cache.ServiceRef `json:"services"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Secret.ID != "sec1" {
+		t.Errorf("secret ID=%s, want sec1", resp.Secret.ID)
+	}
+	if len(resp.Services) != 1 || resp.Services[0].ID != "svc1" {
+		t.Errorf("expected 1 service ref (svc1), got %v", resp.Services)
+	}
+}
+
+func TestHandleGetSecret_NotFound(t *testing.T) {
+	h := NewHandlers(cache.New(nil), nil, closedReady(), nil, nil)
+
+	req := httptest.NewRequest("GET", "/api/secrets/missing", nil)
+	req.SetPathValue("id", "missing")
+	w := httptest.NewRecorder()
+	h.HandleGetSecret(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestHandleGetNetwork_Found(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{ID: "net1", Name: "web_overlay", Driver: "overlay"})
+
+	svc := swarm.Service{ID: "svc1"}
+	svc.Spec.Name = "web"
+	svc.Spec.TaskTemplate.Networks = []swarm.NetworkAttachmentConfig{{Target: "net1"}}
+	c.SetService(svc)
+	h := NewHandlers(c, nil, closedReady(), nil, nil)
+
+	req := httptest.NewRequest("GET", "/api/networks/net1", nil)
+	req.SetPathValue("id", "net1")
+	w := httptest.NewRecorder()
+	h.HandleGetNetwork(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var resp struct {
+		Network  network.Summary    `json:"network"`
+		Services []cache.ServiceRef `json:"services"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Network.ID != "net1" {
+		t.Errorf("network ID=%s, want net1", resp.Network.ID)
+	}
+	if len(resp.Services) != 1 || resp.Services[0].ID != "svc1" {
+		t.Errorf("expected 1 service ref (svc1), got %v", resp.Services)
+	}
+}
+
+func TestHandleGetNetwork_NotFound(t *testing.T) {
+	h := NewHandlers(cache.New(nil), nil, closedReady(), nil, nil)
+
+	req := httptest.NewRequest("GET", "/api/networks/missing", nil)
+	req.SetPathValue("id", "missing")
+	w := httptest.NewRecorder()
+	h.HandleGetNetwork(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestHandleGetVolume_Found(t *testing.T) {
+	c := cache.New(nil)
+	c.SetVolume(volume.Volume{Name: "data-vol", Driver: "local"})
+
+	svc := swarm.Service{ID: "svc1"}
+	svc.Spec.Name = "db"
+	svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{
+		Mounts: []mount.Mount{{Type: mount.TypeVolume, Source: "data-vol"}},
+	}
+	c.SetService(svc)
+	h := NewHandlers(c, nil, closedReady(), nil, nil)
+
+	req := httptest.NewRequest("GET", "/api/volumes/data-vol", nil)
+	req.SetPathValue("name", "data-vol")
+	w := httptest.NewRecorder()
+	h.HandleGetVolume(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var resp struct {
+		Volume   volume.Volume      `json:"volume"`
+		Services []cache.ServiceRef `json:"services"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Volume.Name != "data-vol" {
+		t.Errorf("volume name=%s, want data-vol", resp.Volume.Name)
+	}
+	if len(resp.Services) != 1 || resp.Services[0].ID != "svc1" {
+		t.Errorf("expected 1 service ref (svc1), got %v", resp.Services)
+	}
+}
+
+func TestHandleGetVolume_NotFound(t *testing.T) {
+	h := NewHandlers(cache.New(nil), nil, closedReady(), nil, nil)
+
+	req := httptest.NewRequest("GET", "/api/volumes/missing", nil)
+	req.SetPathValue("name", "missing")
+	w := httptest.NewRecorder()
+	h.HandleGetVolume(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}
+
+// --- Task list with nil ContainerSpec ---
+
+func TestHandleSearch(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "nginx-web"},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{Image: "nginx:1.25-alpine"},
+			},
+		},
+	})
+	c.SetConfig(swarm.Config{
+		ID:   "cfg1",
+		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "nginx.conf"}},
+	})
+	c.SetNetwork(network.Summary{ID: "net1", Name: "nginx-net", Driver: "overlay"})
+	c.SetNode(swarm.Node{
+		ID:          "node1",
+		Spec:        swarm.NodeSpec{Annotations: swarm.Annotations{Name: "worker-1"}},
+		Description: swarm.NodeDescription{Hostname: "worker-1"},
+		Status:      swarm.NodeStatus{State: swarm.NodeStateReady},
+	})
+
+	h := NewHandlers(c, nil, closedReady(), nil, nil)
+	req := httptest.NewRequest("GET", "/api/search?q=nginx", nil)
+	w := httptest.NewRecorder()
+	h.HandleSearch(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+	var body struct {
+		Query   string                       `json:"query"`
+		Results map[string][]json.RawMessage `json:"results"`
+		Counts  map[string]int               `json:"counts"`
+		Total   int                          `json:"total"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Query != "nginx" {
+		t.Errorf("query=%q, want %q", body.Query, "nginx")
+	}
+	if body.Total != 3 {
+		t.Errorf("total=%d, want 3", body.Total)
+	}
+	// Should match service, config, network — not the node (hostname is "worker-1")
+	if len(body.Results["services"]) != 1 {
+		t.Errorf("services results=%d, want 1", len(body.Results["services"]))
+	}
+	if len(body.Results["configs"]) != 1 {
+		t.Errorf("configs results=%d, want 1", len(body.Results["configs"]))
+	}
+	if len(body.Results["networks"]) != 1 {
+		t.Errorf("networks results=%d, want 1", len(body.Results["networks"]))
+	}
+	if len(body.Results["nodes"]) != 0 {
+		t.Errorf("nodes results=%d, want 0", len(body.Results["nodes"]))
+	}
+}
+
+func TestHandleSearch_MatchesLabels(t *testing.T) {
+	c := cache.New(nil)
+	c.SetVolume(volume.Volume{
+		Name:   "data-vol",
+		Labels: map[string]string{"team": "nginx-platform"},
+	})
+
+	h := NewHandlers(c, nil, closedReady(), nil, nil)
+	req := httptest.NewRequest("GET", "/api/search?q=nginx", nil)
+	w := httptest.NewRecorder()
+	h.HandleSearch(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+	var body struct {
+		Total   int                          `json:"total"`
+		Results map[string][]json.RawMessage `json:"results"`
+		Counts  map[string]int               `json:"counts"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Counts["volumes"] != 1 {
+		t.Errorf("volumes count=%d, want 1", body.Counts["volumes"])
+	}
+	if body.Total != 1 {
+		t.Errorf("total=%d, want 1", body.Total)
+	}
+}
+
+func TestHandleSearch_EmptyQuery(t *testing.T) {
+	h := NewHandlers(cache.New(nil), nil, closedReady(), nil, nil)
+	req := httptest.NewRequest("GET", "/api/search", nil)
+	w := httptest.NewRecorder()
+	h.HandleSearch(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status=%d, want 400", w.Code)
+	}
+}
+
+func TestHandleSearch_CapsAtThreePerType(t *testing.T) {
+	c := cache.New(nil)
+	for i := 0; i < 5; i++ {
+		c.SetService(swarm.Service{
+			ID: fmt.Sprintf("svc%d", i),
+			Spec: swarm.ServiceSpec{
+				Annotations:  swarm.Annotations{Name: fmt.Sprintf("web-%d", i)},
+				TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{}},
+			},
+		})
+	}
+
+	h := NewHandlers(c, nil, closedReady(), nil, nil)
+	req := httptest.NewRequest("GET", "/api/search?q=web", nil)
+	w := httptest.NewRecorder()
+	h.HandleSearch(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+	var body struct {
+		Results map[string][]json.RawMessage `json:"results"`
+		Counts  map[string]int               `json:"counts"`
+		Total   int                          `json:"total"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Results["services"]) != 3 {
+		t.Errorf("services results=%d, want 3", len(body.Results["services"]))
+	}
+	if body.Counts["services"] != 5 {
+		t.Errorf("services count=%d, want 5", body.Counts["services"])
+	}
+	if body.Total != 5 {
+		t.Errorf("total=%d, want 5", body.Total)
+	}
+}
+
+func TestHandleListTasks_NilContainerSpec(t *testing.T) {
+	c := cache.New(nil)
+	// Task with nil ContainerSpec should not cause a panic
+	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", Spec: swarm.TaskSpec{ContainerSpec: nil}})
+	c.SetTask(swarm.Task{ID: "t2", ServiceID: "svc2", Spec: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{Image: "nginx"}}})
+	h := NewHandlers(c, nil, closedReady(), nil, nil)
+
+	req := httptest.NewRequest("GET", "/api/tasks", nil)
+	w := httptest.NewRecorder()
+	h.HandleListTasks(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var resp PagedResponse[swarm.Task]
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Total != 2 {
+		t.Errorf("expected 2 tasks, got %d", resp.Total)
 	}
 }

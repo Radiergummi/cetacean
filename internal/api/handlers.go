@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/docker/docker/api/types/network"
@@ -24,6 +26,9 @@ import (
 
 const defaultLogLimit = 500
 const maxLogLimit = 10000
+const maxLogSSEConns = 128
+
+var activeLogSSEConns atomic.Int64
 
 type DockerLogStreamer interface {
 	Logs(ctx context.Context, kind docker.LogKind, id string, tail string, follow bool, since, until string) (io.ReadCloser, error)
@@ -296,11 +301,36 @@ func wantsSSE(r *http.Request) bool {
 	return strings.Contains(r.Header.Get("Accept"), "text/event-stream")
 }
 
+func validLogTimestamp(s string) bool {
+	if s == "" {
+		return true
+	}
+	if _, err := time.Parse(time.RFC3339, s); err == nil {
+		return true
+	}
+	if _, err := time.Parse(time.RFC3339Nano, s); err == nil {
+		return true
+	}
+	if _, err := time.ParseDuration(s); err == nil {
+		return true
+	}
+	return false
+}
+
 func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFetcher) {
 	q := r.URL.Query()
 	since := q.Get("after")
 	until := q.Get("before")
 	streamFilter := q.Get("stream") // "", "stdout", or "stderr"
+
+	if !validLogTimestamp(since) {
+		writeError(w, http.StatusBadRequest, `invalid "after" parameter: must be RFC3339 timestamp or Go duration`)
+		return
+	}
+	if !validLogTimestamp(until) {
+		writeError(w, http.StatusBadRequest, `invalid "before" parameter: must be RFC3339 timestamp or Go duration`)
+		return
+	}
 
 	if wantsSSE(r) {
 		h.serveLogsSSE(w, r, fetch, since, streamFilter)
@@ -355,6 +385,13 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 }
 
 func (h *Handlers) serveLogsSSE(w http.ResponseWriter, r *http.Request, fetch logFetcher, since, streamFilter string) {
+	if activeLogSSEConns.Load() >= maxLogSSEConns {
+		writeError(w, http.StatusServiceUnavailable, "too many active log streams")
+		return
+	}
+	activeLogSSEConns.Add(1)
+	defer activeLogSSEConns.Add(-1)
+
 	// EventSource sends Last-Event-ID on reconnect; use it as fallback for since
 	if since == "" {
 		since = r.Header.Get("Last-Event-ID")
@@ -407,6 +444,9 @@ func (h *Handlers) serveLogsSSE(w http.ResponseWriter, r *http.Request, fetch lo
 			fmt.Fprint(w, ": keepalive\n\n")
 			flusher.Flush()
 		case <-r.Context().Done():
+			logs.Close() // unblocks StreamDockerLogs's io.Read
+			for range ch {
+			}
 			<-done
 			return
 		}
@@ -469,10 +509,20 @@ func (h *Handlers) HandleStackSummary(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
-		memByStack := h.queryStackMetric(ctx,
-			`sum by (`+stackNamespaceLabel+`)(container_memory_usage_bytes)`)
-		cpuByStack := h.queryStackMetric(ctx,
-			`sum by (`+stackNamespaceLabel+`)(rate(container_cpu_usage_seconds_total[5m])) * 100`)
+		var memByStack, cpuByStack map[string]float64
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			memByStack = h.queryStackMetric(ctx,
+				`sum by (`+stackNamespaceLabel+`)(container_memory_usage_bytes)`)
+		}()
+		go func() {
+			defer wg.Done()
+			cpuByStack = h.queryStackMetric(ctx,
+				`sum by (`+stackNamespaceLabel+`)(rate(container_cpu_usage_seconds_total[5m])) * 100`)
+		}()
+		wg.Wait()
 
 		for i := range summaries {
 			summaries[i].MemoryUsageBytes = int64(memByStack[summaries[i].Name])
@@ -551,6 +601,9 @@ func (h *Handlers) HandleGetSecret(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 	secrets := h.cache.ListSecrets()
+	for i := range secrets {
+		secrets[i].Spec.Data = nil
+	}
 	secrets = searchFilter(secrets, r.URL.Query().Get("search"), func(s swarm.Secret) string { return s.Spec.Name })
 	var ok bool
 	if secrets, ok = exprFilter(secrets, r.URL.Query().Get("filter"), filter.SecretEnv, w); !ok {
@@ -635,4 +688,284 @@ func (h *Handlers) HandleNotificationRules(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	writeJSON(w, h.notifier.RuleStatuses())
+}
+
+// --- Search ---
+
+type searchResult struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Detail string `json:"detail"`
+}
+
+func labelsMatch(labels map[string]string, q string) bool {
+	for k, v := range labels {
+		if strings.Contains(strings.ToLower(k), q) || strings.Contains(strings.ToLower(v), q) {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" {
+		writeError(w, http.StatusBadRequest, "missing required query parameter: q")
+		return
+	}
+	ql := strings.ToLower(q)
+
+	limit := 3
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			limit = n
+		}
+	}
+
+	type typeResults struct {
+		key     string
+		results []searchResult
+		count   int
+	}
+
+	// Build service name lookup for tasks
+	services := h.cache.ListServices()
+	svcNames := make(map[string]string, len(services))
+	for _, s := range services {
+		svcNames[s.ID] = s.Spec.Name
+	}
+
+	var sections []typeResults
+
+	// Services
+	{
+		var matches []searchResult
+		count := 0
+		for _, s := range services {
+			hit := strings.Contains(strings.ToLower(s.Spec.Name), ql)
+			if !hit && s.Spec.TaskTemplate.ContainerSpec != nil {
+				hit = strings.Contains(strings.ToLower(s.Spec.TaskTemplate.ContainerSpec.Image), ql)
+			}
+			if !hit {
+				hit = labelsMatch(s.Spec.Labels, ql)
+			}
+			if hit {
+				count++
+				if limit == 0 || len(matches) < limit {
+					detail := ""
+					if s.Spec.TaskTemplate.ContainerSpec != nil {
+						detail = s.Spec.TaskTemplate.ContainerSpec.Image
+					}
+					matches = append(matches, searchResult{ID: s.ID, Name: s.Spec.Name, Detail: detail})
+				}
+			}
+		}
+		if count > 0 {
+			sections = append(sections, typeResults{"services", matches, count})
+		}
+	}
+
+	// Stacks
+	{
+		stacks := h.cache.ListStacks()
+		var matches []searchResult
+		count := 0
+		for _, s := range stacks {
+			if strings.Contains(strings.ToLower(s.Name), ql) {
+				count++
+				if limit == 0 || len(matches) < limit {
+					matches = append(matches, searchResult{
+						ID:     s.Name,
+						Name:   s.Name,
+						Detail: fmt.Sprintf("%d services", len(s.Services)),
+					})
+				}
+			}
+		}
+		if count > 0 {
+			sections = append(sections, typeResults{"stacks", matches, count})
+		}
+	}
+
+	// Nodes
+	{
+		nodes := h.cache.ListNodes()
+		var matches []searchResult
+		count := 0
+		for _, n := range nodes {
+			hit := strings.Contains(strings.ToLower(n.Description.Hostname), ql)
+			if !hit {
+				hit = strings.Contains(strings.ToLower(n.Status.Addr), ql)
+			}
+			if !hit {
+				hit = labelsMatch(n.Spec.Labels, ql)
+			}
+			if hit {
+				count++
+				if limit == 0 || len(matches) < limit {
+					matches = append(matches, searchResult{
+						ID:     n.ID,
+						Name:   n.Description.Hostname,
+						Detail: fmt.Sprintf("%s, %s", n.Spec.Role, n.Status.State),
+					})
+				}
+			}
+		}
+		if count > 0 {
+			sections = append(sections, typeResults{"nodes", matches, count})
+		}
+	}
+
+	// Tasks
+	{
+		tasks := h.cache.ListTasks()
+		var matches []searchResult
+		count := 0
+		for _, t := range tasks {
+			svcName := svcNames[t.ServiceID]
+			taskName := fmt.Sprintf("%s.%d", svcName, t.Slot)
+
+			hit := strings.Contains(strings.ToLower(taskName), ql)
+			if !hit && t.Spec.ContainerSpec != nil {
+				hit = strings.Contains(strings.ToLower(t.Spec.ContainerSpec.Image), ql)
+			}
+			if !hit && t.Spec.ContainerSpec != nil {
+				hit = labelsMatch(t.Spec.ContainerSpec.Labels, ql)
+			}
+			if hit {
+				count++
+				if limit == 0 || len(matches) < limit {
+					matches = append(matches, searchResult{
+						ID:     t.ID,
+						Name:   taskName,
+						Detail: string(t.Status.State),
+					})
+				}
+			}
+		}
+		if count > 0 {
+			sections = append(sections, typeResults{"tasks", matches, count})
+		}
+	}
+
+	// Configs
+	{
+		configs := h.cache.ListConfigs()
+		var matches []searchResult
+		count := 0
+		for _, c := range configs {
+			hit := strings.Contains(strings.ToLower(c.Spec.Name), ql)
+			if !hit {
+				hit = labelsMatch(c.Spec.Labels, ql)
+			}
+			if hit {
+				count++
+				if limit == 0 || len(matches) < limit {
+					matches = append(matches, searchResult{
+						ID:     c.ID,
+						Name:   c.Spec.Name,
+						Detail: c.CreatedAt.Format(time.RFC3339),
+					})
+				}
+			}
+		}
+		if count > 0 {
+			sections = append(sections, typeResults{"configs", matches, count})
+		}
+	}
+
+	// Secrets
+	{
+		secrets := h.cache.ListSecrets()
+		var matches []searchResult
+		count := 0
+		for _, s := range secrets {
+			s.Spec.Data = nil
+			hit := strings.Contains(strings.ToLower(s.Spec.Name), ql)
+			if !hit {
+				hit = labelsMatch(s.Spec.Labels, ql)
+			}
+			if hit {
+				count++
+				if limit == 0 || len(matches) < limit {
+					matches = append(matches, searchResult{
+						ID:     s.ID,
+						Name:   s.Spec.Name,
+						Detail: s.CreatedAt.Format(time.RFC3339),
+					})
+				}
+			}
+		}
+		if count > 0 {
+			sections = append(sections, typeResults{"secrets", matches, count})
+		}
+	}
+
+	// Networks
+	{
+		networks := h.cache.ListNetworks()
+		var matches []searchResult
+		count := 0
+		for _, n := range networks {
+			hit := strings.Contains(strings.ToLower(n.Name), ql)
+			if !hit {
+				hit = labelsMatch(n.Labels, ql)
+			}
+			if hit {
+				count++
+				if limit == 0 || len(matches) < limit {
+					matches = append(matches, searchResult{
+						ID:     n.ID,
+						Name:   n.Name,
+						Detail: n.Driver,
+					})
+				}
+			}
+		}
+		if count > 0 {
+			sections = append(sections, typeResults{"networks", matches, count})
+		}
+	}
+
+	// Volumes
+	{
+		volumes := h.cache.ListVolumes()
+		var matches []searchResult
+		count := 0
+		for _, v := range volumes {
+			hit := strings.Contains(strings.ToLower(v.Name), ql)
+			if !hit {
+				hit = labelsMatch(v.Labels, ql)
+			}
+			if hit {
+				count++
+				if limit == 0 || len(matches) < limit {
+					matches = append(matches, searchResult{
+						ID:     v.Name,
+						Name:   v.Name,
+						Detail: v.Driver,
+					})
+				}
+			}
+		}
+		if count > 0 {
+			sections = append(sections, typeResults{"volumes", matches, count})
+		}
+	}
+
+	results := make(map[string][]searchResult, len(sections))
+	counts := make(map[string]int, len(sections))
+	total := 0
+	for _, s := range sections {
+		results[s.key] = s.results
+		counts[s.key] = s.count
+		total += s.count
+	}
+
+	writeJSON(w, map[string]any{
+		"query":   q,
+		"results": results,
+		"counts":  counts,
+		"total":   total,
+	})
 }

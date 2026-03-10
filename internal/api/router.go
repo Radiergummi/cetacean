@@ -61,6 +61,9 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 	// Notifications
 	mux.HandleFunc("GET /api/notifications/rules", h.HandleNotificationRules)
 
+	// Search
+	mux.HandleFunc("GET /api/search", h.HandleSearch)
+
 	// Topology
 	mux.HandleFunc("GET /api/topology/networks", h.HandleNetworkTopology)
 	mux.HandleFunc("GET /api/topology/placement", h.HandlePlacementTopology)
@@ -70,11 +73,11 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 
 	// Profiling (opt-in via CETACEAN_PPROF=true)
 	if enablePprof {
-		mux.HandleFunc("GET /debug/pprof/", pprof.Index)
-		mux.HandleFunc("GET /debug/pprof/cmdline", pprof.Cmdline)
-		mux.HandleFunc("GET /debug/pprof/profile", pprof.Profile)
-		mux.HandleFunc("GET /debug/pprof/symbol", pprof.Symbol)
-		mux.HandleFunc("GET /debug/pprof/trace", pprof.Trace)
+		mux.HandleFunc("/debug/pprof/", pprof.Index)
+		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 	}
 
 	// SPA fallback (must be last)
