@@ -138,6 +138,120 @@ func (h *Handlers) HandleCluster(w http.ResponseWriter, r *http.Request) {
 	}{snap, h.promClient != nil})
 }
 
+type ClusterMetrics struct {
+	CPU    ResourceMetric `json:"cpu"`
+	Memory ResourceMetric `json:"memory"`
+	Disk   ResourceMetric `json:"disk"`
+}
+
+type ResourceMetric struct {
+	Used    float64 `json:"used"`
+	Total   float64 `json:"total"`
+	Percent float64 `json:"percent"`
+}
+
+func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) {
+	if h.promClient == nil {
+		writeError(w, http.StatusNotFound, "prometheus not configured")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	snap := h.cache.Snapshot()
+
+	var metrics ClusterMetrics
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	wg.Add(3)
+
+	// CPU utilization
+	go func() {
+		defer wg.Done()
+		results, err := h.promClient.InstantQuery(ctx,
+			`sum(rate(node_cpu_seconds_total{mode!="idle"}[5m])) / sum(rate(node_cpu_seconds_total[5m])) * 100`)
+		if err != nil {
+			slog.Warn("cluster metrics: CPU query failed", "error", err)
+			return
+		}
+		if len(results) > 0 {
+			mu.Lock()
+			metrics.CPU = ResourceMetric{
+				Used:    float64(snap.TotalCPU) * results[0].Value / 100,
+				Total:   float64(snap.TotalCPU),
+				Percent: results[0].Value,
+			}
+			mu.Unlock()
+		}
+	}()
+
+	// Memory utilization
+	go func() {
+		defer wg.Done()
+		results, err := h.promClient.InstantQuery(ctx,
+			`sum(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)`)
+		if err != nil {
+			slog.Warn("cluster metrics: memory query failed", "error", err)
+			return
+		}
+		if len(results) > 0 {
+			mu.Lock()
+			total := float64(snap.TotalMemory)
+			used := results[0].Value
+			pct := 0.0
+			if total > 0 {
+				pct = used / total * 100
+			}
+			metrics.Memory = ResourceMetric{Used: used, Total: total, Percent: pct}
+			mu.Unlock()
+		}
+	}()
+
+	// Disk utilization
+	go func() {
+		defer wg.Done()
+		type pair struct{ total, avail float64 }
+		var p pair
+		var pmu sync.Mutex
+		var dwg sync.WaitGroup
+		dwg.Add(2)
+		go func() {
+			defer dwg.Done()
+			r, err := h.promClient.InstantQuery(ctx, `sum(node_filesystem_size_bytes{mountpoint="/"})`)
+			if err == nil && len(r) > 0 {
+				pmu.Lock()
+				p.total = r[0].Value
+				pmu.Unlock()
+			}
+		}()
+		go func() {
+			defer dwg.Done()
+			r, err := h.promClient.InstantQuery(ctx, `sum(node_filesystem_avail_bytes{mountpoint="/"})`)
+			if err == nil && len(r) > 0 {
+				pmu.Lock()
+				p.avail = r[0].Value
+				pmu.Unlock()
+			}
+		}()
+		dwg.Wait()
+
+		if p.total > 0 {
+			used := p.total - p.avail
+			mu.Lock()
+			metrics.Disk = ResourceMetric{
+				Used:    used,
+				Total:   p.total,
+				Percent: used / p.total * 100,
+			}
+			mu.Unlock()
+		}
+	}()
+
+	wg.Wait()
+	writeJSON(w, metrics)
+}
+
 // --- Nodes ---
 
 func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {

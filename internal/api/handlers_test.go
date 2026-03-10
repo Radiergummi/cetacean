@@ -84,6 +84,69 @@ func TestHandleCluster(t *testing.T) {
 	}
 }
 
+func TestHandleClusterMetrics_NoPrometheus(t *testing.T) {
+	c := cache.New(nil)
+	h := NewHandlers(c, nil, closedReady(), nil, nil)
+
+	req := httptest.NewRequest("GET", "/api/cluster/metrics", nil)
+	w := httptest.NewRecorder()
+	h.HandleClusterMetrics(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestHandleClusterMetrics_WithPrometheus(t *testing.T) {
+	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query().Get("query")
+		var val string
+		switch {
+		case strings.Contains(query, "cpu_seconds"):
+			val = "0.62"
+		case strings.Contains(query, "memory_usage"):
+			val = "47400000000"
+		case strings.Contains(query, "filesystem_size"):
+			val = "500000000000"
+		case strings.Contains(query, "filesystem_avail"):
+			val = "295000000000"
+		default:
+			val = "0"
+		}
+		body := `{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1,"` + val + `"]}]}}`
+		fmt.Fprint(w, body)
+	}))
+	defer prom.Close()
+
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{
+		ID:     "n1",
+		Status: swarm.NodeStatus{State: swarm.NodeStateReady},
+		Description: swarm.NodeDescription{
+			Resources: swarm.Resources{NanoCPUs: 4_000_000_000, MemoryBytes: 64_000_000_000},
+		},
+	})
+	h := NewHandlers(c, nil, closedReady(), nil, NewPromClient(prom.URL))
+
+	req := httptest.NewRequest("GET", "/api/cluster/metrics", nil)
+	w := httptest.NewRecorder()
+	h.HandleClusterMetrics(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		CPU    struct{ Percent float64 } `json:"cpu"`
+		Memory struct{ Percent float64 } `json:"memory"`
+		Disk   struct{ Percent float64 } `json:"disk"`
+	}
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp.CPU.Percent == 0 {
+		t.Error("expected non-zero CPU percent")
+	}
+}
+
 func TestHandleListNodes(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{ID: "n1"})

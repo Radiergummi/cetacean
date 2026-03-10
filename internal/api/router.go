@@ -17,6 +17,7 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 
 	// Cluster
 	mux.HandleFunc("GET /api/cluster", h.HandleCluster)
+	mux.HandleFunc("GET /api/cluster/metrics", h.HandleClusterMetrics)
 
 	// Nodes
 	mux.HandleFunc("GET /api/nodes", h.HandleListNodes)
