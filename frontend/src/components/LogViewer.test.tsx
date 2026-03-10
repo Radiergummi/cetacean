@@ -205,6 +205,23 @@ describe("LogViewer", () => {
     });
   });
 
+  it("aborts in-flight fetch on unmount", async () => {
+    let abortSignal: AbortSignal | undefined;
+    mockServiceLogs.mockImplementation((_id, opts) => {
+      abortSignal = opts?.signal;
+      return new Promise(() => {}); // never resolves
+    });
+    const { unmount } = render(<LogViewer serviceId="svc1" />);
+
+    await waitFor(() => {
+      expect(abortSignal).toBeDefined();
+    });
+    expect(abortSignal!.aborted).toBe(false);
+
+    unmount();
+    expect(abortSignal!.aborted).toBe(true);
+  });
+
   it("stops streaming when live is toggled off", async () => {
     mockServiceLogs.mockResolvedValue(logResponse([{ message: "line one" }]));
     mockServiceLogsStreamURL.mockReturnValue("/api/services/svc1/logs");

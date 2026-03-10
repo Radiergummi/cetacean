@@ -50,10 +50,13 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
   const streamParam = streamFilter === "all" ? undefined : streamFilter;
 
   const fetchLogs = useCallback(() => {
+    abortRef.current?.abort();
     setLoading(true);
     setError(null);
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15_000);
+    abortRef.current = controller;
+    let timedOut = false;
+    const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 15_000);
     const opts = { limit, after: timeRange.since, before: timeRange.until, stream: streamParam, signal: controller.signal };
     const req = isTask ? api.taskLogs(logId, opts) : api.serviceLogs(logId, opts);
     req
@@ -62,9 +65,9 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
         setLoading(false);
       })
       .catch((err) => {
-        if (controller.signal.aborted) {
+        if (timedOut) {
           setError("Request timed out");
-        } else {
+        } else if (!controller.signal.aborted) {
           setError(err instanceof Error ? err.message : "Failed to load logs");
         }
         setLoading(false);
@@ -74,6 +77,9 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
 
   useEffect(() => {
     fetchLogs();
+    return () => {
+      abortRef.current?.abort();
+    };
   }, [fetchLogs]);
 
   // Live streaming via SSE
