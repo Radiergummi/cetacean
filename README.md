@@ -1,71 +1,170 @@
-# Cetacean
+<p align="center">
+  <h1 align="center">Cetacean</h1>
+  <p align="center">
+    A real-time observability dashboard for Docker Swarm clusters.<br>
+    Single binary. Zero dependencies. Instant visibility.
+  </p>
+  <p align="center">
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPLv3-blue.svg" alt="License"></a>
+    <img src="https://img.shields.io/badge/go-1.26+-00ADD8.svg" alt="Go 1.26+">
+    <img src="https://img.shields.io/badge/react-19-61DAFB.svg" alt="React 19">
+    <img src="https://img.shields.io/badge/docker-swarm-2496ED.svg" alt="Docker Swarm">
+  </p>
+</p>
 
-A lightweight, real-time observability dashboard for Docker Swarm Mode clusters. Single Go binary with an embedded React frontend. Designed as a focused, read-only alternative to Swarmpit and Portainer for teams that need visibility into their swarm without the overhead of a full management platform.
+<!-- TODO: Replace with actual screenshots
+<p align="center">
+  <img src="docs/screenshots/overview.png" alt="Cluster Overview" width="800">
+</p>
+-->
 
-Cetacean connects to the Docker socket, caches all swarm state in memory, and pushes live updates to browsers via Server-Sent Events (SSE). Prometheus integration provides resource metrics and time-series charts.
+## Why Cetacean?
+
+Most Docker Swarm tools try to do everything — manage services, deploy stacks, handle registries, run terminals.
+Cetacean does one thing well: **let you see what's happening in your swarm.**
+
+```bash
+docker build -t cetacean:latest .
+docker stack deploy -c docker-compose.yml cetacean
+# Open http://<manager>:9000 — done.
+```
+
+No database. No agents on worker nodes. No authentication server. One binary on one manager node, and you have full
+visibility into every resource in your cluster with live updates.
+
+|                       | Portainer          | Swarmpit        | Cetacean       |
+|-----------------------|--------------------|-----------------|----------------|
+| **Purpose**           | Full management    | Full management | Observability  |
+| **Deploy complexity** | DB + agents + auth | CouchDB + agent | Single binary  |
+| **Read ops**          | Yes                | Yes             | Yes            |
+| **Write ops**         | Yes                | Yes             | No (by design) |
+| **Real-time updates** | Polling            | Polling         | SSE push       |
+| **Metrics**           | Built-in           | Built-in        | Prometheus     |
+
+Cetacean is for teams that manage their swarm via CLI or CI/CD and need a dashboard to **understand** the cluster, not
+control it.
 
 ## Features
 
+<!-- TODO: Add screenshots alongside each section for visual impact -->
+
 ### Cluster Overview
-- Live cluster health dashboard with node, service, task, and stack counts
-- Trend indicators showing count changes since the last sync
-- Activity feed of recent cluster events
-- Notification rule status display
 
-### Nodes
-- Sortable, searchable list with live CPU/memory/disk gauges and CPU sparklines
-- Node detail with resource gauges, task table with state filtering, Prometheus charts (CPU %, memory %, disk I/O, network I/O), and activity history
+Live health dashboard with node, service, task, and stack counts. Trend indicators show changes since last sync.
+Activity feed of recent events. At a glance: is your cluster healthy?
 
-### Services
-- Sortable, searchable list with replica mode, image, and update status
-- Service detail with full configuration inspection:
-  - Container config, environment variables, healthcheck settings
-  - Labels, published ports, volume mounts
-  - Attached configs and secrets
-  - Deploy, update, and rollback configuration
-  - Task list with state filter (running, complete, failed, etc.)
-  - CPU and memory time-series charts with limit/reservation threshold lines
-  - Live log viewer with streaming, search, and filtering
-  - Activity history
+### Browse Everything
 
-### Stacks
-- Derived from `com.docker.stack.namespace` labels (not a Docker primitive)
-- Stack detail shows all member services, configs, secrets, networks, and volumes with task counts
+Every Docker Swarm resource type is browsable with full detail pages and cross-references between them:
+
+- **Nodes** — sortable list with live CPU/memory/disk gauges; detail pages with resource charts, task tables, and
+  activity history
+- **Services** — full configuration inspection including container config, env vars, healthchecks, labels, ports,
+  mounts, configs, secrets, deploy/update/rollback settings, task lists with state filtering, CPU/memory charts, and
+  live logs
+- **Stacks** — derived from `com.docker.stack.namespace` labels; shows all member services, configs, secrets, networks,
+  and volumes
+- **Tasks** — global and per-service/per-node views with status history
+- **Configs & Secrets** — detail pages with "used by" cross-references (secret values are never exposed)
+- **Networks & Volumes** — IPAM configuration, driver details, service cross-references
 
 ### Log Viewer
-- Dual mode: JSON batch fetch or live SSE streaming
-- Time range presets (15m, 1h, 6h, 24h) and custom datetime range picker
-- stdout/stderr stream filter
-- Case-sensitive and regex search with inline match highlighting
-- Automatic JSON formatting and log level detection with color coding
-- Copy to clipboard and download as file
-- Configurable line limits (100--5000)
-- Auto-scroll with "jump to bottom" button
+
+- Live SSE streaming or batch fetch with time range presets
+- Regex search with inline highlighting
+- stdout/stderr stream filtering
+- Automatic JSON formatting with log level color coding
+- Copy to clipboard, download as file
 
 ### Topology
-- Logical view: service-to-service connections through overlay networks, rendered with ELK.js orthogonal edge routing
-- Physical view: 3-column grid showing which services run on which nodes
 
-### Additional Resources
-- Configs, secrets, networks, and volumes lists with search and sort
-- Table and grid view toggle on all list pages
-
-### Real-Time Updates
-- Single SSE connection shared across the entire app
-- Granular in-place updates on list pages without full refetches
-- Connection status indicator with last-event timestamp
-- Automatic reconnection with full state re-sync on the backend
+- **Logical view**: service-to-service connections through overlay networks with ELK.js orthogonal routing
+- **Physical view**: which services run on which nodes in a grid layout
 
 ### Metrics
-- Prometheus reverse proxy keeps Prometheus unexposed to browsers
-- Pre-built charts for node and service resources
-- Configurable time ranges (1h, 6h, 24h, 7d) with 30s auto-refresh toggle
-- Cursor sync across charts within a panel
 
-### Notification Webhooks
-- Configurable rules with [expr](https://github.com/expr-lang/expr) expressions
-- Per-rule cooldown periods
-- Circuit breaker (opens after 5 consecutive failures, half-open retry every 30s)
+Optional Prometheus integration for time-series charts:
+
+- **Node**: CPU %, memory %, disk I/O, network I/O with live gauges
+- **Service**: CPU and memory with limit/reservation threshold lines
+- **Stack**: aggregated CPU and memory across all services
+- Configurable time ranges (1h, 6h, 24h, 7d) with auto-refresh
+
+### Real-Time Updates
+
+A single SSE connection pushes changes to the browser as they happen. List pages update in-place without full reloads.
+Connection status indicator shows you're always current.
+
+### Webhook Notifications
+
+Configurable rules with [expr](https://github.com/expr-lang/expr) expressions, per-rule cooldowns, and a circuit breaker
+for reliability. Alert on task failures, node state changes, or any cluster event.
+
+## Quick Start
+
+### Docker Swarm (recommended)
+
+Deploy the full observability stack — Cetacean + Prometheus + cAdvisor + Node Exporter:
+
+```bash
+docker build -t cetacean:latest .
+docker stack deploy -c docker-compose.yml cetacean
+```
+
+Open `http://<manager-node>:9000`. Metrics will populate automatically as cAdvisor and Node Exporter start reporting.
+
+### Without Metrics
+
+Cetacean works without Prometheus — metrics panels simply won't appear:
+
+```bash
+docker build -t cetacean:latest .
+
+docker service create \
+  --name cetacean \
+  --constraint node.role==manager \
+  --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
+  --publish 9000:9000 \
+  cetacean:latest
+```
+
+### From Source
+
+Requires Go 1.26+ and Node.js 22+:
+
+```bash
+cd frontend && npm install && npm run build && cd ..
+go build -o cetacean .
+./cetacean
+```
+
+Set `CETACEAN_PROMETHEUS_URL` to enable metrics, or omit it to run without.
+
+## Configuration
+
+All configuration is via environment variables:
+
+| Variable                      | Default                       | Description                                       |
+|-------------------------------|-------------------------------|---------------------------------------------------|
+| `CETACEAN_PROMETHEUS_URL`     | *(none)*                      | Prometheus server URL (metrics disabled if unset) |
+| `CETACEAN_DOCKER_HOST`        | `unix:///var/run/docker.sock` | Docker socket path or TCP address                 |
+| `CETACEAN_LISTEN_ADDR`        | `:9000`                       | HTTP listen address                               |
+| `CETACEAN_LOG_LEVEL`          | `info`                        | Log level: `debug`, `info`, `warn`, `error`       |
+| `CETACEAN_LOG_FORMAT`         | `json`                        | Log format: `json` or `text`                      |
+| `CETACEAN_DATA_DIR`           | `./data`                      | Directory for snapshot persistence                |
+| `CETACEAN_SNAPSHOT`           | `true`                        | Enable/disable disk snapshots                     |
+| `CETACEAN_NOTIFICATION_RULES` | *(none)*                      | Path to notification webhook rules YAML           |
+| `CETACEAN_SSE_BATCH_INTERVAL` | `100ms`                       | SSE event batching window                         |
+| `CETACEAN_PPROF`              | `false`                       | Enable pprof endpoints at `/debug/pprof/`         |
+
+## Deployment Notes
+
+- **Must run on a manager node** — Cetacean reads swarm state via the Docker socket, which is only available on managers
+- **No authentication built in** — designed to run behind a reverse proxy (Traefik, Caddy, nginx) with your auth layer (
+  OIDC, mTLS, Tailscale, etc.)
+- **Read-only** — Cetacean never writes to the Docker API, so it can't accidentally modify your cluster
+- **Disk snapshots** — on each sync, state is written to `data/snapshot.json` so the dashboard shows cached data
+  immediately on restart while the first full sync completes
 
 ## Architecture
 
@@ -85,173 +184,31 @@ Cetacean connects to the Docker socket, caches all swarm state in memory, and pu
                         |        |
                +--------v-+  +--v-----------+
                |  Docker   |  |  Prometheus   |
-               |  Socket   |  |  Server       |
+               |  Socket   |  |  (optional)   |
                +-----------+  +--------------+
 ```
 
 ### How It Works
 
-1. **Docker Watcher** connects to the Docker socket, performs a full sync of all swarm resources on startup (7 parallel goroutines), then subscribes to the Docker event stream for incremental updates. Events are debounced (50ms window) and coalesced, then inspected via a 4-worker pool. Periodic full re-sync every 5 minutes as a safety net. Automatic reconnection with full re-sync on event stream disconnection.
+1. **Docker Watcher** connects to the Docker socket, performs a full sync on startup (7 parallel goroutines), then
+   subscribes to the event stream. Events are debounced (50ms) and inspected via a 4-worker pool. Re-syncs every 5
+   minutes and on reconnect.
 
-2. **State Cache** holds all swarm state in memory using `sync.RWMutex`-protected maps indexed by resource ID. Stacks are derived from `com.docker.stack.namespace` labels and rebuilt on every mutation. Every mutation fires a callback that feeds both the SSE broadcaster and the notification system.
+2. **State Cache** holds all swarm state in memory with `sync.RWMutex`-protected maps. Stacks are derived from labels
+   and rebuilt on mutation. Every change fires callbacks that feed SSE and notifications.
 
-3. **SSE Broadcaster** fans out change events to up to 256 connected browser clients. Events are batched per-client on a configurable interval (default 100ms). Clients can filter by resource type via `?types=`. Slow clients get events dropped rather than backpressuring the server.
+3. **SSE Broadcaster** fans out events to up to 256 browser clients. Events are batched per-client (default 100ms). Slow
+   clients get events dropped rather than backpressuring.
 
-4. **REST API** serves current cache state as JSON. All endpoints are read-only. List endpoints support search, sort, pagination, and filter expressions.
+4. **REST API** serves cache state as JSON. All read-only. List endpoints support search, sort, pagination,
+   and [expr](https://github.com/expr-lang/expr) filter expressions.
 
-5. **Prometheus Proxy** forwards `/query` and `/query_range` requests to the configured Prometheus instance. 10MB response limit, 30s timeout.
-
-6. **SPA Server** serves the embedded React build via `embed.FS` with `index.html` fallback for client-side routing.
-
-### Disk Snapshots
-
-On each sync, the cache is atomically written to disk (`data/snapshot.json`) so the dashboard can show cached data immediately on restart while the first full sync completes. Disable with `CETACEAN_SNAPSHOT=false`.
-
-## Quick Start
-
-### Docker Swarm (recommended)
-
-The included `docker-compose.yml` deploys Cetacean with Prometheus, cAdvisor, and Node Exporter as a complete observability stack:
-
-```bash
-# Build the image
-docker build -t cetacean:latest .
-
-# Deploy the full stack (requires Docker Swarm mode)
-docker stack deploy -c docker-compose.yml cetacean
-```
-
-Cetacean will be available at `http://<manager-node>:9000`.
-
-The stack includes:
-- **Cetacean** on the manager node (needs Docker socket access)
-- **Prometheus** with DNS-based service discovery for cAdvisor and Node Exporter
-- **cAdvisor** (global mode) for container resource metrics
-- **Node Exporter** (global mode) for host-level metrics
-
-### From Source
-
-Requires Go 1.26+ and Node.js 22+:
-
-```bash
-# Build frontend
-cd frontend && npm install && npm run build && cd ..
-
-# Build binary
-go build -o cetacean .
-
-# Run (Prometheus URL is required)
-CETACEAN_PROMETHEUS_URL=http://localhost:9090 ./cetacean
-```
-
-### Development
-
-```bash
-# Terminal 1: Frontend dev server (hot reload, proxies /api to :9000)
-cd frontend && npm install && npm run dev
-
-# Terminal 2: Go backend
-CETACEAN_PROMETHEUS_URL=http://localhost:9090 go run .
-```
-
-The Vite dev server runs on `:5173` and proxies API requests to the Go backend on `:9000`.
-
-**Useful commands:**
-
-```bash
-make check          # lint + format check + test (run before committing)
-make test           # go test ./...
-make lint           # golangci-lint + oxlint
-make fmt            # gofmt + oxfmt (write)
-```
-
-## Configuration
-
-All configuration is via environment variables:
-
-| Variable | Default | Description |
-|---|---|---|
-| `CETACEAN_PROMETHEUS_URL` | *(required)* | Prometheus server URL |
-| `CETACEAN_DOCKER_HOST` | `unix:///var/run/docker.sock` | Docker socket path or TCP address |
-| `CETACEAN_LISTEN_ADDR` | `:9000` | HTTP listen address |
-| `CETACEAN_LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error` |
-| `CETACEAN_LOG_FORMAT` | `json` | Log format: `json` or `text` |
-| `CETACEAN_DATA_DIR` | `./data` | Directory for snapshot persistence |
-| `CETACEAN_SNAPSHOT` | `true` | Enable/disable disk snapshots |
-| `CETACEAN_NOTIFICATIONS_FILE` | *(none)* | Path to notification webhook rules YAML |
-| `CETACEAN_SSE_BATCH_INTERVAL` | `100ms` | SSE event batching window |
-
-## API
-
-All endpoints are `GET` and return JSON unless noted.
-
-### Resources
-
-| Endpoint | Description |
-|---|---|
-| `GET /api/cluster` | Cluster snapshot: counts, task states, CPU/memory totals |
-| `GET /api/nodes` | List nodes |
-| `GET /api/nodes/{id}` | Node detail |
-| `GET /api/nodes/{id}/tasks` | Tasks running on a node |
-| `GET /api/services` | List services |
-| `GET /api/services/{id}` | Service detail |
-| `GET /api/services/{id}/tasks` | Tasks for a service |
-| `GET /api/services/{id}/logs` | Service logs (JSON or SSE depending on `Accept` header) |
-| `GET /api/tasks` | List tasks |
-| `GET /api/tasks/{id}` | Task detail |
-| `GET /api/tasks/{id}/logs` | Task logs (JSON or SSE) |
-| `GET /api/stacks` | List stacks (derived from labels) |
-| `GET /api/stacks/{name}` | Stack detail with all member resources |
-| `GET /api/configs` | List configs |
-| `GET /api/secrets` | List secrets (metadata only, never values) |
-| `GET /api/networks` | List networks |
-| `GET /api/volumes` | List volumes |
-
-### Infrastructure
-
-| Endpoint | Description |
-|---|---|
-| `GET /api/events` | SSE stream (filter with `?types=node,service,...`) |
-| `GET /api/health` | Health check (always 200) |
-| `GET /api/ready` | Readiness check (503 until first sync completes) |
-| `GET /api/history` | Event history (`?type=`, `?resourceId=`, `?limit=`) |
-| `GET /api/metrics/query` | Prometheus instant query proxy |
-| `GET /api/metrics/query_range` | Prometheus range query proxy |
-| `GET /api/topology/networks` | Service-to-service network topology |
-| `GET /api/topology/placement` | Node-to-service placement topology |
-| `GET /api/notifications/rules` | Notification rule statuses |
-
-### Query Parameters
-
-List endpoints support:
-- `?search=` -- case-insensitive name search (server-side)
-- `?sort=<field>&dir=asc|desc` -- sorting (fields vary by resource)
-- `?limit=N&offset=N` -- pagination
-- `?filter=<expr>` -- filter expressions (e.g., `status == "ready" && role == "manager"`)
-
-Log endpoints support:
-- `?limit=N` -- number of log lines (JSON mode)
-- `?before=<timestamp>&after=<timestamp>` -- time range
-- `?stream=stdout|stderr` -- stream filter
-- `Accept: text/event-stream` header switches to live streaming mode
-
-### SSE Event Format
-
-```
-event: service
-data: {"type":"service","action":"update","id":"abc123","resource":{...}}
-```
-
-Batch events (multiple changes within the batching window):
-
-```
-event: batch
-data: [{"type":"service","action":"update",...},{"type":"task","action":"remove",...}]
-```
+5. **Prometheus Proxy** forwards `/query` and `/query_range` to your Prometheus instance (10MB limit, 30s timeout),
+   keeping it unexposed to browsers.
 
 ## Notification Webhooks
 
-Cetacean can send webhook notifications when cluster events match configurable rules. Create a YAML file and set `CETACEAN_NOTIFICATIONS_FILE`:
+Send webhook notifications when cluster events match configurable rules:
 
 ```yaml
 - name: service-failures
@@ -267,95 +224,119 @@ Cetacean can send webhook notifications when cluster events match configurable r
   cooldown: 10m
 ```
 
-Rules use [expr](https://github.com/expr-lang/expr) expressions evaluated against Docker API types. The webhook system includes a circuit breaker (opens after 5 consecutive failures, half-open retry every 30s) and per-rule cooldown periods to avoid alert fatigue.
+Rules use [expr](https://github.com/expr-lang/expr) expressions evaluated against Docker API types. Includes a circuit
+breaker (opens after 5 consecutive failures, half-open retry every 30s) and per-rule cooldowns.
 
-## Project Structure
+## API Reference
 
+All endpoints are `GET` and return JSON.
+
+### Resources
+
+| Endpoint                       | Description                                              |
+|--------------------------------|----------------------------------------------------------|
+| `GET /api/cluster`             | Cluster snapshot: counts, task states, CPU/memory totals |
+| `GET /api/nodes`               | List nodes                                               |
+| `GET /api/nodes/{id}`          | Node detail with cross-referenced tasks                  |
+| `GET /api/nodes/{id}/tasks`    | Tasks running on a node                                  |
+| `GET /api/services`            | List services                                            |
+| `GET /api/services/{id}`       | Service detail                                           |
+| `GET /api/services/{id}/tasks` | Tasks for a service                                      |
+| `GET /api/services/{id}/logs`  | Service logs (JSON or SSE via `Accept` header)           |
+| `GET /api/tasks`               | List tasks                                               |
+| `GET /api/tasks/{id}`          | Task detail                                              |
+| `GET /api/tasks/{id}/logs`     | Task logs (JSON or SSE)                                  |
+| `GET /api/stacks`              | List stacks                                              |
+| `GET /api/stacks/{name}`       | Stack detail with all member resources                   |
+| `GET /api/configs`             | List configs                                             |
+| `GET /api/configs/{id}`        | Config detail with cross-referenced services             |
+| `GET /api/secrets`             | List secrets (metadata only)                             |
+| `GET /api/secrets/{id}`        | Secret detail with cross-referenced services             |
+| `GET /api/networks`            | List networks                                            |
+| `GET /api/networks/{id}`       | Network detail with cross-referenced services            |
+| `GET /api/volumes`             | List volumes                                             |
+| `GET /api/volumes/{name}`      | Volume detail with cross-referenced services             |
+
+### Infrastructure
+
+| Endpoint                       | Description                                         |
+|--------------------------------|-----------------------------------------------------|
+| `GET /api/events`              | SSE stream (filter with `?types=node,service,...`)  |
+| `GET /api/health`              | Health check                                        |
+| `GET /api/ready`               | Readiness (503 until first sync completes)          |
+| `GET /api/history`             | Event history (`?type=`, `?resourceId=`, `?limit=`) |
+| `GET /api/metrics/query`       | Prometheus instant query proxy                      |
+| `GET /api/metrics/query_range` | Prometheus range query proxy                        |
+| `GET /api/topology/networks`   | Service-to-service network topology                 |
+| `GET /api/topology/placement`  | Node-to-service placement topology                  |
+| `GET /api/notifications/rules` | Notification rule statuses                          |
+
+### Query Parameters
+
+List endpoints:
+
+- `?search=` — case-insensitive name search
+- `?sort=<field>&dir=asc|desc` — sorting
+- `?limit=N&offset=N` — pagination
+- `?filter=<expr>` — filter expressions (e.g., `status == "ready" && role == "manager"`)
+
+Log endpoints:
+
+- `?limit=N` — line count (JSON mode)
+- `?after=<timestamp>&before=<timestamp>` — time range (RFC3339 or Go duration)
+- `?stream=stdout|stderr` — stream filter
+- `Accept: text/event-stream` — switches to live streaming mode
+
+## Development
+
+Cetacean needs a Docker Swarm to connect to. The easiest way to develop locally is to init a single-node swarm on your
+machine:
+
+```bash
+docker swarm init
 ```
-cetacean/
-├── main.go                          # Entrypoint: config, wiring, embedded SPA, server
-├── internal/
-│   ├── config/                      # Environment variable parsing
-│   ├── cache/
-│   │   ├── cache.go                 # Thread-safe in-memory state store
-│   │   ├── stacks.go                # Stack derivation from labels
-│   │   ├── history.go               # Ring buffer event log (10,000 entries)
-│   │   └── snapshot.go              # Atomic disk persistence
-│   ├── docker/
-│   │   ├── client.go                # Docker API client wrapper
-│   │   └── watcher.go               # Event stream, debouncing, worker pool, reconnect
-│   ├── api/
-│   │   ├── router.go                # Route registration, middleware chain
-│   │   ├── handlers.go              # REST handlers with search/sort/filter/paginate
-│   │   ├── sse.go                   # SSE broadcaster (256 clients, batching)
-│   │   ├── prometheus.go            # Prometheus query proxy (allowlisted paths)
-│   │   ├── logparse.go              # Docker multiplex log frame parser
-│   │   ├── topology.go              # Network and placement topology computation
-│   │   ├── middleware.go            # Request logging, recovery, security headers
-│   │   └── spa.go                   # SPA file server with index.html fallback
-│   ├── filter/                      # Expression filter compilation and evaluation
-│   └── notify/                      # Webhook notifications, circuit breaker, rules
-├── frontend/                        # React 19 SPA (Vite + TypeScript)
-│   └── src/
-│       ├── api/                     # Fetch client, TypeScript types
-│       ├── hooks/                   # SSEContext, useSwarmResource, useViewMode
-│       ├── components/              # DataTable, LogViewer, TimeSeriesChart, gauges, etc.
-│       ├── pages/                   # All route pages
-│       └── lib/                     # ELK layout helpers
-├── Dockerfile                       # Multi-stage build (Node + Go + Alpine)
-├── docker-compose.yml               # Swarm stack with Prometheus, cAdvisor, Node Exporter
-└── prometheus.yml                   # Prometheus config with DNS service discovery
+
+Then run the Go backend and Vite dev server side by side:
+
+```bash
+# Terminal 1: Go backend (connects to local Docker socket)
+go run .
+
+# Terminal 2: Frontend dev server (hot reload, proxies /api to :9000)
+cd frontend && npm install && npm run dev
+```
+
+Open `http://localhost:5173`. The Vite dev server proxies `/api` requests to the Go backend on `:9000`, so you get
+frontend hot-reload and live backend data. Changes to Go code require restarting `go run .`; frontend changes apply
+instantly.
+
+```bash
+make check          # lint + format check + test
+make test           # go test ./...
+make lint           # golangci-lint + oxlint
+make fmt            # gofmt + oxfmt
 ```
 
 ## Tech Stack
 
-### Backend
-- Go 1.26, stdlib `net/http` with Go 1.22+ method routing
-- Docker Engine API via `github.com/docker/docker`
-- Structured logging via `log/slog`
-- [expr](https://github.com/expr-lang/expr) for notification rule evaluation
-- [goccy/go-json](https://github.com/goccy/go-json) for fast JSON serialization
+**Backend**: Go 1.26, stdlib `net/http`, Docker Engine API,
+`log/slog`, [expr](https://github.com/expr-lang/expr), [goccy/go-json](https://github.com/goccy/go-json)
 
-### Frontend
-- React 19, TypeScript 5.9, Vite 7
-- Tailwind CSS v4 with shadcn/ui components
-- [uPlot](https://github.com/leeoniya/uPlot) for high-performance time-series charts
-- [React Flow](https://reactflow.dev/) + [ELK.js](https://github.com/kieler/elkjs) for topology visualization
-- [@tanstack/react-virtual](https://tanstack.com/virtual) for virtualized tables (auto-enabled above 100 rows)
+**Frontend**: React 19, TypeScript, Vite, Tailwind CSS v4,
+shadcn/ui, [uPlot](https://github.com/leeoniya/uPlot), [React Flow](https://reactflow.dev/) + [ELK.js](https://github.com/kieler/elkjs), [@tanstack/react-virtual](https://tanstack.com/virtual)
 
-### Monitoring Stack
-- [Prometheus](https://prometheus.io/) for metrics storage and PromQL queries
-- [cAdvisor](https://github.com/google/cadvisor) (global service) for container resource metrics
-- [Node Exporter](https://github.com/prometheus/node_exporter) (global service) for host-level metrics
-
-## Design Decisions
-
-| Decision | Choice | Rationale |
-|---|---|---|
-| Architecture | Single Go binary | Deployment simplicity, single artifact |
-| State source | Docker API direct | Authoritative, real-time, all resource types |
-| Metrics | Prometheus | Industry standard, PromQL time-series queries |
-| Frontend delivery | Embedded via `embed.FS` | Single binary deployment |
-| Real-time | SSE (not WebSockets) | Simpler, one-directional, native auto-reconnect |
-| Authentication | External | Run behind a reverse proxy with OIDC/mTLS/Tailscale |
-| Scope | Read-only | Focused on observability; no accidental destructive actions |
+**Monitoring
+**: [Prometheus](https://prometheus.io/), [cAdvisor](https://github.com/google/cadvisor), [Node Exporter](https://github.com/prometheus/node_exporter)
 
 ## Security
 
 - **Read-only**: no write operations against the Docker API
-- **Secrets safe**: Docker secret values are never exposed, metadata only
-- **Prometheus proxy restricted**: only `/query` and `/query_range` paths allowed, 10MB response limit, 30s timeout
+- **Secrets safe**: secret values are never exposed in API responses
+- **Prometheus proxy restricted**: only `/query` and `/query_range` paths, 10MB limit, 30s timeout
 - **Security headers**: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`
-- **SSE limits**: max 256 concurrent clients, 503 when exceeded
-- **Auth-unaware**: designed to run behind a reverse proxy for authentication
-
-## Requirements
-
-- Docker Swarm Mode cluster
-- Prometheus with cAdvisor and Node Exporter (included in the Compose stack)
-- Deployment on a manager node (needs Docker socket access)
-- Go 1.26+ and Node.js 22+ (for building from source)
+- **Connection limits**: max 256 SSE clients, max 128 concurrent log streams
+- **No auth built in**: run behind a reverse proxy for authentication
 
 ## License
 
-This project is licensed under the [GNU General Public License v3.0](LICENSE).
+[GNU General Public License v3.0](LICENSE)

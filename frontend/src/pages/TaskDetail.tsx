@@ -31,24 +31,24 @@ export default function TaskDetail() {
   if (error) return <FetchError message="Failed to load task" />;
   if (!task) return <LoadingDetail />;
 
-  const shortId = task.ID.slice(0, 7);
   const serviceName = task.ServiceName || task.ServiceID.slice(0, 12);
   const nodeLabel = task.NodeHostname || task.NodeID.slice(0, 12);
+  const taskLabel = task.Slot ? `${serviceName} Replica #${task.Slot}` : `Task ${task.ID.slice(0, 12)}`;
   const exitCode = task.Status.ContainerStatus?.ExitCode;
   const containerId = task.Status.ContainerStatus?.ContainerID;
 
   return (
     <div>
       <PageHeader
-        title={`Task ${task.ID}`}
+        title={taskLabel}
         breadcrumbs={[
           { label: "Services", to: "/services" },
           { label: serviceName, to: `/services/${task.ServiceID}` },
-          { label: task.Slot ? `Replica #${task.Slot} (${shortId})` : shortId },
+          { label: task.Slot ? `Replica #${task.Slot}` : task.ID.slice(0, 12) },
         ]}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">
             State

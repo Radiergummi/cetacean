@@ -104,7 +104,7 @@ func TestHandleClusterMetrics_WithPrometheus(t *testing.T) {
 		switch {
 		case strings.Contains(query, "cpu_seconds"):
 			val = "0.62"
-		case strings.Contains(query, "memory_usage"):
+		case strings.Contains(query, "MemTotal"):
 			val = "47400000000"
 		case strings.Contains(query, "filesystem_size"):
 			val = "500000000000"
@@ -144,6 +144,12 @@ func TestHandleClusterMetrics_WithPrometheus(t *testing.T) {
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp.CPU.Percent == 0 {
 		t.Error("expected non-zero CPU percent")
+	}
+	if resp.Memory.Percent == 0 {
+		t.Error("expected non-zero Memory percent")
+	}
+	if resp.Disk.Percent == 0 {
+		t.Error("expected non-zero Disk percent")
 	}
 }
 

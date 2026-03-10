@@ -53,12 +53,12 @@ export default function VolumeDetail() {
         breadcrumbs={[{ label: "Volumes", to: "/volumes" }, { label: volume.Name }]}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <InfoCard label="Driver" value={volume.Driver} />
         <InfoCard label="Scope" value={volume.Scope} />
-        <InfoCard label="Mountpoint" value={volume.Mountpoint} />
         <ResourceLink label="Stack" name={stack} to={`/stacks/${stack}`} />
         <Timestamp label="Created" date={volume.CreatedAt} />
+        <InfoCard className="col-span-2" label="Mountpoint" value={volume.Mountpoint} />
       </div>
 
       {options.length > 0 && (

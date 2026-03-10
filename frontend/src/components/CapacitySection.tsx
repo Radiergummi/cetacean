@@ -67,6 +67,20 @@ export default function CapacitySection({ snapshot }: { snapshot: ClusterSnapsho
     return () => { cancelled = true; clearInterval(interval); };
   }, [snapshot.prometheusConfigured]);
 
+  if (snapshot.prometheusConfigured && !metrics) {
+    return (
+      <div className="space-y-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="rounded-lg border bg-card p-4">
+            <div className="h-3 w-16 bg-muted rounded mb-2" />
+            <div className="h-2 rounded-full bg-muted" />
+            <div className="h-3 w-24 bg-muted rounded mt-1.5" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   if (snapshot.prometheusConfigured && metrics) {
     return (
       <div className="space-y-3">

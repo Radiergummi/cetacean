@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import type { ServiceRef } from "../api/types";
 import { Badge } from "./ui/badge";
+import ResourceName from "./ResourceName";
 
 interface Props {
   services: ServiceRef[];
@@ -18,7 +19,7 @@ export default function ServiceRefList({ services, label, emptyMessage }: Props)
         <div className="flex flex-wrap gap-2">
           {services.map((svc) => (
             <Badge key={svc.id} variant="outline" render={<Link to={`/services/${svc.id}`} />}>
-              {svc.name || svc.id.slice(0, 12)}
+              <ResourceName name={svc.name || svc.id.slice(0, 12)} />
             </Badge>
           ))}
         </div>

@@ -17,6 +17,7 @@ import ActivityFeed from "../components/ActivityFeed";
 import { statusColor } from "../lib/statusColor";
 import { formatBytes } from "../lib/formatBytes";
 import TimeAgo from "../components/TimeAgo";
+import ResourceName from "../components/ResourceName";
 
 export default function NodeDetail() {
   const { id } = useParams<{ id: string }>();
@@ -37,9 +38,11 @@ export default function NodeDetail() {
 
   useEffect(fetchData, [fetchData]);
 
+  const taskIds = useMemo(() => new Set(tasks.map((t) => t.ID)), [tasks]);
+
   useSSE(["node", "task"], (e) => {
     if (e.type === "node" && e.id === id) fetchData();
-    if (e.type === "task") fetchData();
+    if (e.type === "task" && (taskIds.has(e.id) || (e.resource as Record<string, unknown>)?.NodeID === id)) fetchData();
   });
 
   const filteredTasks = useMemo(() => {
@@ -70,7 +73,7 @@ export default function NodeDetail() {
           </ErrorBoundary>
         </div>
       )}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <InfoCard label="Role" value={node.Spec.Role} />
         <InfoCard label="Status" value={node.Status.State} />
         <InfoCard label="Availability" value={node.Spec.Availability} />
@@ -87,7 +90,7 @@ export default function NodeDetail() {
         <InfoCard label="Memory" value={formatBytes(node.Description.Resources.MemoryBytes)} />
       </div>
       {node.ManagerStatus && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <InfoCard label="Manager" value={node.ManagerStatus.Leader ? "Leader" : "Reachable"} />
           <InfoCard label="Manager Address" value={node.ManagerStatus.Addr} />
         </div>
@@ -105,7 +108,7 @@ export default function NodeDetail() {
             <table className="w-full">
               <thead className="sticky top-0 z-10 bg-background">
                 <tr className="border-b bg-muted/50">
-                  <th className="text-left p-3 text-sm font-medium">ID</th>
+                  <th className="text-left p-3 text-sm font-medium">Task</th>
                   <th className="text-left p-3 text-sm font-medium">Service</th>
                   <th className="text-left p-3 text-sm font-medium">State</th>
                   <th className="text-left p-3 text-sm font-medium">Desired</th>
@@ -120,11 +123,11 @@ export default function NodeDetail() {
                     task.Status.Err || (exitCode && exitCode !== 0 ? `exit ${exitCode}` : "");
                   return (
                     <tr key={task.ID} className="border-b last:border-b-0">
-                      <td className="p-3 text-sm font-mono text-xs">
+                      <td className="p-3 text-sm">
                         <span className="inline-flex items-center gap-2">
                           <span className={`shrink-0 w-2 h-2 rounded-full ${statusColor(task.Status.State)}`} />
                           <Link to={`/tasks/${task.ID}`} className="text-link hover:underline">
-                            {task.ID.slice(0, 12)}
+                            {task.Slot ? `Replica #${task.Slot}` : task.ID.slice(0, 12)}
                           </Link>
                         </span>
                       </td>
@@ -133,7 +136,7 @@ export default function NodeDetail() {
                           to={`/services/${task.ServiceID}`}
                           className="text-link hover:underline"
                         >
-                          {task.ServiceName || task.ServiceID.slice(0, 12)}
+                          <ResourceName name={task.ServiceName || task.ServiceID.slice(0, 12)} />
                         </Link>
                       </td>
                       <td className="p-3 text-sm">

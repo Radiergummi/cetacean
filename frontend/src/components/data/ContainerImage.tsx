@@ -2,7 +2,8 @@ import InfoCard from "../InfoCard";
 import { imageRegistryUrl } from "../../lib/imageUrl";
 
 function registryFavicon(image: string): string | null {
-    const segments = image.split("/");
+    const namePart = image.split("@")[0].split(":")[0];
+    const segments = namePart.split("/");
     const first = segments[0];
 
     if (!first.includes(".") && !first.includes(":")) {
@@ -36,13 +37,13 @@ export default function ContainerImage({
     const href = imageRegistryUrl(image);
     const favicon = registryFavicon(image);
 
-    const content = (
-        <span className="inline-flex items-center gap-1.5">
+    const inner = (
+        <>
             {favicon && (
-                <img src={favicon} alt="" className="h-4 w-4" />
+                <img src={favicon} alt="" className="h-4 w-4 shrink-0" />
             )}
-            <span className="font-mono">{display}</span>
-        </span>
+            {display}
+        </>
     );
 
     const value = href ? (
@@ -50,12 +51,14 @@ export default function ContainerImage({
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-link hover:underline"
+            className="inline-flex items-center gap-1.5 text-link hover:underline"
         >
-            {content}
+            {inner}
         </a>
     ) : (
-        content
+        <span className="inline-flex items-center gap-1.5">
+            {inner}
+        </span>
     );
 
     return <InfoCard label={label} value={value} />;

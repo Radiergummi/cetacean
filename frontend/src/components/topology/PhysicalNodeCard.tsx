@@ -1,5 +1,6 @@
 import type { NodeProps } from "@xyflow/react";
 import { useNavigate } from "react-router-dom";
+import ResourceName from "../ResourceName";
 
 type ServiceSummary = {
   serviceId: string;
@@ -62,7 +63,7 @@ export default function PhysicalNodeCard({ data }: NodeProps & { data: PhysicalN
               onClick={() => navigate(`/services/${svc.serviceId}`)}
             >
               <div className="font-medium text-xs truncate mb-0.5" title={svc.serviceName}>
-                {svc.serviceName}
+                <ResourceName name={svc.serviceName} />
               </div>
               <div className="text-[11px] text-muted-foreground truncate mb-1" title={svc.image}>
                 {svc.image}

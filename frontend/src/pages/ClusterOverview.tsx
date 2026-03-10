@@ -21,23 +21,25 @@ export default function ClusterOverview() {
         if (prev) prevRef.current = prev;
         return s;
       });
-    });
+    }).catch(() => {});
+  }, []);
+
+  const fetchHistory = useCallback(() => {
+    api.history({ limit: 25 }).then(setHistory).catch(() => {});
   }, []);
 
   useEffect(() => {
     fetchSnapshot();
-    api
-      .history({ limit: 25 })
-      .then(setHistory)
-      .catch(() => {})
-      .finally(() => setHistoryLoading(false));
-  }, [fetchSnapshot]);
+    fetchHistory();
+    setHistoryLoading(false);
+  }, [fetchSnapshot, fetchHistory]);
 
   useSSE(
     ["node", "service", "task", "stack"],
     useCallback(() => {
       fetchSnapshot();
-    }, [fetchSnapshot]),
+      fetchHistory();
+    }, [fetchSnapshot, fetchHistory]),
   );
 
   if (!snapshot) {
@@ -73,11 +75,7 @@ export default function ClusterOverview() {
           label="Nodes"
           primary={`${snapshot.nodesReady}/${snapshot.nodeCount} ready`}
           secondary={
-            snapshot.nodesDown > 0
-              ? `${snapshot.nodesDown} down`
-              : snapshot.nodesDraining > 0
-                ? `${snapshot.nodesDraining} draining`
-                : "all ready"
+            [snapshot.nodesDown > 0 && `${snapshot.nodesDown} down`, snapshot.nodesDraining > 0 && `${snapshot.nodesDraining} draining`].filter(Boolean).join(", ") || "all ready"
           }
           status={
             snapshot.nodesDown > 0

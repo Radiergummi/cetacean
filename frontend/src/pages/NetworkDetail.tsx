@@ -124,7 +124,7 @@ export default function NetworkDetail() {
         breadcrumbs={[{ label: "Networks", to: "/networks" }, { label: network.Name }]}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <ResourceId label="ID" id={network.Id} />
         <InfoCard label="Driver" value={network.Driver} />
         <InfoCard label="Scope" value={network.Scope} />

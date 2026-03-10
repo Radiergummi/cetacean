@@ -13,6 +13,7 @@ import TaskStatusBadge from "../components/TaskStatusBadge";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
 import { SkeletonTable } from "../components/LoadingSkeleton";
+import ResourceName from "../components/ResourceName";
 
 export default function TaskList() {
   const navigate = useNavigate();
@@ -40,7 +41,7 @@ export default function TaskList() {
           className="text-link hover:underline font-medium"
           onClick={(e) => e.stopPropagation()}
         >
-          {t.ServiceName || t.ServiceID.slice(0, 12)}
+          <ResourceName name={t.ServiceName || t.ServiceID.slice(0, 12)} />
         </Link>
       ),
     },

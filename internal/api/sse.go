@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -45,11 +46,12 @@ func NewBroadcaster(batchInterval time.Duration) *Broadcaster {
 }
 
 // Broadcast enqueues an event for delivery to SSE clients.
-// Blocks if the internal buffer (256) is full.
+// Non-blocking: drops the event if the internal buffer is full.
 func (b *Broadcaster) Broadcast(e cache.Event) {
 	select {
 	case b.inbox <- e:
-	case <-b.stop:
+	default:
+		slog.Warn("SSE broadcast buffer full, dropping event", "type", e.Type, "id", e.ID)
 	}
 }
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Copy,
   Download,
@@ -39,6 +40,9 @@ interface TimeRange {
 }
 
 const LIMIT_OPTIONS = [100, 500, 1000, 5000] as const;
+const MAX_LIVE_LINES = 10_000;
+const LOG_ROW_HEIGHT_ESTIMATE = 20;
+const LOG_VIRTUAL_THRESHOLD = 200;
 
 const PRESETS: { label: string; getValue: () => TimeRange }[] = [
   { label: "All", getValue: () => ({ label: "All" }) },
@@ -94,10 +98,53 @@ const LEVEL_BAR: Record<Level, string> = {
   default: "bg-transparent",
 };
 
+function classifyLevel(value: string): Level | null {
+  const v = value.toUpperCase();
+  if (v === "ERROR" || v === "ERRO" || v === "FATAL" || v === "PANIC" || v === "CRIT" || v === "CRITICAL") return "error";
+  if (v === "WARN" || v === "WARNING") return "warn";
+  if (v === "DEBUG" || v === "DEBG" || v === "TRACE") return "debug";
+  if (v === "INFO") return "info";
+  return null;
+}
+
+const LEVEL_KEYS = ["level", "severity", "lvl", "loglevel", "log_level", "LEVEL"];
+
+function detectLevelFromJSON(msg: string): Level | null {
+  try {
+    const obj = JSON.parse(msg);
+    if (typeof obj !== "object" || obj === null) return null;
+    for (const key of LEVEL_KEYS) {
+      const val = obj[key];
+      if (typeof val === "string") {
+        const level = classifyLevel(val);
+        if (level) return level;
+      }
+    }
+    // Also check numeric slog-style levels (slog: DEBUG=-4, INFO=0, WARN=4, ERROR=8)
+    const numVal = obj.level ?? obj.severity;
+    if (typeof numVal === "number") {
+      if (numVal >= 8) return "error";
+      if (numVal >= 4) return "warn";
+      if (numVal < 0) return "debug";
+      return "info";
+    }
+  } catch {
+    // not JSON
+  }
+  return null;
+}
+
 function detectLevel(msg: string): Level {
-  const prefix = msg.slice(0, 120).toUpperCase();
-  if (/\b(ERROR|ERRO|FATAL|PANIC|CRIT)\b/.test(prefix)) return "error";
-  if (/\b(WARN|WARNING)\b/.test(prefix)) return "warn";
+  // Try structured JSON first
+  if (msg.length > 0 && msg[0] === "{") {
+    const level = detectLevelFromJSON(msg);
+    if (level) return level;
+  }
+
+  // Fall back to regex on prefix
+  const prefix = msg.slice(0, 200).toUpperCase();
+  if (/\b(ERROR|ERRO|FATAL|PANIC|CRIT(ICAL)?)\b/.test(prefix)) return "error";
+  if (/\b(WARN(ING)?)\b/.test(prefix)) return "warn";
   if (/\b(DEBUG|DEBG|TRACE)\b/.test(prefix)) return "debug";
   if (/\bINFO\b/.test(prefix)) return "info";
   return "default";
@@ -153,7 +200,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [useRegex, setUseRegex] = useState(false);
   const [streamFilter, setStreamFilter] = useState<"all" | "stdout" | "stderr">("all");
-  const [wrapLines, setWrapLines] = useState(true);
+  const [wrapLines, setWrapLines] = useState(false);
   const [following, setFollowing] = useState(true);
   const [live, setLive] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>({ label: "All" });
@@ -207,7 +254,10 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
     es.onmessage = (event) => {
       try {
         const parsed: ApiLogLine = JSON.parse(event.data);
-        setLines((current) => [...current, toLogLine(parsed, current.length)]);
+        setLines((current) => {
+          const next = [...current, toLogLine(parsed, current.length)];
+          return next.length > MAX_LIVE_LINES ? next.slice(-MAX_LIVE_LINES) : next;
+        });
       } catch {
         // skip malformed events
       }
@@ -487,45 +537,15 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
         </div>
       ) : (
         <div className="relative">
-          <div
-            ref={containerRef}
-            onScroll={handleScroll}
-            className="log-panel overflow-auto"
-          >
-            <table className="w-full border-collapse font-mono text-xs leading-5">
-              <tbody>
-                {filtered.map((line) => (
-                  <tr key={line.index} className="hover:bg-muted/50 group">
-                    <td className="w-[3px] p-0 align-stretch">
-                      <div className={`w-[3px] min-h-full ${LEVEL_BAR[line.level]}`} />
-                    </td>
-                    <td className="pl-2 pr-1 py-px text-muted-foreground/50 text-right select-none align-top tabular-nums">
-                      {line.index + 1}
-                    </td>
-                    <td
-                      className="px-2 py-px text-muted-foreground whitespace-nowrap align-top select-all"
-                      title={line.timestamp}
-                    >
-                      {formatTime(line.timestamp)}
-                    </td>
-                    {showAttrs && (
-                      <td
-                        className="px-2 py-px text-muted-foreground/60 whitespace-nowrap align-top font-mono"
-                        title={line.attrs?.taskId}
-                      >
-                        {line.attrs?.taskId?.slice(0, 8)}
-                      </td>
-                    )}
-                    <td
-                      className={`px-2 py-px text-foreground ${wrapLines ? "whitespace-pre-wrap break-all" : "whitespace-pre"}`}
-                    >
-                      <LogMessage line={line} search={search} caseSensitive={caseSensitive} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <LogTable
+            containerRef={containerRef}
+            handleScroll={handleScroll}
+            filtered={filtered}
+            showAttrs={showAttrs}
+            wrapLines={wrapLines}
+            search={search}
+            caseSensitive={caseSensitive}
+          />
 
           {!following && (
             <button
@@ -753,25 +773,217 @@ function ToolbarButton({
   );
 }
 
+interface LogTableProps {
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  handleScroll: () => void;
+  filtered: LogLine[];
+  showAttrs: boolean;
+  wrapLines: boolean;
+  search: string;
+  caseSensitive: boolean;
+}
+
+function LogRow({
+  line,
+  showAttrs,
+  wrapLines,
+  search,
+  caseSensitive,
+  isExpanded,
+  onToggle,
+  measureRef,
+  dataIndex,
+}: {
+  line: LogLine;
+  showAttrs: boolean;
+  wrapLines: boolean;
+  search: string;
+  caseSensitive: boolean;
+  isExpanded: boolean;
+  onToggle: ((index: number) => void) | undefined;
+  measureRef?: (el: HTMLElement | null) => void;
+  dataIndex?: number;
+}) {
+  const jsonLine = isJSON(line.message);
+  const prettyPrint = jsonLine && (wrapLines || isExpanded);
+  return (
+    <tr
+      key={line.index}
+      ref={measureRef}
+      data-index={dataIndex}
+      className={`hover:bg-muted/50 group ${jsonLine ? "cursor-pointer" : ""}`}
+      onClick={onToggle && jsonLine ? () => onToggle(line.index) : undefined}
+    >
+      <td className="w-[3px] p-0 align-stretch">
+        <div className={`w-[3px] min-h-full ${LEVEL_BAR[line.level]}`} />
+      </td>
+      <td className="pl-2 pr-1 py-px text-muted-foreground/50 text-right select-none align-top tabular-nums">
+        {line.index + 1}
+      </td>
+      <td
+        className="px-2 py-px text-muted-foreground whitespace-nowrap align-top select-all"
+        title={line.timestamp}
+      >
+        {formatTime(line.timestamp)}
+      </td>
+      {showAttrs && (
+        <td
+          className="px-2 py-px text-muted-foreground/60 whitespace-nowrap align-top font-mono"
+          title={line.attrs?.taskId}
+        >
+          {line.attrs?.taskId?.slice(0, 8)}
+        </td>
+      )}
+      <td
+        className={`px-2 py-px text-foreground ${wrapLines || isExpanded ? "whitespace-pre-wrap break-all" : "whitespace-pre"}`}
+      >
+        <LogMessage line={line} search={search} caseSensitive={caseSensitive} prettyJson={prettyPrint} />
+      </td>
+    </tr>
+  );
+}
+
+function LogTable({ containerRef, handleScroll, filtered, showAttrs, wrapLines, search, caseSensitive }: LogTableProps) {
+  const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
+  const useVirtual = filtered.length > LOG_VIRTUAL_THRESHOLD;
+
+  const toggleExpanded = useCallback((index: number) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }, []);
+
+  return (
+    <div
+      ref={containerRef}
+      onScroll={handleScroll}
+      className="log-panel overflow-auto"
+    >
+      <table className="w-full border-collapse font-mono text-xs leading-5">
+        {useVirtual ? (
+          <VirtualLogBody
+            containerRef={containerRef}
+            filtered={filtered}
+            showAttrs={showAttrs}
+            wrapLines={wrapLines}
+            search={search}
+            caseSensitive={caseSensitive}
+            expanded={expanded}
+            toggleExpanded={toggleExpanded}
+          />
+        ) : (
+          <tbody>
+            {filtered.map((line) => (
+              <LogRow
+                key={line.index}
+                line={line}
+                showAttrs={showAttrs}
+                wrapLines={wrapLines}
+                search={search}
+                caseSensitive={caseSensitive}
+                isExpanded={expanded.has(line.index)}
+                onToggle={toggleExpanded}
+              />
+            ))}
+          </tbody>
+        )}
+      </table>
+    </div>
+  );
+}
+
+function VirtualLogBody({
+  containerRef,
+  filtered,
+  showAttrs,
+  wrapLines,
+  search,
+  caseSensitive,
+  expanded,
+  toggleExpanded,
+}: {
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  filtered: LogLine[];
+  showAttrs: boolean;
+  wrapLines: boolean;
+  search: string;
+  caseSensitive: boolean;
+  expanded: Set<number>;
+  toggleExpanded: (index: number) => void;
+}) {
+  const virtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => containerRef.current,
+    estimateSize: () => LOG_ROW_HEIGHT_ESTIMATE,
+    overscan: 50,
+  });
+
+  const virtualItems = virtualizer.getVirtualItems();
+  const totalSize = virtualizer.getTotalSize();
+  const colCount = showAttrs ? 5 : 4;
+
+  return (
+    <tbody>
+      {virtualItems.length > 0 && (
+        <tr>
+          <td style={{ height: virtualItems[0].start, padding: 0 }} colSpan={colCount} />
+        </tr>
+      )}
+      {virtualItems.map((virtualRow) => {
+        const line = filtered[virtualRow.index];
+        return (
+          <LogRow
+            key={line.index}
+            line={line}
+            showAttrs={showAttrs}
+            wrapLines={wrapLines}
+            search={search}
+            caseSensitive={caseSensitive}
+            isExpanded={expanded.has(line.index)}
+            onToggle={toggleExpanded}
+            measureRef={virtualizer.measureElement}
+            dataIndex={virtualRow.index}
+          />
+        );
+      })}
+      {virtualItems.length > 0 && (
+        <tr>
+          <td
+            style={{ height: Math.max(0, totalSize - virtualItems[virtualItems.length - 1].end), padding: 0 }}
+            colSpan={colCount}
+          />
+        </tr>
+      )}
+    </tbody>
+  );
+}
+
 function LogMessage({
   line,
   search,
   caseSensitive,
+  prettyJson,
 }: {
   line: LogLine;
   search: string;
   caseSensitive: boolean;
+  prettyJson: boolean;
 }) {
   const msg = line.message;
 
   // If searching, highlight matches
   if (search) {
-    return <HighlightedText text={msg} search={search} caseSensitive={caseSensitive} />;
+    const text = prettyJson && isJSON(msg) ? prettyJSON(msg) : msg;
+    return <HighlightedText text={text} search={search} caseSensitive={caseSensitive} />;
   }
 
-  // Auto-format JSON
+  // Auto-format JSON when pretty-printing is enabled
   if (isJSON(msg)) {
-    return <span className="text-emerald-700 dark:text-emerald-300">{prettyJSON(msg)}</span>;
+    const text = prettyJson ? prettyJSON(msg) : msg;
+    return <span className="text-emerald-700 dark:text-emerald-300">{text}</span>;
   }
 
   // Color error-level lines

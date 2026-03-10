@@ -20,6 +20,7 @@ import {formatBytes} from "../lib/formatBytes";
 import {statusColor} from "../lib/statusColor";
 import {ContainerImage, ResourceLink, Timestamp} from "../components/data";
 import FetchError from "../components/FetchError";
+import ResourceName from "../components/ResourceName";
 
 export default function ServiceDetail() {
     const {id} = useParams<{ id: string }>();
@@ -39,9 +40,11 @@ export default function ServiceDetail() {
 
     useEffect(fetchData, [fetchData]);
 
+    const taskIds = useMemo(() => new Set(tasks.map((t) => t.ID)), [tasks]);
+
     useSSE(["service", "task"], (e) => {
         if (e.type === "service" && e.id === id) fetchData();
-        if (e.type === "task") fetchData();
+        if (e.type === "task" && (taskIds.has(e.id) || (e.resource as Record<string, unknown>)?.ServiceID === id)) fetchData();
     });
 
     const filteredTasks = useMemo(() => {
@@ -68,8 +71,8 @@ export default function ServiceDetail() {
     return (
         <div className="flex flex-col gap-6">
             <PageHeader
-                title={name}
-                breadcrumbs={[{label: "Services", to: "/services"}, {label: name}]}
+                title={<ResourceName name={name} />}
+                breadcrumbs={[{label: "Services", to: "/services"}, {label: <ResourceName name={name} />}]}
             />
 
             {/* Overview cards */}
@@ -108,8 +111,7 @@ export default function ServiceDetail() {
                         <table className="w-full">
                             <thead className="sticky top-0 z-10 bg-background">
                             <tr className="border-b bg-muted/50">
-                                <th className="text-left p-3 text-sm font-medium">ID</th>
-                                <th className="text-left p-3 text-sm font-medium">Slot</th>
+                                <th className="text-left p-3 text-sm font-medium">Task</th>
                                 <th className="text-left p-3 text-sm font-medium">State</th>
                                 <th className="text-left p-3 text-sm font-medium">Node</th>
                                 <th className="text-left p-3 text-sm font-medium">Desired</th>
@@ -127,15 +129,14 @@ export default function ServiceDetail() {
                                     );
                                 return (
                                     <tr key={task.ID} className="border-b last:border-b-0">
-                                        <td className="p-3 font-mono text-xs">
+                                        <td className="p-3 text-sm">
                                             <span className="inline-flex items-center gap-2">
                                                 <span className={`shrink-0 w-2 h-2 rounded-full ${statusColor(task.Status.State)}`}/>
                                                 <Link to={`/tasks/${task.ID}`} className="text-link hover:underline">
-                                                    {task.ID.slice(0, 12)}
+                                                    {task.Slot ? `Replica #${task.Slot}` : task.ID.slice(0, 12)}
                                                 </Link>
                                             </span>
                                         </td>
-                                        <td className="p-3 text-sm">{task.Slot}</td>
                                         <td className="p-3 text-sm">
                                             <TaskStatusBadge state={task.Status.State}/>
                                         </td>

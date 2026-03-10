@@ -78,7 +78,7 @@ export default function VolumeList() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {volumes.map((vol) => (
-            <ResourceCard key={vol.Name} title={vol.Name} to={`/volumes/${vol.Name}`} meta={[vol.Driver, vol.Scope]} />
+            <ResourceCard key={vol.Name} title={<ResourceName name={vol.Name} />} to={`/volumes/${vol.Name}`} meta={[vol.Driver, vol.Scope]} />
           ))}
         </div>
       )}

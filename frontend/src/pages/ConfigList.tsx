@@ -79,7 +79,7 @@ export default function ConfigList() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {configs.map((cfg) => (
-            <ResourceCard key={cfg.ID} title={cfg.Spec.Name || cfg.ID} to={`/configs/${cfg.ID}`}>
+            <ResourceCard key={cfg.ID} title={<ResourceName name={cfg.Spec.Name || cfg.ID} />} to={`/configs/${cfg.ID}`}>
               <div className="space-y-1 text-xs text-muted-foreground">
                 <div>Created: {cfg.CreatedAt ? <TimeAgo date={cfg.CreatedAt} /> : "\u2014"}</div>
                 <div>Updated: {cfg.UpdatedAt ? <TimeAgo date={cfg.UpdatedAt} /> : "\u2014"}</div>

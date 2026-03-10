@@ -24,9 +24,11 @@ import type {
 
 const BASE = "/api";
 
+const headers = { Accept: "application/json" };
+
 async function fetchJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
   const url = `${BASE}${path}`;
-  const res = signal ? await fetch(url, { signal }) : await fetch(url);
+  const res = await fetch(url, { headers, signal });
   if (!res.ok) {
     let message = `${res.status} ${res.statusText}`;
     try {

@@ -8,6 +8,7 @@ import FetchError from "../components/FetchError";
 import ActivityFeed from "../components/ActivityFeed";
 import { useSSE } from "../hooks/useSSE";
 import { ResourceId, ResourceLink, Timestamp } from "../components/data";
+import CodeBlock from "../components/CodeBlock";
 
 export default function ConfigDetail() {
   const { id } = useParams<{ id: string }>();
@@ -61,7 +62,7 @@ export default function ConfigDetail() {
         breadcrumbs={[{ label: "Configs", to: "/configs" }, { label: name }]}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <ResourceId label="ID" id={config.ID} />
         <ResourceLink label="Stack" name={stack} to={`/stacks/${stack}`} />
         <Timestamp label="Created" date={config.CreatedAt} />
@@ -99,9 +100,7 @@ export default function ConfigDetail() {
           <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
             Data
           </h2>
-          <pre className="rounded-lg border bg-muted/30 p-4 text-sm font-mono overflow-x-auto whitespace-pre-wrap break-all">
-            {decoded}
-          </pre>
+          <CodeBlock code={decoded} />
         </div>
       )}
 

@@ -78,7 +78,7 @@ export default function NetworkList() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {networks.map((net) => (
-            <ResourceCard key={net.Id} title={net.Name} to={`/networks/${net.Id}`} meta={[net.Driver, net.Scope]} />
+            <ResourceCard key={net.Id} title={<ResourceName name={net.Name} />} to={`/networks/${net.Id}`} meta={[net.Driver, net.Scope]} />
           ))}
         </div>
       )}

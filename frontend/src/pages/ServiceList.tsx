@@ -121,7 +121,7 @@ export default function ServiceList() {
             return (
               <ResourceCard
                 key={svc.ID}
-                title={svc.Spec.Name}
+                title={<ResourceName name={svc.Spec.Name} />}
                 to={`/services/${svc.ID}`}
                 subtitle={svc.Spec.TaskTemplate.ContainerSpec.Image.split("@")[0]}
                 meta={

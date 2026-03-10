@@ -56,7 +56,7 @@ export default function SecretDetail() {
         Metadata only. Secret values are never exposed.
       </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <ResourceId label="ID" id={secret.ID} />
         <ResourceLink label="Stack" name={stack} to={`/stacks/${stack}`} />
         <Timestamp label="Created" date={secret.CreatedAt} />

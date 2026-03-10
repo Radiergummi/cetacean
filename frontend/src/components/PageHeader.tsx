@@ -1,13 +1,14 @@
+import type React from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 
 interface Crumb {
-  label: string;
+  label: React.ReactNode;
   to?: string;
 }
 
 interface Props {
-  title: string;
+  title: React.ReactNode;
   subtitle?: string;
   breadcrumbs?: Crumb[];
 }
