@@ -16,6 +16,7 @@ export interface LogTableProps {
   scrollToFiltered?: number;
   loadingOlder?: boolean;
   hasOlderLogs?: boolean;
+  onTaskFilter?: (taskId: string | null) => void;
 }
 
 function LogRow({
@@ -27,6 +28,7 @@ function LogRow({
   isExpanded,
   onToggle,
   highlight,
+  onTaskFilter,
   measureRef,
   dataIndex,
 }: {
@@ -38,6 +40,7 @@ function LogRow({
   isExpanded: boolean;
   onToggle: ((index: number) => void) | undefined;
   highlight?: boolean;
+  onTaskFilter?: (taskId: string) => void;
   measureRef?: (el: HTMLElement | null) => void;
   dataIndex?: number;
 }) {
@@ -65,10 +68,20 @@ function LogRow({
       </td>
       {showAttrs && (
         <td
-          className="px-2 py-px text-muted-foreground/60 whitespace-nowrap align-top font-mono"
-          title={line.attrs?.taskId}
+          className="px-2 py-px whitespace-nowrap align-top font-mono"
+          title={line.attrs?.taskId ? `Filter by task ${line.attrs.taskId.slice(0, 12)}` : undefined}
         >
-          {line.attrs?.taskId?.slice(0, 8)}
+          {line.attrs?.taskId && onTaskFilter ? (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onTaskFilter(line.attrs!.taskId!); }}
+              className="text-muted-foreground/60 hover:text-primary hover:underline cursor-pointer"
+            >
+              {line.attrs.taskId.slice(0, 8)}
+            </button>
+          ) : (
+            <span className="text-muted-foreground/60">{line.attrs?.taskId?.slice(0, 8)}</span>
+          )}
         </td>
       )}
       <td
@@ -80,7 +93,7 @@ function LogRow({
   );
 }
 
-export function LogTable({ containerRef, handleScroll, filtered, showAttrs, wrapLines, search, caseSensitive, highlightIndex, scrollToFiltered, loadingOlder, hasOlderLogs }: LogTableProps) {
+export function LogTable({ containerRef, handleScroll, filtered, showAttrs, wrapLines, search, caseSensitive, highlightIndex, scrollToFiltered, loadingOlder, hasOlderLogs, onTaskFilter }: LogTableProps) {
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
   const useVirtual = filtered.length > LOG_VIRTUAL_THRESHOLD;
 
@@ -112,6 +125,7 @@ export function LogTable({ containerRef, handleScroll, filtered, showAttrs, wrap
             toggleExpanded={toggleExpanded}
             highlightIndex={highlightIndex}
             scrollToFiltered={scrollToFiltered}
+            onTaskFilter={onTaskFilter}
           />
         ) : (
           <tbody>
@@ -136,6 +150,7 @@ export function LogTable({ containerRef, handleScroll, filtered, showAttrs, wrap
                 isExpanded={expanded.has(line.index)}
                 onToggle={toggleExpanded}
                 highlight={line.index === highlightIndex}
+                onTaskFilter={onTaskFilter ?? undefined}
               />
             ))}
           </tbody>
@@ -156,6 +171,7 @@ function VirtualLogBody({
   toggleExpanded,
   highlightIndex,
   scrollToFiltered,
+  onTaskFilter,
 }: {
   containerRef: React.RefObject<HTMLDivElement | null>;
   filtered: LogLine[];
@@ -167,6 +183,7 @@ function VirtualLogBody({
   toggleExpanded: (index: number) => void;
   highlightIndex?: number;
   scrollToFiltered?: number;
+  onTaskFilter?: (taskId: string | null) => void;
 }) {
   const virtualizer = useVirtualizer({
     count: filtered.length,
@@ -205,6 +222,7 @@ function VirtualLogBody({
             isExpanded={expanded.has(line.index)}
             onToggle={toggleExpanded}
             highlight={line.index === highlightIndex}
+            onTaskFilter={onTaskFilter ?? undefined}
             measureRef={virtualizer.measureElement}
             dataIndex={virtualRow.index}
           />

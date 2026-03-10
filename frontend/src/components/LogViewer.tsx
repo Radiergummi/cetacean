@@ -47,6 +47,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
   const [useRegex, setUseRegex] = useState(false);
   const [streamFilter, setStreamFilter] = useState<"all" | "stdout" | "stderr">("all");
   const [levelFilter, setLevelFilter] = useState<Level | "all">("all");
+  const [taskFilter, setTaskFilter] = useState<string | null>(null);
   const [wrapLines, setWrapLines] = useState(false);
   const [following, setFollowing] = useState(true);
   const [live, setLive] = useState(false);
@@ -258,6 +259,9 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
     if (levelFilter !== "all") {
       result = result.filter((l) => l.level === levelFilter);
     }
+    if (taskFilter) {
+      result = result.filter((l) => l.attrs?.taskId === taskFilter);
+    }
     if (search) {
       if (useRegex) {
         try {
@@ -278,7 +282,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
       }
     }
     return result;
-  }, [lines, search, caseSensitive, useRegex, streamFilter, levelFilter]);
+  }, [lines, search, caseSensitive, useRegex, streamFilter, levelFilter, taskFilter]);
 
   useEffect(() => {
     setMatchIndex(0);
@@ -468,6 +472,17 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
           icon={<X className="w-3.5 h-3.5" />}
         />
 
+        {taskFilter && (
+          <button
+            onClick={() => setTaskFilter(null)}
+            className="flex items-center gap-1 px-2 py-1 text-xs rounded-md bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20"
+            title="Clear task filter"
+          >
+            <span className="font-mono">{taskFilter.slice(0, 8)}</span>
+            <X className="w-3 h-3" />
+          </button>
+        )}
+
         {live && (
           <span className="flex items-center gap-1.5 text-xs text-green-500">
             <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
@@ -525,6 +540,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
             scrollToFiltered={search && filtered.length > 0 ? matchIndex : undefined}
             loadingOlder={loadingOlder}
             hasOlderLogs={hasOlderLogs}
+            onTaskFilter={setTaskFilter}
           />
 
           {!following && (
