@@ -3,6 +3,7 @@ import {useState} from "react";
 import {BrowserRouter, Link, Route, Routes, useLocation} from "react-router-dom";
 import ConnectionStatus from "./components/ConnectionStatus";
 import ErrorBoundary from "./components/ErrorBoundary";
+import GlobalSearch from "./components/GlobalSearch";
 import ThemeToggle from "./components/ThemeToggle";
 import {SSEProvider} from "./hooks/SSEContext";
 import ClusterOverview from "./pages/ClusterOverview";
@@ -40,6 +41,7 @@ function Layout({children}: { children: React.ReactNode }) {
                             <ConnectionStatus/>
                         </div>
                         <div className="flex items-center gap-1">
+                            <GlobalSearch/>
                             <div className="hidden md:flex items-center gap-1">
                                 <NavLinks/>
                             </div>
