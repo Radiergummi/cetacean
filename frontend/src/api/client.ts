@@ -61,9 +61,20 @@ export interface ClusterSnapshot {
   tasksByState: Record<string, number>;
   nodesReady: number;
   nodesDown: number;
+  nodesDraining: number;
+  servicesConverged: number;
+  servicesDegraded: number;
+  reservedCPU: number;
+  reservedMemory: number;
   totalCPU: number;
   totalMemory: number;
   prometheusConfigured: boolean;
+}
+
+export interface ClusterMetrics {
+  cpu: { used: number; total: number; percent: number };
+  memory: { used: number; total: number; percent: number };
+  disk: { used: number; total: number; percent: number };
 }
 
 export interface ListParams {
@@ -87,6 +98,7 @@ function buildListURL(path: string, params?: ListParams): string {
 
 export const api = {
   cluster: () => fetchJSON<ClusterSnapshot>("/cluster"),
+  clusterMetrics: () => fetchJSON<ClusterMetrics>("/cluster/metrics"),
   nodes: (params?: ListParams) => fetchJSON<PagedResponse<Node>>(buildListURL("/nodes", params)),
   node: (id: string) => fetchJSON<Node>(`/nodes/${id}`),
   services: (params?: ListParams) =>
