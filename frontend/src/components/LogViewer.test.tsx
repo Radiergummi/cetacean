@@ -324,6 +324,48 @@ describe("LogViewer", () => {
     expect(screen.getByText(/batch-0/)).toBeInTheDocument();
   });
 
+  it("loads older logs when scrolling to top", async () => {
+    // Generate exactly 100 lines so hasOlderLogs is true (100 >= limit after switching to 100)
+    const initialLines = Array.from({ length: 100 }, (_, i) => ({
+      message: `line ${i}`,
+      timestamp: `2024-01-01T00:0${Math.floor(i / 60)}:${String(i % 60).padStart(2, "0")}Z`,
+    }));
+    mockServiceLogs
+      .mockResolvedValueOnce(logResponse([{ message: "placeholder" }])) // initial fetch with limit=500
+      .mockResolvedValueOnce(logResponse(initialLines)) // re-fetch after limit change to 100
+      .mockResolvedValueOnce(
+        logResponse([
+          { message: "older line", timestamp: "2024-01-01T00:00:01Z" },
+        ]),
+      );
+
+    renderWithRouter(<LogViewer serviceId="svc1" />);
+
+    // Wait for initial fetch, then change limit to 100
+    await waitFor(() => expect(screen.getByText("placeholder")).toBeInTheDocument());
+    fireEvent.change(screen.getByDisplayValue("500 lines"), { target: { value: "100" } });
+
+    await waitFor(() => expect(screen.getByText("line 0")).toBeInTheDocument());
+
+    // Simulate scroll to top
+    const container = document.querySelector(".log-panel")!;
+    Object.defineProperty(container, "scrollTop", { value: 0, writable: true, configurable: true });
+    Object.defineProperty(container, "scrollHeight", { value: 5000, writable: true, configurable: true });
+    Object.defineProperty(container, "clientHeight", { value: 400, writable: true, configurable: true });
+    fireEvent.scroll(container);
+
+    await waitFor(() => {
+      expect(mockServiceLogs).toHaveBeenCalledWith(
+        "svc1",
+        expect.objectContaining({ before: initialLines[0].timestamp }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("older line")).toBeInTheDocument();
+    });
+  });
+
   it("reads time range from URL on mount", async () => {
     mockServiceLogs.mockResolvedValue(logResponse([{ message: "line" }]));
     renderWithRouter(<LogViewer serviceId="svc1" />, ["/?logRange=5m"]);

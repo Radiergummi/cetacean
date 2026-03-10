@@ -35,6 +35,10 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
   const [lines, setLines] = useState<LogLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasOlderLogs, setHasOlderLogs] = useState(true);
+  const oldestRef = useRef<string | undefined>(undefined);
+  const newestRef = useRef<string | undefined>(undefined);
   const [limit, setLimit] = useState<number>(500);
   const [search, setSearch] = useState("");
   const [caseSensitive, setCaseSensitive] = useState(false);
@@ -96,6 +100,9 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
     abortRef.current?.abort();
     setLoading(true);
     setError(null);
+    setHasOlderLogs(true);
+    oldestRef.current = undefined;
+    newestRef.current = undefined;
     const controller = new AbortController();
     abortRef.current = controller;
     let timedOut = false;
@@ -104,7 +111,11 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
     const req = isTask ? api.taskLogs(logId, opts) : api.serviceLogs(logId, opts);
     req
       .then((resp) => {
-        setLines((resp.lines ?? []).map(toLogLine));
+        const newLines = (resp.lines ?? []).map(toLogLine);
+        setLines(newLines);
+        oldestRef.current = resp.oldest;
+        newestRef.current = resp.newest;
+        setHasOlderLogs(newLines.length >= limit);
         setLoading(false);
       })
       .catch((err) => {
@@ -178,12 +189,42 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
     }
   }, [lines, following]);
 
+  const loadOlder = useCallback(() => {
+    if (loadingOlder || !hasOlderLogs || !oldestRef.current) return;
+    setLoadingOlder(true);
+    const opts = { limit, before: oldestRef.current, stream: streamParam };
+    const req = isTask ? api.taskLogs(logId, opts) : api.serviceLogs(logId, opts);
+    req.then((resp) => {
+      const older = (resp.lines ?? []).map(toLogLine);
+      if (older.length === 0) {
+        setHasOlderLogs(false);
+      } else {
+        oldestRef.current = resp.oldest;
+        const scrollEl = containerRef.current;
+        const prevScrollHeight = scrollEl?.scrollHeight ?? 0;
+        setLines((current) => {
+          const combined = [...older, ...current];
+          return combined.map((l, i) => ({ ...l, index: i }));
+        });
+        requestAnimationFrame(() => {
+          if (scrollEl) {
+            scrollEl.scrollTop += scrollEl.scrollHeight - prevScrollHeight;
+          }
+        });
+      }
+      setLoadingOlder(false);
+    }).catch(() => setLoadingOlder(false));
+  }, [loadingOlder, hasOlderLogs, limit, streamParam, isTask, logId]);
+
   const handleScroll = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
     setFollowing(atBottom);
-  }, []);
+    if (el.scrollTop < 100) {
+      loadOlder();
+    }
+  }, [loadOlder]);
 
   const showAttrs = !isTask && lines.some((l) => l.attrs?.taskId);
 
@@ -460,6 +501,8 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
             caseSensitive={caseSensitive}
             highlightIndex={search && filtered.length > 0 ? filtered[matchIndex]?.index : undefined}
             scrollToFiltered={search && filtered.length > 0 ? matchIndex : undefined}
+            loadingOlder={loadingOlder}
+            hasOlderLogs={hasOlderLogs}
           />
 
           {!following && (

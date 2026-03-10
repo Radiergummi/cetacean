@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { LogLine } from "./log-utils";
 import { LEVEL_BAR, formatTime, isJSON, LOG_ROW_HEIGHT_ESTIMATE, LOG_VIRTUAL_THRESHOLD } from "./log-utils";
@@ -12,6 +12,10 @@ export interface LogTableProps {
   wrapLines: boolean;
   search: string;
   caseSensitive: boolean;
+  highlightIndex?: number;
+  scrollToFiltered?: number;
+  loadingOlder?: boolean;
+  hasOlderLogs?: boolean;
 }
 
 function LogRow({
@@ -22,6 +26,7 @@ function LogRow({
   caseSensitive,
   isExpanded,
   onToggle,
+  highlight,
   measureRef,
   dataIndex,
 }: {
@@ -32,6 +37,7 @@ function LogRow({
   caseSensitive: boolean;
   isExpanded: boolean;
   onToggle: ((index: number) => void) | undefined;
+  highlight?: boolean;
   measureRef?: (el: HTMLElement | null) => void;
   dataIndex?: number;
 }) {
@@ -42,7 +48,7 @@ function LogRow({
       key={line.index}
       ref={measureRef}
       data-index={dataIndex}
-      className={`hover:bg-muted/50 group ${jsonLine ? "cursor-pointer" : ""}`}
+      className={`hover:bg-muted/50 group ${jsonLine ? "cursor-pointer" : ""} ${highlight ? "bg-yellow-500/10" : ""}`}
       onClick={onToggle && jsonLine ? () => onToggle(line.index) : undefined}
     >
       <td className="w-[3px] p-0 align-stretch">
@@ -74,7 +80,7 @@ function LogRow({
   );
 }
 
-export function LogTable({ containerRef, handleScroll, filtered, showAttrs, wrapLines, search, caseSensitive }: LogTableProps) {
+export function LogTable({ containerRef, handleScroll, filtered, showAttrs, wrapLines, search, caseSensitive, highlightIndex, scrollToFiltered, loadingOlder, hasOlderLogs }: LogTableProps) {
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
   const useVirtual = filtered.length > LOG_VIRTUAL_THRESHOLD;
 
@@ -104,9 +110,21 @@ export function LogTable({ containerRef, handleScroll, filtered, showAttrs, wrap
             caseSensitive={caseSensitive}
             expanded={expanded}
             toggleExpanded={toggleExpanded}
+            highlightIndex={highlightIndex}
+            scrollToFiltered={scrollToFiltered}
           />
         ) : (
           <tbody>
+            {loadingOlder && (
+              <tr><td colSpan={showAttrs ? 5 : 4} className="text-center py-2 text-xs text-muted-foreground">
+                Loading older logs...
+              </td></tr>
+            )}
+            {!loadingOlder && hasOlderLogs === false && (
+              <tr><td colSpan={showAttrs ? 5 : 4} className="text-center py-2 text-xs text-muted-foreground">
+                Beginning of logs
+              </td></tr>
+            )}
             {filtered.map((line) => (
               <LogRow
                 key={line.index}
@@ -117,6 +135,7 @@ export function LogTable({ containerRef, handleScroll, filtered, showAttrs, wrap
                 caseSensitive={caseSensitive}
                 isExpanded={expanded.has(line.index)}
                 onToggle={toggleExpanded}
+                highlight={line.index === highlightIndex}
               />
             ))}
           </tbody>
@@ -135,6 +154,8 @@ function VirtualLogBody({
   caseSensitive,
   expanded,
   toggleExpanded,
+  highlightIndex,
+  scrollToFiltered,
 }: {
   containerRef: React.RefObject<HTMLDivElement | null>;
   filtered: LogLine[];
@@ -144,6 +165,8 @@ function VirtualLogBody({
   caseSensitive: boolean;
   expanded: Set<number>;
   toggleExpanded: (index: number) => void;
+  highlightIndex?: number;
+  scrollToFiltered?: number;
 }) {
   const virtualizer = useVirtualizer({
     count: filtered.length,
@@ -151,6 +174,12 @@ function VirtualLogBody({
     estimateSize: () => LOG_ROW_HEIGHT_ESTIMATE,
     overscan: 50,
   });
+
+  useEffect(() => {
+    if (scrollToFiltered !== undefined) {
+      virtualizer.scrollToIndex(scrollToFiltered, { align: "center" });
+    }
+  }, [scrollToFiltered, virtualizer]);
 
   const virtualItems = virtualizer.getVirtualItems();
   const totalSize = virtualizer.getTotalSize();
@@ -175,6 +204,7 @@ function VirtualLogBody({
             caseSensitive={caseSensitive}
             isExpanded={expanded.has(line.index)}
             onToggle={toggleExpanded}
+            highlight={line.index === highlightIndex}
             measureRef={virtualizer.measureElement}
             dataIndex={virtualRow.index}
           />
