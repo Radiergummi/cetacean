@@ -31,6 +31,6 @@ FROM alpine:3.21
 RUN apk add --no-cache ca-certificates
 COPY --from=backend /app/cetacean /usr/local/bin/cetacean
 EXPOSE 9000
-HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
-  CMD wget -qO- http://localhost:9000/api/health || exit 1
+HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
+  CMD wget -qO- http://localhost:9000/api/ready || exit 1
 ENTRYPOINT ["cetacean"]
