@@ -174,7 +174,7 @@ func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, fmt.Sprintf("node %q not found", id))
 		return
 	}
-	writeJSON(w, h.cache.ListTasksByNode(id))
+	writeJSON(w, h.enrichTasks(h.cache.ListTasksByNode(id)))
 }
 
 // --- Services ---
@@ -231,7 +231,7 @@ func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, fmt.Sprintf("service %q not found", id))
 		return
 	}
-	writeJSON(w, h.cache.ListTasksByService(id))
+	writeJSON(w, h.enrichTasks(h.cache.ListTasksByService(id)))
 }
 
 func (h *Handlers) HandleServiceLogs(w http.ResponseWriter, r *http.Request) {
@@ -248,6 +248,31 @@ func (h *Handlers) HandleServiceLogs(w http.ResponseWriter, r *http.Request) {
 
 // --- Tasks ---
 
+type EnrichedTask struct {
+	swarm.Task
+	ServiceName  string `json:"ServiceName,omitempty"`
+	NodeHostname string `json:"NodeHostname,omitempty"`
+}
+
+func (h *Handlers) enrichTask(t swarm.Task) EnrichedTask {
+	et := EnrichedTask{Task: t}
+	if svc, ok := h.cache.GetService(t.ServiceID); ok {
+		et.ServiceName = svc.Spec.Name
+	}
+	if node, ok := h.cache.GetNode(t.NodeID); ok {
+		et.NodeHostname = node.Description.Hostname
+	}
+	return et
+}
+
+func (h *Handlers) enrichTasks(tasks []swarm.Task) []EnrichedTask {
+	out := make([]EnrichedTask, len(tasks))
+	for i, t := range tasks {
+		out[i] = h.enrichTask(t)
+	}
+	return out
+}
+
 func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 	tasks := h.cache.ListTasks()
 	var ok bool
@@ -260,7 +285,8 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 		"service": func(t swarm.Task) string { return t.ServiceID },
 		"node":    func(t swarm.Task) string { return t.NodeID },
 	})
-	writeJSON(w, applyPagination(tasks, p))
+	paged := applyPagination(tasks, p)
+	writeJSON(w, PagedResponse[EnrichedTask]{Items: h.enrichTasks(paged.Items), Total: paged.Total})
 }
 
 func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
@@ -270,7 +296,7 @@ func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, fmt.Sprintf("task %q not found", id))
 		return
 	}
-	writeJSON(w, task)
+	writeJSON(w, h.enrichTask(task))
 }
 
 func (h *Handlers) HandleTaskLogs(w http.ResponseWriter, r *http.Request) {

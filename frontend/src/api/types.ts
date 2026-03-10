@@ -140,6 +140,8 @@ export interface Task {
   Version: { Index: number };
   ServiceID: string;
   NodeID: string;
+  ServiceName?: string;
+  NodeHostname?: string;
   Slot: number;
   Status: {
     Timestamp: string;

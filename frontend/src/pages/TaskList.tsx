@@ -5,8 +5,6 @@ import { useSortParams } from "../hooks/useSort";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { api } from "../api/client";
 import type { Task } from "../api/types";
-
-type TaskListItem = Task & { ServiceName?: string; NodeHostname?: string };
 import SearchInput from "../components/SearchInput";
 import PageHeader from "../components/PageHeader";
 import DataTable, { type Column } from "../components/DataTable";
@@ -31,9 +29,9 @@ export default function TaskList() {
       [debouncedSearch, sortKey, sortDir],
     ),
     "task",
-    (t: TaskListItem) => t.ID,
+    (t: Task) => t.ID,
   );
-  const columns: Column<TaskListItem>[] = [
+  const columns: Column<Task>[] = [
     {
       header: "Service",
       cell: (t) => (

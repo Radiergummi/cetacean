@@ -133,7 +133,7 @@ export default function NodeDetail() {
                           to={`/services/${task.ServiceID}`}
                           className="text-link hover:underline"
                         >
-                          {task.ServiceID.slice(0, 12)}
+                          {task.ServiceName || task.ServiceID.slice(0, 12)}
                         </Link>
                       </td>
                       <td className="p-3 text-sm">

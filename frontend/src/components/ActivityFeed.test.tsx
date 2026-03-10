@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import ActivityFeed from "./ActivityFeed";
 import type { HistoryEntry } from "../api/types";
 
@@ -25,7 +26,7 @@ describe("ActivityFeed", () => {
         name: "web-app",
       },
     ];
-    render(<ActivityFeed entries={entries} />);
+    render(<MemoryRouter><ActivityFeed entries={entries} /></MemoryRouter>);
     expect(screen.getByText("web-app")).toBeInTheDocument();
     expect(screen.getByText("updated")).toBeInTheDocument();
     expect(screen.getByText("service")).toBeInTheDocument();
