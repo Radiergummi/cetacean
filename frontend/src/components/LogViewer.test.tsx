@@ -366,6 +366,43 @@ describe("LogViewer", () => {
     });
   });
 
+  it("loads newer logs when scrolling to bottom in non-live mode", async () => {
+    mockServiceLogs
+      .mockResolvedValueOnce(
+        logResponse([
+          { message: "line 1", timestamp: "2024-01-01T00:00:01Z" },
+          { message: "line 2", timestamp: "2024-01-01T00:00:02Z" },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        logResponse([
+          { message: "newer line", timestamp: "2024-01-01T00:00:03Z" },
+        ]),
+      );
+
+    renderWithRouter(<LogViewer serviceId="svc1" />);
+
+    await waitFor(() => expect(screen.getByText("line 2")).toBeInTheDocument());
+
+    // Simulate scroll to bottom
+    const container = document.querySelector(".log-panel")!;
+    Object.defineProperty(container, "scrollTop", { value: 450, writable: true, configurable: true });
+    Object.defineProperty(container, "scrollHeight", { value: 500, writable: true, configurable: true });
+    Object.defineProperty(container, "clientHeight", { value: 400, writable: true, configurable: true });
+    fireEvent.scroll(container);
+
+    await waitFor(() => {
+      expect(mockServiceLogs).toHaveBeenCalledWith(
+        "svc1",
+        expect.objectContaining({ after: "2024-01-01T00:00:02Z" }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("newer line")).toBeInTheDocument();
+    });
+  });
+
   it("reads time range from URL on mount", async () => {
     mockServiceLogs.mockResolvedValue(logResponse([{ message: "line" }]));
     renderWithRouter(<LogViewer serviceId="svc1" />, ["/?logRange=5m"]);

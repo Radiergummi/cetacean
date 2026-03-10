@@ -37,6 +37,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlderLogs, setHasOlderLogs] = useState(true);
+  const [loadingNewer, setLoadingNewer] = useState(false);
   const oldestRef = useRef<string | undefined>(undefined);
   const newestRef = useRef<string | undefined>(undefined);
   const [limit, setLimit] = useState<number>(500);
@@ -216,6 +217,24 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
     }).catch(() => setLoadingOlder(false));
   }, [loadingOlder, hasOlderLogs, limit, streamParam, isTask, logId]);
 
+  const loadNewer = useCallback(() => {
+    if (loadingNewer || !newestRef.current) return;
+    setLoadingNewer(true);
+    const opts = { limit, after: newestRef.current, stream: streamParam };
+    const req = isTask ? api.taskLogs(logId, opts) : api.serviceLogs(logId, opts);
+    req.then((resp) => {
+      const newer = (resp.lines ?? []).map(toLogLine);
+      if (newer.length > 0) {
+        newestRef.current = resp.newest;
+        setLines((current) => {
+          const combined = [...current, ...newer];
+          return combined.map((l, i) => ({ ...l, index: i }));
+        });
+      }
+      setLoadingNewer(false);
+    }).catch(() => setLoadingNewer(false));
+  }, [loadingNewer, limit, streamParam, isTask, logId]);
+
   const handleScroll = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -224,7 +243,10 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
     if (el.scrollTop < 100) {
       loadOlder();
     }
-  }, [loadOlder]);
+    if (atBottom && !live) {
+      loadNewer();
+    }
+  }, [loadOlder, loadNewer, live]);
 
   const showAttrs = !isTask && lines.some((l) => l.attrs?.taskId);
 
