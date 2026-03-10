@@ -1015,3 +1015,49 @@ func TestCache_ServicesUsingVolume(t *testing.T) {
 		t.Errorf("expected 0 refs for nonexistent volume, got %d", len(refs))
 	}
 }
+
+func ptr[T any](v T) *T { return &v }
+
+func TestSnapshot_ConvergenceAndReservations(t *testing.T) {
+	c := New(nil)
+	c.SetNode(swarm.Node{
+		ID: "n1", Status: swarm.NodeStatus{State: swarm.NodeStateReady},
+		Spec: swarm.NodeSpec{Availability: swarm.NodeAvailabilityDrain},
+		Description: swarm.NodeDescription{Resources: swarm.Resources{NanoCPUs: 4_000_000_000, MemoryBytes: 8_589_934_592}},
+	})
+	c.SetNode(swarm.Node{
+		ID: "n2", Status: swarm.NodeStatus{State: swarm.NodeStateReady},
+		Spec: swarm.NodeSpec{Availability: swarm.NodeAvailabilityActive},
+		Description: swarm.NodeDescription{Resources: swarm.Resources{NanoCPUs: 4_000_000_000, MemoryBytes: 8_589_934_592}},
+	})
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "web"},
+			Mode: swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: ptr(uint64(2))}},
+			TaskTemplate: swarm.TaskSpec{
+				Resources: &swarm.ResourceRequirements{
+					Reservations: &swarm.Resources{NanoCPUs: 500_000_000, MemoryBytes: 256 * 1024 * 1024},
+				},
+			},
+		},
+	})
+	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
+	c.SetTask(swarm.Task{ID: "t2", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
+	c.SetService(swarm.Service{
+		ID: "svc2",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "api"},
+			Mode: swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: ptr(uint64(3))}},
+		},
+	})
+	c.SetTask(swarm.Task{ID: "t3", ServiceID: "svc2", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
+	c.SetTask(swarm.Task{ID: "t4", ServiceID: "svc2", Status: swarm.TaskStatus{State: swarm.TaskStateFailed}})
+
+	snap := c.Snapshot()
+	if snap.ServicesConverged != 1 { t.Errorf("ServicesConverged=%d, want 1", snap.ServicesConverged) }
+	if snap.ServicesDegraded != 1 { t.Errorf("ServicesDegraded=%d, want 1", snap.ServicesDegraded) }
+	if snap.NodesDraining != 1 { t.Errorf("NodesDraining=%d, want 1", snap.NodesDraining) }
+	if snap.ReservedCPU != 1_000_000_000 { t.Errorf("ReservedCPU=%d, want 1000000000", snap.ReservedCPU) }
+	if snap.ReservedMemory != 512*1024*1024 { t.Errorf("ReservedMemory=%d, want %d", snap.ReservedMemory, 512*1024*1024) }
+}

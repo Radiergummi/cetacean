@@ -51,16 +51,21 @@ type StackSummary struct {
 }
 
 type ClusterSnapshot struct {
-	NodeCount    int            `json:"nodeCount"`
-	ServiceCount int            `json:"serviceCount"`
-	TaskCount    int            `json:"taskCount"`
-	StackCount   int            `json:"stackCount"`
-	TasksByState map[string]int `json:"tasksByState"`
-	NodesReady   int            `json:"nodesReady"`
-	NodesDown    int            `json:"nodesDown"`
-	TotalCPU     int            `json:"totalCPU"`
-	TotalMemory  int64          `json:"totalMemory"`
-	LastSync     time.Time      `json:"lastSync"`
+	NodeCount         int            `json:"nodeCount"`
+	ServiceCount      int            `json:"serviceCount"`
+	TaskCount         int            `json:"taskCount"`
+	StackCount        int            `json:"stackCount"`
+	TasksByState      map[string]int `json:"tasksByState"`
+	NodesReady        int            `json:"nodesReady"`
+	NodesDown         int            `json:"nodesDown"`
+	NodesDraining     int            `json:"nodesDraining"`
+	TotalCPU          int            `json:"totalCPU"`
+	TotalMemory       int64          `json:"totalMemory"`
+	ServicesConverged int            `json:"servicesConverged"`
+	ServicesDegraded  int            `json:"servicesDegraded"`
+	ReservedCPU       int64          `json:"reservedCPU"`
+	ReservedMemory    int64          `json:"reservedMemory"`
+	LastSync          time.Time      `json:"lastSync"`
 }
 
 type OnChangeFunc func(Event)
@@ -680,7 +685,7 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 		tasksByState[string(t.Status.State)]++
 	}
 
-	var nodesReady, nodesDown int
+	var nodesReady, nodesDown, nodesDraining int
 	var totalNanoCPUs int64
 	var totalMemory int64
 	for _, n := range c.nodes {
@@ -690,21 +695,57 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 		case swarm.NodeStateDown:
 			nodesDown++
 		}
+		if n.Spec.Availability == swarm.NodeAvailabilityDrain {
+			nodesDraining++
+		}
 		totalNanoCPUs += n.Description.Resources.NanoCPUs
 		totalMemory += n.Description.Resources.MemoryBytes
 	}
 
+	// Count running tasks per service
+	runningByService := make(map[string]int, len(c.services))
+	for _, t := range c.tasks {
+		if t.Status.State == swarm.TaskStateRunning {
+			runningByService[t.ServiceID]++
+		}
+	}
+
+	var servicesConverged, servicesDegraded int
+	var reservedCPU, reservedMemory int64
+	for _, svc := range c.services {
+		if svc.Spec.Mode.Global != nil {
+			servicesConverged++
+		} else if svc.Spec.Mode.Replicated != nil && svc.Spec.Mode.Replicated.Replicas != nil {
+			desired := int(*svc.Spec.Mode.Replicated.Replicas)
+			running := runningByService[svc.ID]
+			if running >= desired {
+				servicesConverged++
+			} else {
+				servicesDegraded++
+			}
+			if res := svc.Spec.TaskTemplate.Resources; res != nil && res.Reservations != nil {
+				reservedCPU += res.Reservations.NanoCPUs * int64(desired)
+				reservedMemory += res.Reservations.MemoryBytes * int64(desired)
+			}
+		}
+	}
+
 	return ClusterSnapshot{
-		NodeCount:    len(c.nodes),
-		ServiceCount: len(c.services),
-		TaskCount:    len(c.tasks),
-		StackCount:   len(c.stacks),
-		TasksByState: tasksByState,
-		NodesReady:   nodesReady,
-		NodesDown:    nodesDown,
-		TotalCPU:     int(totalNanoCPUs / 1e9),
-		TotalMemory:  totalMemory,
-		LastSync:     c.lastSync,
+		NodeCount:         len(c.nodes),
+		ServiceCount:      len(c.services),
+		TaskCount:         len(c.tasks),
+		StackCount:        len(c.stacks),
+		TasksByState:      tasksByState,
+		NodesReady:        nodesReady,
+		NodesDown:         nodesDown,
+		NodesDraining:     nodesDraining,
+		TotalCPU:          int(totalNanoCPUs / 1e9),
+		TotalMemory:       totalMemory,
+		ServicesConverged: servicesConverged,
+		ServicesDegraded:  servicesDegraded,
+		ReservedCPU:       reservedCPU,
+		ReservedMemory:    reservedMemory,
+		LastSync:          c.lastSync,
 	}
 }
 
