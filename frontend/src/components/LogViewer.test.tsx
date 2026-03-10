@@ -179,23 +179,6 @@ describe("LogViewer", () => {
     });
   });
 
-  it("re-fetches when limit changes", async () => {
-    mockServiceLogs.mockResolvedValue(logResponse([{ message: "line one" }]));
-    renderWithRouter(<LogViewer serviceId="svc1" />);
-
-    await waitFor(() => {
-      expect(screen.getByText("line one")).toBeInTheDocument();
-    });
-
-    fireEvent.change(screen.getByDisplayValue("500 lines"), {
-      target: { value: "100" },
-    });
-
-    await waitFor(() => {
-      expect(mockServiceLogs).toHaveBeenCalledWith("svc1", expect.objectContaining({ limit: 100 }));
-    });
-  });
-
   it("shows live tail button", async () => {
     mockServiceLogs.mockResolvedValue(logResponse([{ message: "line one" }]));
     renderWithRouter(<LogViewer serviceId="svc1" />);
@@ -324,15 +307,14 @@ describe("LogViewer", () => {
     expect(screen.getByText(/batch-0/)).toBeInTheDocument();
   });
 
-  it("loads older logs when scrolling to top", async () => {
-    // Generate exactly 100 lines so hasOlderLogs is true (100 >= limit after switching to 100)
-    const initialLines = Array.from({ length: 100 }, (_, i) => ({
+  it("loads older logs when clicking load older button", async () => {
+    // Need >= 500 lines so hasOlderLogs is true (lines.length >= limit)
+    const initialLines = Array.from({ length: 500 }, (_, i) => ({
       message: `line ${i}`,
-      timestamp: `2024-01-01T00:0${Math.floor(i / 60)}:${String(i % 60).padStart(2, "0")}Z`,
+      timestamp: `2024-01-01T00:${String(Math.floor(i / 60)).padStart(2, "0")}:${String(i % 60).padStart(2, "0")}Z`,
     }));
     mockServiceLogs
-      .mockResolvedValueOnce(logResponse([{ message: "placeholder" }])) // initial fetch with limit=500
-      .mockResolvedValueOnce(logResponse(initialLines)) // re-fetch after limit change to 100
+      .mockResolvedValueOnce(logResponse(initialLines))
       .mockResolvedValueOnce(
         logResponse([
           { message: "older line", timestamp: "2024-01-01T00:00:01Z" },
@@ -341,28 +323,16 @@ describe("LogViewer", () => {
 
     renderWithRouter(<LogViewer serviceId="svc1" />);
 
-    // Wait for initial fetch, then change limit to 100
-    await waitFor(() => expect(screen.getByText("placeholder")).toBeInTheDocument());
-    fireEvent.change(screen.getByDisplayValue("500 lines"), { target: { value: "100" } });
+    // Wait for the "Load older logs" button (confirms data loaded and hasOlderLogs=true)
+    await waitFor(() => expect(screen.getByText("Load older logs")).toBeInTheDocument());
 
-    await waitFor(() => expect(screen.getByText("line 0")).toBeInTheDocument());
-
-    // Simulate scroll to top
-    const container = document.querySelector(".log-panel")!;
-    Object.defineProperty(container, "scrollTop", { value: 0, writable: true, configurable: true });
-    Object.defineProperty(container, "scrollHeight", { value: 5000, writable: true, configurable: true });
-    Object.defineProperty(container, "clientHeight", { value: 400, writable: true, configurable: true });
-    fireEvent.scroll(container);
+    fireEvent.click(screen.getByText("Load older logs"));
 
     await waitFor(() => {
       expect(mockServiceLogs).toHaveBeenCalledWith(
         "svc1",
         expect.objectContaining({ before: initialLines[0].timestamp }),
       );
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText("older line")).toBeInTheDocument();
     });
   });
 

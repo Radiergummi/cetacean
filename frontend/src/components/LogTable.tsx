@@ -16,6 +16,7 @@ export interface LogTableProps {
   scrollToFiltered?: number;
   loadingOlder?: boolean;
   hasOlderLogs?: boolean;
+  onLoadOlder?: () => void;
   onTaskFilter?: (taskId: string | null) => void;
 }
 
@@ -93,7 +94,7 @@ function LogRow({
   );
 }
 
-export function LogTable({ containerRef, handleScroll, filtered, showAttrs, wrapLines, search, caseSensitive, highlightIndex, scrollToFiltered, loadingOlder, hasOlderLogs, onTaskFilter }: LogTableProps) {
+export function LogTable({ containerRef, handleScroll, filtered, showAttrs, wrapLines, search, caseSensitive, highlightIndex, scrollToFiltered, loadingOlder, hasOlderLogs, onLoadOlder, onTaskFilter }: LogTableProps) {
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
   const useVirtual = filtered.length > LOG_VIRTUAL_THRESHOLD;
 
@@ -125,20 +126,14 @@ export function LogTable({ containerRef, handleScroll, filtered, showAttrs, wrap
             toggleExpanded={toggleExpanded}
             highlightIndex={highlightIndex}
             scrollToFiltered={scrollToFiltered}
+            loadingOlder={loadingOlder}
+            hasOlderLogs={hasOlderLogs}
+            onLoadOlder={onLoadOlder}
             onTaskFilter={onTaskFilter}
           />
         ) : (
           <tbody>
-            {loadingOlder && (
-              <tr><td colSpan={showAttrs ? 5 : 4} className="text-center py-2 text-xs text-muted-foreground">
-                Loading older logs...
-              </td></tr>
-            )}
-            {!loadingOlder && hasOlderLogs === false && (
-              <tr><td colSpan={showAttrs ? 5 : 4} className="text-center py-2 text-xs text-muted-foreground">
-                Beginning of logs
-              </td></tr>
-            )}
+            <LoadOlderRow colCount={showAttrs ? 5 : 4} loading={loadingOlder} hasMore={hasOlderLogs} onLoad={onLoadOlder} />
             {filtered.map((line) => (
               <LogRow
                 key={line.index}
@@ -171,6 +166,9 @@ function VirtualLogBody({
   toggleExpanded,
   highlightIndex,
   scrollToFiltered,
+  loadingOlder,
+  hasOlderLogs,
+  onLoadOlder,
   onTaskFilter,
 }: {
   containerRef: React.RefObject<HTMLDivElement | null>;
@@ -183,6 +181,9 @@ function VirtualLogBody({
   toggleExpanded: (index: number) => void;
   highlightIndex?: number;
   scrollToFiltered?: number;
+  loadingOlder?: boolean;
+  hasOlderLogs?: boolean;
+  onLoadOlder?: () => void;
   onTaskFilter?: (taskId: string | null) => void;
 }) {
   const virtualizer = useVirtualizer({
@@ -204,6 +205,7 @@ function VirtualLogBody({
 
   return (
     <tbody>
+      <LoadOlderRow colCount={colCount} loading={loadingOlder} hasMore={hasOlderLogs} onLoad={onLoadOlder} />
       {virtualItems.length > 0 && (
         <tr>
           <td style={{ height: virtualItems[0].start, padding: 0 }} colSpan={colCount} />
@@ -238,4 +240,35 @@ function VirtualLogBody({
       )}
     </tbody>
   );
+}
+
+function LoadOlderRow({ colCount, loading, hasMore, onLoad }: { colCount: number; loading?: boolean; hasMore?: boolean; onLoad?: () => void }) {
+  if (loading) {
+    return (
+      <tr><td colSpan={colCount} className="text-center py-2 text-xs text-muted-foreground">
+        Loading older logs...
+      </td></tr>
+    );
+  }
+  if (hasMore === false) {
+    return (
+      <tr><td colSpan={colCount} className="text-center py-2 text-xs text-muted-foreground">
+        Beginning of logs
+      </td></tr>
+    );
+  }
+  if (onLoad) {
+    return (
+      <tr><td colSpan={colCount} className="text-center py-1.5">
+        <button
+          type="button"
+          onClick={onLoad}
+          className="text-xs text-primary hover:underline cursor-pointer"
+        >
+          Load older logs
+        </button>
+      </td></tr>
+    );
+  }
+  return null;
 }

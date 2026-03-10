@@ -18,7 +18,7 @@ import {
 import { api } from "../api/client";
 import type { LogLine as ApiLogLine } from "../api/client";
 import type { LogLine, TimeRange, Level } from "./log-utils";
-import { LIMIT_OPTIONS, MAX_LIVE_LINES, RANGE_DURATIONS, LABEL_TO_RANGE_KEY, formatShortDate, toLogLine } from "./log-utils";
+import { MAX_LIVE_LINES, RANGE_DURATIONS, LABEL_TO_RANGE_KEY, formatShortDate, toLogLine } from "./log-utils";
 import { LogTable } from "./LogTable";
 import { TimeRangeSelector, StreamFilterToggle, LevelFilter, ToolbarButton } from "./LogToolbar";
 
@@ -40,7 +40,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
   const [loadingNewer, setLoadingNewer] = useState(false);
   const oldestRef = useRef<string | undefined>(undefined);
   const newestRef = useRef<string | undefined>(undefined);
-  const [limit, setLimit] = useState<number>(500);
+  const limit = 500;
   const [search, setSearch] = useState("");
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [matchIndex, setMatchIndex] = useState(0);
@@ -241,13 +241,10 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
     if (!el) return;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
     setFollowing(atBottom);
-    if (el.scrollTop < 100) {
-      loadOlder();
-    }
     if (atBottom && !live) {
       loadNewer();
     }
-  }, [loadOlder, loadNewer, live]);
+  }, [loadNewer, live]);
 
   const showAttrs = !isTask && lines.some((l) => l.attrs?.taskId);
 
@@ -354,18 +351,6 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-1.5 min-h-8">
         {toggle}
-        <select
-          value={limit}
-          onChange={(e) => setLimit(Number(e.target.value))}
-          className="h-8 px-2 text-xs border rounded-md bg-background"
-        >
-          {LIMIT_OPTIONS.map((n) => (
-            <option key={n} value={n}>
-              {n} lines
-            </option>
-          ))}
-        </select>
-
         <TimeRangeSelector
           value={timeRange}
           onChange={(tr) => {
@@ -540,6 +525,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
             scrollToFiltered={search && filtered.length > 0 ? matchIndex : undefined}
             loadingOlder={loadingOlder}
             hasOlderLogs={hasOlderLogs}
+            onLoadOlder={loadOlder}
             onTaskFilter={setTaskFilter}
           />
 
