@@ -95,27 +95,36 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
 
     const es = new EventSource(url);
     abortRef.current = { abort: () => es.close() } as AbortController;
+    const buffer: ApiLogLine[] = [];
+    let rafId = 0;
+
+    const flush = () => {
+      rafId = 0;
+      if (buffer.length === 0) return;
+      const batch = buffer.splice(0);
+      setLines((current) => {
+        const next = current.concat(batch.map((l, i) => toLogLine(l, current.length + i)));
+        return next.length > MAX_LIVE_LINES ? next.slice(-MAX_LIVE_LINES) : next;
+      });
+    };
 
     es.onmessage = (event) => {
       try {
-        const parsed: ApiLogLine = JSON.parse(event.data);
-        setLines((current) => {
-          const next = [...current, toLogLine(parsed, current.length)];
-          return next.length > MAX_LIVE_LINES ? next.slice(-MAX_LIVE_LINES) : next;
-        });
+        buffer.push(JSON.parse(event.data));
+        if (!rafId) rafId = requestAnimationFrame(flush);
       } catch {
         // skip malformed events
       }
     };
 
-    es.onerror = () => {
-      // EventSource auto-reconnects on transient errors
-    };
+    es.onerror = () => {};
 
     return () => {
       es.close();
+      cancelAnimationFrame(rafId);
       abortRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live, logId, isTask, streamParam]);
 
   // Auto-scroll to bottom when following (scroll within the container, not the page)

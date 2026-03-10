@@ -240,4 +240,32 @@ describe("LogViewer", () => {
     expect(screen.queryByText("Live")).not.toBeInTheDocument();
     expect(MockEventSource.instances[0].closed).toBe(true);
   });
+
+  it("batches rapid SSE messages into single render", async () => {
+    mockServiceLogs.mockResolvedValue(
+      logResponse([{ message: "initial", timestamp: "2024-01-01T00:00:00Z" }]),
+    );
+    mockServiceLogsStreamURL.mockReturnValue("/api/services/svc1/logs");
+    render(<LogViewer serviceId="svc1" />);
+
+    await waitFor(() => expect(screen.getByText(/initial/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTitle("Live tail"));
+    const es = MockEventSource.instances[0];
+
+    for (let i = 0; i < 5; i++) {
+      es.emit(
+        JSON.stringify({
+          timestamp: `2024-01-01T00:00:0${i + 1}Z`,
+          message: `batch-${i}`,
+          stream: "stdout",
+        }),
+      );
+    }
+
+    await waitFor(() => {
+      expect(screen.getByText(/batch-4/)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/batch-0/)).toBeInTheDocument();
+  });
 });
