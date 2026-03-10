@@ -2,18 +2,18 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { api, type ClusterSnapshot } from "../api/client";
-import type { HistoryEntry, NotificationRuleStatus } from "../api/types";
+import type { HistoryEntry } from "../api/types";
 import { useSSE } from "../hooks/useSSE";
 import PageHeader from "../components/PageHeader";
 import ActivityFeed from "../components/ActivityFeed";
-import NotificationRules from "../components/NotificationRules";
+import PrometheusBanner from "../components/PrometheusBanner";
+import CapacitySection from "../components/CapacitySection";
 
 export default function ClusterOverview() {
   const [snapshot, setSnapshot] = useState<ClusterSnapshot | null>(null);
   const prevRef = useRef<ClusterSnapshot | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
-  const [notifRules, setNotifRules] = useState<NotificationRuleStatus[]>([]);
 
   const fetchSnapshot = useCallback(() => {
     api.cluster().then((s) => {
@@ -27,14 +27,10 @@ export default function ClusterOverview() {
   useEffect(() => {
     fetchSnapshot();
     api
-      .history({ limit: 20 })
+      .history({ limit: 25 })
       .then(setHistory)
       .catch(() => {})
       .finally(() => setHistoryLoading(false));
-    api
-      .notificationRules()
-      .then(setNotifRules)
-      .catch(() => {});
   }, [fetchSnapshot]);
 
   useSSE(
@@ -49,7 +45,7 @@ export default function ClusterOverview() {
       <div>
         <PageHeader title="Cluster Overview" />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {Array.from({ length: 10 }).map((_, i) => (
+          {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="rounded-lg border bg-card p-6">
               <div className="h-4 w-20 bg-muted rounded mb-2" />
               <div className="h-8 w-12 bg-muted rounded" />
@@ -61,123 +57,151 @@ export default function ClusterOverview() {
   }
 
   const prev = prevRef.current;
-  const tasksRunning = snapshot.tasksByState?.["running"] || 0;
   const tasksFailed = snapshot.tasksByState?.["failed"] || 0;
-  const tasksOther = snapshot.taskCount - tasksRunning - tasksFailed;
-  const prevRunning = prev?.tasksByState?.["running"] || 0;
   const prevFailed = prev?.tasksByState?.["failed"] || 0;
-  const prevOther = prev ? prev.taskCount - prevRunning - prevFailed : 0;
+  const tasksRunning = snapshot.tasksByState?.["running"] || 0;
 
   return (
     <div>
       <PageHeader title="Cluster Overview" />
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard
-          label="Nodes Ready"
-          value={snapshot.nodesReady}
-          prev={prev?.nodesReady}
-          color="green"
+
+      <PrometheusBanner configured={snapshot.prometheusConfigured} />
+
+      {/* Health Row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <HealthCard
+          label="Nodes"
+          primary={`${snapshot.nodesReady}/${snapshot.nodeCount} ready`}
+          secondary={
+            snapshot.nodesDown > 0
+              ? `${snapshot.nodesDown} down`
+              : snapshot.nodesDraining > 0
+                ? `${snapshot.nodesDraining} draining`
+                : "all ready"
+          }
+          status={
+            snapshot.nodesDown > 0
+              ? "red"
+              : snapshot.nodesDraining > 0
+                ? "amber"
+                : "green"
+          }
           to="/nodes"
         />
-        <StatCard
-          label="Nodes Down"
-          value={snapshot.nodesDown}
-          prev={prev?.nodesDown}
-          color={snapshot.nodesDown > 0 ? "red" : undefined}
-          to="/nodes"
-        />
-        <StatCard
+        <HealthCard
           label="Services"
-          value={snapshot.serviceCount}
-          prev={prev?.serviceCount}
+          primary={`${snapshot.servicesConverged}/${snapshot.serviceCount} converged`}
+          secondary={
+            snapshot.servicesDegraded > 0
+              ? `${snapshot.servicesDegraded} degraded`
+              : "all healthy"
+          }
+          status={snapshot.servicesDegraded > 0 ? "amber" : "green"}
           to="/services"
         />
-        <StatCard label="Stacks" value={snapshot.stackCount} prev={prev?.stackCount} to="/stacks" />
-        <StatCard
-          label="Tasks Running"
-          value={tasksRunning}
-          prev={prev ? prevRunning : undefined}
-          color="green"
+        <HealthCard
+          label="Failed Tasks"
+          primary={String(tasksFailed)}
+          secondary={tasksFailed > 0 ? "needs attention" : "none"}
+          status={tasksFailed > 0 ? "red" : "neutral"}
+          delta={prev ? tasksFailed - prevFailed : undefined}
+          to="/tasks"
         />
-        <StatCard
-          label="Tasks Failed"
-          value={tasksFailed}
-          prev={prev ? prevFailed : undefined}
-          color={tasksFailed > 0 ? "red" : undefined}
-        />
-        <StatCard label="Tasks Other" value={tasksOther} prev={prev ? prevOther : undefined} />
-        <StatCard label="Tasks Total" value={snapshot.taskCount} prev={prev?.taskCount} />
-        <StatCard
-          label="Total CPU"
-          value={snapshot.totalCPU ?? 0}
-          formatted={(snapshot.totalCPU ?? 0) + " cores"}
-        />
-        <StatCard
-          label="Total Memory"
-          value={snapshot.totalMemory ?? 0}
-          formatted={((snapshot.totalMemory ?? 0) / 1024 ** 3).toFixed(1) + " GB"}
+        <HealthCard
+          label="Tasks"
+          primary={`${tasksRunning} running`}
+          secondary={`${snapshot.taskCount} total · ${snapshot.stackCount} stacks`}
+          status="neutral"
+          to="/tasks"
         />
       </div>
 
-      <div className="mt-6">
-        <h2 className="text-lg font-semibold mb-3">Recent Activity</h2>
-        <ActivityFeed entries={history} loading={historyLoading} />
-      </div>
-
-      {notifRules.length > 0 && (
-        <div className="mt-6">
-          <h2 className="text-lg font-semibold mb-3">Notification Rules</h2>
-          <NotificationRules rules={notifRules} />
+      {/* Two-column: Capacity + Activity */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+            Capacity
+          </h2>
+          <CapacitySection snapshot={snapshot} />
         </div>
-      )}
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+            Recent Activity
+          </h2>
+          <div className="max-h-80 overflow-y-auto rounded-lg border bg-card p-4">
+            <ActivityFeed entries={history} loading={historyLoading} />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-function StatCard({
+function HealthCard({
   label,
-  value,
-  prev,
-  color,
+  primary,
+  secondary,
+  status,
+  delta,
   to,
-  formatted,
 }: {
   label: string;
-  value: number;
-  prev?: number;
-  color?: string;
-  to?: string;
-  formatted?: string;
+  primary: string;
+  secondary: string;
+  status: "green" | "amber" | "red" | "neutral";
+  delta?: number;
+  to: string;
 }) {
   const navigate = useNavigate();
-  const valueColor = color === "green" ? "text-green-600" : color === "red" ? "text-red-600" : "";
-  const bgTint =
-    color === "red" && value > 0
-      ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900"
-      : "bg-card";
-  const delta = prev != null ? value - prev : 0;
+
+  const borderColor = {
+    green: "border-green-500/30",
+    amber: "border-amber-500/30",
+    red: "border-red-500/30",
+    neutral: "",
+  }[status];
+
+  const bgTint = {
+    green: "bg-green-500/5",
+    amber: "bg-amber-500/5",
+    red: "bg-red-500/5",
+    neutral: "bg-card",
+  }[status];
+
+  const primaryColor = {
+    green: "text-green-500",
+    amber: "text-amber-500",
+    red: "text-red-500",
+    neutral: "",
+  }[status];
 
   return (
     <div
-      className={`rounded-lg border p-5 ${bgTint} ${to ? "cursor-pointer hover:border-foreground/20 hover:shadow-sm transition-all" : ""}`}
-      onClick={to ? () => navigate(to) : undefined}
+      className={`rounded-lg border p-5 cursor-pointer hover:border-foreground/20 hover:shadow-sm transition-all ${borderColor} ${bgTint}`}
+      onClick={() => navigate(to)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate(to); } }}
+      role="link"
+      tabIndex={0}
     >
       <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1.5">
         {label}
       </div>
       <div className="flex items-center gap-2">
-        <span className={`text-3xl font-semibold tabular-nums ${valueColor}`}>
-          {formatted ?? value}
+        <span className={`text-2xl font-semibold tabular-nums ${primaryColor}`}>
+          {primary}
         </span>
-        {delta !== 0 && (
+        {delta != null && delta !== 0 && (
           <span
-            className={`flex items-center gap-0.5 text-xs font-medium ${delta > 0 ? "text-green-600" : "text-red-600"}`}
+            className={`flex items-center gap-0.5 text-xs font-medium ${
+              delta > 0 ? "text-red-500" : "text-green-500"
+            }`}
           >
             {delta > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
             {delta > 0 ? `+${delta}` : delta}
           </span>
         )}
       </div>
+      <div className="text-xs text-muted-foreground mt-1">{secondary}</div>
     </div>
   );
 }

@@ -29,8 +29,19 @@ vi.mock("../api/client", () => ({
   api: {
     cluster: vi.fn(),
     history: vi.fn().mockResolvedValue([]),
-    notificationRules: vi.fn().mockResolvedValue([]),
   },
+}));
+
+vi.mock("../components/PrometheusBanner", () => ({
+  default: () => null,
+}));
+
+vi.mock("../components/CapacitySection", () => ({
+  default: () => <div data-testid="capacity-section" />,
+}));
+
+vi.mock("../components/ActivityFeed", () => ({
+  default: () => <div data-testid="activity-feed" />,
 }));
 
 import { api } from "../api/client";
@@ -82,15 +93,15 @@ describe("ClusterOverview", () => {
     render(<ClusterOverview />, { wrapper });
 
     await waitFor(() => {
-      expect(screen.getByText("Nodes Ready")).toBeInTheDocument();
+      expect(screen.getByText("Nodes")).toBeInTheDocument();
     });
     expect(screen.getByText("Services")).toBeInTheDocument();
-    expect(screen.getByText("Stacks")).toBeInTheDocument();
-    expect(screen.getByText("Tasks Running")).toBeInTheDocument();
-    expect(screen.getByText("Tasks Failed")).toBeInTheDocument();
-    expect(screen.getByText("12")).toBeInTheDocument(); // serviceCount
-    expect(screen.getByText("8")).toBeInTheDocument(); // stackCount
-    expect(screen.getByText("39")).toBeInTheDocument(); // tasks running
-    expect(screen.getByText("47")).toBeInTheDocument(); // task total
+    expect(screen.getByText("Failed Tasks")).toBeInTheDocument();
+    expect(screen.getByText("Tasks")).toBeInTheDocument();
+    // HealthCard primary values
+    expect(screen.getByText("3/3 ready")).toBeInTheDocument();
+    expect(screen.getByText("12/12 converged")).toBeInTheDocument();
+    expect(screen.getByText("39 running")).toBeInTheDocument();
+    expect(screen.getByText("47 total · 8 stacks")).toBeInTheDocument();
   });
 });
