@@ -241,6 +241,25 @@ describe("LogViewer", () => {
     expect(MockEventSource.instances[0].closed).toBe(true);
   });
 
+  it("filters logs by level", async () => {
+    mockServiceLogs.mockResolvedValue(
+      logResponse([
+        { message: "INFO starting up" },
+        { message: "ERROR something broke" },
+        { message: "DEBUG verbose stuff" },
+      ]),
+    );
+    render(<LogViewer serviceId="svc1" />);
+
+    await waitFor(() => expect(screen.getByText(/starting up/)).toBeInTheDocument());
+
+    fireEvent.change(screen.getByTitle("Filter by level"), { target: { value: "error" } });
+
+    expect(screen.queryByText(/starting up/)).not.toBeInTheDocument();
+    expect(screen.getByText(/something broke/)).toBeInTheDocument();
+    expect(screen.queryByText(/verbose stuff/)).not.toBeInTheDocument();
+  });
+
   it("batches rapid SSE messages into single render", async () => {
     mockServiceLogs.mockResolvedValue(
       logResponse([{ message: "initial", timestamp: "2024-01-01T00:00:00Z" }]),

@@ -16,10 +16,10 @@ import {
 } from "lucide-react";
 import { api } from "../api/client";
 import type { LogLine as ApiLogLine } from "../api/client";
-import type { LogLine, TimeRange } from "./log-utils";
+import type { LogLine, TimeRange, Level } from "./log-utils";
 import { LIMIT_OPTIONS, MAX_LIVE_LINES, toLogLine } from "./log-utils";
 import { LogTable } from "./LogTable";
-import { TimeRangeSelector, StreamFilterToggle, ToolbarButton } from "./LogToolbar";
+import { TimeRangeSelector, StreamFilterToggle, LevelFilter, ToolbarButton } from "./LogToolbar";
 
 interface Props {
   serviceId?: string;
@@ -39,6 +39,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [useRegex, setUseRegex] = useState(false);
   const [streamFilter, setStreamFilter] = useState<"all" | "stdout" | "stderr">("all");
+  const [levelFilter, setLevelFilter] = useState<Level | "all">("all");
   const [wrapLines, setWrapLines] = useState(false);
   const [following, setFollowing] = useState(true);
   const [live, setLive] = useState(false);
@@ -149,6 +150,9 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
     if (streamFilter !== "all") {
       result = result.filter((l) => l.stream === streamFilter);
     }
+    if (levelFilter !== "all") {
+      result = result.filter((l) => l.level === levelFilter);
+    }
     if (search) {
       if (useRegex) {
         try {
@@ -169,7 +173,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
       }
     }
     return result;
-  }, [lines, search, caseSensitive, useRegex, streamFilter]);
+  }, [lines, search, caseSensitive, useRegex, streamFilter, levelFilter]);
 
   const copyLogs = () => {
     const text = filtered
@@ -281,6 +285,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
         <div className="w-px h-5 bg-border mx-0.5" />
 
         <StreamFilterToggle value={streamFilter} onChange={setStreamFilter} />
+        <LevelFilter value={levelFilter} onChange={setLevelFilter} />
 
         <div className="w-px h-5 bg-border mx-0.5" />
 

@@ -4,7 +4,7 @@ import {
   Clock,
   ChevronDown,
 } from "lucide-react";
-import type { TimeRange } from "./log-utils";
+import type { TimeRange, Level } from "./log-utils";
 import { PRESETS, toLocalInput, formatShortDate } from "./log-utils";
 
 export function TimeRangeSelector({
@@ -149,6 +149,29 @@ export function TimeRangeSelector({
         </div>
       )}
     </div>
+  );
+}
+
+export function LevelFilter({
+  value,
+  onChange,
+}: {
+  value: Level | "all";
+  onChange: (v: Level | "all") => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value as Level | "all")}
+      title="Filter by level"
+      className="h-8 px-2 text-xs border rounded-md bg-background"
+    >
+      <option value="all">All levels</option>
+      <option value="error">Error</option>
+      <option value="warn">Warn</option>
+      <option value="info">Info</option>
+      <option value="debug">Debug</option>
+    </select>
   );
 }
 
