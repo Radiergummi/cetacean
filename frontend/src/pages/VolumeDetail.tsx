@@ -7,8 +7,8 @@ import PageHeader from "../components/PageHeader";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import FetchError from "../components/FetchError";
 import ActivityFeed from "../components/ActivityFeed";
-import TimeAgo from "../components/TimeAgo";
 import { useSSE } from "../hooks/useSSE";
+import { ResourceLink, Timestamp } from "../components/data";
 
 export default function VolumeDetail() {
   const { name } = useParams<{ name: string }>();
@@ -57,10 +57,8 @@ export default function VolumeDetail() {
         <InfoCard label="Driver" value={volume.Driver} />
         <InfoCard label="Scope" value={volume.Scope} />
         <InfoCard label="Mountpoint" value={volume.Mountpoint} />
-        {stack && <InfoCard label="Stack" value={stack} href={`/stacks/${stack}`} />}
-        {volume.CreatedAt && (
-          <InfoCard label="Created" value={<TimeAgo date={volume.CreatedAt} />} />
-        )}
+        <ResourceLink label="Stack" name={stack} to={`/stacks/${stack}`} />
+        <Timestamp label="Created" date={volume.CreatedAt} />
       </div>
 
       {options.length > 0 && (

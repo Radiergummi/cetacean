@@ -7,8 +7,8 @@ import PageHeader from "../components/PageHeader";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import FetchError from "../components/FetchError";
 import ActivityFeed from "../components/ActivityFeed";
-import TimeAgo from "../components/TimeAgo";
 import { useSSE } from "../hooks/useSSE";
+import { ResourceId, ResourceLink, Timestamp } from "../components/data";
 
 function NetworkFlags({ network }: { network: Network }) {
   const flags = [];
@@ -125,13 +125,11 @@ export default function NetworkDetail() {
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <InfoCard label="ID" value={network.Id} />
+        <ResourceId label="ID" id={network.Id} />
         <InfoCard label="Driver" value={network.Driver} />
         <InfoCard label="Scope" value={network.Scope} />
-        {stack && <InfoCard label="Stack" value={stack} href={`/stacks/${stack}`} />}
-        {network.Created && (
-          <InfoCard label="Created" value={<TimeAgo date={network.Created} />} />
-        )}
+        <ResourceLink label="Stack" name={stack} to={`/stacks/${stack}`} />
+        <Timestamp label="Created" date={network.Created} />
       </div>
 
       <NetworkFlags network={network} />

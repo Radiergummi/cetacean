@@ -2,13 +2,12 @@ import { useParams, Link } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../api/client";
 import type { Secret, ServiceRef, HistoryEntry } from "../api/types";
-import InfoCard from "../components/InfoCard";
 import PageHeader from "../components/PageHeader";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import FetchError from "../components/FetchError";
 import ActivityFeed from "../components/ActivityFeed";
-import TimeAgo from "../components/TimeAgo";
 import { useSSE } from "../hooks/useSSE";
+import { ResourceId, ResourceLink, Timestamp } from "../components/data";
 
 export default function SecretDetail() {
   const { id } = useParams<{ id: string }>();
@@ -58,16 +57,10 @@ export default function SecretDetail() {
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <InfoCard label="ID" value={secret.ID} />
-        {stack && <InfoCard label="Stack" value={stack} href={`/stacks/${stack}`} />}
-        <InfoCard
-          label="Created"
-          value={secret.CreatedAt ? <TimeAgo date={secret.CreatedAt} /> : undefined}
-        />
-        <InfoCard
-          label="Updated"
-          value={secret.UpdatedAt ? <TimeAgo date={secret.UpdatedAt} /> : undefined}
-        />
+        <ResourceId label="ID" id={secret.ID} />
+        <ResourceLink label="Stack" name={stack} to={`/stacks/${stack}`} />
+        <Timestamp label="Created" date={secret.CreatedAt} />
+        <Timestamp label="Updated" date={secret.UpdatedAt} />
       </div>
 
       {labelEntries.length > 0 && (

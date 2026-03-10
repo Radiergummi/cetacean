@@ -17,8 +17,8 @@ import TaskStatusBadge from "../components/TaskStatusBadge";
 import TimeAgo, {timeAgo} from "../components/TimeAgo";
 import type {Threshold} from "../components/TimeSeriesChart";
 import {formatBytes} from "../lib/formatBytes";
-import {imageRegistryUrl} from "../lib/imageUrl";
 import {statusColor} from "../lib/statusColor";
+import {ContainerImage, ResourceLink, Timestamp} from "../components/data";
 import FetchError from "../components/FetchError";
 
 export default function ServiceDetail() {
@@ -74,7 +74,7 @@ export default function ServiceDetail() {
 
             {/* Overview cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <InfoCard label="Image" value={cs.Image.split("@")[0]} href={imageRegistryUrl(cs.Image) ?? undefined}/>
+                <ContainerImage image={cs.Image} />
                 <InfoCard
                     label="Mode"
                     value={
@@ -93,17 +93,9 @@ export default function ServiceDetail() {
                             : undefined
                     }
                 />
-                <InfoCard
-                    label="Stack"
-                    value={labels["com.docker.stack.namespace"]}
-                    href={
-                        labels["com.docker.stack.namespace"]
-                            ? `/stacks/${labels["com.docker.stack.namespace"]}`
-                            : undefined
-                    }
-                />
-                {service.CreatedAt && <InfoCard label="Created" value={timeAgo(service.CreatedAt)}/>}
-                {service.UpdatedAt && <InfoCard label="Updated" value={timeAgo(service.UpdatedAt)}/>}
+                <ResourceLink label="Stack" name={labels["com.docker.stack.namespace"]} to={`/stacks/${labels["com.docker.stack.namespace"]}`} />
+                <Timestamp label="Created" date={service.CreatedAt} />
+                <Timestamp label="Updated" date={service.UpdatedAt} />
             </div>
 
             {/* Tasks */}
@@ -149,7 +141,7 @@ export default function ServiceDetail() {
                                         </td>
                                         <td className="p-3 text-sm">
                                             <Link to={`/nodes/${task.NodeID}`} className="text-link hover:underline">
-                                                {task.NodeID.slice(0, 12)}
+                                                {task.NodeHostname || task.NodeID.slice(0, 12)}
                                             </Link>
                                         </td>
                                         <td className="p-3 text-sm">{task.DesiredState}</td>

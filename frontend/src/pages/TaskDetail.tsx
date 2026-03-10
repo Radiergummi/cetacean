@@ -10,7 +10,7 @@ import LogViewer from "../components/LogViewer";
 import PageHeader from "../components/PageHeader";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import FetchError from "../components/FetchError";
-import { timeAgo } from "../components/TimeAgo";
+import { ResourceId, ResourceLink, ContainerImage, Timestamp } from "../components/data";
 
 export default function TaskDetail() {
   const { id } = useParams<{ id: string }>();
@@ -31,18 +31,20 @@ export default function TaskDetail() {
   if (error) return <FetchError message="Failed to load task" />;
   if (!task) return <LoadingDetail />;
 
-  const shortId = task.ID.slice(0, 12);
+  const shortId = task.ID.slice(0, 7);
+  const serviceName = task.ServiceName || task.ServiceID.slice(0, 12);
+  const nodeLabel = task.NodeHostname || task.NodeID.slice(0, 12);
   const exitCode = task.Status.ContainerStatus?.ExitCode;
   const containerId = task.Status.ContainerStatus?.ContainerID;
 
   return (
     <div>
       <PageHeader
-        title={`Task ${shortId}`}
+        title={`Task ${task.ID}`}
         breadcrumbs={[
           { label: "Services", to: "/services" },
-          { label: task.ServiceID.slice(0, 12), to: `/services/${task.ServiceID}` },
-          { label: shortId },
+          { label: serviceName, to: `/services/${task.ServiceID}` },
+          { label: task.Slot ? `Replica #${task.Slot} (${shortId})` : shortId },
         ]}
       />
 
@@ -54,19 +56,12 @@ export default function TaskDetail() {
           <TaskStatusBadge state={task.Status.State} />
         </div>
         <InfoCard label="Desired State" value={task.DesiredState} />
-        <InfoCard
-          label="Service"
-          value={task.ServiceID.slice(0, 12)}
-          href={`/services/${task.ServiceID}`}
-        />
-        <InfoCard label="Node" value={task.NodeID.slice(0, 12)} href={`/nodes/${task.NodeID}`} />
+        <ResourceLink label="Service" name={serviceName} to={`/services/${task.ServiceID}`} />
+        <ResourceLink label="Node" name={nodeLabel} to={`/nodes/${task.NodeID}`} />
         <InfoCard label="Slot" value={task.Slot ? String(task.Slot) : "\u2014"} />
-        <InfoCard label="Image" value={task.Spec.ContainerSpec.Image.split("@")[0]} />
-        <InfoCard
-          label="Timestamp"
-          value={task.Status.Timestamp ? timeAgo(task.Status.Timestamp) : undefined}
-        />
-        {containerId && <InfoCard label="Container" value={containerId.slice(0, 12)} />}
+        <ContainerImage image={task.Spec.ContainerSpec.Image} />
+        <Timestamp label="Timestamp" date={task.Status.Timestamp} />
+        <ResourceId label="Container" id={containerId} truncate={12} />
         {exitCode != null && exitCode !== 0 && (
           <InfoCard label="Exit Code" value={String(exitCode)} />
         )}

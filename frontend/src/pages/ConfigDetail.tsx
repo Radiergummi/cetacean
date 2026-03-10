@@ -2,13 +2,12 @@ import { useParams, Link } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../api/client";
 import type { Config, ServiceRef, HistoryEntry } from "../api/types";
-import InfoCard from "../components/InfoCard";
 import PageHeader from "../components/PageHeader";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import FetchError from "../components/FetchError";
 import ActivityFeed from "../components/ActivityFeed";
-import TimeAgo from "../components/TimeAgo";
 import { useSSE } from "../hooks/useSSE";
+import { ResourceId, ResourceLink, Timestamp } from "../components/data";
 
 export default function ConfigDetail() {
   const { id } = useParams<{ id: string }>();
@@ -63,16 +62,10 @@ export default function ConfigDetail() {
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <InfoCard label="ID" value={config.ID} />
-        {stack && <InfoCard label="Stack" value={stack} href={`/stacks/${stack}`} />}
-        <InfoCard
-          label="Created"
-          value={config.CreatedAt ? <TimeAgo date={config.CreatedAt} /> : undefined}
-        />
-        <InfoCard
-          label="Updated"
-          value={config.UpdatedAt ? <TimeAgo date={config.UpdatedAt} /> : undefined}
-        />
+        <ResourceId label="ID" id={config.ID} />
+        <ResourceLink label="Stack" name={stack} to={`/stacks/${stack}`} />
+        <Timestamp label="Created" date={config.CreatedAt} />
+        <Timestamp label="Updated" date={config.UpdatedAt} />
       </div>
 
       {labelEntries.length > 0 && (
