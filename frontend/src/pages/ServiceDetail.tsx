@@ -78,14 +78,7 @@ export default function ServiceDetail() {
             {/* Overview cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <ContainerImage image={cs.Image} />
-                <InfoCard
-                    label="Mode"
-                    value={
-                        service.Spec.Mode.Replicated
-                            ? <>replicated <span className="inline-flex items-center justify-center rounded-full bg-muted px-2 py-0.5 text-sm font-semibold tabular-nums">{service.Spec.Mode.Replicated.Replicas}</span></>
-                            : "global"
-                    }
-                />
+                <ReplicaCard service={service} tasks={tasks} />
                 <InfoCard
                     label="Update Status"
                     value={
@@ -274,27 +267,18 @@ export default function ServiceDetail() {
             {/* Ports */}
             {service.Endpoint?.Ports && service.Endpoint.Ports.length > 0 && (
                 <Section title="Ports" defaultOpen={false}>
-                    <div className="overflow-x-auto rounded-lg border">
-                        <table className="w-full">
-                            <thead className="sticky top-0 z-10 bg-background">
-                            <tr className="border-b bg-muted/50">
-                                <th className="text-left p-3 text-sm font-medium">Published</th>
-                                <th className="text-left p-3 text-sm font-medium">Target</th>
-                                <th className="text-left p-3 text-sm font-medium">Protocol</th>
-                                <th className="text-left p-3 text-sm font-medium">Mode</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            {service.Endpoint.Ports.map((port, i) => (
-                                <tr key={i} className="border-b last:border-b-0">
-                                    <td className="p-3 text-sm">{port.PublishedPort}</td>
-                                    <td className="p-3 text-sm">{port.TargetPort}</td>
-                                    <td className="p-3 text-sm">{port.Protocol}</td>
-                                    <td className="p-3 text-sm">{port.PublishMode}</td>
-                                </tr>
-                            ))}
-                            </tbody>
-                        </table>
+                    <div className="flex flex-wrap gap-2">
+                        {service.Endpoint.Ports.map((port, i) => (
+                            <span
+                                key={i}
+                                className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-mono"
+                            >
+                                <span className="font-semibold">{port.PublishedPort}</span>
+                                <span className="text-muted-foreground">&rarr;</span>
+                                <span>{port.TargetPort}/{port.Protocol}</span>
+                                <span className="text-xs text-muted-foreground">({port.PublishMode})</span>
+                            </span>
+                        ))}
                     </div>
                 </Section>
             )}
@@ -315,8 +299,16 @@ export default function ServiceDetail() {
                             <tbody>
                             {cs.Mounts.map((m, i) => (
                                 <tr key={i} className="border-b last:border-b-0">
-                                    <td className="p-3 text-sm">{m.Type}</td>
-                                    <td className="p-3 font-mono text-xs">{m.Source || "\u2014"}</td>
+                                    <td className="p-3 text-sm">
+                                        <MountTypeBadge type={m.Type} />
+                                    </td>
+                                    <td className="p-3 font-mono text-xs">
+                                        {m.Type === "volume" && m.Source ? (
+                                            <Link to={`/volumes/${m.Source}`} className="text-link hover:underline"><ResourceName name={m.Source} /></Link>
+                                        ) : (
+                                            m.Source || "\u2014"
+                                        )}
+                                    </td>
                                     <td className="p-3 font-mono text-xs">{m.Target}</td>
                                     <td className="p-3 text-sm">{m.ReadOnly ? "yes" : "no"}</td>
                                 </tr>
@@ -341,7 +333,11 @@ export default function ServiceDetail() {
                             <tbody>
                             {cs.Configs.map((cfg) => (
                                 <tr key={cfg.ConfigID} className="border-b last:border-b-0">
-                                    <td className="p-3 text-sm">{cfg.ConfigName}</td>
+                                    <td className="p-3 text-sm">
+                                        <Link to={`/configs/${cfg.ConfigID}`} className="text-link hover:underline">
+                                            <ResourceName name={cfg.ConfigName} />
+                                        </Link>
+                                    </td>
                                     <td className="p-3 font-mono text-xs">{cfg.File?.Name || "\u2014"}</td>
                                 </tr>
                             ))}
@@ -365,7 +361,11 @@ export default function ServiceDetail() {
                             <tbody>
                             {cs.Secrets.map((s) => (
                                 <tr key={s.SecretID} className="border-b last:border-b-0">
-                                    <td className="p-3 text-sm">{s.SecretName}</td>
+                                    <td className="p-3 text-sm">
+                                        <Link to={`/secrets/${s.SecretID}`} className="text-link hover:underline">
+                                            <ResourceName name={s.SecretName} />
+                                        </Link>
+                                    </td>
                                     <td className="p-3 font-mono text-xs">{s.File?.Name || "\u2014"}</td>
                                 </tr>
                             ))}
@@ -384,27 +384,7 @@ export default function ServiceDetail() {
                             <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">
                                 Resources
                             </h3>
-                            <KVTable
-                                rows={[
-                                    tt.Resources.Limits?.NanoCPUs && [
-                                        "CPU Limit",
-                                        formatCpu(tt.Resources.Limits.NanoCPUs),
-                                    ],
-                                    tt.Resources.Limits?.MemoryBytes && [
-                                        "Memory Limit",
-                                        formatBytes(tt.Resources.Limits.MemoryBytes),
-                                    ],
-                                    tt.Resources.Limits?.Pids && ["PID Limit", String(tt.Resources.Limits.Pids)],
-                                    tt.Resources.Reservations?.NanoCPUs && [
-                                        "CPU Reservation",
-                                        formatCpu(tt.Resources.Reservations.NanoCPUs),
-                                    ],
-                                    tt.Resources.Reservations?.MemoryBytes && [
-                                        "Memory Reservation",
-                                        formatBytes(tt.Resources.Reservations.MemoryBytes),
-                                    ],
-                                ]}
-                            />
+                            <ResourcesPanel resources={tt.Resources} />
                         </div>
                     )}
 
@@ -434,26 +414,7 @@ export default function ServiceDetail() {
                             <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">
                                 Placement
                             </h3>
-                            <KVTable
-                                rows={[
-                                    tt.Placement.Constraints &&
-                                    tt.Placement.Constraints.length > 0 && [
-                                        "Constraints",
-                                        tt.Placement.Constraints.join(", "),
-                                    ],
-                                    tt.Placement.MaxReplicas && [
-                                        "Max Replicas per Node",
-                                        String(tt.Placement.MaxReplicas),
-                                    ],
-                                    tt.Placement.Preferences &&
-                                    tt.Placement.Preferences.length > 0 && [
-                                        "Preferences",
-                                        tt.Placement.Preferences.map((p) => p.Spread?.SpreadDescriptor)
-                                            .filter(Boolean)
-                                            .join(", "),
-                                    ],
-                                ]}
-                            />
+                            <PlacementPanel placement={tt.Placement} />
                         </div>
                     )}
 
@@ -612,6 +573,195 @@ function updateConfigRows(cfg: UpdateConfigShape) {
             ["Order", cfg.Order] as [string, string]
         ),
     ];
+}
+
+function ReplicaCard({service, tasks}: { service: Service; tasks: Task[] }) {
+    const replicated = service.Spec.Mode.Replicated;
+    if (!replicated) {
+        return <InfoCard label="Mode" value="global" />;
+    }
+
+    const desired = replicated.Replicas ?? 0;
+    const running = tasks.filter((t) => t.Status.State === "running").length;
+    const healthy = running >= desired;
+
+    return (
+        <div className="rounded-lg border bg-card p-4">
+            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">Replicas</div>
+            <div className="flex items-center gap-3">
+                <span className="text-2xl font-bold tabular-nums">
+                    {running}<span className="text-muted-foreground font-normal text-lg">/{desired}</span>
+                </span>
+                {desired > 0 && (
+                    <div className="flex gap-0.5">
+                        {Array.from({length: desired}, (_, i) => (
+                            <div
+                                key={i}
+                                className={`h-3 w-3 rounded-sm ${i < running ? "bg-green-500" : "bg-red-400 dark:bg-red-500"}`}
+                            />
+                        ))}
+                    </div>
+                )}
+            </div>
+            {!healthy && (
+                <div className="text-xs text-red-600 dark:text-red-400 mt-1">
+                    {desired - running} replica{desired - running !== 1 ? "s" : ""} not running
+                </div>
+            )}
+        </div>
+    );
+}
+
+const mountTypeColors: Record<string, string> = {
+    volume: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+    bind: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+    tmpfs: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
+};
+
+function MountTypeBadge({type}: { type: string }) {
+    const color = mountTypeColors[type] || "bg-muted text-muted-foreground";
+    return (
+        <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${color}`}>
+            {type}
+        </span>
+    );
+}
+
+function parseConstraint(raw: string): { field: string; op: string; value: string; include: boolean } {
+    const match = raw.match(/^(.+?)\s*(==|!=)\s*(.+)$/);
+    if (!match) return {field: raw, op: "", value: "", include: true};
+    return {field: match[1], op: match[2], value: match[3], include: match[2] === "=="};
+}
+
+type PlacementShape = NonNullable<Service["Spec"]["TaskTemplate"]["Placement"]>;
+
+function PlacementPanel({placement}: { placement: PlacementShape }) {
+    const constraints = placement.Constraints ?? [];
+    const preferences = placement.Preferences ?? [];
+    const hasContent = constraints.length > 0 || placement.MaxReplicas || preferences.length > 0;
+
+    if (!hasContent) return <p className="text-sm text-muted-foreground">No placement constraints.</p>;
+
+    return (
+        <div className="space-y-3">
+            {constraints.length > 0 && (
+                <div className="overflow-x-auto rounded-lg border">
+                    <table className="w-full">
+                        <thead>
+                        <tr className="border-b bg-muted/50">
+                            <th className="text-left p-3 text-sm font-medium w-8"></th>
+                            <th className="text-left p-3 text-sm font-medium">Field</th>
+                            <th className="text-left p-3 text-sm font-medium">Operator</th>
+                            <th className="text-left p-3 text-sm font-medium">Value</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {constraints.map((c) => {
+                            const parsed = parseConstraint(c);
+                            return (
+                                <tr key={c} className="border-b last:border-b-0">
+                                    <td className="p-3 text-sm">
+                                        <span className={`inline-block w-2 h-2 rounded-full ${parsed.include ? "bg-green-500" : "bg-red-500"}`} />
+                                    </td>
+                                    <td className="p-3 font-mono text-xs">{parsed.field}</td>
+                                    <td className="p-3 font-mono text-xs text-muted-foreground">{parsed.op}</td>
+                                    <td className="p-3 font-mono text-xs">{parsed.value}</td>
+                                </tr>
+                            );
+                        })}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
+            {placement.MaxReplicas != null && placement.MaxReplicas > 0 && (
+                <div className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                    <span className="text-muted-foreground">Max replicas per node:</span>
+                    <span className="font-semibold tabular-nums">{placement.MaxReplicas}</span>
+                </div>
+            )}
+
+            {preferences.length > 0 && (
+                <div className="space-y-1">
+                    <div className="text-xs font-medium text-muted-foreground">Spread preferences</div>
+                    <div className="flex flex-wrap gap-2">
+                        {preferences.map((p, i) => (
+                            <span
+                                key={i}
+                                className="inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-mono"
+                            >
+                                {p.Spread?.SpreadDescriptor}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+type ResourceShape = NonNullable<Service["Spec"]["TaskTemplate"]["Resources"]>;
+
+function ResourceBar({label, reserved, limit, format}: {
+    label: string;
+    reserved?: number;
+    limit?: number;
+    format: (v: number) => string;
+}) {
+    if (!reserved && !limit) return null;
+    const max = limit || reserved || 0;
+    const reservedPct = reserved && max ? Math.round((reserved / max) * 100) : 0;
+
+    return (
+        <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-sm">
+                <span className="font-medium">{label}</span>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    {reserved != null && <span>Reserved: <span className="font-mono text-foreground">{format(reserved)}</span></span>}
+                    {limit != null && <span>Limit: <span className="font-mono text-foreground">{format(limit)}</span></span>}
+                </div>
+            </div>
+            {limit && reserved ? (
+                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                        className="h-full rounded-full bg-blue-500"
+                        style={{width: `${reservedPct}%`}}
+                    />
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+function ResourcesPanel({resources}: { resources: ResourceShape }) {
+    const hasCpu = resources.Limits?.NanoCPUs || resources.Reservations?.NanoCPUs;
+    const hasMem = resources.Limits?.MemoryBytes || resources.Reservations?.MemoryBytes;
+    const hasPids = resources.Limits?.Pids;
+
+    if (!hasCpu && !hasMem && !hasPids) return null;
+
+    return (
+        <div className="space-y-4">
+            <ResourceBar
+                label="CPU"
+                reserved={resources.Reservations?.NanoCPUs}
+                limit={resources.Limits?.NanoCPUs}
+                format={formatCpu}
+            />
+            <ResourceBar
+                label="Memory"
+                reserved={resources.Reservations?.MemoryBytes}
+                limit={resources.Limits?.MemoryBytes}
+                format={formatBytes}
+            />
+            {hasPids && (
+                <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">PID Limit</span>
+                    <span className="font-mono">{resources.Limits!.Pids}</span>
+                </div>
+            )}
+        </div>
+    );
 }
 
 function formatNs(ns: number): string {

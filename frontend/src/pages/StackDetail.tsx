@@ -149,7 +149,11 @@ export default function StackDetail() {
               <tbody>
                 {stack.configs.map((c) => (
                   <tr key={c.ID} className="border-b last:border-b-0">
-                    <td className="p-3 text-sm"><ResourceName name={c.Spec.Name || c.ID} /></td>
+                    <td className="p-3 text-sm">
+                      <Link to={`/configs/${c.ID}`} className="text-link hover:underline font-medium">
+                        <ResourceName name={c.Spec.Name || c.ID} />
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -165,7 +169,11 @@ export default function StackDetail() {
               <tbody>
                 {stack.secrets.map((s) => (
                   <tr key={s.ID} className="border-b last:border-b-0">
-                    <td className="p-3 text-sm"><ResourceName name={s.Spec.Name || s.ID} /></td>
+                    <td className="p-3 text-sm">
+                      <Link to={`/secrets/${s.ID}`} className="text-link hover:underline font-medium">
+                        <ResourceName name={s.Spec.Name || s.ID} />
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -187,7 +195,11 @@ export default function StackDetail() {
               <tbody>
                 {stack.networks.map((n) => (
                   <tr key={n.Id} className="border-b last:border-b-0">
-                    <td className="p-3 text-sm"><ResourceName name={n.Name} /></td>
+                    <td className="p-3 text-sm">
+                      <Link to={`/networks/${n.Id}`} className="text-link hover:underline font-medium">
+                        <ResourceName name={n.Name} />
+                      </Link>
+                    </td>
                     <td className="p-3 text-sm">{n.Driver}</td>
                   </tr>
                 ))}
@@ -204,7 +216,11 @@ export default function StackDetail() {
               <tbody>
                 {stack.volumes.map((v) => (
                   <tr key={v.Name} className="border-b last:border-b-0">
-                    <td className="p-3 text-sm"><ResourceName name={v.Name} /></td>
+                    <td className="p-3 text-sm">
+                      <Link to={`/volumes/${v.Name}`} className="text-link hover:underline font-medium">
+                        <ResourceName name={v.Name} />
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>

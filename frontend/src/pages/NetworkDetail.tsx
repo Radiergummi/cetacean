@@ -1,4 +1,4 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../api/client";
 import type { Network, ServiceRef, HistoryEntry } from "../api/types";
@@ -7,6 +7,7 @@ import PageHeader from "../components/PageHeader";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import FetchError from "../components/FetchError";
 import ActivityFeed from "../components/ActivityFeed";
+import ServiceRefList from "../components/ServiceRefList";
 import { useSSE } from "../hooks/useSSE";
 import { ResourceId, ResourceLink, Timestamp } from "../components/data";
 
@@ -188,33 +189,7 @@ export default function NetworkDetail() {
         </div>
       )}
 
-      {services.length > 0 && (
-        <div>
-          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-            Connected Services
-          </h2>
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="text-left p-3 text-sm font-medium">Service</th>
-                </tr>
-              </thead>
-              <tbody>
-                {services.map((svc) => (
-                  <tr key={svc.id} className="border-b last:border-b-0">
-                    <td className="p-3 text-sm">
-                      <Link to={`/services/${svc.id}`} className="text-link hover:underline">
-                        {svc.name || svc.id.slice(0, 12)}
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      <ServiceRefList services={services} label="Connected Services" emptyMessage="No services using this network." />
 
       {history.length > 0 && (
         <div>
