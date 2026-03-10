@@ -24,6 +24,7 @@ import Topology from "./pages/Topology";
 import VolumeDetail from "./pages/VolumeDetail";
 import VolumeList from "./pages/VolumeList";
 import NotFound from "./pages/NotFound";
+import SearchPage from "./pages/SearchPage";
 
 function Layout({children}: { children: React.ReactNode }) {
     const [menuOpen, setMenuOpen] = useState(false);
@@ -140,6 +141,7 @@ export default function App() {
                         <Route path="/volumes" element={<VolumeList/>}/>
                         <Route path="/volumes/:name" element={<VolumeDetail/>}/>
                         <Route path="/topology" element={<Topology/>}/>
+                        <Route path="/search" element={<SearchPage/>}/>
                         <Route path="*" element={<NotFound/>}/>
                     </Routes>
                 </Layout>
