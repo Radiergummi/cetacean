@@ -1,5 +1,6 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { useNavigate } from "react-router-dom";
+import ResourceName from "../ResourceName";
 
 type ServiceCardData = {
   id: string;
@@ -34,7 +35,7 @@ export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCar
     >
       <div className="flex items-center justify-between gap-1 mb-1">
         <span className="font-medium text-sm truncate" title={data.name}>
-          {data.name}
+          <ResourceName name={data.name} />
         </span>
         <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
           {data.mode === "global" ? "Global" : "Replicated"}

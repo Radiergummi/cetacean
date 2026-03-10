@@ -16,6 +16,7 @@ import ResourceCard from "../components/ResourceCard";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
 import { SkeletonTable } from "../components/LoadingSkeleton";
+import ResourceName from "../components/ResourceName";
 
 function ReplicaHealth({ running, desired }: { running: number; desired: number }) {
   const healthy = running >= desired && desired > 0;
@@ -56,7 +57,7 @@ export default function ServiceList() {
           className="text-link hover:underline font-medium"
           onClick={(e) => e.stopPropagation()}
         >
-          {svc.Spec.Name}
+          <ResourceName name={svc.Spec.Name} />
         </Link>
       ),
       onHeaderClick: () => toggle("name"),

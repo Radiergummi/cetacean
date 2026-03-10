@@ -14,6 +14,7 @@ import ResourceCard from "../components/ResourceCard";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
 import { SkeletonTable } from "../components/LoadingSkeleton";
+import ResourceName from "../components/ResourceName";
 import DataTable from "../components/DataTable";
 import type { Column } from "../components/DataTable";
 
@@ -38,7 +39,7 @@ export default function VolumeList() {
   const columns: Column<Volume>[] = [
     {
       header: <SortIndicator label="Name" active={sortKey === "name"} dir={sortDir} />,
-      cell: (v) => v.Name,
+      cell: (v) => <ResourceName name={v.Name} />,
       onHeaderClick: () => toggle("name"),
     },
     {

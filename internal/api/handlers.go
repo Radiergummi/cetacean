@@ -696,6 +696,7 @@ type searchResult struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
 	Detail string `json:"detail"`
+	State  string `json:"state,omitempty"`
 }
 
 func labelsMatch(labels map[string]string, q string) bool {
@@ -755,8 +756,30 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 					detail := ""
 					if s.Spec.TaskTemplate.ContainerSpec != nil {
 						detail = s.Spec.TaskTemplate.ContainerSpec.Image
+						if i := strings.Index(detail, "@sha256:"); i > 0 {
+							detail = detail[:i]
+						}
 					}
-					matches = append(matches, searchResult{ID: s.ID, Name: s.Spec.Name, Detail: detail})
+					running := h.cache.RunningTaskCount(s.ID)
+				desired := 0
+				if s.Spec.Mode.Replicated != nil && s.Spec.Mode.Replicated.Replicas != nil {
+					desired = int(*s.Spec.Mode.Replicated.Replicas)
+				} else if s.Spec.Mode.Global != nil {
+					desired = -1 // global: just check running > 0
+				}
+				state := "running"
+				if s.UpdateStatus != nil && s.UpdateStatus.State == swarm.UpdateStateUpdating {
+					state = "updating"
+				} else if desired == -1 {
+					if running == 0 {
+						state = "pending"
+					}
+				} else if desired > 0 && running == 0 {
+					state = "failed"
+				} else if running < desired {
+					state = "pending"
+				}
+				matches = append(matches, searchResult{ID: s.ID, Name: s.Spec.Name, Detail: detail, State: state})
 				}
 			}
 		}
@@ -825,7 +848,7 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 			svcName := svcNames[t.ServiceID]
 			taskName := fmt.Sprintf("%s.%d", svcName, t.Slot)
 
-			hit := strings.Contains(strings.ToLower(taskName), ql)
+			hit := strings.Contains(strings.ToLower(svcName), ql)
 			if !hit && t.Spec.ContainerSpec != nil {
 				hit = strings.Contains(strings.ToLower(t.Spec.ContainerSpec.Image), ql)
 			}
@@ -835,10 +858,18 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 			if hit {
 				count++
 				if limit == 0 || len(matches) < limit {
+					detail := ""
+					if t.Spec.ContainerSpec != nil {
+						detail = t.Spec.ContainerSpec.Image
+						if i := strings.Index(detail, "@sha256:"); i > 0 {
+							detail = detail[:i]
+						}
+					}
 					matches = append(matches, searchResult{
 						ID:     t.ID,
 						Name:   taskName,
-						Detail: string(t.Status.State),
+						Detail: detail,
+						State:  string(t.Status.State),
 					})
 				}
 			}

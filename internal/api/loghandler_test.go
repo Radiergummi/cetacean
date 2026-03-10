@@ -339,14 +339,14 @@ func TestHandleServiceLogs_SSE_LastEventID_OverriddenByAfter(t *testing.T) {
 	h := NewHandlers(c, mock, closedReady(), nil, nil)
 
 	// Both ?after= and Last-Event-ID present — ?after= should win
-	req := httptest.NewRequest("GET", "/api/services/svc1/logs?after=explicit-value", nil)
+	req := httptest.NewRequest("GET", "/api/services/svc1/logs?after=2024-01-01T00:00:01Z", nil)
 	req.SetPathValue("id", "svc1")
 	req.Header.Set("Accept", "text/event-stream")
-	req.Header.Set("Last-Event-ID", "header-value")
+	req.Header.Set("Last-Event-ID", "2024-01-01T00:00:00Z")
 	w := httptest.NewRecorder()
 	h.HandleServiceLogs(w, req)
 
-	if capturedSince != "explicit-value" {
+	if capturedSince != "2024-01-01T00:00:01Z" {
 		t.Errorf("since = %q, want explicit ?after= value", capturedSince)
 	}
 }

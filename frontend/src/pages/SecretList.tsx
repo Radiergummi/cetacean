@@ -14,6 +14,7 @@ import ResourceCard from "../components/ResourceCard";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
 import { SkeletonTable } from "../components/LoadingSkeleton";
+import ResourceName from "../components/ResourceName";
 import DataTable from "../components/DataTable";
 import type { Column } from "../components/DataTable";
 import TimeAgo from "../components/TimeAgo";
@@ -39,7 +40,7 @@ export default function SecretList() {
   const columns: Column<Secret>[] = [
     {
       header: <SortIndicator label="Name" active={sortKey === "name"} dir={sortDir} />,
-      cell: (s) => s.Spec.Name || s.ID,
+      cell: (s) => <ResourceName name={s.Spec.Name || s.ID} />,
       onHeaderClick: () => toggle("name"),
     },
     {

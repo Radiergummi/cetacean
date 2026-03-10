@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { api } from "../api/client";
 import type { StackDetail as StackDetailType, Task } from "../api/types";
 import PageHeader from "../components/PageHeader";
+import ResourceName from "../components/ResourceName";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import FetchError from "../components/FetchError";
 
@@ -106,7 +107,7 @@ export default function StackDetail() {
                         to={`/services/${svc.ID}`}
                         className="text-link hover:underline font-medium"
                       >
-                        {svc.Spec.Name || svc.ID}
+                        <ResourceName name={svc.Spec.Name || svc.ID} />
                       </Link>
                     </td>
                     <td className="p-3 text-sm font-mono text-xs">
@@ -148,7 +149,7 @@ export default function StackDetail() {
               <tbody>
                 {stack.configs.map((c) => (
                   <tr key={c.ID} className="border-b last:border-b-0">
-                    <td className="p-3 text-sm">{c.Spec.Name || c.ID}</td>
+                    <td className="p-3 text-sm"><ResourceName name={c.Spec.Name || c.ID} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -164,7 +165,7 @@ export default function StackDetail() {
               <tbody>
                 {stack.secrets.map((s) => (
                   <tr key={s.ID} className="border-b last:border-b-0">
-                    <td className="p-3 text-sm">{s.Spec.Name || s.ID}</td>
+                    <td className="p-3 text-sm"><ResourceName name={s.Spec.Name || s.ID} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -186,7 +187,7 @@ export default function StackDetail() {
               <tbody>
                 {stack.networks.map((n) => (
                   <tr key={n.Id} className="border-b last:border-b-0">
-                    <td className="p-3 text-sm">{n.Name}</td>
+                    <td className="p-3 text-sm"><ResourceName name={n.Name} /></td>
                     <td className="p-3 text-sm">{n.Driver}</td>
                   </tr>
                 ))}
@@ -203,7 +204,7 @@ export default function StackDetail() {
               <tbody>
                 {stack.volumes.map((v) => (
                   <tr key={v.Name} className="border-b last:border-b-0">
-                    <td className="p-3 text-sm">{v.Name}</td>
+                    <td className="p-3 text-sm"><ResourceName name={v.Name} /></td>
                   </tr>
                 ))}
               </tbody>

@@ -14,6 +14,7 @@ import ResourceCard from "../components/ResourceCard";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
 import { SkeletonTable } from "../components/LoadingSkeleton";
+import ResourceName from "../components/ResourceName";
 import DataTable from "../components/DataTable";
 import type { Column } from "../components/DataTable";
 import TimeAgo from "../components/TimeAgo";
@@ -39,7 +40,7 @@ export default function ConfigList() {
   const columns: Column<Config>[] = [
     {
       header: <SortIndicator label="Name" active={sortKey === "name"} dir={sortDir} />,
-      cell: (c) => c.Spec.Name || c.ID,
+      cell: (c) => <ResourceName name={c.Spec.Name || c.ID} />,
       onHeaderClick: () => toggle("name"),
     },
     {

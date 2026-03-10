@@ -495,6 +495,9 @@ func (c *Cache) GetStackDetail(name string) (StackDetail, bool) {
 			detail.Volumes = append(detail.Volumes, vol)
 		}
 	}
+	for i := range detail.Secrets {
+		detail.Secrets[i].Spec.Data = nil
+	}
 	return detail, true
 }
 

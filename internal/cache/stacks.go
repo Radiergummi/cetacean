@@ -123,10 +123,11 @@ func appendUnique(sl []string, v string) []string {
 }
 
 func removeStr(sl []string, v string) []string {
-	for i, s := range sl {
-		if s == v {
-			return append(sl[:i], sl[i+1:]...)
+	out := make([]string, 0, len(sl))
+	for _, s := range sl {
+		if s != v {
+			out = append(out, s)
 		}
 	}
-	return sl
+	return out
 }

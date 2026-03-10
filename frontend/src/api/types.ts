@@ -343,3 +343,22 @@ export interface NotificationRuleStatus {
   lastFired?: string;
   fireCount: number;
 }
+
+// Global search
+export type SearchResourceType =
+  | "services" | "stacks" | "nodes" | "tasks"
+  | "configs" | "secrets" | "networks" | "volumes";
+
+export interface SearchResult {
+  id: string;
+  name: string;
+  detail: string;
+  state?: string;
+}
+
+export interface SearchResponse {
+  query: string;
+  results: Partial<Record<SearchResourceType, SearchResult[]>>;
+  counts: Partial<Record<SearchResourceType, number>>;
+  total: number;
+}

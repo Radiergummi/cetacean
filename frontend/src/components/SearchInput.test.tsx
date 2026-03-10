@@ -10,13 +10,13 @@ describe("SearchInput", () => {
 
   it("uses default placeholder", () => {
     render(<SearchInput value="" onChange={vi.fn()} />);
-    expect(screen.getByPlaceholderText("Search...")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Search\u2026")).toBeInTheDocument();
   });
 
   it("calls onChange on input", () => {
     const onChange = vi.fn();
     render(<SearchInput value="" onChange={onChange} />);
-    fireEvent.change(screen.getByPlaceholderText("Search..."), { target: { value: "hello" } });
+    fireEvent.change(screen.getByPlaceholderText("Search\u2026"), { target: { value: "hello" } });
     expect(onChange).toHaveBeenCalledWith("hello");
   });
 

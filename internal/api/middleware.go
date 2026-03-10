@@ -26,11 +26,17 @@ func RequestIDFrom(ctx context.Context) string {
 func requestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := r.Header.Get("X-Request-ID")
-		if id == "" {
+		if id == "" || len(id) > 64 || strings.ContainsAny(id, "\r\n") {
 			var buf [8]byte
 			_, _ = rand.Read(buf[:])
 			id = hex.EncodeToString(buf[:])
 		}
+		id = strings.Map(func(r rune) rune {
+			if r >= 0x20 && r < 0x7f {
+				return r
+			}
+			return -1
+		}, id)
 		ctx := context.WithValue(r.Context(), reqIDKey, id)
 		w.Header().Set("X-Request-ID", id)
 		next.ServeHTTP(w, r.WithContext(ctx))

@@ -19,6 +19,7 @@ import type {
   PlacementTopology,
   NotificationRuleStatus,
   StackSummary,
+  SearchResponse,
 } from "./types";
 
 const BASE = "/api";
@@ -176,4 +177,8 @@ export const api = {
     return fetchJSON<any>(`/metrics/query_range?${params}`);
   },
   notificationRules: () => fetchJSON<NotificationRuleStatus[]>("/notifications/rules"),
+  search: (q: string, limit?: number) =>
+    fetchJSON<SearchResponse>(
+      `/search?q=${encodeURIComponent(q)}${limit !== undefined ? `&limit=${limit}` : ""}`
+    ),
 };

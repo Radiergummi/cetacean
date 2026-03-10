@@ -1,109 +1,139 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { api } from "../api/client";
-import type { SearchResourceType, SearchResponse } from "../api/types";
+import {useEffect, useState} from "react";
+import {Link} from "react-router-dom";
+import {api} from "../api/client";
+import type {SearchResponse} from "../api/types";
 import EmptyState from "../components/EmptyState";
-import { SkeletonTable } from "../components/LoadingSkeleton";
+import {SkeletonTable} from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import SearchInput from "../components/SearchInput";
-import { useSearchParam } from "../hooks/useSearchParam";
+import {useSearchParam} from "../hooks/useSearchParam";
+import {Loader2} from "lucide-react";
+import ResourceName from "../components/ResourceName";
+import {STATE_COLORS} from "../lib/searchConstants";
 
-const TYPE_ORDER: SearchResourceType[] = [
-  "services", "stacks", "nodes", "tasks",
-  "configs", "secrets", "networks", "volumes",
-];
-
-const TYPE_LABELS: Record<SearchResourceType, string> = {
-  services: "Services", stacks: "Stacks", nodes: "Nodes", tasks: "Tasks",
-  configs: "Configs", secrets: "Secrets", networks: "Networks", volumes: "Volumes",
-};
-
-function resourcePath(type: SearchResourceType, id: string): string {
-  return `/${type}/${id}`;
+function StateOrb({state}: { state: string }) {
+    if (state === "updating") {
+        return <Loader2 className="w-3 h-3 shrink-0 text-blue-500 animate-spin" />;
+    }
+    const color = STATE_COLORS[state] ?? "bg-gray-400";
+    return <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${color}`} title={state} />;
 }
+import {resourcePath, TYPE_LABELS, TYPE_ORDER} from "../lib/searchConstants";
 
 export default function SearchPage() {
-  const [input, q, setInput] = useSearchParam("q");
-  const [data, setData] = useState<SearchResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+    const [input, query, setInput] = useSearchParam("q");
+    const [data, setData] = useState<SearchResponse | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-  // Fetch results when debounced q changes
-  useEffect(() => {
-    if (!q) {
-      setData(null);
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    api.search(q, 0).then(
-      (res) => {
-        if (!cancelled) {
-          setData(res);
-          setLoading(false);
+    // Fetch results when debounced q changes
+    useEffect(() => {
+        if (!query) {
+            setData(null);
+            setLoading(false);
+
+            return;
         }
-      },
-      (err) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
-          setLoading(false);
-        }
-      },
+
+        let cancelled = false;
+        setLoading(true);
+        setError(null);
+
+        api.search(query, 0).then(
+            (response) => {
+                if (!cancelled) {
+                    setData(response);
+                    setLoading(false);
+                }
+            },
+            (error) => {
+                if (!cancelled) {
+                    setError(error instanceof Error ? error.message : String(error));
+                    setLoading(false);
+                }
+            },
+        );
+
+        return () => {
+            cancelled = true;
+        };
+    }, [query]);
+
+    return (
+        <>
+            <PageHeader title="Search"/>
+
+            <div className="mb-6">
+                <SearchInput value={input} onChange={setInput} placeholder="Search all resources…"/>
+            </div>
+
+            {loading && <SkeletonTable columns={3} rows={8}/>}
+
+            {error && (
+                <p className="text-sm text-destructive">{error}</p>
+            )}
+
+            {!loading && !error && query && data && data.total === 0 && (
+                <EmptyState message={`No results for "${query}"`}/>
+            )}
+
+            {!loading && !error && data && data.total > 0 && (
+                <ul className="flex flex-col gap-8">
+                    {TYPE_ORDER.map((type) => {
+                        const items = data.results[type];
+
+                        if (!items || items.length === 0) {
+                            return null;
+                        }
+
+                        return (
+                            <li className="contents">
+                                <section key={type}>
+                                    <header className="mb-2">
+                                        <h2 className="text-sm font-medium text-muted-foreground">
+                                            <span>
+                                                {TYPE_LABELS[type]}
+                                            </span>
+                                            <span className="ml-2 inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
+                                                {items.length}
+                                            </span>
+                                        </h2>
+                                    </header>
+
+                                    <ul className="rounded-lg border divide-y">
+                                        {items.map((item) => (
+                                            <li className="contents">
+                                                <Link
+                                                    key={item.id}
+                                                    to={resourcePath(type, item.id)}
+                                                    className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors"
+                                                >
+                                                    {item.state && <StateOrb state={item.state} />}
+                                                    <span className="font-medium text-sm truncate">
+                                                        <ResourceName name={item.name} />
+                                                    </span>
+
+                                                    {item.detail && (
+                                                        <span className="text-xs text-muted-foreground truncate">
+                                                            {item.detail}
+                                                        </span>
+                                                    )}
+                                                </Link>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </section>
+                            </li>
+                        );
+                    })}
+                </ul>
+            )}
+
+            {!loading && !error && !query && (
+                <p className="text-sm text-muted-foreground">
+                    Type to search across all resources.
+                </p>
+            )}
+        </>
     );
-    return () => { cancelled = true; };
-  }, [q]);
-
-  return (
-    <>
-      <PageHeader title="Search" />
-      <div className="mb-6">
-        <SearchInput
-          value={input}
-          onChange={setInput}
-          placeholder="Search all resources..."
-        />
-      </div>
-      {loading && <SkeletonTable columns={3} rows={8} />}
-      {error && (
-        <p className="text-sm text-destructive">{error}</p>
-      )}
-      {!loading && !error && q && data && data.total === 0 && (
-        <EmptyState message={`No results for "${q}"`} />
-      )}
-      {!loading && !error && data && data.total > 0 && (
-        <div className="space-y-8">
-          {TYPE_ORDER.map((type) => {
-            const items = data.results[type];
-            if (!items || items.length === 0) return null;
-            return (
-              <section key={type}>
-                <h2 className="text-sm font-medium text-muted-foreground mb-2">
-                  {TYPE_LABELS[type]} ({items.length})
-                </h2>
-                <div className="rounded-lg border divide-y">
-                  {items.map((item) => (
-                    <Link
-                      key={item.id}
-                      to={resourcePath(type, item.id)}
-                      className="flex items-baseline gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors"
-                    >
-                      <span className="font-medium text-sm truncate">{item.name}</span>
-                      {item.detail && (
-                        <span className="text-xs text-muted-foreground truncate">{item.detail}</span>
-                      )}
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
-        </div>
-      )}
-      {!loading && !error && !q && (
-        <p className="text-sm text-muted-foreground">Type to search across all resources.</p>
-      )}
-    </>
-  );
 }

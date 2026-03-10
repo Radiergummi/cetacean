@@ -117,6 +117,10 @@ func main() {
 	}
 	spa := api.NewSPAHandler(distFS)
 
+	if cfg.Pprof {
+		slog.Warn("pprof endpoints enabled", "path", "/debug/pprof/")
+	}
+
 	router := api.NewRouter(handlers, broadcaster, promProxy, spa, cfg.Pprof)
 
 	server := &http.Server{

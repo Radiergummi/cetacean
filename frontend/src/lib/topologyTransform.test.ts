@@ -88,14 +88,14 @@ describe("buildPhysicalFlow", () => {
     expect(nodes.length).toBe(2);
     expect(nodes[0].type).toBe("physicalNode");
 
-    const n1Services = nodes[0].data.services;
-    expect(n1Services.length).toBe(2);
-    const webSvc = n1Services.find((s: { serviceId: string }) => s.serviceId === "svc1");
-    expect(webSvc.running).toBe(2);
-    expect(webSvc.total).toBe(2);
+    const n1Data = nodes[0].data as { services: { serviceId: string; running: number; total: number }[] };
+    expect(n1Data.services.length).toBe(2);
+    const webSvc = n1Data.services.find((s) => s.serviceId === "svc1");
+    expect(webSvc!.running).toBe(2);
+    expect(webSvc!.total).toBe(2);
 
-    const n2Services = nodes[1].data.services;
-    expect(n2Services.length).toBe(1);
-    expect(n2Services[0].total).toBe(1);
+    const n2Data = nodes[1].data as { services: { total: number }[] };
+    expect(n2Data.services.length).toBe(1);
+    expect(n2Data.services[0].total).toBe(1);
   });
 });

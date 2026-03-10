@@ -30,6 +30,10 @@ go.work.sum
 
 # Claude Code
 .claude/
+.superpowers/
+
+# Runtime data
+data/
 
 # Build output
 cetacean

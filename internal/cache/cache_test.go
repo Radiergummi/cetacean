@@ -3,6 +3,7 @@ package cache
 import (
 	"testing"
 
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
@@ -897,5 +898,120 @@ func TestReplaceAll_PartialSync(t *testing.T) {
 	// Service should be updated
 	if _, ok := c.GetService("s1"); !ok {
 		t.Error("new service not found after partial sync")
+	}
+}
+
+// --- ServicesUsing* cross-reference tests ---
+
+func TestCache_ServicesUsingConfig(t *testing.T) {
+	c := New(nil)
+	svc := swarm.Service{ID: "svc1"}
+	svc.Spec.Name = "web"
+	svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{
+		Configs: []*swarm.ConfigReference{{ConfigID: "cfg1", ConfigName: "app-config"}},
+	}
+	c.SetService(svc)
+
+	svc2 := swarm.Service{ID: "svc2"}
+	svc2.Spec.Name = "api"
+	svc2.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{}
+	c.SetService(svc2)
+
+	refs := c.ServicesUsingConfig("cfg1")
+	if len(refs) != 1 {
+		t.Fatalf("expected 1 service ref, got %d", len(refs))
+	}
+	if refs[0].ID != "svc1" || refs[0].Name != "web" {
+		t.Errorf("unexpected ref: %+v", refs[0])
+	}
+
+	// No services reference this config
+	refs = c.ServicesUsingConfig("nonexistent")
+	if len(refs) != 0 {
+		t.Errorf("expected 0 refs for nonexistent config, got %d", len(refs))
+	}
+}
+
+func TestCache_ServicesUsingSecret(t *testing.T) {
+	c := New(nil)
+	svc := swarm.Service{ID: "svc1"}
+	svc.Spec.Name = "web"
+	svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{
+		Secrets: []*swarm.SecretReference{{SecretID: "sec1", SecretName: "tls-cert"}},
+	}
+	c.SetService(svc)
+
+	svc2 := swarm.Service{ID: "svc2"}
+	svc2.Spec.Name = "api"
+	svc2.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{}
+	c.SetService(svc2)
+
+	refs := c.ServicesUsingSecret("sec1")
+	if len(refs) != 1 {
+		t.Fatalf("expected 1 service ref, got %d", len(refs))
+	}
+	if refs[0].ID != "svc1" || refs[0].Name != "web" {
+		t.Errorf("unexpected ref: %+v", refs[0])
+	}
+
+	refs = c.ServicesUsingSecret("nonexistent")
+	if len(refs) != 0 {
+		t.Errorf("expected 0 refs for nonexistent secret, got %d", len(refs))
+	}
+}
+
+func TestCache_ServicesUsingNetwork(t *testing.T) {
+	c := New(nil)
+	svc := swarm.Service{ID: "svc1"}
+	svc.Spec.Name = "web"
+	svc.Spec.TaskTemplate.Networks = []swarm.NetworkAttachmentConfig{{Target: "net1"}}
+	c.SetService(svc)
+
+	svc2 := swarm.Service{ID: "svc2"}
+	svc2.Spec.Name = "api"
+	svc2.Spec.TaskTemplate.Networks = []swarm.NetworkAttachmentConfig{{Target: "net2"}}
+	c.SetService(svc2)
+
+	refs := c.ServicesUsingNetwork("net1")
+	if len(refs) != 1 {
+		t.Fatalf("expected 1 service ref, got %d", len(refs))
+	}
+	if refs[0].ID != "svc1" || refs[0].Name != "web" {
+		t.Errorf("unexpected ref: %+v", refs[0])
+	}
+
+	refs = c.ServicesUsingNetwork("nonexistent")
+	if len(refs) != 0 {
+		t.Errorf("expected 0 refs for nonexistent network, got %d", len(refs))
+	}
+}
+
+func TestCache_ServicesUsingVolume(t *testing.T) {
+	c := New(nil)
+	svc := swarm.Service{ID: "svc1"}
+	svc.Spec.Name = "db"
+	svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{
+		Mounts: []mount.Mount{{Type: mount.TypeVolume, Source: "data-vol"}},
+	}
+	c.SetService(svc)
+
+	svc2 := swarm.Service{ID: "svc2"}
+	svc2.Spec.Name = "web"
+	svc2.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{
+		Mounts: []mount.Mount{{Type: mount.TypeBind, Source: "/host/path"}},
+	}
+	c.SetService(svc2)
+
+	refs := c.ServicesUsingVolume("data-vol")
+	if len(refs) != 1 {
+		t.Fatalf("expected 1 service ref, got %d", len(refs))
+	}
+	if refs[0].ID != "svc1" || refs[0].Name != "db" {
+		t.Errorf("unexpected ref: %+v", refs[0])
+	}
+
+	refs = c.ServicesUsingVolume("nonexistent")
+	if len(refs) != 0 {
+		t.Errorf("expected 0 refs for nonexistent volume, got %d", len(refs))
 	}
 }

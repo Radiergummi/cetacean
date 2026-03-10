@@ -68,23 +68,10 @@ func New(rules []Rule) *Notifier {
 func (n *Notifier) HandleEvent(e cache.Event, resourceName string) {
 	for i := range n.rules {
 		r := &n.rules[i]
-		if r.matches(e, resourceName) && n.checkCooldown(r) && n.circuitAllows(r.ID) {
-			n.recordFire(r.ID)
+		if r.matches(e, resourceName) && n.checkAndRecordFire(r) {
 			go n.fire(r, e, resourceName)
 		}
 	}
-}
-
-// circuitAllows returns true if the circuit is closed or half-open (ready to retry).
-func (n *Notifier) circuitAllows(ruleID string) bool {
-	n.mu.RLock()
-	cs, ok := n.circuits[ruleID]
-	n.mu.RUnlock()
-	if !ok || cs.failures < circuitThreshold {
-		return true
-	}
-	// Circuit is open — allow a retry after the timeout (half-open)
-	return time.Since(cs.openedAt) >= circuitTimeout
 }
 
 func (n *Notifier) recordSuccess(ruleID string) {
@@ -107,24 +94,26 @@ func (n *Notifier) recordFailure(ruleID string) {
 	n.mu.Unlock()
 }
 
-func (n *Notifier) checkCooldown(rule *Rule) bool {
-	if rule.cooldownDur == 0 {
-		return true
-	}
-	n.mu.RLock()
-	last, ok := n.lastFire[rule.ID]
-	n.mu.RUnlock()
-	if !ok {
-		return true
-	}
-	return time.Since(last) >= rule.cooldownDur
-}
-
-func (n *Notifier) recordFire(ruleID string) {
+// checkAndRecordFire atomically checks the circuit breaker, cooldown, and records
+// the fire time under a single write lock to prevent TOCTOU races on half-open transitions.
+func (n *Notifier) checkAndRecordFire(rule *Rule) bool {
 	n.mu.Lock()
-	n.lastFire[ruleID] = time.Now()
-	n.fireCounts[ruleID]++
-	n.mu.Unlock()
+	defer n.mu.Unlock()
+	// Circuit breaker check
+	if cs, ok := n.circuits[rule.ID]; ok && cs.failures >= circuitThreshold {
+		if time.Since(cs.openedAt) < circuitTimeout {
+			return false
+		}
+	}
+	// Cooldown check
+	if rule.cooldownDur != 0 {
+		if last, ok := n.lastFire[rule.ID]; ok && time.Since(last) < rule.cooldownDur {
+			return false
+		}
+	}
+	n.lastFire[rule.ID] = time.Now()
+	n.fireCounts[rule.ID]++
+	return true
 }
 
 func (n *Notifier) fire(rule *Rule, e cache.Event, resourceName string) {

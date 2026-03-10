@@ -14,6 +14,7 @@ import ResourceCard from "../components/ResourceCard";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
 import { SkeletonTable } from "../components/LoadingSkeleton";
+import ResourceName from "../components/ResourceName";
 import DataTable from "../components/DataTable";
 import type { Column } from "../components/DataTable";
 
@@ -38,7 +39,7 @@ export default function NetworkList() {
   const columns: Column<Network>[] = [
     {
       header: <SortIndicator label="Name" active={sortKey === "name"} dir={sortDir} />,
-      cell: (n) => n.Name,
+      cell: (n) => <ResourceName name={n.Name} />,
       onHeaderClick: () => toggle("name"),
     },
     {

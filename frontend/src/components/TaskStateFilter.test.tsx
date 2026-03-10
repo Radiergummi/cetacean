@@ -18,24 +18,24 @@ describe("TaskStateFilter", () => {
 
   it("renders state buttons with counts", () => {
     render(<TaskStateFilter tasks={fakeTasks} active={null} onChange={() => {}} />);
-    expect(screen.getByText("running")).toBeInTheDocument();
+    expect(screen.getByText("Running")).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument();
-    expect(screen.getByText("failed")).toBeInTheDocument();
+    expect(screen.getByText("Failed")).toBeInTheDocument();
     expect(screen.getByText("1")).toBeInTheDocument();
   });
 
   it("calls onChange with state on click", () => {
     const onChange = vi.fn();
     render(<TaskStateFilter tasks={fakeTasks} active={null} onChange={onChange} />);
-    fireEvent.click(screen.getByText("running"));
+    fireEvent.click(screen.getByText("Running"));
     expect(onChange).toHaveBeenCalledWith("running");
   });
 
-  it("calls onChange with null when clicking active state", () => {
+  it("calls onChange with same state when clicking active state", () => {
     const onChange = vi.fn();
     render(<TaskStateFilter tasks={fakeTasks} active="running" onChange={onChange} />);
-    fireEvent.click(screen.getByText("running"));
-    expect(onChange).toHaveBeenCalledWith(null);
+    fireEvent.click(screen.getByText("Running"));
+    expect(onChange).toHaveBeenCalledWith("running");
   });
 
   it("calls onChange with null when clicking All", () => {
