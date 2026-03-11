@@ -285,7 +285,7 @@ func TestHandleListNodes(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var resp PagedResponse[swarm.Node]
+	var resp CollectionResponse[swarm.Node]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if len(resp.Items) != 2 {
 		t.Errorf("expected 2 nodes, got %d", len(resp.Items))
@@ -398,7 +398,7 @@ func TestHandleListServices_Paginated(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var resp PagedResponse[ServiceListItem]
+	var resp CollectionResponse[ServiceListItem]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Total != 3 {
 		t.Fatalf("expected total 3, got %d", resp.Total)
@@ -429,7 +429,7 @@ func TestHandleListServices_RunningTasks(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListServices(w, req)
 
-	var resp PagedResponse[ServiceListItem]
+	var resp CollectionResponse[ServiceListItem]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 service, got %d", len(resp.Items))
@@ -457,7 +457,7 @@ func TestHandleListNodes_Paginated(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var resp PagedResponse[swarm.Node]
+	var resp CollectionResponse[swarm.Node]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Total != 2 {
 		t.Fatalf("expected total 2, got %d", resp.Total)
@@ -488,7 +488,7 @@ func TestHandleListServices_Search(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var resp PagedResponse[ServiceListItem]
+	var resp CollectionResponse[ServiceListItem]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 service, got %d", len(resp.Items))
@@ -640,7 +640,7 @@ func TestHandleListTasks(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	var resp PagedResponse[swarm.Task]
+	var resp CollectionResponse[swarm.Task]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Total != 2 {
 		t.Errorf("total=%d, want 2", resp.Total)
@@ -688,7 +688,7 @@ func TestHandleListStacks(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	var resp PagedResponse[cache.Stack]
+	var resp CollectionResponse[cache.Stack]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Total != 1 {
 		t.Fatalf("total=%d, want 1", resp.Total)
@@ -712,7 +712,7 @@ func TestHandleListStacks_SortByName(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListStacks(w, req)
 
-	var resp PagedResponse[cache.Stack]
+	var resp CollectionResponse[cache.Stack]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Items[0].Name != "alpha" {
 		t.Errorf("first=%s, want alpha", resp.Items[0].Name)
@@ -729,7 +729,7 @@ func TestHandleListConfigs_SortByName(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListConfigs(w, req)
 
-	var resp PagedResponse[swarm.Config]
+	var resp CollectionResponse[swarm.Config]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Items[0].Spec.Name != "alpha" {
 		t.Errorf("first=%s, want alpha", resp.Items[0].Spec.Name)
@@ -746,7 +746,7 @@ func TestHandleListSecrets_SortByName(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListSecrets(w, req)
 
-	var resp PagedResponse[swarm.Secret]
+	var resp CollectionResponse[swarm.Secret]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Items[0].Spec.Name != "alpha" {
 		t.Errorf("first=%s, want alpha", resp.Items[0].Spec.Name)
@@ -763,7 +763,7 @@ func TestHandleListNetworks_SortByName(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListNetworks(w, req)
 
-	var resp PagedResponse[network.Summary]
+	var resp CollectionResponse[network.Summary]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Items[0].Name != "alpha" {
 		t.Errorf("first=%s, want alpha", resp.Items[0].Name)
@@ -780,7 +780,7 @@ func TestHandleListVolumes_SortByName(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListVolumes(w, req)
 
-	var resp PagedResponse[volume.Volume]
+	var resp CollectionResponse[volume.Volume]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Items[0].Name != "alpha" {
 		t.Errorf("first=%s, want alpha", resp.Items[0].Name)
@@ -803,7 +803,7 @@ func TestHandleListStacks_Search(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListStacks(w, req)
 
-	var resp PagedResponse[cache.Stack]
+	var resp CollectionResponse[cache.Stack]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 stack, got %d", len(resp.Items))
@@ -826,10 +826,18 @@ func TestHandleGetStack_Found(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	var detail cache.StackDetail
-	json.NewDecoder(w.Body).Decode(&detail)
-	if detail.Name != "mystack" {
-		t.Errorf("name=%s, want mystack", detail.Name)
+	var wrapper struct {
+		Context string            `json:"@context"`
+		ID      string            `json:"@id"`
+		Type    string            `json:"@type"`
+		Stack   cache.StackDetail `json:"stack"`
+	}
+	json.NewDecoder(w.Body).Decode(&wrapper)
+	if wrapper.Stack.Name != "mystack" {
+		t.Errorf("name=%s, want mystack", wrapper.Stack.Name)
+	}
+	if wrapper.Type != "Stack" {
+		t.Errorf("@type=%s, want Stack", wrapper.Type)
 	}
 }
 
@@ -859,7 +867,7 @@ func TestHandleListConfigs(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	var resp PagedResponse[swarm.Config]
+	var resp CollectionResponse[swarm.Config]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 config, got %d", len(resp.Items))
@@ -879,7 +887,7 @@ func TestHandleListSecrets(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	var resp PagedResponse[swarm.Secret]
+	var resp CollectionResponse[swarm.Secret]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 secret, got %d", len(resp.Items))
@@ -899,7 +907,7 @@ func TestHandleListNetworks(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	var resp PagedResponse[network.Summary]
+	var resp CollectionResponse[network.Summary]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 network, got %d", len(resp.Items))
@@ -919,7 +927,7 @@ func TestHandleListVolumes(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	var resp PagedResponse[volume.Volume]
+	var resp CollectionResponse[volume.Volume]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 volume, got %d", len(resp.Items))
@@ -988,7 +996,7 @@ func TestHandleListNodes_SortByRole(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListNodes(w, req)
 
-	var resp PagedResponse[swarm.Node]
+	var resp CollectionResponse[swarm.Node]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if len(resp.Items) != 2 {
 		t.Fatalf("expected 2, got %d", len(resp.Items))
@@ -1011,7 +1019,7 @@ func TestHandleListNodes_SortByStatus(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListNodes(w, req)
 
-	var resp PagedResponse[swarm.Node]
+	var resp CollectionResponse[swarm.Node]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if string(resp.Items[0].Status.State) != "down" {
 		t.Errorf("first=%s, want down", resp.Items[0].Status.State)
@@ -1030,7 +1038,7 @@ func TestHandleListNodes_SortByAvailability(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListNodes(w, req)
 
-	var resp PagedResponse[swarm.Node]
+	var resp CollectionResponse[swarm.Node]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if string(resp.Items[0].Spec.Availability) != "active" {
 		t.Errorf("first=%s, want active", resp.Items[0].Spec.Availability)
@@ -1055,7 +1063,7 @@ func TestHandleListServices_SortByMode(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListServices(w, req)
 
-	var resp PagedResponse[ServiceListItem]
+	var resp CollectionResponse[ServiceListItem]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if len(resp.Items) != 2 {
 		t.Fatalf("expected 2, got %d", len(resp.Items))
@@ -1076,7 +1084,7 @@ func TestHandleListTasks_SortByService(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListTasks(w, req)
 
-	var resp PagedResponse[swarm.Task]
+	var resp CollectionResponse[swarm.Task]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Items[0].ServiceID != "svc-a" {
 		t.Errorf("first serviceID=%s, want svc-a", resp.Items[0].ServiceID)
@@ -1093,7 +1101,7 @@ func TestHandleListTasks_SortByNode(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListTasks(w, req)
 
-	var resp PagedResponse[swarm.Task]
+	var resp CollectionResponse[swarm.Task]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Items[0].NodeID != "node-a" {
 		t.Errorf("first nodeID=%s, want node-a", resp.Items[0].NodeID)
@@ -1110,7 +1118,7 @@ func TestHandleListNetworks_SortByDriver(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListNetworks(w, req)
 
-	var resp PagedResponse[network.Summary]
+	var resp CollectionResponse[network.Summary]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Items[0].Driver != "bridge" {
 		t.Errorf("first driver=%s, want bridge", resp.Items[0].Driver)
@@ -1127,7 +1135,7 @@ func TestHandleListVolumes_SortByDriver(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListVolumes(w, req)
 
-	var resp PagedResponse[volume.Volume]
+	var resp CollectionResponse[volume.Volume]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Items[0].Driver != "local" {
 		t.Errorf("first driver=%s, want local", resp.Items[0].Driver)
@@ -1160,7 +1168,7 @@ func TestHandleListNodes_Filter(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	var resp PagedResponse[swarm.Node]
+	var resp CollectionResponse[swarm.Node]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 node, got %d", len(resp.Items))
@@ -1183,7 +1191,7 @@ func TestHandleListTasks_Filter(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	var resp PagedResponse[swarm.Task]
+	var resp CollectionResponse[swarm.Task]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 task, got %d", len(resp.Items))
@@ -1210,7 +1218,7 @@ func TestHandleListServices_Filter(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListServices(w, filterReq("/api/services", `image contains "nginx"`))
 
-	var resp PagedResponse[ServiceListItem]
+	var resp CollectionResponse[ServiceListItem]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 service, got %d", len(resp.Items))
@@ -1229,7 +1237,7 @@ func TestHandleListNetworks_Filter(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListNetworks(w, filterReq("/api/networks", `driver == "overlay"`))
 
-	var resp PagedResponse[network.Summary]
+	var resp CollectionResponse[network.Summary]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 network, got %d", len(resp.Items))
@@ -1268,7 +1276,7 @@ func TestHandleList_FilterEmpty(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListNodes(w, filterReq("/api/nodes", ""))
 
-	var resp PagedResponse[swarm.Node]
+	var resp CollectionResponse[swarm.Node]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Total != 1 {
 		t.Errorf("expected 1 node with empty filter, got %d", resp.Total)
@@ -1286,7 +1294,7 @@ func TestHandleList_FilterNoMatch(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	var resp PagedResponse[swarm.Node]
+	var resp CollectionResponse[swarm.Node]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Total != 0 {
 		t.Errorf("expected 0 nodes, got %d", resp.Total)
@@ -1302,7 +1310,7 @@ func TestHandleListVolumes_Filter(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListVolumes(w, filterReq("/api/volumes", `driver == "nfs"`))
 
-	var resp PagedResponse[volume.Volume]
+	var resp CollectionResponse[volume.Volume]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 volume, got %d", len(resp.Items))
@@ -1321,7 +1329,7 @@ func TestHandleListConfigs_Filter(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListConfigs(w, filterReq("/api/configs", `name contains "app"`))
 
-	var resp PagedResponse[swarm.Config]
+	var resp CollectionResponse[swarm.Config]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 config, got %d", len(resp.Items))
@@ -1337,7 +1345,7 @@ func TestHandleListSecrets_Filter(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListSecrets(w, filterReq("/api/secrets", `name startsWith "tls"`))
 
-	var resp PagedResponse[swarm.Secret]
+	var resp CollectionResponse[swarm.Secret]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 secret, got %d", len(resp.Items))
@@ -1359,7 +1367,7 @@ func TestHandleListStacks_Filter(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListStacks(w, filterReq("/api/stacks", `services > 0`))
 
-	var resp PagedResponse[cache.Stack]
+	var resp CollectionResponse[cache.Stack]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if len(resp.Items) != 2 {
 		t.Fatalf("expected 2 stacks, got %d", len(resp.Items))
@@ -1385,7 +1393,7 @@ func TestHandleList_FilterWithSearchAndPagination(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListNodes(w, req)
 
-	var resp PagedResponse[swarm.Node]
+	var resp CollectionResponse[swarm.Node]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Total != 1 {
 		t.Fatalf("expected 1, got %d", resp.Total)
@@ -1407,7 +1415,7 @@ func TestHandleList_FilterMissingField(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	var resp PagedResponse[swarm.Node]
+	var resp CollectionResponse[swarm.Node]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Total != 0 {
 		t.Errorf("expected 0 nodes for missing field filter, got %d", resp.Total)
@@ -1428,7 +1436,7 @@ func TestHandleListNodes_Search(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleListNodes(w, req)
 
-	var resp PagedResponse[swarm.Node]
+	var resp CollectionResponse[swarm.Node]
 	json.NewDecoder(w.Body).Decode(&resp)
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 node, got %d", len(resp.Items))
@@ -1555,6 +1563,7 @@ func TestHandleGetSecret_DataIsRedacted(t *testing.T) {
 		t.Error("response body contains secret data")
 	}
 	var resp struct {
+		Context  string             `json:"@context"`
 		Secret   swarm.Secret       `json:"secret"`
 		Services []cache.ServiceRef `json:"services"`
 	}
@@ -1585,7 +1594,7 @@ func TestHandleListSecrets_DataIsRedacted(t *testing.T) {
 	if strings.Contains(body, "super-secret") {
 		t.Error("response body contains secret data")
 	}
-	var resp PagedResponse[swarm.Secret]
+	var resp CollectionResponse[swarm.Secret]
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatal(err)
 	}
@@ -1622,6 +1631,9 @@ func TestHandleGetConfig_Found(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	var resp struct {
+		Context  string             `json:"@context"`
+		ID       string             `json:"@id"`
+		Type     string             `json:"@type"`
 		Config   swarm.Config       `json:"config"`
 		Services []cache.ServiceRef `json:"services"`
 	}
@@ -1633,6 +1645,9 @@ func TestHandleGetConfig_Found(t *testing.T) {
 	}
 	if len(resp.Services) != 1 || resp.Services[0].ID != "svc1" {
 		t.Errorf("expected 1 service ref (svc1), got %v", resp.Services)
+	}
+	if resp.Type != "Config" {
+		t.Errorf("@type=%s, want Config", resp.Type)
 	}
 }
 
@@ -1672,6 +1687,9 @@ func TestHandleGetSecret_Found(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	var resp struct {
+		Context  string             `json:"@context"`
+		ID       string             `json:"@id"`
+		Type     string             `json:"@type"`
 		Secret   swarm.Secret       `json:"secret"`
 		Services []cache.ServiceRef `json:"services"`
 	}
@@ -1683,6 +1701,9 @@ func TestHandleGetSecret_Found(t *testing.T) {
 	}
 	if len(resp.Services) != 1 || resp.Services[0].ID != "svc1" {
 		t.Errorf("expected 1 service ref (svc1), got %v", resp.Services)
+	}
+	if resp.Type != "Secret" {
+		t.Errorf("@type=%s, want Secret", resp.Type)
 	}
 }
 
@@ -1718,6 +1739,9 @@ func TestHandleGetNetwork_Found(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	var resp struct {
+		Context  string             `json:"@context"`
+		ID       string             `json:"@id"`
+		Type     string             `json:"@type"`
 		Network  network.Summary    `json:"network"`
 		Services []cache.ServiceRef `json:"services"`
 	}
@@ -1729,6 +1753,9 @@ func TestHandleGetNetwork_Found(t *testing.T) {
 	}
 	if len(resp.Services) != 1 || resp.Services[0].ID != "svc1" {
 		t.Errorf("expected 1 service ref (svc1), got %v", resp.Services)
+	}
+	if resp.Type != "Network" {
+		t.Errorf("@type=%s, want Network", resp.Type)
 	}
 }
 
@@ -1766,6 +1793,9 @@ func TestHandleGetVolume_Found(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	var resp struct {
+		Context  string             `json:"@context"`
+		ID       string             `json:"@id"`
+		Type     string             `json:"@type"`
 		Volume   volume.Volume      `json:"volume"`
 		Services []cache.ServiceRef `json:"services"`
 	}
@@ -1777,6 +1807,9 @@ func TestHandleGetVolume_Found(t *testing.T) {
 	}
 	if len(resp.Services) != 1 || resp.Services[0].ID != "svc1" {
 		t.Errorf("expected 1 service ref (svc1), got %v", resp.Services)
+	}
+	if resp.Type != "Volume" {
+		t.Errorf("@type=%s, want Volume", resp.Type)
 	}
 }
 
@@ -1951,7 +1984,7 @@ func TestHandleListTasks_NilContainerSpec(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	var resp PagedResponse[swarm.Task]
+	var resp CollectionResponse[swarm.Task]
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}

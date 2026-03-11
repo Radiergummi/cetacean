@@ -69,6 +69,18 @@ func TestApplyPagination(t *testing.T) {
 	if result.Items[0] != 2 || result.Items[1] != 3 || result.Items[2] != 4 {
 		t.Errorf("expected items [2,3,4], got %v", result.Items)
 	}
+	if result.Context != jsonLDContext {
+		t.Errorf("expected @context %s, got %s", jsonLDContext, result.Context)
+	}
+	if result.Type != "Collection" {
+		t.Errorf("expected @type Collection, got %s", result.Type)
+	}
+	if result.Limit != 3 {
+		t.Errorf("expected limit 3, got %d", result.Limit)
+	}
+	if result.Offset != 2 {
+		t.Errorf("expected offset 2, got %d", result.Offset)
+	}
 }
 
 func TestApplyPagination_BeyondEnd(t *testing.T) {

@@ -14,11 +14,6 @@ type PageParams struct {
 	Dir    string
 }
 
-type PagedResponse[T any] struct {
-	Items []T `json:"items"`
-	Total int `json:"total"`
-}
-
 func parsePagination(r *http.Request) PageParams {
 	p := PageParams{
 		Limit:  50,
@@ -52,7 +47,7 @@ func parsePagination(r *http.Request) PageParams {
 	return p
 }
 
-func applyPagination[T any](items []T, p PageParams) PagedResponse[T] {
+func applyPagination[T any](items []T, p PageParams) CollectionResponse[T] {
 	total := len(items)
 
 	start := p.Offset
@@ -69,10 +64,7 @@ func applyPagination[T any](items []T, p PageParams) PagedResponse[T] {
 		result = []T{}
 	}
 
-	return PagedResponse[T]{
-		Items: result,
-		Total: total,
-	}
+	return NewCollectionResponse(result, total, p.Limit, p.Offset)
 }
 
 func sortItems[T any](items []T, key, dir string, accessors map[string]func(T) string) []T {

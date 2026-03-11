@@ -537,7 +537,9 @@ func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("node %q not found", id))
 		return
 	}
-	writeJSON(w, node)
+	writeJSON(w, NewDetailResponse("/nodes/"+id, "Node", map[string]any{
+		"node": node,
+	}))
 }
 
 func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
@@ -584,7 +586,7 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, PagedResponse[ServiceListItem]{Items: items, Total: paged.Total})
+	writeJSON(w, NewCollectionResponse(items, paged.Total, paged.Limit, paged.Offset))
 }
 
 func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
@@ -594,7 +596,9 @@ func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("service %q not found", id))
 		return
 	}
-	writeJSON(w, svc)
+	writeJSON(w, NewDetailResponse("/services/"+id, "Service", map[string]any{
+		"service": svc,
+	}))
 }
 
 func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {
@@ -659,7 +663,7 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 		"node":    func(t swarm.Task) string { return t.NodeID },
 	})
 	paged := applyPagination(tasks, p)
-	writeJSON(w, PagedResponse[EnrichedTask]{Items: h.enrichTasks(paged.Items), Total: paged.Total})
+	writeJSON(w, NewCollectionResponse(h.enrichTasks(paged.Items), paged.Total, paged.Limit, paged.Offset))
 }
 
 func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
@@ -669,7 +673,12 @@ func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("task %q not found", id))
 		return
 	}
-	writeJSON(w, h.enrichTask(task))
+	et := h.enrichTask(task)
+	writeJSON(w, NewDetailResponse("/tasks/"+id, "Task", map[string]any{
+		"task":    et,
+		"service": map[string]any{"@id": "/services/" + et.ServiceID, "name": et.ServiceName},
+		"node":    map[string]any{"@id": "/nodes/" + et.NodeID, "hostname": et.NodeHostname},
+	}))
 }
 
 func (h *Handlers) HandleTaskLogs(w http.ResponseWriter, r *http.Request) {
@@ -955,7 +964,9 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("stack %q not found", name))
 		return
 	}
-	writeJSON(w, detail)
+	writeJSON(w, NewDetailResponse("/stacks/"+name, "Stack", map[string]any{
+		"stack": detail,
+	}))
 }
 
 const stackNamespaceLabel = "container_label_com_docker_stack_namespace"
@@ -1018,10 +1029,10 @@ func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("config %q not found", id))
 		return
 	}
-	writeJSON(w, map[string]any{
+	writeJSON(w, NewDetailResponse("/configs/"+id, "Config", map[string]any{
 		"config":   cfg,
 		"services": h.cache.ServicesUsingConfig(id),
-	})
+	}))
 }
 
 func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
@@ -1051,10 +1062,10 @@ func (h *Handlers) HandleGetSecret(w http.ResponseWriter, r *http.Request) {
 	}
 	// Never expose secret data — clear it before responding.
 	sec.Spec.Data = nil
-	writeJSON(w, map[string]any{
+	writeJSON(w, NewDetailResponse("/secrets/"+id, "Secret", map[string]any{
 		"secret":   sec,
 		"services": h.cache.ServicesUsingSecret(id),
-	})
+	}))
 }
 
 func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
@@ -1085,10 +1096,10 @@ func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("network %q not found", id))
 		return
 	}
-	writeJSON(w, map[string]any{
+	writeJSON(w, NewDetailResponse("/networks/"+id, "Network", map[string]any{
 		"network":  net,
 		"services": h.cache.ServicesUsingNetwork(id),
-	})
+	}))
 }
 
 func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
@@ -1116,10 +1127,10 @@ func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("volume %q not found", name))
 		return
 	}
-	writeJSON(w, map[string]any{
+	writeJSON(w, NewDetailResponse("/volumes/"+name, "Volume", map[string]any{
 		"volume":   vol,
 		"services": h.cache.ServicesUsingVolume(name),
-	})
+	}))
 }
 
 func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
