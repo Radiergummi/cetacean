@@ -125,6 +125,50 @@ func TestSecurityHeaders(t *testing.T) {
 	}
 }
 
+func TestDiscoveryLinks_AddedToAPIRoutes(t *testing.T) {
+	handler := discoveryLinks(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/api/nodes", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	links := w.Header().Values("Link")
+	if len(links) != 2 {
+		t.Fatalf("expected 2 Link headers, got %d: %v", len(links), links)
+	}
+	found := map[string]bool{"service-desc": false, "describedby": false}
+	for _, link := range links {
+		if link == `</api>; rel="service-desc"` {
+			found["service-desc"] = true
+		}
+		if link == `</api/context.jsonld>; rel="describedby"` {
+			found["describedby"] = true
+		}
+	}
+	for rel, ok := range found {
+		if !ok {
+			t.Errorf("missing Link header with rel=%s", rel)
+		}
+	}
+}
+
+func TestDiscoveryLinks_SkippedForMetaRoutes(t *testing.T) {
+	handler := discoveryLinks(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/-/health", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	links := w.Header().Values("Link")
+	if len(links) != 0 {
+		t.Errorf("meta routes should not get discovery Link headers, got %v", links)
+	}
+}
+
 func TestNewSPAHandler_ServesFile(t *testing.T) {
 	fsys := fstest.MapFS{
 		"index.html":     {Data: []byte("<html>app</html>")},

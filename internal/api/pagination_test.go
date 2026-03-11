@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -102,6 +103,77 @@ func TestApplyPagination_BeyondEnd(t *testing.T) {
 
 type testItem struct {
 	Name string
+}
+
+func TestWritePaginationLinks_FirstPage(t *testing.T) {
+	w := httptest.NewRecorder()
+	writePaginationLinks(w, "/api/nodes", 100, 10, 0)
+
+	link := w.Header().Get("Link")
+	if link == "" {
+		t.Fatal("expected Link header")
+	}
+	if !strings.Contains(link, `rel="next"`) {
+		t.Error("expected next link")
+	}
+	if strings.Contains(link, `rel="prev"`) {
+		t.Error("first page should not have prev link")
+	}
+	if !strings.Contains(link, "offset=10") {
+		t.Errorf("expected next offset=10, got %s", link)
+	}
+}
+
+func TestWritePaginationLinks_MiddlePage(t *testing.T) {
+	w := httptest.NewRecorder()
+	writePaginationLinks(w, "/api/nodes", 100, 10, 20)
+
+	link := w.Header().Get("Link")
+	if !strings.Contains(link, `rel="next"`) {
+		t.Error("expected next link")
+	}
+	if !strings.Contains(link, `rel="prev"`) {
+		t.Error("expected prev link")
+	}
+	if !strings.Contains(link, "offset=30") {
+		t.Errorf("expected next offset=30, got %s", link)
+	}
+	if !strings.Contains(link, "offset=10") {
+		t.Errorf("expected prev offset=10, got %s", link)
+	}
+}
+
+func TestWritePaginationLinks_LastPage(t *testing.T) {
+	w := httptest.NewRecorder()
+	writePaginationLinks(w, "/api/nodes", 25, 10, 20)
+
+	link := w.Header().Get("Link")
+	if strings.Contains(link, `rel="next"`) {
+		t.Error("last page should not have next link")
+	}
+	if !strings.Contains(link, `rel="prev"`) {
+		t.Error("expected prev link")
+	}
+}
+
+func TestWritePaginationLinks_SinglePage(t *testing.T) {
+	w := httptest.NewRecorder()
+	writePaginationLinks(w, "/api/nodes", 5, 10, 0)
+
+	link := w.Header().Get("Link")
+	if link != "" {
+		t.Errorf("single page should have no Link header, got %s", link)
+	}
+}
+
+func TestWritePaginationLinks_PrevClampsToZero(t *testing.T) {
+	w := httptest.NewRecorder()
+	writePaginationLinks(w, "/api/nodes", 100, 10, 5)
+
+	link := w.Header().Get("Link")
+	if !strings.Contains(link, "offset=0") {
+		t.Errorf("prev offset should clamp to 0, got %s", link)
+	}
 }
 
 func TestSortItems(t *testing.T) {

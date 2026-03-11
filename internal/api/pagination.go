@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -65,6 +66,23 @@ func applyPagination[T any](items []T, p PageParams) CollectionResponse[T] {
 	}
 
 	return NewCollectionResponse(result, total, p.Limit, p.Offset)
+}
+
+func writePaginationLinks(w http.ResponseWriter, path string, total, limit, offset int) {
+	var links []string
+	if offset+limit < total {
+		links = append(links, fmt.Sprintf("<%s?limit=%d&offset=%d>; rel=\"next\"", path, limit, offset+limit))
+	}
+	if offset > 0 {
+		prev := offset - limit
+		if prev < 0 {
+			prev = 0
+		}
+		links = append(links, fmt.Sprintf("<%s?limit=%d&offset=%d>; rel=\"prev\"", path, limit, prev))
+	}
+	if len(links) > 0 {
+		w.Header().Add("Link", strings.Join(links, ", "))
+	}
 }
 
 func sortItems[T any](items []T, key, dir string, accessors map[string]func(T) string) []T {

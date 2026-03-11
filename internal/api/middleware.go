@@ -76,6 +76,16 @@ func (w *statusWriter) Flush() {
 	}
 }
 
+func discoveryLinks(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/-/") {
+			w.Header().Add("Link", `</api>; rel="service-desc"`)
+			w.Header().Add("Link", `</api/context.jsonld>; rel="describedby"`)
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func requestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()

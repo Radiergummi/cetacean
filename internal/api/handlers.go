@@ -527,7 +527,9 @@ func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 		"status":       func(n swarm.Node) string { return string(n.Status.State) },
 		"availability": func(n swarm.Node) string { return string(n.Spec.Availability) },
 	})
-	writeJSON(w, applyPagination(nodes, p))
+	resp := applyPagination(nodes, p)
+	writePaginationLinks(w, r.URL.Path, resp.Total, resp.Limit, resp.Offset)
+	writeJSON(w, resp)
 }
 
 func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
@@ -586,6 +588,7 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	writePaginationLinks(w, r.URL.Path, paged.Total, paged.Limit, paged.Offset)
 	writeJSON(w, NewCollectionResponse(items, paged.Total, paged.Limit, paged.Offset))
 }
 
@@ -663,6 +666,7 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 		"node":    func(t swarm.Task) string { return t.NodeID },
 	})
 	paged := applyPagination(tasks, p)
+	writePaginationLinks(w, r.URL.Path, paged.Total, paged.Limit, paged.Offset)
 	writeJSON(w, NewCollectionResponse(h.enrichTasks(paged.Items), paged.Total, paged.Limit, paged.Offset))
 }
 
@@ -954,7 +958,9 @@ func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
 	stacks = sortItems(stacks, p.Sort, p.Dir, map[string]func(cache.Stack) string{
 		"name": func(s cache.Stack) string { return s.Name },
 	})
-	writeJSON(w, applyPagination(stacks, p))
+	resp := applyPagination(stacks, p)
+	writePaginationLinks(w, r.URL.Path, resp.Total, resp.Limit, resp.Offset)
+	writeJSON(w, resp)
 }
 
 func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
@@ -1048,7 +1054,9 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 		"created": func(c swarm.Config) string { return c.CreatedAt.String() },
 		"updated": func(c swarm.Config) string { return c.UpdatedAt.String() },
 	})
-	writeJSON(w, applyPagination(configs, p))
+	resp := applyPagination(configs, p)
+	writePaginationLinks(w, r.URL.Path, resp.Total, resp.Limit, resp.Offset)
+	writeJSON(w, resp)
 }
 
 // --- Secrets ---
@@ -1084,7 +1092,9 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 		"created": func(s swarm.Secret) string { return s.CreatedAt.String() },
 		"updated": func(s swarm.Secret) string { return s.UpdatedAt.String() },
 	})
-	writeJSON(w, applyPagination(secrets, p))
+	resp := applyPagination(secrets, p)
+	writePaginationLinks(w, r.URL.Path, resp.Total, resp.Limit, resp.Offset)
+	writeJSON(w, resp)
 }
 
 // --- Networks ---
@@ -1115,7 +1125,9 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 		"driver": func(n network.Summary) string { return n.Driver },
 		"scope":  func(n network.Summary) string { return n.Scope },
 	})
-	writeJSON(w, applyPagination(networks, p))
+	resp := applyPagination(networks, p)
+	writePaginationLinks(w, r.URL.Path, resp.Total, resp.Limit, resp.Offset)
+	writeJSON(w, resp)
 }
 
 // --- Volumes ---
@@ -1146,7 +1158,9 @@ func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 		"driver": func(v volume.Volume) string { return v.Driver },
 		"scope":  func(v volume.Volume) string { return v.Scope },
 	})
-	writeJSON(w, applyPagination(volumes, p))
+	resp := applyPagination(volumes, p)
+	writePaginationLinks(w, r.URL.Path, resp.Total, resp.Limit, resp.Offset)
+	writeJSON(w, resp)
 }
 
 // --- Notifications ---
