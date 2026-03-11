@@ -38,9 +38,9 @@ func PrometheusNotConfiguredHandler() http.Handler {
 }
 
 func (p *PrometheusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Map /api/metrics/query → /api/v1/query
-	// Map /api/metrics/query_range → /api/v1/query_range
-	path := strings.TrimPrefix(r.URL.Path, "/api/metrics")
+	// Map /-/metrics/query → /api/v1/query
+	// Map /-/metrics/query_range → /api/v1/query_range
+	path := strings.TrimPrefix(r.URL.Path, "/-/metrics")
 	if !allowedPrometheusPaths[path] {
 		writeProblem(w, r, http.StatusForbidden, "forbidden prometheus endpoint")
 		return

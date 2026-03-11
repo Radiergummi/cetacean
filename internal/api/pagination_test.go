@@ -107,7 +107,7 @@ type testItem struct {
 
 func TestWritePaginationLinks_FirstPage(t *testing.T) {
 	w := httptest.NewRecorder()
-	writePaginationLinks(w, "/api/nodes", 100, 10, 0)
+	writePaginationLinks(w, "/nodes", 100, 10, 0)
 
 	link := w.Header().Get("Link")
 	if link == "" {
@@ -126,7 +126,7 @@ func TestWritePaginationLinks_FirstPage(t *testing.T) {
 
 func TestWritePaginationLinks_MiddlePage(t *testing.T) {
 	w := httptest.NewRecorder()
-	writePaginationLinks(w, "/api/nodes", 100, 10, 20)
+	writePaginationLinks(w, "/nodes", 100, 10, 20)
 
 	link := w.Header().Get("Link")
 	if !strings.Contains(link, `rel="next"`) {
@@ -145,7 +145,7 @@ func TestWritePaginationLinks_MiddlePage(t *testing.T) {
 
 func TestWritePaginationLinks_LastPage(t *testing.T) {
 	w := httptest.NewRecorder()
-	writePaginationLinks(w, "/api/nodes", 25, 10, 20)
+	writePaginationLinks(w, "/nodes", 25, 10, 20)
 
 	link := w.Header().Get("Link")
 	if strings.Contains(link, `rel="next"`) {
@@ -158,7 +158,7 @@ func TestWritePaginationLinks_LastPage(t *testing.T) {
 
 func TestWritePaginationLinks_SinglePage(t *testing.T) {
 	w := httptest.NewRecorder()
-	writePaginationLinks(w, "/api/nodes", 5, 10, 0)
+	writePaginationLinks(w, "/nodes", 5, 10, 0)
 
 	link := w.Header().Get("Link")
 	if link != "" {
@@ -168,7 +168,7 @@ func TestWritePaginationLinks_SinglePage(t *testing.T) {
 
 func TestWritePaginationLinks_PrevClampsToZero(t *testing.T) {
 	w := httptest.NewRecorder()
-	writePaginationLinks(w, "/api/nodes", 100, 10, 5)
+	writePaginationLinks(w, "/nodes", 100, 10, 5)
 
 	link := w.Header().Get("Link")
 	if !strings.Contains(link, "offset=0") {

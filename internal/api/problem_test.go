@@ -9,7 +9,7 @@ import (
 )
 
 func TestWriteProblem(t *testing.T) {
-	req := httptest.NewRequest("GET", "/api/nodes/missing", nil)
+	req := httptest.NewRequest("GET", "/nodes/missing", nil)
 	ctx := context.WithValue(req.Context(), reqIDKey, "test-req-123")
 	req = req.WithContext(ctx)
 
@@ -42,7 +42,7 @@ func TestWriteProblem(t *testing.T) {
 	if p.Detail != `node "missing" not found` {
 		t.Errorf("detail = %q", p.Detail)
 	}
-	if p.Instance != "/api/nodes/missing" {
+	if p.Instance != "/nodes/missing" {
 		t.Errorf("instance = %q", p.Instance)
 	}
 	if p.RequestID != "test-req-123" {
@@ -51,7 +51,7 @@ func TestWriteProblem(t *testing.T) {
 }
 
 func TestWriteProblem_NoRequestID(t *testing.T) {
-	req := httptest.NewRequest("GET", "/api/test", nil)
+	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
 	writeProblem(w, req, http.StatusBadRequest, "bad input")
 
@@ -65,7 +65,7 @@ func TestWriteProblem_NoRequestID(t *testing.T) {
 }
 
 func TestWriteProblemTyped(t *testing.T) {
-	req := httptest.NewRequest("GET", "/api/nodes?filter=bad", nil)
+	req := httptest.NewRequest("GET", "/nodes?filter=bad", nil)
 	ctx := context.WithValue(req.Context(), reqIDKey, "typed-req-456")
 	req = req.WithContext(ctx)
 
@@ -94,7 +94,7 @@ func TestWriteProblemTyped(t *testing.T) {
 	if p.Context != "/api/context.jsonld" {
 		t.Errorf("@context = %q", p.Context)
 	}
-	if p.Instance != "/api/nodes" {
+	if p.Instance != "/nodes" {
 		t.Errorf("instance = %q", p.Instance)
 	}
 	if p.RequestID != "typed-req-456" {
@@ -103,7 +103,7 @@ func TestWriteProblemTyped(t *testing.T) {
 }
 
 func TestWriteProblemTyped_DefaultsFilled(t *testing.T) {
-	req := httptest.NewRequest("GET", "/api/test", nil)
+	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
 	writeProblemTyped(w, req, ProblemDetail{
 		Status: http.StatusInternalServerError,

@@ -30,7 +30,7 @@ func TestHandleNetworkTopology(t *testing.T) {
 	})
 
 	h := NewHandlers(c, nil, nil, closedReady(), nil, nil)
-	req := httptest.NewRequest("GET", "/api/topology/networks", nil)
+	req := httptest.NewRequest("GET", "/topology/networks", nil)
 	w := httptest.NewRecorder()
 	h.HandleNetworkTopology(w, req)
 
@@ -65,7 +65,7 @@ func TestHandleNetworkTopology_WithReplicatedService(t *testing.T) {
 		},
 	})
 	h := NewHandlers(c, nil, nil, closedReady(), nil, nil)
-	req := httptest.NewRequest("GET", "/api/topology/networks", nil)
+	req := httptest.NewRequest("GET", "/topology/networks", nil)
 	w := httptest.NewRecorder()
 	h.HandleNetworkTopology(w, req)
 
@@ -88,7 +88,7 @@ func TestHandlePlacementTopology(t *testing.T) {
 	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", NodeID: "n1", Slot: 1, Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
 
 	h := NewHandlers(c, nil, nil, closedReady(), nil, nil)
-	req := httptest.NewRequest("GET", "/api/topology/placement", nil)
+	req := httptest.NewRequest("GET", "/topology/placement", nil)
 	w := httptest.NewRecorder()
 	h.HandlePlacementTopology(w, req)
 
@@ -138,7 +138,7 @@ func TestHandleNetworkTopology_EnrichedFields(t *testing.T) {
 	})
 
 	h := NewHandlers(c, nil, nil, closedReady(), nil, nil)
-	req := httptest.NewRequest("GET", "/api/topology/networks", nil)
+	req := httptest.NewRequest("GET", "/topology/networks", nil)
 	w := httptest.NewRecorder()
 	h.HandleNetworkTopology(w, req)
 
@@ -188,7 +188,7 @@ func TestHandlePlacementTopology_EnrichedFields(t *testing.T) {
 	})
 
 	h := NewHandlers(c, nil, nil, closedReady(), nil, nil)
-	req := httptest.NewRequest("GET", "/api/topology/placement", nil)
+	req := httptest.NewRequest("GET", "/topology/placement", nil)
 	w := httptest.NewRecorder()
 	h.HandlePlacementTopology(w, req)
 

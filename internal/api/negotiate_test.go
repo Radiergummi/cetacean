@@ -27,86 +27,86 @@ func TestNegotiate(t *testing.T) {
 	}
 
 	t.Run("extension .json strips suffix and returns JSON", func(t *testing.T) {
-		ct, path := run("/api/services.json", "")
+		ct, path := run("/services.json", "")
 		if ct != ContentTypeJSON {
 			t.Errorf("got %v, want JSON", ct)
 		}
-		if path != "/api/services" {
-			t.Errorf("got path %q, want /api/services", path)
+		if path != "/services" {
+			t.Errorf("got path %q, want /services", path)
 		}
 	})
 
 	t.Run("extension .html strips suffix and returns HTML", func(t *testing.T) {
-		ct, path := run("/api/services.html", "")
+		ct, path := run("/services.html", "")
 		if ct != ContentTypeHTML {
 			t.Errorf("got %v, want HTML", ct)
 		}
-		if path != "/api/services" {
-			t.Errorf("got path %q, want /api/services", path)
+		if path != "/services" {
+			t.Errorf("got path %q, want /services", path)
 		}
 	})
 
 	t.Run("Accept application/json", func(t *testing.T) {
-		ct, _ := run("/api/services", "application/json")
+		ct, _ := run("/services", "application/json")
 		if ct != ContentTypeJSON {
 			t.Errorf("got %v, want JSON", ct)
 		}
 	})
 
 	t.Run("Accept application/vnd.cetacean.v1+json", func(t *testing.T) {
-		ct, _ := run("/api/services", "application/vnd.cetacean.v1+json")
+		ct, _ := run("/services", "application/vnd.cetacean.v1+json")
 		if ct != ContentTypeJSON {
 			t.Errorf("got %v, want JSON", ct)
 		}
 	})
 
 	t.Run("Accept text/html browser default", func(t *testing.T) {
-		ct, _ := run("/api/services", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+		ct, _ := run("/services", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 		if ct != ContentTypeHTML {
 			t.Errorf("got %v, want HTML", ct)
 		}
 	})
 
 	t.Run("Accept text/event-stream", func(t *testing.T) {
-		ct, _ := run("/api/events", "text/event-stream")
+		ct, _ := run("/events", "text/event-stream")
 		if ct != ContentTypeSSE {
 			t.Errorf("got %v, want SSE", ct)
 		}
 	})
 
 	t.Run("no Accept header defaults to JSON", func(t *testing.T) {
-		ct, _ := run("/api/services", "")
+		ct, _ := run("/services", "")
 		if ct != ContentTypeJSON {
 			t.Errorf("got %v, want JSON", ct)
 		}
 	})
 
 	t.Run("Accept */* defaults to JSON", func(t *testing.T) {
-		ct, _ := run("/api/services", "*/*")
+		ct, _ := run("/services", "*/*")
 		if ct != ContentTypeJSON {
 			t.Errorf("got %v, want JSON", ct)
 		}
 	})
 
 	t.Run("extension overrides Accept header", func(t *testing.T) {
-		ct, path := run("/api/services.html", "application/json")
+		ct, path := run("/services.html", "application/json")
 		if ct != ContentTypeHTML {
 			t.Errorf("got %v, want HTML", ct)
 		}
-		if path != "/api/services" {
-			t.Errorf("got path %q, want /api/services", path)
+		if path != "/services" {
+			t.Errorf("got path %q, want /services", path)
 		}
 	})
 
 	t.Run("quality value parsing prefers higher q", func(t *testing.T) {
-		ct, _ := run("/api/services", "text/html;q=0.9, application/json;q=1.0")
+		ct, _ := run("/services", "text/html;q=0.9, application/json;q=1.0")
 		if ct != ContentTypeJSON {
 			t.Errorf("got %v, want JSON", ct)
 		}
 	})
 
 	t.Run("quality value parsing html wins", func(t *testing.T) {
-		ct, _ := run("/api/services", "application/json;q=0.5, text/html;q=0.9")
+		ct, _ := run("/services", "application/json;q=0.5, text/html;q=0.9")
 		if ct != ContentTypeHTML {
 			t.Errorf("got %v, want HTML", ct)
 		}
@@ -114,7 +114,7 @@ func TestNegotiate(t *testing.T) {
 
 	t.Run("Vary header is set", func(t *testing.T) {
 		inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
-		req := httptest.NewRequest("GET", "/api/services", nil)
+		req := httptest.NewRequest("GET", "/services", nil)
 		rec := httptest.NewRecorder()
 		negotiate(inner).ServeHTTP(rec, req)
 		if v := rec.Header().Get("Vary"); v != "Accept" {
@@ -123,19 +123,19 @@ func TestNegotiate(t *testing.T) {
 	})
 
 	t.Run("application/xhtml+xml returns HTML", func(t *testing.T) {
-		ct, _ := run("/api/services", "application/xhtml+xml")
+		ct, _ := run("/services", "application/xhtml+xml")
 		if ct != ContentTypeHTML {
 			t.Errorf("got %v, want HTML", ct)
 		}
 	})
 
 	t.Run("path with dot but not known extension is unchanged", func(t *testing.T) {
-		ct, path := run("/api/services/my.service", "application/json")
+		ct, path := run("/services/my.service", "application/json")
 		if ct != ContentTypeJSON {
 			t.Errorf("got %v, want JSON", ct)
 		}
-		if path != "/api/services/my.service" {
-			t.Errorf("got path %q, want /api/services/my.service", path)
+		if path != "/services/my.service" {
+			t.Errorf("got path %q, want /services/my.service", path)
 		}
 	})
 

@@ -40,7 +40,7 @@ func TestHandleServiceLogs_JSON(t *testing.T) {
 
 	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()}, nil, closedReady(), nil, nil)
 
-	req := httptest.NewRequest("GET", "/api/services/svc1/logs?limit=100", nil)
+	req := httptest.NewRequest("GET", "/services/svc1/logs?limit=100", nil)
 	req.SetPathValue("id", "svc1")
 	req.Header.Set("Accept", "application/json")
 	w := httptest.NewRecorder()
@@ -78,7 +78,7 @@ func TestHandleServiceLogs_JSON_NotFound(t *testing.T) {
 	c := cache.New(nil)
 	h := NewHandlers(c, &mockLogStreamer{}, nil, closedReady(), nil, nil)
 
-	req := httptest.NewRequest("GET", "/api/services/missing/logs", nil)
+	req := httptest.NewRequest("GET", "/services/missing/logs", nil)
 	req.SetPathValue("id", "missing")
 	req.Header.Set("Accept", "application/json")
 	w := httptest.NewRecorder()
@@ -99,7 +99,7 @@ func TestHandleServiceLogs_SSE(t *testing.T) {
 
 	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()}, nil, closedReady(), nil, nil)
 
-	req := httptest.NewRequest("GET", "/api/services/svc1/logs", nil)
+	req := httptest.NewRequest("GET", "/services/svc1/logs", nil)
 	req.SetPathValue("id", "svc1")
 	req.Header.Set("Accept", "text/event-stream")
 	w := httptest.NewRecorder()
@@ -145,7 +145,7 @@ func TestHandleTaskLogs_JSON(t *testing.T) {
 
 	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()}, nil, closedReady(), nil, nil)
 
-	req := httptest.NewRequest("GET", "/api/tasks/t1/logs?limit=50", nil)
+	req := httptest.NewRequest("GET", "/tasks/t1/logs?limit=50", nil)
 	req.SetPathValue("id", "t1")
 	req.Header.Set("Accept", "application/json")
 	w := httptest.NewRecorder()
@@ -173,7 +173,7 @@ func TestHandleServiceLogs_JSON_Empty(t *testing.T) {
 
 	h := NewHandlers(c, &mockLogStreamer{data: nil}, nil, closedReady(), nil, nil)
 
-	req := httptest.NewRequest("GET", "/api/services/svc1/logs", nil)
+	req := httptest.NewRequest("GET", "/services/svc1/logs", nil)
 	req.SetPathValue("id", "svc1")
 	req.Header.Set("Accept", "application/json")
 	w := httptest.NewRecorder()
@@ -198,7 +198,7 @@ func TestHandleServiceLogs_DefaultsToJSON(t *testing.T) {
 
 	h := NewHandlers(c, &mockLogStreamer{data: nil}, nil, closedReady(), nil, nil)
 
-	req := httptest.NewRequest("GET", "/api/services/svc1/logs", nil)
+	req := httptest.NewRequest("GET", "/services/svc1/logs", nil)
 	req.SetPathValue("id", "svc1")
 	// No Accept header
 	w := httptest.NewRecorder()
@@ -219,7 +219,7 @@ func TestHandleServiceLogs_SSE_EventIDs(t *testing.T) {
 
 	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()}, nil, closedReady(), nil, nil)
 
-	req := httptest.NewRequest("GET", "/api/services/svc1/logs", nil)
+	req := httptest.NewRequest("GET", "/services/svc1/logs", nil)
 	req.SetPathValue("id", "svc1")
 	req.Header.Set("Accept", "text/event-stream")
 	w := httptest.NewRecorder()
@@ -253,7 +253,7 @@ func TestHandleServiceLogs_JSON_StreamFilter(t *testing.T) {
 	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()}, nil, closedReady(), nil, nil)
 
 	// Filter to stderr only
-	req := httptest.NewRequest("GET", "/api/services/svc1/logs?stream=stderr", nil)
+	req := httptest.NewRequest("GET", "/services/svc1/logs?stream=stderr", nil)
 	req.SetPathValue("id", "svc1")
 	req.Header.Set("Accept", "application/json")
 	w := httptest.NewRecorder()
@@ -281,7 +281,7 @@ func TestHandleServiceLogs_JSON_StreamFilterStdout(t *testing.T) {
 
 	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()}, nil, closedReady(), nil, nil)
 
-	req := httptest.NewRequest("GET", "/api/services/svc1/logs?stream=stdout", nil)
+	req := httptest.NewRequest("GET", "/services/svc1/logs?stream=stdout", nil)
 	req.SetPathValue("id", "svc1")
 	req.Header.Set("Accept", "application/json")
 	w := httptest.NewRecorder()
@@ -315,7 +315,7 @@ func TestHandleServiceLogs_SSE_LastEventID(t *testing.T) {
 	h := NewHandlers(c, mock, nil, closedReady(), nil, nil)
 
 	// Simulate EventSource reconnect with Last-Event-ID header
-	req := httptest.NewRequest("GET", "/api/services/svc1/logs", nil)
+	req := httptest.NewRequest("GET", "/services/svc1/logs", nil)
 	req.SetPathValue("id", "svc1")
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Last-Event-ID", "2024-01-01T00:00:03.000000000Z")
@@ -339,7 +339,7 @@ func TestHandleServiceLogs_SSE_LastEventID_OverriddenByAfter(t *testing.T) {
 	h := NewHandlers(c, mock, nil, closedReady(), nil, nil)
 
 	// Both ?after= and Last-Event-ID present — ?after= should win
-	req := httptest.NewRequest("GET", "/api/services/svc1/logs?after=2024-01-01T00:00:01Z", nil)
+	req := httptest.NewRequest("GET", "/services/svc1/logs?after=2024-01-01T00:00:01Z", nil)
 	req.SetPathValue("id", "svc1")
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Last-Event-ID", "2024-01-01T00:00:00Z")
@@ -374,7 +374,7 @@ func TestHandleServiceLogs_SSE_StreamFilter(t *testing.T) {
 
 	h := NewHandlers(c, &mockLogStreamer{data: frames.Bytes()}, nil, closedReady(), nil, nil)
 
-	req := httptest.NewRequest("GET", "/api/services/svc1/logs?stream=stderr", nil)
+	req := httptest.NewRequest("GET", "/services/svc1/logs?stream=stderr", nil)
 	req.SetPathValue("id", "svc1")
 	req.Header.Set("Accept", "text/event-stream")
 	w := httptest.NewRecorder()

@@ -16,7 +16,7 @@ func TestRequestLogger(t *testing.T) {
 		w.Write([]byte("hello"))
 	}))
 
-	req := httptest.NewRequest("GET", "/api/nodes", nil)
+	req := httptest.NewRequest("GET", "/nodes", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -33,7 +33,7 @@ func TestRecovery(t *testing.T) {
 		panic("test panic")
 	}))
 
-	req := httptest.NewRequest("GET", "/api/test", nil)
+	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -85,7 +85,7 @@ func TestRequestLogger_4xxLevel(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	req := httptest.NewRequest("GET", "/api/missing", nil)
+	req := httptest.NewRequest("GET", "/missing", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -99,7 +99,7 @@ func TestRequestLogger_5xxLevel(t *testing.T) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 
-	req := httptest.NewRequest("GET", "/api/error", nil)
+	req := httptest.NewRequest("GET", "/error", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -113,7 +113,7 @@ func TestSecurityHeaders(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest("GET", "/api/test", nil)
+	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -130,7 +130,7 @@ func TestDiscoveryLinks_AddedToAPIRoutes(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest("GET", "/api/nodes", nil)
+	req := httptest.NewRequest("GET", "/nodes", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -212,7 +212,7 @@ func TestRequestID_Generated(t *testing.T) {
 		w.Write([]byte(id))
 	}))
 
-	req := httptest.NewRequest("GET", "/api/test", nil)
+	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -230,7 +230,7 @@ func TestRequestID_Forwarded(t *testing.T) {
 		w.Write([]byte(RequestIDFrom(r.Context())))
 	}))
 
-	req := httptest.NewRequest("GET", "/api/test", nil)
+	req := httptest.NewRequest("GET", "/test", nil)
 	req.Header.Set("X-Request-ID", "from-proxy-123")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -264,7 +264,7 @@ func TestNewRouter_Smoke(t *testing.T) {
 	}
 
 	// Verify a known route works
-	req := httptest.NewRequest("GET", "/api/health", nil)
+	req := httptest.NewRequest("GET", "/-/health", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 

@@ -20,7 +20,7 @@ func TestPrometheusProxy_ForwardsQuery(t *testing.T) {
 
 	proxy := NewPrometheusProxy(prom.URL)
 
-	req := httptest.NewRequest("GET", "/api/metrics/query?query=up", nil)
+	req := httptest.NewRequest("GET", "/-/metrics/query?query=up", nil)
 	w := httptest.NewRecorder()
 	proxy.ServeHTTP(w, req)
 
@@ -43,7 +43,7 @@ func TestPrometheusProxy_ForwardsQueryRange(t *testing.T) {
 
 	proxy := NewPrometheusProxy(prom.URL)
 
-	req := httptest.NewRequest("GET", "/api/metrics/query_range?query=up&start=0&end=1&step=15", nil)
+	req := httptest.NewRequest("GET", "/-/metrics/query_range?query=up&start=0&end=1&step=15", nil)
 	w := httptest.NewRecorder()
 	proxy.ServeHTTP(w, req)
 
@@ -55,7 +55,7 @@ func TestPrometheusProxy_ForwardsQueryRange(t *testing.T) {
 func TestPrometheusProxy_BlocksForbiddenPath(t *testing.T) {
 	proxy := NewPrometheusProxy("http://localhost:9090")
 
-	req := httptest.NewRequest("GET", "/api/metrics/admin/tsdb/delete", nil)
+	req := httptest.NewRequest("GET", "/-/metrics/admin/tsdb/delete", nil)
 	w := httptest.NewRecorder()
 	proxy.ServeHTTP(w, req)
 
@@ -68,7 +68,7 @@ func TestPrometheusProxy_UpstreamFailure(t *testing.T) {
 	// Use an invalid URL that will fail to connect
 	proxy := NewPrometheusProxy("http://127.0.0.1:1")
 
-	req := httptest.NewRequest("GET", "/api/metrics/query?query=up", nil)
+	req := httptest.NewRequest("GET", "/-/metrics/query?query=up", nil)
 	w := httptest.NewRecorder()
 	proxy.ServeHTTP(w, req)
 

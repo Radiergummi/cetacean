@@ -15,7 +15,7 @@ func TestSSE_BroadcastsEvents(t *testing.T) {
 	b := NewBroadcaster(0)
 	defer b.Close()
 
-	req := httptest.NewRequest("GET", "/api/events", nil)
+	req := httptest.NewRequest("GET", "/events", nil)
 	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
 
 	done := make(chan struct{})
@@ -45,7 +45,7 @@ func TestSSE_FiltersByType(t *testing.T) {
 	b := NewBroadcaster(0)
 	defer b.Close()
 
-	req := httptest.NewRequest("GET", "/api/events?types=service", nil)
+	req := httptest.NewRequest("GET", "/events?types=service", nil)
 	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
 
 	done := make(chan struct{})
@@ -76,7 +76,7 @@ func TestSSE_BatchesRapidEvents(t *testing.T) {
 	b := NewBroadcaster(0)
 	defer b.Close()
 
-	req := httptest.NewRequest("GET", "/api/events", nil)
+	req := httptest.NewRequest("GET", "/events", nil)
 	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
 
 	done := make(chan struct{})
