@@ -172,7 +172,7 @@ func (h *Handlers) getLocalNodeID() string {
 
 func (h *Handlers) HandleCluster(w http.ResponseWriter, r *http.Request) {
 	snap := h.cache.Snapshot()
-	writeJSON(w, struct {
+	writeJSONWithETag(w, r, struct {
 		cache.ClusterSnapshot
 		PrometheusConfigured bool   `json:"prometheusConfigured"`
 		LocalNodeID          string `json:"localNodeID,omitempty"`
@@ -391,7 +391,7 @@ func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, struct {
+	writeJSONWithETag(w, r, struct {
 		Swarm       swarm.Swarm `json:"swarm"`
 		ManagerAddr string      `json:"managerAddr"`
 	}{sw, managerAddr})
@@ -413,7 +413,7 @@ func (h *Handlers) HandlePlugins(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, plugins)
+	writeJSONWithETag(w, r, plugins)
 }
 
 type DiskUsageSummary struct {
@@ -508,7 +508,7 @@ func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
 		TotalSize: bcSize, Reclaimable: bcReclaimable,
 	})
 
-	writeJSON(w, summaries)
+	writeJSONWithETag(w, r, summaries)
 }
 
 // --- Nodes ---
@@ -529,7 +529,7 @@ func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 	})
 	resp := applyPagination(nodes, p)
 	writePaginationLinks(w, r.URL.Path, resp.Total, resp.Limit, resp.Offset)
-	writeJSON(w, resp)
+	writeJSONWithETag(w, r, resp)
 }
 
 func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
@@ -539,7 +539,7 @@ func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("node %q not found", id))
 		return
 	}
-	writeJSON(w, NewDetailResponse("/nodes/"+id, "Node", map[string]any{
+	writeJSONWithETag(w, r, NewDetailResponse("/nodes/"+id, "Node", map[string]any{
 		"node": node,
 	}))
 }
@@ -551,7 +551,7 @@ func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("node %q not found", id))
 		return
 	}
-	writeJSON(w, h.enrichTasks(h.cache.ListTasksByNode(id)))
+	writeJSONWithETag(w, r, h.enrichTasks(h.cache.ListTasksByNode(id)))
 }
 
 // --- Services ---
@@ -589,7 +589,7 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writePaginationLinks(w, r.URL.Path, paged.Total, paged.Limit, paged.Offset)
-	writeJSON(w, NewCollectionResponse(items, paged.Total, paged.Limit, paged.Offset))
+	writeJSONWithETag(w, r, NewCollectionResponse(items, paged.Total, paged.Limit, paged.Offset))
 }
 
 func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
@@ -599,7 +599,7 @@ func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("service %q not found", id))
 		return
 	}
-	writeJSON(w, NewDetailResponse("/services/"+id, "Service", map[string]any{
+	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id, "Service", map[string]any{
 		"service": svc,
 	}))
 }
@@ -611,7 +611,7 @@ func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("service %q not found", id))
 		return
 	}
-	writeJSON(w, h.enrichTasks(h.cache.ListTasksByService(id)))
+	writeJSONWithETag(w, r, h.enrichTasks(h.cache.ListTasksByService(id)))
 }
 
 func (h *Handlers) HandleServiceLogs(w http.ResponseWriter, r *http.Request) {
@@ -667,7 +667,7 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 	})
 	paged := applyPagination(tasks, p)
 	writePaginationLinks(w, r.URL.Path, paged.Total, paged.Limit, paged.Offset)
-	writeJSON(w, NewCollectionResponse(h.enrichTasks(paged.Items), paged.Total, paged.Limit, paged.Offset))
+	writeJSONWithETag(w, r, NewCollectionResponse(h.enrichTasks(paged.Items), paged.Total, paged.Limit, paged.Offset))
 }
 
 func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
@@ -678,7 +678,7 @@ func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	et := h.enrichTask(task)
-	writeJSON(w, NewDetailResponse("/tasks/"+id, "Task", map[string]any{
+	writeJSONWithETag(w, r, NewDetailResponse("/tasks/"+id, "Task", map[string]any{
 		"task":    et,
 		"service": map[string]any{"@id": "/services/" + et.ServiceID, "name": et.ServiceName},
 		"node":    map[string]any{"@id": "/nodes/" + et.NodeID, "hostname": et.NodeHostname},
@@ -942,7 +942,7 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 	if entries == nil {
 		entries = []cache.HistoryEntry{}
 	}
-	writeJSON(w, entries)
+	writeJSONWithETag(w, r, entries)
 }
 
 // --- Stacks ---
@@ -960,7 +960,7 @@ func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
 	})
 	resp := applyPagination(stacks, p)
 	writePaginationLinks(w, r.URL.Path, resp.Total, resp.Limit, resp.Offset)
-	writeJSON(w, resp)
+	writeJSONWithETag(w, r, resp)
 }
 
 func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
@@ -970,7 +970,7 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("stack %q not found", name))
 		return
 	}
-	writeJSON(w, NewDetailResponse("/stacks/"+name, "Stack", map[string]any{
+	writeJSONWithETag(w, r, NewDetailResponse("/stacks/"+name, "Stack", map[string]any{
 		"stack": detail,
 	}))
 }
@@ -1008,7 +1008,7 @@ func (h *Handlers) HandleStackSummary(w http.ResponseWriter, r *http.Request) {
 	if summaries == nil {
 		summaries = []cache.StackSummary{}
 	}
-	writeJSON(w, summaries)
+	writeJSONWithETag(w, r, summaries)
 }
 
 func (h *Handlers) queryStackMetric(ctx context.Context, query string) map[string]float64 {
@@ -1035,7 +1035,7 @@ func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("config %q not found", id))
 		return
 	}
-	writeJSON(w, NewDetailResponse("/configs/"+id, "Config", map[string]any{
+	writeJSONWithETag(w, r, NewDetailResponse("/configs/"+id, "Config", map[string]any{
 		"config":   cfg,
 		"services": h.cache.ServicesUsingConfig(id),
 	}))
@@ -1056,7 +1056,7 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 	})
 	resp := applyPagination(configs, p)
 	writePaginationLinks(w, r.URL.Path, resp.Total, resp.Limit, resp.Offset)
-	writeJSON(w, resp)
+	writeJSONWithETag(w, r, resp)
 }
 
 // --- Secrets ---
@@ -1070,7 +1070,7 @@ func (h *Handlers) HandleGetSecret(w http.ResponseWriter, r *http.Request) {
 	}
 	// Never expose secret data — clear it before responding.
 	sec.Spec.Data = nil
-	writeJSON(w, NewDetailResponse("/secrets/"+id, "Secret", map[string]any{
+	writeJSONWithETag(w, r, NewDetailResponse("/secrets/"+id, "Secret", map[string]any{
 		"secret":   sec,
 		"services": h.cache.ServicesUsingSecret(id),
 	}))
@@ -1094,7 +1094,7 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 	})
 	resp := applyPagination(secrets, p)
 	writePaginationLinks(w, r.URL.Path, resp.Total, resp.Limit, resp.Offset)
-	writeJSON(w, resp)
+	writeJSONWithETag(w, r, resp)
 }
 
 // --- Networks ---
@@ -1106,7 +1106,7 @@ func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("network %q not found", id))
 		return
 	}
-	writeJSON(w, NewDetailResponse("/networks/"+id, "Network", map[string]any{
+	writeJSONWithETag(w, r, NewDetailResponse("/networks/"+id, "Network", map[string]any{
 		"network":  net,
 		"services": h.cache.ServicesUsingNetwork(id),
 	}))
@@ -1127,7 +1127,7 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 	})
 	resp := applyPagination(networks, p)
 	writePaginationLinks(w, r.URL.Path, resp.Total, resp.Limit, resp.Offset)
-	writeJSON(w, resp)
+	writeJSONWithETag(w, r, resp)
 }
 
 // --- Volumes ---
@@ -1139,7 +1139,7 @@ func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("volume %q not found", name))
 		return
 	}
-	writeJSON(w, NewDetailResponse("/volumes/"+name, "Volume", map[string]any{
+	writeJSONWithETag(w, r, NewDetailResponse("/volumes/"+name, "Volume", map[string]any{
 		"volume":   vol,
 		"services": h.cache.ServicesUsingVolume(name),
 	}))
@@ -1160,17 +1160,17 @@ func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 	})
 	resp := applyPagination(volumes, p)
 	writePaginationLinks(w, r.URL.Path, resp.Total, resp.Limit, resp.Offset)
-	writeJSON(w, resp)
+	writeJSONWithETag(w, r, resp)
 }
 
 // --- Notifications ---
 
 func (h *Handlers) HandleNotificationRules(w http.ResponseWriter, r *http.Request) {
 	if h.notifier == nil {
-		writeJSON(w, []struct{}{})
+		writeJSONWithETag(w, r, []struct{}{})
 		return
 	}
-	writeJSON(w, h.notifier.RuleStatuses())
+	writeJSONWithETag(w, r, h.notifier.RuleStatuses())
 }
 
 // --- Search ---
@@ -1485,7 +1485,7 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		total += s.count
 	}
 
-	writeJSON(w, map[string]any{
+	writeJSONWithETag(w, r, map[string]any{
 		"query":   q,
 		"results": results,
 		"counts":  counts,

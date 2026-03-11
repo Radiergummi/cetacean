@@ -166,7 +166,7 @@ func (h *Handlers) HandleNetworkTopology(w http.ResponseWriter, r *http.Request)
 		topoNetworks = append(topoNetworks, overlayNets[id])
 	}
 
-	writeJSON(w, NetworkTopology{
+	writeJSONWithETag(w, r, NetworkTopology{
 		Nodes:    nodes,
 		Edges:    edges,
 		Networks: topoNetworks,
@@ -218,7 +218,7 @@ func (h *Handlers) HandlePlacementTopology(w http.ResponseWriter, r *http.Reques
 		})
 	}
 
-	writeJSON(w, PlacementTopology{Nodes: topoNodes})
+	writeJSONWithETag(w, r, PlacementTopology{Nodes: topoNodes})
 }
 
 func replicaCount(svc swarm.Service) int {
