@@ -49,6 +49,7 @@ go build -o cetacean .
 ```bash
 docker build -t cetacean:latest .                           # Multi-stage build
 docker stack deploy -c docker-compose.yml cetacean          # Deploy full stack (requires swarm)
+docker stack deploy -c docker-compose.monitoring.yml monitoring  # Deploy standalone monitoring stack (Prometheus + cAdvisor + node-exporter)
 ```
 
 ### Environment variables
@@ -78,7 +79,7 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 - **`api/router.go`** — stdlib `net/http.ServeMux` with Go 1.22+ method routing (`"GET /api/..."`). Middleware chain: requestID → recovery → securityHeaders → requestLogger. SPA fallback registered last on `/`.
 - **`api/handlers.go`** — REST handlers. All read-only, serve cache data as JSON. List endpoints support `?search=`, `?filter=` (expr-lang expressions), `?sort=`, `?dir=`, `?limit=`, `?offset=`. Detail endpoints for all resource types return the resource + cross-referenced services. `HandleSearch` provides cross-resource global search. `DockerLogStreamer` interface decouples log streaming for testability. Task list/detail endpoints return `EnrichedTask` (adds `ServiceName`, `NodeHostname` to raw `swarm.Task`). Log-tail SSE connections are capped at 128 concurrent.
 - **`api/sse.go`** — `Broadcaster` manages up to 256 SSE clients. Clients can filter by `?types=node,service,task`. Event batching within configurable interval. Slow clients get events dropped (non-blocking send to buffered channel).
-- **`api/prometheus.go`** — Reverse proxy to Prometheus, only allows `/query` and `/query_range` paths. 10MB response limit, 30s timeout.
+- **`api/prometheus.go`** — Reverse proxy to Prometheus, only allows `/query` and `/query_range` paths. 10MB response limit, 30s timeout. `HandleMonitoringStatus` — `GET /api/metrics/status` probes Prometheus for `up{job="node-exporter"}` and `up{job="cadvisor"}` targets, compares target count against cluster node count. Returns detection status for guided setup UI.
 - **`api/spa.go`** — Serves the embedded `frontend/dist/` filesystem with index.html fallback for client-side routing.
 - **`filter/`** — Expression-based filtering using `expr-lang/expr`. Each resource type has an env builder exposing fields for filter expressions.
 - **`notify/`** — Webhook notification system with expr-lang rule matching, cooldown, and circuit breaker (5 failures → open, 30s half-open).
@@ -90,6 +91,7 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 - **`hooks/SSEContext.tsx`** — Shared SSE provider (single EventSource connection for the whole app). Uses `Map<symbol, listener>` registry. Event types: node, service, task, config, secret, network, volume, stack, batch.
 - **`hooks/useSSE.ts`** — Re-exports `useSSESubscribe` from SSEContext. Used by both list pages (via `useSwarmResource`) and detail pages (direct subscription for re-fetch on change).
 - **`hooks/useSwarmResource.ts`** — Generic fetch + SSE subscription hook for resource lists. Performs optimistic in-place updates (upsert/remove) without full refetch.
+- **`hooks/useMonitoringStatus.ts`** — Replaces `usePrometheusConfigured`. Returns full detection status (Prometheus reachable, node-exporter/cAdvisor target counts vs. cluster node count). Used by `MonitoringStatus` component (replaces `PrometheusBanner`).
 - **`components/`** — Key components:
   - `DataTable` — auto-virtualizes above 100 rows via `@tanstack/react-virtual`
   - `LogViewer` — 800+ line component with live SSE tail, regex search, JSON formatting, stream filtering
