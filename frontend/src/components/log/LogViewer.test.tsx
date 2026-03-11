@@ -316,13 +316,23 @@ describe("LogViewer", () => {
     }));
     mockServiceLogs
       .mockResolvedValueOnce(logResponse(initialLines, true))
+      .mockResolvedValueOnce(logResponse([])) // newer-log poll check
       .mockResolvedValueOnce(
         logResponse([{ message: "older line", timestamp: "2024-01-01T00:00:01Z" }]),
       );
 
     renderWithRouter(<LogViewer serviceId="svc1" />);
 
-    // Wait for the "Load older" button (confirms data loaded and hasOlderLogs=true)
+    // Wait for initial data to load
+    await waitFor(() => expect(screen.getByText("line 0")).toBeInTheDocument());
+
+    // Simulate being at scroll top so atTop becomes true and "Load older" appears
+    const container = document.querySelector(".log-panel")!;
+    Object.defineProperty(container, "scrollTop", { value: 0, writable: true, configurable: true });
+    Object.defineProperty(container, "scrollHeight", { value: 500, writable: true, configurable: true });
+    Object.defineProperty(container, "clientHeight", { value: 400, writable: true, configurable: true });
+    fireEvent.scroll(container);
+
     await waitFor(() => expect(screen.getByText("Load older")).toBeInTheDocument());
 
     fireEvent.click(screen.getByText("Load older"));
@@ -335,7 +345,7 @@ describe("LogViewer", () => {
     });
   });
 
-  it("loads newer logs when scrolling to bottom in non-live mode", async () => {
+  it("loads newer logs via Load newer button in non-live mode", async () => {
     mockServiceLogs
       .mockResolvedValueOnce(
         logResponse([
@@ -344,6 +354,11 @@ describe("LogViewer", () => {
         ]),
       )
       .mockResolvedValueOnce(
+        // Newer-log poll check — returns a line so hasNewerLogs becomes true
+        logResponse([{ message: "check", timestamp: "2024-01-01T00:00:03Z" }]),
+      )
+      .mockResolvedValueOnce(
+        // Load newer click — returns the actual newer content
         logResponse([{ message: "newer line", timestamp: "2024-01-01T00:00:03Z" }]),
       );
 
@@ -351,31 +366,11 @@ describe("LogViewer", () => {
 
     await waitFor(() => expect(screen.getByText("line 2")).toBeInTheDocument());
 
-    // Simulate scroll to bottom
-    const container = document.querySelector(".log-panel")!;
-    Object.defineProperty(container, "scrollTop", {
-      value: 450,
-      writable: true,
-      configurable: true,
-    });
-    Object.defineProperty(container, "scrollHeight", {
-      value: 500,
-      writable: true,
-      configurable: true,
-    });
-    Object.defineProperty(container, "clientHeight", {
-      value: 400,
-      writable: true,
-      configurable: true,
-    });
-    fireEvent.scroll(container);
+    // "Load newer" appears when following=true (at bottom), not live, and hasNewerLogs=true.
+    // following starts true. Polling detects newer logs automatically after initial load.
+    await waitFor(() => expect(screen.getByText("Load newer")).toBeInTheDocument());
 
-    await waitFor(() => {
-      expect(mockServiceLogs).toHaveBeenCalledWith(
-        "svc1",
-        expect.objectContaining({ after: "2024-01-01T00:00:02Z" }),
-      );
-    });
+    fireEvent.click(screen.getByText("Load newer"));
 
     await waitFor(() => {
       expect(screen.getByText("newer line")).toBeInTheDocument();
