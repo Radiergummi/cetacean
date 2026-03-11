@@ -207,7 +207,7 @@ export default function Topology() {
 
   const refetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const debouncedRefetch = useCallback(() => {
-    if (refetchTimerRef.current) return;
+    if (refetchTimerRef.current) clearTimeout(refetchTimerRef.current);
     refetchTimerRef.current = setTimeout(() => {
       refetchTimerRef.current = null;
       fetchData();

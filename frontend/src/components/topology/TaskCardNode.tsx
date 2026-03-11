@@ -1,4 +1,5 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { statusColor } from "../../lib/statusColor";
 
 type TaskCardData = {
   id: string;
@@ -10,25 +11,6 @@ type TaskCardData = {
   highlighted: boolean;
   onHoverService: (serviceId: string | null) => void;
 };
-
-function stateColor(state: string): string {
-  switch (state) {
-    case "running":
-    case "complete":
-      return "bg-green-500";
-    case "failed":
-    case "rejected":
-      return "bg-red-500";
-    case "preparing":
-    case "starting":
-    case "pending":
-    case "assigned":
-    case "accepted":
-      return "bg-yellow-500";
-    default:
-      return "bg-gray-400";
-  }
-}
 
 export default function TaskCardNode({ data }: NodeProps & { data: TaskCardData }) {
   return (
@@ -43,7 +25,7 @@ export default function TaskCardNode({ data }: NodeProps & { data: TaskCardData 
       </div>
 
       <div className="flex items-center gap-1.5 text-xs mt-0.5">
-        <span className={`inline-block size-2 rounded-full ${stateColor(data.state)}`} />
+        <span className={`inline-block size-2 rounded-full ${statusColor(data.state)}`} />
         <span>{data.state}</span>
       </div>
 

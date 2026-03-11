@@ -5,14 +5,14 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import type { SearchResourceType, SearchResponse, SearchResult } from "../../api/types";
-import { resourcePath, STATE_COLORS, TYPE_LABELS, TYPE_ORDER } from "../../lib/searchConstants";
+import { resourcePath, statusColor, TYPE_LABELS, TYPE_ORDER } from "../../lib/searchConstants";
 import { Spinner } from "../Spinner";
 
 function StateOrb({ state }: { state: string }) {
   if (state === "updating") {
     return <Spinner className="size-3 shrink-0 text-blue-500" />;
   }
-  const color = STATE_COLORS[state] ?? "bg-gray-400";
+  const color = statusColor(state);
   return <span className={`inline-block size-2 rounded-full shrink-0 ${color}`} title={state} />;
 }
 import ResourceName from "../ResourceName";
@@ -144,7 +144,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
         });
     }, 2000);
     return () => clearInterval(interval);
-  }, [query, response !== null]);
+  }, [query, !!response]);
 
   const goTo = useCallback(
     ({ result: { id }, type }: FlatItem) => {

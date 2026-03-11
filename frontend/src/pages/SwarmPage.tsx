@@ -1,9 +1,9 @@
 import {Check, Copy} from "lucide-react";
-import type React from "react";
 import {useCallback, useEffect, useState} from "react";
 import {api} from "../api/client";
 import type {Plugin, SwarmInfo} from "../api/types";
-import {ResourceId, Timestamp} from "../components/data";
+import {KVTable, ResourceId, SectionHeader, Timestamp} from "../components/data";
+import {formatNs} from "../lib/formatNs";
 import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
 import {LoadingDetail} from "../components/LoadingSkeleton";
@@ -19,39 +19,6 @@ import {
     DialogTrigger,
 } from "../components/ui/dialog";
 
-function formatNs(ns: number): string {
-    if (ns <= 0) {
-        return "—";
-    }
-
-    const ms = ns / 1_000_000;
-
-    if (ms < 1000) {
-        return `${ms}ms`;
-    }
-
-    const sec = ms / 1000;
-
-    if (sec < 60) {
-        return `${sec}s`;
-    }
-
-    const min = sec / 60;
-
-    if (min < 60) {
-        return `${Math.round(min)}m`;
-    }
-
-    const hrs = min / 60;
-
-    if (hrs < 24) {
-        return `${Math.round(hrs)}h`;
-    }
-
-    const days = hrs / 24;
-
-    return `${Math.round(days)}d`;
-}
 
 function JoinTokenDialog({
     label,
@@ -109,40 +76,6 @@ function JoinTokenDialog({
     );
 }
 
-function KVTable({
-    rows,
-}: {
-    rows: (false | undefined | null | 0 | "" | [string, React.ReactNode])[];
-}) {
-    const valid = rows.filter((row): row is [string, React.ReactNode] => !!row && !!row[1]);
-
-    if (valid.length === 0) {
-        return null;
-    }
-
-    return (
-        <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full">
-                <tbody>
-                {valid.map(([key, value]) => (
-                    <tr key={key} className="border-b last:border-b-0">
-                        <td className="p-3 text-sm font-medium text-muted-foreground min-w-1/3">{key}</td>
-                        <td className="p-3 font-mono text-xs break-all">{value}</td>
-                    </tr>
-                ))}
-                </tbody>
-            </table>
-        </div>
-    );
-}
-
-function SectionHeader({title}: { title: string }) {
-    return (
-        <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-            {title}
-        </h2>
-    );
-}
 
 export default function SwarmPage() {
     const [data, setData] = useState<SwarmInfo | null>(null);

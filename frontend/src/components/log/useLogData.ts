@@ -94,8 +94,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
   useEffect(() => {
     if (!live) return;
 
-    const lastTimestamp = lines.length > 0 ? lines[lines.length - 1].timestamp : undefined;
-    const after = lastTimestamp || new Date().toISOString();
+    const after = newestRef.current || new Date().toISOString();
     const streamOptions = { after, stream: streamParam };
     const url = isTask
       ? api.taskLogsStreamURL(logId, streamOptions)
@@ -144,7 +143,6 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
   useEffect(() => {
     if (!following || !containerRef.current) return;
     const node = containerRef.current;
-    node.scrollTop = node.scrollHeight;
     cancelAnimationFrame(scrollRafRef.current);
     scrollRafRef.current = requestAnimationFrame(() => {
       node.scrollTop = node.scrollHeight;

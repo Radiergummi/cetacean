@@ -5,7 +5,8 @@ import {Link, useParams} from "react-router-dom";
 import {api} from "../api/client";
 import type {HistoryEntry, Service, Task} from "../api/types";
 import ActivityFeed from "../components/ActivityFeed";
-import {ContainerImage, ResourceLink, Timestamp} from "../components/data";
+import {ContainerImage, KVTable, ResourceLink, Timestamp} from "../components/data";
+import {formatNs} from "../lib/formatNs";
 import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
@@ -598,30 +599,6 @@ function Section({
     );
 }
 
-function KVTable({
-    rows,
-}: {
-    rows: (false | undefined | null | 0 | "" | [string, React.ReactNode])[];
-}) {
-    const valid = rows.filter((row): row is [string, React.ReactNode] => !!row && !!row[1]);
-    if (valid.length === 0) {
-        return null;
-    }
-    return (
-        <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full">
-                <tbody>
-                {valid.map(([k, v]) => (
-                    <tr key={k} className="border-b last:border-b-0">
-                        <td className="p-3 text-sm font-medium text-muted-foreground w-1/3">{k}</td>
-                        <td className="p-3 font-mono text-xs break-all">{v}</td>
-                    </tr>
-                ))}
-                </tbody>
-            </table>
-        </div>
-    );
-}
 
 type UpdateConfigShape = NonNullable<Service["Spec"]["UpdateConfig"]>;
 
@@ -882,18 +859,6 @@ function ResourcesPanel({resources}: { resources: ResourceShape }) {
     );
 }
 
-function formatNs(ns: number): string {
-    if (ns >= 60_000_000_000) {
-        return `${Math.round(ns / 60_000_000_000)}m`;
-    }
-    if (ns >= 1_000_000_000) {
-        return `${Math.round(ns / 1_000_000_000)}s`;
-    }
-    if (ns >= 1_000_000) {
-        return `${Math.round(ns / 1_000_000)}ms`;
-    }
-    return `${ns}ns`;
-}
 
 function formatCpu(nanoCpus: number): string {
     return `${(

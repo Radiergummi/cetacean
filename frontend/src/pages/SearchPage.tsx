@@ -9,13 +9,13 @@ import { SearchInput } from "../components/search";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { Loader2 } from "lucide-react";
 import ResourceName from "../components/ResourceName";
-import { STATE_COLORS } from "../lib/searchConstants";
+import { statusColor } from "../lib/searchConstants";
 
 function StateOrb({ state }: { state: string }) {
   if (state === "updating") {
     return <Loader2 className="size-3 shrink-0 text-blue-500 animate-spin" />;
   }
-  const color = STATE_COLORS[state] ?? "bg-gray-400";
+  const color = statusColor(state);
   return <span className={`inline-block size-2 rounded-full shrink-0 ${color}`} title={state} />;
 }
 import { resourcePath, TYPE_LABELS, TYPE_ORDER } from "../lib/searchConstants";
@@ -85,8 +85,8 @@ export default function SearchPage() {
             }
 
             return (
-              <li className="contents">
-                <section key={type}>
+              <li key={type} className="contents">
+                <section>
                   <header className="mb-2">
                     <h2 className="text-sm font-medium text-muted-foreground">
                       <span>{TYPE_LABELS[type]}</span>
@@ -98,9 +98,8 @@ export default function SearchPage() {
 
                   <ul className="rounded-lg border divide-y">
                     {items.map((item) => (
-                      <li className="contents">
+                      <li key={item.id} className="contents">
                         <Link
-                          key={item.id}
                           to={resourcePath(type, item.id)}
                           className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors"
                         >
