@@ -31,7 +31,7 @@ export function SSEProvider({ children }: { children: ReactNode }) {
   const listenersRef = useRef<Map<symbol, { types: Set<string>; fn: SSEListener }>>(new Map());
 
   useEffect(() => {
-    const es = new EventSource("/api/events");
+    const es = new EventSource("/events");
 
     es.onopen = () => setConnected(true);
     es.onerror = () => setConnected(false);

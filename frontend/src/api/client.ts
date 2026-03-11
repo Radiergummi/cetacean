@@ -27,18 +27,15 @@ import type {
   PrometheusResponse,
 } from "./types";
 
-const BASE = "/api";
-
 const headers = { Accept: "application/json" };
 
 async function fetchJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const url = `${BASE}${path}`;
-  const res = await fetch(url, { headers, signal });
+  const res = await fetch(path, { headers, signal });
   if (!res.ok) {
     let message = `${res.status} ${res.statusText}`;
     try {
       const body = await res.json();
-      if (body?.error) message = body.error;
+      if (body?.detail) message = body.detail;
     } catch {
       // response wasn't JSON, use status text
     }
@@ -110,16 +107,18 @@ export const api = {
   swarm: () => fetchJSON<SwarmInfo>("/swarm"),
   plugins: () => fetchJSON<Plugin[]>("/plugins"),
   clusterMetrics: () => fetchJSON<ClusterMetrics>("/cluster/metrics"),
-  monitoringStatus: () => fetchJSON<MonitoringStatus>("/metrics/status"),
+  monitoringStatus: () => fetchJSON<MonitoringStatus>("/-/metrics/status"),
   nodes: (params?: ListParams) => fetchJSON<PagedResponse<Node>>(buildListURL("/nodes", params)),
-  node: (id: string) => fetchJSON<Node>(`/nodes/${id}`),
+  node: (id: string) => fetchJSON<{ node: Node }>(`/nodes/${id}`).then((r) => r.node),
   services: (params?: ListParams) =>
     fetchJSON<PagedResponse<ServiceListItem>>(buildListURL("/services", params)),
-  service: (id: string) => fetchJSON<Service>(`/services/${id}`),
+  service: (id: string) =>
+    fetchJSON<{ service: Service }>(`/services/${id}`).then((r) => r.service),
   tasks: (params?: ListParams) => fetchJSON<PagedResponse<Task>>(buildListURL("/tasks", params)),
   stacks: (params?: ListParams) => fetchJSON<PagedResponse<Stack>>(buildListURL("/stacks", params)),
   stacksSummary: () => fetchJSON<StackSummary[]>("/stacks/summary"),
-  stack: (name: string) => fetchJSON<StackDetail>(`/stacks/${name}`),
+  stack: (name: string) =>
+    fetchJSON<{ stack: StackDetail }>(`/stacks/${name}`).then((r) => r.stack),
   configs: (params?: ListParams) =>
     fetchJSON<PagedResponse<Config>>(buildListURL("/configs", params)),
   config: (id: string) => fetchJSON<ConfigDetail>(`/configs/${id}`),
@@ -132,7 +131,7 @@ export const api = {
   volumes: (params?: ListParams) =>
     fetchJSON<PagedResponse<Volume>>(buildListURL("/volumes", params)),
   volume: (name: string) => fetchJSON<VolumeDetail>(`/volumes/${name}`),
-  task: (id: string) => fetchJSON<Task>(`/tasks/${id}`),
+  task: (id: string) => fetchJSON<{ task: Task }>(`/tasks/${id}`).then((r) => r.task),
   taskLogs: (
     id: string,
     opts?: {
@@ -171,14 +170,14 @@ export const api = {
     if (opts?.after) params.set("after", opts.after);
     if (opts?.stream) params.set("stream", opts.stream);
     const qs = params.toString();
-    return `${BASE}/services/${id}/logs${qs ? `?${qs}` : ""}`;
+    return `/services/${id}/logs${qs ? `?${qs}` : ""}`;
   },
   taskLogsStreamURL: (id: string, opts?: { after?: string; stream?: string }) => {
     const params = new URLSearchParams();
     if (opts?.after) params.set("after", opts.after);
     if (opts?.stream) params.set("stream", opts.stream);
     const qs = params.toString();
-    return `${BASE}/tasks/${id}/logs${qs ? `?${qs}` : ""}`;
+    return `/tasks/${id}/logs${qs ? `?${qs}` : ""}`;
   },
   history: (params?: { type?: string; resourceId?: string; limit?: number }) => {
     const qs = new URLSearchParams();
@@ -194,11 +193,11 @@ export const api = {
   metricsQuery: (query: string, time?: string) => {
     const params = new URLSearchParams({ query });
     if (time) params.set("time", time);
-    return fetchJSON<PrometheusResponse>(`/metrics/query?${params}`);
+    return fetchJSON<PrometheusResponse>(`/-/metrics/query?${params}`);
   },
   metricsQueryRange: (query: string, start: string, end: string, step: string) => {
     const params = new URLSearchParams({ query, start, end, step });
-    return fetchJSON<PrometheusResponse>(`/metrics/query_range?${params}`);
+    return fetchJSON<PrometheusResponse>(`/-/metrics/query_range?${params}`);
   },
   notificationRules: () => fetchJSON<NotificationRuleStatus[]>("/notifications/rules"),
   diskUsage: () => fetchJSON<DiskUsageSummary[]>("/disk-usage"),
