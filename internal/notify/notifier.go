@@ -88,7 +88,7 @@ func (n *Notifier) recordFailure(ruleID string) {
 		n.circuits[ruleID] = cs
 	}
 	cs.failures++
-	if cs.failures >= circuitThreshold {
+	if cs.failures == circuitThreshold {
 		cs.openedAt = time.Now()
 	}
 	n.mu.Unlock()

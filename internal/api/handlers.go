@@ -1154,6 +1154,11 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 			limit = n
 		}
 	}
+	// Cap per-type results to prevent unbounded allocations on large clusters.
+	const maxPerType = 1000
+	if limit == 0 || limit > maxPerType {
+		limit = maxPerType
+	}
 
 	type typeResults struct {
 		key     string

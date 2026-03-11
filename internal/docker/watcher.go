@@ -155,11 +155,15 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 	pending := make(map[eventKey]coalesced)
 	timer := time.NewTimer(debounceWindow)
 	timer.Stop()
+	defer timer.Stop()
 	timerRunning := false
 
 	for {
 		select {
 		case <-ctx.Done():
+			if len(pending) > 0 {
+				w.processBatch(ctx, pending)
+			}
 			return
 		case err := <-errCh:
 			if err != nil {

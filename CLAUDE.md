@@ -61,7 +61,7 @@ docker stack deploy -c docker-compose.monitoring.yml monitoring  # Deploy standa
 | `CETACEAN_LOG_FORMAT` | `json` | No |
 | `CETACEAN_LOG_LEVEL` | `info` | No |
 | `CETACEAN_SSE_BATCH_INTERVAL` | `100ms` | No |
-| `CETACEAN_NOTIFICATION_RULES` | — | No (path to notification rules YAML file) |
+| `CETACEAN_NOTIFICATIONS_FILE` | — | No (path to notification rules YAML file) |
 | `CETACEAN_PPROF` | `false` | No (enable pprof endpoints at `/debug/pprof/`) |
 
 ## Architecture
@@ -119,7 +119,7 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 - Config data is returned base64-encoded (from Docker SDK); frontend decodes with `atob()`
 - No authentication — designed to run behind a reverse proxy
 - pprof endpoints are opt-in via `CETACEAN_PPROF=true`, exposed at `/debug/pprof/` (registered without method prefix to support POST for `go tool pprof`)
-- Global search (`GET /api/search?q=&limit=`) searches names, images, labels across all resource types. `limit=0` returns all results; default is 3 per type. Response includes optional `state` field for services (derived from running/desired tasks + UpdateStatus) and tasks
+- Global search (`GET /api/search?q=&limit=`) searches names, images, labels across all resource types. `limit=0` returns up to 1000 per type; default is 3 per type. Response includes optional `state` field for services (derived from running/desired tasks + UpdateStatus) and tasks
 - Task list endpoints return `EnrichedTask` with `ServiceName` and `NodeHostname` populated from cache cross-references
 - Log-tail SSE endpoints have a 128-connection limit (returns 503 when exceeded)
 - `since`/`until` log params are validated server-side; invalid values return 400
