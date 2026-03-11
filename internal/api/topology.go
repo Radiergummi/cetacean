@@ -15,14 +15,15 @@ type NetworkTopology struct {
 }
 
 type TopoServiceNode struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	Stack        string   `json:"stack,omitempty"`
-	Replicas     int      `json:"replicas"`
-	Image        string   `json:"image"`
-	Ports        []string `json:"ports,omitempty"`
-	Mode         string   `json:"mode"`
-	UpdateStatus string   `json:"updateStatus,omitempty"`
+	ID               string              `json:"id"`
+	Name             string              `json:"name"`
+	Stack            string              `json:"stack,omitempty"`
+	Replicas         int                 `json:"replicas"`
+	Image            string              `json:"image"`
+	Ports            []string            `json:"ports,omitempty"`
+	Mode             string              `json:"mode"`
+	UpdateStatus     string              `json:"updateStatus,omitempty"`
+	NetworkAliases   map[string][]string `json:"networkAliases,omitempty"`
 }
 
 type TopoEdge struct {
@@ -105,15 +106,26 @@ func (h *Handlers) HandleNetworkTopology(w http.ResponseWriter, r *http.Request)
 			updateStatus = string(svc.UpdateStatus.State)
 		}
 
+		var networkAliases map[string][]string
+		for _, na := range svc.Spec.TaskTemplate.Networks {
+			if _, ok := overlayNets[na.Target]; ok && len(na.Aliases) > 0 {
+				if networkAliases == nil {
+					networkAliases = make(map[string][]string)
+				}
+				networkAliases[na.Target] = na.Aliases
+			}
+		}
+
 		nodes = append(nodes, TopoServiceNode{
-			ID:           svc.ID,
-			Name:         svc.Spec.Name,
-			Stack:        stack,
-			Replicas:     replicas,
-			Image:        image,
-			Ports:        ports,
-			Mode:         mode,
-			UpdateStatus: updateStatus,
+			ID:             svc.ID,
+			Name:           svc.Spec.Name,
+			Stack:          stack,
+			Replicas:       replicas,
+			Image:          image,
+			Ports:          ports,
+			Mode:           mode,
+			UpdateStatus:   updateStatus,
+			NetworkAliases: networkAliases,
 		})
 
 		nets := make(map[string]struct{})

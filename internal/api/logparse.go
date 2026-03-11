@@ -1,7 +1,9 @@
 package api
 
 import (
+	"context"
 	"encoding/binary"
+	"errors"
 	"io"
 	"strings"
 )
@@ -26,6 +28,13 @@ func readDockerLogFrames(r io.Reader, emit func(LogLine)) error {
 			return nil
 		}
 		if err != nil {
+			// Docker's log stream with Follow=false may not close
+			// promptly after sending all data. Treat context
+			// deadline/cancellation as EOF — all complete frames
+			// have already been emitted.
+			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+				return nil
+			}
 			return err
 		}
 

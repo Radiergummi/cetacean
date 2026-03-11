@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"slices"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
@@ -34,16 +36,26 @@ type DockerLogStreamer interface {
 	Logs(ctx context.Context, kind docker.LogKind, id string, tail string, follow bool, since, until string) (io.ReadCloser, error)
 }
 
-type Handlers struct {
-	cache        *cache.Cache
-	dockerClient DockerLogStreamer
-	ready        <-chan struct{}
-	notifier     *notify.Notifier
-	promClient   *PromClient
+type DockerSystemClient interface {
+	SwarmInspect(ctx context.Context) (swarm.Swarm, error)
+	DiskUsage(ctx context.Context) (types.DiskUsage, error)
+	PluginList(ctx context.Context) (types.PluginsListResponse, error)
+	LocalNodeID(ctx context.Context) (string, error)
 }
 
-func NewHandlers(c *cache.Cache, dc DockerLogStreamer, ready <-chan struct{}, notifier *notify.Notifier, promClient *PromClient) *Handlers {
-	return &Handlers{cache: c, dockerClient: dc, ready: ready, notifier: notifier, promClient: promClient}
+type Handlers struct {
+	cache           *cache.Cache
+	dockerClient    DockerLogStreamer
+	systemClient    DockerSystemClient
+	ready           <-chan struct{}
+	notifier        *notify.Notifier
+	promClient      *PromClient
+	localNodeOnce   sync.Once
+	localNodeID     string
+}
+
+func NewHandlers(c *cache.Cache, dc DockerLogStreamer, sc DockerSystemClient, ready <-chan struct{}, notifier *notify.Notifier, promClient *PromClient) *Handlers {
+	return &Handlers{cache: c, dockerClient: dc, systemClient: sc, ready: ready, notifier: notifier, promClient: promClient}
 }
 
 func (h *Handlers) isReady() bool {
@@ -130,12 +142,24 @@ func exprFilter[T any](items []T, expr string, env func(T) map[string]any, w htt
 	return filtered, true
 }
 
+func (h *Handlers) getLocalNodeID() string {
+	h.localNodeOnce.Do(func() {
+		if h.systemClient != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			h.localNodeID, _ = h.systemClient.LocalNodeID(ctx)
+		}
+	})
+	return h.localNodeID
+}
+
 func (h *Handlers) HandleCluster(w http.ResponseWriter, r *http.Request) {
 	snap := h.cache.Snapshot()
 	writeJSON(w, struct {
 		cache.ClusterSnapshot
-		PrometheusConfigured bool `json:"prometheusConfigured"`
-	}{snap, h.promClient != nil})
+		PrometheusConfigured bool   `json:"prometheusConfigured"`
+		LocalNodeID          string `json:"localNodeID,omitempty"`
+	}{snap, h.promClient != nil, h.getLocalNodeID()})
 }
 
 type ClusterMetrics struct {
@@ -250,6 +274,147 @@ func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) 
 
 	wg.Wait()
 	writeJSON(w, metrics)
+}
+
+func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
+	if h.systemClient == nil {
+		writeError(w, http.StatusNotImplemented, "swarm inspect not available")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	sw, err := h.systemClient.SwarmInspect(ctx)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("swarm inspect failed: %v", err))
+		return
+	}
+
+	managerAddr := ""
+	for _, n := range h.cache.ListNodes() {
+		if n.ManagerStatus != nil && n.ManagerStatus.Leader {
+			managerAddr = n.ManagerStatus.Addr
+			break
+		}
+	}
+
+	writeJSON(w, struct {
+		Swarm       swarm.Swarm `json:"swarm"`
+		ManagerAddr string      `json:"managerAddr"`
+	}{sw, managerAddr})
+}
+
+func (h *Handlers) HandlePlugins(w http.ResponseWriter, r *http.Request) {
+	if h.systemClient == nil {
+		writeError(w, http.StatusNotImplemented, "plugin list not available")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	plugins, err := h.systemClient.PluginList(ctx)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("plugin list failed: %v", err))
+		return
+	}
+
+	writeJSON(w, plugins)
+}
+
+type DiskUsageSummary struct {
+	Type        string `json:"type"`
+	Count       int    `json:"count"`
+	Active      int    `json:"active"`
+	TotalSize   int64  `json:"totalSize"`
+	Reclaimable int64  `json:"reclaimable"`
+}
+
+func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
+	if h.systemClient == nil {
+		writeError(w, http.StatusNotImplemented, "disk usage not available")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	du, err := h.systemClient.DiskUsage(ctx)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("disk usage failed: %v", err))
+		return
+	}
+
+	var summaries []DiskUsageSummary
+
+	// Images
+	var imgSize, imgReclaimable int64
+	var imgActive int
+	for _, img := range du.Images {
+		imgSize += img.Size
+		if img.Containers > 0 {
+			imgActive++
+		} else {
+			imgReclaimable += img.Size
+		}
+	}
+	summaries = append(summaries, DiskUsageSummary{
+		Type: "images", Count: len(du.Images), Active: imgActive,
+		TotalSize: imgSize, Reclaimable: imgReclaimable,
+	})
+
+	// Containers
+	var ctrSize, ctrReclaimable int64
+	var ctrActive int
+	for _, ctr := range du.Containers {
+		ctrSize += ctr.SizeRw
+		if ctr.State == "running" {
+			ctrActive++
+		} else {
+			ctrReclaimable += ctr.SizeRw
+		}
+	}
+	summaries = append(summaries, DiskUsageSummary{
+		Type: "containers", Count: len(du.Containers), Active: ctrActive,
+		TotalSize: ctrSize, Reclaimable: ctrReclaimable,
+	})
+
+	// Volumes
+	var volSize, volReclaimable int64
+	var volActive int
+	for _, vol := range du.Volumes {
+		if vol.UsageData != nil {
+			volSize += vol.UsageData.Size
+			if vol.UsageData.RefCount > 0 {
+				volActive++
+			} else {
+				volReclaimable += vol.UsageData.Size
+			}
+		}
+	}
+	summaries = append(summaries, DiskUsageSummary{
+		Type: "volumes", Count: len(du.Volumes), Active: volActive,
+		TotalSize: volSize, Reclaimable: volReclaimable,
+	})
+
+	// Build cache
+	var bcSize, bcReclaimable int64
+	var bcActive int
+	for _, bc := range du.BuildCache {
+		bcSize += bc.Size
+		if bc.InUse {
+			bcActive++
+		} else {
+			bcReclaimable += bc.Size
+		}
+	}
+	summaries = append(summaries, DiskUsageSummary{
+		Type: "buildCache", Count: len(du.BuildCache), Active: bcActive,
+		TotalSize: bcSize, Reclaimable: bcReclaimable,
+	})
+
+	writeJSON(w, summaries)
 }
 
 // --- Nodes ---
@@ -430,9 +595,10 @@ type LogStream = io.ReadCloser
 
 // LogResponse is the JSON response for paginated log fetches.
 type LogResponse struct {
-	Lines  []LogLine `json:"lines"`
-	Oldest string    `json:"oldest"`
-	Newest string    `json:"newest"`
+	Lines   []LogLine `json:"lines"`
+	Oldest  string    `json:"oldest"`
+	Newest  string    `json:"newest"`
+	HasMore bool      `json:"hasMore"`
 }
 
 type logFetcher func(ctx context.Context, tail string, follow bool, since, until string) (LogStream, error)
@@ -487,10 +653,21 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 		limit = maxLogLimit
 	}
 
+	// Docker ignores since/until for service logs, so we request more lines
+	// than needed and filter in Go. When paginating (since or until is set),
+	// use a larger tail to ensure we fetch enough lines beyond the cursor.
+	tail := limit
+	if since != "" || until != "" {
+		tail = limit * 10
+		if tail > maxLogLimit {
+			tail = maxLogLimit
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	logs, err := fetch(ctx, strconv.Itoa(limit), false, since, until)
+	logs, err := fetch(ctx, strconv.Itoa(tail), false, since, until)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to get logs: %s", err))
 		return
@@ -506,6 +683,34 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 		lines = []LogLine{}
 	}
 
+	// Docker interleaves lines from multiple tasks; sort by timestamp so
+	// truncation keeps the truly newest lines.
+	slices.SortStableFunc(lines, func(a, b LogLine) int {
+		return strings.Compare(a.Timestamp, b.Timestamp)
+	})
+
+	// Docker ignores since/until for service logs, so enforce them here.
+	if since != "" || until != "" {
+		filtered := lines[:0]
+		for _, l := range lines {
+			if since != "" && l.Timestamp <= since {
+				continue
+			}
+			if until != "" && l.Timestamp >= until {
+				continue
+			}
+			filtered = append(filtered, l)
+		}
+		lines = filtered
+	}
+
+	// Docker's tail=N applies per task for service logs, so the total may
+	// exceed the requested limit. Truncate to the last `limit` lines.
+	hasMore := len(lines) > limit
+	if hasMore {
+		lines = lines[len(lines)-limit:]
+	}
+
 	if streamFilter != "" {
 		filtered := lines[:0]
 		for _, l := range lines {
@@ -516,7 +721,7 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 		lines = filtered
 	}
 
-	resp := LogResponse{Lines: lines}
+	resp := LogResponse{Lines: lines, HasMore: hasMore}
 	if len(lines) > 0 {
 		resp.Oldest = lines[0].Timestamp
 		resp.Newest = lines[len(lines)-1].Timestamp

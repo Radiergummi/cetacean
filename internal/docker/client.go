@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
@@ -131,6 +132,14 @@ func (c *Client) InspectVolume(ctx context.Context, name string) (volume.Volume,
 	return c.docker.VolumeInspect(ctx, name)
 }
 
+func (c *Client) SwarmInspect(ctx context.Context) (swarm.Swarm, error) {
+	return c.docker.SwarmInspect(ctx)
+}
+
+func (c *Client) PluginList(ctx context.Context) (types.PluginsListResponse, error) {
+	return c.docker.PluginList(ctx, filters.Args{})
+}
+
 // FullSync fetches all swarm resources in parallel. Individual resource type
 // failures are logged and their Has* flag stays false so the cache preserves
 // existing data for that type.
@@ -252,6 +261,19 @@ func (c *Client) Inspect(ctx context.Context, resourceType events.Type, id strin
 	default:
 		return nil, fmt.Errorf("unknown resource type: %s", resourceType)
 	}
+}
+
+func (c *Client) DiskUsage(ctx context.Context) (types.DiskUsage, error) {
+	return c.docker.DiskUsage(ctx, types.DiskUsageOptions{})
+}
+
+// LocalNodeID returns the swarm node ID of the Docker host this client is connected to.
+func (c *Client) LocalNodeID(ctx context.Context) (string, error) {
+	info, err := c.docker.Info(ctx)
+	if err != nil {
+		return "", err
+	}
+	return info.Swarm.NodeID, nil
 }
 
 // Logs fetches multiplexed logs for a service or task.
