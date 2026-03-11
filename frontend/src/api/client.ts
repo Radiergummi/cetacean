@@ -23,6 +23,7 @@ import type {
   SwarmInfo,
   DiskUsageSummary,
   Plugin,
+  MonitoringStatus,
 } from "./types";
 
 const BASE = "/api";
@@ -108,6 +109,7 @@ export const api = {
   swarm: () => fetchJSON<SwarmInfo>("/swarm"),
   plugins: () => fetchJSON<Plugin[]>("/plugins"),
   clusterMetrics: () => fetchJSON<ClusterMetrics>("/cluster/metrics"),
+  monitoringStatus: () => fetchJSON<MonitoringStatus>("/metrics/status"),
   nodes: (params?: ListParams) => fetchJSON<PagedResponse<Node>>(buildListURL("/nodes", params)),
   node: (id: string) => fetchJSON<Node>(`/nodes/${id}`),
   services: (params?: ListParams) =>

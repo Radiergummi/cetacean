@@ -435,3 +435,15 @@ export interface DiskUsageSummary {
   totalSize: number;
   reclaimable: number;
 }
+
+export interface TargetStatus {
+  targets: number;
+  nodes: number;
+}
+
+export interface MonitoringStatus {
+  prometheusConfigured: boolean;
+  prometheusReachable: boolean;
+  nodeExporter: TargetStatus | null;
+  cadvisor: TargetStatus | null;
+}
