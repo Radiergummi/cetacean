@@ -31,14 +31,18 @@ export default function ClusterOverview() {
   const fetchHistory = useCallback(() => {
     api
       .history({ limit: 25 })
-      .then(setHistory)
-      .catch(() => {});
+      .then((h) => {
+        setHistory(h);
+        setHistoryLoading(false);
+      })
+      .catch(() => {
+        setHistoryLoading(false);
+      });
   }, []);
 
   useEffect(() => {
     fetchSnapshot();
     fetchHistory();
-    setHistoryLoading(false);
   }, [fetchSnapshot, fetchHistory]);
 
   useSSE(

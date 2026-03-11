@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Level, LogLine } from "./log-utils";
 
-export function useLogFilter(lines: LogLine[], streamFilter: "all" | "stdout" | "stderr") {
+export function useLogFilter(lines: LogLine[]) {
   const [search, setSearch] = useState("");
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [matchIndex, setMatchIndex] = useState(0);
@@ -12,9 +12,6 @@ export function useLogFilter(lines: LogLine[], streamFilter: "all" | "stdout" | 
   const filtered = useMemo(() => {
     let result = lines;
 
-    if (streamFilter !== "all") {
-      result = result.filter(({ stream }) => stream === streamFilter);
-    }
     if (levelFilter !== "all") {
       result = result.filter(({ level }) => level === levelFilter);
     }
@@ -41,7 +38,7 @@ export function useLogFilter(lines: LogLine[], streamFilter: "all" | "stdout" | 
     }
 
     return result;
-  }, [lines, search, caseSensitive, useRegex, streamFilter, levelFilter, taskFilter]);
+  }, [lines, search, caseSensitive, useRegex, levelFilter, taskFilter]);
 
   useEffect(() => {
     setMatchIndex(0);

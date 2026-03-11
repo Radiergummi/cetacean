@@ -1,5 +1,5 @@
 import type React from "react";
-import {useCallback, useEffect, useState} from "react";
+import {useCallback, useEffect, useRef, useState} from "react";
 import {Link, useParams} from "react-router-dom";
 import {api} from "../api/client";
 import type {StackDetail as StackDetailType, Task} from "../api/types";
@@ -40,8 +40,10 @@ export default function StackDetail() {
 
     useEffect(fetchData, [fetchData]);
 
+    const fetchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
     useSSE(["stack", "service", "task"], useCallback(() => {
-        fetchData();
+        clearTimeout(fetchTimerRef.current);
+        fetchTimerRef.current = setTimeout(fetchData, 500);
     }, [fetchData]));
 
     useEffect(() => {

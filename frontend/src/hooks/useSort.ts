@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
 export type SortDir = "asc" | "desc";
@@ -12,50 +12,31 @@ export function useSort<T>(
   defaultDir: SortDir = "asc",
 ) {
   const [params, setParams] = useSearchParams();
-  const initialKey = params.get("sort") ?? defaultKey;
-  const initialDir = (
+  const sortKey = params.get("sort") ?? defaultKey;
+  const sortDir = (
     params.get("dir") === "desc" ? "desc" : params.get("dir") === "asc" ? "asc" : defaultDir
   ) as SortDir;
 
-  const [sortKey, setSortKey] = useState<string | undefined>(initialKey);
-  const [sortDir, setSortDir] = useState<SortDir>(initialDir);
-
-  useEffect(() => {
-    const urlKey = params.get("sort") ?? defaultKey;
-    const urlDir = (
-      params.get("dir") === "desc" ? "desc" : params.get("dir") === "asc" ? "asc" : defaultDir
-    ) as SortDir;
-    setSortKey(urlKey);
-    setSortDir(urlDir);
-  }, [params, defaultKey, defaultDir]);
-
-  const toggle = (key: string) => {
-    let newKey: string;
-    let newDir: SortDir;
-    if (sortKey === key) {
-      newDir = sortDir === "asc" ? "desc" : "asc";
-      newKey = key;
-    } else {
-      newKey = key;
-      newDir = "asc";
-    }
-    setSortKey(newKey);
-    setSortDir(newDir);
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (newKey === defaultKey && newDir === defaultDir) {
-          next.delete("sort");
-          next.delete("dir");
-        } else {
-          next.set("sort", newKey);
-          next.set("dir", newDir);
-        }
-        return next;
-      },
-      { replace: true },
-    );
-  };
+  const toggle = useCallback(
+    (key: string) => {
+      const newDir = sortKey === key ? (sortDir === "asc" ? "desc" : "asc") : "asc";
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (key === defaultKey && newDir === defaultDir) {
+            next.delete("sort");
+            next.delete("dir");
+          } else {
+            next.set("sort", key);
+            next.set("dir", newDir);
+          }
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [sortKey, sortDir, defaultKey, defaultDir, setParams],
+  );
 
   const sorted = useMemo(() => {
     if (!sortKey || !accessors[sortKey]) return items;
@@ -79,41 +60,31 @@ export function useSort<T>(
 /** Sort state only — no client-side sorting. For use with server-side sort. */
 export function useSortParams(defaultKey?: string, defaultDir: SortDir = "asc") {
   const [params, setParams] = useSearchParams();
-  const initialKey = params.get("sort") ?? defaultKey;
-  const initialDir = (
+  const sortKey = params.get("sort") ?? defaultKey;
+  const sortDir = (
     params.get("dir") === "desc" ? "desc" : params.get("dir") === "asc" ? "asc" : defaultDir
   ) as SortDir;
 
-  const [sortKey, setSortKey] = useState<string | undefined>(initialKey);
-  const [sortDir, setSortDir] = useState<SortDir>(initialDir);
-
-  const toggle = (key: string) => {
-    let newKey: string;
-    let newDir: SortDir;
-    if (sortKey === key) {
-      newDir = sortDir === "asc" ? "desc" : "asc";
-      newKey = key;
-    } else {
-      newKey = key;
-      newDir = "asc";
-    }
-    setSortKey(newKey);
-    setSortDir(newDir);
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (newKey === defaultKey && newDir === defaultDir) {
-          next.delete("sort");
-          next.delete("dir");
-        } else {
-          next.set("sort", newKey);
-          next.set("dir", newDir);
-        }
-        return next;
-      },
-      { replace: true },
-    );
-  };
+  const toggle = useCallback(
+    (key: string) => {
+      const newDir = sortKey === key ? (sortDir === "asc" ? "desc" : "asc") : "asc";
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (key === defaultKey && newDir === defaultDir) {
+            next.delete("sort");
+            next.delete("dir");
+          } else {
+            next.set("sort", key);
+            next.set("dir", newDir);
+          }
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [sortKey, sortDir, defaultKey, defaultDir, setParams],
+  );
 
   return { sortKey, sortDir, toggle };
 }

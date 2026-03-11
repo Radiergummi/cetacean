@@ -144,7 +144,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
         });
     }, 2000);
     return () => clearInterval(interval);
-  }, [query, !!response]);
+  }, [query, response]);
 
   const goTo = useCallback(
     ({ result: { id }, type }: FlatItem) => {

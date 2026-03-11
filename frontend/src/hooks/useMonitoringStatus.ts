@@ -22,12 +22,7 @@ export function useMonitoringStatus(): MonitoringStatus | null {
           cached = s;
         })
         .catch(() => {
-          cached = {
-            prometheusConfigured: false,
-            prometheusReachable: false,
-            nodeExporter: null,
-            cadvisor: null,
-          };
+          inflight = null;
         });
     }
     inflight.then(() => setStatus(cached));

@@ -71,7 +71,7 @@ export default function LogViewer({serviceId, taskId, header}: Props) {
         taskFilter,
         setTaskFilter,
         filtered,
-    } = useLogFilter(data.lines, streamFilter);
+    } = useLogFilter(data.lines);
 
     const showAttrs = useMemo(() => !isTask && data.lines.some(({attrs}) => attrs?.taskId), [isTask, data.lines]);
 

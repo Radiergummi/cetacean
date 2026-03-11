@@ -30,7 +30,6 @@ export function useSwarmResource<T>(
   }, []);
 
   useEffect(() => {
-    fetchFnRef.current = fetchFn;
     load();
   }, [fetchFn]);
 

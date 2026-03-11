@@ -9,7 +9,7 @@ import { SearchInput } from "../components/search";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { Loader2 } from "lucide-react";
 import ResourceName from "../components/ResourceName";
-import { statusColor } from "../lib/searchConstants";
+import { resourcePath, statusColor, TYPE_LABELS, TYPE_ORDER } from "../lib/searchConstants";
 
 function StateOrb({ state }: { state: string }) {
   if (state === "updating") {
@@ -18,7 +18,6 @@ function StateOrb({ state }: { state: string }) {
   const color = statusColor(state);
   return <span className={`inline-block size-2 rounded-full shrink-0 ${color}`} title={state} />;
 }
-import { resourcePath, TYPE_LABELS, TYPE_ORDER } from "../lib/searchConstants";
 
 export default function SearchPage() {
   const [input, query, setInput] = useSearchParam("q");
