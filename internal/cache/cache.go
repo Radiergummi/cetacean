@@ -616,6 +616,9 @@ func (c *Cache) ServicesUsingConfig(configID string) []ServiceRef {
 	defer c.mu.RUnlock()
 	var refs []ServiceRef
 	for _, svc := range c.services {
+		if svc.Spec.TaskTemplate.ContainerSpec == nil {
+			continue
+		}
 		for _, cfg := range svc.Spec.TaskTemplate.ContainerSpec.Configs {
 			if cfg.ConfigID == configID {
 				refs = append(refs, ServiceRef{ID: svc.ID, Name: svc.Spec.Name})
@@ -632,6 +635,9 @@ func (c *Cache) ServicesUsingSecret(secretID string) []ServiceRef {
 	defer c.mu.RUnlock()
 	var refs []ServiceRef
 	for _, svc := range c.services {
+		if svc.Spec.TaskTemplate.ContainerSpec == nil {
+			continue
+		}
 		for _, sec := range svc.Spec.TaskTemplate.ContainerSpec.Secrets {
 			if sec.SecretID == secretID {
 				refs = append(refs, ServiceRef{ID: svc.ID, Name: svc.Spec.Name})
@@ -664,6 +670,9 @@ func (c *Cache) ServicesUsingVolume(volumeName string) []ServiceRef {
 	defer c.mu.RUnlock()
 	var refs []ServiceRef
 	for _, svc := range c.services {
+		if svc.Spec.TaskTemplate.ContainerSpec == nil {
+			continue
+		}
 		for _, m := range svc.Spec.TaskTemplate.ContainerSpec.Mounts {
 			if m.Type == "volume" && m.Source == volumeName {
 				refs = append(refs, ServiceRef{ID: svc.ID, Name: svc.Spec.Name})

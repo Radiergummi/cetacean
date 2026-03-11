@@ -361,7 +361,8 @@ func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 
 	sw, err := h.systemClient.SwarmInspect(ctx)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("swarm inspect failed: %v", err))
+		slog.Error("swarm inspect failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "swarm inspect failed")
 		return
 	}
 
@@ -390,7 +391,8 @@ func (h *Handlers) HandlePlugins(w http.ResponseWriter, r *http.Request) {
 
 	plugins, err := h.systemClient.PluginList(ctx)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("plugin list failed: %v", err))
+		slog.Error("plugin list failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "plugin list failed")
 		return
 	}
 
@@ -416,7 +418,8 @@ func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
 
 	du, err := h.systemClient.DiskUsage(ctx)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("disk usage failed: %v", err))
+		slog.Error("disk usage failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "disk usage failed")
 		return
 	}
 
@@ -743,14 +746,16 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 
 	logs, err := fetch(ctx, strconv.Itoa(tail), false, since, until)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to get logs: %s", err))
+		slog.Error("failed to get logs", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to get logs")
 		return
 	}
 	defer logs.Close() //nolint:errcheck
 
 	lines, err := ParseDockerLogs(logs)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to parse logs: %s", err))
+		slog.Error("failed to parse logs", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to parse logs")
 		return
 	}
 	if lines == nil {
@@ -804,20 +809,28 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 }
 
 func (h *Handlers) serveLogsSSE(w http.ResponseWriter, r *http.Request, fetch logFetcher, since, streamFilter string) {
-	if activeLogSSEConns.Load() >= maxLogSSEConns {
-		writeError(w, http.StatusServiceUnavailable, "too many active log streams")
-		return
+	for {
+		cur := activeLogSSEConns.Load()
+		if cur >= maxLogSSEConns {
+			writeError(w, http.StatusServiceUnavailable, "too many active log streams")
+			return
+		}
+		if activeLogSSEConns.CompareAndSwap(cur, cur+1) {
+			break
+		}
 	}
-	activeLogSSEConns.Add(1)
 	defer activeLogSSEConns.Add(-1)
 
 	// EventSource sends Last-Event-ID on reconnect; use it as fallback for since
 	if since == "" {
-		since = r.Header.Get("Last-Event-ID")
+		if v := r.Header.Get("Last-Event-ID"); validLogTimestamp(v) {
+			since = v
+		}
 	}
 	logs, err := fetch(r.Context(), "0", true, since, "")
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to stream logs: %s", err))
+		slog.Error("failed to stream logs", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to stream logs")
 		return
 	}
 	defer logs.Close() //nolint:errcheck

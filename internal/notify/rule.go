@@ -1,6 +1,8 @@
 package notify
 
 import (
+	"fmt"
+	"net/url"
 	"regexp"
 	"time"
 
@@ -29,6 +31,13 @@ type Match struct {
 }
 
 func (r *Rule) compile() error {
+	u, err := url.Parse(r.Webhook)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return fmt.Errorf("webhook must be an http or https URL, got %q", r.Webhook)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("webhook URL must have a host, got %q", r.Webhook)
+	}
 	if r.Match.NameRegex != "" {
 		re, err := regexp.Compile(r.Match.NameRegex)
 		if err != nil {

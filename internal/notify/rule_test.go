@@ -11,6 +11,7 @@ import (
 func TestRule_Matches_TypeAndAction(t *testing.T) {
 	r := Rule{
 		Enabled: true,
+		Webhook: "http://example.com/hook",
 		Match:   Match{Type: "task", Action: "update"},
 	}
 	if err := r.compile(); err != nil {
@@ -31,6 +32,7 @@ func TestRule_Matches_TypeAndAction(t *testing.T) {
 func TestRule_Matches_NameRegex(t *testing.T) {
 	r := Rule{
 		Enabled: true,
+		Webhook: "http://example.com/hook",
 		Match:   Match{NameRegex: `^web\.`},
 	}
 	if err := r.compile(); err != nil {
@@ -49,6 +51,7 @@ func TestRule_Matches_NameRegex(t *testing.T) {
 func TestRule_Matches_Condition(t *testing.T) {
 	r := Rule{
 		Enabled: true,
+		Webhook: "http://example.com/hook",
 		Match:   Match{Condition: `state == "failed"`},
 	}
 	if err := r.compile(); err != nil {
@@ -77,6 +80,7 @@ func TestRule_Matches_Condition(t *testing.T) {
 func TestRule_Matches_ConditionComplex(t *testing.T) {
 	r := Rule{
 		Enabled: true,
+		Webhook: "http://example.com/hook",
 		Match:   Match{Condition: `state == "failed" && exit_code != "0"`},
 	}
 	if err := r.compile(); err != nil {
@@ -101,6 +105,7 @@ func TestRule_Matches_ConditionComplex(t *testing.T) {
 func TestRule_Matches_ConditionContains(t *testing.T) {
 	r := Rule{
 		Enabled: true,
+		Webhook: "http://example.com/hook",
 		Match:   Match{Condition: `image contains "nginx"`},
 	}
 	if err := r.compile(); err != nil {
@@ -126,6 +131,7 @@ func TestRule_Matches_ConditionContains(t *testing.T) {
 func TestRule_Matches_ConditionNilResource(t *testing.T) {
 	r := Rule{
 		Enabled: true,
+		Webhook: "http://example.com/hook",
 		Match:   Match{Condition: `state == "failed"`},
 	}
 	if err := r.compile(); err != nil {
@@ -142,6 +148,7 @@ func TestRule_Matches_ConditionNilResource(t *testing.T) {
 func TestRule_Matches_NodeCondition(t *testing.T) {
 	r := Rule{
 		Enabled: true,
+		Webhook: "http://example.com/hook",
 		Match:   Match{Condition: `role == "manager" && state == "ready"`},
 	}
 	if err := r.compile(); err != nil {
@@ -164,6 +171,7 @@ func TestRule_Matches_NodeCondition(t *testing.T) {
 func TestRule_Matches_Disabled(t *testing.T) {
 	r := Rule{
 		Enabled: false,
+		Webhook: "http://example.com/hook",
 		Match:   Match{Type: "task"},
 	}
 	if err := r.compile(); err != nil {
@@ -179,6 +187,7 @@ func TestRule_Matches_Disabled(t *testing.T) {
 func TestRule_Compile_BadRegex(t *testing.T) {
 	r := Rule{
 		Enabled: true,
+		Webhook: "http://example.com/hook",
 		Match:   Match{NameRegex: `[invalid`},
 	}
 	if err := r.compile(); err == nil {
@@ -189,6 +198,7 @@ func TestRule_Compile_BadRegex(t *testing.T) {
 func TestRule_Compile_BadCondition(t *testing.T) {
 	r := Rule{
 		Enabled: true,
+		Webhook: "http://example.com/hook",
 		Match:   Match{Condition: `state ===`},
 	}
 	if err := r.compile(); err == nil {
@@ -199,6 +209,7 @@ func TestRule_Compile_BadCondition(t *testing.T) {
 func TestRule_Matches_ConditionOrLogic(t *testing.T) {
 	r := Rule{
 		Enabled: true,
+		Webhook: "http://example.com/hook",
 		Match:   Match{Condition: `state == "failed" || state == "rejected"`},
 	}
 	if err := r.compile(); err != nil {
@@ -228,6 +239,7 @@ func TestRule_Matches_ConditionWrongResourceType(t *testing.T) {
 	// "role" exists on nodes but not tasks — should not match
 	r := Rule{
 		Enabled: true,
+		Webhook: "http://example.com/hook",
 		Match:   Match{Condition: `role == "manager"`},
 	}
 	if err := r.compile(); err != nil {
@@ -248,6 +260,7 @@ func TestRule_Matches_NoCondition(t *testing.T) {
 	// Empty condition should always pass (match on type/action only)
 	r := Rule{
 		Enabled: true,
+		Webhook: "http://example.com/hook",
 		Match:   Match{Type: "task", Action: "update"},
 	}
 	if err := r.compile(); err != nil {

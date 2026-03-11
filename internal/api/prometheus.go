@@ -1,10 +1,10 @@
 package api
 
 import (
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -46,20 +46,29 @@ func (p *PrometheusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Only forward expected Prometheus query parameters.
+	allowed := url.Values{}
+	for _, key := range []string{"query", "time", "timeout", "start", "end", "step"} {
+		if v := r.URL.Query().Get(key); v != "" {
+			allowed.Set(key, v)
+		}
+	}
 	targetURL := p.baseURL + "/api/v1" + path
-	if r.URL.RawQuery != "" {
-		targetURL += "?" + r.URL.RawQuery
+	if encoded := allowed.Encode(); encoded != "" {
+		targetURL += "?" + encoded
 	}
 
 	req, err := http.NewRequestWithContext(r.Context(), "GET", targetURL, nil)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to create prometheus request: %s", err))
+		slog.Error("failed to create prometheus request", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to create prometheus request")
 		return
 	}
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, fmt.Sprintf("prometheus unreachable at %s: %s", p.baseURL, err))
+		slog.Error("prometheus unreachable", "url", p.baseURL, "error", err)
+		writeError(w, http.StatusBadGateway, "prometheus unreachable")
 		return
 	}
 	defer resp.Body.Close()
