@@ -5,7 +5,7 @@ import (
 	"net/http/pprof"
 )
 
-func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Handler, enablePprof bool) http.Handler {
+func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Handler, openapiSpec []byte, enablePprof bool) http.Handler {
 	mux := http.NewServeMux()
 
 	// Meta endpoints (no content negotiation, no discovery links)
@@ -15,7 +15,7 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 	mux.Handle("GET /-/metrics/", promProxy)
 
 	// API documentation (content-negotiated)
-	mux.HandleFunc("GET /api", HandleAPIDoc)
+	mux.HandleFunc("GET /api", HandleAPIDoc(openapiSpec))
 	mux.HandleFunc("GET /api/context.jsonld", HandleContext)
 
 	// SSE events

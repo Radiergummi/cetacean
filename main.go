@@ -24,6 +24,9 @@ import (
 //go:embed frontend/dist/*
 var frontendDist embed.FS
 
+//go:embed api/openapi.yaml
+var openapiSpec []byte
+
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
@@ -122,7 +125,7 @@ func main() {
 		slog.Warn("pprof endpoints enabled", "path", "/debug/pprof/")
 	}
 
-	router := api.NewRouter(handlers, broadcaster, promProxy, spa, cfg.Pprof)
+	router := api.NewRouter(handlers, broadcaster, promProxy, spa, openapiSpec, cfg.Pprof)
 
 	server := &http.Server{
 		Addr:         cfg.ListenAddr,

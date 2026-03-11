@@ -1,0 +1,2010 @@
+openapi: "3.1.0"
+info:
+  title: Cetacean API
+  version: "1.0"
+  description: |
+    Read-only observability API for Docker Swarm Mode clusters.
+
+    Uses content negotiation — same URLs serve JSON, HTML (SPA), or SSE based on
+    the Accept header. Append `.json` or `.html` to any path to force a content type.
+
+    All collection responses include JSON-LD `@context` and `@type` fields.
+    Detail responses include `@context`, `@id`, and `@type`.
+    Error responses follow RFC 9457 (Problem Details).
+
+    Every response (except `/-/` meta endpoints) includes:
+    - `Link: </api>; rel="service-desc"` — pointer to this spec
+    - `Link: </api/context.jsonld>; rel="describedby"` — JSON-LD context
+    - `Vary: Accept` — content negotiation indicator
+
+servers:
+  - url: /
+
+tags:
+  - name: Meta
+    description: Health checks and operational endpoints (no content negotiation, no discovery links)
+  - name: Cluster
+    description: Cluster-wide information, swarm config, disk usage, and plugins
+  - name: Nodes
+    description: Swarm nodes
+  - name: Services
+    description: Swarm services
+  - name: Tasks
+    description: Swarm tasks (enriched with ServiceName and NodeHostname)
+  - name: Stacks
+    description: Derived stacks (from com.docker.stack.namespace labels)
+  - name: Configs
+    description: Swarm configs
+  - name: Secrets
+    description: Swarm secrets (data always redacted)
+  - name: Networks
+    description: Docker networks
+  - name: Volumes
+    description: Docker volumes
+  - name: Search
+    description: Cross-resource global search
+  - name: History
+    description: Resource change history (ring buffer)
+  - name: Topology
+    description: Network and placement topology views
+  - name: Monitoring
+    description: Prometheus metrics proxy and monitoring status
+  - name: Events
+    description: Real-time SSE event stream
+  - name: Notifications
+    description: Webhook notification rule status
+  - name: Documentation
+    description: API spec and JSON-LD context
+
+paths:
+  # ── Meta ──────────────────────────────────────────────────────────────
+
+  /-/health:
+    get:
+      operationId: getHealth
+      tags: [Meta]
+      summary: Health check
+      description: Always returns 200 with version info. No content negotiation.
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  version:
+                    type: string
+                  commit:
+                    type: string
+                  buildDate:
+                    type: string
+
+  /-/ready:
+    get:
+      operationId: getReady
+      tags: [Meta]
+      summary: Readiness check
+      description: |
+        Returns 200 after the initial Docker sync completes,
+        503 while still syncing.
+      responses:
+        "200":
+          description: Ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ready
+        "503":
+          description: Not ready (initial sync in progress)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: not_ready
+
+  /-/metrics/status:
+    get:
+      operationId: getMonitoringStatus
+      tags: [Monitoring]
+      summary: Monitoring auto-detection status
+      description: |
+        Probes Prometheus for node-exporter and cAdvisor targets.
+        Returns detection status for the guided setup UI.
+      responses:
+        "200":
+          description: Monitoring status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonitoringStatus"
+
+  /-/metrics/{path}:
+    get:
+      operationId: proxyPrometheus
+      tags: [Monitoring]
+      summary: Prometheus query proxy
+      description: |
+        Reverse proxy to Prometheus. Only allows `/query` and `/query_range` sub-paths
+        with whitelisted query params. 10 MB response limit, 30 s timeout.
+        Returns 404 if Prometheus is not configured.
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [query, query_range]
+      responses:
+        "200":
+          description: Proxied Prometheus response
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Prometheus query result (proxied as-is)
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Documentation ────────────────────────────────────────────────────
+
+  /api:
+    get:
+      operationId: getApiDoc
+      tags: [Documentation]
+      summary: API documentation
+      description: |
+        Content-negotiated. HTML requests get the Scalar API playground;
+        all other requests get this OpenAPI spec as YAML.
+      responses:
+        "200":
+          description: API documentation
+          content:
+            application/yaml:
+              schema:
+                type: string
+            text/html:
+              schema:
+                type: string
+
+  /api/context.jsonld:
+    get:
+      operationId: getJsonLdContext
+      tags: [Documentation]
+      summary: JSON-LD context document
+      description: Defines the vocabulary for JSON-LD terms used in responses.
+      responses:
+        "200":
+          description: JSON-LD context
+          content:
+            application/ld+json:
+              schema:
+                type: object
+
+  # ── Events ───────────────────────────────────────────────────────────
+
+  /events:
+    get:
+      operationId: getEvents
+      tags: [Events]
+      summary: Real-time SSE event stream
+      description: |
+        Server-Sent Events stream of resource changes. Requires `Accept: text/event-stream`.
+        HTML requests get the SPA; JSON requests get 406.
+
+        Events are batched within the configured interval (default 100 ms).
+        Single events use `event: <type>` (node, service, task, etc.).
+        Batched events use `event: batch` with an array payload.
+
+        Max 256 concurrent SSE clients. Returns 429 with Retry-After when exceeded.
+      parameters:
+        - name: types
+          in: query
+          description: Comma-separated event types to subscribe to
+          schema:
+            type: string
+            example: node,service,task
+      responses:
+        "200":
+          description: SSE event stream
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/SSEEvent"
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # ── Cluster ──────────────────────────────────────────────────────────
+
+  /cluster:
+    get:
+      operationId: getCluster
+      tags: [Cluster]
+      summary: Cluster overview
+      description: Aggregated counts and status of all swarm resources.
+      responses:
+        "200":
+          description: Cluster snapshot
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClusterSnapshot"
+        "304":
+          $ref: "#/components/responses/NotModified"
+
+  /cluster/metrics:
+    get:
+      operationId: getClusterMetrics
+      tags: [Cluster]
+      summary: Cluster resource utilization
+      description: |
+        CPU, memory, and disk utilization from Prometheus.
+        Returns 404 if Prometheus is not configured.
+      responses:
+        "200":
+          description: Cluster metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClusterMetrics"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /swarm:
+    get:
+      operationId: getSwarm
+      tags: [Cluster]
+      summary: Swarm configuration
+      description: Full swarm inspect result with join tokens, raft config, etc.
+      responses:
+        "200":
+          description: Swarm info
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  swarm:
+                    type: object
+                    description: Docker swarm.Swarm object
+                  managerAddr:
+                    type: string
+                    description: Address of the leader manager node
+        "304":
+          $ref: "#/components/responses/NotModified"
+
+  /disk-usage:
+    get:
+      operationId: getDiskUsage
+      tags: [Cluster]
+      summary: Docker disk usage
+      description: Summarized disk usage by category (images, containers, volumes, build cache).
+      responses:
+        "200":
+          description: Disk usage summaries
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DiskUsageSummary"
+        "304":
+          $ref: "#/components/responses/NotModified"
+
+  /plugins:
+    get:
+      operationId: getPlugins
+      tags: [Cluster]
+      summary: Installed Docker plugins
+      responses:
+        "200":
+          description: Plugin list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Docker PluginsListResponse object
+        "304":
+          $ref: "#/components/responses/NotModified"
+
+  # ── Nodes ────────────────────────────────────────────────────────────
+
+  /nodes:
+    get:
+      operationId: listNodes
+      tags: [Nodes]
+      summary: List nodes
+      parameters:
+        - $ref: "#/components/parameters/search"
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [hostname, role, status, availability]
+        - $ref: "#/components/parameters/dir"
+      responses:
+        "200":
+          description: Paginated node list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Link:
+              $ref: "#/components/headers/Link"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeCollection"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /nodes/{id}:
+    get:
+      operationId: getNode
+      tags: [Nodes]
+      summary: Node detail
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Node detail
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      node:
+                        type: object
+                        description: Docker swarm.Node object
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /nodes/{id}/tasks:
+    get:
+      operationId: getNodeTasks
+      tags: [Nodes]
+      summary: Tasks running on a node
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Array of enriched tasks
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EnrichedTask"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Services ─────────────────────────────────────────────────────────
+
+  /services:
+    get:
+      operationId: listServices
+      tags: [Services]
+      summary: List services
+      parameters:
+        - $ref: "#/components/parameters/search"
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [name, mode]
+        - $ref: "#/components/parameters/dir"
+      responses:
+        "200":
+          description: Paginated service list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Link:
+              $ref: "#/components/headers/Link"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceCollection"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /services/{id}:
+    get:
+      operationId: getService
+      tags: [Services]
+      summary: Service detail
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Service detail
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      service:
+                        type: object
+                        description: Docker swarm.Service object
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /services/{id}/tasks:
+    get:
+      operationId: getServiceTasks
+      tags: [Services]
+      summary: Tasks belonging to a service
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Array of enriched tasks
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EnrichedTask"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /services/{id}/logs:
+    get:
+      operationId: getServiceLogs
+      tags: [Services]
+      summary: Service logs
+      description: |
+        JSON (default): returns paginated log lines.
+        SSE (`Accept: text/event-stream`): streams log lines in real time.
+
+        SSE streams have a 128-connection limit (returns 429 when exceeded).
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/logLimit"
+        - $ref: "#/components/parameters/logAfter"
+        - $ref: "#/components/parameters/logBefore"
+        - $ref: "#/components/parameters/logStream"
+      responses:
+        "200":
+          description: Log lines
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogResponse"
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/LogLine"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # ── Tasks ────────────────────────────────────────────────────────────
+
+  /tasks:
+    get:
+      operationId: listTasks
+      tags: [Tasks]
+      summary: List tasks
+      description: |
+        Tasks are returned as EnrichedTask objects with ServiceName and
+        NodeHostname populated from cache cross-references.
+      parameters:
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [state, service, node]
+        - $ref: "#/components/parameters/dir"
+      responses:
+        "200":
+          description: Paginated task list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Link:
+              $ref: "#/components/headers/Link"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskCollection"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /tasks/{id}:
+    get:
+      operationId: getTask
+      tags: [Tasks]
+      summary: Task detail
+      description: |
+        Returns the enriched task with cross-references to its service and node.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Task detail with service and node refs
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      task:
+                        $ref: "#/components/schemas/EnrichedTask"
+                      service:
+                        type: object
+                        description: Cross-reference to the parent service
+                        properties:
+                          "@id":
+                            type: string
+                          name:
+                            type: string
+                      node:
+                        type: object
+                        description: Cross-reference to the assigned node
+                        properties:
+                          "@id":
+                            type: string
+                          hostname:
+                            type: string
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /tasks/{id}/logs:
+    get:
+      operationId: getTaskLogs
+      tags: [Tasks]
+      summary: Task logs
+      description: |
+        JSON (default): returns paginated log lines.
+        SSE (`Accept: text/event-stream`): streams log lines in real time.
+
+        SSE streams have a 128-connection limit (returns 429 when exceeded).
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/logLimit"
+        - $ref: "#/components/parameters/logAfter"
+        - $ref: "#/components/parameters/logBefore"
+        - $ref: "#/components/parameters/logStream"
+      responses:
+        "200":
+          description: Log lines
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogResponse"
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/LogLine"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # ── History ──────────────────────────────────────────────────────────
+
+  /history:
+    get:
+      operationId: getHistory
+      tags: [History]
+      summary: Resource change history
+      description: |
+        Returns recent change events from the in-memory ring buffer (10,000 entries).
+        Can be filtered by resource type and/or specific resource ID.
+      parameters:
+        - name: type
+          in: query
+          description: Filter by resource type (node, service, task, etc.)
+          schema:
+            type: string
+        - name: resourceId
+          in: query
+          description: Filter by specific resource ID
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Max entries to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: History entries
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HistoryEntry"
+        "304":
+          $ref: "#/components/responses/NotModified"
+
+  # ── Stacks ───────────────────────────────────────────────────────────
+
+  /stacks:
+    get:
+      operationId: listStacks
+      tags: [Stacks]
+      summary: List stacks
+      description: Stacks derived from the com.docker.stack.namespace label.
+      parameters:
+        - $ref: "#/components/parameters/search"
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [name]
+        - $ref: "#/components/parameters/dir"
+      responses:
+        "200":
+          description: Paginated stack list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Link:
+              $ref: "#/components/headers/Link"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StackCollection"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /stacks/summary:
+    get:
+      operationId: getStackSummary
+      tags: [Stacks]
+      summary: Stack summaries with metrics
+      description: |
+        Returns all stacks with task counts and optional Prometheus metrics
+        (memory usage, CPU usage per stack).
+      responses:
+        "200":
+          description: Stack summaries
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StackSummary"
+        "304":
+          $ref: "#/components/responses/NotModified"
+
+  /stacks/{name}:
+    get:
+      operationId: getStack
+      tags: [Stacks]
+      summary: Stack detail
+      description: Full stack with all its services, configs, secrets, networks, and volumes.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Stack name
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Stack detail
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      stack:
+                        $ref: "#/components/schemas/StackDetail"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Configs ──────────────────────────────────────────────────────────
+
+  /configs:
+    get:
+      operationId: listConfigs
+      tags: [Configs]
+      summary: List configs
+      parameters:
+        - $ref: "#/components/parameters/search"
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [name, created, updated]
+        - $ref: "#/components/parameters/dir"
+      responses:
+        "200":
+          description: Paginated config list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Link:
+              $ref: "#/components/headers/Link"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfigCollection"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /configs/{id}:
+    get:
+      operationId: getConfig
+      tags: [Configs]
+      summary: Config detail
+      description: |
+        Returns the config with its data (base64-encoded) and
+        a list of services using this config.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Config detail with cross-referenced services
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      config:
+                        type: object
+                        description: Docker swarm.Config object (data is base64-encoded)
+                      services:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ServiceRef"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Secrets ──────────────────────────────────────────────────────────
+
+  /secrets:
+    get:
+      operationId: listSecrets
+      tags: [Secrets]
+      summary: List secrets
+      description: Secret data is always redacted (cleared before response).
+      parameters:
+        - $ref: "#/components/parameters/search"
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [name, created, updated]
+        - $ref: "#/components/parameters/dir"
+      responses:
+        "200":
+          description: Paginated secret list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Link:
+              $ref: "#/components/headers/Link"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecretCollection"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /secrets/{id}:
+    get:
+      operationId: getSecret
+      tags: [Secrets]
+      summary: Secret detail
+      description: |
+        Returns the secret metadata (data always redacted) and
+        a list of services using this secret.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Secret detail with cross-referenced services
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      secret:
+                        type: object
+                        description: Docker swarm.Secret object (data always nil)
+                      services:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ServiceRef"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Networks ─────────────────────────────────────────────────────────
+
+  /networks:
+    get:
+      operationId: listNetworks
+      tags: [Networks]
+      summary: List networks
+      parameters:
+        - $ref: "#/components/parameters/search"
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [name, driver, scope]
+        - $ref: "#/components/parameters/dir"
+      responses:
+        "200":
+          description: Paginated network list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Link:
+              $ref: "#/components/headers/Link"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NetworkCollection"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /networks/{id}:
+    get:
+      operationId: getNetwork
+      tags: [Networks]
+      summary: Network detail
+      description: Returns the network and a list of services attached to it.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Network detail with cross-referenced services
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      network:
+                        type: object
+                        description: Docker network.Summary object
+                      services:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ServiceRef"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Volumes ──────────────────────────────────────────────────────────
+
+  /volumes:
+    get:
+      operationId: listVolumes
+      tags: [Volumes]
+      summary: List volumes
+      parameters:
+        - $ref: "#/components/parameters/search"
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [name, driver, scope]
+        - $ref: "#/components/parameters/dir"
+      responses:
+        "200":
+          description: Paginated volume list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Link:
+              $ref: "#/components/headers/Link"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VolumeCollection"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /volumes/{name}:
+    get:
+      operationId: getVolume
+      tags: [Volumes]
+      summary: Volume detail
+      description: |
+        Returns the volume and a list of services using it.
+        Note: volumes are keyed by name, not ID.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Volume name
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Volume detail with cross-referenced services
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      volume:
+                        type: object
+                        description: Docker volume.Volume object
+                      services:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ServiceRef"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Notifications ────────────────────────────────────────────────────
+
+  /notifications/rules:
+    get:
+      operationId: getNotificationRules
+      tags: [Notifications]
+      summary: Notification rule statuses
+      description: |
+        Returns the current status of all configured notification rules,
+        including fire counts and circuit breaker state.
+        Returns an empty array if no notifier is configured.
+      responses:
+        "200":
+          description: Rule statuses
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RuleStatus"
+        "304":
+          $ref: "#/components/responses/NotModified"
+
+  # ── Search ───────────────────────────────────────────────────────────
+
+  /search:
+    get:
+      operationId: search
+      tags: [Search]
+      summary: Global cross-resource search
+      description: |
+        Searches names, images, and labels across all resource types.
+        Results are grouped by type. The `limit` parameter controls max results
+        per type (default 3; 0 means up to 1000 per type).
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search query (case-insensitive substring match, max 200 chars)
+          schema:
+            type: string
+            maxLength: 200
+        - name: limit
+          in: query
+          description: Max results per resource type (0 = up to 1000)
+          schema:
+            type: integer
+            default: 3
+            minimum: 0
+      responses:
+        "200":
+          description: Grouped search results
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  # ── Topology ─────────────────────────────────────────────────────────
+
+  /topology/networks:
+    get:
+      operationId: getNetworkTopology
+      tags: [Topology]
+      summary: Network topology graph
+      description: |
+        Returns a graph of services connected by shared overlay networks.
+        Nodes are services, edges represent shared network membership.
+      responses:
+        "200":
+          description: Network topology
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NetworkTopology"
+        "304":
+          $ref: "#/components/responses/NotModified"
+
+  /topology/placement:
+    get:
+      operationId: getPlacementTopology
+      tags: [Topology]
+      summary: Task placement topology
+      description: |
+        Returns cluster nodes with their assigned tasks,
+        for visualizing task placement across the swarm.
+      responses:
+        "200":
+          description: Placement topology
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlacementTopology"
+        "304":
+          $ref: "#/components/responses/NotModified"
+
+# ════════════════════════════════════════════════════════════════════════
+# Components
+# ════════════════════════════════════════════════════════════════════════
+
+components:
+
+  # ── Parameters ───────────────────────────────────────────────────────
+
+  parameters:
+    resourceId:
+      name: id
+      in: path
+      required: true
+      description: Resource ID
+      schema:
+        type: string
+
+    search:
+      name: search
+      in: query
+      description: Case-insensitive substring search on resource names
+      schema:
+        type: string
+
+    filter:
+      name: filter
+      in: query
+      description: |
+        expr-lang filter expression (max 512 characters).
+        Available fields depend on the resource type.
+      schema:
+        type: string
+        maxLength: 512
+
+    limit:
+      name: limit
+      in: query
+      description: Page size
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+
+    offset:
+      name: offset
+      in: query
+      description: Starting offset for pagination
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+
+    dir:
+      name: dir
+      in: query
+      description: Sort direction
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: asc
+
+    logLimit:
+      name: limit
+      in: query
+      description: Max log lines to return (JSON mode only)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 10000
+        default: 500
+
+    logAfter:
+      name: after
+      in: query
+      description: |
+        Return lines after this timestamp (RFC 3339 or Go duration).
+        For SSE, Last-Event-ID header is used as fallback.
+      schema:
+        type: string
+
+    logBefore:
+      name: before
+      in: query
+      description: |
+        Return lines before this timestamp (RFC 3339 or Go duration).
+        Not supported for SSE streams (returns 400).
+      schema:
+        type: string
+
+    logStream:
+      name: stream
+      in: query
+      description: Filter by output stream
+      schema:
+        type: string
+        enum: [stdout, stderr]
+
+  # ── Headers ──────────────────────────────────────────────────────────
+
+  headers:
+    ETag:
+      description: Weak ETag for conditional requests (use with If-None-Match)
+      schema:
+        type: string
+        example: '"w/abc123"'
+
+    Link:
+      description: RFC 8288 pagination links (rel="next", rel="prev")
+      schema:
+        type: string
+        example: '</nodes?limit=50&offset=50>; rel="next"'
+
+    Retry-After:
+      description: Seconds to wait before retrying
+      schema:
+        type: integer
+        example: 5
+
+  # ── Responses ────────────────────────────────────────────────────────
+
+  responses:
+    NotModified:
+      description: Not modified (ETag matched If-None-Match)
+
+    BadRequest:
+      description: Bad request (invalid filter, missing parameter, etc.)
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+
+    NotAcceptable:
+      description: Requested content type not supported for this endpoint
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+
+    TooManyRequests:
+      description: Too many concurrent connections
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/Retry-After"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+
+  # ── Schemas ──────────────────────────────────────────────────────────
+
+  schemas:
+
+    # ── Error ────────────────────────────────────────────────────────
+
+    ProblemDetail:
+      type: object
+      description: RFC 9457 Problem Details with JSON-LD @context
+      required: [type, title, status]
+      properties:
+        "@context":
+          type: string
+          example: /api/context.jsonld
+        type:
+          type: string
+          description: Problem type URI
+          example: about:blank
+        title:
+          type: string
+          description: Short human-readable summary
+          example: Not Found
+        status:
+          type: integer
+          description: HTTP status code
+          example: 404
+        detail:
+          type: string
+          description: Human-readable explanation
+        instance:
+          type: string
+          description: Request path that generated the error
+        requestId:
+          type: string
+          description: Correlation ID for this request
+
+    # ── JSON-LD Envelopes ────────────────────────────────────────────
+
+    DetailEnvelope:
+      type: object
+      description: JSON-LD wrapper for detail endpoints
+      properties:
+        "@context":
+          type: string
+          example: /api/context.jsonld
+        "@id":
+          type: string
+          description: Canonical path of this resource
+          example: /nodes/abc123
+        "@type":
+          type: string
+          description: Resource type name
+          example: Node
+
+    CollectionEnvelope:
+      type: object
+      description: JSON-LD wrapper for list endpoints
+      required: [items, total, limit, offset]
+      properties:
+        "@context":
+          type: string
+          example: /api/context.jsonld
+        "@type":
+          type: string
+          example: Collection
+        items:
+          type: array
+          items: {}
+        total:
+          type: integer
+          description: Total number of items matching the query
+        limit:
+          type: integer
+          description: Page size used
+        offset:
+          type: integer
+          description: Starting offset used
+
+    # ── Collections ──────────────────────────────────────────────────
+
+    NodeCollection:
+      allOf:
+        - $ref: "#/components/schemas/CollectionEnvelope"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                type: object
+                description: Docker swarm.Node object
+
+    ServiceCollection:
+      allOf:
+        - $ref: "#/components/schemas/CollectionEnvelope"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/ServiceListItem"
+
+    TaskCollection:
+      allOf:
+        - $ref: "#/components/schemas/CollectionEnvelope"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/EnrichedTask"
+
+    StackCollection:
+      allOf:
+        - $ref: "#/components/schemas/CollectionEnvelope"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Stack"
+
+    ConfigCollection:
+      allOf:
+        - $ref: "#/components/schemas/CollectionEnvelope"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                type: object
+                description: Docker swarm.Config object
+
+    SecretCollection:
+      allOf:
+        - $ref: "#/components/schemas/CollectionEnvelope"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                type: object
+                description: Docker swarm.Secret object (data always nil)
+
+    NetworkCollection:
+      allOf:
+        - $ref: "#/components/schemas/CollectionEnvelope"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                type: object
+                description: Docker network.Summary object
+
+    VolumeCollection:
+      allOf:
+        - $ref: "#/components/schemas/CollectionEnvelope"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                type: object
+                description: Docker volume.Volume object
+
+    # ── Resource Types ───────────────────────────────────────────────
+
+    ServiceRef:
+      type: object
+      description: Lightweight service cross-reference
+      properties:
+        "@id":
+          type: string
+          description: Canonical path
+          example: /services/abc123
+        id:
+          type: string
+        name:
+          type: string
+
+    ServiceListItem:
+      type: object
+      description: Service with running task count (extends Docker swarm.Service)
+      properties:
+        ID:
+          type: string
+        Spec:
+          type: object
+          description: Docker ServiceSpec
+        RunningTasks:
+          type: integer
+          description: Number of currently running tasks
+
+    EnrichedTask:
+      type: object
+      description: Docker swarm.Task with added ServiceName and NodeHostname
+      properties:
+        ID:
+          type: string
+        ServiceID:
+          type: string
+        NodeID:
+          type: string
+        Status:
+          type: object
+          description: Docker TaskStatus
+        ServiceName:
+          type: string
+          description: Resolved from cache
+        NodeHostname:
+          type: string
+          description: Resolved from cache
+
+    Stack:
+      type: object
+      properties:
+        name:
+          type: string
+        services:
+          type: array
+          items:
+            type: string
+          description: Service IDs
+        configs:
+          type: array
+          items:
+            type: string
+          description: Config IDs
+        secrets:
+          type: array
+          items:
+            type: string
+          description: Secret IDs
+        networks:
+          type: array
+          items:
+            type: string
+          description: Network IDs
+        volumes:
+          type: array
+          items:
+            type: string
+          description: Volume names
+
+    StackDetail:
+      type: object
+      description: Full stack with resolved resources
+      properties:
+        name:
+          type: string
+        services:
+          type: array
+          items:
+            type: object
+            description: Docker swarm.Service objects
+        configs:
+          type: array
+          items:
+            type: object
+            description: Docker swarm.Config objects
+        secrets:
+          type: array
+          items:
+            type: object
+            description: Docker swarm.Secret objects (data redacted)
+        networks:
+          type: array
+          items:
+            type: object
+            description: Docker network.Summary objects
+        volumes:
+          type: array
+          items:
+            type: object
+            description: Docker volume.Volume objects
+
+    StackSummary:
+      type: object
+      properties:
+        name:
+          type: string
+        serviceCount:
+          type: integer
+        configCount:
+          type: integer
+        secretCount:
+          type: integer
+        networkCount:
+          type: integer
+        volumeCount:
+          type: integer
+        desiredTasks:
+          type: integer
+        tasksByState:
+          type: object
+          additionalProperties:
+            type: integer
+        updatingServices:
+          type: integer
+        memoryLimitBytes:
+          type: integer
+          format: int64
+        memoryUsageBytes:
+          type: integer
+          format: int64
+          description: Populated from Prometheus (0 if unavailable)
+        cpuUsagePercent:
+          type: number
+          format: double
+          description: Populated from Prometheus (0 if unavailable)
+
+    # ── Cluster ──────────────────────────────────────────────────────
+
+    ClusterSnapshot:
+      type: object
+      properties:
+        nodeCount:
+          type: integer
+        serviceCount:
+          type: integer
+        taskCount:
+          type: integer
+        stackCount:
+          type: integer
+        tasksByState:
+          type: object
+          additionalProperties:
+            type: integer
+        nodesReady:
+          type: integer
+        nodesDown:
+          type: integer
+        nodesDraining:
+          type: integer
+        totalCPU:
+          type: integer
+        totalMemory:
+          type: integer
+          format: int64
+        prometheusConfigured:
+          type: boolean
+        localNodeID:
+          type: string
+
+    ClusterMetrics:
+      type: object
+      properties:
+        cpu:
+          $ref: "#/components/schemas/ResourceMetric"
+        memory:
+          $ref: "#/components/schemas/ResourceMetric"
+        disk:
+          $ref: "#/components/schemas/ResourceMetric"
+
+    ResourceMetric:
+      type: object
+      properties:
+        used:
+          type: number
+          format: double
+        total:
+          type: number
+          format: double
+        percent:
+          type: number
+          format: double
+
+    DiskUsageSummary:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [images, containers, volumes, buildCache]
+        count:
+          type: integer
+        active:
+          type: integer
+        totalSize:
+          type: integer
+          format: int64
+        reclaimable:
+          type: integer
+          format: int64
+
+    MonitoringStatus:
+      type: object
+      properties:
+        prometheusConfigured:
+          type: boolean
+        prometheusReachable:
+          type: boolean
+        nodeExporter:
+          $ref: "#/components/schemas/TargetStatus"
+        cadvisor:
+          $ref: "#/components/schemas/TargetStatus"
+
+    TargetStatus:
+      type: object
+      properties:
+        targets:
+          type: integer
+          description: Number of active targets detected
+        nodes:
+          type: integer
+          description: Total nodes in the cluster (for comparison)
+
+    # ── History ──────────────────────────────────────────────────────
+
+    HistoryEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: uint64
+        timestamp:
+          type: string
+          format: date-time
+        type:
+          type: string
+          description: Resource type (node, service, task, etc.)
+        action:
+          type: string
+          description: Change action (set, delete)
+        resourceId:
+          type: string
+        name:
+          type: string
+        summary:
+          type: string
+
+    # ── Logs ─────────────────────────────────────────────────────────
+
+    LogResponse:
+      type: object
+      properties:
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/LogLine"
+        oldest:
+          type: string
+          description: Timestamp of the oldest line returned
+        newest:
+          type: string
+          description: Timestamp of the newest line returned
+        hasMore:
+          type: boolean
+          description: Whether more lines exist beyond the limit
+
+    LogLine:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          description: RFC 3339 Nano timestamp
+        message:
+          type: string
+        stream:
+          type: string
+          enum: [stdout, stderr]
+        attrs:
+          type: object
+          additionalProperties:
+            type: string
+          description: Docker log attributes (e.g. task ID)
+
+    # ── SSE ──────────────────────────────────────────────────────────
+
+    SSEEvent:
+      type: object
+      description: |
+        JSON payload of an SSE event. Single events have `event: <type>`,
+        batched events have `event: batch` with an array of these objects.
+      properties:
+        "@id":
+          type: string
+          description: Canonical resource path
+        "@type":
+          type: string
+          description: Resource type (Node, Service, Task, etc.)
+        type:
+          type: string
+          description: Event type string (node, service, task, etc.)
+        action:
+          type: string
+          description: Event action (set, delete)
+        id:
+          type: string
+          description: Resource ID
+        resource:
+          type: object
+          description: The full resource object (type varies by event type)
+
+    # ── Search ───────────────────────────────────────────────────────
+
+    SearchResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        results:
+          type: object
+          description: Grouped results keyed by resource type
+          additionalProperties:
+            type: array
+            items:
+              $ref: "#/components/schemas/SearchResult"
+        counts:
+          type: object
+          description: Total match count per type (may exceed returned results)
+          additionalProperties:
+            type: integer
+        total:
+          type: integer
+          description: Total matches across all types
+
+    SearchResult:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        detail:
+          type: string
+          description: Context-dependent detail (image, driver, date, etc.)
+        state:
+          type: string
+          description: Present for services and tasks
+
+    # ── Notifications ────────────────────────────────────────────────
+
+    RuleStatus:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        enabled:
+          type: boolean
+        lastFired:
+          type: string
+          format: date-time
+        fireCount:
+          type: integer
+        circuitOpen:
+          type: boolean
+        consecFailures:
+          type: integer
+
+    # ── Topology ─────────────────────────────────────────────────────
+
+    NetworkTopology:
+      type: object
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopoServiceNode"
+        edges:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopoEdge"
+        networks:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopoNetwork"
+
+    TopoServiceNode:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        stack:
+          type: string
+        replicas:
+          type: integer
+        image:
+          type: string
+        ports:
+          type: array
+          items:
+            type: string
+        mode:
+          type: string
+          enum: [replicated, global]
+        updateStatus:
+          type: string
+        networkAliases:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+
+    TopoEdge:
+      type: object
+      properties:
+        source:
+          type: string
+          description: Service ID
+        target:
+          type: string
+          description: Service ID
+        networks:
+          type: array
+          items:
+            type: string
+          description: Shared network IDs
+
+    TopoNetwork:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        driver:
+          type: string
+        scope:
+          type: string
+        stack:
+          type: string
+
+    PlacementTopology:
+      type: object
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopoClusterNode"
+
+    TopoClusterNode:
+      type: object
+      properties:
+        id:
+          type: string
+        hostname:
+          type: string
+        role:
+          type: string
+        state:
+          type: string
+        availability:
+          type: string
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopoTask"
+
+    TopoTask:
+      type: object
+      properties:
+        id:
+          type: string
+        serviceId:
+          type: string
+        serviceName:
+          type: string
+        state:
+          type: string
+        slot:
+          type: integer
+        image:
+          type: string
