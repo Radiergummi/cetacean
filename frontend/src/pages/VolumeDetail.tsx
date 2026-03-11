@@ -9,7 +9,7 @@ import FetchError from "../components/FetchError";
 import ActivityFeed from "../components/ActivityFeed";
 import ServiceRefList from "../components/ServiceRefList";
 import { useSSE } from "../hooks/useSSE";
-import { KeyValuePills, ResourceLink, Timestamp } from "../components/data";
+import { KeyValuePills, ResourceLink, SectionHeader, Timestamp } from "../components/data";
 
 export default function VolumeDetail() {
   const { name } = useParams<{ name: string }>();
@@ -65,18 +65,14 @@ export default function VolumeDetail() {
 
       {options.length > 0 && (
         <div>
-          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-            Driver Options
-          </h2>
+          <SectionHeader title="Driver Options" />
           <KeyValuePills entries={options} />
         </div>
       )}
 
       {labelEntries.length > 0 && (
         <div>
-          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-            Labels
-          </h2>
+          <SectionHeader title="Labels" />
           <KeyValuePills entries={labelEntries} />
         </div>
       )}
@@ -89,9 +85,7 @@ export default function VolumeDetail() {
 
       {history.length > 0 && (
         <div>
-          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-            Recent Activity
-          </h2>
+          <SectionHeader title="Recent Activity" />
           <ActivityFeed entries={history} />
         </div>
       )}

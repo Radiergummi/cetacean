@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { DiskUsageSummary } from "../api/types";
 import { formatBytes } from "../lib/formatBytes";
+import SectionHeader from "./data/SectionHeader";
 
 const typeLabels: Record<string, string> = {
   images: "Images",
@@ -127,9 +128,7 @@ export default function DiskUsageSection({ nodeId }: { nodeId?: string }) {
 
   return (
     <div>
-      <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-        Docker Disk Usage
-      </h2>
+      <SectionHeader title="Docker Disk Usage" />
       {data ? <DiskUsageTable data={data} /> : <DiskUsageLoading />}
     </div>
   );

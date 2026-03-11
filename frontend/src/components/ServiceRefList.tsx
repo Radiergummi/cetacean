@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import type { ServiceRef } from "../api/types";
 import { Badge } from "./ui/badge";
 import ResourceName from "./ResourceName";
+import SectionHeader from "./data/SectionHeader";
 
 interface Props {
   services: ServiceRef[];
@@ -12,9 +13,7 @@ interface Props {
 export default function ServiceRefList({ services, label, emptyMessage }: Props) {
   return (
     <div>
-      <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-        {label}
-      </h2>
+      <SectionHeader title={label} />
       {services.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {services.map((svc) => (

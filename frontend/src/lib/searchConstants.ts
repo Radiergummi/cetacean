@@ -24,8 +24,35 @@ export const TYPE_LABELS: Record<SearchResourceType, string> = {
   volumes: "Volumes",
 };
 
-export function resourcePath(type: SearchResourceType, id: string): string {
-  return `/${type}/${id}`;
+export function resourcePath(type: string, id: string, name?: string): string | null {
+  switch (type) {
+    // plural (SearchResourceType)
+    case "nodes":
+    case "services":
+    case "tasks":
+    case "configs":
+    case "secrets":
+    case "networks":
+      return `/${type}/${id}`;
+    case "volumes":
+      return `/volumes/${name ?? id}`;
+    case "stacks":
+      return `/stacks/${name ?? id}`;
+    // singular (HistoryEntry type)
+    case "node":
+    case "service":
+    case "task":
+    case "config":
+    case "secret":
+    case "network":
+      return `/${type}s/${id}`;
+    case "volume":
+      return `/volumes/${name ?? id}`;
+    case "stack":
+      return `/stacks/${name ?? id}`;
+    default:
+      return null;
+  }
 }
 
 /** Split "stack_name" into { prefix: "stack", name: "name" }, or null prefix if no underscore. */

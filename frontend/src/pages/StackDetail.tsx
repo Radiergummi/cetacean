@@ -8,14 +8,12 @@ import {LoadingDetail} from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
 import {useSSE} from "../hooks/useSSE";
+import SectionHeader from "../components/data/SectionHeader";
 
-function Section({title, children}: { title: string; children: React.ReactNode }) {
+function StackSection({title, children}: { title: string; children: React.ReactNode }) {
     return (
         <div>
-            <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-                {title}
-            </h2>
-
+            <SectionHeader title={title} />
             {children}
         </div>
     );
@@ -115,7 +113,7 @@ export default function StackDetail() {
             />
 
             {stack.services?.length > 0 && (
-                <Section title="Services">
+                <StackSection title="Services">
                     <div className="overflow-x-auto rounded-lg border">
                         <table className="w-full">
                             <thead className="sticky top-0 z-10 bg-background">
@@ -163,11 +161,11 @@ export default function StackDetail() {
                             </tbody>
                         </table>
                     </div>
-                </Section>
+                </StackSection>
             )}
 
             {stack.configs?.length > 0 && (
-                <Section title="Configs">
+                <StackSection title="Configs">
                     <div className="overflow-x-auto rounded-lg border">
                         <table className="w-full">
                             <tbody>
@@ -186,11 +184,11 @@ export default function StackDetail() {
                             </tbody>
                         </table>
                     </div>
-                </Section>
+                </StackSection>
             )}
 
             {stack.secrets?.length > 0 && (
-                <Section title="Secrets">
+                <StackSection title="Secrets">
                     <div className="overflow-x-auto rounded-lg border">
                         <table className="w-full">
                             <tbody>
@@ -209,11 +207,11 @@ export default function StackDetail() {
                             </tbody>
                         </table>
                     </div>
-                </Section>
+                </StackSection>
             )}
 
             {stack.networks?.length > 0 && (
-                <Section title="Networks">
+                <StackSection title="Networks">
                     <div className="overflow-x-auto rounded-lg border">
                         <table className="w-full">
                             <thead className="sticky top-0 z-10 bg-background">
@@ -239,11 +237,11 @@ export default function StackDetail() {
                             </tbody>
                         </table>
                     </div>
-                </Section>
+                </StackSection>
             )}
 
             {stack.volumes?.length > 0 && (
-                <Section title="Volumes">
+                <StackSection title="Volumes">
                     <div className="overflow-x-auto rounded-lg border">
                         <table className="w-full">
                             <tbody>
@@ -262,7 +260,7 @@ export default function StackDetail() {
                             </tbody>
                         </table>
                     </div>
-                </Section>
+                </StackSection>
             )}
         </div>
     );

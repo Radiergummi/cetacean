@@ -8,7 +8,7 @@ import FetchError from "../components/FetchError";
 import ActivityFeed from "../components/ActivityFeed";
 import ServiceRefList from "../components/ServiceRefList";
 import { useSSE } from "../hooks/useSSE";
-import { KeyValuePills, ResourceId, ResourceLink, Timestamp } from "../components/data";
+import { KeyValuePills, ResourceId, ResourceLink, SectionHeader, Timestamp } from "../components/data";
 
 export default function SecretDetail() {
   const { id } = useParams<{ id: string }>();
@@ -67,9 +67,7 @@ export default function SecretDetail() {
 
       {labelEntries.length > 0 && (
         <div>
-          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-            Labels
-          </h2>
+          <SectionHeader title="Labels" />
           <KeyValuePills entries={labelEntries} />
         </div>
       )}
@@ -82,9 +80,7 @@ export default function SecretDetail() {
 
       {history.length > 0 && (
         <div>
-          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-            Recent Activity
-          </h2>
+          <SectionHeader title="Recent Activity" />
           <ActivityFeed entries={history} />
         </div>
       )}

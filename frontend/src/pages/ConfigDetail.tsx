@@ -8,7 +8,7 @@ import FetchError from "../components/FetchError";
 import ActivityFeed from "../components/ActivityFeed";
 import ServiceRefList from "../components/ServiceRefList";
 import { useSSE } from "../hooks/useSSE";
-import { KeyValuePills, ResourceId, ResourceLink, Timestamp } from "../components/data";
+import { KeyValuePills, ResourceId, ResourceLink, SectionHeader, Timestamp } from "../components/data";
 import CodeBlock from "../components/CodeBlock";
 
 export default function ConfigDetail() {
@@ -73,18 +73,14 @@ export default function ConfigDetail() {
 
       {labelEntries.length > 0 && (
         <div>
-          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-            Labels
-          </h2>
+          <SectionHeader title="Labels" />
           <KeyValuePills entries={labelEntries} />
         </div>
       )}
 
       {decoded != null && (
         <div>
-          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-            Data
-          </h2>
+          <SectionHeader title="Data" />
           <CodeBlock code={decoded} />
         </div>
       )}
@@ -97,9 +93,7 @@ export default function ConfigDetail() {
 
       {history.length > 0 && (
         <div>
-          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-            Recent Activity
-          </h2>
+          <SectionHeader title="Recent Activity" />
           <ActivityFeed entries={history} />
         </div>
       )}

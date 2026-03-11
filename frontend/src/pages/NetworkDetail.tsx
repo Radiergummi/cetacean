@@ -9,7 +9,7 @@ import FetchError from "../components/FetchError";
 import ActivityFeed from "../components/ActivityFeed";
 import ServiceRefList from "../components/ServiceRefList";
 import { useSSE } from "../hooks/useSSE";
-import { KeyValuePills, ResourceId, ResourceLink, Timestamp } from "../components/data";
+import { KeyValuePills, ResourceId, ResourceLink, SectionHeader, Timestamp } from "../components/data";
 
 function NetworkFlags({ network }: { network: Network }) {
   const flags = [];
@@ -38,9 +38,7 @@ function IPAMPanel({ network }: { network: Network }) {
 
   return (
     <div>
-      <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-        IPAM Configuration
-      </h2>
+      <SectionHeader title="IPAM Configuration" />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {ipam.Config.map((cfg, i) => (
           <div key={i} className="rounded-lg border bg-card p-4">
@@ -140,18 +138,14 @@ export default function NetworkDetail() {
 
       {options.length > 0 && (
         <div>
-          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-            Driver Options
-          </h2>
+          <SectionHeader title="Driver Options" />
           <KeyValuePills entries={options} />
         </div>
       )}
 
       {labelEntries.length > 0 && (
         <div>
-          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-            Labels
-          </h2>
+          <SectionHeader title="Labels" />
           <KeyValuePills entries={labelEntries} />
         </div>
       )}
@@ -164,9 +158,7 @@ export default function NetworkDetail() {
 
       {history.length > 0 && (
         <div>
-          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-            Recent Activity
-          </h2>
+          <SectionHeader title="Recent Activity" />
           <ActivityFeed entries={history} />
         </div>
       )}

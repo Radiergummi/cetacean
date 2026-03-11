@@ -148,7 +148,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
 
   const goTo = useCallback(
     ({ result: { id }, type }: FlatItem) => {
-      navigate(resourcePath(type, id));
+      navigate(resourcePath(type, id)!);
       onClose();
     },
     [navigate, onClose],

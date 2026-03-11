@@ -179,7 +179,7 @@ export default function ServiceDetail() {
 
             {/* Container configuration */}
             {hasContainerConfig && (
-                <Section title="Container Configuration" defaultOpen={false}>
+                <CollapsibleSection title="Container Configuration" defaultOpen={false}>
                     <KVTable
                         rows={[
                             containerSpec.Command && ["Command", containerSpec.Command.join(" ")],
@@ -196,12 +196,12 @@ export default function ServiceDetail() {
                             containerSpec.ReadOnly && ["Read Only Root FS", "yes"],
                         ]}
                     />
-                </Section>
+                </CollapsibleSection>
             )}
 
             {/* Environment variables */}
             {containerSpec.Env && containerSpec.Env.length > 0 && (
-                <Section title="Environment Variables" defaultOpen={false}>
+                <CollapsibleSection title="Environment Variables" defaultOpen={false}>
                     <div className="overflow-x-auto rounded-lg border">
                         <table className="w-full">
                             <thead className="sticky top-0 z-10 bg-background">
@@ -225,12 +225,12 @@ export default function ServiceDetail() {
                             </tbody>
                         </table>
                     </div>
-                </Section>
+                </CollapsibleSection>
             )}
 
             {/* Healthcheck */}
             {containerSpec.Healthcheck && (
-                <Section title="Healthcheck" defaultOpen={false}>
+                <CollapsibleSection title="Healthcheck" defaultOpen={false}>
                     <KVTable
                         rows={[
                             containerSpec.Healthcheck.Test && ["Test", containerSpec.Healthcheck.Test.join(" ")],
@@ -252,12 +252,12 @@ export default function ServiceDetail() {
                             ],
                         ]}
                     />
-                </Section>
+                </CollapsibleSection>
             )}
 
             {/* Labels */}
             {nonStackLabels.length > 0 && (
-                <Section title="Labels" defaultOpen={false}>
+                <CollapsibleSection title="Labels" defaultOpen={false}>
                     <div className="flex flex-wrap gap-2">
                         {nonStackLabels.map(([key, value]) => (
                             <span
@@ -269,12 +269,12 @@ export default function ServiceDetail() {
                             </span>
                         ))}
                     </div>
-                </Section>
+                </CollapsibleSection>
             )}
 
             {/* Ports */}
             {service.Endpoint?.Ports && service.Endpoint.Ports.length > 0 && (
-                <Section title="Ports" defaultOpen={false}>
+                <CollapsibleSection title="Ports" defaultOpen={false}>
                     <div className="flex flex-wrap gap-2">
                         {service.Endpoint.Ports.map(
                             ({Protocol, PublishMode, PublishedPort, TargetPort}, index) => (
@@ -292,12 +292,12 @@ export default function ServiceDetail() {
                             ),
                         )}
                     </div>
-                </Section>
+                </CollapsibleSection>
             )}
 
             {/* Mounts */}
             {containerSpec.Mounts && containerSpec.Mounts.length > 0 && (
-                <Section title="Mounts" defaultOpen={false}>
+                <CollapsibleSection title="Mounts" defaultOpen={false}>
                     <div className="overflow-x-auto rounded-lg border">
                         <table className="w-full">
                             <thead className="sticky top-0 z-10 bg-background">
@@ -330,12 +330,12 @@ export default function ServiceDetail() {
                             </tbody>
                         </table>
                     </div>
-                </Section>
+                </CollapsibleSection>
             )}
 
             {/* Networks */}
             {taskTemplate.Networks && taskTemplate.Networks.length > 0 && (
-                <Section title="Networks" defaultOpen={false}>
+                <CollapsibleSection title="Networks" defaultOpen={false}>
                     <div className="overflow-x-auto rounded-lg border">
                         <table className="w-full">
                             <thead className="sticky top-0 z-10 bg-background">
@@ -366,12 +366,12 @@ export default function ServiceDetail() {
                             </tbody>
                         </table>
                     </div>
-                </Section>
+                </CollapsibleSection>
             )}
 
             {/* Configs */}
             {containerSpec.Configs && containerSpec.Configs.length > 0 && (
-                <Section title="Configs" defaultOpen={false}>
+                <CollapsibleSection title="Configs" defaultOpen={false}>
                     <div className="overflow-x-auto rounded-lg border">
                         <table className="w-full">
                             <thead className="sticky top-0 z-10 bg-background">
@@ -396,12 +396,12 @@ export default function ServiceDetail() {
                             </tbody>
                         </table>
                     </div>
-                </Section>
+                </CollapsibleSection>
             )}
 
             {/* Secrets */}
             {containerSpec.Secrets && containerSpec.Secrets.length > 0 && (
-                <Section title="Secrets" defaultOpen={false}>
+                <CollapsibleSection title="Secrets" defaultOpen={false}>
                     <div className="overflow-x-auto rounded-lg border">
                         <table className="w-full">
                             <thead className="sticky top-0 z-10 bg-background">
@@ -425,11 +425,11 @@ export default function ServiceDetail() {
                             </tbody>
                         </table>
                     </div>
-                </Section>
+                </CollapsibleSection>
             )}
 
             {/* Deploy: Resources, Placement, Restart, Update, Rollback */}
-            <Section title="Deploy Configuration" defaultOpen={false}>
+            <CollapsibleSection title="Deploy Configuration" defaultOpen={false}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {taskTemplate.Resources && (
                         <div className="rounded-lg border p-4 flex flex-col gap-3">
@@ -540,12 +540,12 @@ export default function ServiceDetail() {
                         </div>
                     )}
                 </div>
-            </Section>
+            </CollapsibleSection>
 
             {history.length > 0 && (
-                <Section title="Recent Activity">
+                <CollapsibleSection title="Recent Activity">
                     <ActivityFeed entries={history}/>
-                </Section>
+                </CollapsibleSection>
             )}
 
             <ErrorBoundary inline>
@@ -559,7 +559,7 @@ function sectionKey(title: string) {
     return `section:${title.toLowerCase().replace(/\s+/g, "-")}`;
 }
 
-function Section({
+function CollapsibleSection({
     title,
     children,
     controls,

@@ -99,7 +99,7 @@ export default function SearchPage() {
                     {items.map((item) => (
                       <li key={item.id} className="contents">
                         <Link
-                          to={resourcePath(type, item.id)}
+                          to={resourcePath(type, item.id)!}
                           className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors"
                         >
                           {item.state && <StateOrb state={item.state} />}

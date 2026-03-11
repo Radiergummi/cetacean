@@ -1,24 +1,7 @@
 import { Link } from "react-router-dom";
 import type { HistoryEntry } from "../api/types";
+import { resourcePath } from "../lib/searchConstants";
 import TimeAgo from "./TimeAgo";
-
-function resourcePath(type: string, resourceId: string, name: string): string | null {
-  switch (type) {
-    case "node":
-    case "service":
-    case "task":
-    case "config":
-    case "secret":
-    case "network":
-      return `/${type}s/${resourceId}`;
-    case "volume":
-      return `/volumes/${name}`;
-    case "stack":
-      return `/stacks/${name}`;
-    default:
-      return null;
-  }
-}
 
 interface ActivityFeedProps {
   entries: HistoryEntry[];

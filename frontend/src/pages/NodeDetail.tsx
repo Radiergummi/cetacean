@@ -13,7 +13,7 @@ import PageHeader from "../components/PageHeader";
 import TasksTable from "../components/TasksTable";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useSSE } from "../hooks/useSSE";
-import { KeyValuePills } from "../components/data";
+import { KeyValuePills, SectionHeader } from "../components/data";
 import { formatBytes } from "../lib/formatBytes";
 
 export default function NodeDetail() {
@@ -116,9 +116,7 @@ export default function NodeDetail() {
 
       {node.Spec.Labels && Object.keys(node.Spec.Labels).length > 0 && (
         <div>
-          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-            Labels
-          </h2>
+          <SectionHeader title="Labels" />
           <KeyValuePills
             entries={Object.entries(node.Spec.Labels).sort(([a], [b]) => a.localeCompare(b))}
           />
@@ -131,9 +129,7 @@ export default function NodeDetail() {
 
       {history.length > 0 && (
         <div>
-          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-            Recent Activity
-          </h2>
+          <SectionHeader title="Recent Activity" />
           <ActivityFeed entries={history} />
         </div>
       )}
