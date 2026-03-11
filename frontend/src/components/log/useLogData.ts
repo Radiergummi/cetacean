@@ -37,7 +37,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
     setLoading(true);
     setError(null);
     setHasOlderLogs(true);
-    setHasNewerLogs(true);
+    setHasNewerLogs(false);
     oldestRef.current = undefined;
     newestRef.current = undefined;
 

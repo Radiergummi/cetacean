@@ -39,6 +39,7 @@ export default function StackDetail() {
     useEffect(fetchData, [fetchData]);
 
     const fetchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+    useEffect(() => () => clearTimeout(fetchTimerRef.current), []);
     useSSE(["stack", "service", "task"], useCallback(() => {
         clearTimeout(fetchTimerRef.current);
         fetchTimerRef.current = setTimeout(fetchData, 500);
