@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { api, type ClusterSnapshot } from "../api/client";
 import type { HistoryEntry } from "../api/types";
@@ -162,8 +162,6 @@ function HealthCard({
   delta?: number;
   to: string;
 }) {
-  const navigate = useNavigate();
-
   const borderColor = {
     green: "border-green-500/30",
     amber: "border-amber-500/30",
@@ -186,17 +184,9 @@ function HealthCard({
   }[status];
 
   return (
-    <div
-      className={`rounded-lg border p-5 cursor-pointer hover:border-foreground/20 hover:shadow-sm transition-all ${borderColor} ${bgTint}`}
-      onClick={() => navigate(to)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          navigate(to);
-        }
-      }}
-      role="link"
-      tabIndex={0}
+    <Link
+      to={to}
+      className={`block rounded-lg border p-5 cursor-pointer hover:border-foreground/20 hover:shadow-sm transition-all ${borderColor} ${bgTint}`}
     >
       <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1.5">
         {label}
@@ -214,6 +204,6 @@ function HealthCard({
         )}
       </div>
       <div className="text-xs text-muted-foreground mt-1">{secondary}</div>
-    </div>
+    </Link>
   );
 }

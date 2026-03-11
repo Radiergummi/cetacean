@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../api/client";
+import type { PrometheusResponse } from "../api/types";
 import { useMonitoringStatus } from "./useMonitoringStatus";
 
 export interface NodeMetrics {
@@ -96,20 +97,20 @@ function instanceAddr(instance: string): string {
   return i > 0 ? instance.slice(0, i) : instance;
 }
 
-function parseInstant(resp: any): [string, number][] | null {
+function parseInstant(resp: PrometheusResponse | null): [string, number][] | null {
   const results = resp?.data?.result;
   if (!results?.length) return null;
   return results.map(
-    (r: any) => [instanceAddr(r.metric?.instance || ""), Number(r.value?.[1])] as [string, number],
+    (r) => [instanceAddr(r.metric?.instance || ""), Number(r.value?.[1])] as [string, number],
   );
 }
 
-function parseRange(resp: any): [string, number[]][] | null {
+function parseRange(resp: PrometheusResponse | null): [string, number[]][] | null {
   const results = resp?.data?.result;
   if (!results?.length) return null;
   return results.map(
-    (r: any) =>
-      [instanceAddr(r.metric?.instance || ""), (r.values || []).map((v: any) => Number(v[1]))] as [
+    (r) =>
+      [instanceAddr(r.metric?.instance || ""), (r.values || []).map((v) => Number(v[1]))] as [
         string,
         number[],
       ],

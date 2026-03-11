@@ -448,3 +448,13 @@ export interface MonitoringStatus {
   nodeExporter: TargetStatus | null;
   cadvisor: TargetStatus | null;
 }
+
+export interface PrometheusResponse {
+  data: {
+    result: Array<{
+      metric: Record<string, string>;
+      value?: [number, string];
+      values?: [number, string][];
+    }>;
+  };
+}

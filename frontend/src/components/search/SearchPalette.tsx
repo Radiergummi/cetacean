@@ -7,6 +7,7 @@ import { api } from "../../api/client";
 import type { SearchResourceType, SearchResponse, SearchResult } from "../../api/types";
 import { resourcePath, statusColor, TYPE_LABELS, TYPE_ORDER } from "../../lib/searchConstants";
 import { Spinner } from "../Spinner";
+import ResourceName from "../ResourceName";
 
 function StateOrb({ state }: { state: string }) {
   if (state === "updating") {
@@ -15,7 +16,6 @@ function StateOrb({ state }: { state: string }) {
   const color = statusColor(state);
   return <span className={`inline-block size-2 rounded-full shrink-0 ${color}`} title={state} />;
 }
-import ResourceName from "../ResourceName";
 
 interface FlatItem {
   type: SearchResourceType;

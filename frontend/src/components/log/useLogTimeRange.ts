@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { TimeRange } from "./log-utils";
 import { formatShortDate, LABEL_TO_RANGE_KEY, RANGE_DURATIONS } from "./log-utils";
@@ -6,7 +6,7 @@ import { formatShortDate, LABEL_TO_RANGE_KEY, RANGE_DURATIONS } from "./log-util
 export function useLogTimeRange() {
   const [params, setParams] = useSearchParams();
 
-  const initialTimeRange = useMemo((): TimeRange => {
+  const [timeRange, setTimeRange] = useState<TimeRange>(() => {
     const rangeKey = params.get("logRange");
 
     if (rangeKey && RANGE_DURATIONS[rangeKey]) {
@@ -30,10 +30,7 @@ export function useLogTimeRange() {
     }
 
     return { label: "All" };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const [timeRange, setTimeRange] = useState<TimeRange>(initialTimeRange);
+  });
 
   const updateTimeRange = useCallback(
     (range: TimeRange) => {

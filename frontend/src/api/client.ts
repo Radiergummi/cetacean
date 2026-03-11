@@ -24,6 +24,7 @@ import type {
   DiskUsageSummary,
   Plugin,
   MonitoringStatus,
+  PrometheusResponse,
 } from "./types";
 
 const BASE = "/api";
@@ -95,8 +96,8 @@ export interface ListParams {
 
 function buildListURL(path: string, params?: ListParams): string {
   const qs = new URLSearchParams();
-  if (params?.limit) qs.set("limit", String(params.limit));
-  if (params?.offset) qs.set("offset", String(params.offset));
+  if (params?.limit != null) qs.set("limit", String(params.limit));
+  if (params?.offset != null) qs.set("offset", String(params.offset));
   if (params?.sort) qs.set("sort", params.sort);
   if (params?.dir) qs.set("dir", params.dir);
   if (params?.search) qs.set("search", params.search);
@@ -193,11 +194,11 @@ export const api = {
   metricsQuery: (query: string, time?: string) => {
     const params = new URLSearchParams({ query });
     if (time) params.set("time", time);
-    return fetchJSON<any>(`/metrics/query?${params}`);
+    return fetchJSON<PrometheusResponse>(`/metrics/query?${params}`);
   },
   metricsQueryRange: (query: string, start: string, end: string, step: string) => {
     const params = new URLSearchParams({ query, start, end, step });
-    return fetchJSON<any>(`/metrics/query_range?${params}`);
+    return fetchJSON<PrometheusResponse>(`/metrics/query_range?${params}`);
   },
   notificationRules: () => fetchJSON<NotificationRuleStatus[]>("/notifications/rules"),
   diskUsage: () => fetchJSON<DiskUsageSummary[]>("/disk-usage"),
