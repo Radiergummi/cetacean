@@ -44,6 +44,7 @@ const (
 type circuitState struct {
 	failures int
 	openedAt time.Time
+	halfOpen bool // true while a probe is in flight
 }
 
 type Notifier struct {
@@ -66,6 +67,7 @@ func New(rules []Rule) *Notifier {
 }
 
 func (n *Notifier) HandleEvent(e cache.Event, resourceName string) {
+	// n.rules is immutable after construction — no lock needed.
 	for i := range n.rules {
 		r := &n.rules[i]
 		if r.matches(e, resourceName) && n.checkAndRecordFire(r) {
@@ -104,6 +106,11 @@ func (n *Notifier) checkAndRecordFire(rule *Rule) bool {
 		if time.Since(cs.openedAt) < circuitTimeout {
 			return false
 		}
+		// Half-open: allow one probe at a time.
+		if cs.halfOpen {
+			return false
+		}
+		cs.halfOpen = true
 	}
 	// Cooldown check
 	if rule.cooldownDur != 0 {
