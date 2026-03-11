@@ -162,7 +162,9 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			if len(pending) > 0 {
-				w.processBatch(ctx, pending)
+				flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				w.processBatch(flushCtx, pending)
+				cancel()
 			}
 			return
 		case err := <-errCh:
