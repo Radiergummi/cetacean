@@ -11,7 +11,7 @@ import { LoadingDetail } from "../components/LoadingSkeleton";
 import { MetricsPanel, NodeResourceGauges } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import TasksTable from "../components/TasksTable";
-import { usePrometheusConfigured } from "../hooks/usePrometheusConfigured";
+import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useSSE } from "../hooks/useSSE";
 import { KeyValuePills } from "../components/data";
 import { formatBytes } from "../lib/formatBytes";
@@ -22,7 +22,8 @@ export default function NodeDetail() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
 
-  const hasPrometheus = usePrometheusConfigured();
+  const monitoring = useMonitoringStatus();
+  const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
   const [error, setError] = useState(false);
 
   const fetchData = useCallback(() => {

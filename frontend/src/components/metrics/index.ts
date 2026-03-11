@@ -5,4 +5,4 @@ export { default as ResourceGauge } from "./ResourceGauge";
 export { default as NodeResourceGauges } from "./NodeResourceGauges";
 export { default as Sparkline } from "./Sparkline";
 export { default as CapacitySection } from "./CapacitySection";
-export { default as PrometheusBanner } from "./PrometheusBanner";
+export { default as MonitoringStatus } from "./MonitoringStatus";

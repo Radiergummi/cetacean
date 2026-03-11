@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { SSEProvider } from "../hooks/SSEContext";
 import NodeList from "./NodeList";
 import type { Node } from "../api/types";
-import { _resetPrometheusCache } from "../hooks/usePrometheusConfigured";
+import { _resetMonitoringStatusCache } from "../hooks/useMonitoringStatus";
 
 class MockEventSource {
   static instance: MockEventSource;
@@ -36,6 +36,7 @@ vi.mock("../api/client", () => ({
   api: {
     nodes: vi.fn(),
     cluster: vi.fn().mockResolvedValue({ prometheusConfigured: false }),
+    monitoringStatus: vi.fn().mockResolvedValue({ prometheusConfigured: false, prometheusReachable: false, nodeExporter: null, cadvisor: null }),
     metricsQuery: vi.fn().mockResolvedValue({ data: { result: [] } }),
     metricsQueryRange: vi.fn().mockResolvedValue({ data: { result: [] } }),
   },
@@ -58,7 +59,7 @@ const fakeNode = (id: string, hostname: string): Node => ({
 });
 
 beforeEach(() => {
-  _resetPrometheusCache();
+  _resetMonitoringStatusCache();
   vi.stubGlobal("EventSource", MockEventSource);
   vi.stubGlobal("localStorage", {
     getItem: () => null,

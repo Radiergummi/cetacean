@@ -7,7 +7,8 @@ import { useSSE } from "../hooks/useSSE";
 import PageHeader from "../components/PageHeader";
 import ActivityFeed from "../components/ActivityFeed";
 import DiskUsageSection from "../components/DiskUsageSection";
-import { PrometheusBanner, CapacitySection } from "../components/metrics";
+import { MonitoringStatus, CapacitySection } from "../components/metrics";
+import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 
 export default function ClusterOverview() {
   const [snapshot, setSnapshot] = useState<ClusterSnapshot | null>(null);
@@ -48,6 +49,8 @@ export default function ClusterOverview() {
     }, [fetchSnapshot, fetchHistory]),
   );
 
+  const monitoring = useMonitoringStatus();
+
   if (!snapshot) {
     return (
       <div>
@@ -73,7 +76,7 @@ export default function ClusterOverview() {
     <div>
       <PageHeader title="Cluster Overview" />
 
-      <PrometheusBanner configured={snapshot.prometheusConfigured} />
+      {monitoring && <MonitoringStatus status={monitoring} />}
 
       {/* Health Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

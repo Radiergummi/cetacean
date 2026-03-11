@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import type { ReactNode } from "react";
 import { SSEProvider } from "../hooks/SSEContext";
 import ClusterOverview from "./ClusterOverview";
+import { _resetMonitoringStatusCache } from "../hooks/useMonitoringStatus";
 
 // Mock EventSource
 class MockEventSource {
@@ -30,11 +31,12 @@ vi.mock("../api/client", () => ({
     cluster: vi.fn(),
     history: vi.fn().mockResolvedValue([]),
     diskUsage: vi.fn().mockResolvedValue([]),
+    monitoringStatus: vi.fn().mockResolvedValue({ prometheusConfigured: false, prometheusReachable: false, nodeExporter: null, cadvisor: null }),
   },
 }));
 
 vi.mock("../components/metrics", () => ({
-  PrometheusBanner: () => null,
+  MonitoringStatus: () => null,
   CapacitySection: () => <div data-testid="capacity-section" />,
 }));
 
@@ -46,6 +48,7 @@ import { api } from "../api/client";
 const mockCluster = vi.mocked(api.cluster);
 
 beforeEach(() => {
+  _resetMonitoringStatusCache();
   vi.stubGlobal("EventSource", MockEventSource);
   mockCluster.mockReset();
 });

@@ -15,7 +15,7 @@ import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
 import TasksTable from "../components/TasksTable";
 import {timeAgo} from "../components/TimeAgo";
-import {usePrometheusConfigured} from "../hooks/usePrometheusConfigured";
+import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import {useSSE} from "../hooks/useSSE";
 import {formatBytes} from "../lib/formatBytes";
 
@@ -24,7 +24,8 @@ export default function ServiceDetail() {
     const [service, setService] = useState<Service | null>(null);
     const [tasks, setTasks] = useState<Task[]>([]);
     const [history, setHistory] = useState<HistoryEntry[]>([]);
-    const hasPrometheus = usePrometheusConfigured();
+    const monitoring = useMonitoringStatus();
+    const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
     const [error, setError] = useState(false);
     const [networkNames, setNetworkNames] = useState<Record<string, string>>({});
 

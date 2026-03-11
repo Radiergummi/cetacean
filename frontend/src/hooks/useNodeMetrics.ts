@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../api/client";
-import { usePrometheusConfigured } from "./usePrometheusConfigured";
+import { useMonitoringStatus } from "./useMonitoringStatus";
 
 export interface NodeMetrics {
   cpu: number | null;
@@ -14,7 +14,8 @@ const EMPTY: NodeMetrics = { cpu: null, memory: null, disk: null, cpuHistory: []
 // Fetches per-instance metrics from Prometheus and maps them by IP address.
 // Nodes are matched to instances via node.Status.Addr.
 export function useNodeMetrics() {
-  const hasPrometheus = usePrometheusConfigured();
+  const monitoring = useMonitoringStatus();
+  const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
   const [byAddr, setByAddr] = useState<Record<string, NodeMetrics>>({});
 
   const fetchAll = useCallback(() => {

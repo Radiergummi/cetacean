@@ -5,7 +5,7 @@ import { useSortParams } from "../hooks/useSort";
 import { useViewMode } from "../hooks/useViewMode";
 import { useNodeMetrics } from "../hooks/useNodeMetrics";
 import { useSearchParam } from "../hooks/useSearchParam";
-import { usePrometheusConfigured } from "../hooks/usePrometheusConfigured";
+import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { api } from "../api/client";
 import type { Node } from "../api/types";
 import { SearchInput } from "../components/search";
@@ -39,7 +39,8 @@ export default function NodeList() {
   );
   const [viewMode, setViewMode] = useViewMode("nodes");
   const navigate = useNavigate();
-  const hasPrometheus = usePrometheusConfigured();
+  const monitoring = useMonitoringStatus();
+  const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
   const { getForNode } = useNodeMetrics();
 
   const baseColumns: Column<Node>[] = [
