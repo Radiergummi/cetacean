@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"slices"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -44,14 +44,15 @@ type DockerSystemClient interface {
 }
 
 type Handlers struct {
-	cache           *cache.Cache
-	dockerClient    DockerLogStreamer
-	systemClient    DockerSystemClient
-	ready           <-chan struct{}
-	notifier        *notify.Notifier
-	promClient      *PromClient
-	localNodeOnce   sync.Once
-	localNodeID     string
+	cache         *cache.Cache
+	dockerClient  DockerLogStreamer
+	systemClient  DockerSystemClient
+	ready         <-chan struct{}
+	notifier      *notify.Notifier
+	promClient    *PromClient
+	localNodeMu   sync.Mutex
+	localNodeID   string
+	localNodeDone bool
 }
 
 func NewHandlers(c *cache.Cache, dc DockerLogStreamer, sc DockerSystemClient, ready <-chan struct{}, notifier *notify.Notifier, promClient *PromClient) *Handlers {
@@ -143,13 +144,22 @@ func exprFilter[T any](items []T, expr string, env func(T) map[string]any, w htt
 }
 
 func (h *Handlers) getLocalNodeID() string {
-	h.localNodeOnce.Do(func() {
-		if h.systemClient != nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			h.localNodeID, _ = h.systemClient.LocalNodeID(ctx)
+	h.localNodeMu.Lock()
+	defer h.localNodeMu.Unlock()
+	if h.localNodeDone {
+		return h.localNodeID
+	}
+	if h.systemClient != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		id, err := h.systemClient.LocalNodeID(ctx)
+		if err != nil {
+			slog.Warn("failed to get local node ID", "error", err)
+			return ""
 		}
-	})
+		h.localNodeID = id
+		h.localNodeDone = true
+	}
 	return h.localNodeID
 }
 
@@ -716,6 +726,10 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	}
 
 	if wantsSSE(r) {
+		if until != "" {
+			writeError(w, http.StatusBadRequest, `"before" parameter is not supported for SSE log streams`)
+			return
+		}
 		h.serveLogsSSE(w, r, fetch, since, streamFilter)
 		return
 	}
@@ -1146,6 +1160,10 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "missing required query parameter: q")
 		return
 	}
+	if len(q) > 200 {
+		writeError(w, http.StatusBadRequest, "query too long (max 200 characters)")
+		return
+	}
 	ql := strings.ToLower(q)
 
 	limit := 3
@@ -1198,25 +1216,25 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 						}
 					}
 					running := h.cache.RunningTaskCount(s.ID)
-				desired := 0
-				if s.Spec.Mode.Replicated != nil && s.Spec.Mode.Replicated.Replicas != nil {
-					desired = int(*s.Spec.Mode.Replicated.Replicas)
-				} else if s.Spec.Mode.Global != nil {
-					desired = -1 // global: just check running > 0
-				}
-				state := "running"
-				if s.UpdateStatus != nil && s.UpdateStatus.State == swarm.UpdateStateUpdating {
-					state = "updating"
-				} else if desired == -1 {
-					if running == 0 {
+					desired := 0
+					if s.Spec.Mode.Replicated != nil && s.Spec.Mode.Replicated.Replicas != nil {
+						desired = int(*s.Spec.Mode.Replicated.Replicas)
+					} else if s.Spec.Mode.Global != nil {
+						desired = -1 // global: just check running > 0
+					}
+					state := "running"
+					if s.UpdateStatus != nil && s.UpdateStatus.State == swarm.UpdateStateUpdating {
+						state = "updating"
+					} else if desired == -1 {
+						if running == 0 {
+							state = "pending"
+						}
+					} else if desired > 0 && running == 0 {
+						state = "failed"
+					} else if running < desired {
 						state = "pending"
 					}
-				} else if desired > 0 && running == 0 {
-					state = "failed"
-				} else if running < desired {
-					state = "pending"
-				}
-				matches = append(matches, searchResult{ID: s.ID, Name: s.Spec.Name, Detail: detail, State: state})
+					matches = append(matches, searchResult{ID: s.ID, Name: s.Spec.Name, Detail: detail, State: state})
 				}
 			}
 		}
