@@ -135,30 +135,45 @@ func TestEnvBool(t *testing.T) {
 }
 
 func TestEnvDuration(t *testing.T) {
-	tests := []struct {
-		value    string
-		fallback time.Duration
-		want     time.Duration
-	}{
-		{"50ms", 100 * time.Millisecond, 50 * time.Millisecond},
-		{"2s", 100 * time.Millisecond, 2 * time.Second},
-		{"", 100 * time.Millisecond, 100 * time.Millisecond},          // empty → fallback
-		{"invalid", 100 * time.Millisecond, 100 * time.Millisecond},   // bad → fallback
-		{"-5ms", 100 * time.Millisecond, 100 * time.Millisecond},      // negative → fallback
-		{"0", 100 * time.Millisecond, 100 * time.Millisecond},         // zero → fallback
-	}
-	for _, tt := range tests {
-		t.Run(tt.value, func(t *testing.T) {
-			key := "TEST_ENVDUR_" + tt.value
-			if tt.value != "" {
-				t.Setenv(key, tt.value)
-			}
-			got := envDuration(key, tt.fallback)
-			if got != tt.want {
-				t.Errorf("envDuration(%q, %v)=%v, want %v", tt.value, tt.fallback, got, tt.want)
-			}
-		})
-	}
+	t.Run("valid values", func(t *testing.T) {
+		tests := []struct {
+			value    string
+			fallback time.Duration
+			want     time.Duration
+		}{
+			{"50ms", 100 * time.Millisecond, 50 * time.Millisecond},
+			{"2s", 100 * time.Millisecond, 2 * time.Second},
+			{"", 100 * time.Millisecond, 100 * time.Millisecond}, // empty → fallback
+		}
+		for _, tt := range tests {
+			t.Run(tt.value, func(t *testing.T) {
+				key := "TEST_ENVDUR_" + tt.value
+				if tt.value != "" {
+					t.Setenv(key, tt.value)
+				}
+				got, err := envDuration(key, tt.fallback)
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got != tt.want {
+					t.Errorf("envDuration(%q, %v)=%v, want %v", tt.value, tt.fallback, got, tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("invalid values return error", func(t *testing.T) {
+		for _, value := range []string{"invalid", "-5ms", "0"} {
+			t.Run(value, func(t *testing.T) {
+				key := "TEST_ENVDUR_ERR_" + value
+				t.Setenv(key, value)
+				_, err := envDuration(key, 100*time.Millisecond)
+				if err == nil {
+					t.Errorf("envDuration(%q) should return error for %q", key, value)
+				}
+			})
+		}
+	})
 }
 
 func TestLoad_SSEBatchInterval(t *testing.T) {

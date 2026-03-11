@@ -760,7 +760,7 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 
 // --- Bulk replace (for full sync) ---
 
-func (c *Cache) ReplaceNodes(nodes []swarm.Node) {
+func (c *Cache) replaceNodes(nodes []swarm.Node) {
 	m := make(map[string]swarm.Node, len(nodes))
 	for _, n := range nodes {
 		m[n.ID] = n
@@ -770,7 +770,7 @@ func (c *Cache) ReplaceNodes(nodes []swarm.Node) {
 	c.mu.Unlock()
 }
 
-func (c *Cache) ReplaceServices(services []swarm.Service) {
+func (c *Cache) replaceServices(services []swarm.Service) {
 	m := make(map[string]swarm.Service, len(services))
 	for _, s := range services {
 		m[s.ID] = s
@@ -780,7 +780,7 @@ func (c *Cache) ReplaceServices(services []swarm.Service) {
 	c.mu.Unlock()
 }
 
-func (c *Cache) ReplaceTasks(tasks []swarm.Task) {
+func (c *Cache) replaceTasks(tasks []swarm.Task) {
 	m := make(map[string]swarm.Task, len(tasks))
 	byService := make(map[string]map[string]struct{})
 	byNode := make(map[string]map[string]struct{})
@@ -806,7 +806,7 @@ func (c *Cache) ReplaceTasks(tasks []swarm.Task) {
 	c.mu.Unlock()
 }
 
-func (c *Cache) ReplaceConfigs(configs []swarm.Config) {
+func (c *Cache) replaceConfigs(configs []swarm.Config) {
 	m := make(map[string]swarm.Config, len(configs))
 	for _, cfg := range configs {
 		m[cfg.ID] = cfg
@@ -816,7 +816,7 @@ func (c *Cache) ReplaceConfigs(configs []swarm.Config) {
 	c.mu.Unlock()
 }
 
-func (c *Cache) ReplaceSecrets(secrets []swarm.Secret) {
+func (c *Cache) replaceSecrets(secrets []swarm.Secret) {
 	m := make(map[string]swarm.Secret, len(secrets))
 	for _, s := range secrets {
 		m[s.ID] = s
@@ -826,7 +826,7 @@ func (c *Cache) ReplaceSecrets(secrets []swarm.Secret) {
 	c.mu.Unlock()
 }
 
-func (c *Cache) ReplaceNetworks(networks []network.Summary) {
+func (c *Cache) replaceNetworks(networks []network.Summary) {
 	m := make(map[string]network.Summary, len(networks))
 	for _, n := range networks {
 		m[n.ID] = n
@@ -836,7 +836,7 @@ func (c *Cache) ReplaceNetworks(networks []network.Summary) {
 	c.mu.Unlock()
 }
 
-func (c *Cache) ReplaceVolumes(volumes []volume.Volume) {
+func (c *Cache) replaceVolumes(volumes []volume.Volume) {
 	m := make(map[string]volume.Volume, len(volumes))
 	for _, v := range volumes {
 		m[v.Name] = v
@@ -846,9 +846,9 @@ func (c *Cache) ReplaceVolumes(volumes []volume.Volume) {
 	c.mu.Unlock()
 }
 
-// RebuildStacks rebuilds all derived stack data from the current resource maps.
-// Call this once after all Replace* calls complete during a full sync.
-func (c *Cache) RebuildStacks() {
+// rebuildStacksSynced acquires the lock and rebuilds derived stack data.
+// Used by tests after calling individual replace* methods.
+func (c *Cache) rebuildStacksSynced() {
 	c.mu.Lock()
 	c.rebuildStacks()
 	c.mu.Unlock()

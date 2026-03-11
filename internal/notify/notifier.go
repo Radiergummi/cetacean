@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -54,6 +55,7 @@ type Notifier struct {
 	fireCounts map[string]int
 	circuits   map[string]*circuitState
 	client     *http.Client
+	wg         sync.WaitGroup
 }
 
 func New(rules []Rule) *Notifier {
@@ -71,9 +73,18 @@ func (n *Notifier) HandleEvent(e cache.Event, resourceName string) {
 	for i := range n.rules {
 		r := &n.rules[i]
 		if r.matches(e, resourceName) && n.checkAndRecordFire(r) {
-			go n.fire(r, e, resourceName)
+			n.wg.Add(1)
+			go func() {
+				defer n.wg.Done()
+				n.fire(r, e, resourceName)
+			}()
 		}
 	}
+}
+
+// Close waits for all in-flight webhook calls to complete.
+func (n *Notifier) Close() {
+	n.wg.Wait()
 }
 
 func (n *Notifier) recordSuccess(ruleID string) {
@@ -153,7 +164,9 @@ func (n *Notifier) fire(rule *Rule, e cache.Event, resourceName string) {
 		slog.Error("notify: webhook request", "rule", rule.ID, "url", rule.Webhook, "error", err)
 		return
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
+	// Drain body to allow connection reuse and bound memory from large responses.
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 
 	if resp.StatusCode >= 400 {
 		n.recordFailure(rule.ID)

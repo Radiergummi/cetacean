@@ -715,6 +715,10 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	since := q.Get("after")
 	until := q.Get("before")
 	streamFilter := q.Get("stream") // "", "stdout", or "stderr"
+	if streamFilter != "" && streamFilter != "stdout" && streamFilter != "stderr" {
+		writeError(w, http.StatusBadRequest, `invalid "stream" parameter: must be "stdout" or "stderr"`)
+		return
+	}
 
 	if !validLogTimestamp(since) {
 		writeError(w, http.StatusBadRequest, `invalid "after" parameter: must be RFC3339 timestamp or Go duration`)
@@ -841,6 +845,12 @@ func (h *Handlers) serveLogsSSE(w http.ResponseWriter, r *http.Request, fetch lo
 			since = v
 		}
 	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "streaming not supported")
+		return
+	}
+
 	logs, err := fetch(r.Context(), "0", true, since, "")
 	if err != nil {
 		slog.Error("failed to stream logs", "error", err)
@@ -853,12 +863,6 @@ func (h *Handlers) serveLogsSSE(w http.ResponseWriter, r *http.Request, fetch lo
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		writeError(w, http.StatusInternalServerError, "streaming not supported")
-		return
-	}
 
 	ch := make(chan LogLine, 64)
 	done := make(chan error, 1)

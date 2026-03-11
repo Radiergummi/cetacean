@@ -41,6 +41,11 @@ func (c *Cache) WriteToDisk(path string) error {
 	}
 	c.mu.RUnlock()
 
+	// Never persist secret data to disk.
+	for i := range snap.Secrets {
+		snap.Secrets[i].Spec.Data = nil
+	}
+
 	data, err := json.Marshal(snap)
 	if err != nil {
 		return fmt.Errorf("marshal snapshot: %w", err)

@@ -175,7 +175,7 @@ func TestCache_ReplaceNodes_RemovesStale(t *testing.T) {
 	c.SetNode(swarm.Node{ID: "n3"})
 
 	// Replace with only n1 and n4 — n2 and n3 should be pruned
-	c.ReplaceNodes([]swarm.Node{{ID: "n1"}, {ID: "n4"}})
+	c.replaceNodes([]swarm.Node{{ID: "n1"}, {ID: "n4"}})
 
 	nodes := c.ListNodes()
 	if len(nodes) != 2 {
@@ -498,8 +498,8 @@ func TestCache_ReplaceServices_RebuildStacks(t *testing.T) {
 	// Replace with different services
 	svc2 := swarm.Service{ID: "svc2"}
 	svc2.Spec.Labels = map[string]string{stackLabel: "newstack"}
-	c.ReplaceServices([]swarm.Service{svc2})
-	c.RebuildStacks()
+	c.replaceServices([]swarm.Service{svc2})
+	c.rebuildStacksSynced()
 
 	if _, ok := c.GetService("svc1"); ok {
 		t.Error("expected svc1 to be replaced")
@@ -519,7 +519,7 @@ func TestCache_ReplaceTasks_RebuildsIndexes(t *testing.T) {
 	c := New(nil)
 	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", NodeID: "node1"})
 
-	c.ReplaceTasks([]swarm.Task{
+	c.replaceTasks([]swarm.Task{
 		{ID: "t2", ServiceID: "svc2", NodeID: "node2"},
 		{ID: "t3", ServiceID: "svc2", NodeID: "node2"},
 	})
@@ -545,8 +545,8 @@ func TestCache_ReplaceConfigs_RebuildStacks(t *testing.T) {
 	c.SetConfig(cfg)
 
 	// Replace with empty — stack from configs should be gone
-	c.ReplaceConfigs(nil)
-	c.RebuildStacks()
+	c.replaceConfigs(nil)
+	c.rebuildStacksSynced()
 
 	if _, ok := c.GetConfig("cfg1"); ok {
 		t.Error("expected cfg1 to be replaced")
@@ -561,8 +561,8 @@ func TestCache_ReplaceSecrets_RebuildStacks(t *testing.T) {
 
 	sec2 := swarm.Secret{ID: "sec2"}
 	sec2.Spec.Labels = map[string]string{stackLabel: "otherstack"}
-	c.ReplaceSecrets([]swarm.Secret{sec2})
-	c.RebuildStacks()
+	c.replaceSecrets([]swarm.Secret{sec2})
+	c.rebuildStacksSynced()
 
 	if _, ok := c.GetSecret("sec1"); ok {
 		t.Error("expected sec1 to be replaced")
@@ -576,10 +576,10 @@ func TestCache_ReplaceNetworks_RebuildStacks(t *testing.T) {
 	c := New(nil)
 	c.SetNetwork(network.Summary{ID: "net1", Labels: map[string]string{stackLabel: "mystack"}})
 
-	c.ReplaceNetworks([]network.Summary{
+	c.replaceNetworks([]network.Summary{
 		{ID: "net2", Labels: map[string]string{stackLabel: "newstack"}},
 	})
-	c.RebuildStacks()
+	c.rebuildStacksSynced()
 
 	if _, ok := c.GetNetwork("net1"); ok {
 		t.Error("expected net1 to be replaced")
@@ -593,10 +593,10 @@ func TestCache_ReplaceVolumes_RebuildStacks(t *testing.T) {
 	c := New(nil)
 	c.SetVolume(volume.Volume{Name: "vol1", Labels: map[string]string{stackLabel: "mystack"}})
 
-	c.ReplaceVolumes([]volume.Volume{
+	c.replaceVolumes([]volume.Volume{
 		{Name: "vol2", Labels: map[string]string{stackLabel: "newstack"}},
 	})
-	c.RebuildStacks()
+	c.rebuildStacksSynced()
 
 	if _, ok := c.GetVolume("vol1"); ok {
 		t.Error("expected vol1 to be replaced")
@@ -620,8 +620,8 @@ func TestCache_ReplaceStacks_CrossResourceRebuild(t *testing.T) {
 	c.SetConfig(cfg)
 
 	// Replace services with empty — stack should still exist from config
-	c.ReplaceServices(nil)
-	c.RebuildStacks()
+	c.replaceServices(nil)
+	c.rebuildStacksSynced()
 
 	stack, ok := c.GetStack("mystack")
 	if !ok {

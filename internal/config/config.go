@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"strings"
@@ -21,16 +22,21 @@ type Config struct {
 }
 
 func Load() (*Config, error) {
+	batchInterval, err := envDuration("CETACEAN_SSE_BATCH_INTERVAL", 100*time.Millisecond)
+	if err != nil {
+		return nil, err
+	}
+
 	cfg := &Config{
-		DockerHost:    envOr("CETACEAN_DOCKER_HOST", "unix:///var/run/docker.sock"),
-		PrometheusURL: os.Getenv("CETACEAN_PROMETHEUS_URL"),
-		ListenAddr:    envOr("CETACEAN_LISTEN_ADDR", ":9000"),
-		LogLevel:      envOr("CETACEAN_LOG_LEVEL", "info"),
-		LogFormat:     envOr("CETACEAN_LOG_FORMAT", "json"),
-		DataDir:       envOr("CETACEAN_DATA_DIR", "./data"),
+		DockerHost:        envOr("CETACEAN_DOCKER_HOST", "unix:///var/run/docker.sock"),
+		PrometheusURL:     os.Getenv("CETACEAN_PROMETHEUS_URL"),
+		ListenAddr:        envOr("CETACEAN_LISTEN_ADDR", ":9000"),
+		LogLevel:          envOr("CETACEAN_LOG_LEVEL", "info"),
+		LogFormat:         envOr("CETACEAN_LOG_FORMAT", "json"),
+		DataDir:           envOr("CETACEAN_DATA_DIR", "./data"),
 		Snapshot:          envBool("CETACEAN_SNAPSHOT", true),
 		NotificationsFile: os.Getenv("CETACEAN_NOTIFICATIONS_FILE"),
-		SSEBatchInterval:  envDuration("CETACEAN_SSE_BATCH_INTERVAL", 100*time.Millisecond),
+		SSEBatchInterval:  batchInterval,
 		Pprof:             envBool("CETACEAN_PPROF", false),
 	}
 
@@ -57,14 +63,19 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-func envDuration(key string, fallback time.Duration) time.Duration {
-	if v := os.Getenv(key); v != "" {
-		d, err := time.ParseDuration(v)
-		if err == nil && d > 0 {
-			return d
-		}
+func envDuration(key string, fallback time.Duration) (time.Duration, error) {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback, nil
 	}
-	return fallback
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s %q: %w", key, v, err)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("invalid %s %q: must be positive", key, v)
+	}
+	return d, nil
 }
 
 func envBool(key string, fallback bool) bool {

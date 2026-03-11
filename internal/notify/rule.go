@@ -3,8 +3,10 @@ package notify
 import (
 	"fmt"
 	"log/slog"
+	"net"
 	"net/url"
 	"regexp"
+	"strings"
 	"time"
 
 	"cetacean/internal/cache"
@@ -38,6 +40,9 @@ func (r *Rule) compile() error {
 	}
 	if u.Host == "" {
 		return fmt.Errorf("webhook URL must have a host, got %q", r.Webhook)
+	}
+	if err := rejectInternalHost(u.Hostname()); err != nil {
+		return fmt.Errorf("webhook URL rejected: %w", err)
 	}
 	if r.Match.NameRegex != "" {
 		re, err := regexp.Compile(r.Match.NameRegex)
@@ -80,6 +85,55 @@ func (r *Rule) matches(e cache.Event, resourceName string) bool {
 		return false
 	}
 	return true
+}
+
+// allowLoopback disables loopback checks for testing with local HTTP servers.
+var allowLoopback bool
+
+// rejectInternalHost returns an error if hostname resolves to a loopback,
+// link-local, or cloud metadata address.
+func rejectInternalHost(hostname string) error {
+	lower := strings.ToLower(hostname)
+	if lower == "localhost" && !allowLoopback {
+		return fmt.Errorf("localhost is not allowed")
+	}
+	// Metadata endpoints (AWS, GCP, Azure)
+	if lower == "metadata.google.internal" {
+		return fmt.Errorf("cloud metadata endpoint is not allowed")
+	}
+
+	ip := net.ParseIP(hostname)
+	if ip == nil {
+		// Not an IP literal — resolve it.
+		addrs, err := net.LookupHost(hostname)
+		if err != nil {
+			// Can't resolve at compile time; allow it (will fail at fire time).
+			return nil
+		}
+		for _, addr := range addrs {
+			if parsed := net.ParseIP(addr); parsed != nil {
+				if err := checkIP(parsed); err != nil {
+					return fmt.Errorf("%s resolves to %s: %w", hostname, addr, err)
+				}
+			}
+		}
+		return nil
+	}
+	return checkIP(ip)
+}
+
+func checkIP(ip net.IP) error {
+	if ip.IsLoopback() && !allowLoopback {
+		return fmt.Errorf("%s is a loopback address", ip)
+	}
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return fmt.Errorf("%s is a link-local address", ip)
+	}
+	// AWS/cloud metadata: 169.254.169.254
+	if ip.Equal(net.ParseIP("169.254.169.254")) {
+		return fmt.Errorf("%s is a cloud metadata address", ip)
+	}
+	return nil
 }
 
 func (r *Rule) matchesCondition(resource any) bool {

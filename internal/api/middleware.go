@@ -45,16 +45,19 @@ func requestID(next http.Handler) http.Handler {
 
 type statusWriter struct {
 	http.ResponseWriter
-	status  int
-	written int64
+	status      int
+	written     int64
+	wroteHeader bool
 }
 
 func (w *statusWriter) WriteHeader(code int) {
+	w.wroteHeader = true
 	w.status = code
 	w.ResponseWriter.WriteHeader(code)
 }
 
 func (w *statusWriter) Write(b []byte) (int, error) {
+	w.wroteHeader = true // implicit 200 on first Write
 	n, err := w.ResponseWriter.Write(b)
 	w.written += int64(n)
 	return n, err
@@ -113,6 +116,12 @@ func recovery(next http.Handler) http.Handler {
 					"path", r.URL.Path,
 					"stack", string(debug.Stack()),
 				)
+				// Only attempt an error response if headers haven't been
+				// sent yet (e.g. mid-SSE-stream panics). Writing after
+				// commit would corrupt the partial response.
+				if sw, ok := w.(*statusWriter); ok && sw.wroteHeader {
+					return
+				}
 				writeError(w, http.StatusInternalServerError, "internal server error")
 			}
 		}()

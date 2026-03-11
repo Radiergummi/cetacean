@@ -171,9 +171,12 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 			if err != nil {
 				slog.Warn("event stream error", "error", err)
 			}
-			// Flush any pending events before returning.
+			// Flush pending events with a fresh context — the parent ctx
+			// may already be cancelled if shutdown raced with the stream error.
 			if len(pending) > 0 {
-				w.processBatch(ctx, pending)
+				flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				w.processBatch(flushCtx, pending)
+				cancel()
 			}
 			return
 		case msg := <-msgCh:

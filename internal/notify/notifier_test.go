@@ -4,12 +4,18 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"cetacean/internal/cache"
 )
+
+func TestMain(m *testing.M) {
+	allowLoopback = true
+	os.Exit(m.Run())
+}
 
 func TestNotifier_FiresWebhook(t *testing.T) {
 	var calls atomic.Int32

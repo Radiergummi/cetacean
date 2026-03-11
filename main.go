@@ -56,6 +56,7 @@ func main() {
 		if len(rules) > 0 {
 			slog.Info("loaded notification rules", "count", len(rules))
 			notifier = notify.New(rules)
+			defer notifier.Close()
 		}
 	}
 
