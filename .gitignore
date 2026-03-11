@@ -39,3 +39,4 @@ go.work.sum
 cetacean
 frontend/dist/
 node_modules/
+.worktrees/
