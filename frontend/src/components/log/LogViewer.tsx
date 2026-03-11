@@ -72,7 +72,7 @@ export default function LogViewer({serviceId, taskId, header}: Props) {
         filtered,
     } = useLogFilter(data.lines, streamFilter);
 
-    const showAttrs = !isTask && data.lines.some(({attrs}) => attrs?.taskId);
+    const showAttrs = useMemo(() => !isTask && data.lines.some(({attrs}) => attrs?.taskId), [isTask, data.lines]);
 
     // Keyboard shortcut: Ctrl+F to focus search
     useEffect(() => {
@@ -92,29 +92,25 @@ export default function LogViewer({serviceId, taskId, header}: Props) {
         return () => document.removeEventListener("keydown", handler);
     }, [data.containerRef]);
 
-    const copyLogs = () => {
-        const text = filtered
-            .map(({message, timestamp}) => (
-                timestamp ? `${timestamp} ${message}` : message
-            ))
-            .join("\n");
-        void navigator.clipboard.writeText(text);
-    };
+    const formatLogs = useCallback(() => filtered
+        .map(({message, timestamp}) => (
+            timestamp ? `${timestamp} ${message}` : message
+        ))
+        .join("\n"), [filtered]);
 
-    const downloadLogs = () => {
-        const text = filtered
-            .map(({message, timestamp}) => (
-                timestamp ? `${timestamp} ${message}` : message
-            ))
-            .join("\n");
-        const blob = new Blob([text], {type: "text/plain"});
+    const copyLogs = useCallback(() => {
+        void navigator.clipboard.writeText(formatLogs());
+    }, [formatLogs]);
+
+    const downloadLogs = useCallback(() => {
+        const blob = new Blob([formatLogs()], {type: "text/plain"});
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
         link.download = `logs-${logId.slice(0, 12)}.log`;
         link.click();
         URL.revokeObjectURL(url);
-    };
+    }, [formatLogs, logId]);
 
     const toggle = header ? (
         <button
@@ -325,8 +321,7 @@ export default function LogViewer({serviceId, taskId, header}: Props) {
                         onTaskFilter={setTaskFilter}
                         pinnedKeys={pinnedKeys}
                         pinnedLines={pinnedLines}
-                        onPin={handlePin}
-                        onUnpin={handlePin}
+                        onTogglePin={handlePin}
                     />
 
                     {data.atTop && data.hasOlderLogs && (

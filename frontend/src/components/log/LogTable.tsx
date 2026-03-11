@@ -20,8 +20,7 @@ export interface LogTableProps {
     onTaskFilter?: (taskId: string | null) => void;
     pinnedKeys?: Set<string>;
     pinnedLines?: LogLine[];
-    onPin?: (line: LogLine) => void;
-    onUnpin?: (line: LogLine) => void;
+    onTogglePin?: (line: LogLine) => void;
 }
 
 function LogRow({
@@ -38,7 +37,7 @@ function LogRow({
     measureRef,
     dataIndex,
     isPinned,
-    onPin,
+    onTogglePin,
 }: {
     line: LogLine;
     showAttrs: boolean;
@@ -53,7 +52,7 @@ function LogRow({
     measureRef?: (el: HTMLElement | null) => void;
     dataIndex?: number;
     isPinned?: boolean;
-    onPin?: (line: LogLine) => void;
+    onTogglePin?: (line: LogLine) => void;
 }) {
     const jsonLine = isJSON(line.message);
     const prettyPrint = jsonLine &&
@@ -71,14 +70,14 @@ function LogRow({
             className="hover:bg-muted/50 group data-json:cursor-pointer data-highlight:bg-yellow-500/10"
             onClick={onToggle && jsonLine ? () => onToggle(line.index) : undefined}
         >
-            <td className={`${onPin ? "w-6" : "w-0.75"} ps-0.75 align-stretch relative`}>
+            <td className={`${onTogglePin ? "w-6" : "w-0.75"} ps-0.75 align-stretch relative`}>
                 <div className={`w-0.75 min-h-full ${LEVEL_BAR[line.level]} absolute left-0 top-0 bottom-0`}/>
-                {onPin && (
+                {onTogglePin && (
                     <button
                         type="button"
                         onClick={(event) => {
                             event.stopPropagation();
-                            onPin(line);
+                            onTogglePin(line);
                         }}
                         aria-pressed={isPinned || undefined}
                         className="flex items-center justify-center p-1 opacity-0 group-hover:opacity-100
@@ -152,8 +151,7 @@ export function LogTable({
     onTaskFilter,
     pinnedKeys,
     pinnedLines,
-    onPin,
-    onUnpin,
+    onTogglePin,
 }: LogTableProps) {
     const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
     const useVirtual = filtered.length > LOG_VIRTUAL_THRESHOLD;
@@ -178,7 +176,7 @@ export function LogTable({
                     {pinnedLines.map((line) => (
                         <tr
                             key={logLineKey(line)}
-                            onClick={() => onUnpin?.(line)}
+                            onClick={() => onTogglePin?.(line)}
                             className="cursor-pointer hover:bg-muted/50"
                         >
                             <td className="w-6 ps-1.75 align-stretch relative">
@@ -219,7 +217,7 @@ export function LogTable({
                         following={following}
                         onTaskFilter={onTaskFilter}
                         pinnedKeys={pinnedKeys}
-                        onPin={onPin}
+                        onTogglePin={onTogglePin}
                     />
                 ) : (
                     <tbody>
@@ -237,7 +235,7 @@ export function LogTable({
                             highlight={line.index === highlightIndex}
                             onTaskFilter={onTaskFilter ?? undefined}
                             isPinned={pinnedKeys?.has(logLineKey(line))}
-                            onPin={onPin}
+                            onTogglePin={onTogglePin}
                         />
                     ))}
                     </tbody>
@@ -262,7 +260,7 @@ function VirtualLogBody({
     following,
     onTaskFilter,
     pinnedKeys,
-    onPin,
+    onTogglePin,
 }: {
     containerRef: RefObject<HTMLDivElement | null>;
     filtered: LogLine[];
@@ -278,7 +276,7 @@ function VirtualLogBody({
     following?: boolean;
     onTaskFilter?: (taskId: string | null) => void;
     pinnedKeys?: Set<string>;
-    onPin?: (line: LogLine) => void;
+    onTogglePin?: (line: LogLine) => void;
 }) {
     const virtualizer = useVirtualizer({
         count: filtered.length,
@@ -325,7 +323,7 @@ function VirtualLogBody({
                     measureRef={virtualizer.measureElement}
                     dataIndex={virtualRow.index}
                     isPinned={pinnedKeys?.has(logLineKey(line))}
-                    onPin={onPin}
+                    onTogglePin={onTogglePin}
                 />
             );
         })}
