@@ -91,14 +91,6 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func writeError(w http.ResponseWriter, status int, msg string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"error":  msg,
-		"status": status,
-	})
-}
 
 func searchFilter[T any](items []T, query string, name func(T) string) []T {
 	if query == "" {
@@ -116,24 +108,39 @@ func searchFilter[T any](items []T, query string, name func(T) string) []T {
 
 const maxFilterLen = 512
 
-func exprFilter[T any](items []T, expr string, env func(T) map[string]any, w http.ResponseWriter) ([]T, bool) {
+func exprFilter[T any](items []T, expr string, env func(T) map[string]any, w http.ResponseWriter, r *http.Request) ([]T, bool) {
 	if expr == "" {
 		return items, true
 	}
 	if len(expr) > maxFilterLen {
-		writeError(w, http.StatusBadRequest, "filter expression too long")
+		writeProblemTyped(w, r, ProblemDetail{
+			Type:   "urn:cetacean:error:filter-invalid",
+			Title:  "Invalid Filter Expression",
+			Status: http.StatusBadRequest,
+			Detail: "filter expression too long",
+		})
 		return nil, false
 	}
 	prog, err := filter.Compile(expr)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("invalid filter expression: %s", err))
+		writeProblemTyped(w, r, ProblemDetail{
+			Type:   "urn:cetacean:error:filter-invalid",
+			Title:  "Invalid Filter Expression",
+			Status: http.StatusBadRequest,
+			Detail: fmt.Sprintf("invalid filter expression: %s", err),
+		})
 		return nil, false
 	}
 	var filtered []T
 	for _, item := range items {
 		ok, err := filter.Evaluate(prog, env(item))
 		if err != nil {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("filter evaluation error: %s", err))
+			writeProblemTyped(w, r, ProblemDetail{
+				Type:   "urn:cetacean:error:filter-invalid",
+				Title:  "Invalid Filter Expression",
+				Status: http.StatusBadRequest,
+				Detail: fmt.Sprintf("filter evaluation error: %s", err),
+			})
 			return nil, false
 		}
 		if ok {
@@ -186,7 +193,7 @@ type ResourceMetric struct {
 
 func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) {
 	if h.promClient == nil {
-		writeError(w, http.StatusNotFound, "prometheus not configured")
+		writeProblem(w, r, http.StatusNotFound, "prometheus not configured")
 		return
 	}
 
@@ -362,7 +369,7 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 
 func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 	if h.systemClient == nil {
-		writeError(w, http.StatusNotImplemented, "swarm inspect not available")
+		writeProblem(w, r, http.StatusNotImplemented, "swarm inspect not available")
 		return
 	}
 
@@ -372,7 +379,7 @@ func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 	sw, err := h.systemClient.SwarmInspect(ctx)
 	if err != nil {
 		slog.Error("swarm inspect failed", "error", err)
-		writeError(w, http.StatusInternalServerError, "swarm inspect failed")
+		writeProblem(w, r, http.StatusInternalServerError, "swarm inspect failed")
 		return
 	}
 
@@ -392,7 +399,7 @@ func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandlePlugins(w http.ResponseWriter, r *http.Request) {
 	if h.systemClient == nil {
-		writeError(w, http.StatusNotImplemented, "plugin list not available")
+		writeProblem(w, r, http.StatusNotImplemented, "plugin list not available")
 		return
 	}
 
@@ -402,7 +409,7 @@ func (h *Handlers) HandlePlugins(w http.ResponseWriter, r *http.Request) {
 	plugins, err := h.systemClient.PluginList(ctx)
 	if err != nil {
 		slog.Error("plugin list failed", "error", err)
-		writeError(w, http.StatusInternalServerError, "plugin list failed")
+		writeProblem(w, r, http.StatusInternalServerError, "plugin list failed")
 		return
 	}
 
@@ -419,7 +426,7 @@ type DiskUsageSummary struct {
 
 func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
 	if h.systemClient == nil {
-		writeError(w, http.StatusNotImplemented, "disk usage not available")
+		writeProblem(w, r, http.StatusNotImplemented, "disk usage not available")
 		return
 	}
 
@@ -429,7 +436,7 @@ func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
 	du, err := h.systemClient.DiskUsage(ctx)
 	if err != nil {
 		slog.Error("disk usage failed", "error", err)
-		writeError(w, http.StatusInternalServerError, "disk usage failed")
+		writeProblem(w, r, http.StatusInternalServerError, "disk usage failed")
 		return
 	}
 
@@ -510,7 +517,7 @@ func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 	nodes := h.cache.ListNodes()
 	nodes = searchFilter(nodes, r.URL.Query().Get("search"), func(n swarm.Node) string { return n.Description.Hostname })
 	var ok bool
-	if nodes, ok = exprFilter(nodes, r.URL.Query().Get("filter"), filter.NodeEnv, w); !ok {
+	if nodes, ok = exprFilter(nodes, r.URL.Query().Get("filter"), filter.NodeEnv, w, r); !ok {
 		return
 	}
 	p := parsePagination(r)
@@ -527,7 +534,7 @@ func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	node, ok := h.cache.GetNode(id)
 	if !ok {
-		writeError(w, http.StatusNotFound, fmt.Sprintf("node %q not found", id))
+		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("node %q not found", id))
 		return
 	}
 	writeJSON(w, node)
@@ -537,7 +544,7 @@ func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	_, ok := h.cache.GetNode(id)
 	if !ok {
-		writeError(w, http.StatusNotFound, fmt.Sprintf("node %q not found", id))
+		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("node %q not found", id))
 		return
 	}
 	writeJSON(w, h.enrichTasks(h.cache.ListTasksByNode(id)))
@@ -554,7 +561,7 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 	services := h.cache.ListServices()
 	services = searchFilter(services, r.URL.Query().Get("search"), func(s swarm.Service) string { return s.Spec.Name })
 	var ok bool
-	if services, ok = exprFilter(services, r.URL.Query().Get("filter"), filter.ServiceEnv, w); !ok {
+	if services, ok = exprFilter(services, r.URL.Query().Get("filter"), filter.ServiceEnv, w, r); !ok {
 		return
 	}
 	p := parsePagination(r)
@@ -584,7 +591,7 @@ func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeError(w, http.StatusNotFound, fmt.Sprintf("service %q not found", id))
+		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("service %q not found", id))
 		return
 	}
 	writeJSON(w, svc)
@@ -594,7 +601,7 @@ func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeError(w, http.StatusNotFound, fmt.Sprintf("service %q not found", id))
+		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("service %q not found", id))
 		return
 	}
 	writeJSON(w, h.enrichTasks(h.cache.ListTasksByService(id)))
@@ -604,7 +611,7 @@ func (h *Handlers) HandleServiceLogs(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeError(w, http.StatusNotFound, fmt.Sprintf("service %q not found", id))
+		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("service %q not found", id))
 		return
 	}
 	h.serveLogs(w, r, func(ctx context.Context, tail string, follow bool, since, until string) (LogStream, error) {
@@ -642,7 +649,7 @@ func (h *Handlers) enrichTasks(tasks []swarm.Task) []EnrichedTask {
 func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 	tasks := h.cache.ListTasks()
 	var ok bool
-	if tasks, ok = exprFilter(tasks, r.URL.Query().Get("filter"), filter.TaskEnv, w); !ok {
+	if tasks, ok = exprFilter(tasks, r.URL.Query().Get("filter"), filter.TaskEnv, w, r); !ok {
 		return
 	}
 	p := parsePagination(r)
@@ -659,7 +666,7 @@ func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	task, ok := h.cache.GetTask(id)
 	if !ok {
-		writeError(w, http.StatusNotFound, fmt.Sprintf("task %q not found", id))
+		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("task %q not found", id))
 		return
 	}
 	writeJSON(w, h.enrichTask(task))
@@ -669,7 +676,7 @@ func (h *Handlers) HandleTaskLogs(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	_, ok := h.cache.GetTask(id)
 	if !ok {
-		writeError(w, http.StatusNotFound, fmt.Sprintf("task %q not found", id))
+		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("task %q not found", id))
 		return
 	}
 	h.serveLogs(w, r, func(ctx context.Context, tail string, follow bool, since, until string) (LogStream, error) {
@@ -716,22 +723,22 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	until := q.Get("before")
 	streamFilter := q.Get("stream") // "", "stdout", or "stderr"
 	if streamFilter != "" && streamFilter != "stdout" && streamFilter != "stderr" {
-		writeError(w, http.StatusBadRequest, `invalid "stream" parameter: must be "stdout" or "stderr"`)
+		writeProblem(w, r, http.StatusBadRequest, `invalid "stream" parameter: must be "stdout" or "stderr"`)
 		return
 	}
 
 	if !validLogTimestamp(since) {
-		writeError(w, http.StatusBadRequest, `invalid "after" parameter: must be RFC3339 timestamp or Go duration`)
+		writeProblem(w, r, http.StatusBadRequest, `invalid "after" parameter: must be RFC3339 timestamp or Go duration`)
 		return
 	}
 	if !validLogTimestamp(until) {
-		writeError(w, http.StatusBadRequest, `invalid "before" parameter: must be RFC3339 timestamp or Go duration`)
+		writeProblem(w, r, http.StatusBadRequest, `invalid "before" parameter: must be RFC3339 timestamp or Go duration`)
 		return
 	}
 
 	if wantsSSE(r) {
 		if until != "" {
-			writeError(w, http.StatusBadRequest, `"before" parameter is not supported for SSE log streams`)
+			writeProblem(w, r, http.StatusBadRequest, `"before" parameter is not supported for SSE log streams`)
 			return
 		}
 		h.serveLogsSSE(w, r, fetch, since, streamFilter)
@@ -765,7 +772,7 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	logs, err := fetch(ctx, strconv.Itoa(tail), false, since, until)
 	if err != nil {
 		slog.Error("failed to get logs", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to get logs")
+		writeProblem(w, r, http.StatusInternalServerError, "failed to get logs")
 		return
 	}
 	defer logs.Close() //nolint:errcheck
@@ -773,7 +780,7 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	lines, err := ParseDockerLogs(logs)
 	if err != nil {
 		slog.Error("failed to parse logs", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to parse logs")
+		writeProblem(w, r, http.StatusInternalServerError, "failed to parse logs")
 		return
 	}
 	if lines == nil {
@@ -830,7 +837,8 @@ func (h *Handlers) serveLogsSSE(w http.ResponseWriter, r *http.Request, fetch lo
 	for {
 		cur := activeLogSSEConns.Load()
 		if cur >= maxLogSSEConns {
-			writeError(w, http.StatusServiceUnavailable, "too many active log streams")
+			w.Header().Set("Retry-After", "5")
+			writeProblem(w, r, http.StatusTooManyRequests, "too many active log streams")
 			return
 		}
 		if activeLogSSEConns.CompareAndSwap(cur, cur+1) {
@@ -847,14 +855,14 @@ func (h *Handlers) serveLogsSSE(w http.ResponseWriter, r *http.Request, fetch lo
 	}
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		writeError(w, http.StatusInternalServerError, "streaming not supported")
+		writeProblem(w, r, http.StatusInternalServerError, "streaming not supported")
 		return
 	}
 
 	logs, err := fetch(r.Context(), "0", true, since, "")
 	if err != nil {
 		slog.Error("failed to stream logs", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to stream logs")
+		writeProblem(w, r, http.StatusInternalServerError, "failed to stream logs")
 		return
 	}
 	defer logs.Close() //nolint:errcheck
@@ -930,7 +938,7 @@ func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
 	stacks := h.cache.ListStacks()
 	stacks = searchFilter(stacks, r.URL.Query().Get("search"), func(s cache.Stack) string { return s.Name })
 	var ok bool
-	if stacks, ok = exprFilter(stacks, r.URL.Query().Get("filter"), filter.StackEnv, w); !ok {
+	if stacks, ok = exprFilter(stacks, r.URL.Query().Get("filter"), filter.StackEnv, w, r); !ok {
 		return
 	}
 	p := parsePagination(r)
@@ -944,7 +952,7 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	detail, ok := h.cache.GetStackDetail(name)
 	if !ok {
-		writeError(w, http.StatusNotFound, fmt.Sprintf("stack %q not found", name))
+		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("stack %q not found", name))
 		return
 	}
 	writeJSON(w, detail)
@@ -1007,7 +1015,7 @@ func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	cfg, ok := h.cache.GetConfig(id)
 	if !ok {
-		writeError(w, http.StatusNotFound, fmt.Sprintf("config %q not found", id))
+		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("config %q not found", id))
 		return
 	}
 	writeJSON(w, map[string]any{
@@ -1020,7 +1028,7 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 	configs := h.cache.ListConfigs()
 	configs = searchFilter(configs, r.URL.Query().Get("search"), func(c swarm.Config) string { return c.Spec.Name })
 	var ok bool
-	if configs, ok = exprFilter(configs, r.URL.Query().Get("filter"), filter.ConfigEnv, w); !ok {
+	if configs, ok = exprFilter(configs, r.URL.Query().Get("filter"), filter.ConfigEnv, w, r); !ok {
 		return
 	}
 	p := parsePagination(r)
@@ -1038,7 +1046,7 @@ func (h *Handlers) HandleGetSecret(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	sec, ok := h.cache.GetSecret(id)
 	if !ok {
-		writeError(w, http.StatusNotFound, fmt.Sprintf("secret %q not found", id))
+		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("secret %q not found", id))
 		return
 	}
 	// Never expose secret data — clear it before responding.
@@ -1056,7 +1064,7 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 	}
 	secrets = searchFilter(secrets, r.URL.Query().Get("search"), func(s swarm.Secret) string { return s.Spec.Name })
 	var ok bool
-	if secrets, ok = exprFilter(secrets, r.URL.Query().Get("filter"), filter.SecretEnv, w); !ok {
+	if secrets, ok = exprFilter(secrets, r.URL.Query().Get("filter"), filter.SecretEnv, w, r); !ok {
 		return
 	}
 	p := parsePagination(r)
@@ -1074,7 +1082,7 @@ func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	net, ok := h.cache.GetNetwork(id)
 	if !ok {
-		writeError(w, http.StatusNotFound, fmt.Sprintf("network %q not found", id))
+		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("network %q not found", id))
 		return
 	}
 	writeJSON(w, map[string]any{
@@ -1087,7 +1095,7 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 	networks := h.cache.ListNetworks()
 	networks = searchFilter(networks, r.URL.Query().Get("search"), func(n network.Summary) string { return n.Name })
 	var ok bool
-	if networks, ok = exprFilter(networks, r.URL.Query().Get("filter"), filter.NetworkEnv, w); !ok {
+	if networks, ok = exprFilter(networks, r.URL.Query().Get("filter"), filter.NetworkEnv, w, r); !ok {
 		return
 	}
 	p := parsePagination(r)
@@ -1105,7 +1113,7 @@ func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	vol, ok := h.cache.GetVolume(name)
 	if !ok {
-		writeError(w, http.StatusNotFound, fmt.Sprintf("volume %q not found", name))
+		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("volume %q not found", name))
 		return
 	}
 	writeJSON(w, map[string]any{
@@ -1118,7 +1126,7 @@ func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 	volumes := h.cache.ListVolumes()
 	volumes = searchFilter(volumes, r.URL.Query().Get("search"), func(v volume.Volume) string { return v.Name })
 	var ok bool
-	if volumes, ok = exprFilter(volumes, r.URL.Query().Get("filter"), filter.VolumeEnv, w); !ok {
+	if volumes, ok = exprFilter(volumes, r.URL.Query().Get("filter"), filter.VolumeEnv, w, r); !ok {
 		return
 	}
 	p := parsePagination(r)
@@ -1161,11 +1169,11 @@ func labelsMatch(labels map[string]string, q string) bool {
 func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	if q == "" {
-		writeError(w, http.StatusBadRequest, "missing required query parameter: q")
+		writeProblem(w, r, http.StatusBadRequest, "missing required query parameter: q")
 		return
 	}
 	if len(q) > 200 {
-		writeError(w, http.StatusBadRequest, "query too long (max 200 characters)")
+		writeProblem(w, r, http.StatusBadRequest, "query too long (max 200 characters)")
 		return
 	}
 	ql := strings.ToLower(q)

@@ -94,7 +94,7 @@ func (b *Broadcaster) Close() {
 func (b *Broadcaster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		writeProblem(w, r, http.StatusInternalServerError, "streaming not supported")
 		return
 	}
 
@@ -119,7 +119,8 @@ func (b *Broadcaster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(b.clients) >= maxSSEClients {
 		b.mu.Unlock()
-		http.Error(w, "too many SSE connections", http.StatusServiceUnavailable)
+		w.Header().Set("Retry-After", "5")
+		writeProblem(w, r, http.StatusTooManyRequests, "too many SSE connections")
 		return
 	}
 	b.clients[client] = struct{}{}

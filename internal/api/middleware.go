@@ -122,7 +122,7 @@ func recovery(next http.Handler) http.Handler {
 				if sw, ok := w.(*statusWriter); ok && sw.wroteHeader {
 					return
 				}
-				writeError(w, http.StatusInternalServerError, "internal server error")
+				writeProblem(w, r, http.StatusInternalServerError, "internal server error")
 			}
 		}()
 		next.ServeHTTP(w, r)
