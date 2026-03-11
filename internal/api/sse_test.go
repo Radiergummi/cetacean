@@ -124,6 +124,144 @@ func TestSSE_BatchesRapidEvents(t *testing.T) {
 	}
 }
 
+func TestSSE_EventContainsJSONLD(t *testing.T) {
+	b := NewBroadcaster(0)
+	defer b.Close()
+
+	req := httptest.NewRequest("GET", "/events", nil)
+	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	done := make(chan struct{})
+	go func() {
+		b.ServeHTTP(w, req)
+		close(done)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+
+	b.Broadcast(cache.Event{Type: "service", Action: "update", ID: "abc123"})
+
+	time.Sleep(50 * time.Millisecond)
+	b.Close()
+	<-done
+
+	body := w.Body.String()
+	if !strings.Contains(body, `"@id":"/services/abc123"`) {
+		t.Errorf("expected @id field in body, got: %s", body)
+	}
+	if !strings.Contains(body, `"@type":"Service"`) {
+		t.Errorf("expected @type field in body, got: %s", body)
+	}
+}
+
+func TestSSE_BatchEventContainsJSONLD(t *testing.T) {
+	b := NewBroadcaster(0)
+	defer b.Close()
+
+	req := httptest.NewRequest("GET", "/events", nil)
+	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	done := make(chan struct{})
+	go func() {
+		b.ServeHTTP(w, req)
+		close(done)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+
+	// Send multiple events fast to trigger batching
+	for i := 0; i < 3; i++ {
+		b.Broadcast(cache.Event{Type: "task", Action: "update", ID: fmt.Sprintf("t%d", i)})
+	}
+
+	time.Sleep(200 * time.Millisecond)
+	b.Close()
+	<-done
+
+	body := w.Body.String()
+	// Whether batched or individual, all events should have @id and @type
+	if !strings.Contains(body, `"@id":"/tasks/t0"`) {
+		t.Errorf("expected @id for t0 in body, got: %s", body)
+	}
+	if !strings.Contains(body, `"@type":"Task"`) {
+		t.Errorf("expected @type Task in body, got: %s", body)
+	}
+}
+
+func TestResourcePath(t *testing.T) {
+	tests := []struct {
+		typ, id, want string
+	}{
+		{"node", "n1", "/nodes/n1"},
+		{"service", "s1", "/services/s1"},
+		{"task", "t1", "/tasks/t1"},
+		{"config", "c1", "/configs/c1"},
+		{"secret", "sec1", "/secrets/sec1"},
+		{"network", "net1", "/networks/net1"},
+		{"volume", "vol1", "/volumes/vol1"},
+		{"stack", "mystack", "/stacks/mystack"},
+		{"unknown", "x", ""},
+	}
+	for _, tt := range tests {
+		got := resourcePath(tt.typ, tt.id)
+		if got != tt.want {
+			t.Errorf("resourcePath(%q, %q) = %q, want %q", tt.typ, tt.id, got, tt.want)
+		}
+	}
+}
+
+func TestResourceType(t *testing.T) {
+	tests := []struct {
+		typ, want string
+	}{
+		{"node", "Node"},
+		{"service", "Service"},
+		{"task", "Task"},
+		{"config", "Config"},
+		{"secret", "Secret"},
+		{"network", "Network"},
+		{"volume", "Volume"},
+		{"stack", "Stack"},
+		{"unknown", ""},
+	}
+	for _, tt := range tests {
+		got := resourceType(tt.typ)
+		if got != tt.want {
+			t.Errorf("resourceType(%q) = %q, want %q", tt.typ, got, tt.want)
+		}
+	}
+}
+
+func TestSSE_429OnConnectionLimit(t *testing.T) {
+	b := NewBroadcaster(0)
+	defer b.Close()
+
+	req := httptest.NewRequest("GET", "/events", nil)
+	w := httptest.NewRecorder()
+
+	// Artificially fill up clients to max
+	b.mu.Lock()
+	for i := 0; i < maxSSEClients; i++ {
+		c := &sseClient{
+			events: make(chan cache.Event, 1),
+			done:   make(chan struct{}),
+		}
+		b.clients[c] = struct{}{}
+	}
+	b.mu.Unlock()
+
+	// This recorder doesn't implement Flusher, so we need a flushRecorder
+	fw := &flushRecorder{ResponseRecorder: w}
+	b.ServeHTTP(fw, req)
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("expected status 429, got %d", w.Code)
+	}
+	if w.Header().Get("Retry-After") != "5" {
+		t.Errorf("expected Retry-After: 5, got %q", w.Header().Get("Retry-After"))
+	}
+}
+
 // flushRecorder implements http.Flusher for testing SSE.
 type flushRecorder struct {
 	*httptest.ResponseRecorder

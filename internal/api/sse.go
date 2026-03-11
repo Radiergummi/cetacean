@@ -171,13 +171,86 @@ func (b *Broadcaster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// sseEvent is the JSON-LD enriched wire format for SSE event payloads.
+type sseEvent struct {
+	AtID     string      `json:"@id,omitempty"`
+	AtType   string      `json:"@type,omitempty"`
+	Type     string      `json:"type"`
+	Action   string      `json:"action"`
+	ID       string      `json:"id"`
+	Resource interface{} `json:"resource,omitempty"`
+}
+
+func toSSEEvent(e cache.Event) sseEvent {
+	return sseEvent{
+		AtID:     resourcePath(e.Type, e.ID),
+		AtType:   resourceType(e.Type),
+		Type:     e.Type,
+		Action:   e.Action,
+		ID:       e.ID,
+		Resource: e.Resource,
+	}
+}
+
+// resourcePath returns the canonical API path for a resource.
+func resourcePath(typ, id string) string {
+	switch typ {
+	case "node":
+		return "/nodes/" + id
+	case "service":
+		return "/services/" + id
+	case "task":
+		return "/tasks/" + id
+	case "config":
+		return "/configs/" + id
+	case "secret":
+		return "/secrets/" + id
+	case "network":
+		return "/networks/" + id
+	case "volume":
+		return "/volumes/" + id
+	case "stack":
+		return "/stacks/" + id
+	default:
+		return ""
+	}
+}
+
+// resourceType returns the JSON-LD @type for a resource type string.
+func resourceType(typ string) string {
+	switch typ {
+	case "node":
+		return "Node"
+	case "service":
+		return "Service"
+	case "task":
+		return "Task"
+	case "config":
+		return "Config"
+	case "secret":
+		return "Secret"
+	case "network":
+		return "Network"
+	case "volume":
+		return "Volume"
+	case "stack":
+		return "Stack"
+	default:
+		return ""
+	}
+}
+
 func writeBatch(w io.Writer, flusher http.Flusher, events []cache.Event, eventID *uint64) {
 	*eventID++
 	if len(events) == 1 {
-		data, _ := json.Marshal(events[0])
+		data, _ := json.Marshal(toSSEEvent(events[0]))
 		fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", *eventID, events[0].Type, data)
 	} else {
-		data, _ := json.Marshal(events)
+		enriched := make([]sseEvent, len(events))
+		for i, e := range events {
+			enriched[i] = toSSEEvent(e)
+		}
+		data, _ := json.Marshal(enriched)
 		fmt.Fprintf(w, "id: %d\nevent: batch\ndata: %s\n\n", *eventID, data)
 	}
 	flusher.Flush()
