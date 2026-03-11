@@ -90,7 +90,12 @@ func (n *Notifier) recordFailure(ruleID string) {
 		n.circuits[ruleID] = cs
 	}
 	cs.failures++
-	if cs.failures == circuitThreshold {
+	if cs.halfOpen {
+		// Half-open probe failed — reset so the circuit re-enters open state
+		// with a fresh timeout, allowing another probe after circuitTimeout.
+		cs.halfOpen = false
+		cs.openedAt = time.Now()
+	} else if cs.failures == circuitThreshold {
 		cs.openedAt = time.Now()
 	}
 	n.mu.Unlock()

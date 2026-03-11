@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 )
+
+const maxLogFrameSize = 1 << 20 // 1 MiB
 
 // LogLine represents a single parsed Docker log line.
 type LogLine struct {
@@ -42,6 +45,9 @@ func readDockerLogFrames(r io.Reader, emit func(LogLine)) error {
 		size := binary.BigEndian.Uint32(header[4:8])
 		if size == 0 {
 			continue
+		}
+		if size > maxLogFrameSize {
+			return fmt.Errorf("log frame too large: %d bytes (max %d)", size, maxLogFrameSize)
 		}
 
 		payload := make([]byte, size)

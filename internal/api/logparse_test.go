@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/binary"
+	"strings"
 	"testing"
 )
 
@@ -161,5 +162,22 @@ func TestStreamDockerLogs(t *testing.T) {
 	}
 	if lines[1].Stream != "stderr" || lines[1].Message != "line2" {
 		t.Errorf("lines[1] = %+v", lines[1])
+	}
+}
+
+func TestParseDockerLogs_RejectsOversizedFrame(t *testing.T) {
+	// Build a header with a size exceeding maxLogFrameSize.
+	var buf bytes.Buffer
+	buf.WriteByte(1)          // stdout
+	buf.Write([]byte{0, 0, 0}) // padding
+	_ = binary.Write(&buf, binary.BigEndian, uint32(maxLogFrameSize+1))
+	// No need to write the full payload — the error should fire before reading it.
+
+	_, err := ParseDockerLogs(&buf)
+	if err == nil {
+		t.Fatal("expected error for oversized frame, got nil")
+	}
+	if !strings.Contains(err.Error(), "log frame too large") {
+		t.Errorf("unexpected error: %v", err)
 	}
 }

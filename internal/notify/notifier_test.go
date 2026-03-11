@@ -216,6 +216,61 @@ func TestNotifier_CircuitResetsOnSuccess(t *testing.T) {
 	}
 }
 
+func TestNotifier_CircuitHalfOpenProbeFailsRecovers(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusInternalServerError) // always fail
+	}))
+	defer srv.Close()
+
+	rules := []Rule{
+		{ID: "r1", Name: "test", Enabled: true, Match: Match{Type: "task"}, Webhook: srv.URL},
+	}
+	for i := range rules {
+		if err := rules[i].compile(); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	n := New(rules)
+	event := cache.Event{Type: "task", Action: "update", ID: "t1"}
+
+	// Trip the circuit breaker: 5 failures to reach threshold.
+	for i := 0; i < 5; i++ {
+		n.HandleEvent(event, "web.1")
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	// Circuit is open. Force the timeout to expire so next event triggers a half-open probe.
+	n.mu.Lock()
+	n.circuits["r1"].openedAt = time.Now().Add(-circuitTimeout - time.Second)
+	n.mu.Unlock()
+
+	// Half-open probe fires and fails.
+	n.HandleEvent(event, "web.1")
+	time.Sleep(100 * time.Millisecond)
+
+	// After the failed probe, halfOpen must be cleared and openedAt refreshed.
+	// Expire the timeout again to confirm a second probe is allowed.
+	n.mu.Lock()
+	cs := n.circuits["r1"]
+	if cs.halfOpen {
+		t.Fatal("halfOpen should be false after failed probe")
+	}
+	cs.openedAt = time.Now().Add(-circuitTimeout - time.Second)
+	n.mu.Unlock()
+
+	callsBefore := calls.Load()
+	n.HandleEvent(event, "web.1")
+	time.Sleep(100 * time.Millisecond)
+
+	// A new probe should have been allowed (circuit not permanently locked).
+	if got := calls.Load(); got <= callsBefore {
+		t.Errorf("expected another probe after timeout, but no new calls (was %d, now %d)", callsBefore, got)
+	}
+}
+
 func TestNotifier_RuleStatuses(t *testing.T) {
 	rules := []Rule{
 		{ID: "r1", Name: "rule one", Enabled: true, Match: Match{Type: "task"}, Webhook: "http://example.com"},
