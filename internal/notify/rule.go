@@ -2,6 +2,7 @@ package notify
 
 import (
 	"fmt"
+	"log/slog"
 	"net/url"
 	"regexp"
 	"time"
@@ -88,6 +89,7 @@ func (r *Rule) matchesCondition(resource any) bool {
 	}
 	ok, err := filter.Evaluate(r.condProg, env)
 	if err != nil {
+		slog.Warn("notify: condition evaluation failed", "rule", r.ID, "condition", r.Match.Condition, "error", err)
 		return false
 	}
 	return ok
