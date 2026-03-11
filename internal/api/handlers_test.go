@@ -153,6 +153,124 @@ func TestHandleClusterMetrics_WithPrometheus(t *testing.T) {
 	}
 }
 
+func TestHandleMonitoringStatus_NoPrometheus(t *testing.T) {
+	h := NewHandlers(cache.New(nil), nil, nil, closedReady(), nil, nil)
+
+	req := httptest.NewRequest("GET", "/api/metrics/status", nil)
+	w := httptest.NewRecorder()
+	h.HandleMonitoringStatus(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp MonitoringStatus
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.PrometheusConfigured {
+		t.Error("expected prometheusConfigured=false")
+	}
+	if resp.PrometheusReachable {
+		t.Error("expected prometheusReachable=false")
+	}
+	if resp.NodeExporter != nil {
+		t.Error("expected nodeExporter=nil")
+	}
+	if resp.Cadvisor != nil {
+		t.Error("expected cadvisor=nil")
+	}
+}
+
+func TestHandleMonitoringStatus_WithPrometheus(t *testing.T) {
+	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query().Get("query")
+		var body string
+		switch {
+		case strings.Contains(query, "node-exporter"):
+			body = `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"instance":"host1:9100"},"value":[1,"1"]},{"metric":{"instance":"host2:9100"},"value":[1,"1"]}]}}`
+		case strings.Contains(query, "cadvisor"):
+			body = `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"instance":"host1:8080"},"value":[1,"1"]},{"metric":{"instance":"host2:8080"},"value":[1,"1"]}]}}`
+		default:
+			body = `{"status":"success","data":{"resultType":"vector","result":[]}}`
+		}
+		fmt.Fprint(w, body)
+	}))
+	defer prom.Close()
+
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{ID: "n1", Status: swarm.NodeStatus{State: swarm.NodeStateReady}})
+	c.SetNode(swarm.Node{ID: "n2", Status: swarm.NodeStatus{State: swarm.NodeStateReady}})
+	h := NewHandlers(c, nil, nil, closedReady(), nil, NewPromClient(prom.URL))
+
+	req := httptest.NewRequest("GET", "/api/metrics/status", nil)
+	w := httptest.NewRecorder()
+	h.HandleMonitoringStatus(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp MonitoringStatus
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if !resp.PrometheusConfigured {
+		t.Error("expected prometheusConfigured=true")
+	}
+	if !resp.PrometheusReachable {
+		t.Error("expected prometheusReachable=true")
+	}
+	if resp.NodeExporter == nil {
+		t.Fatal("expected nodeExporter to be non-nil")
+	}
+	if resp.NodeExporter.Targets != 2 {
+		t.Errorf("expected nodeExporter.targets=2, got %d", resp.NodeExporter.Targets)
+	}
+	if resp.NodeExporter.Nodes != 2 {
+		t.Errorf("expected nodeExporter.nodes=2, got %d", resp.NodeExporter.Nodes)
+	}
+	if resp.Cadvisor == nil {
+		t.Fatal("expected cadvisor to be non-nil")
+	}
+	if resp.Cadvisor.Targets != 2 {
+		t.Errorf("expected cadvisor.targets=2, got %d", resp.Cadvisor.Targets)
+	}
+	if resp.Cadvisor.Nodes != 2 {
+		t.Errorf("expected cadvisor.nodes=2, got %d", resp.Cadvisor.Nodes)
+	}
+}
+
+func TestHandleMonitoringStatus_PrometheusUnreachable(t *testing.T) {
+	// Point to a URL that will refuse connections
+	h := NewHandlers(cache.New(nil), nil, nil, closedReady(), nil, NewPromClient("http://127.0.0.1:19999"))
+
+	req := httptest.NewRequest("GET", "/api/metrics/status", nil)
+	w := httptest.NewRecorder()
+	h.HandleMonitoringStatus(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp MonitoringStatus
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if !resp.PrometheusConfigured {
+		t.Error("expected prometheusConfigured=true")
+	}
+	if resp.PrometheusReachable {
+		t.Error("expected prometheusReachable=false")
+	}
+	if resp.NodeExporter != nil {
+		t.Error("expected nodeExporter=nil")
+	}
+	if resp.Cadvisor != nil {
+		t.Error("expected cadvisor=nil")
+	}
+}
+
 func TestHandleListNodes(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{ID: "n1"})

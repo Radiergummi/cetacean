@@ -72,6 +72,9 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 	mux.HandleFunc("GET /api/topology/networks", h.HandleNetworkTopology)
 	mux.HandleFunc("GET /api/topology/placement", h.HandlePlacementTopology)
 
+	// Monitoring status
+	mux.HandleFunc("GET /api/metrics/status", h.HandleMonitoringStatus)
+
 	// Prometheus proxy
 	mux.Handle("GET /api/metrics/", promProxy)
 

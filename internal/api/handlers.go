@@ -276,6 +276,80 @@ func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, metrics)
 }
 
+type MonitoringStatus struct {
+	PrometheusConfigured bool          `json:"prometheusConfigured"`
+	PrometheusReachable  bool          `json:"prometheusReachable"`
+	NodeExporter         *TargetStatus `json:"nodeExporter"`
+	Cadvisor             *TargetStatus `json:"cadvisor"`
+}
+
+type TargetStatus struct {
+	Targets int `json:"targets"`
+	Nodes   int `json:"nodes"`
+}
+
+func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request) {
+	if h.promClient == nil {
+		writeJSON(w, MonitoringStatus{})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	nodeCount := len(h.cache.ListNodes())
+
+	var status MonitoringStatus
+	status.PrometheusConfigured = true
+
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	var anySuccess bool
+	wg.Add(2)
+
+	// Query node-exporter targets
+	go func() {
+		defer wg.Done()
+		results, err := h.promClient.InstantQuery(ctx, `up{job="node-exporter"}`)
+		if err != nil {
+			slog.Warn("monitoring status: node-exporter query failed", "error", err)
+			return
+		}
+		mu.Lock()
+		anySuccess = true
+		status.NodeExporter = &TargetStatus{Targets: len(results), Nodes: nodeCount}
+		mu.Unlock()
+	}()
+
+	// Query cadvisor targets
+	go func() {
+		defer wg.Done()
+		results, err := h.promClient.InstantQuery(ctx, `up{job="cadvisor"}`)
+		if err != nil {
+			slog.Warn("monitoring status: cadvisor query failed", "error", err)
+			return
+		}
+		mu.Lock()
+		anySuccess = true
+		status.Cadvisor = &TargetStatus{Targets: len(results), Nodes: nodeCount}
+		mu.Unlock()
+	}()
+
+	wg.Wait()
+
+	if anySuccess {
+		status.PrometheusReachable = true
+	} else {
+		// Fallback connectivity check
+		_, err := h.promClient.InstantQuery(ctx, `vector(1)`)
+		if err == nil {
+			status.PrometheusReachable = true
+		}
+	}
+
+	writeJSON(w, status)
+}
+
 func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 	if h.systemClient == nil {
 		writeError(w, http.StatusNotImplemented, "swarm inspect not available")
