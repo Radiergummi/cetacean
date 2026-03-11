@@ -1,4 +1,4 @@
-import type { LogLine as ApiLogLine } from "../api/client";
+import type { LogLine as ApiLogLine } from "../../api/client";
 
 export interface LogLine extends ApiLogLine {
   index: number;
@@ -13,7 +13,6 @@ export interface TimeRange {
   label: string;
 }
 
-export const LIMIT_OPTIONS = [100, 500, 1000, 5000] as const;
 export const MAX_LIVE_LINES = 10_000;
 export const LOG_ROW_HEIGHT_ESTIMATE = 20;
 export const LOG_VIRTUAL_THRESHOLD = 200;
@@ -78,16 +77,24 @@ export const LABEL_TO_RANGE_KEY: Record<string, string> = Object.fromEntries(
 );
 
 export const LEVEL_BAR: Record<Level, string> = {
-  error: "bg-red-500",
+  error: "bg-red-400",
   warn: "bg-yellow-500",
-  info: "bg-blue-400",
+  info: "bg-blue-300",
   debug: "bg-gray-600",
   default: "bg-transparent",
 };
 
 export function classifyLevel(value: string): Level | null {
   const v = value.toUpperCase();
-  if (v === "ERROR" || v === "ERRO" || v === "FATAL" || v === "PANIC" || v === "CRIT" || v === "CRITICAL") return "error";
+  if (
+    v === "ERROR" ||
+    v === "ERRO" ||
+    v === "FATAL" ||
+    v === "PANIC" ||
+    v === "CRIT" ||
+    v === "CRITICAL"
+  )
+    return "error";
   if (v === "WARN" || v === "WARNING") return "warn";
   if (v === "DEBUG" || v === "DEBG" || v === "TRACE") return "debug";
   if (v === "INFO") return "info";
@@ -173,6 +180,10 @@ export function toLocalInput(iso: string): string {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+export function logLineKey(line: LogLine): string {
+  return `${line.timestamp}\x00${line.attrs?.taskId ?? ""}\x00${line.message}`;
 }
 
 export function formatShortDate(iso: string): string {

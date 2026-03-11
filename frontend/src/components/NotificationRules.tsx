@@ -11,7 +11,8 @@ export default function NotificationRules({ rules }: NotificationRulesProps) {
       {rules.map((rule) => (
         <div key={rule.id} className="flex items-center gap-3 py-1 min-h-7 text-sm">
           <span
-            className={`w-2 h-2 rounded-full shrink-0 ${rule.enabled ? "bg-green-500" : "bg-gray-400"}`}
+            data-enabled={rule.enabled || undefined}
+            className="size-2 rounded-full shrink-0 bg-gray-400 data-enabled:bg-green-500"
           />
           <span className="font-medium truncate flex-1">{rule.name}</span>
           {rule.fireCount > 0 && (

@@ -14,6 +14,7 @@ import ServiceCardNode from "@/components/topology/ServiceCardNode";
 import PhysicalNodeCard from "@/components/topology/PhysicalNodeCard";
 import GroupNode from "@/components/topology/GroupNode";
 import NetworkEdge from "@/components/topology/NetworkEdge";
+import { HighlightProvider } from "@/components/topology/HighlightContext";
 import { Network, Server } from "lucide-react";
 
 const logicalNodeTypes = {
@@ -35,7 +36,7 @@ function StackLegend({ stackColors }: { stackColors: Map<string, string> }) {
         {[...stackColors.entries()].map(([stack, color]) => (
           <span key={stack} className="flex items-center gap-1.5">
             <span
-              className="inline-block w-3 h-3 rounded-full shrink-0"
+              className="inline-block size-3 rounded-full shrink-0"
               style={{ backgroundColor: color }}
             />
             {stack}
@@ -60,8 +61,14 @@ function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
 
   // Structural fingerprint: only changes when nodes/edges are added/removed
   const structureKey = useMemo(() => {
-    const nk = rawNodes.map((n) => `${n.id}:${n.parentId ?? ""}`).sort().join(",");
-    const ek = rawEdges.map((e) => `${e.source}>${e.target}`).sort().join(",");
+    const nk = rawNodes
+      .map((n) => `${n.id}:${n.parentId ?? ""}`)
+      .sort()
+      .join(",");
+    const ek = rawEdges
+      .map((e) => `${e.source}>${e.target}`)
+      .sort()
+      .join(",");
     return `${nk}|${ek}`;
   }, [rawNodes, rawEdges]);
 
@@ -75,7 +82,9 @@ function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
         setReady(true);
       }
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [structureKey]);
 
   // Patch node data in-place when only display data changes (replicas, status, etc.)
@@ -109,7 +118,7 @@ function LogicalView({ data }: { data: NetworkTopology }) {
     return (
       <EmptyState
         message="No overlay networks found"
-        icon={<Network className="w-10 h-10 mb-3 opacity-40" />}
+        icon={<Network className="size-10 mb-3 opacity-40" />}
       />
     );
   }
@@ -117,21 +126,23 @@ function LogicalView({ data }: { data: NetworkTopology }) {
   if (!ready) return null;
 
   return (
-    <div className="relative" style={{ height: "calc(100vh - 12rem)" }}>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={logicalNodeTypes}
-        edgeTypes={logicalEdgeTypes}
-        fitView
-        proOptions={{ hideAttribution: true }}
-        nodesDraggable
-        nodesConnectable={false}
-      >
-        <Background />
-      </ReactFlow>
-      <StackLegend stackColors={stackColors} />
-    </div>
+    <HighlightProvider edges={rawEdges}>
+      <div className="relative" style={{ height: "calc(100vh - 12rem)" }}>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={logicalNodeTypes}
+          edgeTypes={logicalEdgeTypes}
+          fitView
+          proOptions={{ hideAttribution: true }}
+          nodesDraggable
+          nodesConnectable={false}
+        >
+          <Background />
+        </ReactFlow>
+        <StackLegend stackColors={stackColors} />
+      </div>
+    </HighlightProvider>
   );
 }
 
@@ -142,7 +153,7 @@ function PhysicalView({ data }: { data: PlacementTopology }) {
     return (
       <EmptyState
         message="No nodes found in the cluster"
-        icon={<Server className="w-10 h-10 mb-3 opacity-40" />}
+        icon={<Server className="size-10 mb-3 opacity-40" />}
       />
     );
   }

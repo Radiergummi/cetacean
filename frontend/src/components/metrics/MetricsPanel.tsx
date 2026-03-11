@@ -3,8 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { RefreshCw, Play, Square, ChevronRight } from "lucide-react";
 import TimeSeriesChart from "./TimeSeriesChart";
 import type { Threshold } from "./TimeSeriesChart";
-import SegmentedControl from "./SegmentedControl";
-import type { Segment } from "./SegmentedControl";
+import SegmentedControl from "../SegmentedControl";
+import type { Segment } from "../SegmentedControl";
 
 interface ChartDef {
   title: string;
@@ -62,16 +62,15 @@ export default function MetricsPanel({ charts, header }: Props) {
         className="h-8 w-8 flex items-center justify-center rounded-md border hover:bg-muted"
         title="Refresh"
       >
-        <RefreshCw className="w-3.5 h-3.5" />
+        <RefreshCw className="size-3.5" />
       </button>
       <button
         onClick={() => setAutoRefresh((v) => !v)}
+        aria-pressed={autoRefresh}
         title={autoRefresh ? "Pause auto-refresh" : "Auto-refresh (30s)"}
-        className={`h-8 w-8 flex items-center justify-center rounded-md border ${
-          autoRefresh ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"
-        }`}
+        className="h-8 w-8 flex items-center justify-center rounded-md border hover:bg-muted aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:border-primary"
       >
-        {autoRefresh ? <Square className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+        {autoRefresh ? <Square className="size-3.5" /> : <Play className="size-3.5" />}
       </button>
     </div>
   );
@@ -82,7 +81,7 @@ export default function MetricsPanel({ charts, header }: Props) {
       onClick={() => setCollapsed((c) => !c)}
       className="flex items-center gap-1.5 text-sm font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
     >
-      <ChevronRight className={`h-4 w-4 transition-transform ${collapsed ? "" : "rotate-90"}`} />
+      <ChevronRight data-open={!collapsed || undefined} className="h-4 w-4 transition-transform data-open:rotate-90" />
       {header ?? "Metrics"}
     </button>
   );

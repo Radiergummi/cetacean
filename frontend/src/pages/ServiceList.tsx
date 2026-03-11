@@ -7,7 +7,7 @@ import { useViewMode } from "../hooks/useViewMode";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { api } from "../api/client";
 import type { ServiceListItem } from "../api/types";
-import SearchInput from "../components/SearchInput";
+import { SearchInput } from "../components/search";
 import PageHeader from "../components/PageHeader";
 import DataTable, { type Column } from "../components/DataTable";
 import SortIndicator from "../components/SortIndicator";
@@ -20,10 +20,12 @@ import ResourceName from "../components/ResourceName";
 
 function ReplicaHealth({ running, desired }: { running: number; desired: number }) {
   const healthy = running >= desired && desired > 0;
-  const color = healthy ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400";
 
   return (
-    <span className={`tabular-nums font-medium ${color}`}>
+    <span
+      data-healthy={healthy || undefined}
+      className="tabular-nums font-medium text-red-600 dark:text-red-400 data-healthy:text-green-600 dark:data-healthy:text-green-400"
+    >
       {running}/{desired}
     </span>
   );

@@ -4,7 +4,7 @@ import { api } from "../api/client";
 import type { StackSummary } from "../api/types";
 import { useSSE } from "../hooks/useSSE";
 import { useSearchParam } from "../hooks/useSearchParam";
-import SearchInput from "../components/SearchInput";
+import { SearchInput } from "../components/search";
 import PageHeader from "../components/PageHeader";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";

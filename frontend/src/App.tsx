@@ -1,9 +1,10 @@
+import {Menu, X} from "lucide-react";
 import type React from "react";
 import {useState} from "react";
 import {BrowserRouter, Link, Route, Routes, useLocation} from "react-router-dom";
 import ConnectionStatus from "./components/ConnectionStatus";
 import ErrorBoundary from "./components/ErrorBoundary";
-import GlobalSearch from "./components/GlobalSearch";
+import {GlobalSearch} from "./components/search";
 import ThemeToggle from "./components/ThemeToggle";
 import {SSEProvider} from "./hooks/SSEContext";
 import ClusterOverview from "./pages/ClusterOverview";
@@ -13,18 +14,19 @@ import NetworkDetail from "./pages/NetworkDetail";
 import NetworkList from "./pages/NetworkList";
 import NodeDetail from "./pages/NodeDetail";
 import NodeList from "./pages/NodeList";
+import NotFound from "./pages/NotFound";
+import SearchPage from "./pages/SearchPage";
 import SecretDetail from "./pages/SecretDetail";
 import SecretList from "./pages/SecretList";
 import ServiceDetail from "./pages/ServiceDetail";
 import ServiceList from "./pages/ServiceList";
 import StackDetail from "./pages/StackDetail";
 import StackList from "./pages/StackList";
+import SwarmPage from "./pages/SwarmPage";
 import TaskDetail from "./pages/TaskDetail";
 import Topology from "./pages/Topology";
 import VolumeDetail from "./pages/VolumeDetail";
 import VolumeList from "./pages/VolumeList";
-import NotFound from "./pages/NotFound";
-import SearchPage from "./pages/SearchPage";
 
 function Layout({children}: { children: React.ReactNode }) {
     const [menuOpen, setMenuOpen] = useState(false);
@@ -38,42 +40,35 @@ function Layout({children}: { children: React.ReactNode }) {
                             <Link to="/" className="font-semibold text-base tracking-tight">
                                 Cetacean
                             </Link>
+
                             <span className="hidden sm:block text-border">|</span>
+
                             <ConnectionStatus/>
                         </div>
-                        <div className="flex items-center gap-1">
-                            <GlobalSearch/>
-                            <div className="hidden md:flex items-center gap-1">
+
+                        <div className="flex items-center gap-3">
+                            <div className="hidden lg:flex items-center gap-1">
                                 <NavLinks/>
                             </div>
+
                             <ThemeToggle/>
+                            <GlobalSearch/>
+
                             <button
-                                className="md:hidden p-2 rounded-md hover:bg-muted"
+                                className="lg:hidden p-2 rounded-md hover:bg-muted"
                                 onClick={() => setMenuOpen(!menuOpen)}
                                 aria-label="Toggle menu"
                             >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    {menuOpen ? (
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M6 18L18 6M6 6l12 12"
-                                        />
-                                    ) : (
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M4 6h16M4 12h16M4 18h16"
-                                        />
-                                    )}
-                                </svg>
+                                {menuOpen ? (
+                                    <X className="text-sm size-5"/>
+                                ) : (
+                                    <Menu className="text-sm size-5"/>
+                                )}
                             </button>
                         </div>
                     </div>
                     {menuOpen && (
-                        <div className="md:hidden flex flex-col gap-1 pb-3" onClick={() => setMenuOpen(false)}>
+                        <div className="lg:hidden w-full flex flex-col gap-1 py-3" onClick={() => setMenuOpen(false)}>
                             <NavLinks/>
                         </div>
                     )}
@@ -96,6 +91,7 @@ function NavLinks() {
         {to: "/secrets", label: "Secrets"},
         {to: "/networks", label: "Networks"},
         {to: "/volumes", label: "Volumes"},
+        {to: "/swarm", label: "Swarm"},
         {to: "/topology", label: "Topology"},
     ];
     return (
@@ -106,9 +102,8 @@ function NavLinks() {
                     <Link
                         key={to}
                         to={to}
-                        className={`text-sm px-3 py-1.5 rounded-md transition-colors ${active
-                            ? "bg-muted text-foreground font-medium"
-                            : "text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}
+                        aria-current={active ? "page" : undefined}
+                        className="text-sm px-3 py-1.5 rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted/50 aria-[current=page]:bg-muted aria-[current=page]:text-foreground aria-[current=page]:font-medium"
                     >
                         {label}
                     </Link>
@@ -140,6 +135,7 @@ export default function App() {
                         <Route path="/networks/:id" element={<NetworkDetail/>}/>
                         <Route path="/volumes" element={<VolumeList/>}/>
                         <Route path="/volumes/:name" element={<VolumeDetail/>}/>
+                        <Route path="/swarm" element={<SwarmPage/>}/>
                         <Route path="/topology" element={<Topology/>}/>
                         <Route path="/search" element={<SearchPage/>}/>
                         <Route path="*" element={<NotFound/>}/>

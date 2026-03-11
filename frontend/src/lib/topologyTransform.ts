@@ -49,6 +49,7 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
   const edges: Edge[] = [];
 
   const networkMap = new Map(data.networks.map((n) => [n.id, n]));
+  const serviceMap = new Map(data.nodes.map((s) => [s.id, s]));
 
   // Collect unique stacks and assign colors
   const stacks = new Set<string>();
@@ -120,6 +121,8 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
     return ka < kb ? -1 : ka > kb ? 1 : 0;
   });
   for (const edge of sortedEdges) {
+    const srcSvc = serviceMap.get(edge.source);
+    const tgtSvc = serviceMap.get(edge.target);
     const networks = [...edge.networks].sort().map((netId) => {
       const net = networkMap.get(netId);
       return {
@@ -128,15 +131,32 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
         driver: net?.driver ?? "unknown",
         scope: net?.scope ?? "swarm",
         stack: net?.stack,
-        color: net?.stack ? stackColorMap.get(net.stack) ?? hashColor(netId) : undefined,
+        color: net?.stack ? (stackColorMap.get(net.stack) ?? hashColor(netId)) : undefined,
       };
     });
+
+    // Collect non-default aliases per endpoint (exclude aliases matching the service name)
+    const sourceAliases: string[] = [];
+    const targetAliases: string[] = [];
+    for (const netId of edge.networks) {
+      for (const alias of srcSvc?.networkAliases?.[netId] ?? []) {
+        if (alias !== srcSvc?.name && !sourceAliases.includes(alias)) sourceAliases.push(alias);
+      }
+      for (const alias of tgtSvc?.networkAliases?.[netId] ?? []) {
+        if (alias !== tgtSvc?.name && !targetAliases.includes(alias)) targetAliases.push(alias);
+      }
+    }
+
     edges.push({
       id: `edge:${edge.source}:${edge.target}`,
       source: edge.source,
       target: edge.target,
       type: "networkEdge",
-      data: { networks },
+      data: {
+        networks,
+        sourceAliases: sourceAliases.length > 0 ? sourceAliases : undefined,
+        targetAliases: targetAliases.length > 0 ? targetAliases : undefined,
+      },
     });
   }
 
@@ -155,11 +175,20 @@ export function buildPhysicalFlow(data: PlacementTopology): { nodes: Node[] } {
   let y = 0;
   for (const clusterNode of sortedClusterNodes) {
     // Aggregate tasks by service
-    const serviceMap = new Map<string, { serviceName: string; image: string; running: number; total: number; states: string[] }>();
+    const serviceMap = new Map<
+      string,
+      { serviceName: string; image: string; running: number; total: number; states: string[] }
+    >();
     for (const task of clusterNode.tasks) {
       let entry = serviceMap.get(task.serviceId);
       if (!entry) {
-        entry = { serviceName: task.serviceName, image: task.image, running: 0, total: 0, states: [] };
+        entry = {
+          serviceName: task.serviceName,
+          image: task.image,
+          running: 0,
+          total: 0,
+          states: [],
+        };
         serviceMap.set(task.serviceId, entry);
       }
       entry.total++;
@@ -168,7 +197,7 @@ export function buildPhysicalFlow(data: PlacementTopology): { nodes: Node[] } {
     }
 
     const services = [...serviceMap.entries()]
-      .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
       .map(([serviceId, s]) => ({ serviceId, ...s }));
 
     const rows = Math.max(1, Math.ceil(services.length / COLS));

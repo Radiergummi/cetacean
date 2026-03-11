@@ -91,7 +91,11 @@ export function SSEProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  return <SSEContext.Provider value={{ connected, lastEventAt, subscribe }}>{children}</SSEContext.Provider>;
+  return (
+    <SSEContext.Provider value={{ connected, lastEventAt, subscribe }}>
+      {children}
+    </SSEContext.Provider>
+  );
 }
 
 export function useSSEConnection() {

@@ -1,9 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import {
-  X,
-  Clock,
-  ChevronDown,
-} from "lucide-react";
+import { X, Clock, ChevronDown } from "lucide-react";
 import type { TimeRange, Level } from "./log-utils";
 import { PRESETS, toLocalInput, formatShortDate } from "./log-utils";
 
@@ -58,16 +54,13 @@ export function TimeRangeSelector({
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className={`h-8 inline-flex items-center gap-1.5 px-2.5 text-xs border rounded-md ${
-          value.since || value.until
-            ? "bg-primary/10 border-primary/30 text-primary"
-            : "bg-background hover:bg-muted"
-        }`}
+        data-active={value.since || value.until || undefined}
+        className="h-8 inline-flex items-center gap-1.5 px-2.5 text-xs border rounded-md bg-background hover:bg-muted data-active:bg-primary/10 data-active:border-primary/30 data-active:text-primary"
         title="Time range"
       >
-        <Clock className="w-3.5 h-3.5" />
+        <Clock className="size-3.5" />
         <span className="max-w-32 truncate">{value.label}</span>
-        <ChevronDown className="w-3 h-3 opacity-50" />
+        <ChevronDown className="size-3 opacity-50" />
       </button>
 
       {open && (
@@ -85,11 +78,8 @@ export function TimeRangeSelector({
                     onChange(p.getValue());
                     setOpen(false);
                   }}
-                  className={`px-2 py-1 text-xs rounded-md ${
-                    value.label === p.label
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted hover:bg-muted/80 text-foreground"
-                  }`}
+                  aria-selected={value.label === p.label || undefined}
+                  className="px-2 py-1 text-xs rounded-md bg-muted hover:bg-muted/80 text-foreground aria-selected:bg-primary aria-selected:text-primary-foreground"
                 >
                   {p.label}
                 </button>
@@ -116,7 +106,7 @@ export function TimeRangeSelector({
                     onClick={() => setCustomSince("")}
                     className="text-muted-foreground hover:text-foreground"
                   >
-                    <X className="w-3 h-3" />
+                    <X className="size-3" />
                   </button>
                 )}
               </label>
@@ -133,7 +123,7 @@ export function TimeRangeSelector({
                     onClick={() => setCustomUntil("")}
                     className="text-muted-foreground hover:text-foreground"
                   >
-                    <X className="w-3 h-3" />
+                    <X className="size-3" />
                   </button>
                 )}
               </label>
@@ -190,11 +180,8 @@ export function StreamFilterToggle({
         <button
           key={opt}
           onClick={() => onChange(opt)}
-          className={`px-2 h-full text-xs ${
-            value === opt
-              ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:text-foreground hover:bg-muted"
-          }`}
+          aria-pressed={value === opt}
+          className="px-2 h-full text-xs text-muted-foreground hover:text-foreground hover:bg-muted aria-pressed:bg-primary aria-pressed:text-primary-foreground"
           title={opt === "all" ? "All streams" : opt}
         >
           {opt === "all" ? "All" : opt}
@@ -219,11 +206,8 @@ export function ToolbarButton({
     <button
       onClick={onClick}
       title={title}
-      className={`h-8 w-8 flex items-center justify-center rounded-md border ${
-        active
-          ? "bg-primary text-primary-foreground border-primary"
-          : "bg-background hover:bg-muted border-border"
-      }`}
+      aria-pressed={active || undefined}
+      className="h-8 w-8 flex items-center justify-center rounded-md border border-border bg-background hover:bg-muted aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:border-primary"
     >
       {icon}
     </button>

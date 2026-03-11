@@ -7,7 +7,7 @@ import LogViewer from "./LogViewer";
 Element.prototype.scrollIntoView = vi.fn();
 
 // Mock the api module
-vi.mock("../api/client", () => ({
+vi.mock("../../api/client", () => ({
   api: {
     serviceLogs: vi.fn(),
     serviceLogsStreamURL: vi.fn(),
@@ -15,7 +15,7 @@ vi.mock("../api/client", () => ({
   },
 }));
 
-import { api } from "../api/client";
+import { api } from "../../api/client";
 const mockServiceLogs = vi.mocked(api.serviceLogs);
 const mockServiceLogsStreamURL = vi.mocked(api.serviceLogsStreamURL);
 
@@ -23,7 +23,10 @@ function renderWithRouter(ui: React.ReactElement, initialEntries = ["/"]) {
   return render(<MemoryRouter initialEntries={initialEntries}>{ui}</MemoryRouter>);
 }
 
-function logResponse(lines: { message: string; timestamp?: string; stream?: string }[]) {
+function logResponse(
+  lines: { message: string; timestamp?: string; stream?: string }[],
+  hasMore = false,
+) {
   const mapped = lines.map((l) => ({
     timestamp: l.timestamp ?? "",
     message: l.message,
@@ -33,6 +36,7 @@ function logResponse(lines: { message: string; timestamp?: string; stream?: stri
     lines: mapped,
     oldest: mapped[0]?.timestamp ?? "",
     newest: mapped[mapped.length - 1]?.timestamp ?? "",
+    hasMore,
   };
 }
 
@@ -97,11 +101,13 @@ describe("LogViewer", () => {
   });
 
   it("shows empty state when no logs", async () => {
-    mockServiceLogs.mockResolvedValue({ lines: [], oldest: "", newest: "" });
+    mockServiceLogs.mockResolvedValue({ lines: [], oldest: "", newest: "", hasMore: false });
     renderWithRouter(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => {
-      expect(screen.getByText("No logs yet — the container hasn't produced any output")).toBeInTheDocument();
+      expect(
+        screen.getByText("No logs yet — the container hasn't produced any output"),
+      ).toBeInTheDocument();
     });
   });
 
@@ -126,11 +132,7 @@ describe("LogViewer", () => {
 
   it("navigates between search matches with Enter", async () => {
     mockServiceLogs.mockResolvedValue(
-      logResponse([
-        { message: "foo bar" },
-        { message: "baz" },
-        { message: "foo qux" },
-      ]),
+      logResponse([{ message: "foo bar" }, { message: "baz" }, { message: "foo qux" }]),
     );
     renderWithRouter(<LogViewer serviceId="svc1" />);
 
@@ -308,25 +310,22 @@ describe("LogViewer", () => {
   });
 
   it("loads older logs when clicking load older button", async () => {
-    // Need >= 500 lines so hasOlderLogs is true (lines.length >= limit)
-    const initialLines = Array.from({ length: 500 }, (_, i) => ({
+    const initialLines = Array.from({ length: 10 }, (_, i) => ({
       message: `line ${i}`,
-      timestamp: `2024-01-01T00:${String(Math.floor(i / 60)).padStart(2, "0")}:${String(i % 60).padStart(2, "0")}Z`,
+      timestamp: `2024-01-01T00:00:${String(i + 10).padStart(2, "0")}Z`,
     }));
     mockServiceLogs
-      .mockResolvedValueOnce(logResponse(initialLines))
+      .mockResolvedValueOnce(logResponse(initialLines, true))
       .mockResolvedValueOnce(
-        logResponse([
-          { message: "older line", timestamp: "2024-01-01T00:00:01Z" },
-        ]),
+        logResponse([{ message: "older line", timestamp: "2024-01-01T00:00:01Z" }]),
       );
 
     renderWithRouter(<LogViewer serviceId="svc1" />);
 
-    // Wait for the "Load older logs" button (confirms data loaded and hasOlderLogs=true)
-    await waitFor(() => expect(screen.getByText("Load older logs")).toBeInTheDocument());
+    // Wait for the "Load older" button (confirms data loaded and hasOlderLogs=true)
+    await waitFor(() => expect(screen.getByText("Load older")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText("Load older logs"));
+    fireEvent.click(screen.getByText("Load older"));
 
     await waitFor(() => {
       expect(mockServiceLogs).toHaveBeenCalledWith(
@@ -345,9 +344,7 @@ describe("LogViewer", () => {
         ]),
       )
       .mockResolvedValueOnce(
-        logResponse([
-          { message: "newer line", timestamp: "2024-01-01T00:00:03Z" },
-        ]),
+        logResponse([{ message: "newer line", timestamp: "2024-01-01T00:00:03Z" }]),
       );
 
     renderWithRouter(<LogViewer serviceId="svc1" />);
@@ -356,9 +353,21 @@ describe("LogViewer", () => {
 
     // Simulate scroll to bottom
     const container = document.querySelector(".log-panel")!;
-    Object.defineProperty(container, "scrollTop", { value: 450, writable: true, configurable: true });
-    Object.defineProperty(container, "scrollHeight", { value: 500, writable: true, configurable: true });
-    Object.defineProperty(container, "clientHeight", { value: 400, writable: true, configurable: true });
+    Object.defineProperty(container, "scrollTop", {
+      value: 450,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(container, "scrollHeight", {
+      value: 500,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(container, "clientHeight", {
+      value: 400,
+      writable: true,
+      configurable: true,
+    });
     fireEvent.scroll(container);
 
     await waitFor(() => {

@@ -9,7 +9,7 @@ import FetchError from "../components/FetchError";
 import ActivityFeed from "../components/ActivityFeed";
 import ServiceRefList from "../components/ServiceRefList";
 import { useSSE } from "../hooks/useSSE";
-import { ResourceId, ResourceLink, Timestamp } from "../components/data";
+import { KeyValuePills, ResourceId, ResourceLink, Timestamp } from "../components/data";
 
 function NetworkFlags({ network }: { network: Network }) {
   const flags = [];
@@ -98,7 +98,10 @@ export default function NetworkDetail() {
         setServices(d.services ?? []);
       })
       .catch(() => setError(true));
-    api.history({ resourceId: id, limit: 10 }).then(setHistory).catch(() => {});
+    api
+      .history({ resourceId: id, limit: 10 })
+      .then(setHistory)
+      .catch(() => {});
   }, [id]);
 
   useEffect(fetchData, [fetchData]);
@@ -112,9 +115,7 @@ export default function NetworkDetail() {
   if (!network) return <LoadingDetail />;
 
   const labels = network.Labels || {};
-  const labelEntries = Object.entries(labels).filter(
-    ([k]) => k !== "com.docker.stack.namespace",
-  );
+  const labelEntries = Object.entries(labels).filter(([k]) => k !== "com.docker.stack.namespace");
   const stack = labels["com.docker.stack.namespace"];
   const options = Object.entries(network.Options || {});
 
@@ -142,24 +143,7 @@ export default function NetworkDetail() {
           <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
             Driver Options
           </h2>
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="text-left p-3 text-sm font-medium">Key</th>
-                  <th className="text-left p-3 text-sm font-medium">Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {options.map(([k, v]) => (
-                  <tr key={k} className="border-b last:border-b-0">
-                    <td className="p-3 text-sm font-mono">{k}</td>
-                    <td className="p-3 text-sm font-mono">{v}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <KeyValuePills entries={options} />
         </div>
       )}
 
@@ -168,28 +152,15 @@ export default function NetworkDetail() {
           <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
             Labels
           </h2>
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="text-left p-3 text-sm font-medium">Key</th>
-                  <th className="text-left p-3 text-sm font-medium">Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {labelEntries.map(([k, v]) => (
-                  <tr key={k} className="border-b last:border-b-0">
-                    <td className="p-3 text-sm font-mono">{k}</td>
-                    <td className="p-3 text-sm font-mono">{v}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <KeyValuePills entries={labelEntries} />
         </div>
       )}
 
-      <ServiceRefList services={services} label="Connected Services" emptyMessage="No services using this network." />
+      <ServiceRefList
+        services={services}
+        label="Connected Services"
+        emptyMessage="No services using this network."
+      />
 
       {history.length > 0 && (
         <div>

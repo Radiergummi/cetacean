@@ -26,7 +26,11 @@ describe("ActivityFeed", () => {
         name: "web-app",
       },
     ];
-    render(<MemoryRouter><ActivityFeed entries={entries} /></MemoryRouter>);
+    render(
+      <MemoryRouter>
+        <ActivityFeed entries={entries} />
+      </MemoryRouter>,
+    );
     expect(screen.getByText("web-app")).toBeInTheDocument();
     expect(screen.getByText("updated")).toBeInTheDocument();
     expect(screen.getByText("service")).toBeInTheDocument();

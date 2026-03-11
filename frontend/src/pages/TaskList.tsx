@@ -5,7 +5,7 @@ import { useSortParams } from "../hooks/useSort";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { api } from "../api/client";
 import type { Task } from "../api/types";
-import SearchInput from "../components/SearchInput";
+import { SearchInput } from "../components/search";
 import PageHeader from "../components/PageHeader";
 import DataTable, { type Column } from "../components/DataTable";
 import SortIndicator from "../components/SortIndicator";

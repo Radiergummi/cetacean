@@ -1,6 +1,7 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { useNavigate } from "react-router-dom";
 import ResourceName from "../ResourceName";
+import { useHighlight } from "./HighlightContext";
 
 type ServiceCardData = {
   id: string;
@@ -18,20 +19,26 @@ type ServiceCardData = {
 
 export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCardData }) {
   const navigate = useNavigate();
+  const { hoveredId, neighbors, setHovered } = useHighlight();
   const running = data.runningReplicas ?? data.replicas;
 
   const statusColor =
     running === data.replicas ? "bg-green-500" : running > 0 ? "bg-yellow-500" : "bg-red-500";
 
+  const dimmed = hoveredId != null && hoveredId !== data.id && !neighbors.has(data.id);
+
   return (
     <div
-      className="w-56 rounded-lg bg-card shadow-sm p-3 cursor-pointer hover:shadow-md transition-shadow"
+      data-dimmed={dimmed || undefined}
+      className="w-56 rounded-lg bg-card shadow-sm p-3 cursor-pointer transition-all duration-200 data-dimmed:opacity-25 data-dimmed:grayscale-50"
       style={{
         borderWidth: 2,
         borderStyle: "solid",
         borderColor: data.stackColor ?? "var(--color-border)",
       }}
       onClick={() => navigate(`/services/${data.id}`)}
+      onMouseEnter={() => setHovered(data.id)}
+      onMouseLeave={() => setHovered(null)}
     >
       <div className="flex items-center justify-between gap-1 mb-1">
         <span className="font-medium text-sm truncate" title={data.name}>
@@ -47,7 +54,7 @@ export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCar
       </div>
 
       <div className="flex items-center gap-1.5 text-xs mb-1">
-        <span className={`inline-block w-2 h-2 rounded-full ${statusColor}`} />
+        <span className={`inline-block size-2 rounded-full ${statusColor}`} />
         <span>
           {running}/{data.replicas}
         </span>
@@ -64,10 +71,18 @@ export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCar
       {data.updateStatus && <div className="text-xs text-yellow-500 mt-1">Updating...</div>}
 
       {data.hasTargetEdge && (
-        <Handle type="target" position={Position.Left} className="!w-0 !h-0 !border-0 !bg-transparent" />
+        <Handle
+          type="target"
+          position={Position.Left}
+          className="!w-0 !h-0 !border-0 !bg-transparent"
+        />
       )}
       {data.hasSourceEdge && (
-        <Handle type="source" position={Position.Right} className="!w-0 !h-0 !border-0 !bg-transparent" />
+        <Handle
+          type="source"
+          position={Position.Right}
+          className="!w-0 !h-0 !border-0 !bg-transparent"
+        />
       )}
     </div>
   );

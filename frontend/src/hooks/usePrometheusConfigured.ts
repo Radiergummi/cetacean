@@ -17,11 +17,14 @@ export function usePrometheusConfigured(): boolean | null {
   useEffect(() => {
     if (cached != null) return;
     if (!inflight) {
-      inflight = api.cluster().then((s) => {
-        cached = s.prometheusConfigured;
-      }).catch(() => {
-        cached = false;
-      });
+      inflight = api
+        .cluster()
+        .then((s) => {
+          cached = s.prometheusConfigured;
+        })
+        .catch(() => {
+          cached = false;
+        });
     }
     inflight.then(() => setConfigured(cached));
   }, []);

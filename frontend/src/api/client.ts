@@ -20,6 +20,9 @@ import type {
   NotificationRuleStatus,
   StackSummary,
   SearchResponse,
+  SwarmInfo,
+  DiskUsageSummary,
+  Plugin,
 } from "./types";
 
 const BASE = "/api";
@@ -53,6 +56,7 @@ export interface LogResponse {
   lines: LogLine[];
   oldest: string;
   newest: string;
+  hasMore: boolean;
 }
 
 export interface ClusterSnapshot {
@@ -71,6 +75,7 @@ export interface ClusterSnapshot {
   totalCPU: number;
   totalMemory: number;
   prometheusConfigured: boolean;
+  localNodeID?: string;
 }
 
 export interface ClusterMetrics {
@@ -100,6 +105,8 @@ function buildListURL(path: string, params?: ListParams): string {
 
 export const api = {
   cluster: () => fetchJSON<ClusterSnapshot>("/cluster"),
+  swarm: () => fetchJSON<SwarmInfo>("/swarm"),
+  plugins: () => fetchJSON<Plugin[]>("/plugins"),
   clusterMetrics: () => fetchJSON<ClusterMetrics>("/cluster/metrics"),
   nodes: (params?: ListParams) => fetchJSON<PagedResponse<Node>>(buildListURL("/nodes", params)),
   node: (id: string) => fetchJSON<Node>(`/nodes/${id}`),
@@ -191,8 +198,9 @@ export const api = {
     return fetchJSON<any>(`/metrics/query_range?${params}`);
   },
   notificationRules: () => fetchJSON<NotificationRuleStatus[]>("/notifications/rules"),
+  diskUsage: () => fetchJSON<DiskUsageSummary[]>("/disk-usage"),
   search: (q: string, limit?: number) =>
     fetchJSON<SearchResponse>(
-      `/search?q=${encodeURIComponent(q)}${limit !== undefined ? `&limit=${limit}` : ""}`
+      `/search?q=${encodeURIComponent(q)}${limit !== undefined ? `&limit=${limit}` : ""}`,
     ),
 };

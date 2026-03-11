@@ -9,7 +9,7 @@ import FetchError from "../components/FetchError";
 import ActivityFeed from "../components/ActivityFeed";
 import ServiceRefList from "../components/ServiceRefList";
 import { useSSE } from "../hooks/useSSE";
-import { ResourceLink, Timestamp } from "../components/data";
+import { KeyValuePills, ResourceLink, Timestamp } from "../components/data";
 
 export default function VolumeDetail() {
   const { name } = useParams<{ name: string }>();
@@ -27,7 +27,10 @@ export default function VolumeDetail() {
         setServices(d.services ?? []);
       })
       .catch(() => setError(true));
-    api.history({ resourceId: name, limit: 10 }).then(setHistory).catch(() => {});
+    api
+      .history({ resourceId: name, limit: 10 })
+      .then(setHistory)
+      .catch(() => {});
   }, [name]);
 
   useEffect(fetchData, [fetchData]);
@@ -41,9 +44,7 @@ export default function VolumeDetail() {
   if (!volume) return <LoadingDetail />;
 
   const labels = volume.Labels || {};
-  const labelEntries = Object.entries(labels).filter(
-    ([k]) => k !== "com.docker.stack.namespace",
-  );
+  const labelEntries = Object.entries(labels).filter(([k]) => k !== "com.docker.stack.namespace");
   const stack = labels["com.docker.stack.namespace"];
   const options = Object.entries(volume.Options || {});
 
@@ -67,24 +68,7 @@ export default function VolumeDetail() {
           <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
             Driver Options
           </h2>
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="text-left p-3 text-sm font-medium">Key</th>
-                  <th className="text-left p-3 text-sm font-medium">Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {options.map(([k, v]) => (
-                  <tr key={k} className="border-b last:border-b-0">
-                    <td className="p-3 text-sm font-mono">{k}</td>
-                    <td className="p-3 text-sm font-mono">{v}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <KeyValuePills entries={options} />
         </div>
       )}
 
@@ -93,28 +77,15 @@ export default function VolumeDetail() {
           <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
             Labels
           </h2>
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="text-left p-3 text-sm font-medium">Key</th>
-                  <th className="text-left p-3 text-sm font-medium">Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {labelEntries.map(([k, v]) => (
-                  <tr key={k} className="border-b last:border-b-0">
-                    <td className="p-3 text-sm font-mono">{k}</td>
-                    <td className="p-3 text-sm font-mono">{v}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <KeyValuePills entries={labelEntries} />
         </div>
       )}
 
-      <ServiceRefList services={services} label="Mounted by Services" emptyMessage="No services using this volume." />
+      <ServiceRefList
+        services={services}
+        label="Mounted by Services"
+        emptyMessage="No services using this volume."
+      />
 
       {history.length > 0 && (
         <div>

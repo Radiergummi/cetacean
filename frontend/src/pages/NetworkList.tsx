@@ -6,7 +6,7 @@ import { useViewMode } from "../hooks/useViewMode";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { api } from "../api/client";
 import type { Network } from "../api/types";
-import SearchInput from "../components/SearchInput";
+import { SearchInput } from "../components/search";
 import PageHeader from "../components/PageHeader";
 import SortIndicator from "../components/SortIndicator";
 import ViewToggle from "../components/ViewToggle";
@@ -74,11 +74,21 @@ export default function NetworkList() {
       {networks.length === 0 ? (
         <EmptyState message={search ? "No networks match your search" : "No networks found"} />
       ) : viewMode === "table" ? (
-        <DataTable columns={columns} data={networks} keyFn={(n) => n.Id} onRowClick={(n) => navigate(`/networks/${n.Id}`)} />
+        <DataTable
+          columns={columns}
+          data={networks}
+          keyFn={(n) => n.Id}
+          onRowClick={(n) => navigate(`/networks/${n.Id}`)}
+        />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {networks.map((net) => (
-            <ResourceCard key={net.Id} title={<ResourceName name={net.Name} />} to={`/networks/${net.Id}`} meta={[net.Driver, net.Scope]} />
+            <ResourceCard
+              key={net.Id}
+              title={<ResourceName name={net.Name} />}
+              to={`/networks/${net.Id}`}
+              meta={[net.Driver, net.Scope]}
+            />
           ))}
         </div>
       )}

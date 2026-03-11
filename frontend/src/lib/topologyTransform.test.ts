@@ -33,7 +33,9 @@ describe("buildLogicalFlow", () => {
 
     // One edge with all networks collapsed
     expect(edges.length).toBe(1);
-    expect((edges[0].data as { networks: Array<{ name: string }> }).networks[0].name).toBe("app_net");
+    expect((edges[0].data as { networks: Array<{ name: string }> }).networks[0].name).toBe(
+      "app_net",
+    );
   });
 
   it("collapses multiple networks into a single edge per pair", () => {
@@ -50,7 +52,9 @@ describe("buildLogicalFlow", () => {
     };
     const { edges } = buildLogicalFlow(data);
     expect(edges.length).toBe(1);
-    const names = (edges[0].data as { networks: Array<{ name: string }> }).networks.map((n) => n.name).sort();
+    const names = (edges[0].data as { networks: Array<{ name: string }> }).networks
+      .map((n) => n.name)
+      .sort();
     expect(names).toEqual(["backend", "frontend"]);
   });
 });
@@ -66,9 +70,30 @@ describe("buildPhysicalFlow", () => {
           state: "ready",
           availability: "active",
           tasks: [
-            { id: "t1", serviceId: "svc1", serviceName: "web", state: "running", slot: 1, image: "nginx:1.25" },
-            { id: "t2", serviceId: "svc1", serviceName: "web", state: "running", slot: 2, image: "nginx:1.25" },
-            { id: "t3", serviceId: "svc2", serviceName: "api", state: "running", slot: 1, image: "node:20" },
+            {
+              id: "t1",
+              serviceId: "svc1",
+              serviceName: "web",
+              state: "running",
+              slot: 1,
+              image: "nginx:1.25",
+            },
+            {
+              id: "t2",
+              serviceId: "svc1",
+              serviceName: "web",
+              state: "running",
+              slot: 2,
+              image: "nginx:1.25",
+            },
+            {
+              id: "t3",
+              serviceId: "svc2",
+              serviceName: "api",
+              state: "running",
+              slot: 1,
+              image: "node:20",
+            },
           ],
         },
         {
@@ -78,7 +103,14 @@ describe("buildPhysicalFlow", () => {
           state: "ready",
           availability: "active",
           tasks: [
-            { id: "t4", serviceId: "svc1", serviceName: "web", state: "running", slot: 3, image: "nginx:1.25" },
+            {
+              id: "t4",
+              serviceId: "svc1",
+              serviceName: "web",
+              state: "running",
+              slot: 3,
+              image: "nginx:1.25",
+            },
           ],
         },
       ],
@@ -88,7 +120,9 @@ describe("buildPhysicalFlow", () => {
     expect(nodes.length).toBe(2);
     expect(nodes[0].type).toBe("physicalNode");
 
-    const n1Data = nodes[0].data as { services: { serviceId: string; running: number; total: number }[] };
+    const n1Data = nodes[0].data as {
+      services: { serviceId: string; running: number; total: number }[];
+    };
     expect(n1Data.services.length).toBe(2);
     const webSvc = n1Data.services.find((s) => s.serviceId === "svc1");
     expect(webSvc!.running).toBe(2);

@@ -23,14 +23,14 @@ describe("api client", () => {
     mockFetch.mockReturnValue(jsonResponse({ items: [{ ID: "n1" }], total: 1 }));
     const result = await api.nodes();
     expect(result).toEqual({ items: [{ ID: "n1" }], total: 1 });
-    expect(mockFetch).toHaveBeenCalledWith("/api/nodes");
+    expect(mockFetch).toHaveBeenCalledWith("/api/nodes", expect.objectContaining({ headers: { Accept: "application/json" } }));
   });
 
   it("fetches a single node", async () => {
     mockFetch.mockReturnValue(jsonResponse({ ID: "n1" }));
     const result = await api.node("n1");
     expect(result).toEqual({ ID: "n1" });
-    expect(mockFetch).toHaveBeenCalledWith("/api/nodes/n1");
+    expect(mockFetch).toHaveBeenCalledWith("/api/nodes/n1", expect.objectContaining({ headers: { Accept: "application/json" } }));
   });
 
   it("fetches cluster snapshot", async () => {
@@ -54,19 +54,19 @@ describe("api client", () => {
     mockFetch.mockReturnValue(jsonResponse(resp));
     const result = await api.serviceLogs("svc1", { limit: 100 });
     expect(result).toEqual(resp);
-    expect(mockFetch).toHaveBeenCalledWith("/api/services/svc1/logs?limit=100");
+    expect(mockFetch).toHaveBeenCalledWith("/api/services/svc1/logs?limit=100", expect.objectContaining({ headers: { Accept: "application/json" } }));
   });
 
   it("fetches service logs with stream filter", async () => {
     mockFetch.mockReturnValue(jsonResponse({ lines: [], oldest: "", newest: "" }));
     await api.serviceLogs("svc1", { limit: 100, stream: "stderr" });
-    expect(mockFetch).toHaveBeenCalledWith("/api/services/svc1/logs?limit=100&stream=stderr");
+    expect(mockFetch).toHaveBeenCalledWith("/api/services/svc1/logs?limit=100&stream=stderr", expect.objectContaining({ headers: { Accept: "application/json" } }));
   });
 
   it("builds metrics query params", async () => {
     mockFetch.mockReturnValue(jsonResponse({ status: "success" }));
     await api.metricsQuery("up", "1234");
-    expect(mockFetch).toHaveBeenCalledWith("/api/metrics/query?query=up&time=1234");
+    expect(mockFetch).toHaveBeenCalledWith("/api/metrics/query?query=up&time=1234", expect.objectContaining({ headers: { Accept: "application/json" } }));
   });
 
   it("builds metrics range query params", async () => {
@@ -74,6 +74,7 @@ describe("api client", () => {
     await api.metricsQueryRange("up", "100", "200", "15s");
     expect(mockFetch).toHaveBeenCalledWith(
       "/api/metrics/query_range?query=up&start=100&end=200&step=15s",
+      expect.objectContaining({ headers: { Accept: "application/json" } }),
     );
   });
 

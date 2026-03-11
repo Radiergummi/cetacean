@@ -6,8 +6,8 @@ import type { HistoryEntry } from "../api/types";
 import { useSSE } from "../hooks/useSSE";
 import PageHeader from "../components/PageHeader";
 import ActivityFeed from "../components/ActivityFeed";
-import PrometheusBanner from "../components/PrometheusBanner";
-import CapacitySection from "../components/CapacitySection";
+import DiskUsageSection from "../components/DiskUsageSection";
+import { PrometheusBanner, CapacitySection } from "../components/metrics";
 
 export default function ClusterOverview() {
   const [snapshot, setSnapshot] = useState<ClusterSnapshot | null>(null);
@@ -16,16 +16,22 @@ export default function ClusterOverview() {
   const [historyLoading, setHistoryLoading] = useState(true);
 
   const fetchSnapshot = useCallback(() => {
-    api.cluster().then((s) => {
-      setSnapshot((prev) => {
-        if (prev) prevRef.current = prev;
-        return s;
-      });
-    }).catch(() => {});
+    api
+      .cluster()
+      .then((s) => {
+        setSnapshot((prev) => {
+          if (prev) prevRef.current = prev;
+          return s;
+        });
+      })
+      .catch(() => {});
   }, []);
 
   const fetchHistory = useCallback(() => {
-    api.history({ limit: 25 }).then(setHistory).catch(() => {});
+    api
+      .history({ limit: 25 })
+      .then(setHistory)
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -75,24 +81,21 @@ export default function ClusterOverview() {
           label="Nodes"
           primary={`${snapshot.nodesReady}/${snapshot.nodeCount} ready`}
           secondary={
-            [snapshot.nodesDown > 0 && `${snapshot.nodesDown} down`, snapshot.nodesDraining > 0 && `${snapshot.nodesDraining} draining`].filter(Boolean).join(", ") || "all ready"
+            [
+              snapshot.nodesDown > 0 && `${snapshot.nodesDown} down`,
+              snapshot.nodesDraining > 0 && `${snapshot.nodesDraining} draining`,
+            ]
+              .filter(Boolean)
+              .join(", ") || "all ready"
           }
-          status={
-            snapshot.nodesDown > 0
-              ? "red"
-              : snapshot.nodesDraining > 0
-                ? "amber"
-                : "green"
-          }
+          status={snapshot.nodesDown > 0 ? "red" : snapshot.nodesDraining > 0 ? "amber" : "green"}
           to="/nodes"
         />
         <HealthCard
           label="Services"
           primary={`${snapshot.servicesConverged}/${snapshot.serviceCount} converged`}
           secondary={
-            snapshot.servicesDegraded > 0
-              ? `${snapshot.servicesDegraded} degraded`
-              : "all healthy"
+            snapshot.servicesDegraded > 0 ? `${snapshot.servicesDegraded} degraded` : "all healthy"
           }
           status={snapshot.servicesDegraded > 0 ? "amber" : "green"}
           to="/services"
@@ -115,7 +118,7 @@ export default function ClusterOverview() {
       </div>
 
       {/* Two-column: Capacity + Activity */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
             Capacity
@@ -131,6 +134,8 @@ export default function ClusterOverview() {
           </div>
         </div>
       </div>
+
+      <DiskUsageSection />
     </div>
   );
 }
@@ -177,7 +182,12 @@ function HealthCard({
     <div
       className={`rounded-lg border p-5 cursor-pointer hover:border-foreground/20 hover:shadow-sm transition-all ${borderColor} ${bgTint}`}
       onClick={() => navigate(to)}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate(to); } }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          navigate(to);
+        }
+      }}
       role="link"
       tabIndex={0}
     >
@@ -185,16 +195,13 @@ function HealthCard({
         {label}
       </div>
       <div className="flex items-center gap-2">
-        <span className={`text-2xl font-semibold tabular-nums ${primaryColor}`}>
-          {primary}
-        </span>
+        <span className={`text-2xl font-semibold tabular-nums ${primaryColor}`}>{primary}</span>
         {delta != null && delta !== 0 && (
           <span
-            className={`flex items-center gap-0.5 text-xs font-medium ${
-              delta > 0 ? "text-red-500" : "text-green-500"
-            }`}
+            data-negative={delta < 0 || undefined}
+            className="flex items-center gap-0.5 text-xs font-medium text-red-500 data-negative:text-green-500"
           >
-            {delta > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+            {delta > 0 ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
             {delta > 0 ? `+${delta}` : delta}
           </span>
         )}

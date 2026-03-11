@@ -29,15 +29,13 @@ vi.mock("../api/client", () => ({
   api: {
     cluster: vi.fn(),
     history: vi.fn().mockResolvedValue([]),
+    diskUsage: vi.fn().mockResolvedValue([]),
   },
 }));
 
-vi.mock("../components/PrometheusBanner", () => ({
-  default: () => null,
-}));
-
-vi.mock("../components/CapacitySection", () => ({
-  default: () => <div data-testid="capacity-section" />,
+vi.mock("../components/metrics", () => ({
+  PrometheusBanner: () => null,
+  CapacitySection: () => <div data-testid="capacity-section" />,
 }));
 
 vi.mock("../components/ActivityFeed", () => ({

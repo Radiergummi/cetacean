@@ -1,16 +1,17 @@
+import ResourceName from "@/components/ResourceName.tsx";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { useState, useEffect, useCallback } from "react";
 import { api } from "../api/client";
 import type { Task } from "../api/types";
-import { useSSE } from "../hooks/useSSE";
+import { ContainerImage, ResourceId, ResourceLink, Timestamp } from "../components/data";
 import ErrorBoundary from "../components/ErrorBoundary";
-import InfoCard from "../components/InfoCard";
-import TaskStatusBadge from "../components/TaskStatusBadge";
-import LogViewer from "../components/LogViewer";
-import PageHeader from "../components/PageHeader";
-import { LoadingDetail } from "../components/LoadingSkeleton";
 import FetchError from "../components/FetchError";
-import { ResourceId, ResourceLink, ContainerImage, Timestamp } from "../components/data";
+import InfoCard from "../components/InfoCard";
+import { LoadingDetail } from "../components/LoadingSkeleton";
+import { LogViewer } from "../components/log";
+import PageHeader from "../components/PageHeader";
+import TaskStatusBadge from "../components/TaskStatusBadge";
+import { useSSE } from "../hooks/useSSE";
 
 export default function TaskDetail() {
   const { id } = useParams<{ id: string }>();
@@ -18,22 +19,35 @@ export default function TaskDetail() {
   const [error, setError] = useState(false);
 
   const fetchData = useCallback(() => {
-    if (!id) return;
-    api.task(id).then(setTask).catch(() => setError(true));
+    if (!id) {
+      return;
+    }
+    api
+      .task(id)
+      .then(setTask)
+      .catch(() => setError(true));
   }, [id]);
 
   useEffect(fetchData, [fetchData]);
 
   useSSE(["task"], (e) => {
-    if (e.id === id) fetchData();
+    if (e.id === id) {
+      fetchData();
+    }
   });
 
-  if (error) return <FetchError message="Failed to load task" />;
-  if (!task) return <LoadingDetail />;
+  if (error) {
+    return <FetchError message="Failed to load task" />;
+  }
+  if (!task) {
+    return <LoadingDetail />;
+  }
 
   const serviceName = task.ServiceName || task.ServiceID.slice(0, 12);
   const nodeLabel = task.NodeHostname || task.NodeID.slice(0, 12);
-  const taskLabel = task.Slot ? `${serviceName} Replica #${task.Slot}` : `Task ${task.ID.slice(0, 12)}`;
+  const taskLabel = task.Slot
+    ? `${serviceName} Replica #${task.Slot}`
+    : `Task ${task.ID.slice(0, 12)}`;
   const exitCode = task.Status.ContainerStatus?.ExitCode;
   const containerId = task.Status.ContainerStatus?.ContainerID;
 
@@ -56,7 +70,11 @@ export default function TaskDetail() {
           <TaskStatusBadge state={task.Status.State} />
         </div>
         <InfoCard label="Desired State" value={task.DesiredState} />
-        <ResourceLink label="Service" name={serviceName} to={`/services/${task.ServiceID}`} />
+        <ResourceLink
+          label="Service"
+          name={<ResourceName name={serviceName} />}
+          to={`/services/${task.ServiceID}`}
+        />
         <ResourceLink label="Node" name={nodeLabel} to={`/nodes/${task.NodeID}`} />
         <InfoCard label="Slot" value={task.Slot ? String(task.Slot) : "\u2014"} />
         <ContainerImage image={task.Spec.ContainerSpec.Image} />

@@ -1,6 +1,7 @@
 import { EdgeLabelRenderer, type EdgeProps, getSmoothStepPath } from "@xyflow/react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useHighlight } from "./HighlightContext";
 
 type NetworkInfo = {
   id: string;
@@ -14,6 +15,8 @@ type NetworkInfo = {
 type NetworkEdgeData = {
   networks: NetworkInfo[];
   bendPoints?: Array<{ x: number; y: number }>;
+  sourceAliases?: string[];
+  targetAliases?: string[];
 };
 
 /** Snap points so each segment is strictly horizontal or vertical */
@@ -72,6 +75,8 @@ function buildOrthogonalPath(points: Array<{ x: number; y: number }>, radius = 6
 
 export default function NetworkEdge({
   id,
+  source,
+  target,
   sourceX,
   sourceY,
   targetX,
@@ -82,12 +87,18 @@ export default function NetworkEdge({
 }: EdgeProps & { data: NetworkEdgeData }) {
   const [hovered, setHovered] = useState(false);
   const navigate = useNavigate();
+  const { hoveredId } = useHighlight();
+
+  const highlighted = hoveredId != null && (source === hoveredId || target === hoveredId);
+  const dimmed = hoveredId != null && !highlighted;
 
   const isStackNetwork = data.networks.some((n) => n.color != null);
   const color = isStackNetwork
     ? data.networks.find((n) => n.color)!.color!
     : "var(--color-muted-foreground)";
-  const strokeWidth = hovered ? 2 : isStackNetwork ? 1.5 : 1;
+
+  const baseWidth = isStackNetwork ? 1.5 : 1;
+  const strokeWidth = highlighted ? 2.5 : hovered ? 2 : baseWidth;
 
   let edgePath: string;
   let labelX: number;
@@ -116,13 +127,20 @@ export default function NetworkEdge({
 
   return (
     <>
+      {/* Visible path */}
       <path
         id={id}
         d={edgePath}
-        style={{ stroke: color, strokeWidth }}
+        data-highlighted={highlighted || undefined}
+        data-dimmed={dimmed || undefined}
+        style={{
+          stroke: color,
+          strokeWidth,
+        }}
         fill="none"
-        className="react-flow__edge-path transition-all"
+        className="react-flow__edge-path transition-all data-dimmed:opacity-15 data-highlighted:opacity-100 data-highlighted:[stroke-dasharray:6_4] data-highlighted:topology-edge-flow"
       />
+      {/* Hover target (wide invisible path) */}
       <path
         d={edgePath}
         strokeWidth={16}
@@ -131,8 +149,28 @@ export default function NetworkEdge({
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       />
-      {hovered && (
-        <EdgeLabelRenderer>
+      <EdgeLabelRenderer>
+        {data.sourceAliases && !dimmed && (
+          <div
+            className="absolute rounded bg-muted/90 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground pointer-events-none whitespace-nowrap"
+            style={{
+              transform: `translate(-100%, -50%) translate(${sourceX - 4}px, ${sourceY}px)`,
+            }}
+          >
+            {data.sourceAliases.join(", ")}
+          </div>
+        )}
+        {data.targetAliases && !dimmed && (
+          <div
+            className="absolute rounded bg-muted/90 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground pointer-events-none whitespace-nowrap"
+            style={{
+              transform: `translate(0%, -50%) translate(${targetX + 4}px, ${targetY}px)`,
+            }}
+          >
+            {data.targetAliases.join(", ")}
+          </div>
+        )}
+        {hovered && (
           <div
             className="absolute rounded-lg bg-popover border shadow-md px-2.5 py-1.5 text-xs"
             style={{
@@ -150,7 +188,7 @@ export default function NetworkEdge({
                 }}
               >
                 <span
-                  className="inline-block w-2 h-2 rounded-full shrink-0"
+                  className="inline-block size-2 rounded-full shrink-0"
                   style={{ backgroundColor: net.color ?? "var(--color-muted-foreground)" }}
                 />
                 <span className="font-medium">{net.name}</span>
@@ -160,8 +198,8 @@ export default function NetworkEdge({
               </div>
             ))}
           </div>
-        </EdgeLabelRenderer>
-      )}
+        )}
+      </EdgeLabelRenderer>
     </>
   );
 }

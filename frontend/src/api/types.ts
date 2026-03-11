@@ -84,6 +84,7 @@ export interface Service {
         MaxReplicas?: number;
       };
       LogDriver?: { Name: string; Options?: Record<string, string> };
+      Networks?: Array<{ Target: string; Aliases?: string[] }>;
     };
     Mode: {
       Replicated?: { Replicas: number };
@@ -121,6 +122,10 @@ export interface Service {
       TargetPort: number;
       PublishedPort: number;
       PublishMode: string;
+    }>;
+    VirtualIPs?: Array<{
+      NetworkID: string;
+      Addr: string;
     }>;
   };
   UpdateStatus?: {
@@ -259,6 +264,7 @@ export interface TopoServiceNode {
   ports?: string[];
   mode: string;
   updateStatus?: string;
+  networkAliases?: Record<string, string[]>;
 }
 
 export interface TopoEdge {
@@ -348,8 +354,14 @@ export interface NotificationRuleStatus {
 
 // Global search
 export type SearchResourceType =
-  | "services" | "stacks" | "nodes" | "tasks"
-  | "configs" | "secrets" | "networks" | "volumes";
+  | "services"
+  | "stacks"
+  | "nodes"
+  | "tasks"
+  | "configs"
+  | "secrets"
+  | "networks"
+  | "volumes";
 
 export interface SearchResult {
   id: string;
@@ -363,4 +375,63 @@ export interface SearchResponse {
   results: Partial<Record<SearchResourceType, SearchResult[]>>;
   counts: Partial<Record<SearchResourceType, number>>;
   total: number;
+}
+
+export interface SwarmInfo {
+  swarm: {
+    ID: string;
+    CreatedAt: string;
+    UpdatedAt: string;
+    Spec: {
+      Annotations: { Name: string; Labels: Record<string, string> };
+      Orchestration: { TaskHistoryRetentionLimit?: number };
+      Raft: {
+        SnapshotInterval: number;
+        KeepOldSnapshots?: number;
+        LogEntriesForSlowFollowers: number;
+        ElectionTick: number;
+        HeartbeatTick: number;
+      };
+      Dispatcher: { HeartbeatPeriod: number };
+      CAConfig: {
+        NodeCertExpiry: number;
+        ExternalCAs?: Array<{ Protocol: string; URL: string; Options?: Record<string, string> }>;
+        ForceRotate: number;
+      };
+      TaskDefaults: {
+        LogDriver?: { Name: string; Options?: Record<string, string> };
+      };
+      EncryptionConfig: { AutoLockManagers: boolean };
+    };
+    TLSInfo: {
+      TrustRoot: string;
+      CertIssuerSubject: string;
+      CertIssuerPublicKey: string;
+    };
+    RootRotationInProgress: boolean;
+    DefaultAddrPool: string[];
+    SubnetSize: number;
+    DataPathPort: number;
+    JoinTokens: { Worker: string; Manager: string };
+  };
+  managerAddr: string;
+}
+
+export interface Plugin {
+  Id?: string;
+  Name: string;
+  Enabled: boolean;
+  PluginReference?: string;
+  Config: {
+    Description: string;
+    Interface: { Types: Array<{ Prefix: string; Capability: string; Description: string }> };
+  };
+}
+
+export interface DiskUsageSummary {
+  type: "images" | "containers" | "volumes" | "buildCache";
+  count: number;
+  active: number;
+  totalSize: number;
+  reclaimable: number;
 }

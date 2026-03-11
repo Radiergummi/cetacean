@@ -8,7 +8,7 @@ import FetchError from "../components/FetchError";
 import ActivityFeed from "../components/ActivityFeed";
 import ServiceRefList from "../components/ServiceRefList";
 import { useSSE } from "../hooks/useSSE";
-import { ResourceId, ResourceLink, Timestamp } from "../components/data";
+import { KeyValuePills, ResourceId, ResourceLink, Timestamp } from "../components/data";
 
 export default function SecretDetail() {
   const { id } = useParams<{ id: string }>();
@@ -26,7 +26,10 @@ export default function SecretDetail() {
         setServices(d.services ?? []);
       })
       .catch(() => setError(true));
-    api.history({ resourceId: id, limit: 10 }).then(setHistory).catch(() => {});
+    api
+      .history({ resourceId: id, limit: 10 })
+      .then(setHistory)
+      .catch(() => {});
   }, [id]);
 
   useEffect(fetchData, [fetchData]);
@@ -41,9 +44,7 @@ export default function SecretDetail() {
 
   const name = secret.Spec.Name || secret.ID;
   const labels = secret.Spec.Labels || {};
-  const labelEntries = Object.entries(labels).filter(
-    ([k]) => k !== "com.docker.stack.namespace",
-  );
+  const labelEntries = Object.entries(labels).filter(([k]) => k !== "com.docker.stack.namespace");
   const stack = labels["com.docker.stack.namespace"];
 
   return (
@@ -69,28 +70,15 @@ export default function SecretDetail() {
           <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
             Labels
           </h2>
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="text-left p-3 text-sm font-medium">Key</th>
-                  <th className="text-left p-3 text-sm font-medium">Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {labelEntries.map(([k, v]) => (
-                  <tr key={k} className="border-b last:border-b-0">
-                    <td className="p-3 text-sm font-mono">{k}</td>
-                    <td className="p-3 text-sm font-mono">{v}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <KeyValuePills entries={labelEntries} />
         </div>
       )}
 
-      <ServiceRefList services={services} label="Used by Services" emptyMessage="No services using this secret." />
+      <ServiceRefList
+        services={services}
+        label="Used by Services"
+        emptyMessage="No services using this secret."
+      />
 
       {history.length > 0 && (
         <div>

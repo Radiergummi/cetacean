@@ -28,7 +28,7 @@ export default class ErrorBoundary extends Component<Props, State> {
       if (this.props.inline) {
         return (
           <div className="flex items-center gap-2 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-3 text-sm text-red-700 dark:text-red-400">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <AlertTriangle className="size-4 shrink-0" />
             <span className="truncate">{this.state.error.message}</span>
             <button
               onClick={() => this.setState({ error: null })}
@@ -41,7 +41,7 @@ export default class ErrorBoundary extends Component<Props, State> {
       }
       return (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
+          <AlertTriangle className="size-12 text-red-500 mb-4" />
           <h2 className="text-lg font-semibold mb-2">Something went wrong</h2>
           <p className="text-sm text-muted-foreground mb-4 max-w-md">{this.state.error.message}</p>
           <button

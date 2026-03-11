@@ -26,6 +26,12 @@ class MockEventSource {
   }
 }
 
+vi.mock("../components/metrics", () => ({
+  ResourceGauge: ({ label }: { label: string }) => <div data-testid={`gauge-${label}`} />,
+  Sparkline: () => <div />,
+  NodeResourceGauges: () => <div data-testid="node-resource-gauges" />,
+}));
+
 vi.mock("../api/client", () => ({
   api: {
     nodes: vi.fn(),

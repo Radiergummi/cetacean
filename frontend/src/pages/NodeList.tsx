@@ -8,21 +8,18 @@ import { useSearchParam } from "../hooks/useSearchParam";
 import { usePrometheusConfigured } from "../hooks/usePrometheusConfigured";
 import { api } from "../api/client";
 import type { Node } from "../api/types";
-import SearchInput from "../components/SearchInput";
+import { SearchInput } from "../components/search";
 import PageHeader from "../components/PageHeader";
 import DataTable, { type Column } from "../components/DataTable";
 import SortIndicator from "../components/SortIndicator";
 import ViewToggle from "../components/ViewToggle";
 import TaskStatusBadge from "../components/TaskStatusBadge";
 import ResourceCard from "../components/ResourceCard";
-import ResourceGauge from "../components/ResourceGauge";
-import Sparkline from "../components/Sparkline";
+import { ResourceGauge, Sparkline, NodeResourceGauges } from "../components/metrics";
 import EmptyState from "../components/EmptyState";
 import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
 import { SkeletonTable } from "../components/LoadingSkeleton";
-import NodeResourceGauges from "../components/NodeResourceGauges";
-
 
 export default function NodeList() {
   const [search, debouncedSearch, setSearch] = useSearchParam("q");
@@ -71,32 +68,42 @@ export default function NodeList() {
     },
   ];
 
-  const metricsColumns: Column<Node>[] = hasPrometheus ? [
-    {
-      header: "CPU",
-      cell: (node) => {
-        const m = getForNode(node.Status.Addr);
-        return <span className="tabular-nums">{m.cpu != null ? `${Math.round(m.cpu)}%` : "\u2014"}</span>;
-      },
-    },
-    {
-      header: "Memory",
-      cell: (node) => {
-        const m = getForNode(node.Status.Addr);
-        return <span className="tabular-nums">{m.memory != null ? `${Math.round(m.memory)}%` : "\u2014"}</span>;
-      },
-    },
-    {
-      header: "CPU (1h)",
-      cell: (node) => {
-        const m = getForNode(node.Status.Addr);
-        if (m.cpuHistory.length > 1) {
-          return <Sparkline data={m.cpuHistory} />;
-        }
-        return <span className="text-muted-foreground">{"\u2014"}</span>;
-      },
-    },
-  ] : [];
+  const metricsColumns: Column<Node>[] = hasPrometheus
+    ? [
+        {
+          header: "CPU",
+          cell: (node) => {
+            const m = getForNode(node.Status.Addr);
+            return (
+              <span className="tabular-nums">
+                {m.cpu != null ? `${Math.round(m.cpu)}%` : "\u2014"}
+              </span>
+            );
+          },
+        },
+        {
+          header: "Memory",
+          cell: (node) => {
+            const m = getForNode(node.Status.Addr);
+            return (
+              <span className="tabular-nums">
+                {m.memory != null ? `${Math.round(m.memory)}%` : "\u2014"}
+              </span>
+            );
+          },
+        },
+        {
+          header: "CPU (1h)",
+          cell: (node) => {
+            const m = getForNode(node.Status.Addr);
+            if (m.cpuHistory.length > 1) {
+              return <Sparkline data={m.cpuHistory} />;
+            }
+            return <span className="text-muted-foreground">{"\u2014"}</span>;
+          },
+        },
+      ]
+    : [];
 
   const columns: Column<Node>[] = [
     ...baseColumns,
@@ -149,7 +156,11 @@ export default function NodeList() {
                 title={node.Description.Hostname || node.ID}
                 to={`/nodes/${node.ID}`}
                 badge={<TaskStatusBadge state={node.Status.State} />}
-                meta={[node.Spec.Role, node.Spec.Availability, `v${node.Description.Engine.EngineVersion}`]}
+                meta={[
+                  node.Spec.Role,
+                  node.Spec.Availability,
+                  `v${node.Description.Engine.EngineVersion}`,
+                ]}
               >
                 {hasPrometheus && (
                   <div className="flex items-center justify-center gap-4">

@@ -33,7 +33,8 @@ function stateColor(state: string): string {
 export default function TaskCardNode({ data }: NodeProps & { data: TaskCardData }) {
   return (
     <div
-      className={`w-48 border rounded-lg bg-card shadow-sm p-2 transition-shadow ${data.highlighted ? "ring-2 ring-primary/50" : ""}`}
+      data-highlighted={data.highlighted || undefined}
+      className="w-48 border rounded-lg bg-card shadow-sm p-2 transition-shadow data-highlighted:ring-2 data-highlighted:ring-primary/50"
       onMouseEnter={() => data.onHoverService(data.serviceId)}
       onMouseLeave={() => data.onHoverService(null)}
     >
@@ -42,7 +43,7 @@ export default function TaskCardNode({ data }: NodeProps & { data: TaskCardData 
       </div>
 
       <div className="flex items-center gap-1.5 text-xs mt-0.5">
-        <span className={`inline-block w-2 h-2 rounded-full ${stateColor(data.state)}`} />
+        <span className={`inline-block size-2 rounded-full ${stateColor(data.state)}`} />
         <span>{data.state}</span>
       </div>
 

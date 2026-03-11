@@ -38,14 +38,13 @@ export default function PhysicalNodeCard({ data }: NodeProps & { data: PhysicalN
       }}
     >
       <div className="flex items-center gap-2 mb-3">
-        <span className="text-sm font-semibold text-muted-foreground">
-          {data.label}
-        </span>
+        <span className="text-sm font-semibold text-muted-foreground">{data.label}</span>
         <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
           {data.role === "manager" ? "Manager" : "Worker"}
         </span>
         <span
-          className={`inline-block w-2 h-2 rounded-full ${data.state === "ready" ? "bg-green-500" : "bg-red-500"}`}
+          data-ready={data.state === "ready" || undefined}
+          className="inline-block size-2 rounded-full bg-red-500 data-ready:bg-green-500"
         />
         {data.availability !== "active" && (
           <span className="text-[10px] text-muted-foreground">{data.availability}</span>
@@ -69,8 +68,12 @@ export default function PhysicalNodeCard({ data }: NodeProps & { data: PhysicalN
                 {svc.image}
               </div>
               <div className="flex items-center gap-1.5 text-xs">
-                <span className={`inline-block w-2 h-2 rounded-full ${stateColor(svc.running, svc.total)}`} />
-                <span>{svc.running}/{svc.total} tasks</span>
+                <span
+                  className={`inline-block size-2 rounded-full ${stateColor(svc.running, svc.total)}`}
+                />
+                <span>
+                  {svc.running}/{svc.total} tasks
+                </span>
               </div>
             </div>
           ))}

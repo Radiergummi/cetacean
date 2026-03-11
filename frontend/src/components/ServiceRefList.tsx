@@ -18,7 +18,12 @@ export default function ServiceRefList({ services, label, emptyMessage }: Props)
       {services.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {services.map((svc) => (
-            <Badge key={svc.id} variant="outline" className="!h-auto !px-4 !py-2 !text-sm" render={<Link to={`/services/${svc.id}`} />}>
+            <Badge
+              key={svc.id}
+              variant="outline"
+              className="!h-auto !px-4 !py-2 !text-sm"
+              render={<Link to={`/services/${svc.id}`} />}
+            >
               <ResourceName name={svc.name || svc.id.slice(0, 12)} />
             </Badge>
           ))}

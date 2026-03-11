@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { RefreshCw, BarChart3 } from "lucide-react";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
-import { api } from "../api/client";
+import { api } from "../../api/client";
 
 export interface Threshold {
   label: string;
@@ -360,7 +360,7 @@ export default function TimeSeriesChart({
               onClick={fetchData}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-destructive/30 text-destructive hover:bg-destructive/10"
             >
-              <RefreshCw className="w-3 h-3" />
+              <RefreshCw className="size-3" />
               Retry
             </button>
           </div>
@@ -370,14 +370,14 @@ export default function TimeSeriesChart({
       {state === "empty" && (
         <div className="h-[200px] rounded bg-muted/30 flex items-center justify-center">
           <div className="text-center text-muted-foreground">
-            <BarChart3 className="w-8 h-8 mx-auto mb-2 opacity-30" />
+            <BarChart3 className="size-8 mx-auto mb-2 opacity-30" />
             <p className="text-sm">No data for this time range</p>
           </div>
         </div>
       )}
 
       <div className="relative">
-        <div ref={containerRef} className={state === "data" ? "" : "hidden"} />
+        <div ref={containerRef} hidden={state !== "data"} />
         {tooltip && state === "data" && (
           <div
             ref={tooltipElRef}
@@ -393,10 +393,7 @@ export default function TimeSeriesChart({
                     style={{ borderColor: s.color }}
                   />
                 ) : (
-                  <span
-                    className="w-1 shrink-0 h-3 rounded-sm"
-                    style={{ background: s.color }}
-                  />
+                  <span className="w-1 shrink-0 h-3 rounded-sm" style={{ background: s.color }} />
                 )}
                 <span className="text-muted-foreground">{s.label}</span>
                 <span className="font-semibold ms-auto ps-4 text-foreground">{s.value}</span>

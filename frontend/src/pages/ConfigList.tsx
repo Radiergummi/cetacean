@@ -6,7 +6,7 @@ import { useViewMode } from "../hooks/useViewMode";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { api } from "../api/client";
 import type { Config } from "../api/types";
-import SearchInput from "../components/SearchInput";
+import { SearchInput } from "../components/search";
 import PageHeader from "../components/PageHeader";
 import SortIndicator from "../components/SortIndicator";
 import ViewToggle from "../components/ViewToggle";
@@ -75,11 +75,20 @@ export default function ConfigList() {
       {configs.length === 0 ? (
         <EmptyState message={search ? "No configs match your search" : "No configs found"} />
       ) : viewMode === "table" ? (
-        <DataTable columns={columns} data={configs} keyFn={(c) => c.ID} onRowClick={(c) => navigate(`/configs/${c.ID}`)} />
+        <DataTable
+          columns={columns}
+          data={configs}
+          keyFn={(c) => c.ID}
+          onRowClick={(c) => navigate(`/configs/${c.ID}`)}
+        />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {configs.map((cfg) => (
-            <ResourceCard key={cfg.ID} title={<ResourceName name={cfg.Spec.Name || cfg.ID} />} to={`/configs/${cfg.ID}`}>
+            <ResourceCard
+              key={cfg.ID}
+              title={<ResourceName name={cfg.Spec.Name || cfg.ID} />}
+              to={`/configs/${cfg.ID}`}
+            >
               <div className="space-y-1 text-xs text-muted-foreground">
                 <div>Created: {cfg.CreatedAt ? <TimeAgo date={cfg.CreatedAt} /> : "\u2014"}</div>
                 <div>Updated: {cfg.UpdatedAt ? <TimeAgo date={cfg.UpdatedAt} /> : "\u2014"}</div>

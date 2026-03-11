@@ -11,17 +11,19 @@ export default function ViewToggle({ mode, onChange }: Props) {
     <div className="inline-flex rounded-md border shrink-0">
       <button
         onClick={() => onChange("table")}
-        className={`px-2.5 flex items-center ${mode === "table" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+        aria-pressed={mode === "table"}
+        className="px-2.5 flex items-center text-muted-foreground hover:text-foreground aria-pressed:bg-muted aria-pressed:text-foreground"
         title="Table view"
       >
-        <TableProperties className="w-4 h-4" />
+        <TableProperties className="size-4" />
       </button>
       <button
         onClick={() => onChange("grid")}
-        className={`px-2.5 flex items-center border-l ${mode === "grid" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+        aria-pressed={mode === "grid"}
+        className="px-2.5 flex items-center border-l text-muted-foreground hover:text-foreground aria-pressed:bg-muted aria-pressed:text-foreground"
         title="Grid view"
       >
-        <LayoutGrid className="w-4 h-4" />
+        <LayoutGrid className="size-4" />
       </button>
     </div>
   );

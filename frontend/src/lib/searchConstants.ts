@@ -14,13 +14,25 @@ export const STATE_COLORS: Record<string, string> = {
 };
 
 export const TYPE_ORDER: SearchResourceType[] = [
-  "services", "stacks", "nodes", "tasks",
-  "configs", "secrets", "networks", "volumes",
+  "services",
+  "stacks",
+  "nodes",
+  "tasks",
+  "configs",
+  "secrets",
+  "networks",
+  "volumes",
 ];
 
 export const TYPE_LABELS: Record<SearchResourceType, string> = {
-  services: "Services", stacks: "Stacks", nodes: "Nodes", tasks: "Tasks",
-  configs: "Configs", secrets: "Secrets", networks: "Networks", volumes: "Volumes",
+  services: "Services",
+  stacks: "Stacks",
+  nodes: "Nodes",
+  tasks: "Tasks",
+  configs: "Configs",
+  secrets: "Secrets",
+  networks: "Networks",
+  volumes: "Volumes",
 };
 
 export function resourcePath(type: SearchResourceType, id: string): string {

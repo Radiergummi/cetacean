@@ -27,7 +27,7 @@ export async function computeLayout(
     const elkNode: ElkNode = {
       id: leaf.id,
       width: NODE_WIDTH,
-      height: (leaf.data as Record<string, unknown>)?._elkHeight as number ?? DEFAULT_NODE_HEIGHT,
+      height: ((leaf.data as Record<string, unknown>)?._elkHeight as number) ?? DEFAULT_NODE_HEIGHT,
     };
     if (leaf.parentId && groupChildren.has(leaf.parentId)) {
       groupChildren.get(leaf.parentId)!.push(elkNode);
@@ -52,7 +52,8 @@ export async function computeLayout(
       topLevelChildren.push({
         id: leaf.id,
         width: NODE_WIDTH,
-        height: (leaf.data as Record<string, unknown>)?._elkHeight as number ?? DEFAULT_NODE_HEIGHT,
+        height:
+          ((leaf.data as Record<string, unknown>)?._elkHeight as number) ?? DEFAULT_NODE_HEIGHT,
       });
     }
   }
@@ -97,7 +98,8 @@ export async function computeLayout(
     const x = (elkNode.x ?? 0) + offsetX;
     const y = (elkNode.y ?? 0) + offsetY;
     positionMap.set(elkNode.id, {
-      x, y,
+      x,
+      y,
       width: elkNode.width ?? 0,
       height: elkNode.height ?? 0,
     });
