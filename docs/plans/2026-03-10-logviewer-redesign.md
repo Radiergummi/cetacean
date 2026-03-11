@@ -711,7 +711,7 @@ Pass `loadingOlder` and `hasOlderLogs` to `LogTable`. In LogTable, render a stat
 ```typescript
 {loadingOlder && (
   <tr><td colSpan={colCount} className="text-center py-2 text-xs text-muted-foreground">
-    <Loader2 className="w-3 h-3 animate-spin inline mr-1" /> Loading older logs...
+    <Loader2 className="size-3 animate-spin inline mr-1" /> Loading older logs...
   </td></tr>
 )}
 {!hasOlderLogs && (

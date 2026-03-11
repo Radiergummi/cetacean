@@ -523,7 +523,7 @@ export default function PrometheusBanner({ configured }: { configured: boolean }
 
   return (
     <div className="flex items-center gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 mb-4">
-      <BarChart3 className="w-5 h-5 text-blue-400 shrink-0" />
+      <BarChart3 className="size-5 text-blue-400 shrink-0" />
       <p className="text-sm text-blue-200 flex-1">
         Set <code className="rounded bg-blue-500/20 px-1.5 py-0.5 text-xs font-mono">CETACEAN_PROMETHEUS_URL</code> to
         enable CPU, memory, and disk utilization metrics.
@@ -536,7 +536,7 @@ export default function PrometheusBanner({ configured }: { configured: boolean }
         className="text-blue-400/60 hover:text-blue-300 transition-colors"
         aria-label="Dismiss"
       >
-        <X className="w-4 h-4" />
+        <X className="size-4" />
       </button>
     </div>
   );
@@ -893,7 +893,7 @@ function HealthCard({
               delta > 0 ? "text-red-500" : "text-green-500"
             }`}
           >
-            {delta > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+            {delta > 0 ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
             {delta > 0 ? `+${delta}` : delta}
           </span>
         )}
