@@ -52,6 +52,7 @@ func (c *Cache) WriteToDisk(path string) error {
 	}
 
 	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath) //nolint:errcheck
 		return fmt.Errorf("rename snapshot: %w", err)
 	}
 
