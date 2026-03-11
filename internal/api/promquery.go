@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -54,7 +55,7 @@ func (pc *PromClient) InstantQuery(ctx context.Context, query string) ([]PromRes
 			} `json:"result"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&body); err != nil {
 		return nil, fmt.Errorf("prometheus response parse error: %w", err)
 	}
 	if body.Status != "success" {
