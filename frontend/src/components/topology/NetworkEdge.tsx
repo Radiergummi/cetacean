@@ -184,7 +184,7 @@ export default function NetworkEdge({
                 className="flex items-center gap-1.5 py-0.5 cursor-pointer hover:underline"
                 onMouseDown={(e) => {
                   e.stopPropagation();
-                  navigate(`/networks`);
+                  navigate(`/networks/${net.id}`);
                 }}
               >
                 <span

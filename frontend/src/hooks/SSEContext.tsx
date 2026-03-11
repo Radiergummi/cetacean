@@ -112,5 +112,6 @@ export function useSSESubscribe(types: string[], listener: SSEListener) {
 
   useEffect(() => {
     return ctx.subscribe(types, (e) => listenerRef.current(e));
+    // Stabilize types array identity — callers typically pass inline literals like ["node", "service"]
   }, [ctx, types.join(",")]);
 }

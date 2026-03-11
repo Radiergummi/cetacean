@@ -99,7 +99,7 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
   - `metrics/` — `TimeSeriesChart` (uPlot canvas), `MetricsPanel` (range picker + N charts), `ResourceGauge` (SVG half-circle), `NodeResourceGauges`, `CapacitySection` (cluster utilization bars), `MonitoringStatus` (auto-detection banner with 4 states: unconfigured, unreachable, partial, healthy)
   - `search/` — `GlobalSearch` (nav bar trigger + Cmd+K), `SearchPalette` (command palette with grouped results, keyboard nav, 2s polling), `SearchInput`
   - `InfoCard`, `ResourceCard`, `PageHeader`, `FetchError`, `EmptyState`, `LoadingSkeleton`
-- **`lib/searchConstants.ts`** — Shared constants for search UI: `TYPE_ORDER`, `TYPE_LABELS`, `STATE_COLORS`, `resourcePath`
+- **`lib/searchConstants.ts`** — Shared constants for search UI: `TYPE_ORDER`, `TYPE_LABELS`, `statusColor`, `resourcePath`
 - **`pages/`** — All resource types have list + detail pages. Detail pages subscribe to SSE for real-time updates. List pages use `useSwarmResource` for SSE-driven optimistic updates. `SearchPage` at `/search?q=` for full global search results. `SwarmPage` at `/swarm` shows cluster info, join tokens, raft/CA/orchestration config, task defaults, and installed plugins. `Topology` at `/topology` with logical (services grouped by stack) and physical (tasks grouped by node) views.
 - Path alias: `@/` maps to `frontend/src/`
 

@@ -190,7 +190,7 @@ export interface Secret {
 }
 
 export interface Network {
-  Id: string;
+  Id: string; // Docker SDK: network.Summary uses "Id" not "ID"
   Name: string;
   Created: string;
   Driver: string;

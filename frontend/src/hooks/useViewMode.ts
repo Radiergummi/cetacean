@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 export type ViewMode = "table" | "grid";
 
@@ -11,10 +11,10 @@ export function useViewMode(
     return stored === "table" || stored === "grid" ? stored : defaultMode;
   });
 
-  const set = (m: ViewMode) => {
+  const set = useCallback((m: ViewMode) => {
     setMode(m);
     localStorage.setItem(`viewMode:${key}`, m);
-  };
+  }, [key]);
 
   return [mode, set];
 }
