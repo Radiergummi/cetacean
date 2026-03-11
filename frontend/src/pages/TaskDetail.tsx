@@ -1,4 +1,4 @@
-import ResourceName from "@/components/ResourceName.tsx";
+import ResourceName from "../components/ResourceName";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";

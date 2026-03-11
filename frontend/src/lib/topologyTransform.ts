@@ -1,5 +1,5 @@
 import type { Node, Edge } from "@xyflow/react";
-import type { NetworkTopology, PlacementTopology } from "@/api/types";
+import type { NetworkTopology, PlacementTopology } from "../api/types";
 
 const COLORS = [
   "#3b82f6",

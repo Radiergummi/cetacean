@@ -14,7 +14,8 @@ import {
     WrapText,
     X,
 } from "lucide-react";
-import {type default as React, useCallback, useEffect, useMemo, useRef, useState} from "react";
+import type React from "react";
+import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {Spinner} from "../Spinner";
 import {LogTable} from "./LogTable";
 import type {LogLine} from "./log-utils";

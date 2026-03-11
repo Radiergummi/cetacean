@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AlertTriangle, BarChart3, X } from "lucide-react";
-import type { MonitoringStatus as Status } from "@/api/types";
+import type { MonitoringStatus as Status } from "../../api/types";
 
 const DISMISS_KEY = "cetacean:dismiss-monitoring-banner";
 

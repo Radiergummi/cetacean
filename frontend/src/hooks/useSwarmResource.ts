@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSSE } from "./useSSE";
-import type { PagedResponse } from "@/api/types";
+import type { PagedResponse } from "../api/types";
 
 export function useSwarmResource<T>(
   fetchFn: () => Promise<PagedResponse<T>>,

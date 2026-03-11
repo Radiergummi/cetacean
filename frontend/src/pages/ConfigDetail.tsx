@@ -47,7 +47,7 @@ export default function ConfigDetail() {
   const labels = config.Spec.Labels || {};
   const labelEntries = Object.entries(labels).filter(([k]) => k !== "com.docker.stack.namespace");
   const stack = labels["com.docker.stack.namespace"];
-  const data = (config as any).Spec?.Data;
+  const data = config.Spec.Data;
   let decoded: string | null = null;
   if (data) {
     try {

@@ -1,5 +1,6 @@
 import {ChevronRight, Globe, Shuffle} from "lucide-react";
-import {type default as React, useCallback, useEffect, useMemo, useState} from "react";
+import type React from "react";
+import {useCallback, useEffect, useMemo, useState} from "react";
 import {Link, useParams} from "react-router-dom";
 import {api} from "../api/client";
 import type {HistoryEntry, Service, Task} from "../api/types";

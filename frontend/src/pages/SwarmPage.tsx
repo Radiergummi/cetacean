@@ -1,5 +1,6 @@
 import {Check, Copy} from "lucide-react";
-import {type default as React, useCallback, useEffect, useState} from "react";
+import type React from "react";
+import {useCallback, useEffect, useState} from "react";
 import {api} from "../api/client";
 import type {Plugin, SwarmInfo} from "../api/types";
 import {ResourceId, Timestamp} from "../components/data";

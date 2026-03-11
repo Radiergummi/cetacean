@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, type ClusterSnapshot, type ClusterMetrics } from "@/api/client.ts";
+import { api, type ClusterSnapshot, type ClusterMetrics } from "../../api/client";
+import { formatBytes } from "../../lib/formatBytes";
 
 function barColor(percent: number, isReservation: boolean): string {
   const high = isReservation ? 95 : 90;
@@ -8,13 +9,6 @@ function barColor(percent: number, isReservation: boolean): string {
   if (percent >= high) return "bg-red-500";
   if (percent >= mid) return "bg-amber-500";
   return "bg-blue-500";
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1e12) return (bytes / 1e12).toFixed(1) + " TB";
-  if (bytes >= 1e9) return (bytes / 1e9).toFixed(1) + " GB";
-  if (bytes >= 1e6) return (bytes / 1e6).toFixed(1) + " MB";
-  return (bytes / 1e3).toFixed(0) + " KB";
 }
 
 function Bar({

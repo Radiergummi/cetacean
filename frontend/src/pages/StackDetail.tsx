@@ -1,5 +1,5 @@
 import type React from "react";
-import {useEffect, useState} from "react";
+import {useCallback, useEffect, useState} from "react";
 import {Link, useParams} from "react-router-dom";
 import {api} from "../api/client";
 import type {StackDetail as StackDetailType, Task} from "../api/types";
@@ -7,6 +7,7 @@ import FetchError from "../components/FetchError";
 import {LoadingDetail} from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
+import {useSSE} from "../hooks/useSSE";
 
 function Section({title, children}: { title: string; children: React.ReactNode }) {
     return (
@@ -28,7 +29,7 @@ export default function StackDetail() {
         {},
     );
 
-    useEffect(() => {
+    const fetchData = useCallback(() => {
         if (name) {
             api
                 .stack(name)
@@ -36,6 +37,12 @@ export default function StackDetail() {
                 .catch(() => setError(true));
         }
     }, [name]);
+
+    useEffect(fetchData, [fetchData]);
+
+    useSSE(["stack", "service", "task"], useCallback(() => {
+        fetchData();
+    }, [fetchData]));
 
     useEffect(() => {
         if (!stack?.services?.length) {

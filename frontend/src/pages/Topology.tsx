@@ -1,20 +1,20 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { ReactFlow, ReactFlowProvider, Background, type Node, type Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { api } from "@/api/client";
-import type { NetworkTopology, PlacementTopology } from "@/api/types";
-import PageHeader from "@/components/PageHeader";
-import EmptyState from "@/components/EmptyState";
-import { LoadingPage } from "@/components/LoadingSkeleton";
-import SegmentedControl from "@/components/SegmentedControl";
-import { useSSE } from "@/hooks/useSSE";
-import { computeLayout } from "@/lib/layoutElk";
-import { buildLogicalFlow, buildPhysicalFlow, hashColor } from "@/lib/topologyTransform";
-import ServiceCardNode from "@/components/topology/ServiceCardNode";
-import PhysicalNodeCard from "@/components/topology/PhysicalNodeCard";
-import GroupNode from "@/components/topology/GroupNode";
-import NetworkEdge from "@/components/topology/NetworkEdge";
-import { HighlightProvider } from "@/components/topology/HighlightContext";
+import { api } from "../api/client";
+import type { NetworkTopology, PlacementTopology } from "../api/types";
+import PageHeader from "../components/PageHeader";
+import EmptyState from "../components/EmptyState";
+import { LoadingPage } from "../components/LoadingSkeleton";
+import SegmentedControl from "../components/SegmentedControl";
+import { useSSE } from "../hooks/useSSE";
+import { computeLayout } from "../lib/layoutElk";
+import { buildLogicalFlow, buildPhysicalFlow, hashColor } from "../lib/topologyTransform";
+import ServiceCardNode from "../components/topology/ServiceCardNode";
+import PhysicalNodeCard from "../components/topology/PhysicalNodeCard";
+import GroupNode from "../components/topology/GroupNode";
+import NetworkEdge from "../components/topology/NetworkEdge";
+import { HighlightProvider } from "../components/topology/HighlightContext";
 import { Network, Server } from "lucide-react";
 
 const logicalNodeTypes = {

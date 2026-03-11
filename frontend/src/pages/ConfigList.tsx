@@ -15,8 +15,7 @@ import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
 import { SkeletonTable } from "../components/LoadingSkeleton";
 import ResourceName from "../components/ResourceName";
-import DataTable from "../components/DataTable";
-import type { Column } from "../components/DataTable";
+import DataTable, { type Column } from "../components/DataTable";
 import TimeAgo from "../components/TimeAgo";
 
 export default function ConfigList() {

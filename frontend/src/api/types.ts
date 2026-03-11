@@ -174,6 +174,7 @@ export interface Config {
   Spec: {
     Name: string;
     Labels: Record<string, string>;
+    Data?: string;
   };
 }
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildLogicalFlow, buildPhysicalFlow } from "./topologyTransform";
-import type { NetworkTopology, PlacementTopology } from "@/api/types";
+import type { NetworkTopology, PlacementTopology } from "../api/types";
 
 describe("buildLogicalFlow", () => {
   it("creates group nodes for stacks and service nodes as children", () => {

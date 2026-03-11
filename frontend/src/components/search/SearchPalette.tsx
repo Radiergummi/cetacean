@@ -1,10 +1,11 @@
 import { Search } from "lucide-react";
-import { type default as React, useCallback, useEffect, useRef, useState } from "react";
+import type React from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { api } from "@/api/client.ts";
-import type { SearchResourceType, SearchResponse, SearchResult } from "@/api/types.ts";
-import { resourcePath, STATE_COLORS, TYPE_LABELS, TYPE_ORDER } from "@/lib/searchConstants.ts";
+import { api } from "../../api/client";
+import type { SearchResourceType, SearchResponse, SearchResult } from "../../api/types";
+import { resourcePath, STATE_COLORS, TYPE_LABELS, TYPE_ORDER } from "../../lib/searchConstants";
 import { Spinner } from "../Spinner";
 
 function StateOrb({ state }: { state: string }) {
