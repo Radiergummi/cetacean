@@ -8,7 +8,9 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      - CETACEAN_PROMETHEUS_URL=http://prometheus:9090
+      - CETACEAN_PROMETHEUS_URL=${CETACEAN_PROMETHEUS_URL:-}
+    networks:
+      - monitoring
     deploy:
       placement:
         constraints:
@@ -21,65 +23,7 @@ services:
           cpus: "0.5"
           memory: 256M
 
-  prometheus:
-    image: prom/prometheus:v3.3.0
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - prometheus_data:/prometheus
-    deploy:
-      placement:
-        constraints:
-          - node.role == manager
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 2G
-        reservations:
-          cpus: "0.25"
-          memory: 512M
-
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.51.0
-    command:
-      - '--store_container_labels=true'
-      - '--docker_only=true'
-    volumes:
-      - /:/rootfs:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /run/docker/containerd/containerd.sock:/run/containerd/containerd.sock:ro
-      - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
-    deploy:
-      mode: global
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 256M
-        reservations:
-          cpus: "0.1"
-          memory: 64M
-
-  node-exporter:
-    image: prom/node-exporter:v1.9.0
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/rootfs:ro
-    command:
-      - '--path.procfs=/host/proc'
-      - '--path.sysfs=/host/sys'
-      - '--path.rootfs=/rootfs'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
-    deploy:
-      mode: global
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 128M
-        reservations:
-          cpus: "0.1"
-          memory: 32M
-
-volumes:
-  prometheus_data:
+networks:
+  monitoring:
+    external: true
+    name: cetacean-monitoring_monitoring
