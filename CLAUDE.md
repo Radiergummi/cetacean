@@ -61,7 +61,7 @@ docker stack deploy -c docker-compose.monitoring.yml monitoring  # Deploy standa
 | `CETACEAN_LOG_FORMAT` | `json` | No |
 | `CETACEAN_LOG_LEVEL` | `info` | No |
 | `CETACEAN_SSE_BATCH_INTERVAL` | `100ms` | No |
-| `CETACEAN_NOTIFICATIONS_FILE` | — | No (path to notification rules YAML file) |
+| `CETACEAN_NOTIFICATIONS_FILE` | — | No (path to notification rules JSON file) |
 | `CETACEAN_PPROF` | `false` | No (enable pprof endpoints at `/debug/pprof/`) |
 
 ## Architecture
@@ -79,7 +79,8 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 - **`api/router.go`** — stdlib `net/http.ServeMux` with Go 1.22+ method routing (`"GET /api/..."`). Middleware chain: requestID → recovery → securityHeaders → requestLogger. SPA fallback registered last on `/`.
 - **`api/handlers.go`** — REST handlers. All read-only, serve cache data as JSON. List endpoints support `?search=`, `?filter=` (expr-lang expressions), `?sort=`, `?dir=`, `?limit=`, `?offset=`. Detail endpoints for all resource types return the resource + cross-referenced services. `HandleSearch` provides cross-resource global search. `DockerLogStreamer` interface decouples log streaming for testability. Task list/detail endpoints return `EnrichedTask` (adds `ServiceName`, `NodeHostname` to raw `swarm.Task`). Log-tail SSE connections are capped at 128 concurrent.
 - **`api/sse.go`** — `Broadcaster` manages up to 256 SSE clients. Clients can filter by `?types=node,service,task`. Event batching within configurable interval. Slow clients get events dropped (non-blocking send to buffered channel).
-- **`api/prometheus.go`** — Reverse proxy to Prometheus, only allows `/query` and `/query_range` paths. 10MB response limit, 30s timeout. `HandleMonitoringStatus` — `GET /api/metrics/status` probes Prometheus for `up{job="node-exporter"}` and `up{job="cadvisor"}` targets, compares target count against cluster node count. Returns detection status for guided setup UI.
+- **`api/prometheus.go`** — Reverse proxy to Prometheus, only allows `/query` and `/query_range` paths with whitelisted query params. 10MB response limit, 30s timeout.
+- **`api/promquery.go`** — `PromClient` for direct Prometheus instant queries. Used by `HandleClusterMetrics` and `HandleMonitoringStatus` (`GET /api/metrics/status` — probes for node-exporter/cAdvisor targets, returns detection status for guided setup UI).
 - **`api/spa.go`** — Serves the embedded `frontend/dist/` filesystem with index.html fallback for client-side routing.
 - **`filter/`** — Expression-based filtering using `expr-lang/expr`. Each resource type has an env builder exposing fields for filter expressions.
 - **`notify/`** — Webhook notification system with expr-lang rule matching, cooldown, and circuit breaker (5 failures → open, 30s half-open).
@@ -94,15 +95,12 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 - **`hooks/useMonitoringStatus.ts`** — Replaces `usePrometheusConfigured`. Returns full detection status (Prometheus reachable, node-exporter/cAdvisor target counts vs. cluster node count). Used by `MonitoringStatus` component (replaces `PrometheusBanner`).
 - **`components/`** — Key components:
   - `DataTable` — auto-virtualizes above 100 rows via `@tanstack/react-virtual`
-  - `LogViewer` — 800+ line component with live SSE tail, regex search, JSON formatting, stream filtering
-  - `TimeSeriesChart` — uPlot canvas with gradient fill, threshold annotations, cursor sync
-  - `MetricsPanel` — wraps N charts with shared range picker (1h/6h/24h/7d, URL-persisted)
-  - `ResourceGauge` — SVG half-circle gauge with threshold coloring
-  - `GlobalSearch` — nav bar trigger + Cmd+K listener, opens `SearchPalette`
-  - `SearchPalette` — command palette overlay with grouped results, keyboard nav, live polling (2s refresh)
+  - `log/` — Modular log viewer: `LogViewer` (orchestrator), `LogTable` (virtual/plain rendering), `LogMessage` (line renderer with JSON pretty-print), `LogToolbar` (time range, stream/level filters), `useLogData` (fetch + SSE streaming + pagination), `useLogFilter` (search/level/task filtering), `useLogTimeRange` (URL-persisted time range), `log-utils` (types, constants, formatters)
+  - `metrics/` — `TimeSeriesChart` (uPlot canvas), `MetricsPanel` (range picker + N charts), `ResourceGauge` (SVG half-circle), `NodeResourceGauges`, `CapacitySection` (cluster utilization bars), `MonitoringStatus` (auto-detection banner with 4 states: unconfigured, unreachable, partial, healthy)
+  - `search/` — `GlobalSearch` (nav bar trigger + Cmd+K), `SearchPalette` (command palette with grouped results, keyboard nav, 2s polling), `SearchInput`
   - `InfoCard`, `ResourceCard`, `PageHeader`, `FetchError`, `EmptyState`, `LoadingSkeleton`
 - **`lib/searchConstants.ts`** — Shared constants for search UI: `TYPE_ORDER`, `TYPE_LABELS`, `STATE_COLORS`, `resourcePath`
-- **`pages/`** — All resource types have list + detail pages. Detail pages subscribe to SSE for real-time updates. List pages use `useSwarmResource` for SSE-driven optimistic updates. `SearchPage` at `/search?q=` for full global search results.
+- **`pages/`** — All resource types have list + detail pages. Detail pages subscribe to SSE for real-time updates. List pages use `useSwarmResource` for SSE-driven optimistic updates. `SearchPage` at `/search?q=` for full global search results. `SwarmPage` at `/swarm` shows cluster info, join tokens, raft/CA/orchestration config, task defaults, and installed plugins. `Topology` at `/topology` with logical (services grouped by stack) and physical (tasks grouped by node) views.
 - Path alias: `@/` maps to `frontend/src/`
 
 ### Embedding
@@ -141,3 +139,5 @@ None — all previously known test failures have been fixed.
 Design specs and implementation plans are in `docs/plans/`. Key recent ones:
 - `2026-03-10-global-search-design.md` — Global search feature design
 - `2026-03-10-global-search.md` — Global search implementation plan
+- `2026-03-11-monitoring-onboarding.md` — Monitoring onboarding design (auto-detection, compose split, guided setup UI)
+- `2026-03-11-monitoring-onboarding-plan.md` — Monitoring onboarding implementation plan
