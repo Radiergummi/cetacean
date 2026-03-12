@@ -100,7 +100,7 @@ func main() {
 
 	go watcher.Run(ctx)
 
-	// API — pass ready channel so /api/ready reports sync status
+	// API — pass ready channel so /-/ready reports sync status
 	var promClient *api.PromClient
 	var promProxy http.Handler
 	if cfg.PrometheusURL != "" {
