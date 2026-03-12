@@ -306,7 +306,7 @@ func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) 
 	}()
 
 	wg.Wait()
-	writeJSON(w, metrics)
+	writeJSONWithETag(w, r, metrics)
 }
 
 type MonitoringStatus struct {
