@@ -13,6 +13,41 @@ import (
 	"cetacean/internal/cache"
 )
 
+// waitForClients polls until the broadcaster has at least n clients registered.
+func waitForClients(t *testing.T, b *Broadcaster, n int) {
+	t.Helper()
+	deadline := time.After(2 * time.Second)
+	for {
+		b.mu.RLock()
+		count := len(b.clients)
+		b.mu.RUnlock()
+		if count >= n {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("timed out waiting for %d SSE client(s), have %d", n, count)
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+}
+
+// waitForBody polls until the recorder's body contains the expected substring.
+func waitForBody(t *testing.T, w *flushRecorder, substr string) {
+	t.Helper()
+	deadline := time.After(2 * time.Second)
+	for {
+		if strings.Contains(w.Body.String(), substr) {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("timed out waiting for %q in body, got: %s", substr, w.Body.String())
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+}
+
 func TestSSE_BroadcastsEvents(t *testing.T) {
 	b := NewBroadcaster(0)
 	defer b.Close()
@@ -26,18 +61,15 @@ func TestSSE_BroadcastsEvents(t *testing.T) {
 		close(done)
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForClients(t, b, 1)
 
 	b.Broadcast(cache.Event{Type: "node", Action: "update", ID: "n1"})
 
-	time.Sleep(50 * time.Millisecond)
+	waitForBody(t, w, "event: node")
 	b.Close()
 	<-done
 
 	body := w.Body.String()
-	if !strings.Contains(body, "event: node") {
-		t.Errorf("expected event: node in body, got: %s", body)
-	}
 	if !strings.Contains(body, `"action":"update"`) {
 		t.Errorf("expected action:update in body, got: %s", body)
 	}
@@ -56,21 +88,18 @@ func TestSSE_FiltersByType(t *testing.T) {
 		close(done)
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForClients(t, b, 1)
 
 	b.Broadcast(cache.Event{Type: "node", Action: "update", ID: "n1"})
 	b.Broadcast(cache.Event{Type: "service", Action: "update", ID: "s1"})
 
-	time.Sleep(50 * time.Millisecond)
+	waitForBody(t, w, "event: service")
 	b.Close()
 	<-done
 
 	body := w.Body.String()
 	if strings.Contains(body, "event: node") {
 		t.Error("node event should have been filtered out")
-	}
-	if !strings.Contains(body, "event: service") {
-		t.Error("service event should have been included")
 	}
 }
 
@@ -87,15 +116,15 @@ func TestSSE_BatchesRapidEvents(t *testing.T) {
 		close(done)
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForClients(t, b, 1)
 
 	// Send 5 events as fast as possible so they land in the same batch window
 	for i := 0; i < 5; i++ {
 		b.Broadcast(cache.Event{Type: "task", Action: "update", ID: fmt.Sprintf("t%d", i)})
 	}
 
-	// Wait for the batch ticker to fire and then close
-	time.Sleep(200 * time.Millisecond)
+	// Wait for all events to appear (either individual or batched)
+	waitForBody(t, w, `"t4"`)
 	b.Close()
 	<-done
 
@@ -139,18 +168,15 @@ func TestSSE_EventContainsJSONLD(t *testing.T) {
 		close(done)
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForClients(t, b, 1)
 
 	b.Broadcast(cache.Event{Type: "service", Action: "update", ID: "abc123"})
 
-	time.Sleep(50 * time.Millisecond)
+	waitForBody(t, w, `"@id":"/services/abc123"`)
 	b.Close()
 	<-done
 
 	body := w.Body.String()
-	if !strings.Contains(body, `"@id":"/services/abc123"`) {
-		t.Errorf("expected @id field in body, got: %s", body)
-	}
 	if !strings.Contains(body, `"@type":"Service"`) {
 		t.Errorf("expected @type field in body, got: %s", body)
 	}
@@ -169,22 +195,18 @@ func TestSSE_BatchEventContainsJSONLD(t *testing.T) {
 		close(done)
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForClients(t, b, 1)
 
 	// Send multiple events fast to trigger batching
 	for i := 0; i < 3; i++ {
 		b.Broadcast(cache.Event{Type: "task", Action: "update", ID: fmt.Sprintf("t%d", i)})
 	}
 
-	time.Sleep(200 * time.Millisecond)
+	waitForBody(t, w, `"@id":"/tasks/t0"`)
 	b.Close()
 	<-done
 
 	body := w.Body.String()
-	// Whether batched or individual, all events should have @id and @type
-	if !strings.Contains(body, `"@id":"/tasks/t0"`) {
-		t.Errorf("expected @id for t0 in body, got: %s", body)
-	}
 	if !strings.Contains(body, `"@type":"Task"`) {
 		t.Errorf("expected @type Task in body, got: %s", body)
 	}

@@ -129,6 +129,11 @@ func (b *Broadcaster) serveSSE(w http.ResponseWriter, r *http.Request, match fun
 		writeProblem(w, r, http.StatusTooManyRequests, "too many SSE connections")
 		return
 	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	flusher.Flush()
+
 	b.clients[client] = struct{}{}
 	b.mu.Unlock()
 
@@ -137,11 +142,6 @@ func (b *Broadcaster) serveSSE(w http.ResponseWriter, r *http.Request, match fun
 		delete(b.clients, client)
 		b.mu.Unlock()
 	}()
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	flusher.Flush()
 
 	var eventID uint64
 	batchTicker := time.NewTicker(b.batchInterval)
@@ -178,17 +178,22 @@ func (b *Broadcaster) serveSSE(w http.ResponseWriter, r *http.Request, match fun
 }
 
 // typeMatcher returns a match function that accepts events of the given type.
+// Sync events always pass through so clients can trigger a full refetch.
 func typeMatcher(typ string) func(cache.Event) bool {
 	return func(e cache.Event) bool {
-		return e.Type == typ
+		return e.Type == typ || e.Type == "sync"
 	}
 }
 
 // resourceMatcher returns a match function for per-resource SSE streams.
+// Sync events always pass through so clients can trigger a full refetch.
 func resourceMatcher(typ, id string) func(cache.Event) bool {
 	switch typ {
 	case "node":
 		return func(e cache.Event) bool {
+			if e.Type == "sync" {
+				return true
+			}
 			if e.Type == "node" && e.ID == id {
 				return true
 			}
@@ -201,6 +206,9 @@ func resourceMatcher(typ, id string) func(cache.Event) bool {
 		}
 	case "service":
 		return func(e cache.Event) bool {
+			if e.Type == "sync" {
+				return true
+			}
 			if e.Type == "service" && e.ID == id {
 				return true
 			}
@@ -213,20 +221,24 @@ func resourceMatcher(typ, id string) func(cache.Event) bool {
 		}
 	case "task":
 		return func(e cache.Event) bool {
-			return e.Type == "task" && e.ID == id
+			return e.Type == "sync" || (e.Type == "task" && e.ID == id)
 		}
 	default:
 		// config, secret, network, volume — match by type+ID.
 		// Cross-reference "ref_changed" events already have the correct type+ID.
 		return func(e cache.Event) bool {
-			return e.Type == typ && e.ID == id
+			return e.Type == "sync" || (e.Type == typ && e.ID == id)
 		}
 	}
 }
 
 // stackMatcher returns a match function for stack SSE streams.
+// Sync events always pass through so clients can trigger a full refetch.
 func stackMatcher(c *cache.Cache, name string) func(cache.Event) bool {
 	return func(e cache.Event) bool {
+		if e.Type == "sync" {
+			return true
+		}
 		stack, ok := c.GetStack(name)
 		if !ok {
 			return false

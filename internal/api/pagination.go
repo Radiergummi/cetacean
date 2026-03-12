@@ -1,9 +1,10 @@
 package api
 
 import (
+	"cmp"
 	"fmt"
 	"net/http"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -102,13 +103,13 @@ func sortItems[T any](items []T, key, dir string, accessors map[string]func(T) s
 	copy(cp, items)
 
 	desc := strings.EqualFold(dir, "desc")
-	sort.SliceStable(cp, func(i, j int) bool {
-		a := strings.ToLower(accessor(cp[i]))
-		b := strings.ToLower(accessor(cp[j]))
+	slices.SortStableFunc(cp, func(a, b T) int {
+		av := strings.ToLower(accessor(a))
+		bv := strings.ToLower(accessor(b))
 		if desc {
-			return a > b
+			return cmp.Compare(bv, av)
 		}
-		return a < b
+		return cmp.Compare(av, bv)
 	})
 
 	return cp

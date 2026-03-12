@@ -52,7 +52,7 @@ func (c *Cache) WriteToDisk(path string) error {
 	}
 
 	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
 		return fmt.Errorf("write snapshot tmp: %w", err)
 	}
 
@@ -110,7 +110,7 @@ func (c *Cache) SnapshotAge() time.Duration {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.lastSync.IsZero() {
-		return time.Since(time.Time{})
+		return time.Duration(1<<63 - 1) // max duration — never synced
 	}
 	return time.Since(c.lastSync)
 }

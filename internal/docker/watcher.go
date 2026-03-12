@@ -80,22 +80,6 @@ func (w *Watcher) Run(ctx context.Context) {
 	w.writeSnapshot()
 	w.syncOnce.Do(func() { close(w.ready) })
 
-	// Periodic re-sync safety net
-	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				slog.Info("periodic full re-sync")
-				w.fullSync(ctx)
-				w.writeSnapshot()
-			}
-		}
-	}()
-
 	// Event stream with reconnect
 	for {
 		if ctx.Err() != nil {
@@ -153,14 +137,21 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 	msgCh, errCh := w.client.Events(ctx)
 
 	pending := make(map[eventKey]coalesced)
-	timer := time.NewTimer(debounceWindow)
-	timer.Stop()
-	defer timer.Stop()
-	timerRunning := false
+	var timer *time.Timer
+	var timerC <-chan time.Time // nil until first event arms it
+
+	// Periodic re-sync runs inside the select loop so it is serialized
+	// with event processing — this prevents a concurrent ReplaceAll from
+	// re-inserting resources that were just deleted by an incremental event.
+	syncTicker := time.NewTicker(5 * time.Minute)
+	defer syncTicker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
+			if timer != nil {
+				timer.Stop()
+			}
 			if len(pending) > 0 {
 				flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				w.processBatch(flushCtx, pending)
@@ -170,6 +161,9 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 		case err := <-errCh:
 			if err != nil {
 				slog.Warn("event stream error", "error", err)
+			}
+			if timer != nil {
+				timer.Stop()
 			}
 			// Flush pending events with a fresh context — the parent ctx
 			// may already be cancelled if shutdown raced with the stream error.
@@ -185,17 +179,35 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 				continue // unrecognized event, skip
 			}
 			pending[key] = coalesced{action: action}
-			if !timerRunning {
-				timer.Reset(debounceWindow)
-				timerRunning = true
+			if timerC == nil {
+				if timer == nil {
+					timer = time.NewTimer(debounceWindow)
+				} else {
+					timer.Reset(debounceWindow)
+				}
+				timerC = timer.C
 			}
-		case <-timer.C:
-			timerRunning = false
+		case <-timerC:
+			timerC = nil
 			if len(pending) > 0 {
 				batch := pending
 				pending = make(map[eventKey]coalesced)
 				w.processBatch(ctx, batch)
 			}
+		case <-syncTicker.C:
+			// Flush pending events before the full sync so we don't lose them.
+			if timer != nil {
+				timer.Stop()
+				timerC = nil
+			}
+			if len(pending) > 0 {
+				batch := pending
+				pending = make(map[eventKey]coalesced)
+				w.processBatch(ctx, batch)
+			}
+			slog.Info("periodic full re-sync")
+			w.fullSync(ctx)
+			w.writeSnapshot()
 		}
 	}
 }
@@ -231,11 +243,15 @@ func (w *Watcher) eventKeyFromMsg(msg events.Message) (eventKey, string) {
 // processBatch handles a coalesced batch of events with a worker pool.
 func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced) {
 	// Process removes synchronously first — they're cheap (no Inspect).
+	var removeKeys []eventKey
 	for key, ev := range batch {
 		if ev.action == "remove" {
-			w.applyRemove(key)
-			delete(batch, key)
+			removeKeys = append(removeKeys, key)
 		}
+	}
+	for _, key := range removeKeys {
+		w.applyRemove(key)
+		delete(batch, key)
 	}
 
 	if len(batch) == 0 {
