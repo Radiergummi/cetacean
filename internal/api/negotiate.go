@@ -14,6 +14,10 @@ const (
 	ContentTypeJSON ContentType = iota
 	ContentTypeHTML
 	ContentTypeSSE
+
+	// ContentTypeUnsupported means the client explicitly asked for a type we
+	// cannot provide. Dispatch helpers should return 406 Not Acceptable.
+	ContentTypeUnsupported ContentType = -1
 )
 
 func (ct ContentType) String() string {
@@ -24,6 +28,8 @@ func (ct ContentType) String() string {
 		return "HTML"
 	case ContentTypeSSE:
 		return "SSE"
+	case ContentTypeUnsupported:
+		return "Unsupported"
 	default:
 		return "Unknown"
 	}
@@ -66,22 +72,65 @@ func negotiate(next http.Handler) http.Handler {
 	})
 }
 
-// parseAccept parses an Accept header value and returns the best matching ContentType.
+// supportedTypes lists the media types we support, mapped to ContentType.
+// When a wildcard matches multiple supported types, we prefer earlier entries.
+var supportedTypes = []struct {
+	typ     string // e.g. "application"
+	subtype string // e.g. "json"
+	ct      ContentType
+}{
+	{"application", "json", ContentTypeJSON},
+	{"application", "vnd.cetacean.v1+json", ContentTypeJSON},
+	{"text", "html", ContentTypeHTML},
+	{"application", "xhtml+xml", ContentTypeHTML},
+	{"text", "event-stream", ContentTypeSSE},
+}
+
+// mediaRange is a parsed Accept header entry.
+type mediaRange struct {
+	typ     string  // e.g. "text", "*"
+	subtype string  // e.g. "html", "*"
+	q       float64 // quality value 0.0-1.0
+	order   int     // position in the Accept header (for tie-breaking)
+}
+
+// specificity returns the specificity level of a media range:
+//   - 3 for exact match (e.g. text/html)
+//   - 2 for partial wildcard (e.g. text/*)
+//   - 1 for full wildcard (*​/*)
+func (mr mediaRange) specificity() int {
+	if mr.typ == "*" {
+		return 1
+	}
+	if mr.subtype == "*" {
+		return 2
+	}
+	return 3
+}
+
+// matches reports whether this media range matches the given type/subtype.
+func (mr mediaRange) matches(typ, subtype string) bool {
+	if mr.typ == "*" && mr.subtype == "*" {
+		return true
+	}
+	if mr.typ == typ && mr.subtype == "*" {
+		return true
+	}
+	return mr.typ == typ && mr.subtype == subtype
+}
+
+// parseAccept parses an Accept header value per RFC 7231 Section 5.3.2 and
+// returns the best matching ContentType. Returns ContentTypeUnsupported when
+// the header contains media types but none match our supported types.
 func parseAccept(accept string) ContentType {
 	accept = strings.TrimSpace(accept)
 	if accept == "" {
 		return ContentTypeJSON
 	}
 
-	type entry struct {
-		ct ContentType
-		q  float64
-	}
-
-	var best entry
-	best.q = -1
-
-	for _, part := range strings.Split(accept, ",") {
+	// Parse all media ranges from the header.
+	var ranges []mediaRange
+	for i, part := range strings.Split(accept, ",") {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
@@ -103,28 +152,75 @@ func parseAccept(accept string) ContentType {
 			}
 		}
 
-		var ct ContentType
-		matched := true
-		switch mediaType {
-		case "application/json", "application/vnd.cetacean.v1+json":
-			ct = ContentTypeJSON
-		case "text/html", "application/xhtml+xml":
-			ct = ContentTypeHTML
-		case "text/event-stream":
-			ct = ContentTypeSSE
-		case "*/*":
-			ct = ContentTypeJSON
-		default:
-			matched = false
+		// Split into type/subtype; skip malformed entries.
+		slash := strings.IndexByte(mediaType, '/')
+		if slash < 1 || slash >= len(mediaType)-1 {
+			continue
 		}
+		typ := mediaType[:slash]
+		subtype := mediaType[slash+1:]
 
-		if matched && q > best.q {
-			best = entry{ct: ct, q: q}
+		ranges = append(ranges, mediaRange{
+			typ:     typ,
+			subtype: subtype,
+			q:       q,
+			order:   i,
+		})
+	}
+
+	// No valid ranges parsed — treat as empty Accept (default JSON).
+	if len(ranges) == 0 {
+		return ContentTypeJSON
+	}
+
+	// For each supported type, find the best matching range.
+	type candidate struct {
+		ct          ContentType
+		q           float64
+		specificity int
+		order       int // header position of the matching range
+	}
+
+	var best *candidate
+
+	for _, sup := range supportedTypes {
+		for _, mr := range ranges {
+			if !mr.matches(sup.typ, sup.subtype) {
+				continue
+			}
+
+			spec := mr.specificity()
+			c := candidate{
+				ct:          sup.ct,
+				q:           mr.q,
+				specificity: spec,
+				order:       mr.order,
+			}
+
+			if best == nil {
+				best = &c
+				continue
+			}
+
+			// Higher quality wins.
+			if c.q > best.q {
+				best = &c
+			} else if c.q == best.q {
+				// Same quality: higher specificity wins.
+				if c.specificity > best.specificity {
+					best = &c
+				} else if c.specificity == best.specificity {
+					// Same specificity: earlier in header wins.
+					if c.order < best.order {
+						best = &c
+					}
+				}
+			}
 		}
 	}
 
-	if best.q < 0 {
-		return ContentTypeJSON
+	if best == nil {
+		return ContentTypeUnsupported
 	}
 	return best.ct
 }

@@ -12,6 +12,8 @@ func contentNegotiated(jsonHandler http.HandlerFunc, spa http.Handler) http.Hand
 			spa.ServeHTTP(w, r)
 		case ContentTypeSSE:
 			writeProblem(w, r, http.StatusNotAcceptable, "this endpoint does not support text/event-stream")
+		case ContentTypeUnsupported:
+			writeProblem(w, r, http.StatusNotAcceptable, "no supported media type in Accept header")
 		default:
 			jsonHandler(w, r)
 		}
@@ -27,6 +29,8 @@ func contentNegotiatedWithSSE(jsonHandler, sseHandler http.HandlerFunc, spa http
 			spa.ServeHTTP(w, r)
 		case ContentTypeSSE:
 			sseHandler(w, r)
+		case ContentTypeUnsupported:
+			writeProblem(w, r, http.StatusNotAcceptable, "no supported media type in Accept header")
 		default:
 			jsonHandler(w, r)
 		}
@@ -42,6 +46,8 @@ func sseOnly(sseHandler http.Handler, spa http.Handler) http.HandlerFunc {
 			spa.ServeHTTP(w, r)
 		case ContentTypeSSE:
 			sseHandler.ServeHTTP(w, r)
+		case ContentTypeUnsupported:
+			writeProblem(w, r, http.StatusNotAcceptable, "no supported media type in Accept header")
 		default:
 			writeProblem(w, r, http.StatusNotAcceptable, "this endpoint only supports text/event-stream")
 		}

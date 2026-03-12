@@ -146,4 +146,117 @@ func TestNegotiate(t *testing.T) {
 			t.Errorf("got %v, want JSON", ct)
 		}
 	})
+
+	// --- Partial wildcard support ---
+
+	t.Run("partial wildcard text/* matches HTML", func(t *testing.T) {
+		ct, _ := run("/services", "text/*")
+		if ct != ContentTypeHTML {
+			t.Errorf("got %v, want HTML", ct)
+		}
+	})
+
+	t.Run("partial wildcard application/* matches JSON", func(t *testing.T) {
+		ct, _ := run("/services", "application/*")
+		if ct != ContentTypeJSON {
+			t.Errorf("got %v, want JSON", ct)
+		}
+	})
+
+	// --- Specificity ---
+
+	t.Run("specificity: exact match beats partial wildcard at same q", func(t *testing.T) {
+		// text/* and application/json both q=1.0, but application/json is exact (specificity 3)
+		// while text/* is partial (specificity 2).
+		ct, _ := run("/services", "text/*, application/json")
+		if ct != ContentTypeJSON {
+			t.Errorf("got %v, want JSON", ct)
+		}
+	})
+
+	t.Run("specificity: higher q wins over higher specificity", func(t *testing.T) {
+		// text/html is exact (specificity 3, q=0.9); text/* is partial (specificity 2, q=1.0).
+		// Higher q wins, so text/* matches. text/* matches text/html first in our preference order.
+		ct, _ := run("/services", "text/html;q=0.9, text/*;q=1.0")
+		if ct != ContentTypeHTML {
+			t.Errorf("got %v, want HTML", ct)
+		}
+	})
+
+	// --- Unsupported types ---
+
+	t.Run("application/xml alone is unsupported", func(t *testing.T) {
+		ct, _ := run("/services", "application/xml")
+		if ct != ContentTypeUnsupported {
+			t.Errorf("got %v, want Unsupported", ct)
+		}
+	})
+
+	t.Run("text/plain alone is unsupported", func(t *testing.T) {
+		ct, _ := run("/services", "text/plain")
+		if ct != ContentTypeUnsupported {
+			t.Errorf("got %v, want Unsupported", ct)
+		}
+	})
+
+	t.Run("application/xml with */* fallback returns JSON", func(t *testing.T) {
+		ct, _ := run("/services", "application/xml, */*;q=0.1")
+		if ct != ContentTypeJSON {
+			t.Errorf("got %v, want JSON", ct)
+		}
+	})
+
+	t.Run("unsupported type with higher q still picks only match", func(t *testing.T) {
+		// application/xml;q=1.0 is unsupported; application/json;q=0.5 is our only match.
+		ct, _ := run("/services", "application/xml;q=1.0, application/json;q=0.5")
+		if ct != ContentTypeJSON {
+			t.Errorf("got %v, want JSON", ct)
+		}
+	})
+
+	// --- Malformed headers ---
+
+	t.Run("malformed: empty commas", func(t *testing.T) {
+		ct, _ := run("/services", ",,")
+		if ct != ContentTypeJSON {
+			t.Errorf("got %v, want JSON (default for all-empty ranges)", ct)
+		}
+	})
+
+	t.Run("malformed: broken q value", func(t *testing.T) {
+		// ";q=broken" has no valid media type before the semicolon — it's just "".
+		ct, _ := run("/services", ";q=broken")
+		if ct != ContentTypeJSON {
+			t.Errorf("got %v, want JSON (default for malformed)", ct)
+		}
+	})
+
+	t.Run("malformed: bare slash", func(t *testing.T) {
+		ct, _ := run("/services", "/")
+		if ct != ContentTypeJSON {
+			t.Errorf("got %v, want JSON (default for malformed)", ct)
+		}
+	})
+
+	t.Run("malformed: no subtype", func(t *testing.T) {
+		ct, _ := run("/services", "text")
+		if ct != ContentTypeJSON {
+			t.Errorf("got %v, want JSON (default for malformed)", ct)
+		}
+	})
+
+	t.Run("malformed: empty subtype after slash", func(t *testing.T) {
+		ct, _ := run("/services", "text/")
+		if ct != ContentTypeJSON {
+			t.Errorf("got %v, want JSON (default for malformed)", ct)
+		}
+	})
+
+	// --- ContentType String ---
+
+	t.Run("ContentTypeUnsupported String", func(t *testing.T) {
+		if s := ContentTypeUnsupported.String(); s != "Unsupported" {
+			t.Errorf("got %q, want Unsupported", s)
+		}
+	})
 }
