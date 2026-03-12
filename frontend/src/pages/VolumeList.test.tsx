@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import type { ReactNode } from "react";
-import { SSEProvider } from "../hooks/SSEContext";
 import VolumeList from "./VolumeList";
 import type { Volume } from "../api/types";
 
@@ -61,7 +60,7 @@ afterEach(() => {
 function wrapper({ children }: { children: ReactNode }) {
   return (
     <MemoryRouter>
-      <SSEProvider>{children}</SSEProvider>
+      <>{children}</>
     </MemoryRouter>
   );
 }

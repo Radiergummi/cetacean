@@ -126,13 +126,10 @@ func recovery(next http.Handler) http.Handler {
 					"path", r.URL.Path,
 					"stack", string(debug.Stack()),
 				)
-				// Only attempt an error response if headers haven't been
-				// sent yet (e.g. mid-SSE-stream panics). Writing after
-				// commit would corrupt the partial response.
-				if sw, ok := w.(*statusWriter); ok && sw.wroteHeader {
-					return
-				}
-				writeProblem(w, r, http.StatusInternalServerError, "internal server error")
+				// Best-effort error response. If headers were already
+			// flushed (e.g. mid-SSE-stream), WriteHeader is a no-op
+			// and the partial write is harmless.
+			writeProblem(w, r, http.StatusInternalServerError, "internal server error")
 			}
 		}()
 		next.ServeHTTP(w, r)

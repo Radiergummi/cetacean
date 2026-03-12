@@ -1,6 +1,6 @@
 import {ChevronRight, Globe, Shuffle} from "lucide-react";
 import type React from "react";
-import {useCallback, useEffect, useMemo, useState} from "react";
+import {useCallback, useEffect, useState} from "react";
 import {Link, useParams} from "react-router-dom";
 import {api} from "../api/client";
 import type {HistoryEntry, Service, Task} from "../api/types";
@@ -18,7 +18,7 @@ import ResourceName from "../components/ResourceName";
 import TasksTable from "../components/TasksTable";
 import {timeAgo} from "../components/TimeAgo";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
-import {useSSE} from "../hooks/useSSE";
+import {useResourceStream} from "../hooks/useResourceStream";
 import {formatBytes} from "../lib/formatBytes";
 
 export default function ServiceDetail() {
@@ -68,26 +68,7 @@ export default function ServiceDetail() {
 
     useEffect(fetchData, [fetchData]);
 
-    const taskIds = useMemo(() => new Set(tasks.map(({ID}) => ID)), [tasks]);
-
-    useSSE(["service", "task"], ({id: taskId, resource, type}) => {
-        if (type === "service" && taskId === id) {
-            fetchData();
-        }
-
-        if (
-            type === "task" &&
-            (
-                taskIds.has(taskId) ||
-                (
-                    resource as Record<string, unknown>
-                )?.ServiceID ===
-                id
-            )
-        ) {
-            fetchData();
-        }
-    });
+    useResourceStream(`/services/${id}`, fetchData);
 
     if (error) {
         return <FetchError message="Failed to load service"/>;

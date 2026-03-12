@@ -61,7 +61,6 @@ docker stack deploy -c docker-compose.monitoring.yml monitoring  # Deploy standa
 | `CETACEAN_LOG_FORMAT` | `json` | No |
 | `CETACEAN_LOG_LEVEL` | `info` | No |
 | `CETACEAN_SSE_BATCH_INTERVAL` | `100ms` | No |
-| `CETACEAN_NOTIFICATIONS_FILE` | — | No (path to notification rules JSON file) |
 | `CETACEAN_PPROF` | `false` | No (enable pprof endpoints at `/debug/pprof/`) |
 
 ## Architecture
@@ -90,7 +89,6 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 - **`api/context.go`** — Serves the JSON-LD context document at `/api/context.jsonld`.
 - **`api/apidoc.go`** — Serves `/api` endpoint: HTML gets Scalar API playground, otherwise returns OpenAPI YAML spec.
 - **`filter/`** — Expression-based filtering using `expr-lang/expr`. Each resource type has an env builder exposing fields for filter expressions.
-- **`notify/`** — Webhook notification system with expr-lang rule matching, cooldown, and circuit breaker (5 failures → open, 30s half-open).
 
 ### Frontend (`frontend/src/`)
 - React 19 + TypeScript + Vite, Tailwind CSS v4, shadcn/ui components, uPlot for time-series charts

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { HistoryEntry, Node, Task } from "../api/types";
@@ -12,7 +12,7 @@ import { MetricsPanel, NodeResourceGauges } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import TasksTable from "../components/TasksTable";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
-import { useSSE } from "../hooks/useSSE";
+import { useResourceStream } from "../hooks/useResourceStream";
 import { KeyValuePills, SectionHeader } from "../components/data";
 import { formatBytes } from "../lib/formatBytes";
 
@@ -47,20 +47,7 @@ export default function NodeDetail() {
 
   useEffect(fetchData, [fetchData]);
 
-  const taskIds = useMemo(() => new Set(tasks.map(({ ID }) => ID)), [tasks]);
-
-  useSSE(["node", "task"], ({ id: taskId, resource, type }) => {
-    if (type === "node" && taskId === id) {
-      fetchData();
-    }
-
-    if (
-      type === "task" &&
-      (taskIds.has(taskId) || (resource as Record<string, unknown>)?.NodeID === id)
-    ) {
-      fetchData();
-    }
-  });
+  useResourceStream(`/nodes/${id}`, fetchData);
 
   if (error) {
     return <FetchError message="Failed to load node" />;

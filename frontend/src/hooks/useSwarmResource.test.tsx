@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor, act } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { SSEProvider } from "./SSEContext";
 import { useSwarmResource } from "./useSwarmResource";
 
 interface Item {
@@ -44,7 +43,7 @@ afterEach(() => {
 });
 
 function wrapper({ children }: { children: ReactNode }) {
-  return <SSEProvider>{children}</SSEProvider>;
+  return <>{children}</>;
 }
 
 describe("useSwarmResource", () => {

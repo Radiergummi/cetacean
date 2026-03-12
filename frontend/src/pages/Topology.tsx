@@ -7,7 +7,7 @@ import PageHeader from "../components/PageHeader";
 import EmptyState from "../components/EmptyState";
 import { LoadingPage } from "../components/LoadingSkeleton";
 import SegmentedControl from "../components/SegmentedControl";
-import { useSSE } from "../hooks/useSSE";
+import { useResourceStream } from "../hooks/useResourceStream";
 import { computeLayout } from "../lib/layoutElk";
 import { buildLogicalFlow, buildPhysicalFlow, hashColor } from "../lib/topologyTransform";
 import ServiceCardNode from "../components/topology/ServiceCardNode";
@@ -220,8 +220,8 @@ export default function Topology() {
     };
   }, []);
 
-  useSSE(
-    ["service", "task", "node", "network"],
+  useResourceStream(
+    "/events",
     useCallback(() => {
       debouncedRefetch();
     }, [debouncedRefetch]),

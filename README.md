@@ -95,11 +95,6 @@ Optional Prometheus integration for time-series charts:
 A single SSE connection pushes changes to the browser as they happen. List pages update in-place without full reloads.
 Connection status indicator shows you're always current.
 
-### Webhook Notifications
-
-Configurable rules with [expr](https://github.com/expr-lang/expr) expressions, per-rule cooldowns, and a circuit breaker
-for reliability. Alert on task failures, node state changes, or any cluster event.
-
 ## Quick Start
 
 ### Docker Swarm (recommended)
@@ -153,7 +148,6 @@ All configuration is via environment variables:
 | `CETACEAN_LOG_FORMAT`         | `json`                        | Log format: `json` or `text`                      |
 | `CETACEAN_DATA_DIR`           | `./data`                      | Directory for snapshot persistence                |
 | `CETACEAN_SNAPSHOT`           | `true`                        | Enable/disable disk snapshots                     |
-| `CETACEAN_NOTIFICATION_RULES` | *(none)*                      | Path to notification webhook rules YAML           |
 | `CETACEAN_SSE_BATCH_INTERVAL` | `100ms`                       | SSE event batching window                         |
 | `CETACEAN_PPROF`              | `false`                       | Enable pprof endpoints at `/debug/pprof/`         |
 
@@ -195,7 +189,7 @@ All configuration is via environment variables:
    minutes and on reconnect.
 
 2. **State Cache** holds all swarm state in memory with `sync.RWMutex`-protected maps. Stacks are derived from labels
-   and rebuilt on mutation. Every change fires callbacks that feed SSE and notifications.
+   and rebuilt on mutation. Every change fires callbacks that feed SSE.
 
 3. **SSE Broadcaster** fans out events to up to 256 browser clients. Events are batched per-client (default 100ms). Slow
    clients get events dropped rather than backpressuring.
@@ -205,27 +199,6 @@ All configuration is via environment variables:
 
 5. **Prometheus Proxy** forwards `/query` and `/query_range` to your Prometheus instance (10MB limit, 30s timeout),
    keeping it unexposed to browsers.
-
-## Notification Webhooks
-
-Send webhook notifications when cluster events match configurable rules:
-
-```yaml
-- name: service-failures
-  match: type == "task" && action == "update"
-  condition: resource.Status.State == "failed"
-  webhook: https://hooks.slack.com/services/...
-  cooldown: 5m
-
-- name: node-down
-  match: type == "node" && action == "update"
-  condition: resource.Status.State != "ready"
-  webhook: https://hooks.slack.com/services/...
-  cooldown: 10m
-```
-
-Rules use [expr](https://github.com/expr-lang/expr) expressions evaluated against Docker API types. Includes a circuit
-breaker (opens after 5 consecutive failures, half-open retry every 30s) and per-rule cooldowns.
 
 ## API Reference
 
@@ -269,8 +242,6 @@ All endpoints are `GET` and return JSON.
 | `GET /api/metrics/query_range` | Prometheus range query proxy                        |
 | `GET /api/topology/networks`   | Service-to-service network topology                 |
 | `GET /api/topology/placement`  | Node-to-service placement topology                  |
-| `GET /api/notifications/rules` | Notification rule statuses                          |
-
 ### Query Parameters
 
 List endpoints:

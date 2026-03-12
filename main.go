@@ -17,7 +17,6 @@ import (
 	"cetacean/internal/cache"
 	"cetacean/internal/config"
 	"cetacean/internal/docker"
-	"cetacean/internal/notify"
 	"cetacean/internal/version"
 )
 
@@ -51,27 +50,9 @@ func main() {
 	broadcaster := api.NewBroadcaster(cfg.SSEBatchInterval)
 	defer broadcaster.Close()
 
-	// Notification webhooks (optional)
-	var notifier *notify.Notifier
-	if cfg.NotificationsFile != "" {
-		rules, err := notify.LoadRules(cfg.NotificationsFile)
-		if err != nil {
-			slog.Error("failed to load notification rules", "error", err)
-			os.Exit(1)
-		}
-		if len(rules) > 0 {
-			slog.Info("loaded notification rules", "count", len(rules))
-			notifier = notify.New(rules)
-			defer notifier.Close()
-		}
-	}
-
 	// State cache — broadcasts changes via SSE
 	stateCache := cache.New(func(e cache.Event) {
 		broadcaster.Broadcast(e)
-		if notifier != nil {
-			notifier.HandleEvent(e, cache.ExtractName(e))
-		}
 	})
 
 	// Docker client + watcher
@@ -114,7 +95,7 @@ func main() {
 		promProxy = api.PrometheusNotConfiguredHandler()
 		slog.Warn("prometheus not configured, metrics disabled")
 	}
-	handlers := api.NewHandlers(stateCache, dockerClient, dockerClient, watcher.Ready(), notifier, promClient)
+	handlers := api.NewHandlers(stateCache, broadcaster, dockerClient, dockerClient, watcher.Ready(), promClient)
 
 	// SPA
 	distFS, err := fs.Sub(frontendDist, "frontend/dist")

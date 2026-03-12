@@ -1,12 +1,12 @@
 import {Menu, X} from "lucide-react";
 import type React from "react";
-import {useState} from "react";
+import {useEffect, useRef, useState} from "react";
 import {BrowserRouter, Link, Route, Routes, useLocation} from "react-router-dom";
 import ConnectionStatus from "./components/ConnectionStatus";
 import ErrorBoundary from "./components/ErrorBoundary";
 import {GlobalSearch} from "./components/search";
 import ThemeToggle from "./components/ThemeToggle";
-import {SSEProvider} from "./hooks/SSEContext";
+import {ConnectionProvider} from "./hooks/useResourceStream";
 import ClusterOverview from "./pages/ClusterOverview";
 import ConfigDetail from "./pages/ConfigDetail";
 import ConfigList from "./pages/ConfigList";
@@ -113,10 +113,40 @@ function NavLinks() {
     );
 }
 
+function ConnectionTracker({children}: { children: React.ReactNode }) {
+    const [connected, setConnected] = useState(true);
+    const [lastEventAt, setLastEventAt] = useState<number | null>(null);
+    const lastEventAtRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        const es = new EventSource("/events");
+        es.onopen = () => setConnected(true);
+        es.onerror = () => setConnected(false);
+
+        const touch = () => {
+            const now = Date.now();
+            lastEventAtRef.current = now;
+            setLastEventAt(now);
+        };
+
+        const eventTypes = ["node", "service", "task", "config", "secret", "network", "volume", "stack", "batch"];
+        for (const type of eventTypes) {
+            es.addEventListener(type, touch);
+        }
+        return () => es.close();
+    }, []);
+
+    return (
+        <ConnectionProvider value={{connected, lastEventAt}}>
+            {children}
+        </ConnectionProvider>
+    );
+}
+
 export default function App() {
     return (
         <BrowserRouter>
-            <SSEProvider>
+            <ConnectionTracker>
                 <Layout>
                     <Routes>
                         <Route path="/" element={<ClusterOverview/>}/>
@@ -141,7 +171,7 @@ export default function App() {
                         <Route path="*" element={<NotFound/>}/>
                     </Routes>
                 </Layout>
-            </SSEProvider>
+            </ConnectionTracker>
         </BrowserRouter>
     );
 }

@@ -15,9 +15,8 @@ type Config struct {
 	LogLevel      string // "debug", "info", "warn", "error"
 	LogFormat     string // "json", "text"
 	DataDir       string // CETACEAN_DATA_DIR, default "./data"
-	Snapshot          bool          // CETACEAN_SNAPSHOT, default true
-	NotificationsFile string        // CETACEAN_NOTIFICATIONS_FILE, optional
-	SSEBatchInterval  time.Duration // CETACEAN_SSE_BATCH_INTERVAL, default 100ms
+	Snapshot         bool          // CETACEAN_SNAPSHOT, default true
+	SSEBatchInterval time.Duration // CETACEAN_SSE_BATCH_INTERVAL, default 100ms
 	Pprof             bool          // CETACEAN_PPROF, default false
 }
 
@@ -35,8 +34,7 @@ func Load() (*Config, error) {
 		LogFormat:         envOr("CETACEAN_LOG_FORMAT", "json"),
 		DataDir:           envOr("CETACEAN_DATA_DIR", "./data"),
 		Snapshot:          envBool("CETACEAN_SNAPSHOT", true),
-		NotificationsFile: os.Getenv("CETACEAN_NOTIFICATIONS_FILE"),
-		SSEBatchInterval:  batchInterval,
+		SSEBatchInterval: batchInterval,
 		Pprof:             envBool("CETACEAN_PPROF", false),
 	}
 

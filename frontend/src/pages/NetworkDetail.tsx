@@ -1,5 +1,5 @@
 import { useParams } from "react-router-dom";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { api } from "../api/client";
 import type { Network, ServiceRef, HistoryEntry } from "../api/types";
 import InfoCard from "../components/InfoCard";
@@ -8,7 +8,7 @@ import { LoadingDetail } from "../components/LoadingSkeleton";
 import FetchError from "../components/FetchError";
 import ActivityFeed from "../components/ActivityFeed";
 import ServiceRefList from "../components/ServiceRefList";
-import { useSSE } from "../hooks/useSSE";
+import { useResourceStream } from "../hooks/useResourceStream";
 import { KeyValuePills, ResourceId, ResourceLink, SectionHeader, Timestamp } from "../components/data";
 
 function NetworkFlags({ network }: { network: Network }) {
@@ -104,15 +104,7 @@ export default function NetworkDetail() {
 
   useEffect(fetchData, [fetchData]);
 
-  const serviceTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(serviceTimerRef.current), []);
-  useSSE(["network", "service"], (e) => {
-    if (e.type === "network" && e.id === id) fetchData();
-    if (e.type === "service") {
-      clearTimeout(serviceTimerRef.current);
-      serviceTimerRef.current = setTimeout(fetchData, 500);
-    }
-  });
+  useResourceStream(`/networks/${id}`, fetchData);
 
   if (error) return <FetchError message="Failed to load network" />;
   if (!network) return <LoadingDetail />;

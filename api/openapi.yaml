@@ -51,8 +51,6 @@ tags:
     description: Prometheus metrics proxy and monitoring status
   - name: Events
     description: Real-time SSE event stream
-  - name: Notifications
-    description: Webhook notification rule status
   - name: Documentation
     description: API spec and JSON-LD context
 
@@ -1066,30 +1064,6 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  # ── Notifications ────────────────────────────────────────────────────
-
-  /notifications/rules:
-    get:
-      operationId: getNotificationRules
-      tags: [Notifications]
-      summary: Notification rule statuses
-      description: |
-        Returns the current status of all configured notification rules,
-        including fire counts and circuit breaker state.
-        Returns an empty array if no notifier is configured.
-      responses:
-        "200":
-          description: Rule statuses
-          headers:
-            ETag:
-              $ref: "#/components/headers/ETag"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RuleStatusCollection"
-        "304":
-          $ref: "#/components/responses/NotModified"
-
   # ── Search ───────────────────────────────────────────────────────────
 
   /search:
@@ -1505,16 +1479,6 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/HistoryEntry"
-
-    RuleStatusCollection:
-      allOf:
-        - $ref: "#/components/schemas/CollectionEnvelope"
-        - type: object
-          properties:
-            items:
-              type: array
-              items:
-                $ref: "#/components/schemas/RuleStatus"
 
     DiskUsageCollection:
       allOf:
@@ -1936,27 +1900,6 @@ components:
         state:
           type: string
           description: Present for services and tasks
-
-    # ── Notifications ────────────────────────────────────────────────
-
-    RuleStatus:
-      type: object
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        enabled:
-          type: boolean
-        lastFired:
-          type: string
-          format: date-time
-        fireCount:
-          type: integer
-        circuitOpen:
-          type: boolean
-        consecFailures:
-          type: integer
 
     # ── Topology ─────────────────────────────────────────────────────
 

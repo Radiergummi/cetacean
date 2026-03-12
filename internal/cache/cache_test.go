@@ -1018,6 +1018,114 @@ func TestCache_ServicesUsingVolume(t *testing.T) {
 
 func ptr[T any](v T) *T { return &v }
 
+func TestCache_SetService_EmitsCrossRefEvents(t *testing.T) {
+	var events []Event
+	c := New(func(e Event) { events = append(events, e) })
+
+	svc := swarm.Service{ID: "svc1"}
+	svc.Spec.Name = "web"
+	svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{
+		Configs: []*swarm.ConfigReference{{ConfigID: "cfg1", ConfigName: "app-config"}},
+	}
+	svc.Spec.TaskTemplate.Networks = []swarm.NetworkAttachmentConfig{{Target: "net1"}}
+	c.SetService(svc)
+
+	if len(events) != 3 {
+		t.Fatalf("expected 3 events, got %d: %+v", len(events), events)
+	}
+	if events[0].Type != "service" || events[0].Action != "update" {
+		t.Errorf("event[0]: expected service/update, got %s/%s", events[0].Type, events[0].Action)
+	}
+	refEvents := events[1:]
+	hasConfig := false
+	hasNetwork := false
+	for _, e := range refEvents {
+		if e.Action != "ref_changed" {
+			t.Errorf("expected ref_changed action, got %s", e.Action)
+		}
+		if e.Type == "config" && e.ID == "cfg1" {
+			hasConfig = true
+		}
+		if e.Type == "network" && e.ID == "net1" {
+			hasNetwork = true
+		}
+	}
+	if !hasConfig {
+		t.Error("missing ref_changed event for config cfg1")
+	}
+	if !hasNetwork {
+		t.Error("missing ref_changed event for network net1")
+	}
+}
+
+func TestCache_SetService_RefChangeDiff(t *testing.T) {
+	var events []Event
+	c := New(func(e Event) { events = append(events, e) })
+
+	svc := swarm.Service{ID: "svc1"}
+	svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{
+		Configs: []*swarm.ConfigReference{{ConfigID: "cfg1"}},
+	}
+	c.SetService(svc)
+	events = nil
+
+	svc2 := swarm.Service{ID: "svc1"}
+	svc2.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{
+		Configs: []*swarm.ConfigReference{{ConfigID: "cfg2"}},
+	}
+	c.SetService(svc2)
+
+	if len(events) != 3 {
+		t.Fatalf("expected 3 events, got %d: %+v", len(events), events)
+	}
+	refEvents := events[1:]
+	ids := map[string]bool{}
+	for _, e := range refEvents {
+		if e.Type != "config" || e.Action != "ref_changed" {
+			t.Errorf("expected config/ref_changed, got %s/%s", e.Type, e.Action)
+		}
+		ids[e.ID] = true
+	}
+	if !ids["cfg1"] || !ids["cfg2"] {
+		t.Errorf("expected ref_changed for both cfg1 and cfg2, got %v", ids)
+	}
+}
+
+func TestCache_DeleteService_EmitsCrossRefEvents(t *testing.T) {
+	var events []Event
+	c := New(func(e Event) { events = append(events, e) })
+
+	svc := swarm.Service{ID: "svc1"}
+	svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{
+		Secrets: []*swarm.SecretReference{{SecretID: "sec1"}},
+	}
+	c.SetService(svc)
+	events = nil
+
+	c.DeleteService("svc1")
+
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events, got %d: %+v", len(events), events)
+	}
+	if events[0].Type != "service" || events[0].Action != "remove" {
+		t.Errorf("event[0]: expected service/remove, got %s/%s", events[0].Type, events[0].Action)
+	}
+	if events[1].Type != "secret" || events[1].Action != "ref_changed" || events[1].ID != "sec1" {
+		t.Errorf("event[1]: expected secret/ref_changed/sec1, got %s/%s/%s", events[1].Type, events[1].Action, events[1].ID)
+	}
+}
+
+func TestCache_SetService_NoRefChange_NoExtraEvents(t *testing.T) {
+	var events []Event
+	c := New(func(e Event) { events = append(events, e) })
+
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d: %+v", len(events), events)
+	}
+}
+
 func TestSnapshot_ConvergenceAndReservations(t *testing.T) {
 	c := New(nil)
 	c.SetNode(swarm.Node{

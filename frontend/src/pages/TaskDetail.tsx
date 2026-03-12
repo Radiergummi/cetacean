@@ -11,7 +11,7 @@ import { LoadingDetail } from "../components/LoadingSkeleton";
 import { LogViewer } from "../components/log";
 import PageHeader from "../components/PageHeader";
 import TaskStatusBadge from "../components/TaskStatusBadge";
-import { useSSE } from "../hooks/useSSE";
+import { useResourceStream } from "../hooks/useResourceStream";
 
 export default function TaskDetail() {
   const { id } = useParams<{ id: string }>();
@@ -30,11 +30,7 @@ export default function TaskDetail() {
 
   useEffect(fetchData, [fetchData]);
 
-  useSSE(["task"], (e) => {
-    if (e.id === id) {
-      fetchData();
-    }
-  });
+  useResourceStream(`/tasks/${id}`, fetchData);
 
   if (error) {
     return <FetchError message="Failed to load task" />;

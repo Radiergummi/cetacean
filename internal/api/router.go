@@ -30,47 +30,46 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 	mux.HandleFunc("GET /plugins", contentNegotiated(h.HandlePlugins, spa))
 
 	// Nodes
-	mux.HandleFunc("GET /nodes", contentNegotiated(h.HandleListNodes, spa))
-	mux.HandleFunc("GET /nodes/{id}", contentNegotiated(h.HandleGetNode, spa))
+	mux.HandleFunc("GET /nodes", contentNegotiatedWithSSE(h.HandleListNodes, func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, "node") }, spa))
+	mux.HandleFunc("GET /nodes/{id}", contentNegotiatedWithSSE(h.HandleGetNode, func(w http.ResponseWriter, r *http.Request) { h.streamResource(w, r, "node", r.PathValue("id")) }, spa))
 	mux.HandleFunc("GET /nodes/{id}/tasks", contentNegotiated(h.HandleNodeTasks, spa))
 
 	// Services
-	mux.HandleFunc("GET /services", contentNegotiated(h.HandleListServices, spa))
-	mux.HandleFunc("GET /services/{id}", contentNegotiated(h.HandleGetService, spa))
+	mux.HandleFunc("GET /services", contentNegotiatedWithSSE(h.HandleListServices, func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, "service") }, spa))
+	mux.HandleFunc("GET /services/{id}", contentNegotiatedWithSSE(h.HandleGetService, func(w http.ResponseWriter, r *http.Request) { h.streamResource(w, r, "service", r.PathValue("id")) }, spa))
 	mux.HandleFunc("GET /services/{id}/tasks", contentNegotiated(h.HandleServiceTasks, spa))
 	mux.HandleFunc("GET /services/{id}/logs", contentNegotiatedWithSSE(h.HandleServiceLogs, h.HandleServiceLogs, spa))
 
 	// Tasks
-	mux.HandleFunc("GET /tasks", contentNegotiated(h.HandleListTasks, spa))
-	mux.HandleFunc("GET /tasks/{id}", contentNegotiated(h.HandleGetTask, spa))
+	mux.HandleFunc("GET /tasks", contentNegotiatedWithSSE(h.HandleListTasks, func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, "task") }, spa))
+	mux.HandleFunc("GET /tasks/{id}", contentNegotiatedWithSSE(h.HandleGetTask, func(w http.ResponseWriter, r *http.Request) { h.streamResource(w, r, "task", r.PathValue("id")) }, spa))
 	mux.HandleFunc("GET /tasks/{id}/logs", contentNegotiatedWithSSE(h.HandleTaskLogs, h.HandleTaskLogs, spa))
 
 	// History
 	mux.HandleFunc("GET /history", contentNegotiated(h.HandleHistory, spa))
 
 	// Stacks
-	mux.HandleFunc("GET /stacks", contentNegotiated(h.HandleListStacks, spa))
+	mux.HandleFunc("GET /stacks", contentNegotiatedWithSSE(h.HandleListStacks, func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, "stack") }, spa))
 	mux.HandleFunc("GET /stacks/summary", contentNegotiated(h.HandleStackSummary, spa))
-	mux.HandleFunc("GET /stacks/{name}", contentNegotiated(h.HandleGetStack, spa))
+	mux.HandleFunc("GET /stacks/{name}", contentNegotiatedWithSSE(h.HandleGetStack, func(w http.ResponseWriter, r *http.Request) {
+		h.broadcaster.serveSSE(w, r, stackMatcher(h.cache, r.PathValue("name")))
+	}, spa))
 
 	// Configs
-	mux.HandleFunc("GET /configs", contentNegotiated(h.HandleListConfigs, spa))
-	mux.HandleFunc("GET /configs/{id}", contentNegotiated(h.HandleGetConfig, spa))
+	mux.HandleFunc("GET /configs", contentNegotiatedWithSSE(h.HandleListConfigs, func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, "config") }, spa))
+	mux.HandleFunc("GET /configs/{id}", contentNegotiatedWithSSE(h.HandleGetConfig, func(w http.ResponseWriter, r *http.Request) { h.streamResource(w, r, "config", r.PathValue("id")) }, spa))
 
 	// Secrets
-	mux.HandleFunc("GET /secrets", contentNegotiated(h.HandleListSecrets, spa))
-	mux.HandleFunc("GET /secrets/{id}", contentNegotiated(h.HandleGetSecret, spa))
+	mux.HandleFunc("GET /secrets", contentNegotiatedWithSSE(h.HandleListSecrets, func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, "secret") }, spa))
+	mux.HandleFunc("GET /secrets/{id}", contentNegotiatedWithSSE(h.HandleGetSecret, func(w http.ResponseWriter, r *http.Request) { h.streamResource(w, r, "secret", r.PathValue("id")) }, spa))
 
 	// Networks
-	mux.HandleFunc("GET /networks", contentNegotiated(h.HandleListNetworks, spa))
-	mux.HandleFunc("GET /networks/{id}", contentNegotiated(h.HandleGetNetwork, spa))
+	mux.HandleFunc("GET /networks", contentNegotiatedWithSSE(h.HandleListNetworks, func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, "network") }, spa))
+	mux.HandleFunc("GET /networks/{id}", contentNegotiatedWithSSE(h.HandleGetNetwork, func(w http.ResponseWriter, r *http.Request) { h.streamResource(w, r, "network", r.PathValue("id")) }, spa))
 
 	// Volumes
-	mux.HandleFunc("GET /volumes", contentNegotiated(h.HandleListVolumes, spa))
-	mux.HandleFunc("GET /volumes/{name}", contentNegotiated(h.HandleGetVolume, spa))
-
-	// Notifications
-	mux.HandleFunc("GET /notifications/rules", contentNegotiated(h.HandleNotificationRules, spa))
+	mux.HandleFunc("GET /volumes", contentNegotiatedWithSSE(h.HandleListVolumes, func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, "volume") }, spa))
+	mux.HandleFunc("GET /volumes/{name}", contentNegotiatedWithSSE(h.HandleGetVolume, func(w http.ResponseWriter, r *http.Request) { h.streamResource(w, r, "volume", r.PathValue("name")) }, spa))
 
 	// Search
 	mux.HandleFunc("GET /search", contentNegotiated(h.HandleSearch, spa))

@@ -1,5 +1,5 @@
 import { useParams } from "react-router-dom";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { api } from "../api/client";
 import type { Volume, ServiceRef, HistoryEntry } from "../api/types";
 import InfoCard from "../components/InfoCard";
@@ -8,7 +8,7 @@ import { LoadingDetail } from "../components/LoadingSkeleton";
 import FetchError from "../components/FetchError";
 import ActivityFeed from "../components/ActivityFeed";
 import ServiceRefList from "../components/ServiceRefList";
-import { useSSE } from "../hooks/useSSE";
+import { useResourceStream } from "../hooks/useResourceStream";
 import { KeyValuePills, ResourceLink, SectionHeader, Timestamp } from "../components/data";
 
 export default function VolumeDetail() {
@@ -35,15 +35,7 @@ export default function VolumeDetail() {
 
   useEffect(fetchData, [fetchData]);
 
-  const serviceTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(serviceTimerRef.current), []);
-  useSSE(["volume", "service"], (e) => {
-    if (e.type === "volume" && e.id === name) fetchData();
-    if (e.type === "service") {
-      clearTimeout(serviceTimerRef.current);
-      serviceTimerRef.current = setTimeout(fetchData, 500);
-    }
-  });
+  useResourceStream(`/volumes/${name}`, fetchData);
 
   if (error) return <FetchError message="Failed to load volume" />;
   if (!volume) return <LoadingDetail />;

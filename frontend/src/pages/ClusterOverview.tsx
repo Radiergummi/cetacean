@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { api, type ClusterSnapshot } from "../api/client";
 import type { HistoryEntry } from "../api/types";
-import { useSSE } from "../hooks/useSSE";
+import { useResourceStream } from "../hooks/useResourceStream";
 import PageHeader from "../components/PageHeader";
 import ActivityFeed from "../components/ActivityFeed";
 import DiskUsageSection from "../components/DiskUsageSection";
@@ -45,8 +45,8 @@ export default function ClusterOverview() {
     fetchHistory();
   }, [fetchSnapshot, fetchHistory]);
 
-  useSSE(
-    ["node", "service", "task", "stack"],
+  useResourceStream(
+    "/events",
     useCallback(() => {
       fetchSnapshot();
       fetchHistory();

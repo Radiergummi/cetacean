@@ -54,8 +54,8 @@ func HandleScalarJS(js []byte) http.HandlerFunc {
 	}
 }
 
-// convertYAMLToJSON recursively converts yaml.v3 types to JSON-compatible types.
-// yaml.v3 unmarshals maps as map[string]any but integer keys as map[any]any.
+// convertYAMLToJSON recursively converts yaml.v3 map[string]any types to
+// JSON-compatible types. Does not handle map[any]any (non-string keys).
 func convertYAMLToJSON(v any) any {
 	switch v := v.(type) {
 	case map[string]any:

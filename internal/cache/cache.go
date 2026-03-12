@@ -139,6 +139,60 @@ func ExtractName(e Event) string {
 	}
 }
 
+// --- Cross-reference event support ---
+
+type refSet struct {
+	configs  map[string]bool
+	secrets  map[string]bool
+	networks map[string]bool
+	volumes  map[string]bool
+}
+
+func serviceRefs(s swarm.Service) refSet {
+	r := refSet{
+		configs:  make(map[string]bool),
+		secrets:  make(map[string]bool),
+		networks: make(map[string]bool),
+		volumes:  make(map[string]bool),
+	}
+	if cs := s.Spec.TaskTemplate.ContainerSpec; cs != nil {
+		for _, c := range cs.Configs {
+			r.configs[c.ConfigID] = true
+		}
+		for _, s := range cs.Secrets {
+			r.secrets[s.SecretID] = true
+		}
+		for _, m := range cs.Mounts {
+			if m.Type == "volume" && m.Source != "" {
+				r.volumes[m.Source] = true
+			}
+		}
+	}
+	for _, n := range s.Spec.TaskTemplate.Networks {
+		r.networks[n.Target] = true
+	}
+	return r
+}
+
+func (c *Cache) notifyRefChanges(old, new refSet) {
+	diffNotify := func(typ string, oldSet, newSet map[string]bool) {
+		for id := range oldSet {
+			if !newSet[id] {
+				c.notify(Event{Type: typ, Action: "ref_changed", ID: id})
+			}
+		}
+		for id := range newSet {
+			if !oldSet[id] {
+				c.notify(Event{Type: typ, Action: "ref_changed", ID: id})
+			}
+		}
+	}
+	diffNotify("config", old.configs, new.configs)
+	diffNotify("secret", old.secrets, new.secrets)
+	diffNotify("network", old.networks, new.networks)
+	diffNotify("volume", old.volumes, new.volumes)
+}
+
 // --- Nodes ---
 
 func (c *Cache) SetNode(n swarm.Node) {
@@ -176,13 +230,18 @@ func (c *Cache) ListNodes() []swarm.Node {
 
 func (c *Cache) SetService(s swarm.Service) {
 	c.mu.Lock()
+	var oldRefs refSet
 	if old, ok := c.services[s.ID]; ok {
+		oldRefs = serviceRefs(old)
 		c.removeFromStack("service", old.ID, old.Spec.Labels)
 	}
 	c.services[s.ID] = s
 	c.addToStack("service", s.ID, s.Spec.Labels)
+	newRefs := serviceRefs(s)
 	c.mu.Unlock()
+
 	c.notify(Event{Type: "service", Action: "update", ID: s.ID, Resource: s})
+	c.notifyRefChanges(oldRefs, newRefs)
 }
 
 func (c *Cache) GetService(id string) (swarm.Service, bool) {
@@ -194,12 +253,16 @@ func (c *Cache) GetService(id string) (swarm.Service, bool) {
 
 func (c *Cache) DeleteService(id string) {
 	c.mu.Lock()
+	var oldRefs refSet
 	if old, ok := c.services[id]; ok {
+		oldRefs = serviceRefs(old)
 		c.removeFromStack("service", id, old.Spec.Labels)
 	}
 	delete(c.services, id)
 	c.mu.Unlock()
+
 	c.notify(Event{Type: "service", Action: "remove", ID: id})
+	c.notifyRefChanges(oldRefs, refSet{})
 }
 
 func (c *Cache) ListServices() []swarm.Service {

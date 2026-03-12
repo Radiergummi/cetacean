@@ -46,7 +46,6 @@ func TestLoad_AllEnvVars(t *testing.T) {
 	t.Setenv("CETACEAN_LOG_FORMAT", "text")
 	t.Setenv("CETACEAN_DATA_DIR", "/tmp/data")
 	t.Setenv("CETACEAN_SNAPSHOT", "false")
-	t.Setenv("CETACEAN_NOTIFICATIONS_FILE", "/tmp/rules.json")
 
 	cfg, err := Load()
 	if err != nil {
@@ -72,9 +71,6 @@ func TestLoad_AllEnvVars(t *testing.T) {
 	}
 	if cfg.Snapshot != false {
 		t.Errorf("Snapshot=%v, want false", cfg.Snapshot)
-	}
-	if cfg.NotificationsFile != "/tmp/rules.json" {
-		t.Errorf("NotificationsFile=%s, want /tmp/rules.json", cfg.NotificationsFile)
 	}
 	if cfg.SSEBatchInterval != 100*time.Millisecond {
 		t.Errorf("SSEBatchInterval=%v, want 100ms", cfg.SSEBatchInterval)

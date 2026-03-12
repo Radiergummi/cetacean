@@ -471,12 +471,6 @@ curl -H "Accept: text/event-stream" http://localhost:9000/events
 curl -H "Accept: text/event-stream" "http://localhost:9000/events?types=service,task"
 ```
 
-### Notifications
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/notifications/rules` | Configured notification rules and their status. |
-
 ### API Documentation
 
 | Method | Path | Description |

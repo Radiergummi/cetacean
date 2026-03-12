@@ -1,8 +1,8 @@
 import {useEffect, useRef, useState} from "react";
-import {useSSEConnection} from "../hooks/SSEContext";
+import {useConnection} from "../hooks/useResourceStream";
 
 export default function ConnectionStatus() {
-    const {connected, lastEventAt} = useSSEConnection();
+    const {connected, lastEventAt} = useConnection();
     const [ago, setAgo] = useState("");
     const [pulsing, setPulsing] = useState(false);
     const previousEventRef = useRef(lastEventAt);

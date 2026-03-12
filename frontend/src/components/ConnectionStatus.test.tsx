@@ -1,63 +1,36 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, act } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { SSEProvider } from "../hooks/SSEContext";
+import { ConnectionProvider } from "../hooks/useResourceStream";
 import ConnectionStatus from "./ConnectionStatus";
-
-class MockEventSource {
-  static instance: MockEventSource;
-  onopen: (() => void) | null = null;
-  onerror: (() => void) | null = null;
-  listeners = new Map<string, ((e: MessageEvent) => void)[]>();
-  closed = false;
-
-  constructor(_url: string) {
-    MockEventSource.instance = this;
-  }
-  addEventListener(type: string, handler: (e: MessageEvent) => void) {
-    const existing = this.listeners.get(type) || [];
-    existing.push(handler);
-    this.listeners.set(type, existing);
-  }
-  close() {
-    this.closed = true;
-  }
-  simulateOpen() {
-    this.onopen?.();
-  }
-  simulateError() {
-    this.onerror?.();
-  }
-}
-
-beforeEach(() => {
-  vi.stubGlobal("EventSource", MockEventSource);
-});
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function wrapper({ children }: { children: ReactNode }) {
-  return <SSEProvider>{children}</SSEProvider>;
+function createWrapper(connected: boolean, lastEventAt: number | null) {
+  return function wrapper({ children }: { children: ReactNode }) {
+    return (
+      <ConnectionProvider value={{ connected, lastEventAt }}>
+        {children}
+      </ConnectionProvider>
+    );
+  };
 }
 
 describe("ConnectionStatus", () => {
   it("shows 'Live' when connected", () => {
-    render(<ConnectionStatus />, { wrapper });
+    render(<ConnectionStatus />, { wrapper: createWrapper(true, null) });
     expect(screen.getByText("Live")).toBeInTheDocument();
   });
 
-  it("shows 'Reconnecting' on error", () => {
-    render(<ConnectionStatus />, { wrapper });
-    act(() => MockEventSource.instance.simulateError());
+  it("shows 'Reconnecting' when disconnected", () => {
+    render(<ConnectionStatus />, { wrapper: createWrapper(false, null) });
     expect(screen.getByText("Reconnecting")).toBeInTheDocument();
   });
 
-  it("recovers to 'Live' on reconnect", () => {
-    render(<ConnectionStatus />, { wrapper });
-    act(() => MockEventSource.instance.simulateError());
-    act(() => MockEventSource.instance.simulateOpen());
+  it("shows 'Live' when reconnected", () => {
+    render(<ConnectionStatus />, { wrapper: createWrapper(true, Date.now()) });
     expect(screen.getByText("Live")).toBeInTheDocument();
   });
 });

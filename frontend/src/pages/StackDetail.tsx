@@ -1,5 +1,5 @@
 import type React from "react";
-import {useCallback, useEffect, useRef, useState} from "react";
+import {useCallback, useEffect, useState} from "react";
 import {Link, useParams} from "react-router-dom";
 import {api} from "../api/client";
 import type {StackDetail as StackDetailType, Task} from "../api/types";
@@ -7,7 +7,7 @@ import FetchError from "../components/FetchError";
 import {LoadingDetail} from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
-import {useSSE} from "../hooks/useSSE";
+import {useResourceStream} from "../hooks/useResourceStream";
 import SectionHeader from "../components/data/SectionHeader";
 
 function StackSection({title, children}: { title: string; children: React.ReactNode }) {
@@ -38,12 +38,7 @@ export default function StackDetail() {
 
     useEffect(fetchData, [fetchData]);
 
-    const fetchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-    useEffect(() => () => clearTimeout(fetchTimerRef.current), []);
-    useSSE(["stack", "service", "task"], useCallback(() => {
-        clearTimeout(fetchTimerRef.current);
-        fetchTimerRef.current = setTimeout(fetchData, 500);
-    }, [fetchData]));
+    useResourceStream(`/stacks/${name}`, fetchData);
 
     useEffect(() => {
         if (!stack?.services?.length) {

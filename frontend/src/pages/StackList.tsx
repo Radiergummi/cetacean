@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import type { StackSummary } from "../api/types";
-import { useSSE } from "../hooks/useSSE";
+import { useResourceStream } from "../hooks/useResourceStream";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { SearchInput } from "../components/search";
 import PageHeader from "../components/PageHeader";
@@ -32,8 +32,8 @@ export default function StackList() {
     load();
   }, [load]);
 
-  useSSE(
-    ["stack", "service", "task"],
+  useResourceStream(
+    "/stacks",
     useCallback(() => {
       load();
     }, [load]),

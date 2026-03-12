@@ -1,6 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useSSE } from "./useSSE";
+import { useResourceStream } from "./useResourceStream";
 import type { PagedResponse } from "../api/types";
+
+const ssePathMap: Record<string, string> = {
+  node: "/nodes",
+  service: "/services",
+  task: "/tasks",
+  config: "/configs",
+  secret: "/secrets",
+  network: "/networks",
+  volume: "/volumes",
+  stack: "/stacks",
+};
 
 export function useSwarmResource<T>(
   fetchFn: () => Promise<PagedResponse<T>>,
@@ -33,8 +44,8 @@ export function useSwarmResource<T>(
     load();
   }, [fetchFn]);
 
-  useSSE(
-    [sseType],
+  useResourceStream(
+    ssePathMap[sseType] ?? `/events?types=${sseType}`,
     useCallback((event) => {
       if (event.action === "remove") {
         setData((prev) => prev.filter((item) => getIdRef.current(item) !== event.id));

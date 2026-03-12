@@ -30,8 +30,8 @@ func setupIntegrationRouter(t *testing.T) http.Handler {
 		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
 	})
 
-	h := NewHandlers(c, nil, nil, closedReady(), nil, nil)
 	b := NewBroadcaster(100 * time.Millisecond)
+	h := NewHandlers(c, b, nil, nil, closedReady(), nil)
 	spa := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte("<html>SPA</html>")) //nolint:errcheck
@@ -113,7 +113,7 @@ func TestContentNegotiationIntegration(t *testing.T) {
 	})
 
 	t.Run("SSE on non-SSE endpoint returns 406", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/nodes", nil)
+		req := httptest.NewRequest("GET", "/history", nil)
 		req.Header.Set("Accept", "text/event-stream")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
@@ -124,7 +124,7 @@ func TestContentNegotiationIntegration(t *testing.T) {
 	})
 
 	t.Run("406 error is RFC 9457 problem+json", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/nodes", nil)
+		req := httptest.NewRequest("GET", "/history", nil)
 		req.Header.Set("Accept", "text/event-stream")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)

@@ -5,10 +5,12 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
 
 	"cetacean/internal/cache"
@@ -16,7 +18,7 @@ import (
 
 type sseClient struct {
 	events chan cache.Event
-	types  map[string]bool // nil means all types
+	match  func(cache.Event) bool // nil means accept all
 	done   chan struct{}
 }
 
@@ -62,7 +64,7 @@ func (b *Broadcaster) fanOut() {
 		case e := <-b.inbox:
 			b.mu.RLock()
 			for c := range b.clients {
-				if c.types != nil && !c.types[e.Type] {
+				if c.match != nil && !c.match(e) {
 					continue
 				}
 				select {
@@ -92,23 +94,27 @@ func (b *Broadcaster) Close() {
 }
 
 func (b *Broadcaster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	var match func(cache.Event) bool
+	if t := r.URL.Query().Get("types"); t != "" {
+		types := make(map[string]bool)
+		for _, typ := range strings.Split(t, ",") {
+			types[strings.TrimSpace(typ)] = true
+		}
+		match = func(e cache.Event) bool { return types[e.Type] }
+	}
+	b.serveSSE(w, r, match)
+}
+
+func (b *Broadcaster) serveSSE(w http.ResponseWriter, r *http.Request, match func(cache.Event) bool) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		writeProblem(w, r, http.StatusInternalServerError, "streaming not supported")
 		return
 	}
 
-	var types map[string]bool
-	if t := r.URL.Query().Get("types"); t != "" {
-		types = make(map[string]bool)
-		for _, typ := range strings.Split(t, ",") {
-			types[strings.TrimSpace(typ)] = true
-		}
-	}
-
 	client := &sseClient{
 		events: make(chan cache.Event, 64),
-		types:  types,
+		match:  match,
 		done:   make(chan struct{}),
 	}
 
@@ -167,6 +173,84 @@ func (b *Broadcaster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				writeBatch(w, flusher, batch, &eventID)
 			}
 			return
+		}
+	}
+}
+
+// typeMatcher returns a match function that accepts events of the given type.
+func typeMatcher(typ string) func(cache.Event) bool {
+	return func(e cache.Event) bool {
+		return e.Type == typ
+	}
+}
+
+// resourceMatcher returns a match function for per-resource SSE streams.
+func resourceMatcher(typ, id string) func(cache.Event) bool {
+	switch typ {
+	case "node":
+		return func(e cache.Event) bool {
+			if e.Type == "node" && e.ID == id {
+				return true
+			}
+			if e.Type == "task" {
+				if t, ok := e.Resource.(swarm.Task); ok {
+					return t.NodeID == id
+				}
+			}
+			return false
+		}
+	case "service":
+		return func(e cache.Event) bool {
+			if e.Type == "service" && e.ID == id {
+				return true
+			}
+			if e.Type == "task" {
+				if t, ok := e.Resource.(swarm.Task); ok {
+					return t.ServiceID == id
+				}
+			}
+			return false
+		}
+	case "task":
+		return func(e cache.Event) bool {
+			return e.Type == "task" && e.ID == id
+		}
+	default:
+		// config, secret, network, volume — match by type+ID.
+		// Cross-reference "ref_changed" events already have the correct type+ID.
+		return func(e cache.Event) bool {
+			return e.Type == typ && e.ID == id
+		}
+	}
+}
+
+// stackMatcher returns a match function for stack SSE streams.
+func stackMatcher(c *cache.Cache, name string) func(cache.Event) bool {
+	return func(e cache.Event) bool {
+		stack, ok := c.GetStack(name)
+		if !ok {
+			return false
+		}
+		switch e.Type {
+		case "service":
+			return slices.Contains(stack.Services, e.ID)
+		case "config":
+			return slices.Contains(stack.Configs, e.ID)
+		case "secret":
+			return slices.Contains(stack.Secrets, e.ID)
+		case "network":
+			return slices.Contains(stack.Networks, e.ID)
+		case "volume":
+			return slices.Contains(stack.Volumes, e.ID)
+		case "task":
+			if t, ok := e.Resource.(swarm.Task); ok {
+				return slices.Contains(stack.Services, t.ServiceID)
+			}
+			return false
+		case "stack":
+			return e.ID == name
+		default:
+			return false
 		}
 	}
 }

@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/docker/docker/api/types/swarm"
+
 	"cetacean/internal/cache"
 )
 
@@ -259,6 +261,58 @@ func TestSSE_429OnConnectionLimit(t *testing.T) {
 	}
 	if w.Header().Get("Retry-After") != "5" {
 		t.Errorf("expected Retry-After: 5, got %q", w.Header().Get("Retry-After"))
+	}
+}
+
+func TestSSE_ResourceMatcher_Config(t *testing.T) {
+	match := resourceMatcher("config", "cfg1")
+	if !match(cache.Event{Type: "config", Action: "update", ID: "cfg1"}) {
+		t.Error("should match direct config event")
+	}
+	if !match(cache.Event{Type: "config", Action: "ref_changed", ID: "cfg1"}) {
+		t.Error("should match ref_changed event")
+	}
+	if match(cache.Event{Type: "config", Action: "update", ID: "cfg2"}) {
+		t.Error("should not match different config")
+	}
+	if match(cache.Event{Type: "service", Action: "update", ID: "svc1"}) {
+		t.Error("should not match service event")
+	}
+}
+
+func TestSSE_ResourceMatcher_Service(t *testing.T) {
+	match := resourceMatcher("service", "svc1")
+	if !match(cache.Event{Type: "service", Action: "update", ID: "svc1"}) {
+		t.Error("should match direct service event")
+	}
+	if !match(cache.Event{Type: "task", Action: "update", ID: "t1", Resource: swarm.Task{ServiceID: "svc1"}}) {
+		t.Error("should match task for this service")
+	}
+	if match(cache.Event{Type: "task", Action: "update", ID: "t2", Resource: swarm.Task{ServiceID: "svc2"}}) {
+		t.Error("should not match task for different service")
+	}
+}
+
+func TestSSE_ResourceMatcher_Node(t *testing.T) {
+	match := resourceMatcher("node", "n1")
+	if !match(cache.Event{Type: "node", Action: "update", ID: "n1"}) {
+		t.Error("should match direct node event")
+	}
+	if !match(cache.Event{Type: "task", Action: "update", ID: "t1", Resource: swarm.Task{NodeID: "n1"}}) {
+		t.Error("should match task on this node")
+	}
+	if match(cache.Event{Type: "task", Action: "update", ID: "t2", Resource: swarm.Task{NodeID: "n2"}}) {
+		t.Error("should not match task on different node")
+	}
+}
+
+func TestSSE_TypeMatcher(t *testing.T) {
+	match := typeMatcher("node")
+	if !match(cache.Event{Type: "node", Action: "update", ID: "n1"}) {
+		t.Error("should match node event")
+	}
+	if match(cache.Event{Type: "service", Action: "update", ID: "s1"}) {
+		t.Error("should not match service event")
 	}
 }
 

@@ -1,5 +1,5 @@
 import { useParams } from "react-router-dom";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { api } from "../api/client";
 import type { Config, ServiceRef, HistoryEntry } from "../api/types";
 import PageHeader from "../components/PageHeader";
@@ -7,7 +7,7 @@ import { LoadingDetail } from "../components/LoadingSkeleton";
 import FetchError from "../components/FetchError";
 import ActivityFeed from "../components/ActivityFeed";
 import ServiceRefList from "../components/ServiceRefList";
-import { useSSE } from "../hooks/useSSE";
+import { useResourceStream } from "../hooks/useResourceStream";
 import { KeyValuePills, ResourceId, ResourceLink, SectionHeader, Timestamp } from "../components/data";
 import CodeBlock from "../components/CodeBlock";
 
@@ -35,15 +35,7 @@ export default function ConfigDetail() {
 
   useEffect(fetchData, [fetchData]);
 
-  const serviceTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(serviceTimerRef.current), []);
-  useSSE(["config", "service"], (e) => {
-    if (e.type === "config" && e.id === id) fetchData();
-    if (e.type === "service") {
-      clearTimeout(serviceTimerRef.current);
-      serviceTimerRef.current = setTimeout(fetchData, 500);
-    }
-  });
+  useResourceStream(`/configs/${id}`, fetchData);
 
   if (error) return <FetchError message="Failed to load config" />;
   if (!config) return <LoadingDetail />;

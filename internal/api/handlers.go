@@ -22,7 +22,6 @@ import (
 	"cetacean/internal/cache"
 	"cetacean/internal/docker"
 	"cetacean/internal/filter"
-	"cetacean/internal/notify"
 	"cetacean/internal/version"
 )
 
@@ -45,18 +44,26 @@ type DockerSystemClient interface {
 
 type Handlers struct {
 	cache         *cache.Cache
+	broadcaster   *Broadcaster
 	dockerClient  DockerLogStreamer
 	systemClient  DockerSystemClient
 	ready         <-chan struct{}
-	notifier      *notify.Notifier
 	promClient    *PromClient
 	localNodeMu   sync.Mutex
 	localNodeID   string
 	localNodeDone bool
 }
 
-func NewHandlers(c *cache.Cache, dc DockerLogStreamer, sc DockerSystemClient, ready <-chan struct{}, notifier *notify.Notifier, promClient *PromClient) *Handlers {
-	return &Handlers{cache: c, dockerClient: dc, systemClient: sc, ready: ready, notifier: notifier, promClient: promClient}
+func NewHandlers(c *cache.Cache, b *Broadcaster, dc DockerLogStreamer, sc DockerSystemClient, ready <-chan struct{}, promClient *PromClient) *Handlers {
+	return &Handlers{cache: c, broadcaster: b, dockerClient: dc, systemClient: sc, ready: ready, promClient: promClient}
+}
+
+func (h *Handlers) streamList(w http.ResponseWriter, r *http.Request, typ string) {
+	h.broadcaster.serveSSE(w, r, typeMatcher(typ))
+}
+
+func (h *Handlers) streamResource(w http.ResponseWriter, r *http.Request, typ, id string) {
+	h.broadcaster.serveSSE(w, r, resourceMatcher(typ, id))
 }
 
 func (h *Handlers) isReady() bool {
@@ -1178,17 +1185,6 @@ func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 	resp := applyPagination(volumes, p)
 	writePaginationLinks(w, r, resp.Total, resp.Limit, resp.Offset)
 	writeJSONWithETag(w, r, resp)
-}
-
-// --- Notifications ---
-
-func (h *Handlers) HandleNotificationRules(w http.ResponseWriter, r *http.Request) {
-	if h.notifier == nil {
-		writeJSONWithETag(w, r, NewCollectionResponse([]notify.RuleStatus{}, 0, 0, 0))
-		return
-	}
-	statuses := h.notifier.RuleStatuses()
-	writeJSONWithETag(w, r, NewCollectionResponse(statuses, len(statuses), len(statuses), 0))
 }
 
 // --- Search ---

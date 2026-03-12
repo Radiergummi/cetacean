@@ -77,7 +77,7 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 		Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
 	})
 
-	h := NewHandlers(c, nil, nil, closedReady(), nil, nil)
+	h := NewHandlers(c, nil, nil, nil, closedReady(), nil)
 	b := NewBroadcaster(0)
 	defer b.Close()
 	noopSPA := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -156,13 +156,6 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 			name:       "history",
 			method:     "GET",
 			path:       "/history",
-			accept:     "application/json",
-			wantStatus: 200,
-		},
-		{
-			name:       "notification rules",
-			method:     "GET",
-			path:       "/notifications/rules",
 			accept:     "application/json",
 			wantStatus: 200,
 		},
