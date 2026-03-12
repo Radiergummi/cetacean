@@ -1503,10 +1503,10 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		total += s.count
 	}
 
-	writeJSONWithETag(w, r, map[string]any{
+	writeJSONWithETag(w, r, NewDetailResponse("/search", "SearchResult", map[string]any{
 		"query":   q,
 		"results": results,
 		"counts":  counts,
 		"total":   total,
-	})
+	}))
 }

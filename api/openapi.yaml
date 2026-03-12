@@ -1896,6 +1896,15 @@ components:
     SearchResponse:
       type: object
       properties:
+        "@context":
+          type: string
+          example: /api/context.jsonld
+        "@id":
+          type: string
+          example: /search
+        "@type":
+          type: string
+          example: SearchResult
         query:
           type: string
         results:
