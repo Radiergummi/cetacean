@@ -1642,6 +1642,9 @@ components:
         memoryLimitBytes:
           type: integer
           format: int64
+        cpuLimitCores:
+          type: number
+          format: double
         memoryUsageBytes:
           type: integer
           format: int64
@@ -1679,6 +1682,19 @@ components:
         totalMemory:
           type: integer
           format: int64
+        servicesConverged:
+          type: integer
+        servicesDegraded:
+          type: integer
+        reservedCPU:
+          type: integer
+          format: int64
+        reservedMemory:
+          type: integer
+          format: int64
+        lastSync:
+          type: string
+          format: date-time
         prometheusConfigured:
           type: boolean
         localNodeID:
