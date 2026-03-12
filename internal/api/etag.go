@@ -17,6 +17,9 @@ func computeETag(body []byte) string {
 
 // writeJSONWithETag marshals v to JSON, computes an ETag, and returns
 // 304 Not Modified if the client's If-None-Match header matches.
+// ETag stability for map[string]any relies on goccy/go-json sorting map keys
+// by default (unlike encoding/json). If switching JSON libraries, ensure map
+// key ordering is deterministic or ETags will flap.
 func writeJSONWithETag(w http.ResponseWriter, r *http.Request, v any) {
 	body, err := json.Marshal(v)
 	if err != nil {

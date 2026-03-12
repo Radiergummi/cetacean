@@ -231,6 +231,13 @@ export interface PagedResponse<T> {
   total: number;
 }
 
+export interface CollectionResponse<T> {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export interface HistoryEntry {
   id: number;
   timestamp: string;

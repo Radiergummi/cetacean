@@ -89,6 +89,10 @@ func TestHandleServiceLogs_JSON_NotFound(t *testing.T) {
 	}
 }
 
+func withContentType(r *http.Request, ct ContentType) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), contentTypeKey, ct))
+}
+
 func TestHandleServiceLogs_SSE(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{ID: "svc1"})
@@ -102,6 +106,7 @@ func TestHandleServiceLogs_SSE(t *testing.T) {
 	req := httptest.NewRequest("GET", "/services/svc1/logs", nil)
 	req.SetPathValue("id", "svc1")
 	req.Header.Set("Accept", "text/event-stream")
+	req = withContentType(req, ContentTypeSSE)
 	w := httptest.NewRecorder()
 	h.HandleServiceLogs(w, req)
 
@@ -222,6 +227,7 @@ func TestHandleServiceLogs_SSE_EventIDs(t *testing.T) {
 	req := httptest.NewRequest("GET", "/services/svc1/logs", nil)
 	req.SetPathValue("id", "svc1")
 	req.Header.Set("Accept", "text/event-stream")
+	req = withContentType(req, ContentTypeSSE)
 	w := httptest.NewRecorder()
 	h.HandleServiceLogs(w, req)
 
@@ -319,6 +325,7 @@ func TestHandleServiceLogs_SSE_LastEventID(t *testing.T) {
 	req.SetPathValue("id", "svc1")
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Last-Event-ID", "2024-01-01T00:00:03.000000000Z")
+	req = withContentType(req, ContentTypeSSE)
 	w := httptest.NewRecorder()
 	h.HandleServiceLogs(w, req)
 
@@ -343,6 +350,7 @@ func TestHandleServiceLogs_SSE_LastEventID_OverriddenByAfter(t *testing.T) {
 	req.SetPathValue("id", "svc1")
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Last-Event-ID", "2024-01-01T00:00:00Z")
+	req = withContentType(req, ContentTypeSSE)
 	w := httptest.NewRecorder()
 	h.HandleServiceLogs(w, req)
 
@@ -377,6 +385,7 @@ func TestHandleServiceLogs_SSE_StreamFilter(t *testing.T) {
 	req := httptest.NewRequest("GET", "/services/svc1/logs?stream=stderr", nil)
 	req.SetPathValue("id", "svc1")
 	req.Header.Set("Accept", "text/event-stream")
+	req = withContentType(req, ContentTypeSSE)
 	w := httptest.NewRecorder()
 	h.HandleServiceLogs(w, req)
 

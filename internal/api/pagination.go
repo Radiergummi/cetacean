@@ -68,17 +68,24 @@ func applyPagination[T any](items []T, p PageParams) CollectionResponse[T] {
 	return NewCollectionResponse(result, total, p.Limit, p.Offset)
 }
 
-func writePaginationLinks(w http.ResponseWriter, path string, total, limit, offset int) {
+func writePaginationLinks(w http.ResponseWriter, r *http.Request, total, limit, offset int) {
+	buildLink := func(newOffset int) string {
+		q := r.URL.Query()
+		q.Set("limit", strconv.Itoa(limit))
+		q.Set("offset", strconv.Itoa(newOffset))
+		return fmt.Sprintf("<%s?%s>", r.URL.Path, q.Encode())
+	}
+
 	var links []string
 	if offset+limit < total {
-		links = append(links, fmt.Sprintf("<%s?limit=%d&offset=%d>; rel=\"next\"", path, limit, offset+limit))
+		links = append(links, buildLink(offset+limit)+`; rel="next"`)
 	}
 	if offset > 0 {
 		prev := offset - limit
 		if prev < 0 {
 			prev = 0
 		}
-		links = append(links, fmt.Sprintf("<%s?limit=%d&offset=%d>; rel=\"prev\"", path, limit, prev))
+		links = append(links, buildLink(prev)+`; rel="prev"`)
 	}
 	if len(links) > 0 {
 		w.Header().Add("Link", strings.Join(links, ", "))

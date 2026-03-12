@@ -243,7 +243,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ClusterSnapshot"
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - $ref: "#/components/schemas/ClusterSnapshot"
         "304":
           $ref: "#/components/responses/NotModified"
 
@@ -280,14 +282,16 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  swarm:
-                    type: object
-                    description: Docker swarm.Swarm object
-                  managerAddr:
-                    type: string
-                    description: Address of the leader manager node
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      swarm:
+                        type: object
+                        description: Docker swarm.Swarm object
+                      managerAddr:
+                        type: string
+                        description: Address of the leader manager node
         "304":
           $ref: "#/components/responses/NotModified"
 
@@ -306,9 +310,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/DiskUsageSummary"
+                $ref: "#/components/schemas/DiskUsageCollection"
         "304":
           $ref: "#/components/responses/NotModified"
 
@@ -326,8 +328,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                description: Docker PluginsListResponse object
+                $ref: "#/components/schemas/PluginCollection"
         "304":
           $ref: "#/components/responses/NotModified"
 
@@ -403,16 +404,14 @@ paths:
         - $ref: "#/components/parameters/resourceId"
       responses:
         "200":
-          description: Array of enriched tasks
+          description: Collection of enriched tasks
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/EnrichedTask"
+                $ref: "#/components/schemas/TaskCollection"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -490,16 +489,14 @@ paths:
         - $ref: "#/components/parameters/resourceId"
       responses:
         "200":
-          description: Array of enriched tasks
+          description: Collection of enriched tasks
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/EnrichedTask"
+                $ref: "#/components/schemas/TaskCollection"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -691,9 +688,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/HistoryEntry"
+                $ref: "#/components/schemas/HistoryCollection"
         "304":
           $ref: "#/components/responses/NotModified"
 
@@ -750,9 +745,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/StackSummary"
+                $ref: "#/components/schemas/StackSummaryCollection"
         "304":
           $ref: "#/components/responses/NotModified"
 
@@ -1093,9 +1086,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/RuleStatus"
+                $ref: "#/components/schemas/RuleStatusCollection"
         "304":
           $ref: "#/components/responses/NotModified"
 
@@ -1504,6 +1495,57 @@ components:
               items:
                 type: object
                 description: Docker volume.Volume object
+
+    HistoryCollection:
+      allOf:
+        - $ref: "#/components/schemas/CollectionEnvelope"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/HistoryEntry"
+
+    RuleStatusCollection:
+      allOf:
+        - $ref: "#/components/schemas/CollectionEnvelope"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/RuleStatus"
+
+    DiskUsageCollection:
+      allOf:
+        - $ref: "#/components/schemas/CollectionEnvelope"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/DiskUsageSummary"
+
+    PluginCollection:
+      allOf:
+        - $ref: "#/components/schemas/CollectionEnvelope"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                type: object
+                description: Docker Plugin object
+
+    StackSummaryCollection:
+      allOf:
+        - $ref: "#/components/schemas/CollectionEnvelope"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/StackSummary"
 
     # ── Resource Types ───────────────────────────────────────────────
 

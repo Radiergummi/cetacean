@@ -17,12 +17,10 @@ type ProblemDetail struct {
 	RequestID string `json:"requestId,omitempty"`
 }
 
-const problemJSONLDContext = "/api/context.jsonld"
-
 // writeProblem writes an RFC 9457 problem details response with about:blank type.
 func writeProblem(w http.ResponseWriter, r *http.Request, status int, detail string) {
 	p := ProblemDetail{
-		Context:   problemJSONLDContext,
+		Context:   jsonLDContext,
 		Type:      "about:blank",
 		Title:     http.StatusText(status),
 		Status:    status,
@@ -37,7 +35,7 @@ func writeProblem(w http.ResponseWriter, r *http.Request, status int, detail str
 // It fills in defaults for context, instance, and requestId if not already set.
 func writeProblemTyped(w http.ResponseWriter, r *http.Request, p ProblemDetail) {
 	if p.Context == "" {
-		p.Context = problemJSONLDContext
+		p.Context = jsonLDContext
 	}
 	if p.Type == "" {
 		p.Type = "about:blank"

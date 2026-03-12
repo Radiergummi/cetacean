@@ -77,10 +77,16 @@ func TestHandleCluster(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var snap cache.ClusterSnapshot
-	json.NewDecoder(w.Body).Decode(&snap)
-	if snap.NodeCount != 1 || snap.ServiceCount != 1 {
-		t.Errorf("unexpected snapshot: %+v", snap)
+	var body map[string]any
+	json.NewDecoder(w.Body).Decode(&body)
+	if body["@context"] == nil {
+		t.Error("response missing @context")
+	}
+	if body["@type"] != "Cluster" {
+		t.Errorf("@type=%v, want Cluster", body["@type"])
+	}
+	if body["nodeCount"].(float64) != 1 || body["serviceCount"].(float64) != 1 {
+		t.Errorf("unexpected snapshot: nodeCount=%v serviceCount=%v", body["nodeCount"], body["serviceCount"])
 	}
 }
 
@@ -342,13 +348,16 @@ func TestHandleServiceTasks(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var tasks []swarm.Task
-	json.NewDecoder(w.Body).Decode(&tasks)
-	if len(tasks) != 1 {
-		t.Fatalf("expected 1 task, got %d", len(tasks))
+	var resp CollectionResponse[EnrichedTask]
+	json.NewDecoder(w.Body).Decode(&resp)
+	if len(resp.Items) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(resp.Items))
 	}
-	if tasks[0].ID != "t1" {
-		t.Errorf("expected task t1, got %s", tasks[0].ID)
+	if resp.Items[0].ID != "t1" {
+		t.Errorf("expected task t1, got %s", resp.Items[0].ID)
+	}
+	if resp.Total != 1 {
+		t.Errorf("expected total 1, got %d", resp.Total)
 	}
 }
 
@@ -371,13 +380,16 @@ func TestHandleNodeTasks(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var tasks []swarm.Task
-	json.NewDecoder(w.Body).Decode(&tasks)
-	if len(tasks) != 1 {
-		t.Fatalf("expected 1 task, got %d", len(tasks))
+	var resp CollectionResponse[EnrichedTask]
+	json.NewDecoder(w.Body).Decode(&resp)
+	if len(resp.Items) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(resp.Items))
 	}
-	if tasks[0].ID != "t1" {
-		t.Errorf("expected task t1, got %s", tasks[0].ID)
+	if resp.Items[0].ID != "t1" {
+		t.Errorf("expected task t1, got %s", resp.Items[0].ID)
+	}
+	if resp.Total != 1 {
+		t.Errorf("expected total 1, got %d", resp.Total)
 	}
 }
 
@@ -508,14 +520,14 @@ func TestHandleHistory(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleHistory(w, req)
 
-	var entries []cache.HistoryEntry
-	json.NewDecoder(w.Body).Decode(&entries)
-	if len(entries) != 2 {
-		t.Errorf("got %d entries, want 2", len(entries))
+	var resp CollectionResponse[cache.HistoryEntry]
+	json.NewDecoder(w.Body).Decode(&resp)
+	if len(resp.Items) != 2 {
+		t.Errorf("got %d entries, want 2", len(resp.Items))
 	}
 	// Newest first
-	if len(entries) > 0 && entries[0].Name != "redis" {
-		t.Errorf("first entry name=%s, want redis", entries[0].Name)
+	if len(resp.Items) > 0 && resp.Items[0].Name != "redis" {
+		t.Errorf("first entry name=%s, want redis", resp.Items[0].Name)
 	}
 }
 
@@ -529,10 +541,10 @@ func TestHandleHistory_FilterByResource(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleHistory(w, req)
 
-	var entries []cache.HistoryEntry
-	json.NewDecoder(w.Body).Decode(&entries)
-	if len(entries) != 1 {
-		t.Errorf("got %d entries, want 1", len(entries))
+	var resp CollectionResponse[cache.HistoryEntry]
+	json.NewDecoder(w.Body).Decode(&resp)
+	if len(resp.Items) != 1 {
+		t.Errorf("got %d entries, want 1", len(resp.Items))
 	}
 }
 
@@ -559,13 +571,13 @@ func TestHandleNotificationRules_WithNotifier(t *testing.T) {
 	if w.Code != 200 {
 		t.Fatalf("status=%d, want 200", w.Code)
 	}
-	var statuses []notify.RuleStatus
-	json.NewDecoder(w.Body).Decode(&statuses)
-	if len(statuses) != 1 {
-		t.Fatalf("expected 1 rule, got %d", len(statuses))
+	var resp CollectionResponse[notify.RuleStatus]
+	json.NewDecoder(w.Body).Decode(&resp)
+	if len(resp.Items) != 1 {
+		t.Fatalf("expected 1 rule, got %d", len(resp.Items))
 	}
-	if statuses[0].Name != "test-rule" {
-		t.Errorf("name=%s, want test-rule", statuses[0].Name)
+	if resp.Items[0].Name != "test-rule" {
+		t.Errorf("name=%s, want test-rule", resp.Items[0].Name)
 	}
 }
 
@@ -975,10 +987,10 @@ func TestHandleHistory_CustomLimit(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleHistory(w, req)
 
-	var entries []cache.HistoryEntry
-	json.NewDecoder(w.Body).Decode(&entries)
-	if len(entries) != 2 {
-		t.Errorf("got %d entries, want 2", len(entries))
+	var resp CollectionResponse[cache.HistoryEntry]
+	json.NewDecoder(w.Body).Decode(&resp)
+	if len(resp.Items) != 2 {
+		t.Errorf("got %d entries, want 2", len(resp.Items))
 	}
 }
 
@@ -1487,19 +1499,19 @@ func TestHandleStackSummary(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var summaries []cache.StackSummary
-	json.NewDecoder(w.Body).Decode(&summaries)
-	if len(summaries) != 1 {
-		t.Fatalf("expected 1 summary, got %d", len(summaries))
+	var resp CollectionResponse[cache.StackSummary]
+	json.NewDecoder(w.Body).Decode(&resp)
+	if len(resp.Items) != 1 {
+		t.Fatalf("expected 1 summary, got %d", len(resp.Items))
 	}
-	if summaries[0].Name != "myapp" {
-		t.Errorf("name=%q, want myapp", summaries[0].Name)
+	if resp.Items[0].Name != "myapp" {
+		t.Errorf("name=%q, want myapp", resp.Items[0].Name)
 	}
-	if summaries[0].TasksByState["running"] != 2 {
-		t.Errorf("running=%d, want 2", summaries[0].TasksByState["running"])
+	if resp.Items[0].TasksByState["running"] != 2 {
+		t.Errorf("running=%d, want 2", resp.Items[0].TasksByState["running"])
 	}
-	if summaries[0].MemoryUsageBytes != 104857600 {
-		t.Errorf("memoryUsageBytes=%d, want 104857600", summaries[0].MemoryUsageBytes)
+	if resp.Items[0].MemoryUsageBytes != 104857600 {
+		t.Errorf("memoryUsageBytes=%d, want 104857600", resp.Items[0].MemoryUsageBytes)
 	}
 }
 
@@ -1530,13 +1542,13 @@ func TestHandleStackSummary_PrometheusDown(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
-	var summaries []cache.StackSummary
-	json.NewDecoder(w.Body).Decode(&summaries)
-	if len(summaries) != 1 {
-		t.Fatalf("expected 1 summary, got %d", len(summaries))
+	var resp CollectionResponse[cache.StackSummary]
+	json.NewDecoder(w.Body).Decode(&resp)
+	if len(resp.Items) != 1 {
+		t.Fatalf("expected 1 summary, got %d", len(resp.Items))
 	}
-	if summaries[0].MemoryUsageBytes != 0 {
-		t.Errorf("expected 0 memory usage when prometheus is down, got %d", summaries[0].MemoryUsageBytes)
+	if resp.Items[0].MemoryUsageBytes != 0 {
+		t.Errorf("expected 0 memory usage when prometheus is down, got %d", resp.Items[0].MemoryUsageBytes)
 	}
 }
 

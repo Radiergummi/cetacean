@@ -14,6 +14,7 @@ import type {
   NetworkDetail,
   VolumeDetail,
   PagedResponse,
+  CollectionResponse,
   HistoryEntry,
   NetworkTopology,
   PlacementTopology,
@@ -105,7 +106,8 @@ function buildListURL(path: string, params?: ListParams): string {
 export const api = {
   cluster: () => fetchJSON<ClusterSnapshot>("/cluster"),
   swarm: () => fetchJSON<SwarmInfo>("/swarm"),
-  plugins: () => fetchJSON<Plugin[]>("/plugins"),
+  plugins: () =>
+    fetchJSON<CollectionResponse<Plugin>>("/plugins").then((r) => r.items),
   clusterMetrics: () => fetchJSON<ClusterMetrics>("/cluster/metrics"),
   monitoringStatus: () => fetchJSON<MonitoringStatus>("/-/metrics/status"),
   nodes: (params?: ListParams) => fetchJSON<PagedResponse<Node>>(buildListURL("/nodes", params)),
@@ -116,7 +118,8 @@ export const api = {
     fetchJSON<{ service: Service }>(`/services/${id}`).then((r) => r.service),
   tasks: (params?: ListParams) => fetchJSON<PagedResponse<Task>>(buildListURL("/tasks", params)),
   stacks: (params?: ListParams) => fetchJSON<PagedResponse<Stack>>(buildListURL("/stacks", params)),
-  stacksSummary: () => fetchJSON<StackSummary[]>("/stacks/summary"),
+  stacksSummary: () =>
+    fetchJSON<CollectionResponse<StackSummary>>("/stacks/summary").then((r) => r.items),
   stack: (name: string) =>
     fetchJSON<{ stack: StackDetail }>(`/stacks/${name}`).then((r) => r.stack),
   configs: (params?: ListParams) =>
@@ -148,7 +151,8 @@ export const api = {
     if (opts?.stream) params.set("stream", opts.stream);
     return fetchJSON<LogResponse>(`/tasks/${id}/logs?${params}`, opts?.signal);
   },
-  serviceTasks: (id: string) => fetchJSON<Task[]>(`/services/${id}/tasks`),
+  serviceTasks: (id: string) =>
+    fetchJSON<CollectionResponse<Task>>(`/services/${id}/tasks`).then((r) => r.items),
   serviceLogs: (
     id: string,
     opts?: {
@@ -185,11 +189,14 @@ export const api = {
     if (params?.resourceId) qs.set("resourceId", params.resourceId);
     if (params?.limit) qs.set("limit", String(params.limit));
     const query = qs.toString();
-    return fetchJSON<HistoryEntry[]>(`/history${query ? `?${query}` : ""}`);
+    return fetchJSON<CollectionResponse<HistoryEntry>>(`/history${query ? `?${query}` : ""}`).then(
+      (r) => r.items,
+    );
   },
   topologyNetworks: () => fetchJSON<NetworkTopology>("/topology/networks"),
   topologyPlacement: () => fetchJSON<PlacementTopology>("/topology/placement"),
-  nodeTasks: (id: string) => fetchJSON<Task[]>(`/nodes/${id}/tasks`),
+  nodeTasks: (id: string) =>
+    fetchJSON<CollectionResponse<Task>>(`/nodes/${id}/tasks`).then((r) => r.items),
   metricsQuery: (query: string, time?: string) => {
     const params = new URLSearchParams({ query });
     if (time) params.set("time", time);
@@ -199,8 +206,12 @@ export const api = {
     const params = new URLSearchParams({ query, start, end, step });
     return fetchJSON<PrometheusResponse>(`/-/metrics/query_range?${params}`);
   },
-  notificationRules: () => fetchJSON<NotificationRuleStatus[]>("/notifications/rules"),
-  diskUsage: () => fetchJSON<DiskUsageSummary[]>("/disk-usage"),
+  notificationRules: () =>
+    fetchJSON<CollectionResponse<NotificationRuleStatus>>("/notifications/rules").then(
+      (r) => r.items,
+    ),
+  diskUsage: () =>
+    fetchJSON<CollectionResponse<DiskUsageSummary>>("/disk-usage").then((r) => r.items),
   search: (q: string, limit?: number) =>
     fetchJSON<SearchResponse>(
       `/search?q=${encodeURIComponent(q)}${limit !== undefined ? `&limit=${limit}` : ""}`,

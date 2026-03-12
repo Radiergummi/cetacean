@@ -107,7 +107,8 @@ type testItem struct {
 
 func TestWritePaginationLinks_FirstPage(t *testing.T) {
 	w := httptest.NewRecorder()
-	writePaginationLinks(w, "/nodes", 100, 10, 0)
+	r := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+	writePaginationLinks(w, r, 100, 10, 0)
 
 	link := w.Header().Get("Link")
 	if link == "" {
@@ -126,7 +127,8 @@ func TestWritePaginationLinks_FirstPage(t *testing.T) {
 
 func TestWritePaginationLinks_MiddlePage(t *testing.T) {
 	w := httptest.NewRecorder()
-	writePaginationLinks(w, "/nodes", 100, 10, 20)
+	r := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+	writePaginationLinks(w, r, 100, 10, 20)
 
 	link := w.Header().Get("Link")
 	if !strings.Contains(link, `rel="next"`) {
@@ -145,7 +147,8 @@ func TestWritePaginationLinks_MiddlePage(t *testing.T) {
 
 func TestWritePaginationLinks_LastPage(t *testing.T) {
 	w := httptest.NewRecorder()
-	writePaginationLinks(w, "/nodes", 25, 10, 20)
+	r := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+	writePaginationLinks(w, r, 25, 10, 20)
 
 	link := w.Header().Get("Link")
 	if strings.Contains(link, `rel="next"`) {
@@ -158,7 +161,8 @@ func TestWritePaginationLinks_LastPage(t *testing.T) {
 
 func TestWritePaginationLinks_SinglePage(t *testing.T) {
 	w := httptest.NewRecorder()
-	writePaginationLinks(w, "/nodes", 5, 10, 0)
+	r := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+	writePaginationLinks(w, r, 5, 10, 0)
 
 	link := w.Header().Get("Link")
 	if link != "" {
@@ -168,11 +172,26 @@ func TestWritePaginationLinks_SinglePage(t *testing.T) {
 
 func TestWritePaginationLinks_PrevClampsToZero(t *testing.T) {
 	w := httptest.NewRecorder()
-	writePaginationLinks(w, "/nodes", 100, 10, 5)
+	r := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+	writePaginationLinks(w, r, 100, 10, 5)
 
 	link := w.Header().Get("Link")
 	if !strings.Contains(link, "offset=0") {
 		t.Errorf("prev offset should clamp to 0, got %s", link)
+	}
+}
+
+func TestWritePaginationLinks_PreservesQueryParams(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/nodes?search=worker&sort=name", nil)
+	writePaginationLinks(w, r, 100, 10, 0)
+
+	link := w.Header().Get("Link")
+	if !strings.Contains(link, "search=worker") {
+		t.Errorf("expected search param preserved, got %s", link)
+	}
+	if !strings.Contains(link, "sort=name") {
+		t.Errorf("expected sort param preserved, got %s", link)
 	}
 }
 
