@@ -67,6 +67,11 @@ func negotiate(next http.Handler) http.Handler {
 			ct = parseAccept(r.Header.Get("Accept"))
 		}
 
+		if ct == ContentTypeUnsupported {
+			writeProblem(w, r, http.StatusNotAcceptable, "no supported media type in Accept header")
+			return
+		}
+
 		ctx := context.WithValue(r.Context(), contentTypeKey, ct)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

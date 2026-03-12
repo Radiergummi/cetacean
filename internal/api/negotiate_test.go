@@ -183,19 +183,34 @@ func TestNegotiate(t *testing.T) {
 		}
 	})
 
-	// --- Unsupported types ---
+	// --- Unsupported types → 406 at middleware level ---
 
-	t.Run("application/xml alone is unsupported", func(t *testing.T) {
-		ct, _ := run("/services", "application/xml")
-		if ct != ContentTypeUnsupported {
-			t.Errorf("got %v, want Unsupported", ct)
+	t.Run("application/xml alone returns 406", func(t *testing.T) {
+		inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			t.Error("inner handler should not be called for unsupported type")
+		})
+		req := httptest.NewRequest("GET", "/services", nil)
+		req.Header.Set("Accept", "application/xml")
+		rec := httptest.NewRecorder()
+		negotiate(inner).ServeHTTP(rec, req)
+		if rec.Code != http.StatusNotAcceptable {
+			t.Errorf("status=%d, want 406", rec.Code)
+		}
+		if ct := rec.Header().Get("Content-Type"); ct != "application/problem+json" {
+			t.Errorf("content-type=%q, want application/problem+json", ct)
 		}
 	})
 
-	t.Run("text/plain alone is unsupported", func(t *testing.T) {
-		ct, _ := run("/services", "text/plain")
-		if ct != ContentTypeUnsupported {
-			t.Errorf("got %v, want Unsupported", ct)
+	t.Run("text/plain alone returns 406", func(t *testing.T) {
+		inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			t.Error("inner handler should not be called for unsupported type")
+		})
+		req := httptest.NewRequest("GET", "/services", nil)
+		req.Header.Set("Accept", "text/plain")
+		rec := httptest.NewRecorder()
+		negotiate(inner).ServeHTTP(rec, req)
+		if rec.Code != http.StatusNotAcceptable {
+			t.Errorf("status=%d, want 406", rec.Code)
 		}
 	})
 
