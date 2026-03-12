@@ -92,8 +92,10 @@ Optional Prometheus integration for time-series charts:
 
 ### Real-Time Updates
 
-A single SSE connection pushes changes to the browser as they happen. List pages update in-place without full reloads.
-Connection status indicator shows you're always current.
+Per-resource SSE connections push changes to the browser as they happen. List and detail endpoints each accept
+`Accept: text/event-stream` for a filtered event stream scoped to that resource type or individual resource.
+List pages perform optimistic in-place updates without full reloads. Connection status indicator shows you're always
+current.
 
 ## Quick Start
 
@@ -170,10 +172,10 @@ All configuration is via environment variables:
                     +-------v--------+
                     |   Go Server    |
                     |                |
-                    |  /           -> Embedded React SPA
-                    |  /api/*     -> REST endpoints (read-only)
-                    |  /api/events -> SSE stream
-                    |  /api/metrics -> Prometheus proxy
+                    |  /            -> Embedded React SPA
+                    |  /{resource}  -> REST + SSE (read-only)
+                    |  /events      -> Global SSE stream
+                    |  /-/metrics/  -> Prometheus proxy
                     +---+--------+--+
                         |        |
                +--------v-+  +--v-----------+
@@ -191,8 +193,9 @@ All configuration is via environment variables:
 2. **State Cache** holds all swarm state in memory with `sync.RWMutex`-protected maps. Stacks are derived from labels
    and rebuilt on mutation. Every change fires callbacks that feed SSE.
 
-3. **SSE Broadcaster** fans out events to up to 256 browser clients. Events are batched per-client (default 100ms). Slow
-   clients get events dropped rather than backpressuring.
+3. **SSE Broadcaster** fans out events to up to 256 browser clients. Each list/detail endpoint can serve a filtered SSE
+   stream scoped to that resource type or ID. Events include the full resource payload for optimistic client-side
+   updates. Events are batched per-client (default 100ms). Slow clients get events dropped rather than backpressuring.
 
 4. **REST API** serves cache state as JSON. All read-only. List endpoints support search, sort, pagination,
    and [expr](https://github.com/expr-lang/expr) filter expressions.
@@ -206,42 +209,53 @@ All endpoints are `GET` and return JSON.
 
 ### Resources
 
-| Endpoint                       | Description                                              |
-|--------------------------------|----------------------------------------------------------|
-| `GET /api/cluster`             | Cluster snapshot: counts, task states, CPU/memory totals |
-| `GET /api/nodes`               | List nodes                                               |
-| `GET /api/nodes/{id}`          | Node detail with cross-referenced tasks                  |
-| `GET /api/nodes/{id}/tasks`    | Tasks running on a node                                  |
-| `GET /api/services`            | List services                                            |
-| `GET /api/services/{id}`       | Service detail                                           |
-| `GET /api/services/{id}/tasks` | Tasks for a service                                      |
-| `GET /api/services/{id}/logs`  | Service logs (JSON or SSE via `Accept` header)           |
-| `GET /api/tasks`               | List tasks                                               |
-| `GET /api/tasks/{id}`          | Task detail                                              |
-| `GET /api/tasks/{id}/logs`     | Task logs (JSON or SSE)                                  |
-| `GET /api/stacks`              | List stacks                                              |
-| `GET /api/stacks/{name}`       | Stack detail with all member resources                   |
-| `GET /api/configs`             | List configs                                             |
-| `GET /api/configs/{id}`        | Config detail with cross-referenced services             |
-| `GET /api/secrets`             | List secrets (metadata only)                             |
-| `GET /api/secrets/{id}`        | Secret detail with cross-referenced services             |
-| `GET /api/networks`            | List networks                                            |
-| `GET /api/networks/{id}`       | Network detail with cross-referenced services            |
-| `GET /api/volumes`             | List volumes                                             |
-| `GET /api/volumes/{name}`      | Volume detail with cross-referenced services             |
+All list and detail endpoints support content negotiation: `Accept: application/json` for JSON, `Accept: text/event-stream` for per-resource SSE streaming, or browser `Accept` for the SPA.
+
+| Endpoint                    | Description                                              |
+|-----------------------------|----------------------------------------------------------|
+| `GET /cluster`              | Cluster snapshot: counts, task states, CPU/memory totals |
+| `GET /cluster/metrics`      | Cluster-wide Prometheus metrics                          |
+| `GET /swarm`                | Swarm inspect info (join tokens, raft config, CA)        |
+| `GET /disk-usage`           | Docker system disk usage                                 |
+| `GET /plugins`              | Installed Docker plugins                                 |
+| `GET /nodes`                | List nodes                                               |
+| `GET /nodes/{id}`           | Node detail with cross-referenced tasks                  |
+| `GET /nodes/{id}/tasks`     | Tasks running on a node                                  |
+| `GET /services`             | List services                                            |
+| `GET /services/{id}`        | Service detail                                           |
+| `GET /services/{id}/tasks`  | Tasks for a service                                      |
+| `GET /services/{id}/logs`   | Service logs (JSON or SSE via `Accept` header)           |
+| `GET /tasks`                | List tasks                                               |
+| `GET /tasks/{id}`           | Task detail                                              |
+| `GET /tasks/{id}/logs`      | Task logs (JSON or SSE)                                  |
+| `GET /stacks`               | List stacks                                              |
+| `GET /stacks/{name}`        | Stack detail with all member resources                   |
+| `GET /stacks/summary`       | Stack summary (service/task counts per stack)            |
+| `GET /configs`              | List configs                                             |
+| `GET /configs/{id}`         | Config detail with cross-referenced services             |
+| `GET /secrets`              | List secrets (metadata only)                             |
+| `GET /secrets/{id}`         | Secret detail with cross-referenced services             |
+| `GET /networks`             | List networks                                            |
+| `GET /networks/{id}`        | Network detail with cross-referenced services            |
+| `GET /volumes`              | List volumes                                             |
+| `GET /volumes/{name}`       | Volume detail with cross-referenced services             |
+| `GET /search`               | Global cross-resource search (`?q=`, `?limit=`)         |
 
 ### Infrastructure
 
-| Endpoint                       | Description                                         |
-|--------------------------------|-----------------------------------------------------|
-| `GET /api/events`              | SSE stream (filter with `?types=node,service,...`)  |
-| `GET /api/health`              | Health check                                        |
-| `GET /api/ready`               | Readiness (503 until first sync completes)          |
-| `GET /api/history`             | Event history (`?type=`, `?resourceId=`, `?limit=`) |
-| `GET /api/metrics/query`       | Prometheus instant query proxy                      |
-| `GET /api/metrics/query_range` | Prometheus range query proxy                        |
-| `GET /api/topology/networks`   | Service-to-service network topology                 |
-| `GET /api/topology/placement`  | Node-to-service placement topology                  |
+| Endpoint                    | Description                                             |
+|-----------------------------|---------------------------------------------------------|
+| `GET /events`               | Global SSE stream (filter with `?types=node,service,…`) |
+| `GET /history`              | Event history (`?type=`, `?resourceId=`, `?limit=`)     |
+| `GET /-/health`             | Health check                                            |
+| `GET /-/ready`              | Readiness (503 until first sync completes)              |
+| `GET /-/metrics/status`     | Monitoring auto-detection status                        |
+| `GET /-/metrics/query`      | Prometheus instant query proxy                          |
+| `GET /-/metrics/query_range`| Prometheus range query proxy                            |
+| `GET /topology/networks`    | Service-to-service network topology                     |
+| `GET /topology/placement`   | Node-to-service placement topology                      |
+| `GET /api`                  | OpenAPI spec (JSON) / Scalar playground (HTML)          |
+| `GET /api/context.jsonld`   | JSON-LD context document                                |
 ### Query Parameters
 
 List endpoints:
@@ -273,12 +287,12 @@ Then run the Go backend and Vite dev server side by side:
 # Terminal 1: Go backend (connects to local Docker socket)
 go run .
 
-# Terminal 2: Frontend dev server (hot reload, proxies /api to :9000)
+# Terminal 2: Frontend dev server (hot reload, proxies resource paths to :9000)
 cd frontend && npm install && npm run dev
 ```
 
-Open `http://localhost:5173`. The Vite dev server proxies `/api` requests to the Go backend on `:9000`, so you get
-frontend hot-reload and live backend data. Changes to Go code require restarting `go run .`; frontend changes apply
+Open `http://localhost:5173`. The Vite dev server proxies resource paths (e.g. `/nodes`, `/services`, `/events`) to the
+Go backend on `:9000`, so you get frontend hot-reload and live backend data. Changes to Go code require restarting `go run .`; frontend changes apply
 instantly.
 
 ```bash
