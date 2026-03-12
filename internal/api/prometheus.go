@@ -33,16 +33,16 @@ var allowedPrometheusPaths = map[string]bool{
 // when Prometheus is not configured.
 func PrometheusNotConfiguredHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeError(w, http.StatusServiceUnavailable, "prometheus not configured")
+		writeProblem(w, r, http.StatusServiceUnavailable, "prometheus not configured")
 	})
 }
 
 func (p *PrometheusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Map /api/metrics/query → /api/v1/query
-	// Map /api/metrics/query_range → /api/v1/query_range
-	path := strings.TrimPrefix(r.URL.Path, "/api/metrics")
+	// Map /-/metrics/query → /api/v1/query
+	// Map /-/metrics/query_range → /api/v1/query_range
+	path := strings.TrimPrefix(r.URL.Path, "/-/metrics")
 	if !allowedPrometheusPaths[path] {
-		writeError(w, http.StatusForbidden, "forbidden prometheus endpoint")
+		writeProblem(w, r, http.StatusForbidden, "forbidden prometheus endpoint")
 		return
 	}
 
@@ -61,14 +61,14 @@ func (p *PrometheusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	req, err := http.NewRequestWithContext(r.Context(), "GET", targetURL, nil)
 	if err != nil {
 		slog.Error("failed to create prometheus request", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to create prometheus request")
+		writeProblem(w, r, http.StatusInternalServerError, "failed to create prometheus request")
 		return
 	}
 
 	resp, err := p.client.Do(req)
 	if err != nil {
 		slog.Error("prometheus unreachable", "url", p.baseURL, "error", err)
-		writeError(w, http.StatusBadGateway, "prometheus unreachable")
+		writeProblem(w, r, http.StatusBadGateway, "prometheus unreachable")
 		return
 	}
 	defer resp.Body.Close()

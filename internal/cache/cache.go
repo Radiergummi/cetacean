@@ -606,6 +606,7 @@ func (c *Cache) ListTasksByNode(nodeID string) []swarm.Task {
 
 // ServiceRef is a lightweight reference to a service.
 type ServiceRef struct {
+	AtID string `json:"@id"`
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
@@ -621,7 +622,7 @@ func (c *Cache) ServicesUsingConfig(configID string) []ServiceRef {
 		}
 		for _, cfg := range svc.Spec.TaskTemplate.ContainerSpec.Configs {
 			if cfg.ConfigID == configID {
-				refs = append(refs, ServiceRef{ID: svc.ID, Name: svc.Spec.Name})
+				refs = append(refs, ServiceRef{AtID: "/services/" + svc.ID, ID: svc.ID, Name: svc.Spec.Name})
 				break
 			}
 		}
@@ -640,7 +641,7 @@ func (c *Cache) ServicesUsingSecret(secretID string) []ServiceRef {
 		}
 		for _, sec := range svc.Spec.TaskTemplate.ContainerSpec.Secrets {
 			if sec.SecretID == secretID {
-				refs = append(refs, ServiceRef{ID: svc.ID, Name: svc.Spec.Name})
+				refs = append(refs, ServiceRef{AtID: "/services/" + svc.ID, ID: svc.ID, Name: svc.Spec.Name})
 				break
 			}
 		}
@@ -656,7 +657,7 @@ func (c *Cache) ServicesUsingNetwork(networkID string) []ServiceRef {
 	for _, svc := range c.services {
 		for _, net := range svc.Spec.TaskTemplate.Networks {
 			if net.Target == networkID {
-				refs = append(refs, ServiceRef{ID: svc.ID, Name: svc.Spec.Name})
+				refs = append(refs, ServiceRef{AtID: "/services/" + svc.ID, ID: svc.ID, Name: svc.Spec.Name})
 				break
 			}
 		}
@@ -675,7 +676,7 @@ func (c *Cache) ServicesUsingVolume(volumeName string) []ServiceRef {
 		}
 		for _, m := range svc.Spec.TaskTemplate.ContainerSpec.Mounts {
 			if m.Type == "volume" && m.Source == volumeName {
-				refs = append(refs, ServiceRef{ID: svc.ID, Name: svc.Spec.Name})
+				refs = append(refs, ServiceRef{AtID: "/services/" + svc.ID, ID: svc.ID, Name: svc.Spec.Name})
 				break
 			}
 		}

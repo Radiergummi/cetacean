@@ -14,6 +14,7 @@ import type {
   NetworkDetail,
   VolumeDetail,
   PagedResponse,
+  CollectionResponse,
   HistoryEntry,
   NetworkTopology,
   PlacementTopology,
@@ -27,18 +28,15 @@ import type {
   PrometheusResponse,
 } from "./types";
 
-const BASE = "/api";
-
 const headers = { Accept: "application/json" };
 
 async function fetchJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const url = `${BASE}${path}`;
-  const res = await fetch(url, { headers, signal });
+  const res = await fetch(path, { headers, signal });
   if (!res.ok) {
     let message = `${res.status} ${res.statusText}`;
     try {
       const body = await res.json();
-      if (body?.error) message = body.error;
+      if (body?.detail) message = body.detail;
     } catch {
       // response wasn't JSON, use status text
     }
@@ -108,18 +106,22 @@ function buildListURL(path: string, params?: ListParams): string {
 export const api = {
   cluster: () => fetchJSON<ClusterSnapshot>("/cluster"),
   swarm: () => fetchJSON<SwarmInfo>("/swarm"),
-  plugins: () => fetchJSON<Plugin[]>("/plugins"),
+  plugins: () =>
+    fetchJSON<CollectionResponse<Plugin>>("/plugins").then((r) => r.items),
   clusterMetrics: () => fetchJSON<ClusterMetrics>("/cluster/metrics"),
-  monitoringStatus: () => fetchJSON<MonitoringStatus>("/metrics/status"),
+  monitoringStatus: () => fetchJSON<MonitoringStatus>("/-/metrics/status"),
   nodes: (params?: ListParams) => fetchJSON<PagedResponse<Node>>(buildListURL("/nodes", params)),
-  node: (id: string) => fetchJSON<Node>(`/nodes/${id}`),
+  node: (id: string) => fetchJSON<{ node: Node }>(`/nodes/${id}`).then((r) => r.node),
   services: (params?: ListParams) =>
     fetchJSON<PagedResponse<ServiceListItem>>(buildListURL("/services", params)),
-  service: (id: string) => fetchJSON<Service>(`/services/${id}`),
+  service: (id: string) =>
+    fetchJSON<{ service: Service }>(`/services/${id}`).then((r) => r.service),
   tasks: (params?: ListParams) => fetchJSON<PagedResponse<Task>>(buildListURL("/tasks", params)),
   stacks: (params?: ListParams) => fetchJSON<PagedResponse<Stack>>(buildListURL("/stacks", params)),
-  stacksSummary: () => fetchJSON<StackSummary[]>("/stacks/summary"),
-  stack: (name: string) => fetchJSON<StackDetail>(`/stacks/${name}`),
+  stacksSummary: () =>
+    fetchJSON<CollectionResponse<StackSummary>>("/stacks/summary").then((r) => r.items),
+  stack: (name: string) =>
+    fetchJSON<{ stack: StackDetail }>(`/stacks/${name}`).then((r) => r.stack),
   configs: (params?: ListParams) =>
     fetchJSON<PagedResponse<Config>>(buildListURL("/configs", params)),
   config: (id: string) => fetchJSON<ConfigDetail>(`/configs/${id}`),
@@ -132,7 +134,7 @@ export const api = {
   volumes: (params?: ListParams) =>
     fetchJSON<PagedResponse<Volume>>(buildListURL("/volumes", params)),
   volume: (name: string) => fetchJSON<VolumeDetail>(`/volumes/${name}`),
-  task: (id: string) => fetchJSON<Task>(`/tasks/${id}`),
+  task: (id: string) => fetchJSON<{ task: Task }>(`/tasks/${id}`).then((r) => r.task),
   taskLogs: (
     id: string,
     opts?: {
@@ -149,7 +151,8 @@ export const api = {
     if (opts?.stream) params.set("stream", opts.stream);
     return fetchJSON<LogResponse>(`/tasks/${id}/logs?${params}`, opts?.signal);
   },
-  serviceTasks: (id: string) => fetchJSON<Task[]>(`/services/${id}/tasks`),
+  serviceTasks: (id: string) =>
+    fetchJSON<CollectionResponse<Task>>(`/services/${id}/tasks`).then((r) => r.items),
   serviceLogs: (
     id: string,
     opts?: {
@@ -171,14 +174,14 @@ export const api = {
     if (opts?.after) params.set("after", opts.after);
     if (opts?.stream) params.set("stream", opts.stream);
     const qs = params.toString();
-    return `${BASE}/services/${id}/logs${qs ? `?${qs}` : ""}`;
+    return `/services/${id}/logs${qs ? `?${qs}` : ""}`;
   },
   taskLogsStreamURL: (id: string, opts?: { after?: string; stream?: string }) => {
     const params = new URLSearchParams();
     if (opts?.after) params.set("after", opts.after);
     if (opts?.stream) params.set("stream", opts.stream);
     const qs = params.toString();
-    return `${BASE}/tasks/${id}/logs${qs ? `?${qs}` : ""}`;
+    return `/tasks/${id}/logs${qs ? `?${qs}` : ""}`;
   },
   history: (params?: { type?: string; resourceId?: string; limit?: number }) => {
     const qs = new URLSearchParams();
@@ -186,22 +189,29 @@ export const api = {
     if (params?.resourceId) qs.set("resourceId", params.resourceId);
     if (params?.limit) qs.set("limit", String(params.limit));
     const query = qs.toString();
-    return fetchJSON<HistoryEntry[]>(`/history${query ? `?${query}` : ""}`);
+    return fetchJSON<CollectionResponse<HistoryEntry>>(`/history${query ? `?${query}` : ""}`).then(
+      (r) => r.items,
+    );
   },
   topologyNetworks: () => fetchJSON<NetworkTopology>("/topology/networks"),
   topologyPlacement: () => fetchJSON<PlacementTopology>("/topology/placement"),
-  nodeTasks: (id: string) => fetchJSON<Task[]>(`/nodes/${id}/tasks`),
+  nodeTasks: (id: string) =>
+    fetchJSON<CollectionResponse<Task>>(`/nodes/${id}/tasks`).then((r) => r.items),
   metricsQuery: (query: string, time?: string) => {
     const params = new URLSearchParams({ query });
     if (time) params.set("time", time);
-    return fetchJSON<PrometheusResponse>(`/metrics/query?${params}`);
+    return fetchJSON<PrometheusResponse>(`/-/metrics/query?${params}`);
   },
   metricsQueryRange: (query: string, start: string, end: string, step: string) => {
     const params = new URLSearchParams({ query, start, end, step });
-    return fetchJSON<PrometheusResponse>(`/metrics/query_range?${params}`);
+    return fetchJSON<PrometheusResponse>(`/-/metrics/query_range?${params}`);
   },
-  notificationRules: () => fetchJSON<NotificationRuleStatus[]>("/notifications/rules"),
-  diskUsage: () => fetchJSON<DiskUsageSummary[]>("/disk-usage"),
+  notificationRules: () =>
+    fetchJSON<CollectionResponse<NotificationRuleStatus>>("/notifications/rules").then(
+      (r) => r.items,
+    ),
+  diskUsage: () =>
+    fetchJSON<CollectionResponse<DiskUsageSummary>>("/disk-usage").then((r) => r.items),
   search: (q: string, limit?: number) =>
     fetchJSON<SearchResponse>(
       `/search?q=${encodeURIComponent(q)}${limit !== undefined ? `&limit=${limit}` : ""}`,

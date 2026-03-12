@@ -24,6 +24,12 @@ import (
 //go:embed frontend/dist/*
 var frontendDist embed.FS
 
+//go:embed api/openapi.yaml
+var openapiSpec []byte
+
+//go:embed api/scalar/standalone.js
+var scalarJS []byte
+
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
@@ -97,7 +103,7 @@ func main() {
 
 	go watcher.Run(ctx)
 
-	// API — pass ready channel so /api/ready reports sync status
+	// API — pass ready channel so /-/ready reports sync status
 	var promClient *api.PromClient
 	var promProxy http.Handler
 	if cfg.PrometheusURL != "" {
@@ -122,7 +128,7 @@ func main() {
 		slog.Warn("pprof endpoints enabled", "path", "/debug/pprof/")
 	}
 
-	router := api.NewRouter(handlers, broadcaster, promProxy, spa, cfg.Pprof)
+	router := api.NewRouter(handlers, broadcaster, promProxy, spa, openapiSpec, scalarJS, cfg.Pprof)
 
 	server := &http.Server{
 		Addr:         cfg.ListenAddr,

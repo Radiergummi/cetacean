@@ -16,7 +16,7 @@ func TestRequestLogger(t *testing.T) {
 		w.Write([]byte("hello"))
 	}))
 
-	req := httptest.NewRequest("GET", "/api/nodes", nil)
+	req := httptest.NewRequest("GET", "/nodes", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -33,7 +33,7 @@ func TestRecovery(t *testing.T) {
 		panic("test panic")
 	}))
 
-	req := httptest.NewRequest("GET", "/api/test", nil)
+	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -85,7 +85,7 @@ func TestRequestLogger_4xxLevel(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	req := httptest.NewRequest("GET", "/api/missing", nil)
+	req := httptest.NewRequest("GET", "/missing", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -99,7 +99,7 @@ func TestRequestLogger_5xxLevel(t *testing.T) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 
-	req := httptest.NewRequest("GET", "/api/error", nil)
+	req := httptest.NewRequest("GET", "/error", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -113,7 +113,7 @@ func TestSecurityHeaders(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest("GET", "/api/test", nil)
+	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -122,6 +122,50 @@ func TestSecurityHeaders(t *testing.T) {
 	}
 	if got := w.Header().Get("X-Frame-Options"); got != "DENY" {
 		t.Errorf("X-Frame-Options=%q, want DENY", got)
+	}
+}
+
+func TestDiscoveryLinks_AddedToAPIRoutes(t *testing.T) {
+	handler := discoveryLinks(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/nodes", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	links := w.Header().Values("Link")
+	if len(links) != 2 {
+		t.Fatalf("expected 2 Link headers, got %d: %v", len(links), links)
+	}
+	found := map[string]bool{"service-desc": false, "describedby": false}
+	for _, link := range links {
+		if link == `</api>; rel="service-desc"` {
+			found["service-desc"] = true
+		}
+		if link == `</api/context.jsonld>; rel="describedby"` {
+			found["describedby"] = true
+		}
+	}
+	for rel, ok := range found {
+		if !ok {
+			t.Errorf("missing Link header with rel=%s", rel)
+		}
+	}
+}
+
+func TestDiscoveryLinks_SkippedForMetaRoutes(t *testing.T) {
+	handler := discoveryLinks(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/-/health", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	links := w.Header().Values("Link")
+	if len(links) != 0 {
+		t.Errorf("meta routes should not get discovery Link headers, got %v", links)
 	}
 }
 
@@ -168,7 +212,7 @@ func TestRequestID_Generated(t *testing.T) {
 		w.Write([]byte(id))
 	}))
 
-	req := httptest.NewRequest("GET", "/api/test", nil)
+	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -186,7 +230,7 @@ func TestRequestID_Forwarded(t *testing.T) {
 		w.Write([]byte(RequestIDFrom(r.Context())))
 	}))
 
-	req := httptest.NewRequest("GET", "/api/test", nil)
+	req := httptest.NewRequest("GET", "/test", nil)
 	req.Header.Set("X-Request-ID", "from-proxy-123")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -214,13 +258,13 @@ func TestNewRouter_Smoke(t *testing.T) {
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}
 	spa := NewSPAHandler(fs.FS(fsys))
 
-	router := NewRouter(h, b, prom, spa, false)
+	router := NewRouter(h, b, prom, spa, []byte("openapi: '3.1.0'"), nil, false)
 	if router == nil {
 		t.Fatal("NewRouter returned nil")
 	}
 
 	// Verify a known route works
-	req := httptest.NewRequest("GET", "/api/health", nil)
+	req := httptest.NewRequest("GET", "/-/health", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 

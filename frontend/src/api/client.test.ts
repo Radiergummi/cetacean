@@ -23,14 +23,20 @@ describe("api client", () => {
     mockFetch.mockReturnValue(jsonResponse({ items: [{ ID: "n1" }], total: 1 }));
     const result = await api.nodes();
     expect(result).toEqual({ items: [{ ID: "n1" }], total: 1 });
-    expect(mockFetch).toHaveBeenCalledWith("/api/nodes", expect.objectContaining({ headers: { Accept: "application/json" } }));
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/nodes",
+      expect.objectContaining({ headers: { Accept: "application/json" } }),
+    );
   });
 
-  it("fetches a single node", async () => {
-    mockFetch.mockReturnValue(jsonResponse({ ID: "n1" }));
+  it("fetches a single node (unwraps JSON-LD wrapper)", async () => {
+    mockFetch.mockReturnValue(jsonResponse({ node: { ID: "n1" } }));
     const result = await api.node("n1");
     expect(result).toEqual({ ID: "n1" });
-    expect(mockFetch).toHaveBeenCalledWith("/api/nodes/n1", expect.objectContaining({ headers: { Accept: "application/json" } }));
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/nodes/n1",
+      expect.objectContaining({ headers: { Accept: "application/json" } }),
+    );
   });
 
   it("fetches cluster snapshot", async () => {
@@ -40,7 +46,12 @@ describe("api client", () => {
     expect(result).toEqual(snapshot);
   });
 
-  it("throws on non-ok response", async () => {
+  it("throws on non-ok response with problem detail", async () => {
+    mockFetch.mockReturnValue(jsonResponse({ detail: "node not found" }, 404));
+    await expect(api.nodes()).rejects.toThrow("node not found");
+  });
+
+  it("throws on non-ok response with status text fallback", async () => {
     mockFetch.mockReturnValue(jsonResponse(null, 404));
     await expect(api.nodes()).rejects.toThrow("404 Not Found");
   });
@@ -54,33 +65,42 @@ describe("api client", () => {
     mockFetch.mockReturnValue(jsonResponse(resp));
     const result = await api.serviceLogs("svc1", { limit: 100 });
     expect(result).toEqual(resp);
-    expect(mockFetch).toHaveBeenCalledWith("/api/services/svc1/logs?limit=100", expect.objectContaining({ headers: { Accept: "application/json" } }));
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/services/svc1/logs?limit=100",
+      expect.objectContaining({ headers: { Accept: "application/json" } }),
+    );
   });
 
   it("fetches service logs with stream filter", async () => {
     mockFetch.mockReturnValue(jsonResponse({ lines: [], oldest: "", newest: "" }));
     await api.serviceLogs("svc1", { limit: 100, stream: "stderr" });
-    expect(mockFetch).toHaveBeenCalledWith("/api/services/svc1/logs?limit=100&stream=stderr", expect.objectContaining({ headers: { Accept: "application/json" } }));
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/services/svc1/logs?limit=100&stream=stderr",
+      expect.objectContaining({ headers: { Accept: "application/json" } }),
+    );
   });
 
   it("builds metrics query params", async () => {
     mockFetch.mockReturnValue(jsonResponse({ status: "success" }));
     await api.metricsQuery("up", "1234");
-    expect(mockFetch).toHaveBeenCalledWith("/api/metrics/query?query=up&time=1234", expect.objectContaining({ headers: { Accept: "application/json" } }));
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/-/metrics/query?query=up&time=1234",
+      expect.objectContaining({ headers: { Accept: "application/json" } }),
+    );
   });
 
   it("builds metrics range query params", async () => {
     mockFetch.mockReturnValue(jsonResponse({ status: "success" }));
     await api.metricsQueryRange("up", "100", "200", "15s");
     expect(mockFetch).toHaveBeenCalledWith(
-      "/api/metrics/query_range?query=up&start=100&end=200&step=15s",
+      "/-/metrics/query_range?query=up&start=100&end=200&step=15s",
       expect.objectContaining({ headers: { Accept: "application/json" } }),
     );
   });
 
   it("builds service logs stream URL with after param", () => {
     const url = api.serviceLogsStreamURL("svc1", { after: "2024-01-01T00:00:00Z" });
-    expect(url).toBe("/api/services/svc1/logs?after=2024-01-01T00%3A00%3A00Z");
+    expect(url).toBe("/services/svc1/logs?after=2024-01-01T00%3A00%3A00Z");
   });
 
   it("builds service logs stream URL with stream filter", () => {
@@ -88,11 +108,11 @@ describe("api client", () => {
       after: "2024-01-01T00:00:00Z",
       stream: "stdout",
     });
-    expect(url).toBe("/api/services/svc1/logs?after=2024-01-01T00%3A00%3A00Z&stream=stdout");
+    expect(url).toBe("/services/svc1/logs?after=2024-01-01T00%3A00%3A00Z&stream=stdout");
   });
 
   it("builds task logs stream URL without params", () => {
     const url = api.taskLogsStreamURL("t1");
-    expect(url).toBe("/api/tasks/t1/logs");
+    expect(url).toBe("/tasks/t1/logs");
   });
 });

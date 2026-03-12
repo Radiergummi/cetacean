@@ -196,9 +196,7 @@ describe("LogViewer", () => {
     mockServiceLogs.mockResolvedValue(
       logResponse([{ message: "initial line", timestamp: "2024-01-01T00:00:00Z" }]),
     );
-    mockServiceLogsStreamURL.mockReturnValue(
-      "/api/services/svc1/logs?after=2024-01-01T00%3A00%3A00Z",
-    );
+    mockServiceLogsStreamURL.mockReturnValue("/services/svc1/logs?after=2024-01-01T00%3A00%3A00Z");
 
     renderWithRouter(<LogViewer serviceId="svc1" />);
 
@@ -210,7 +208,7 @@ describe("LogViewer", () => {
 
     expect(screen.getByText("Live")).toBeInTheDocument();
     expect(MockEventSource.instances).toHaveLength(1);
-    expect(MockEventSource.instances[0].url).toContain("/api/services/svc1/logs");
+    expect(MockEventSource.instances[0].url).toContain("/services/svc1/logs");
 
     // Simulate receiving an SSE event
     MockEventSource.instances[0].emit(
@@ -245,7 +243,7 @@ describe("LogViewer", () => {
 
   it("stops streaming when live is toggled off", async () => {
     mockServiceLogs.mockResolvedValue(logResponse([{ message: "line one" }]));
-    mockServiceLogsStreamURL.mockReturnValue("/api/services/svc1/logs");
+    mockServiceLogsStreamURL.mockReturnValue("/services/svc1/logs");
 
     renderWithRouter(<LogViewer serviceId="svc1" />);
 
@@ -285,7 +283,7 @@ describe("LogViewer", () => {
     mockServiceLogs.mockResolvedValue(
       logResponse([{ message: "initial", timestamp: "2024-01-01T00:00:00Z" }]),
     );
-    mockServiceLogsStreamURL.mockReturnValue("/api/services/svc1/logs");
+    mockServiceLogsStreamURL.mockReturnValue("/services/svc1/logs");
     renderWithRouter(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => expect(screen.getByText(/initial/)).toBeInTheDocument());
@@ -329,8 +327,16 @@ describe("LogViewer", () => {
     // Simulate being at scroll top so atTop becomes true and "Load older" appears
     const container = document.querySelector(".log-panel")!;
     Object.defineProperty(container, "scrollTop", { value: 0, writable: true, configurable: true });
-    Object.defineProperty(container, "scrollHeight", { value: 500, writable: true, configurable: true });
-    Object.defineProperty(container, "clientHeight", { value: 400, writable: true, configurable: true });
+    Object.defineProperty(container, "scrollHeight", {
+      value: 500,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(container, "clientHeight", {
+      value: 400,
+      writable: true,
+      configurable: true,
+    });
     fireEvent.scroll(container);
 
     await waitFor(() => expect(screen.getByText("Load older")).toBeInTheDocument());

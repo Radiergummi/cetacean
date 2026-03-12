@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -69,6 +70,18 @@ func TestApplyPagination(t *testing.T) {
 	if result.Items[0] != 2 || result.Items[1] != 3 || result.Items[2] != 4 {
 		t.Errorf("expected items [2,3,4], got %v", result.Items)
 	}
+	if result.Context != jsonLDContext {
+		t.Errorf("expected @context %s, got %s", jsonLDContext, result.Context)
+	}
+	if result.Type != "Collection" {
+		t.Errorf("expected @type Collection, got %s", result.Type)
+	}
+	if result.Limit != 3 {
+		t.Errorf("expected limit 3, got %d", result.Limit)
+	}
+	if result.Offset != 2 {
+		t.Errorf("expected offset 2, got %d", result.Offset)
+	}
 }
 
 func TestApplyPagination_BeyondEnd(t *testing.T) {
@@ -90,6 +103,96 @@ func TestApplyPagination_BeyondEnd(t *testing.T) {
 
 type testItem struct {
 	Name string
+}
+
+func TestWritePaginationLinks_FirstPage(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+	writePaginationLinks(w, r, 100, 10, 0)
+
+	link := w.Header().Get("Link")
+	if link == "" {
+		t.Fatal("expected Link header")
+	}
+	if !strings.Contains(link, `rel="next"`) {
+		t.Error("expected next link")
+	}
+	if strings.Contains(link, `rel="prev"`) {
+		t.Error("first page should not have prev link")
+	}
+	if !strings.Contains(link, "offset=10") {
+		t.Errorf("expected next offset=10, got %s", link)
+	}
+}
+
+func TestWritePaginationLinks_MiddlePage(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+	writePaginationLinks(w, r, 100, 10, 20)
+
+	link := w.Header().Get("Link")
+	if !strings.Contains(link, `rel="next"`) {
+		t.Error("expected next link")
+	}
+	if !strings.Contains(link, `rel="prev"`) {
+		t.Error("expected prev link")
+	}
+	if !strings.Contains(link, "offset=30") {
+		t.Errorf("expected next offset=30, got %s", link)
+	}
+	if !strings.Contains(link, "offset=10") {
+		t.Errorf("expected prev offset=10, got %s", link)
+	}
+}
+
+func TestWritePaginationLinks_LastPage(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+	writePaginationLinks(w, r, 25, 10, 20)
+
+	link := w.Header().Get("Link")
+	if strings.Contains(link, `rel="next"`) {
+		t.Error("last page should not have next link")
+	}
+	if !strings.Contains(link, `rel="prev"`) {
+		t.Error("expected prev link")
+	}
+}
+
+func TestWritePaginationLinks_SinglePage(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+	writePaginationLinks(w, r, 5, 10, 0)
+
+	link := w.Header().Get("Link")
+	if link != "" {
+		t.Errorf("single page should have no Link header, got %s", link)
+	}
+}
+
+func TestWritePaginationLinks_PrevClampsToZero(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+	writePaginationLinks(w, r, 100, 10, 5)
+
+	link := w.Header().Get("Link")
+	if !strings.Contains(link, "offset=0") {
+		t.Errorf("prev offset should clamp to 0, got %s", link)
+	}
+}
+
+func TestWritePaginationLinks_PreservesQueryParams(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/nodes?search=worker&sort=name", nil)
+	writePaginationLinks(w, r, 100, 10, 0)
+
+	link := w.Header().Get("Link")
+	if !strings.Contains(link, "search=worker") {
+		t.Errorf("expected search param preserved, got %s", link)
+	}
+	if !strings.Contains(link, "sort=name") {
+		t.Errorf("expected sort param preserved, got %s", link)
+	}
 }
 
 func TestSortItems(t *testing.T) {

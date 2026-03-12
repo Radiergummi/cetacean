@@ -13,7 +13,10 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/api": "http://localhost:9000",
+      "^/(nodes|services|tasks|configs|secrets|networks|volumes|stacks|search|events|topology|cluster|swarm|plugins|disk-usage|history|notifications|api|-|debug)":
+        {
+          target: "http://localhost:9000",
+        },
     },
   },
   test: {

@@ -20,7 +20,7 @@ go run .                                  # Run locally (metrics require CETACEA
 ```bash
 cd frontend
 npm install                               # Install dependencies
-npm run dev                               # Vite dev server on :5173 (proxies /api to :9000)
+npm run dev                               # Vite dev server on :5173 (proxies resource paths to :9000)
 npm run build                             # Build to frontend/dist/
 npm run lint                              # oxlint
 npm run fmt                               # oxfmt (write)
@@ -76,18 +76,25 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 - **`cache/snapshot.go`** — Atomic disk persistence with versioned JSON format.
 - **`docker/client.go`** — Thin wrapper over the Docker Engine API. List, Inspect, and Events methods for all resource types.
 - **`docker/watcher.go`** — Full sync on startup (7 parallel goroutines), then subscribes to Docker event stream. Re-syncs every 5 minutes and on reconnect. Container events are mapped to task updates via `com.docker.swarm.task.id` attribute. 50ms debounce with 4-worker inspect pool.
-- **`api/router.go`** — stdlib `net/http.ServeMux` with Go 1.22+ method routing (`"GET /api/..."`). Middleware chain: requestID → recovery → securityHeaders → requestLogger. SPA fallback registered last on `/`.
-- **`api/handlers.go`** — REST handlers. All read-only, serve cache data as JSON. List endpoints support `?search=`, `?filter=` (expr-lang expressions), `?sort=`, `?dir=`, `?limit=`, `?offset=`. Detail endpoints for all resource types return the resource + cross-referenced services. `HandleSearch` provides cross-resource global search. `DockerLogStreamer` interface decouples log streaming for testability. Task list/detail endpoints return `EnrichedTask` (adds `ServiceName`, `NodeHostname` to raw `swarm.Task`). Log-tail SSE connections are capped at 128 concurrent.
+- **`api/router.go`** — stdlib `net/http.ServeMux` with Go 1.22+ method routing. Resources live at top-level paths (e.g., `GET /nodes`, `GET /services/{id}`), meta endpoints under `/-/` (health, ready, metrics), and API docs at `/api`. Content negotiation middleware (`negotiate`) resolves `Accept` header or `.json`/`.html` extension suffix, storing the result in context. Dispatch helpers (`contentNegotiated`, `contentNegotiatedWithSSE`, `sseOnly`) route to JSON handler, SSE handler, or SPA based on negotiated type. Middleware chain: requestID → recovery → securityHeaders → negotiate → discoveryLinks → requestLogger. SPA fallback registered last on `/`.
+- **`api/handlers.go`** — REST handlers. All read-only, serve cache data as JSON. List endpoints support `?search=`, `?filter=` (expr-lang expressions), `?sort=`, `?dir=`, `?limit=`, `?offset=` and return `CollectionResponse` with JSON-LD metadata + pagination Link headers. Detail endpoints return JSON-LD wrapped responses (`@context`, `@id`, `@type`) with the resource + cross-referenced services. All JSON responses include ETag for conditional 304 responses. `HandleSearch` provides cross-resource global search. `DockerLogStreamer` interface decouples log streaming for testability. Task list/detail endpoints return `EnrichedTask` (adds `ServiceName`, `NodeHostname` to raw `swarm.Task`). Log-tail SSE connections are capped at 128 concurrent.
 - **`api/sse.go`** — `Broadcaster` manages up to 256 SSE clients. Clients can filter by `?types=node,service,task`. Event batching within configurable interval. Slow clients get events dropped (non-blocking send to buffered channel).
 - **`api/prometheus.go`** — Reverse proxy to Prometheus, only allows `/query` and `/query_range` paths with whitelisted query params. 10MB response limit, 30s timeout.
-- **`api/promquery.go`** — `PromClient` for direct Prometheus instant queries. Used by `HandleClusterMetrics` and `HandleMonitoringStatus` (`GET /api/metrics/status` — probes for node-exporter/cAdvisor targets, returns detection status for guided setup UI).
+- **`api/promquery.go`** — `PromClient` for direct Prometheus instant queries. Used by `HandleClusterMetrics` and `HandleMonitoringStatus` (`GET /-/metrics/status` — probes for node-exporter/cAdvisor targets, returns detection status for guided setup UI).
 - **`api/spa.go`** — Serves the embedded `frontend/dist/` filesystem with index.html fallback for client-side routing.
+- **`api/negotiate.go`** — Content negotiation middleware. Resolves `Accept` header or `.json`/`.html` extension suffix to `ContentType` enum stored in context. `ContentTypeFromContext` used by handlers.
+- **`api/dispatch.go`** — `contentNegotiated`, `contentNegotiatedWithSSE`, and `sseOnly` dispatch helpers that route requests to JSON handler, SSE handler, or SPA based on negotiated content type.
+- **`api/problem.go`** — RFC 9457 problem details (`application/problem+json`). `writeProblem` and `writeProblemTyped` produce structured error responses with JSON-LD `@context`.
+- **`api/jsonld.go`** — JSON-LD response helpers. `NewDetailResponse` creates `@context`/`@id`/`@type` wrappers for detail endpoints. `CollectionResponse` generic struct wraps list endpoints with pagination metadata.
+- **`api/etag.go`** — `writeJSONWithETag` computes SHA-256 ETag and returns 304 Not Modified on `If-None-Match` match.
+- **`api/context.go`** — Serves the JSON-LD context document at `/api/context.jsonld`.
+- **`api/apidoc.go`** — Serves `/api` endpoint: HTML gets Scalar API playground, otherwise returns OpenAPI YAML spec.
 - **`filter/`** — Expression-based filtering using `expr-lang/expr`. Each resource type has an env builder exposing fields for filter expressions.
 - **`notify/`** — Webhook notification system with expr-lang rule matching, cooldown, and circuit breaker (5 failures → open, 30s half-open).
 
 ### Frontend (`frontend/src/`)
 - React 19 + TypeScript + Vite, Tailwind CSS v4, shadcn/ui components, uPlot for time-series charts
-- **`api/client.ts`** — Fetch wrapper for all API endpoints. Detail methods: `api.node(id)`, `api.service(id)`, `api.task(id)`, `api.stack(name)`, `api.config(id)`, `api.secret(id)`, `api.network(id)`, `api.volume(name)`. Global search: `api.search(q, limit?)`.
+- **`api/client.ts`** — Fetch wrapper for all API endpoints. All requests include `Accept: application/json` header (required for content negotiation — without it, resource paths serve the SPA HTML). Detail methods: `api.node(id)`, `api.service(id)`, `api.task(id)`, `api.stack(name)`, `api.config(id)`, `api.secret(id)`, `api.network(id)`, `api.volume(name)`. Global search: `api.search(q, limit?)`.
 - **`api/types.ts`** — TypeScript types matching the Go JSON responses. Detail response types bundle the resource + `ServiceRef[]` cross-references.
 - **`hooks/SSEContext.tsx`** — Shared SSE provider (single EventSource connection for the whole app). Uses `Map<symbol, listener>` registry. Event types: node, service, task, config, secret, network, volume, stack, batch.
 - **`hooks/useSSE.ts`** — Re-exports `useSSESubscribe` from SSEContext. Used by both list pages (via `useSwarmResource`) and detail pages (direct subscription for re-fetch on change).
@@ -109,7 +116,12 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 ## Key Conventions
 - All API endpoints are GET-only (read-only system)
 - Uses Docker Engine API types directly (e.g., `swarm.Node`, `swarm.Service`) — no separate domain models
-- Detail endpoints return `{ resource: T, services: ServiceRef[] }` bundles for cross-referencing
+- All responses include JSON-LD `@context`, `@id`, `@type` metadata; detail endpoints return `{ @context, @id, @type, <resource>, services? }` wrappers for cross-referencing
+- List responses return `CollectionResponse` with `items`, `total`, `limit`, `offset` + pagination Link headers (RFC 8288)
+- Self-discovery Link headers (RFC 8631) on all non-meta responses: `</api>; rel="service-desc"` and `</api/context.jsonld>; rel="describedby"`
+- Error responses use RFC 9457 (`application/problem+json`) with `@context`, `type`, `title`, `status`, `detail`, `instance`, `requestId`
+- Content negotiation: `Accept` header or `.json`/`.html` extension suffix; resource URLs serve SPA for HTML, JSON for `application/json`
+- ETag + conditional 304 responses on all JSON endpoints
 - Stacks are a derived concept from `com.docker.stack.namespace` labels, not a Docker primitive
 - Volumes are keyed by Name, everything else by ID — volume detail route uses `{name}` not `{id}`
 - Networks use `network.Summary` (which aliases `network.Inspect`) — the list and inspect types are identical in the Docker SDK
@@ -117,10 +129,10 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 - Config data is returned base64-encoded (from Docker SDK); frontend decodes with `atob()`
 - No authentication — designed to run behind a reverse proxy
 - pprof endpoints are opt-in via `CETACEAN_PPROF=true`, exposed at `/debug/pprof/` (registered without method prefix to support POST for `go tool pprof`)
-- Global search (`GET /api/search?q=&limit=`) searches names, images, labels across all resource types. `limit=0` returns up to 1000 per type; default is 3 per type. Response includes optional `state` field for services (derived from running/desired tasks + UpdateStatus) and tasks
+- Global search (`GET /search?q=&limit=`) searches names, images, labels across all resource types. `limit=0` returns up to 1000 per type; default is 3 per type. Response includes optional `state` field for services (derived from running/desired tasks + UpdateStatus) and tasks
 - Task list endpoints return `EnrichedTask` with `ServiceName` and `NodeHostname` populated from cache cross-references
-- Log-tail SSE endpoints have a 128-connection limit (returns 503 when exceeded)
-- `since`/`until` log params are validated server-side; invalid values return 400
+- SSE connection limits return 429 (not 503) with `Retry-After` header
+- Log-tail SSE endpoints have a 128-connection limit; log `after`/`before` params are validated server-side (invalid values return 400)
 
 ## Frontend Patterns
 - **List pages**: `useSwarmResource` hook + `DataTable`/`ResourceCard` with `onRowClick`/`to` for navigation
@@ -131,6 +143,12 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 - **Global search**: `Cmd+K` opens `SearchPalette` command palette; `/search?q=` for full-page results. Palette polls every 2s for live state updates (orbs/spinners) but preserves result order to avoid UI jank. Results grouped by type in fixed order: services > stacks > nodes > tasks > configs > secrets > networks > volumes
 - **Cross-references**: detail pages show "Used by Services" tables with links; configs/secrets link to stacks via label
 - Structured logging throughout backend via `log/slog`
+
+## API Documentation
+- **OpenAPI spec**: `api/openapi.yaml`, served at `GET /api` (YAML for programmatic clients, Scalar HTML playground for browsers)
+- **JSON-LD context**: `internal/api/context.go`, served at `GET /api/context.jsonld`
+- **Markdown docs**: `docs/api.md`
+- Meta endpoints (`/-/health`, `/-/ready`, `/-/metrics/`) have no content negotiation or discovery links
 
 ## Known Pre-existing Issues
 None — all previously known test failures have been fixed.

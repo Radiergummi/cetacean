@@ -5,78 +5,79 @@ import (
 	"net/http/pprof"
 )
 
-func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Handler, enablePprof bool) http.Handler {
+func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Handler, openapiSpec []byte, scalarJS []byte, enablePprof bool) http.Handler {
 	mux := http.NewServeMux()
 
-	// Health
-	mux.HandleFunc("GET /api/health", h.HandleHealth)
-	mux.HandleFunc("GET /api/ready", h.HandleReady)
+	// Meta endpoints (no content negotiation, no discovery links)
+	mux.HandleFunc("GET /-/health", h.HandleHealth)
+	mux.HandleFunc("GET /-/ready", h.HandleReady)
+	mux.HandleFunc("GET /-/metrics/status", h.HandleMonitoringStatus)
+	mux.Handle("GET /-/metrics/", promProxy)
 
-	// SSE
-	mux.Handle("GET /api/events", b)
+	// API documentation (content-negotiated)
+	mux.HandleFunc("GET /api", HandleAPIDoc(openapiSpec))
+	mux.HandleFunc("GET /api/scalar.js", HandleScalarJS(scalarJS))
+	mux.HandleFunc("GET /api/context.jsonld", HandleContext)
+
+	// SSE events
+	mux.Handle("GET /events", sseOnly(b, spa))
 
 	// Cluster
-	mux.HandleFunc("GET /api/cluster", h.HandleCluster)
-	mux.HandleFunc("GET /api/cluster/metrics", h.HandleClusterMetrics)
-	mux.HandleFunc("GET /api/swarm", h.HandleSwarm)
-	mux.HandleFunc("GET /api/disk-usage", h.HandleDiskUsage)
-	mux.HandleFunc("GET /api/plugins", h.HandlePlugins)
+	mux.HandleFunc("GET /cluster", contentNegotiated(h.HandleCluster, spa))
+	mux.HandleFunc("GET /cluster/metrics", contentNegotiated(h.HandleClusterMetrics, spa))
+	mux.HandleFunc("GET /swarm", contentNegotiated(h.HandleSwarm, spa))
+	mux.HandleFunc("GET /disk-usage", contentNegotiated(h.HandleDiskUsage, spa))
+	mux.HandleFunc("GET /plugins", contentNegotiated(h.HandlePlugins, spa))
 
 	// Nodes
-	mux.HandleFunc("GET /api/nodes", h.HandleListNodes)
-	mux.HandleFunc("GET /api/nodes/{id}", h.HandleGetNode)
-	mux.HandleFunc("GET /api/nodes/{id}/tasks", h.HandleNodeTasks)
+	mux.HandleFunc("GET /nodes", contentNegotiated(h.HandleListNodes, spa))
+	mux.HandleFunc("GET /nodes/{id}", contentNegotiated(h.HandleGetNode, spa))
+	mux.HandleFunc("GET /nodes/{id}/tasks", contentNegotiated(h.HandleNodeTasks, spa))
 
 	// Services
-	mux.HandleFunc("GET /api/services", h.HandleListServices)
-	mux.HandleFunc("GET /api/services/{id}", h.HandleGetService)
-	mux.HandleFunc("GET /api/services/{id}/tasks", h.HandleServiceTasks)
-	mux.HandleFunc("GET /api/services/{id}/logs", h.HandleServiceLogs)
+	mux.HandleFunc("GET /services", contentNegotiated(h.HandleListServices, spa))
+	mux.HandleFunc("GET /services/{id}", contentNegotiated(h.HandleGetService, spa))
+	mux.HandleFunc("GET /services/{id}/tasks", contentNegotiated(h.HandleServiceTasks, spa))
+	mux.HandleFunc("GET /services/{id}/logs", contentNegotiatedWithSSE(h.HandleServiceLogs, h.HandleServiceLogs, spa))
 
 	// Tasks
-	mux.HandleFunc("GET /api/tasks", h.HandleListTasks)
-	mux.HandleFunc("GET /api/tasks/{id}", h.HandleGetTask)
-	mux.HandleFunc("GET /api/tasks/{id}/logs", h.HandleTaskLogs)
+	mux.HandleFunc("GET /tasks", contentNegotiated(h.HandleListTasks, spa))
+	mux.HandleFunc("GET /tasks/{id}", contentNegotiated(h.HandleGetTask, spa))
+	mux.HandleFunc("GET /tasks/{id}/logs", contentNegotiatedWithSSE(h.HandleTaskLogs, h.HandleTaskLogs, spa))
 
 	// History
-	mux.HandleFunc("GET /api/history", h.HandleHistory)
+	mux.HandleFunc("GET /history", contentNegotiated(h.HandleHistory, spa))
 
 	// Stacks
-	mux.HandleFunc("GET /api/stacks", h.HandleListStacks)
-	mux.HandleFunc("GET /api/stacks/summary", h.HandleStackSummary)
-	mux.HandleFunc("GET /api/stacks/{name}", h.HandleGetStack)
+	mux.HandleFunc("GET /stacks", contentNegotiated(h.HandleListStacks, spa))
+	mux.HandleFunc("GET /stacks/summary", contentNegotiated(h.HandleStackSummary, spa))
+	mux.HandleFunc("GET /stacks/{name}", contentNegotiated(h.HandleGetStack, spa))
 
 	// Configs
-	mux.HandleFunc("GET /api/configs", h.HandleListConfigs)
-	mux.HandleFunc("GET /api/configs/{id}", h.HandleGetConfig)
+	mux.HandleFunc("GET /configs", contentNegotiated(h.HandleListConfigs, spa))
+	mux.HandleFunc("GET /configs/{id}", contentNegotiated(h.HandleGetConfig, spa))
 
 	// Secrets
-	mux.HandleFunc("GET /api/secrets", h.HandleListSecrets)
-	mux.HandleFunc("GET /api/secrets/{id}", h.HandleGetSecret)
+	mux.HandleFunc("GET /secrets", contentNegotiated(h.HandleListSecrets, spa))
+	mux.HandleFunc("GET /secrets/{id}", contentNegotiated(h.HandleGetSecret, spa))
 
 	// Networks
-	mux.HandleFunc("GET /api/networks", h.HandleListNetworks)
-	mux.HandleFunc("GET /api/networks/{id}", h.HandleGetNetwork)
+	mux.HandleFunc("GET /networks", contentNegotiated(h.HandleListNetworks, spa))
+	mux.HandleFunc("GET /networks/{id}", contentNegotiated(h.HandleGetNetwork, spa))
 
 	// Volumes
-	mux.HandleFunc("GET /api/volumes", h.HandleListVolumes)
-	mux.HandleFunc("GET /api/volumes/{name}", h.HandleGetVolume)
+	mux.HandleFunc("GET /volumes", contentNegotiated(h.HandleListVolumes, spa))
+	mux.HandleFunc("GET /volumes/{name}", contentNegotiated(h.HandleGetVolume, spa))
 
 	// Notifications
-	mux.HandleFunc("GET /api/notifications/rules", h.HandleNotificationRules)
+	mux.HandleFunc("GET /notifications/rules", contentNegotiated(h.HandleNotificationRules, spa))
 
 	// Search
-	mux.HandleFunc("GET /api/search", h.HandleSearch)
+	mux.HandleFunc("GET /search", contentNegotiated(h.HandleSearch, spa))
 
 	// Topology
-	mux.HandleFunc("GET /api/topology/networks", h.HandleNetworkTopology)
-	mux.HandleFunc("GET /api/topology/placement", h.HandlePlacementTopology)
-
-	// Monitoring status
-	mux.HandleFunc("GET /api/metrics/status", h.HandleMonitoringStatus)
-
-	// Prometheus proxy
-	mux.Handle("GET /api/metrics/", promProxy)
+	mux.HandleFunc("GET /topology/networks", contentNegotiated(h.HandleNetworkTopology, spa))
+	mux.HandleFunc("GET /topology/placement", contentNegotiated(h.HandlePlacementTopology, spa))
 
 	// Profiling (opt-in via CETACEAN_PPROF=true)
 	if enablePprof {
@@ -90,7 +91,14 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 	// SPA fallback (must be last)
 	mux.Handle("/", spa)
 
-	return requestID(recovery(securityHeaders(requestLogger(mux))))
+	var handler http.Handler = mux
+	handler = requestLogger(handler)
+	handler = discoveryLinks(handler)
+	handler = negotiate(handler)
+	handler = securityHeaders(handler)
+	handler = recovery(handler)
+	handler = requestID(handler)
+	return handler
 }
 
 func securityHeaders(next http.Handler) http.Handler {
