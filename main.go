@@ -66,7 +66,7 @@ func main() {
 	snapshotPath := ""
 	if cfg.Snapshot {
 		snapshotPath = filepath.Join(cfg.DataDir, "snapshot.json")
-		if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
+		if err := os.MkdirAll(cfg.DataDir, 0700); err != nil {
 			slog.Warn("could not create data dir", "error", err)
 		}
 		if err := stateCache.LoadFromDisk(snapshotPath); err != nil {

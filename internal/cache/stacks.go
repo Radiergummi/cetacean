@@ -1,6 +1,5 @@
 package cache
 
-
 const stackLabel = "com.docker.stack.namespace"
 
 // addToStack incrementally adds a resource to the appropriate stack. Must be called with c.mu held for writing.
@@ -111,7 +110,6 @@ func (c *Cache) rebuildStacks() {
 	}
 	c.stacks = result
 }
-
 
 func appendUnique(sl []string, v string) []string {
 	for _, s := range sl {

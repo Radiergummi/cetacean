@@ -398,6 +398,7 @@ func (c *Cache) SetSecret(s swarm.Secret) {
 	if old, ok := c.secrets[s.ID]; ok {
 		c.removeFromStack("secret", old.ID, old.Spec.Labels)
 	}
+	s.Spec.Data = nil
 	c.secrets[s.ID] = s
 	c.addToStack("secret", s.ID, s.Spec.Labels)
 	c.mu.Unlock()
@@ -1040,4 +1041,6 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 	c.rebuildStacks()
 	c.lastSync = time.Now()
 	c.mu.Unlock()
+
+	c.notify(Event{Type: "sync", Action: "full_sync", ID: ""})
 }

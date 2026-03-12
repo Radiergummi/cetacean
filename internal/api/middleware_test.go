@@ -123,6 +123,9 @@ func TestSecurityHeaders(t *testing.T) {
 	if got := w.Header().Get("X-Frame-Options"); got != "DENY" {
 		t.Errorf("X-Frame-Options=%q, want DENY", got)
 	}
+	if got := w.Header().Get("Content-Security-Policy"); got != "default-src 'self'; style-src 'self' 'unsafe-inline'" {
+		t.Errorf("Content-Security-Policy=%q, want default-src 'self'; style-src 'self' 'unsafe-inline'", got)
+	}
 }
 
 func TestDiscoveryLinks_AddedToAPIRoutes(t *testing.T) {

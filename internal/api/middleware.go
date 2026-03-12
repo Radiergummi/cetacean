@@ -127,9 +127,9 @@ func recovery(next http.Handler) http.Handler {
 					"stack", string(debug.Stack()),
 				)
 				// Best-effort error response. If headers were already
-			// flushed (e.g. mid-SSE-stream), WriteHeader is a no-op
-			// and the partial write is harmless.
-			writeProblem(w, r, http.StatusInternalServerError, "internal server error")
+				// flushed (e.g. mid-SSE-stream), WriteHeader is a no-op
+				// and the partial write is harmless.
+				writeProblem(w, r, http.StatusInternalServerError, "internal server error")
 			}
 		}()
 		next.ServeHTTP(w, r)

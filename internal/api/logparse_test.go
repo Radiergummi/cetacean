@@ -168,7 +168,7 @@ func TestStreamDockerLogs(t *testing.T) {
 func TestParseDockerLogs_RejectsOversizedFrame(t *testing.T) {
 	// Build a header with a size exceeding maxLogFrameSize.
 	var buf bytes.Buffer
-	buf.WriteByte(1)          // stdout
+	buf.WriteByte(1)           // stdout
 	buf.Write([]byte{0, 0, 0}) // padding
 	_ = binary.Write(&buf, binary.BigEndian, uint32(maxLogFrameSize+1))
 	// No need to write the full payload — the error should fire before reading it.

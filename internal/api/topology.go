@@ -15,20 +15,20 @@ type NetworkTopology struct {
 }
 
 type TopoServiceNode struct {
-	ID               string              `json:"id"`
-	Name             string              `json:"name"`
-	Stack            string              `json:"stack,omitempty"`
-	Replicas         int                 `json:"replicas"`
-	Image            string              `json:"image"`
-	Ports            []string            `json:"ports,omitempty"`
-	Mode             string              `json:"mode"`
-	UpdateStatus     string              `json:"updateStatus,omitempty"`
-	NetworkAliases   map[string][]string `json:"networkAliases,omitempty"`
+	ID             string              `json:"id"`
+	Name           string              `json:"name"`
+	Stack          string              `json:"stack,omitempty"`
+	Replicas       int                 `json:"replicas"`
+	Image          string              `json:"image"`
+	Ports          []string            `json:"ports,omitempty"`
+	Mode           string              `json:"mode"`
+	UpdateStatus   string              `json:"updateStatus,omitempty"`
+	NetworkAliases map[string][]string `json:"networkAliases,omitempty"`
 }
 
 type TopoEdge struct {
 	Source   string   `json:"source"`
-	Target  string   `json:"target"`
+	Target   string   `json:"target"`
 	Networks []string `json:"networks"`
 }
 

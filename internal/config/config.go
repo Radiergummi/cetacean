@@ -9,15 +9,15 @@ import (
 )
 
 type Config struct {
-	DockerHost    string
-	PrometheusURL string
-	ListenAddr    string
-	LogLevel      string // "debug", "info", "warn", "error"
-	LogFormat     string // "json", "text"
-	DataDir       string // CETACEAN_DATA_DIR, default "./data"
+	DockerHost       string
+	PrometheusURL    string
+	ListenAddr       string
+	LogLevel         string        // "debug", "info", "warn", "error"
+	LogFormat        string        // "json", "text"
+	DataDir          string        // CETACEAN_DATA_DIR, default "./data"
 	Snapshot         bool          // CETACEAN_SNAPSHOT, default true
 	SSEBatchInterval time.Duration // CETACEAN_SSE_BATCH_INTERVAL, default 100ms
-	Pprof             bool          // CETACEAN_PPROF, default false
+	Pprof            bool          // CETACEAN_PPROF, default false
 }
 
 func Load() (*Config, error) {
@@ -27,15 +27,15 @@ func Load() (*Config, error) {
 	}
 
 	cfg := &Config{
-		DockerHost:        envOr("CETACEAN_DOCKER_HOST", "unix:///var/run/docker.sock"),
-		PrometheusURL:     os.Getenv("CETACEAN_PROMETHEUS_URL"),
-		ListenAddr:        envOr("CETACEAN_LISTEN_ADDR", ":9000"),
-		LogLevel:          envOr("CETACEAN_LOG_LEVEL", "info"),
-		LogFormat:         envOr("CETACEAN_LOG_FORMAT", "json"),
-		DataDir:           envOr("CETACEAN_DATA_DIR", "./data"),
-		Snapshot:          envBool("CETACEAN_SNAPSHOT", true),
+		DockerHost:       envOr("CETACEAN_DOCKER_HOST", "unix:///var/run/docker.sock"),
+		PrometheusURL:    os.Getenv("CETACEAN_PROMETHEUS_URL"),
+		ListenAddr:       envOr("CETACEAN_LISTEN_ADDR", ":9000"),
+		LogLevel:         envOr("CETACEAN_LOG_LEVEL", "info"),
+		LogFormat:        envOr("CETACEAN_LOG_FORMAT", "json"),
+		DataDir:          envOr("CETACEAN_DATA_DIR", "./data"),
+		Snapshot:         envBool("CETACEAN_SNAPSHOT", true),
 		SSEBatchInterval: batchInterval,
-		Pprof:             envBool("CETACEAN_PPROF", false),
+		Pprof:            envBool("CETACEAN_PPROF", false),
 	}
 
 	return cfg, nil

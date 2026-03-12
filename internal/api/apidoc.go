@@ -36,6 +36,7 @@ func HandleAPIDoc(specYAML []byte) http.HandlerFunc {
 		switch ct {
 		case ContentTypeHTML:
 			w.Header().Set("Content-Type", "text/html")
+			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
 			w.Write([]byte(apiPlaygroundHTML)) //nolint:errcheck
 		default:
 			// JSON is the default for content negotiation (including */*).

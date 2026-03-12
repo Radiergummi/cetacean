@@ -98,7 +98,6 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-
 func searchFilter[T any](items []T, query string, name func(T) string) []T {
 	if query == "" {
 		return items
@@ -169,7 +168,6 @@ func (h *Handlers) getLocalNodeID() string {
 		id, err := h.systemClient.LocalNodeID(ctx)
 		if err != nil {
 			slog.Warn("failed to get local node ID", "error", err)
-			return ""
 		}
 		h.localNodeID = id
 		h.localNodeDone = true
