@@ -12,7 +12,7 @@ const apiPlaygroundHTML = `<!DOCTYPE html>
 <head><title>Cetacean API</title><meta charset="utf-8"/></head>
 <body>
   <script id="api-reference" data-url="/api"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+  <script src="/api/scalar.js"></script>
 </body>
 </html>`
 
@@ -42,6 +42,15 @@ func HandleAPIDoc(specYAML []byte) http.HandlerFunc {
 			w.Header().Set("Content-Type", "application/json")
 			w.Write(specJSON) //nolint:errcheck
 		}
+	}
+}
+
+// HandleScalarJS serves the embedded Scalar API reference JavaScript bundle.
+func HandleScalarJS(js []byte) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/javascript")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Write(js) //nolint:errcheck
 	}
 }
 
