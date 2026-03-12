@@ -82,3 +82,84 @@ func TestETagMismatch(t *testing.T) {
 		t.Fatal("expected ETag header")
 	}
 }
+
+func TestETagMatch(t *testing.T) {
+	tests := []struct {
+		name   string
+		header string
+		etag   string
+		want   bool
+	}{
+		{"empty header", "", `"abc"`, false},
+		{"exact match", `"abc"`, `"abc"`, true},
+		{"no match", `"xyz"`, `"abc"`, false},
+		{"wildcard", "*", `"abc"`, true},
+		{"weak etag match", `W/"abc"`, `"abc"`, true},
+		{"multi-value first", `"abc", "def"`, `"abc"`, true},
+		{"multi-value second", `"abc", "def"`, `"def"`, true},
+		{"multi-value no match", `"abc", "def"`, `"ghi"`, false},
+		{"multi-value with weak", `W/"abc", "def"`, `"abc"`, true},
+		{"multi-value with spaces", `"abc" , "def" , "ghi"`, `"def"`, true},
+		{"weak in multi-value", `"abc", W/"def", "ghi"`, `"def"`, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := etagMatch(tt.header, tt.etag); got != tt.want {
+				t.Errorf("etagMatch(%q, %q) = %v, want %v", tt.header, tt.etag, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestETagConditionalMultiValue(t *testing.T) {
+	data := map[string]string{"status": "ok"}
+
+	// Get the ETag for this data.
+	r1 := httptest.NewRequest("GET", "/test", nil)
+	w1 := httptest.NewRecorder()
+	writeJSONWithETag(w1, r1, data)
+	etag := w1.Header().Get("ETag")
+
+	// Send If-None-Match with multiple ETags including the correct one.
+	r2 := httptest.NewRequest("GET", "/test", nil)
+	r2.Header.Set("If-None-Match", `"stale", `+etag+`, "other"`)
+	w2 := httptest.NewRecorder()
+	writeJSONWithETag(w2, r2, data)
+
+	if w2.Code != http.StatusNotModified {
+		t.Fatalf("expected 304 with multi-value If-None-Match, got %d", w2.Code)
+	}
+}
+
+func TestETagConditionalWeak(t *testing.T) {
+	data := map[string]string{"status": "ok"}
+
+	// Get the ETag.
+	r1 := httptest.NewRequest("GET", "/test", nil)
+	w1 := httptest.NewRecorder()
+	writeJSONWithETag(w1, r1, data)
+	etag := w1.Header().Get("ETag")
+
+	// Send weak version of the same ETag.
+	r2 := httptest.NewRequest("GET", "/test", nil)
+	r2.Header.Set("If-None-Match", "W/"+etag)
+	w2 := httptest.NewRecorder()
+	writeJSONWithETag(w2, r2, data)
+
+	if w2.Code != http.StatusNotModified {
+		t.Fatalf("expected 304 with weak ETag, got %d", w2.Code)
+	}
+}
+
+func TestETagConditionalWildcard(t *testing.T) {
+	data := map[string]string{"status": "ok"}
+
+	r := httptest.NewRequest("GET", "/test", nil)
+	r.Header.Set("If-None-Match", "*")
+	w := httptest.NewRecorder()
+	writeJSONWithETag(w, r, data)
+
+	if w.Code != http.StatusNotModified {
+		t.Fatalf("expected 304 with wildcard If-None-Match, got %d", w.Code)
+	}
+}

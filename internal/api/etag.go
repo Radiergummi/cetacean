@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
+	"strings"
 
 	json "github.com/goccy/go-json"
 )
@@ -15,11 +16,36 @@ func computeETag(body []byte) string {
 	return `"` + hex.EncodeToString(h[:16]) + `"`
 }
 
+// etagMatch reports whether the If-None-Match header matches the given strong ETag.
+// Handles multiple comma-separated ETags, weak ETags (W/"..."), and the wildcard "*".
+// Uses weak comparison per RFC 9110 Section 13.1.2 (appropriate for GET/HEAD).
+func etagMatch(header, etag string) bool {
+	if header == "" {
+		return false
+	}
+	if header == "*" {
+		return true
+	}
+	// Extract the opaque-tag from our strong ETag (strip quotes).
+	opaqueTag := strings.TrimPrefix(etag, `"`)
+	opaqueTag = strings.TrimSuffix(opaqueTag, `"`)
+
+	for _, candidate := range strings.Split(header, ",") {
+		candidate = strings.TrimSpace(candidate)
+		// Strip weak prefix if present.
+		candidate = strings.TrimPrefix(candidate, "W/")
+		// Strip quotes.
+		candidate = strings.TrimPrefix(candidate, `"`)
+		candidate = strings.TrimSuffix(candidate, `"`)
+		if candidate == opaqueTag {
+			return true
+		}
+	}
+	return false
+}
+
 // writeJSONWithETag marshals v to JSON, computes an ETag, and returns
 // 304 Not Modified if the client's If-None-Match header matches.
-// ETag stability for map[string]any relies on goccy/go-json sorting map keys
-// by default (unlike encoding/json). If switching JSON libraries, ensure map
-// key ordering is deterministic or ETags will flap.
 func writeJSONWithETag(w http.ResponseWriter, r *http.Request, v any) {
 	body, err := json.Marshal(v)
 	if err != nil {
@@ -31,11 +57,11 @@ func writeJSONWithETag(w http.ResponseWriter, r *http.Request, v any) {
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Content-Type", "application/json")
 
-	if r.Header.Get("If-None-Match") == etag {
+	if etagMatch(r.Header.Get("If-None-Match"), etag) {
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
 
-	w.Write(body)    //nolint:errcheck
+	w.Write(body)         //nolint:errcheck
 	w.Write([]byte{'\n'}) //nolint:errcheck
 }

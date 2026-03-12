@@ -2,6 +2,8 @@ package api
 
 import (
 	"testing"
+
+	json "github.com/goccy/go-json"
 )
 
 func TestNewDetailResponse(t *testing.T) {
@@ -9,17 +11,26 @@ func TestNewDetailResponse(t *testing.T) {
 		"node": "test-value",
 	})
 
-	if resp["@context"] != jsonLDContext {
-		t.Errorf("@context = %v, want %s", resp["@context"], jsonLDContext)
+	body, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if resp["@id"] != "/nodes/n1" {
-		t.Errorf("@id = %v, want /nodes/n1", resp["@id"])
+	var m map[string]any
+	if err := json.Unmarshal(body, &m); err != nil {
+		t.Fatal(err)
 	}
-	if resp["@type"] != "Node" {
-		t.Errorf("@type = %v, want Node", resp["@type"])
+
+	if m["@context"] != jsonLDContext {
+		t.Errorf("@context = %v, want %s", m["@context"], jsonLDContext)
 	}
-	if resp["node"] != "test-value" {
-		t.Errorf("node = %v, want test-value", resp["node"])
+	if m["@id"] != "/nodes/n1" {
+		t.Errorf("@id = %v, want /nodes/n1", m["@id"])
+	}
+	if m["@type"] != "Node" {
+		t.Errorf("@type = %v, want Node", m["@type"])
+	}
+	if m["node"] != "test-value" {
+		t.Errorf("node = %v, want test-value", m["node"])
 	}
 }
 
@@ -29,32 +40,76 @@ func TestNewDetailResponse_MultipleExtras(t *testing.T) {
 		"services": []string{"svc1"},
 	})
 
-	if resp["@context"] != jsonLDContext {
-		t.Errorf("@context = %v, want %s", resp["@context"], jsonLDContext)
+	body, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if resp["@id"] != "/configs/c1" {
-		t.Errorf("@id = %v, want /configs/c1", resp["@id"])
+	var m map[string]any
+	if err := json.Unmarshal(body, &m); err != nil {
+		t.Fatal(err)
 	}
-	if resp["@type"] != "Config" {
-		t.Errorf("@type = %v, want Config", resp["@type"])
+
+	if m["@context"] != jsonLDContext {
+		t.Errorf("@context = %v, want %s", m["@context"], jsonLDContext)
 	}
-	if resp["config"] != "cfg-data" {
-		t.Errorf("config = %v, want cfg-data", resp["config"])
+	if m["@id"] != "/configs/c1" {
+		t.Errorf("@id = %v, want /configs/c1", m["@id"])
 	}
-	svcs, ok := resp["services"].([]string)
-	if !ok || len(svcs) != 1 || svcs[0] != "svc1" {
-		t.Errorf("services = %v, want [svc1]", resp["services"])
+	if m["@type"] != "Config" {
+		t.Errorf("@type = %v, want Config", m["@type"])
+	}
+	if m["config"] != "cfg-data" {
+		t.Errorf("config = %v, want cfg-data", m["config"])
 	}
 }
 
 func TestNewDetailResponse_NilExtras(t *testing.T) {
 	resp := NewDetailResponse("/nodes/n1", "Node", nil)
 
-	if len(resp) != 3 {
-		t.Errorf("expected 3 keys, got %d", len(resp))
+	body, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if resp["@context"] != jsonLDContext {
-		t.Errorf("@context = %v, want %s", resp["@context"], jsonLDContext)
+	var m map[string]any
+	if err := json.Unmarshal(body, &m); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(m) != 3 {
+		t.Errorf("expected 3 keys, got %d", len(m))
+	}
+	if m["@context"] != jsonLDContext {
+		t.Errorf("@context = %v, want %s", m["@context"], jsonLDContext)
+	}
+}
+
+func TestDetailResponse_DeterministicSerialization(t *testing.T) {
+	// Marshal the same response multiple times and verify identical output.
+	resp := NewDetailResponse("/nodes/n1", "Node", map[string]any{
+		"zebra": 1,
+		"alpha": 2,
+		"node":  "value",
+	})
+
+	first, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 100; i++ {
+		got, err := json.Marshal(resp)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != string(first) {
+			t.Fatalf("iteration %d: serialization not deterministic\nfirst: %s\n  got: %s", i, first, got)
+		}
+	}
+
+	// Verify key order: @context, @id, @type, then extras alphabetically.
+	expected := `{"@context":"/api/context.jsonld","@id":"/nodes/n1","@type":"Node","alpha":2,"node":"value","zebra":1}`
+	if string(first) != expected {
+		t.Errorf("unexpected key order:\n got: %s\nwant: %s", first, expected)
 	}
 }
 
