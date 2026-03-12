@@ -23,30 +23,34 @@ export function useSwarmResource<T>(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const getIdRef = useRef(getId);
-  const fetchFnRef = useRef(fetchFn);
   getIdRef.current = getId;
-  fetchFnRef.current = fetchFn;
 
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    fetchFnRef
-      .current()
+    fetchFn()
       .then((resp) => {
         setData(resp.items);
         setTotal(resp.total);
       })
       .catch(setError)
       .finally(() => setLoading(false));
-  }, []);
+  }, [fetchFn]);
 
   useEffect(() => {
     load();
-  }, [fetchFn]);
+  }, [load]);
+
+  const loadRef = useRef(load);
+  loadRef.current = load;
 
   useResourceStream(
     ssePathMap[sseType] ?? `/events?types=${sseType}`,
     useCallback((event) => {
+      if (event.type === "sync") {
+        loadRef.current();
+        return;
+      }
       if (event.action === "remove") {
         setData((prev) => prev.filter((item) => getIdRef.current(item) !== event.id));
       } else if (event.resource) {

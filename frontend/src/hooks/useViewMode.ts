@@ -11,10 +11,13 @@ export function useViewMode(
     return stored === "table" || stored === "grid" ? stored : defaultMode;
   });
 
-  const set = useCallback((m: ViewMode) => {
-    setMode(m);
-    localStorage.setItem(`viewMode:${key}`, m);
-  }, [key]);
+  const set = useCallback(
+    (m: ViewMode) => {
+      setMode(m);
+      localStorage.setItem(`viewMode:${key}`, m);
+    },
+    [key],
+  );
 
   return [mode, set];
 }

@@ -18,8 +18,7 @@ export function useMonitoringStatus(): MonitoringStatus | null {
   const [status, setStatus] = useState<MonitoringStatus | null>(cached);
 
   useEffect(() => {
-    if (cached != null && cachedAt != null && Date.now() - cachedAt < TTL_MS)
-      return;
+    if (cached != null && cachedAt != null && Date.now() - cachedAt < TTL_MS) return;
     if (cached != null) {
       cached = null;
       inflight = null;
@@ -35,7 +34,9 @@ export function useMonitoringStatus(): MonitoringStatus | null {
           inflight = null;
         });
     }
-    inflight.then(() => setStatus(cached));
+    inflight.then(() => {
+      if (cached != null) setStatus(cached);
+    });
   }, []);
 
   return status;

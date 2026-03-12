@@ -9,6 +9,18 @@ interface SSEEvent {
 
 type SSEListener = (event: SSEEvent) => void;
 
+export const SSE_EVENT_TYPES = [
+  "node",
+  "service",
+  "task",
+  "config",
+  "secret",
+  "network",
+  "volume",
+  "stack",
+  "sync",
+] as const;
+
 /**
  * Opens an EventSource to the given path and dispatches parsed events.
  * Returns connection status for use by ConnectionStatus component.
@@ -43,8 +55,7 @@ export function useResourceStream(path: string, listener: SSEListener) {
       }
     };
 
-    const eventTypes = ["node", "service", "task", "config", "secret", "network", "volume", "stack"];
-    for (const type of eventTypes) {
+    for (const type of SSE_EVENT_TYPES) {
       es.addEventListener(type, handler);
     }
     es.addEventListener("batch", batchHandler);

@@ -1,6 +1,7 @@
 export { default as ContainerImage } from "./ContainerImage";
 export { default as KeyValuePills } from "./KeyValuePills";
 export { default as KVTable } from "./KVTable";
+export { default as LabelSection } from "./LabelSection";
 export { default as ResourceId } from "./ResourceId";
 export { default as ResourceLink } from "./ResourceLink";
 export { default as SectionHeader } from "./SectionHeader";
