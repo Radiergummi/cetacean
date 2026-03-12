@@ -138,7 +138,7 @@ func (h *Handlers) HandleNetworkTopology(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Build edges for each pair of services sharing overlay networks.
-	var edges []TopoEdge
+	edges := make([]TopoEdge, 0)
 	for i := 0; i < len(services); i++ {
 		for j := i + 1; j < len(services); j++ {
 			a, b := services[i].ID, services[j].ID
