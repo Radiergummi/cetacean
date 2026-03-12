@@ -1,3 +1,4 @@
+import type React from "react";
 import { Inbox } from "lucide-react";
 
 interface Props {

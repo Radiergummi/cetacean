@@ -1,54 +1,36 @@
 import { useParams } from "react-router-dom";
-import { useState, useEffect, useCallback } from "react";
 import { api } from "../api/client";
-import type { Config, ServiceRef, HistoryEntry } from "../api/types";
-import PageHeader from "../components/PageHeader";
-import { LoadingDetail } from "../components/LoadingSkeleton";
-import FetchError from "../components/FetchError";
-import ActivityFeed from "../components/ActivityFeed";
-import ServiceRefList from "../components/ServiceRefList";
-import { useResourceStream } from "../hooks/useResourceStream";
-import { KeyValuePills, ResourceId, ResourceLink, SectionHeader, Timestamp } from "../components/data";
+import ActivitySection from "../components/ActivitySection";
 import CodeBlock from "../components/CodeBlock";
+import {
+  LabelSection,
+  ResourceId,
+  ResourceLink,
+  SectionHeader,
+  Timestamp,
+} from "../components/data";
+import FetchError from "../components/FetchError";
+import { LoadingDetail } from "../components/LoadingSkeleton";
+import PageHeader from "../components/PageHeader";
+import ServiceRefList from "../components/ServiceRefList";
+import { useDetailResource } from "../hooks/useDetailResource";
+import { parseStackLabels } from "../lib/parseStackLabels";
 
 export default function ConfigDetail() {
   const { id } = useParams<{ id: string }>();
-  const [config, setConfig] = useState<Config | null>(null);
-  const [services, setServices] = useState<ServiceRef[]>([]);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [error, setError] = useState(false);
-
-  const fetchData = useCallback(() => {
-    if (!id) return;
-    api
-      .config(id)
-      .then((d) => {
-        setConfig(d.config);
-        setServices(d.services ?? []);
-      })
-      .catch(() => setError(true));
-    api
-      .history({ resourceId: id, limit: 10 })
-      .then(setHistory)
-      .catch(() => {});
-  }, [id]);
-
-  useEffect(fetchData, [fetchData]);
-
-  useResourceStream(`/configs/${id}`, fetchData);
+  const { data, history, error } = useDetailResource(id, api.config, `/configs/${id}`);
 
   if (error) return <FetchError message="Failed to load config" />;
-  if (!config) return <LoadingDetail />;
+  if (!data) return <LoadingDetail />;
 
+  const config = data.config;
+  const services = data.services ?? [];
   const name = config.Spec.Name || config.ID;
-  const labels = config.Spec.Labels || {};
-  const labelEntries = Object.entries(labels).filter(([k]) => k !== "com.docker.stack.namespace");
-  const stack = labels["com.docker.stack.namespace"];
-  const data = config.Spec.Data;
+  const { entries: labelEntries, stack } = parseStackLabels(config.Spec.Labels);
   let decoded: string | null = null;
-  if (data) {
+  if (config.Spec.Data) {
     try {
-      decoded = atob(data);
+      decoded = atob(config.Spec.Data);
     } catch {
       decoded = null;
     }
@@ -68,12 +50,7 @@ export default function ConfigDetail() {
         <Timestamp label="Updated" date={config.UpdatedAt} />
       </div>
 
-      {labelEntries.length > 0 && (
-        <div>
-          <SectionHeader title="Labels" />
-          <KeyValuePills entries={labelEntries} />
-        </div>
-      )}
+      <LabelSection entries={labelEntries} />
 
       {decoded != null && (
         <div>
@@ -88,12 +65,7 @@ export default function ConfigDetail() {
         emptyMessage="No services using this config."
       />
 
-      {history.length > 0 && (
-        <div>
-          <SectionHeader title="Recent Activity" />
-          <ActivityFeed entries={history} />
-        </div>
-      )}
+      <ActivitySection entries={history} />
     </div>
   );
 }

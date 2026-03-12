@@ -1,48 +1,31 @@
 import { useParams } from "react-router-dom";
-import { useState, useEffect, useCallback } from "react";
 import { api } from "../api/client";
-import type { Volume, ServiceRef, HistoryEntry } from "../api/types";
-import InfoCard from "../components/InfoCard";
-import PageHeader from "../components/PageHeader";
-import { LoadingDetail } from "../components/LoadingSkeleton";
+import ActivitySection from "../components/ActivitySection";
+import {
+  KeyValuePills,
+  LabelSection,
+  ResourceLink,
+  SectionHeader,
+  Timestamp,
+} from "../components/data";
 import FetchError from "../components/FetchError";
-import ActivityFeed from "../components/ActivityFeed";
+import InfoCard from "../components/InfoCard";
+import { LoadingDetail } from "../components/LoadingSkeleton";
+import PageHeader from "../components/PageHeader";
 import ServiceRefList from "../components/ServiceRefList";
-import { useResourceStream } from "../hooks/useResourceStream";
-import { KeyValuePills, ResourceLink, SectionHeader, Timestamp } from "../components/data";
+import { useDetailResource } from "../hooks/useDetailResource";
+import { parseStackLabels } from "../lib/parseStackLabels";
 
 export default function VolumeDetail() {
   const { name } = useParams<{ name: string }>();
-  const [volume, setVolume] = useState<Volume | null>(null);
-  const [services, setServices] = useState<ServiceRef[]>([]);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [error, setError] = useState(false);
-
-  const fetchData = useCallback(() => {
-    if (!name) return;
-    api
-      .volume(name)
-      .then((d) => {
-        setVolume(d.volume);
-        setServices(d.services ?? []);
-      })
-      .catch(() => setError(true));
-    api
-      .history({ resourceId: name, limit: 10 })
-      .then(setHistory)
-      .catch(() => {});
-  }, [name]);
-
-  useEffect(fetchData, [fetchData]);
-
-  useResourceStream(`/volumes/${name}`, fetchData);
+  const { data, history, error } = useDetailResource(name, api.volume, `/volumes/${name}`);
 
   if (error) return <FetchError message="Failed to load volume" />;
-  if (!volume) return <LoadingDetail />;
+  if (!data) return <LoadingDetail />;
 
-  const labels = volume.Labels || {};
-  const labelEntries = Object.entries(labels).filter(([k]) => k !== "com.docker.stack.namespace");
-  const stack = labels["com.docker.stack.namespace"];
+  const volume = data.volume;
+  const services = data.services ?? [];
+  const { entries: labelEntries, stack } = parseStackLabels(volume.Labels);
   const options = Object.entries(volume.Options || {});
 
   return (
@@ -67,12 +50,7 @@ export default function VolumeDetail() {
         </div>
       )}
 
-      {labelEntries.length > 0 && (
-        <div>
-          <SectionHeader title="Labels" />
-          <KeyValuePills entries={labelEntries} />
-        </div>
-      )}
+      <LabelSection entries={labelEntries} />
 
       <ServiceRefList
         services={services}
@@ -80,12 +58,7 @@ export default function VolumeDetail() {
         emptyMessage="No services using this volume."
       />
 
-      {history.length > 0 && (
-        <div>
-          <SectionHeader title="Recent Activity" />
-          <ActivityFeed entries={history} />
-        </div>
-      )}
+      <ActivitySection entries={history} />
     </div>
   );
 }

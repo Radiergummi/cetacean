@@ -10,11 +10,7 @@ afterEach(() => {
 
 function createWrapper(connected: boolean, lastEventAt: number | null) {
   return function wrapper({ children }: { children: ReactNode }) {
-    return (
-      <ConnectionProvider value={{ connected, lastEventAt }}>
-        {children}
-      </ConnectionProvider>
-    );
+    return <ConnectionProvider value={{ connected, lastEventAt }}>{children}</ConnectionProvider>;
   };
 }
 

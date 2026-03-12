@@ -27,7 +27,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
   const oldestRef = useRef<string | undefined>(undefined);
   const newestRef = useRef<string | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  const abortRef = useRef<{ abort(): void } | null>(null);
   const scrollRafRef = useRef(0);
 
   const streamParam = streamFilter === "all" ? undefined : streamFilter;
@@ -101,7 +101,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
       : api.serviceLogsStreamURL(logId, streamOptions);
 
     const eventSource = new EventSource(url);
-    abortRef.current = { abort: () => eventSource.close() } as AbortController;
+    abortRef.current = { abort: () => eventSource.close() };
     const buffer: ApiLogLine[] = [];
     let animationFrameId = 0;
 
@@ -210,9 +210,11 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
       if (!cursor) return;
       const options = { limit: 1, after: cursor, stream: streamParam };
       const request = isTask ? api.taskLogs(logId, options) : api.serviceLogs(logId, options);
-      request.then((response) => {
-        setHasNewerLogs((response.lines?.length ?? 0) > 0);
-      }).catch(() => {});
+      request
+        .then((response) => {
+          setHasNewerLogs((response.lines?.length ?? 0) > 0);
+        })
+        .catch(() => {});
     };
     check();
     const id = setInterval(check, 5_000);

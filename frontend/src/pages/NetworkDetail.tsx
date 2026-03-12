@@ -1,15 +1,22 @@
 import { useParams } from "react-router-dom";
-import { useState, useEffect, useCallback } from "react";
 import { api } from "../api/client";
-import type { Network, ServiceRef, HistoryEntry } from "../api/types";
-import InfoCard from "../components/InfoCard";
-import PageHeader from "../components/PageHeader";
-import { LoadingDetail } from "../components/LoadingSkeleton";
+import type { Network } from "../api/types";
+import ActivitySection from "../components/ActivitySection";
+import {
+  KeyValuePills,
+  LabelSection,
+  ResourceId,
+  ResourceLink,
+  SectionHeader,
+  Timestamp,
+} from "../components/data";
 import FetchError from "../components/FetchError";
-import ActivityFeed from "../components/ActivityFeed";
+import InfoCard from "../components/InfoCard";
+import { LoadingDetail } from "../components/LoadingSkeleton";
+import PageHeader from "../components/PageHeader";
 import ServiceRefList from "../components/ServiceRefList";
-import { useResourceStream } from "../hooks/useResourceStream";
-import { KeyValuePills, ResourceId, ResourceLink, SectionHeader, Timestamp } from "../components/data";
+import { useDetailResource } from "../hooks/useDetailResource";
+import { parseStackLabels } from "../lib/parseStackLabels";
 
 function NetworkFlags({ network }: { network: Network }) {
   const flags = [];
@@ -82,36 +89,14 @@ function IPAMPanel({ network }: { network: Network }) {
 
 export default function NetworkDetail() {
   const { id } = useParams<{ id: string }>();
-  const [network, setNetwork] = useState<Network | null>(null);
-  const [services, setServices] = useState<ServiceRef[]>([]);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [error, setError] = useState(false);
-
-  const fetchData = useCallback(() => {
-    if (!id) return;
-    api
-      .network(id)
-      .then((d) => {
-        setNetwork(d.network);
-        setServices(d.services ?? []);
-      })
-      .catch(() => setError(true));
-    api
-      .history({ resourceId: id, limit: 10 })
-      .then(setHistory)
-      .catch(() => {});
-  }, [id]);
-
-  useEffect(fetchData, [fetchData]);
-
-  useResourceStream(`/networks/${id}`, fetchData);
+  const { data, history, error } = useDetailResource(id, api.network, `/networks/${id}`);
 
   if (error) return <FetchError message="Failed to load network" />;
-  if (!network) return <LoadingDetail />;
+  if (!data) return <LoadingDetail />;
 
-  const labels = network.Labels || {};
-  const labelEntries = Object.entries(labels).filter(([k]) => k !== "com.docker.stack.namespace");
-  const stack = labels["com.docker.stack.namespace"];
+  const network = data.network;
+  const services = data.services ?? [];
+  const { entries: labelEntries, stack } = parseStackLabels(network.Labels);
   const options = Object.entries(network.Options || {});
 
   return (
@@ -140,12 +125,7 @@ export default function NetworkDetail() {
         </div>
       )}
 
-      {labelEntries.length > 0 && (
-        <div>
-          <SectionHeader title="Labels" />
-          <KeyValuePills entries={labelEntries} />
-        </div>
-      )}
+      <LabelSection entries={labelEntries} />
 
       <ServiceRefList
         services={services}
@@ -153,12 +133,7 @@ export default function NetworkDetail() {
         emptyMessage="No services using this network."
       />
 
-      {history.length > 0 && (
-        <div>
-          <SectionHeader title="Recent Activity" />
-          <ActivityFeed entries={history} />
-        </div>
-      )}
+      <ActivitySection entries={history} />
     </div>
   );
 }

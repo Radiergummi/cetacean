@@ -134,7 +134,7 @@ export default function TimeSeriesChart({
 
     api
       .metricsQueryRange(query, String(start), String(now), String(step))
-      .then((resp: any) => {
+      .then((resp) => {
         if (cancelled) return;
 
         if (!resp.data?.result?.length) {
@@ -143,10 +143,10 @@ export default function TimeSeriesChart({
         }
 
         const series = resp.data.result;
-        const timestamps = series[0].values.map((v: any) => Number(v[0]));
+        const timestamps = series[0].values!.map((v) => Number(v[0]));
         const data: uPlot.AlignedData = [
           timestamps,
-          ...series.map((s: any) => s.values.map((v: any) => Number(v[1]))),
+          ...series.map((s) => s.values!.map((v) => Number(v[1]))),
         ];
 
         if (chartRef.current) chartRef.current.destroy();
@@ -268,7 +268,7 @@ export default function TimeSeriesChart({
           focus: { alpha: 0.3 },
           series: [
             {},
-            ...series.map((_s: any, i: number) => {
+            ...series.map((_s, i) => {
               const color = colorOverride ?? CHART_COLORS[i % CHART_COLORS.length];
               return {
                 label: seriesLabel(_s.metric, series.length === 1 ? title : undefined),

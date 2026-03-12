@@ -1,3 +1,4 @@
+import type React from "react";
 import { useState, useEffect, useRef } from "react";
 import { X, Clock, ChevronDown } from "lucide-react";
 import type { TimeRange, Level } from "./log-utils";

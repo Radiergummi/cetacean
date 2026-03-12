@@ -14,7 +14,11 @@ const typeLabels: Record<string, string> = {
 function reclaimableCell(reclaimable: number, total: number) {
   if (reclaimable <= 0) return "0 B";
   const pct = total > 0 ? Math.round((reclaimable / total) * 100) : 0;
-  return <>{formatBytes(reclaimable)} <span className="ml-1">({pct}%)</span></>;
+  return (
+    <>
+      {formatBytes(reclaimable)} <span className="ml-1">({pct}%)</span>
+    </>
+  );
 }
 
 function DiskUsageTable({ data }: { data: DiskUsageSummary[] }) {
@@ -39,7 +43,9 @@ function DiskUsageTable({ data }: { data: DiskUsageSummary[] }) {
               <td className="p-3">{typeLabels[d.type] || d.type}</td>
               <td className="p-3 text-right tabular-nums">{d.count}</td>
               <td className="p-3 text-right tabular-nums">{d.active}</td>
-              <td className="p-3 text-right tabular-nums">{d.totalSize > 0 ? formatBytes(d.totalSize) : "0 B"}</td>
+              <td className="p-3 text-right tabular-nums">
+                {d.totalSize > 0 ? formatBytes(d.totalSize) : "0 B"}
+              </td>
               <td className="p-3 text-right tabular-nums text-muted-foreground">
                 {reclaimableCell(d.reclaimable, d.totalSize)}
               </td>
@@ -80,11 +86,21 @@ function DiskUsageLoading() {
         <tbody>
           {[1, 2, 3, 4].map((i) => (
             <tr key={i} className="border-b last:border-b-0">
-              <td className="p-3"><div className="h-4 w-20 bg-muted rounded animate-pulse" /></td>
-              <td className="p-3"><div className="h-4 w-8 bg-muted rounded animate-pulse ml-auto" /></td>
-              <td className="p-3"><div className="h-4 w-8 bg-muted rounded animate-pulse ml-auto" /></td>
-              <td className="p-3"><div className="h-4 w-16 bg-muted rounded animate-pulse ml-auto" /></td>
-              <td className="p-3"><div className="h-4 w-24 bg-muted rounded animate-pulse ml-auto" /></td>
+              <td className="p-3">
+                <div className="h-4 w-20 bg-muted rounded animate-pulse" />
+              </td>
+              <td className="p-3">
+                <div className="h-4 w-8 bg-muted rounded animate-pulse ml-auto" />
+              </td>
+              <td className="p-3">
+                <div className="h-4 w-8 bg-muted rounded animate-pulse ml-auto" />
+              </td>
+              <td className="p-3">
+                <div className="h-4 w-16 bg-muted rounded animate-pulse ml-auto" />
+              </td>
+              <td className="p-3">
+                <div className="h-4 w-24 bg-muted rounded animate-pulse ml-auto" />
+              </td>
             </tr>
           ))}
         </tbody>
@@ -104,13 +120,16 @@ export default function DiskUsageSection({ nodeId }: { nodeId?: string }) {
 
   useEffect(() => {
     if (!nodeId) return;
-    api.cluster().then((snap) => {
-      if (snap.localNodeID && snap.localNodeID === nodeId) {
-        setVisible(true);
-      } else {
-        setLoading(false);
-      }
-    }).catch(() => setLoading(false));
+    api
+      .cluster()
+      .then((snap) => {
+        if (snap.localNodeID && snap.localNodeID === nodeId) {
+          setVisible(true);
+        } else {
+          setLoading(false);
+        }
+      })
+      .catch(() => setLoading(false));
   }, [nodeId]);
 
   useEffect(() => {

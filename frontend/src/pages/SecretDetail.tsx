@@ -1,48 +1,25 @@
 import { useParams } from "react-router-dom";
-import { useState, useEffect, useCallback } from "react";
 import { api } from "../api/client";
-import type { Secret, ServiceRef, HistoryEntry } from "../api/types";
-import PageHeader from "../components/PageHeader";
-import { LoadingDetail } from "../components/LoadingSkeleton";
+import ActivitySection from "../components/ActivitySection";
+import { LabelSection, ResourceId, ResourceLink, Timestamp } from "../components/data";
 import FetchError from "../components/FetchError";
-import ActivityFeed from "../components/ActivityFeed";
+import { LoadingDetail } from "../components/LoadingSkeleton";
+import PageHeader from "../components/PageHeader";
 import ServiceRefList from "../components/ServiceRefList";
-import { useResourceStream } from "../hooks/useResourceStream";
-import { KeyValuePills, ResourceId, ResourceLink, SectionHeader, Timestamp } from "../components/data";
+import { useDetailResource } from "../hooks/useDetailResource";
+import { parseStackLabels } from "../lib/parseStackLabels";
 
 export default function SecretDetail() {
   const { id } = useParams<{ id: string }>();
-  const [secret, setSecret] = useState<Secret | null>(null);
-  const [services, setServices] = useState<ServiceRef[]>([]);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [error, setError] = useState(false);
-
-  const fetchData = useCallback(() => {
-    if (!id) return;
-    api
-      .secret(id)
-      .then((d) => {
-        setSecret(d.secret);
-        setServices(d.services ?? []);
-      })
-      .catch(() => setError(true));
-    api
-      .history({ resourceId: id, limit: 10 })
-      .then(setHistory)
-      .catch(() => {});
-  }, [id]);
-
-  useEffect(fetchData, [fetchData]);
-
-  useResourceStream(`/secrets/${id}`, fetchData);
+  const { data, history, error } = useDetailResource(id, api.secret, `/secrets/${id}`);
 
   if (error) return <FetchError message="Failed to load secret" />;
-  if (!secret) return <LoadingDetail />;
+  if (!data) return <LoadingDetail />;
 
+  const secret = data.secret;
+  const services = data.services ?? [];
   const name = secret.Spec.Name || secret.ID;
-  const labels = secret.Spec.Labels || {};
-  const labelEntries = Object.entries(labels).filter(([k]) => k !== "com.docker.stack.namespace");
-  const stack = labels["com.docker.stack.namespace"];
+  const { entries: labelEntries, stack } = parseStackLabels(secret.Spec.Labels);
 
   return (
     <div className="flex flex-col gap-6">
@@ -62,12 +39,7 @@ export default function SecretDetail() {
         <Timestamp label="Updated" date={secret.UpdatedAt} />
       </div>
 
-      {labelEntries.length > 0 && (
-        <div>
-          <SectionHeader title="Labels" />
-          <KeyValuePills entries={labelEntries} />
-        </div>
-      )}
+      <LabelSection entries={labelEntries} />
 
       <ServiceRefList
         services={services}
@@ -75,12 +47,7 @@ export default function SecretDetail() {
         emptyMessage="No services using this secret."
       />
 
-      {history.length > 0 && (
-        <div>
-          <SectionHeader title="Recent Activity" />
-          <ActivityFeed entries={history} />
-        </div>
-      )}
+      <ActivitySection entries={history} />
     </div>
   );
 }

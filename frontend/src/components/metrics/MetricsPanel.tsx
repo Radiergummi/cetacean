@@ -1,3 +1,4 @@
+import type React from "react";
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { RefreshCw, Play, Square, ChevronRight } from "lucide-react";
@@ -75,7 +76,10 @@ export default function MetricsPanel({ charts, header }: Props) {
       onClick={() => setCollapsed((c) => !c)}
       className="flex items-center gap-1.5 text-sm font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
     >
-      <ChevronRight data-open={!collapsed || undefined} className="h-4 w-4 transition-transform data-open:rotate-90" />
+      <ChevronRight
+        data-open={!collapsed || undefined}
+        className="h-4 w-4 transition-transform data-open:rotate-90"
+      />
       {header ?? "Metrics"}
     </button>
   );

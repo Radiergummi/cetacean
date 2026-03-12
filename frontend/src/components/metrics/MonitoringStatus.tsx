@@ -1,3 +1,4 @@
+import type React from "react";
 import { useState } from "react";
 import { AlertTriangle, BarChart3, X } from "lucide-react";
 import type { MonitoringStatus as Status } from "../../api/types";
@@ -10,9 +11,7 @@ interface Props {
 }
 
 export default function MonitoringStatus({ status, source }: Props) {
-  const [dismissed, setDismissed] = useState(
-    () => localStorage.getItem(DISMISS_KEY) === "true",
-  );
+  const [dismissed, setDismissed] = useState(() => localStorage.getItem(DISMISS_KEY) === "true");
 
   // Fully healthy — nothing to show
   if (status.prometheusConfigured && status.prometheusReachable) {
@@ -36,8 +35,8 @@ export default function MonitoringStatus({ status, source }: Props) {
         }}
       >
         <p className="text-sm">
-          <strong>Monitoring not configured.</strong> Deploy the monitoring stack
-          to enable CPU, memory, and disk metrics across your cluster.
+          <strong>Monitoring not configured.</strong> Deploy the monitoring stack to enable CPU,
+          memory, and disk metrics across your cluster.
         </p>
         <pre className="mt-2 text-xs bg-blue-500/10 rounded px-2 py-1 overflow-x-auto">
           docker stack deploy -c docker-compose.monitoring.yml cetacean-monitoring
@@ -63,8 +62,8 @@ export default function MonitoringStatus({ status, source }: Props) {
         textColor="text-amber-200"
       >
         <p className="text-sm">
-          <strong>Cannot reach Prometheus</strong> — metrics unavailable. Check
-          that the Prometheus service is running and reachable from Cetacean.
+          <strong>Cannot reach Prometheus</strong> — metrics unavailable. Check that the Prometheus
+          service is running and reachable from Cetacean.
         </p>
       </Banner>
     );

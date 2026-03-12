@@ -33,13 +33,16 @@ export function HighlightProvider({
   }, [edges]);
 
   const neighbors = useMemo(
-    () => (hoveredId ? adjacency.get(hoveredId) ?? new Set<string>() : new Set<string>()),
+    () => (hoveredId ? (adjacency.get(hoveredId) ?? new Set<string>()) : new Set<string>()),
     [hoveredId, adjacency],
   );
 
   const setHovered = useCallback((id: string | null) => setHoveredId(id), []);
 
-  const value = useMemo(() => ({ hoveredId, neighbors, setHovered }), [hoveredId, neighbors, setHovered]);
+  const value = useMemo(
+    () => ({ hoveredId, neighbors, setHovered }),
+    [hoveredId, neighbors, setHovered],
+  );
 
   return <ctx.Provider value={value}>{children}</ctx.Provider>;
 }

@@ -42,13 +42,9 @@ export default function TasksTable({ tasks, variant }: TasksTableProps) {
           <thead className="sticky top-0 z-10 bg-background">
             <tr className="border-b bg-muted/50">
               <th className="text-left p-3 text-sm font-medium">Task</th>
-              {variant === "node" && (
-                <th className="text-left p-3 text-sm font-medium">Service</th>
-              )}
+              {variant === "node" && <th className="text-left p-3 text-sm font-medium">Service</th>}
               <th className="text-left p-3 text-sm font-medium">State</th>
-              {variant === "service" && (
-                <th className="text-left p-3 text-sm font-medium">Node</th>
-              )}
+              {variant === "service" && <th className="text-left p-3 text-sm font-medium">Node</th>}
               <th className="text-left p-3 text-sm font-medium">Desired</th>
               <th className="text-left p-3 text-sm font-medium">Error</th>
               <th className="text-left p-3 text-sm font-medium">Timestamp</th>

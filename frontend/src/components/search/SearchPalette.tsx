@@ -48,6 +48,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
 
   const flat = response ? flattenResults(response) : [];
+  const hasResponse = response !== null;
 
   const doSearch = useCallback((query: string) => {
     if (abortRef.current) {
@@ -106,7 +107,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
 
   // Poll every 2s to refresh state/detail on existing results (no reorder/add/remove)
   useEffect(() => {
-    if (!response || !query.trim()) return;
+    if (!hasResponse || !query.trim()) return;
     const interval = setInterval(() => {
       api
         .search(query)
@@ -144,7 +145,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
         });
     }, 2000);
     return () => clearInterval(interval);
-  }, [query, response]);
+  }, [query, hasResponse]);
 
   const goTo = useCallback(
     ({ result: { id }, type }: FlatItem) => {

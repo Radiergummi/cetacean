@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
+import { escapePromQL } from "../lib/utils";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { HistoryEntry, Node, Task } from "../api/types";
-import ActivityFeed from "../components/ActivityFeed";
+import ActivitySection from "../components/ActivitySection";
 import DiskUsageSection from "../components/DiskUsageSection";
 import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
@@ -13,7 +14,7 @@ import PageHeader from "../components/PageHeader";
 import TasksTable from "../components/TasksTable";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
-import { KeyValuePills, SectionHeader } from "../components/data";
+import { LabelSection } from "../components/data";
 import { formatBytes } from "../lib/formatBytes";
 
 export default function NodeDetail() {
@@ -102,24 +103,16 @@ export default function NodeDetail() {
       </div>
 
       {node.Spec.Labels && Object.keys(node.Spec.Labels).length > 0 && (
-        <div>
-          <SectionHeader title="Labels" />
-          <KeyValuePills
-            entries={Object.entries(node.Spec.Labels).sort(([a], [b]) => a.localeCompare(b))}
-          />
-        </div>
+        <LabelSection
+          entries={Object.entries(node.Spec.Labels).sort(([a], [b]) => a.localeCompare(b))}
+        />
       )}
 
       <TasksTable tasks={tasks} variant="node" />
 
       <DiskUsageSection nodeId={node.ID} />
 
-      {history.length > 0 && (
-        <div>
-          <SectionHeader title="Recent Activity" />
-          <ActivityFeed entries={history} />
-        </div>
-      )}
+      <ActivitySection entries={history} />
 
       {hasPrometheus && (
         <ErrorBoundary inline>
@@ -128,22 +121,22 @@ export default function NodeDetail() {
             charts={[
               {
                 title: "CPU Usage",
-                query: `100 - (avg(rate(node_cpu_seconds_total{mode="idle",instance=~"${addr}:.*"}[5m])) * 100)`,
+                query: `100 - (avg(rate(node_cpu_seconds_total{mode="idle",instance=~"${escapePromQL(addr)}:.*"}[5m])) * 100)`,
                 unit: "%",
               },
               {
                 title: "Memory Usage",
-                query: `(1 - node_memory_MemAvailable_bytes{instance=~"${addr}:.*"} / node_memory_MemTotal_bytes{instance=~"${addr}:.*"}) * 100`,
+                query: `(1 - node_memory_MemAvailable_bytes{instance=~"${escapePromQL(addr)}:.*"} / node_memory_MemTotal_bytes{instance=~"${escapePromQL(addr)}:.*"}) * 100`,
                 unit: "%",
               },
               {
                 title: "Disk I/O",
-                query: `sum(rate(node_disk_read_bytes_total{instance=~"${addr}:.*"}[5m]))`,
+                query: `sum(rate(node_disk_read_bytes_total{instance=~"${escapePromQL(addr)}:.*"}[5m]))`,
                 unit: "bytes/s",
               },
               {
                 title: "Network I/O",
-                query: `sum(rate(node_network_receive_bytes_total{device!="lo",instance=~"${addr}:.*"}[5m]))`,
+                query: `sum(rate(node_network_receive_bytes_total{device!="lo",instance=~"${escapePromQL(addr)}:.*"}[5m]))`,
                 unit: "bytes/s",
               },
             ]}

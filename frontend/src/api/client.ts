@@ -84,6 +84,30 @@ export interface ClusterMetrics {
   disk: { used: number; total: number; percent: number };
 }
 
+export interface LogOpts {
+  limit?: number;
+  after?: string;
+  before?: string;
+  stream?: string;
+  signal?: AbortSignal;
+}
+
+function buildLogParams(opts?: LogOpts): URLSearchParams {
+  const params = new URLSearchParams({ limit: String(opts?.limit || 500) });
+  if (opts?.after) params.set("after", opts.after);
+  if (opts?.before) params.set("before", opts.before);
+  if (opts?.stream) params.set("stream", opts.stream);
+  return params;
+}
+
+function buildLogStreamURL(path: string, opts?: { after?: string; stream?: string }): string {
+  const params = new URLSearchParams();
+  if (opts?.after) params.set("after", opts.after);
+  if (opts?.stream) params.set("stream", opts.stream);
+  const qs = params.toString();
+  return `${path}${qs ? `?${qs}` : ""}`;
+}
+
 export interface ListParams {
   limit?: number;
   offset?: number;
@@ -106,8 +130,7 @@ function buildListURL(path: string, params?: ListParams): string {
 export const api = {
   cluster: () => fetchJSON<ClusterSnapshot>("/cluster"),
   swarm: () => fetchJSON<SwarmInfo>("/swarm"),
-  plugins: () =>
-    fetchJSON<CollectionResponse<Plugin>>("/plugins").then((r) => r.items),
+  plugins: () => fetchJSON<CollectionResponse<Plugin>>("/plugins").then((r) => r.items),
   clusterMetrics: () => fetchJSON<ClusterMetrics>("/cluster/metrics"),
   monitoringStatus: () => fetchJSON<MonitoringStatus>("/-/metrics/status"),
   nodes: (params?: ListParams) => fetchJSON<PagedResponse<Node>>(buildListURL("/nodes", params)),
@@ -135,54 +158,16 @@ export const api = {
     fetchJSON<PagedResponse<Volume>>(buildListURL("/volumes", params)),
   volume: (name: string) => fetchJSON<VolumeDetail>(`/volumes/${name}`),
   task: (id: string) => fetchJSON<{ task: Task }>(`/tasks/${id}`).then((r) => r.task),
-  taskLogs: (
-    id: string,
-    opts?: {
-      limit?: number;
-      after?: string;
-      before?: string;
-      stream?: string;
-      signal?: AbortSignal;
-    },
-  ) => {
-    const params = new URLSearchParams({ limit: String(opts?.limit || 500) });
-    if (opts?.after) params.set("after", opts.after);
-    if (opts?.before) params.set("before", opts.before);
-    if (opts?.stream) params.set("stream", opts.stream);
-    return fetchJSON<LogResponse>(`/tasks/${id}/logs?${params}`, opts?.signal);
-  },
+  taskLogs: (id: string, opts?: LogOpts) =>
+    fetchJSON<LogResponse>(`/tasks/${id}/logs?${buildLogParams(opts)}`, opts?.signal),
   serviceTasks: (id: string) =>
     fetchJSON<CollectionResponse<Task>>(`/services/${id}/tasks`).then((r) => r.items),
-  serviceLogs: (
-    id: string,
-    opts?: {
-      limit?: number;
-      after?: string;
-      before?: string;
-      stream?: string;
-      signal?: AbortSignal;
-    },
-  ) => {
-    const params = new URLSearchParams({ limit: String(opts?.limit || 500) });
-    if (opts?.after) params.set("after", opts.after);
-    if (opts?.before) params.set("before", opts.before);
-    if (opts?.stream) params.set("stream", opts.stream);
-    return fetchJSON<LogResponse>(`/services/${id}/logs?${params}`, opts?.signal);
-  },
-  serviceLogsStreamURL: (id: string, opts?: { after?: string; stream?: string }) => {
-    const params = new URLSearchParams();
-    if (opts?.after) params.set("after", opts.after);
-    if (opts?.stream) params.set("stream", opts.stream);
-    const qs = params.toString();
-    return `/services/${id}/logs${qs ? `?${qs}` : ""}`;
-  },
-  taskLogsStreamURL: (id: string, opts?: { after?: string; stream?: string }) => {
-    const params = new URLSearchParams();
-    if (opts?.after) params.set("after", opts.after);
-    if (opts?.stream) params.set("stream", opts.stream);
-    const qs = params.toString();
-    return `/tasks/${id}/logs${qs ? `?${qs}` : ""}`;
-  },
+  serviceLogs: (id: string, opts?: LogOpts) =>
+    fetchJSON<LogResponse>(`/services/${id}/logs?${buildLogParams(opts)}`, opts?.signal),
+  serviceLogsStreamURL: (id: string, opts?: { after?: string; stream?: string }) =>
+    buildLogStreamURL(`/services/${id}/logs`, opts),
+  taskLogsStreamURL: (id: string, opts?: { after?: string; stream?: string }) =>
+    buildLogStreamURL(`/tasks/${id}/logs`, opts),
   history: (params?: { type?: string; resourceId?: string; limit?: number }) => {
     const qs = new URLSearchParams();
     if (params?.type) qs.set("type", params.type);

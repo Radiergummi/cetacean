@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../../api/client";
+import { escapePromQL } from "../../lib/utils";
 import ResourceGauge from "./ResourceGauge";
 
 interface GaugeDef {
@@ -8,7 +9,7 @@ interface GaugeDef {
 }
 
 function instanceFilter(addr?: string) {
-  return addr ? `instance=~"${addr}:.*"` : "";
+  return addr ? `instance=~"${escapePromQL(addr)}:.*"` : "";
 }
 
 const GAUGES: GaugeDef[] = [
@@ -48,7 +49,7 @@ export default function NodeResourceGauges({ instance }: Props) {
       GAUGES.map((g) =>
         api
           .metricsQuery(g.query(instance))
-          .then((resp: any) => {
+          .then((resp) => {
             const val = resp.data?.result?.[0]?.value?.[1];
             return val != null ? Number(val) : null;
           })
