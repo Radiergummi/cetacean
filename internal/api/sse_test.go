@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -37,12 +38,12 @@ func waitForBody(t *testing.T, w *flushRecorder, substr string) {
 	t.Helper()
 	deadline := time.After(2 * time.Second)
 	for {
-		if strings.Contains(w.Body.String(), substr) {
+		if strings.Contains(w.bodyString(), substr) {
 			return
 		}
 		select {
 		case <-deadline:
-			t.Fatalf("timed out waiting for %q in body, got: %s", substr, w.Body.String())
+			t.Fatalf("timed out waiting for %q in body, got: %s", substr, w.bodyString())
 		case <-time.After(5 * time.Millisecond):
 		}
 	}
@@ -338,9 +339,22 @@ func TestSSE_TypeMatcher(t *testing.T) {
 	}
 }
 
-// flushRecorder implements http.Flusher for testing SSE.
+// flushRecorder implements http.Flusher for testing SSE with thread-safe body access.
 type flushRecorder struct {
 	*httptest.ResponseRecorder
+	mu sync.Mutex
+}
+
+func (f *flushRecorder) Write(b []byte) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.ResponseRecorder.Write(b)
+}
+
+func (f *flushRecorder) bodyString() string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.Body.String()
 }
 
 func (f *flushRecorder) Flush() {}
