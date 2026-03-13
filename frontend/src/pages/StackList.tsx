@@ -93,11 +93,8 @@ const HEALTH_BORDER = {
 function StackCard({ stack }: { stack: StackSummary }) {
   const health = stackHealth(stack);
   const running = stack.tasksByState["running"] ?? 0;
-  const failed = stack.tasksByState["failed"] ?? 0;
-  const other = Object.entries(stack.tasksByState)
-    .filter(([k]) => k !== "running" && k !== "failed")
-    .reduce((sum, [, v]) => sum + v, 0);
-  const totalTasks = running + failed + other;
+  const desired = stack.desiredTasks;
+  const pct = desired > 0 ? Math.min((running / desired) * 100, 100) : 0;
 
   return (
     <Link
@@ -120,29 +117,15 @@ function StackCard({ stack }: { stack: StackSummary }) {
         <div className="flex justify-between text-xs text-muted-foreground mb-1">
           <span>Tasks</span>
           <span className="tabular-nums">
-            {running}/{stack.desiredTasks}
+            {running}/{desired}
           </span>
         </div>
-        {totalTasks > 0 ? (
+        {desired > 0 ? (
           <div className="h-2 rounded-full bg-muted overflow-hidden flex">
-            {running > 0 && (
-              <div
-                className="bg-green-500 transition-all"
-                style={{ width: `${(running / totalTasks) * 100}%` }}
-              />
-            )}
-            {other > 0 && (
-              <div
-                className="bg-yellow-500 transition-all"
-                style={{ width: `${(other / totalTasks) * 100}%` }}
-              />
-            )}
-            {failed > 0 && (
-              <div
-                className="bg-red-500 transition-all"
-                style={{ width: `${(failed / totalTasks) * 100}%` }}
-              />
-            )}
+            <div
+              className={`${pct >= 100 ? "bg-green-500" : "bg-yellow-500"} transition-all`}
+              style={{ width: `${pct}%` }}
+            />
           </div>
         ) : (
           <div className="h-2 rounded-full bg-muted" />

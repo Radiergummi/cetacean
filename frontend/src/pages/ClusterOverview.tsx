@@ -16,6 +16,7 @@ export default function ClusterOverview() {
   const prevRef = useRef<ClusterSnapshot | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchSnapshot = useCallback(() => {
     api
@@ -49,8 +50,11 @@ export default function ClusterOverview() {
   useResourceStream(
     "/events",
     useCallback(() => {
-      fetchSnapshot();
-      fetchHistory();
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        fetchSnapshot();
+        fetchHistory();
+      }, 2000);
     }, [fetchSnapshot, fetchHistory]),
   );
 

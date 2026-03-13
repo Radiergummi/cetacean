@@ -494,8 +494,8 @@ func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
 
 	du, err := h.systemClient.DiskUsage(ctx)
 	if err != nil {
-		slog.Error("disk usage failed", "error", err)
-		writeProblem(w, r, http.StatusInternalServerError, "disk usage failed")
+		slog.Error("disk usage failed", "error", err, "detail", err.Error())
+		writeProblem(w, r, http.StatusInternalServerError, fmt.Sprintf("disk usage failed: %v", err))
 		return
 	}
 
@@ -714,6 +714,25 @@ func (h *Handlers) enrichTasks(tasks []swarm.Task) []EnrichedTask {
 	return out
 }
 
+// taskStateSortKey returns a sort key that orders running tasks first,
+// then starting/preparing, then terminal states alphabetically.
+func taskStateSortKey(state swarm.TaskState) string {
+	switch state {
+	case swarm.TaskStateRunning:
+		return "0"
+	case swarm.TaskStateStarting:
+		return "1"
+	case swarm.TaskStatePreparing:
+		return "1"
+	case swarm.TaskStateReady:
+		return "1"
+	case swarm.TaskStateNew:
+		return "1"
+	default:
+		return "2" + string(state)
+	}
+}
+
 func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 	tasks := h.cache.ListTasks()
 	var ok bool
@@ -722,7 +741,7 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 	}
 	p := parsePagination(r)
 	tasks = sortItems(tasks, p.Sort, p.Dir, map[string]func(swarm.Task) string{
-		"state":   func(t swarm.Task) string { return string(t.Status.State) },
+		"state":   func(t swarm.Task) string { return taskStateSortKey(t.Status.State) },
 		"service": func(t swarm.Task) string { return t.ServiceID },
 		"node":    func(t swarm.Task) string { return t.NodeID },
 	})

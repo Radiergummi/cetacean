@@ -23,9 +23,18 @@ export default function TasksTable({ tasks, variant }: TasksTableProps) {
       ? tasks.filter(({ Status: { State } }) => State === stateFilter)
       : tasks;
 
-    return [...filtered].sort(
-      (a, b) => new Date(b.Status.Timestamp).getTime() - new Date(a.Status.Timestamp).getTime(),
-    );
+    const stateWeight = (s: string) =>
+      s === "running"
+        ? 0
+        : s === "starting" || s === "preparing" || s === "ready" || s === "new"
+          ? 1
+          : 2;
+
+    return [...filtered].sort((a, b) => {
+      const w = stateWeight(a.Status.State) - stateWeight(b.Status.State);
+      if (w !== 0) return w;
+      return new Date(b.Status.Timestamp).getTime() - new Date(a.Status.Timestamp).getTime();
+    });
   }, [tasks, stateFilter]);
 
   if (tasks.length === 0) {

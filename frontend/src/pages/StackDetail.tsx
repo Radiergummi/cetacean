@@ -14,9 +14,9 @@ export default function StackDetail() {
   const { name } = useParams<{ name: string }>();
   const [stack, setStack] = useState<StackDetailType | null>(null);
   const [error, setError] = useState(false);
-  const [taskCounts, setTaskCounts] = useState<Record<string, { running: number; total: number }>>(
-    {},
-  );
+  const [taskCounts, setTaskCounts] = useState<
+    Record<string, { running: number; desired: number }>
+  >({});
 
   const fetchData = useCallback(() => {
     if (name) {
@@ -39,23 +39,28 @@ export default function StackDetail() {
     let cancelled = false;
 
     Promise.all(
-      stack.services.map(({ ID }) =>
+      stack.services.map((svc) =>
         api
-          .serviceTasks(ID)
-          .then((tasks: Task[]) => [ID, tasks] as const)
-          .catch(() => [ID, []] as const),
+          .serviceTasks(svc.ID)
+          .then((tasks: Task[]) => [svc, tasks] as const)
+          .catch(() => [svc, []] as const),
       ),
     ).then((results) => {
       if (cancelled) {
         return;
       }
 
-      const counts: Record<string, { running: number; total: number }> = {};
+      const counts: Record<string, { running: number; desired: number }> = {};
 
-      for (const [id, tasks] of results) {
-        counts[id] = {
+      for (const [svc, tasks] of results) {
+        const desired =
+          svc.Spec.Mode.Replicated?.Replicas ??
+          (svc.Spec.Mode.Global
+            ? tasks.filter(({ Status: { State } }) => State === "running").length
+            : 1);
+        counts[svc.ID] = {
           running: tasks.filter(({ Status: { State } }) => State === "running").length,
-          total: tasks.length,
+          desired,
         };
       }
       setTaskCounts(counts);
@@ -120,12 +125,12 @@ export default function StackDetail() {
                   {taskCounts[ID] ? (
                     <span>
                       <span
-                        data-healthy={taskCounts[ID].running === taskCounts[ID].total || undefined}
+                        data-healthy={taskCounts[ID].running >= taskCounts[ID].desired || undefined}
                         className="text-yellow-600 data-healthy:text-green-600"
                       >
                         {taskCounts[ID].running}
                       </span>
-                      /{taskCounts[ID].total}
+                      /{taskCounts[ID].desired}
                     </span>
                   ) : (
                     "—"
@@ -140,6 +145,7 @@ export default function StackDetail() {
       {stack.configs?.length > 0 && (
         <CollapsibleSection title="Configs">
           <SimpleTable
+            maxHeight
             items={stack.configs}
             keyFn={({ ID }) => ID}
             renderRow={({ ID, Spec: { Name } }) => (
@@ -156,6 +162,7 @@ export default function StackDetail() {
       {stack.secrets?.length > 0 && (
         <CollapsibleSection title="Secrets">
           <SimpleTable
+            maxHeight
             items={stack.secrets}
             keyFn={({ ID }) => ID}
             renderRow={({ ID, Spec: { Name } }) => (
@@ -172,6 +179,7 @@ export default function StackDetail() {
       {stack.networks?.length > 0 && (
         <CollapsibleSection title="Networks">
           <SimpleTable
+            maxHeight
             columns={["Name", "Driver"]}
             items={stack.networks}
             keyFn={({ Id }) => Id}
@@ -192,6 +200,7 @@ export default function StackDetail() {
       {stack.volumes?.length > 0 && (
         <CollapsibleSection title="Volumes">
           <SimpleTable
+            maxHeight
             items={stack.volumes}
             keyFn={({ Name }) => Name}
             renderRow={({ Name }) => (

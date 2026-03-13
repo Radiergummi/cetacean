@@ -202,23 +202,18 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
       .catch(() => setLoadingNewer(false));
   }, [loadingNewer, hasNewerLogs, limit, streamParam, isTask, logId]);
 
-  // When not live, poll for newer log availability so we can show "Load newer".
+  // When not live, check once for newer log availability after initial load.
   useEffect(() => {
     if (live || !newestRef.current || loading) return;
-    const check = () => {
-      const cursor = newestRef.current;
-      if (!cursor) return;
-      const options = { limit: 1, after: cursor, stream: streamParam };
-      const request = isTask ? api.taskLogs(logId, options) : api.serviceLogs(logId, options);
-      request
-        .then((response) => {
-          setHasNewerLogs((response.lines?.length ?? 0) > 0);
-        })
-        .catch(() => {});
-    };
-    check();
-    const id = setInterval(check, 5_000);
-    return () => clearInterval(id);
+    const cursor = newestRef.current;
+    if (!cursor) return;
+    const options = { limit: 1, after: cursor, stream: streamParam };
+    const request = isTask ? api.taskLogs(logId, options) : api.serviceLogs(logId, options);
+    request
+      .then((response) => {
+        setHasNewerLogs((response.lines?.length ?? 0) > 0);
+      })
+      .catch(() => {});
   }, [live, loading, logId, isTask, streamParam]);
 
   const handleScroll = useCallback(() => {

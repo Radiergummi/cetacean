@@ -1,4 +1,3 @@
-import ResourceName from "../components/ResourceName";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
@@ -66,11 +65,7 @@ export default function TaskDetail() {
           <TaskStatusBadge state={task.Status.State} />
         </div>
         <InfoCard label="Desired State" value={task.DesiredState} />
-        <ResourceLink
-          label="Service"
-          name={<ResourceName name={serviceName} />}
-          to={`/services/${task.ServiceID}`}
-        />
+        <ResourceLink label="Service" name={serviceName} to={`/services/${task.ServiceID}`} />
         <ResourceLink label="Node" name={nodeLabel} to={`/nodes/${task.NodeID}`} />
         <InfoCard label="Slot" value={task.Slot ? String(task.Slot) : "\u2014"} />
         <ContainerImage image={task.Spec.ContainerSpec.Image} />

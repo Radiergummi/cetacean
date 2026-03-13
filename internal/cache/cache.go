@@ -292,13 +292,21 @@ func (c *Cache) ListServices() []swarm.Service {
 
 func (c *Cache) SetTask(t swarm.Task) {
 	c.mu.Lock()
+	changed := true
 	if old, ok := c.tasks[t.ID]; ok {
+		changed = old.Status.State != t.Status.State ||
+			old.DesiredState != t.DesiredState ||
+			old.Status.Err != t.Status.Err ||
+			old.NodeID != t.NodeID ||
+			old.Meta.Version != t.Meta.Version
 		c.removeTaskIndex(old)
 	}
 	c.tasks[t.ID] = t
 	c.addTaskIndex(t)
 	c.mu.Unlock()
-	c.notify(Event{Type: "task", Action: "update", ID: t.ID, Resource: t})
+	if changed {
+		c.notify(Event{Type: "task", Action: "update", ID: t.ID, Resource: t})
+	}
 }
 
 func (c *Cache) GetTask(id string) (swarm.Task, bool) {
