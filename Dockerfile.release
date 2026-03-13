@@ -1,0 +1,10 @@
+# Minimal runtime image using pre-built binaries.
+# Used by the release workflow to avoid QEMU-emulated compilation.
+FROM alpine:3.21
+ARG TARGETARCH
+RUN apk add --no-cache ca-certificates
+COPY binaries/linux/${TARGETARCH}/cetacean /usr/local/bin/cetacean
+EXPOSE 9000
+HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
+  CMD wget -qO- http://localhost:9000/-/health || exit 1
+ENTRYPOINT ["cetacean"]

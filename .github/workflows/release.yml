@@ -55,9 +55,26 @@ jobs:
           path: cetacean-${{ matrix.os }}-${{ matrix.arch }}
 
   docker:
+    needs: [build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          sparse-checkout: Dockerfile.release
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: cetacean-linux-*
+          merge-multiple: true
+
+      - name: Prepare binaries
+        run: |
+          mkdir -p binaries/linux/amd64 binaries/linux/arm64
+          cp cetacean-linux-amd64 binaries/linux/amd64/cetacean
+          cp cetacean-linux-arm64 binaries/linux/arm64/cetacean
+          chmod +x binaries/linux/amd64/cetacean binaries/linux/arm64/cetacean
+
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
 
@@ -88,18 +105,14 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
+          file: Dockerfile.release
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
-          build-args: |
-            VERSION=${{ github.ref_name }}
-            COMMIT=${{ github.sha }}
           provenance: mode=max
           sbom: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       - uses: actions/attest-build-provenance@v4
         with:
