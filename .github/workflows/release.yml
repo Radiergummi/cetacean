@@ -133,7 +133,7 @@ jobs:
           awk "/^## \\[${VERSION}\\]/{found=1; next} /^## \\[/{if(found) exit} found" CHANGELOG.md > release-notes.md
           # Fall back to auto-generated notes if no section found
           if [ ! -s release-notes.md ]; then
-            echo "auto" >> "$GITHUB_OUTPUT"
+            echo "fallback=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create release
