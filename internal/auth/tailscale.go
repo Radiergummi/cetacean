@@ -3,11 +3,13 @@ package auth
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 
 	json "github.com/goccy/go-json"
 	"tailscale.com/client/local"
 	"tailscale.com/client/tailscale/apitype"
+	"tailscale.com/tsnet"
 )
 
 // WhoIsClient abstracts the Tailscale WhoIs API for testing.
@@ -19,6 +21,32 @@ type WhoIsClient interface {
 // WhoIs API to identify connecting peers by their remote address.
 type TailscaleProvider struct {
 	client WhoIsClient
+}
+
+// NewTailscaleTsnetProvider creates a provider using an embedded tsnet node.
+// Returns the provider, the tsnet server (caller must close), and a net.Listener
+// that should be used for serving authenticated routes.
+func NewTailscaleTsnetProvider(hostname, authKey, stateDir string) (*TailscaleProvider, *tsnet.Server, net.Listener, error) {
+	srv := &tsnet.Server{
+		Hostname: hostname,
+		AuthKey:  authKey,
+		Dir:      stateDir,
+	}
+
+	ln, err := srv.Listen("tcp", ":443")
+	if err != nil {
+		srv.Close()
+		return nil, nil, nil, fmt.Errorf("tsnet listen: %w", err)
+	}
+
+	lc, err := srv.LocalClient()
+	if err != nil {
+		ln.Close()
+		srv.Close()
+		return nil, nil, nil, fmt.Errorf("tsnet local client: %w", err)
+	}
+
+	return &TailscaleProvider{client: lc}, srv, ln, nil
 }
 
 // NewTailscaleLocalProvider creates a TailscaleProvider that uses the local
