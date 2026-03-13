@@ -2,12 +2,14 @@ import { Menu, X } from "lucide-react";
 import type React from "react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { BrowserRouter, Link, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { api } from "./api/client";
 import ConnectionStatus from "./components/ConnectionStatus";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { GlobalSearch, type GlobalSearchHandle } from "./components/search";
 import ShortcutsHelp from "./components/ShortcutsHelp";
 import ShortcutTooltip from "./components/ShortcutTooltip";
 import ThemeToggle from "./components/ThemeToggle";
+import { AuthContext, useAuth } from "./hooks/useAuth";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { ConnectionProvider, SSE_EVENT_TYPES } from "./hooks/useResourceStream";
 
@@ -81,6 +83,7 @@ function Layout({ children }: { children: React.ReactNode }) {
 
               <ThemeToggle />
               <GlobalSearch ref={searchRef} />
+              <UserBadge />
 
               <button
                 className="lg:hidden p-2 rounded-md hover:bg-muted"
@@ -143,6 +146,32 @@ function NavLinks() {
   );
 }
 
+function UserBadge() {
+  const { identity, loading } = useAuth();
+  if (loading || !identity || identity.provider === "none") return null;
+  return (
+    <span className="hidden sm:block text-sm text-muted-foreground truncate max-w-32">
+      {identity.displayName || identity.email || identity.subject}
+    </span>
+  );
+}
+
+function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [state, setState] = useState<{ identity: import("./api/types").Identity | null; loading: boolean }>({
+    identity: null,
+    loading: true,
+  });
+
+  useEffect(() => {
+    api
+      .whoami()
+      .then((identity) => setState({ identity, loading: false }))
+      .catch(() => setState({ identity: null, loading: false }));
+  }, []);
+
+  return <AuthContext value={state}>{children}</AuthContext>;
+}
+
 function ConnectionTracker({ children }: { children: React.ReactNode }) {
   const [connected, setConnected] = useState(true);
   const [lastEventAt, setLastEventAt] = useState<number | null>(null);
@@ -172,35 +201,37 @@ function ConnectionTracker({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <BrowserRouter>
-      <ConnectionTracker>
-        <Layout>
-          <Suspense>
-          <Routes>
-            <Route path="/" element={<ClusterOverview />} />
-            <Route path="/nodes" element={<NodeList />} />
-            <Route path="/nodes/:id" element={<NodeDetail />} />
-            <Route path="/stacks" element={<StackList />} />
-            <Route path="/stacks/:name" element={<StackDetail />} />
-            <Route path="/services" element={<ServiceList />} />
-            <Route path="/services/:id" element={<ServiceDetail />} />
-            <Route path="/tasks" element={<TaskList />} />
-            <Route path="/tasks/:id" element={<TaskDetail />} />
-            <Route path="/configs" element={<ConfigList />} />
-            <Route path="/configs/:id" element={<ConfigDetail />} />
-            <Route path="/secrets" element={<SecretList />} />
-            <Route path="/secrets/:id" element={<SecretDetail />} />
-            <Route path="/networks" element={<NetworkList />} />
-            <Route path="/networks/:id" element={<NetworkDetail />} />
-            <Route path="/volumes" element={<VolumeList />} />
-            <Route path="/volumes/:name" element={<VolumeDetail />} />
-            <Route path="/swarm" element={<SwarmPage />} />
-            <Route path="/topology" element={<Topology />} />
-            <Route path="/search" element={<SearchPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-          </Suspense>
-        </Layout>
-      </ConnectionTracker>
+      <AuthProvider>
+        <ConnectionTracker>
+          <Layout>
+            <Suspense>
+              <Routes>
+                <Route path="/" element={<ClusterOverview />} />
+                <Route path="/nodes" element={<NodeList />} />
+                <Route path="/nodes/:id" element={<NodeDetail />} />
+                <Route path="/stacks" element={<StackList />} />
+                <Route path="/stacks/:name" element={<StackDetail />} />
+                <Route path="/services" element={<ServiceList />} />
+                <Route path="/services/:id" element={<ServiceDetail />} />
+                <Route path="/tasks" element={<TaskList />} />
+                <Route path="/tasks/:id" element={<TaskDetail />} />
+                <Route path="/configs" element={<ConfigList />} />
+                <Route path="/configs/:id" element={<ConfigDetail />} />
+                <Route path="/secrets" element={<SecretList />} />
+                <Route path="/secrets/:id" element={<SecretDetail />} />
+                <Route path="/networks" element={<NetworkList />} />
+                <Route path="/networks/:id" element={<NetworkDetail />} />
+                <Route path="/volumes" element={<VolumeList />} />
+                <Route path="/volumes/:name" element={<VolumeDetail />} />
+                <Route path="/swarm" element={<SwarmPage />} />
+                <Route path="/topology" element={<Topology />} />
+                <Route path="/search" element={<SearchPage />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
+          </Layout>
+        </ConnectionTracker>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

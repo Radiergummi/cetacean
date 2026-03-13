@@ -23,6 +23,7 @@ import type {
   SwarmInfo,
   DiskUsageSummary,
   Plugin,
+  Identity,
   MonitoringStatus,
   PrometheusResponse,
 } from "./types";
@@ -127,6 +128,7 @@ function buildListURL(path: string, params?: ListParams): string {
 }
 
 export const api = {
+  whoami: () => fetchJSON<Identity>("/auth/whoami"),
   cluster: () => fetchJSON<ClusterSnapshot>("/cluster"),
   swarm: () => fetchJSON<SwarmInfo>("/swarm"),
   plugins: () => fetchJSON<CollectionResponse<Plugin>>("/plugins").then((r) => r.items),
