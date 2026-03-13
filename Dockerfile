@@ -1,14 +1,12 @@
 # syntax=docker/dockerfile:1
 
-# Stage 1: Build frontend
-FROM node:22-alpine AS frontend
+FROM node:24-alpine AS frontend
 WORKDIR /app/frontend
 COPY --link frontend/package*.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci
 COPY --link frontend/ ./
 RUN npm run build
 
-# Stage 2: Build Go binary
 FROM golang:1.26-alpine AS backend
 ARG VERSION=dev
 ARG COMMIT=unknown
@@ -26,8 +24,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     -X github.com/radiergummi/cetacean/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     -o cetacean .
 
-# Stage 3: Minimal runtime
-FROM alpine:3.21
+FROM alpine:3.23
 RUN apk add --no-cache ca-certificates
 COPY --from=backend /app/cetacean /usr/local/bin/cetacean
 EXPOSE 9000
