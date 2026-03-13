@@ -57,6 +57,44 @@ describe("buildLogicalFlow", () => {
       .sort();
     expect(names).toEqual(["backend", "frontend"]);
   });
+  it("deduplicates bidirectional edges into a single edge", () => {
+    const data: NetworkTopology = {
+      nodes: [
+        { id: "s1", name: "web", replicas: 1, image: "nginx", mode: "replicated" },
+        { id: "s2", name: "api", replicas: 1, image: "node", mode: "replicated" },
+      ],
+      edges: [
+        { source: "s1", target: "s2", networks: ["net1"] },
+        { source: "s2", target: "s1", networks: ["net1"] },
+      ],
+      networks: [{ id: "net1", name: "backend", driver: "overlay", scope: "swarm" }],
+    };
+    const { edges } = buildLogicalFlow(data);
+    expect(edges.length).toBe(1);
+  });
+
+  it("merges networks from bidirectional edges", () => {
+    const data: NetworkTopology = {
+      nodes: [
+        { id: "s1", name: "web", replicas: 1, image: "nginx", mode: "replicated" },
+        { id: "s2", name: "api", replicas: 1, image: "node", mode: "replicated" },
+      ],
+      edges: [
+        { source: "s1", target: "s2", networks: ["net1"] },
+        { source: "s2", target: "s1", networks: ["net2"] },
+      ],
+      networks: [
+        { id: "net1", name: "backend", driver: "overlay", scope: "swarm" },
+        { id: "net2", name: "frontend", driver: "overlay", scope: "swarm" },
+      ],
+    };
+    const { edges } = buildLogicalFlow(data);
+    expect(edges.length).toBe(1);
+    const names = (edges[0].data as { networks: Array<{ name: string }> }).networks
+      .map((n) => n.name)
+      .sort();
+    expect(names).toEqual(["backend", "frontend"]);
+  });
 });
 
 describe("buildPhysicalFlow", () => {

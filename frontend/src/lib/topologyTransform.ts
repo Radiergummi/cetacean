@@ -114,13 +114,23 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
     nodes.push(node);
   }
 
-  // Create one edge per source-target pair, collecting all shared networks
-  const sortedEdges = [...normalizedEdges].sort((a, b) => {
-    const ka = `${a.source}:${a.target}`;
-    const kb = `${b.source}:${b.target}`;
-    return ka < kb ? -1 : ka > kb ? 1 : 0;
-  });
-  for (const edge of sortedEdges) {
+  // Deduplicate normalized edges: merge edges sharing the same source-target pair,
+  // combining their network sets (the API may return both A→B and B→A).
+  const edgeMap = new Map<string, { source: string; target: string; networks: Set<string> }>();
+  for (const edge of normalizedEdges) {
+    const key = `${edge.source}:${edge.target}`;
+    const existing = edgeMap.get(key);
+    if (existing) {
+      for (const netId of edge.networks) existing.networks.add(netId);
+    } else {
+      edgeMap.set(key, { source: edge.source, target: edge.target, networks: new Set(edge.networks) });
+    }
+  }
+
+  // Create one edge per unique source-target pair
+  const sortedEdgeKeys = [...edgeMap.keys()].sort();
+  for (const key of sortedEdgeKeys) {
+    const edge = edgeMap.get(key)!;
     const srcSvc = serviceMap.get(edge.source);
     const tgtSvc = serviceMap.get(edge.target);
     const networks = [...edge.networks].sort().map((netId) => {
@@ -166,9 +176,10 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
 export function buildPhysicalFlow(data: PlacementTopology): { nodes: Node[] } {
   const nodes: Node[] = [];
   const COLS = 3;
-  const CARD_H = 72; // approx height of one service card in the grid
-  const HEADER_H = 48;
-  const PAD = 32;
+  const CARD_H = 80; // card: p-2.5(20) + name(18) + mb-0.5(2) + image(16) + mb-1(4) + tasks(18) + border(2)
+  const CARD_GAP = 8; // gap-2 between grid items
+  const HEADER_H = 44; // header line(20) + mb-3(12) + container p-4 top(16) - overlap adjustment
+  const PAD = 24; // container p-4 bottom(16) + extra breathing room
   const GAP = 24;
 
   const sortedClusterNodes = [...data.nodes].sort(byId);
@@ -201,7 +212,7 @@ export function buildPhysicalFlow(data: PlacementTopology): { nodes: Node[] } {
       .map(([serviceId, s]) => ({ serviceId, ...s }));
 
     const rows = Math.max(1, Math.ceil(services.length / COLS));
-    const nodeHeight = HEADER_H + rows * CARD_H + PAD;
+    const nodeHeight = HEADER_H + rows * CARD_H + Math.max(0, rows - 1) * CARD_GAP + PAD;
 
     nodes.push({
       id: clusterNode.id,
