@@ -49,6 +49,7 @@ func (s *SessionCodec) Set(w http.ResponseWriter, id *Identity, ttl time.Duratio
 		Path:     "/",
 		MaxAge:   int(ttl.Seconds()),
 		HttpOnly: true,
+		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 	})
 }

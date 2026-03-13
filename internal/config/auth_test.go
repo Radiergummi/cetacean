@@ -104,7 +104,7 @@ func TestLoadAuth_TailscaleTsnetRequiresAuthKey(t *testing.T) {
 func TestLoadAuth_TailscaleTsnetHappyPath(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "tailscale")
 	t.Setenv("CETACEAN_AUTH_TAILSCALE_MODE", "tsnet")
-	t.Setenv("CETACEAN_AUTH_TAILSCALE_AUTH_KEY", "tskey-abc123")
+	t.Setenv("CETACEAN_AUTH_TAILSCALE_AUTHKEY", "tskey-abc123")
 
 	cfg, err := LoadAuth()
 	if err != nil {

@@ -119,6 +119,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "TLS configuration error: %v\n", err)
 		os.Exit(1)
 	}
+	if authCfg.Mode == "cert" && !tlsCfg.Enabled() {
+		fmt.Fprintf(os.Stderr, "cert auth mode requires CETACEAN_TLS_CERT and CETACEAN_TLS_KEY\n")
+		os.Exit(1)
+	}
 
 	// Set up structured logging
 	var logHandler slog.Handler

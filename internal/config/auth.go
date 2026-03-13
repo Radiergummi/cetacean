@@ -62,7 +62,7 @@ func LoadAuth() (*AuthConfig, error) {
 		},
 		Tailscale: TailscaleConfig{
 			Mode:     envOr("CETACEAN_AUTH_TAILSCALE_MODE", "local"),
-			AuthKey:  os.Getenv("CETACEAN_AUTH_TAILSCALE_AUTH_KEY"),
+			AuthKey:  os.Getenv("CETACEAN_AUTH_TAILSCALE_AUTHKEY"),
 			Hostname: envOr("CETACEAN_AUTH_TAILSCALE_HOSTNAME", "cetacean"),
 			StateDir: os.Getenv("CETACEAN_AUTH_TAILSCALE_STATE_DIR"),
 		},
@@ -93,7 +93,7 @@ func LoadAuth() (*AuthConfig, error) {
 			return nil, fmt.Errorf("tailscale mode must be \"local\" or \"tsnet\", got %q", cfg.Tailscale.Mode)
 		}
 		if cfg.Tailscale.Mode == "tsnet" && cfg.Tailscale.AuthKey == "" {
-			return nil, fmt.Errorf("tailscale tsnet mode requires CETACEAN_AUTH_TAILSCALE_AUTH_KEY")
+			return nil, fmt.Errorf("tailscale tsnet mode requires CETACEAN_AUTH_TAILSCALE_AUTHKEY")
 		}
 	case "cert":
 		if cfg.Cert.CA == "" {
