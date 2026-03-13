@@ -47,7 +47,7 @@ func isExempt(path string) bool {
 		return true
 	case strings.HasPrefix(path, "/assets/"):
 		return true
-	case strings.HasPrefix(path, "/auth/"):
+	case path == "/auth" || strings.HasPrefix(path, "/auth/"):
 		return true
 	default:
 		return false
