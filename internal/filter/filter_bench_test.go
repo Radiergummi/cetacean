@@ -12,27 +12,27 @@ func BenchmarkCompile(b *testing.B) {
 		for b.Loop() {
 			// Reset cache to measure cold compile.
 			compileCache = newProgramCache(compileCacheSize)
-			Compile(`name == "test"`)
+			_, _ = Compile(`name == "test"`)
 		}
 	})
 	b.Run("complex", func(b *testing.B) {
 		for b.Loop() {
 			compileCache = newProgramCache(compileCacheSize)
-			Compile(`state == "running" and (role == "worker" or availability == "active")`)
+			_, _ = Compile(`state == "running" and (role == "worker" or availability == "active")`)
 		}
 	})
 	b.Run("cached_simple", func(b *testing.B) {
 		compileCache = newProgramCache(compileCacheSize)
-		Compile(`name == "test"`) // warm the cache
+		_, _ = Compile(`name == "test"`) // warm the cache
 		for b.Loop() {
-			Compile(`name == "test"`)
+			_, _ = Compile(`name == "test"`)
 		}
 	})
 	b.Run("cached_complex", func(b *testing.B) {
 		compileCache = newProgramCache(compileCacheSize)
-		Compile(`state == "running" and (role == "worker" or availability == "active")`)
+		_, _ = Compile(`state == "running" and (role == "worker" or availability == "active")`)
 		for b.Loop() {
-			Compile(`state == "running" and (role == "worker" or availability == "active")`)
+			_, _ = Compile(`state == "running" and (role == "worker" or availability == "active")`)
 		}
 	})
 }
@@ -45,7 +45,7 @@ func BenchmarkEvaluate(b *testing.B) {
 			"role": "worker", "availability": "active",
 		}
 		for b.Loop() {
-			Evaluate(prog, env)
+			_, _ = Evaluate(prog, env)
 		}
 	})
 	b.Run("miss", func(b *testing.B) {
@@ -54,7 +54,7 @@ func BenchmarkEvaluate(b *testing.B) {
 			"role": "manager", "availability": "active",
 		}
 		for b.Loop() {
-			Evaluate(prog, env)
+			_, _ = Evaluate(prog, env)
 		}
 	})
 }
@@ -98,7 +98,7 @@ func BenchmarkFilterPipeline(b *testing.B) {
 		for b.Loop() {
 			for i := range tasks {
 				env := TaskEnv(tasks[i], nil)
-				Evaluate(prog, env)
+				_, _ = Evaluate(prog, env)
 			}
 		}
 	})
@@ -107,7 +107,7 @@ func BenchmarkFilterPipeline(b *testing.B) {
 			var m map[string]any
 			for i := range tasks {
 				m = TaskEnv(tasks[i], m)
-				Evaluate(prog, m)
+				_, _ = Evaluate(prog, m)
 			}
 		}
 	})

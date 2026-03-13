@@ -619,7 +619,7 @@ func BenchmarkDetailResponseMarshalJSON(b *testing.B) {
 			"node": swarm.Node{ID: "n1"},
 		})
 		for b.Loop() {
-			json.Marshal(dr)
+			_, _ = json.Marshal(dr)
 		}
 	})
 	b.Run("with_services", func(b *testing.B) {
@@ -639,7 +639,7 @@ func BenchmarkDetailResponseMarshalJSON(b *testing.B) {
 			"services": services,
 		})
 		for b.Loop() {
-			json.Marshal(dr)
+			_, _ = json.Marshal(dr)
 		}
 	})
 }
@@ -677,9 +677,9 @@ func BenchmarkLabelsMatch(b *testing.B) {
 	labels := map[string]string{
 		"com.docker.stack.namespace": "mystack",
 		"com.docker.stack.image":     "registry.example.com/web:v2.1.0",
-		"app.version":               "2.1.0",
-		"maintainer":                "team-platform",
-		"environment":               "production",
+		"app.version":                "2.1.0",
+		"maintainer":                 "team-platform",
+		"environment":                "production",
 	}
 	b.Run("hit_value", func(b *testing.B) {
 		for b.Loop() {
@@ -785,7 +785,7 @@ func BenchmarkHandleListNodes_FullPipeline(b *testing.B) {
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			for b.Loop() {
 				req := httptest.NewRequestWithContext(b.Context(), "GET",
-					"/nodes?filter="+strings.Replace("role == \"worker\"", " ", "%20", -1)+"&sort=name&dir=desc&limit=10&offset=5", nil)
+					"/nodes?filter="+strings.ReplaceAll("role == \"worker\"", " ", "%20")+"&sort=name&dir=desc&limit=10&offset=5", nil)
 				h.HandleListNodes(httptest.NewRecorder(), req)
 			}
 		})
@@ -824,7 +824,7 @@ func realisticServiceEvent() cache.Event {
 							{ConfigID: "cfg-1", ConfigName: "mystack_nginx.conf"},
 						},
 						Secrets: []*swarm.SecretReference{
-							{SecretID: "sec-1", SecretName: "mystack_tls_cert"},
+							{SecretID: "sec-1", SecretName: "mystack_tls_cert"}, //nolint:gosec // test data
 						},
 					},
 					Networks: []swarm.NetworkAttachmentConfig{
@@ -1204,8 +1204,7 @@ func BenchmarkClientRegistration(b *testing.B) {
 	}()
 
 	// Feed events at a controlled rate so the inbox doesn't overflow.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := b.Context()
 	go func() {
 		e := cache.Event{Type: "service", Action: "update", ID: "svc-1"}
 		ticker := time.NewTicker(100 * time.Microsecond)
@@ -1252,11 +1251,9 @@ func BenchmarkServeSSE(b *testing.B) {
 				w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
 
 				var wg sync.WaitGroup
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
+				wg.Go(func() {
 					br.ServeHTTP(w, req)
-				}()
+				})
 
 				// Wait for client registration.
 				for {
@@ -1297,11 +1294,9 @@ func BenchmarkServeSSEFiltered(b *testing.B) {
 		w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
 
 		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			br.ServeHTTP(w, req)
-		}()
+		})
 
 		for {
 			br.mu.RLock()

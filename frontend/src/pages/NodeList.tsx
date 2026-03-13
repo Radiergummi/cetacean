@@ -133,7 +133,13 @@ export default function NodeList() {
           </ErrorBoundary>
         </div>
       )}
-      <ListToolbar search={search} onSearchChange={setSearch} placeholder="Search nodes..." viewMode={viewMode} onViewModeChange={setViewMode} />
+      <ListToolbar
+        search={search}
+        onSearchChange={setSearch}
+        placeholder="Search nodes..."
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+      />
       {nodes.length === 0 ? (
         <EmptyState message={search ? "No nodes match your search" : "No nodes found"} />
       ) : viewMode === "table" ? (

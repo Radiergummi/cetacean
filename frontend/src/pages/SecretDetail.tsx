@@ -1,7 +1,13 @@
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import ActivitySection from "../components/ActivitySection";
-import { LabelSection, MetadataGrid, ResourceId, ResourceLink, Timestamp } from "../components/data";
+import {
+  LabelSection,
+  MetadataGrid,
+  ResourceId,
+  ResourceLink,
+  Timestamp,
+} from "../components/data";
 import FetchError from "../components/FetchError";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";

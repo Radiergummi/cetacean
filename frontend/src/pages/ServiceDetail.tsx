@@ -521,9 +521,7 @@ function ServiceStatusCard({ service }: { service: Service }) {
       value={
         <div className="flex flex-col">
           <span className={`text-base font-medium ${color}`}>{label}</span>
-          {ts && (
-            <span className="text-xs text-muted-foreground">{timeAgo(ts)}</span>
-          )}
+          {ts && <span className="text-xs text-muted-foreground">{timeAgo(ts)}</span>}
           {msg && label !== "Stable" && (
             <span className="text-xs text-muted-foreground truncate" title={msg}>
               {msg}

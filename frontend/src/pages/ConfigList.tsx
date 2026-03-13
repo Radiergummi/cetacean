@@ -66,7 +66,13 @@ export default function ConfigList() {
   return (
     <div>
       <PageHeader title="Configs" />
-      <ListToolbar search={search} onSearchChange={setSearch} placeholder="Search configs..." viewMode={viewMode} onViewModeChange={setViewMode} />
+      <ListToolbar
+        search={search}
+        onSearchChange={setSearch}
+        placeholder="Search configs..."
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+      />
       {configs.length === 0 ? (
         <EmptyState message={search ? "No configs match your search" : "No configs found"} />
       ) : viewMode === "table" ? (

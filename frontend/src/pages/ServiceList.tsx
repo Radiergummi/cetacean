@@ -102,7 +102,13 @@ export default function ServiceList() {
   return (
     <div>
       <PageHeader title="Services" />
-      <ListToolbar search={search} onSearchChange={setSearch} placeholder="Search services..." viewMode={viewMode} onViewModeChange={setViewMode} />
+      <ListToolbar
+        search={search}
+        onSearchChange={setSearch}
+        placeholder="Search services..."
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+      />
       {services.length === 0 ? (
         <EmptyState message={search ? "No services match your search" : "No services found"} />
       ) : viewMode === "table" ? (
@@ -160,7 +166,7 @@ const statusColors: Record<string, string> = {
 
 function ServiceStatusBadge({ service }: { service: Pick<Service, "UpdateStatus"> }) {
   const state = service.UpdateStatus?.State;
-  const label = !state || state === "completed" ? "Stable" : (statusLabels[state] || state);
+  const label = !state || state === "completed" ? "Stable" : statusLabels[state] || state;
   const color = statusColors[state || "stable"] || statusColors.stable;
 
   return <span className={`text-sm font-medium ${color}`}>{label}</span>;

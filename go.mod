@@ -2,7 +2,13 @@ module github.com/radiergummi/cetacean
 
 go 1.26.1
 
-require github.com/docker/docker v28.5.2+incompatible
+require (
+	github.com/docker/docker v28.5.2+incompatible
+	github.com/expr-lang/expr v1.17.8
+	github.com/getkin/kin-openapi v0.133.0
+	github.com/goccy/go-json v0.10.5
+	gopkg.in/yaml.v3 v3.0.1
+)
 
 require (
 	github.com/Microsoft/go-winio v0.4.21 // indirect
@@ -13,14 +19,11 @@ require (
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/go-connections v0.6.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
-	github.com/expr-lang/expr v1.17.8 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/getkin/kin-openapi v0.133.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
-	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
@@ -44,6 +47,5 @@ require (
 	go.opentelemetry.io/otel/trace v1.42.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
 )

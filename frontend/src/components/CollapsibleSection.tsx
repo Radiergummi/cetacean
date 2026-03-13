@@ -20,7 +20,9 @@ export function useSectionCollapse(title: string, defaultOpen = true) {
     setOpen((prev) => {
       try {
         localStorage.setItem(sectionKey(title), prev ? "0" : "1");
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       return !prev;
     });
   }, [title]);

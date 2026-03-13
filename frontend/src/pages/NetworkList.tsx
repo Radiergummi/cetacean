@@ -65,7 +65,13 @@ export default function NetworkList() {
   return (
     <div>
       <PageHeader title="Networks" />
-      <ListToolbar search={search} onSearchChange={setSearch} placeholder="Search networks..." viewMode={viewMode} onViewModeChange={setViewMode} />
+      <ListToolbar
+        search={search}
+        onSearchChange={setSearch}
+        placeholder="Search networks..."
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+      />
       {networks.length === 0 ? (
         <EmptyState message={search ? "No networks match your search" : "No networks found"} />
       ) : viewMode === "table" ? (

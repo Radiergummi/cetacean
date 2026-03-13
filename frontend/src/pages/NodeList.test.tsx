@@ -35,14 +35,12 @@ vi.mock("../api/client", () => ({
   api: {
     nodes: vi.fn(),
     cluster: vi.fn().mockResolvedValue({ prometheusConfigured: false }),
-    monitoringStatus: vi
-      .fn()
-      .mockResolvedValue({
-        prometheusConfigured: false,
-        prometheusReachable: false,
-        nodeExporter: null,
-        cadvisor: null,
-      }),
+    monitoringStatus: vi.fn().mockResolvedValue({
+      prometheusConfigured: false,
+      prometheusReachable: false,
+      nodeExporter: null,
+      cadvisor: null,
+    }),
     metricsQuery: vi.fn().mockResolvedValue({ data: { result: [] } }),
     metricsQueryRange: vi.fn().mockResolvedValue({ data: { result: [] } }),
   },

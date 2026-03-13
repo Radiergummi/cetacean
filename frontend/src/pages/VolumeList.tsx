@@ -68,7 +68,13 @@ export default function VolumeList() {
   return (
     <div>
       <PageHeader title="Volumes" />
-      <ListToolbar search={search} onSearchChange={setSearch} placeholder="Search volumes..." viewMode={viewMode} onViewModeChange={setViewMode} />
+      <ListToolbar
+        search={search}
+        onSearchChange={setSearch}
+        placeholder="Search volumes..."
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+      />
       {volumes.length === 0 ? (
         <EmptyState message={search ? "No volumes match your search" : "No volumes found"} />
       ) : viewMode === "table" ? (

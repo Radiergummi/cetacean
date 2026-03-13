@@ -35,9 +35,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
   const logId = (serviceId || taskId)!;
   const isTask = !!taskId;
 
-  const { open, toggle: toggleCollapse } = useSectionCollapse(
-    header ? String(header) : "Logs",
-  );
+  const { open, toggle: toggleCollapse } = useSectionCollapse(header ? String(header) : "Logs");
   const [wrapLines, setWrapLines] = useState(false);
   const [streamFilter, setStreamFilter] = useState<"all" | "stdout" | "stderr">("all");
   const [pinnedLines, setPinnedLines] = useState<LogLine[]>([]);
