@@ -97,7 +97,7 @@ jobs:
           images: |
             ghcr.io/${{ github.repository }}
             ${{ vars.DOCKER_HUB_USERNAME }}/cetacean
-          annotations:
+          annotations: |
             org.opencontainers.image.description="A real-time observability dashboard for Docker Swarm clusters."
           tags: |
             type=semver,pattern={{version}}

@@ -5,39 +5,40 @@ import ResourceGauge from "./ResourceGauge";
 
 interface GaugeDef {
   label: string;
-  query: (addr?: string) => string;
+  query: (instance?: string) => string;
 }
 
-function instanceFilter(addr?: string) {
-  return addr ? `instance=~"${escapePromQL(addr)}:.*"` : "";
+function instanceFilter(instance?: string) {
+  return instance ? `instance="${escapePromQL(instance)}"` : "";
 }
 
 const GAUGES: GaugeDef[] = [
   {
     label: "CPU",
-    query: (addr) => {
-      const f = instanceFilter(addr);
+    query: (instance) => {
+      const f = instanceFilter(instance);
       return `100 - (avg(rate(node_cpu_seconds_total{mode="idle"${f ? `,${f}` : ""}}[5m])) * 100)`;
     },
   },
   {
     label: "Memory",
-    query: (addr) => {
-      const f = instanceFilter(addr);
+    query: (instance) => {
+      const f = instanceFilter(instance);
       const sel = f ? `{${f}}` : "";
       return `(1 - node_memory_MemAvailable_bytes${sel} / node_memory_MemTotal_bytes${sel}) * 100`;
     },
   },
   {
     label: "Disk",
-    query: (addr) => {
-      const f = instanceFilter(addr);
+    query: (instance) => {
+      const f = instanceFilter(instance);
       return `max((1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs"${f ? `,${f}` : ""}} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs"${f ? `,${f}` : ""}}) * 100)`;
     },
   },
 ];
 
 interface Props {
+  /** Prometheus instance label (e.g. "10.100.9.27:9100"). Omit for cluster-wide. */
   instance?: string;
 }
 

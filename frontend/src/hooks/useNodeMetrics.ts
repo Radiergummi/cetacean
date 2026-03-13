@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "../api/client";
 import type { PrometheusResponse } from "../api/types";
 import { useMonitoringStatus } from "./useMonitoringStatus";
+import { useInstanceResolver } from "./useInstanceResolver";
 
 export interface NodeMetrics {
   cpu: number | null;
@@ -12,12 +13,13 @@ export interface NodeMetrics {
 
 const EMPTY: NodeMetrics = { cpu: null, memory: null, disk: null, cpuHistory: [] };
 
-// Fetches per-instance metrics from Prometheus and maps them by IP address.
-// Nodes are matched to instances via node.Status.Addr.
+// Fetches per-instance metrics from Prometheus and maps them by instance label.
+// Nodes are matched to instances via useInstanceResolver (hostname-based).
 export function useNodeMetrics() {
   const monitoring = useMonitoringStatus();
   const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
-  const [byAddr, setByAddr] = useState<Record<string, NodeMetrics>>({});
+  const { resolve } = useInstanceResolver();
+  const [byInstance, setByInstance] = useState<Record<string, NodeMetrics>>({});
 
   const fetchAll = useCallback(() => {
     // Instant queries — per instance
@@ -39,25 +41,25 @@ export function useNodeMetrics() {
     ]).then(([cpuResp, memResp, diskResp, cpuRangeResp]) => {
       const map: Record<string, NodeMetrics> = {};
 
-      const ensure = (addr: string) => {
-        if (!map[addr]) map[addr] = { ...EMPTY, cpuHistory: [] };
-        return map[addr];
+      const ensure = (instance: string) => {
+        if (!map[instance]) map[instance] = { ...EMPTY, cpuHistory: [] };
+        return map[instance];
       };
 
-      parseInstant(cpuResp)?.forEach(([addr, val]) => {
-        ensure(addr).cpu = val;
+      parseInstant(cpuResp)?.forEach(([instance, val]) => {
+        ensure(instance).cpu = val;
       });
-      parseInstant(memResp)?.forEach(([addr, val]) => {
-        ensure(addr).memory = val;
+      parseInstant(memResp)?.forEach(([instance, val]) => {
+        ensure(instance).memory = val;
       });
-      parseInstant(diskResp)?.forEach(([addr, val]) => {
-        ensure(addr).disk = val;
+      parseInstant(diskResp)?.forEach(([instance, val]) => {
+        ensure(instance).disk = val;
       });
-      parseRange(cpuRangeResp)?.forEach(([addr, values]) => {
-        ensure(addr).cpuHistory = values;
+      parseRange(cpuRangeResp)?.forEach(([instance, values]) => {
+        ensure(instance).cpuHistory = values;
       });
 
-      setByAddr(map);
+      setByInstance(map);
     });
   }, []);
 
@@ -69,39 +71,31 @@ export function useNodeMetrics() {
   }, [fetchAll, hasPrometheus]);
 
   const getForNode = useCallback(
-    (nodeAddr: string): NodeMetrics => {
-      // Direct match
-      if (byAddr[nodeAddr]) return byAddr[nodeAddr];
-      // Match by IP prefix (instance is "ip:port", nodeAddr is just "ip")
-      for (const key of Object.keys(byAddr)) {
-        if (key.startsWith(nodeAddr + ":") || key === nodeAddr) {
-          return byAddr[key];
+    (hostname: string, addr: string): NodeMetrics => {
+      // Resolve hostname → instance via node_uname_info mapping
+      const instance = resolve(hostname);
+      if (instance && byInstance[instance]) return byInstance[instance];
+
+      // Fallback: try matching by addr (works when IPs happen to match)
+      for (const [key, metrics] of Object.entries(byInstance)) {
+        if (key.startsWith(addr + ":") || key === addr) {
+          return metrics;
         }
       }
-      // Fallback: return the first instance with actual data
-      // (handles mismatched IPs in single-node setups like OrbStack)
-      for (const entry of Object.values(byAddr)) {
-        if (entry.cpu != null) return entry;
-      }
+
       return EMPTY;
     },
-    [byAddr],
+    [byInstance, resolve],
   );
 
-  return { getForNode, hasData: Object.keys(byAddr).length > 0 };
-}
-
-function instanceAddr(instance: string): string {
-  // "10.0.0.2:9100" -> "10.0.0.2"
-  const i = instance.lastIndexOf(":");
-  return i > 0 ? instance.slice(0, i) : instance;
+  return { getForNode, hasData: Object.keys(byInstance).length > 0 };
 }
 
 function parseInstant(resp: PrometheusResponse | null): [string, number][] | null {
   const results = resp?.data?.result;
   if (!results?.length) return null;
   return results.map(
-    (r) => [instanceAddr(r.metric?.instance || ""), Number(r.value?.[1])] as [string, number],
+    (r) => [r.metric?.instance || "", Number(r.value?.[1])] as [string, number],
   );
 }
 
@@ -110,7 +104,7 @@ function parseRange(resp: PrometheusResponse | null): [string, number[]][] | nul
   if (!results?.length) return null;
   return results.map(
     (r) =>
-      [instanceAddr(r.metric?.instance || ""), (r.values || []).map((v) => Number(v[1]))] as [
+      [r.metric?.instance || "", (r.values || []).map((v) => Number(v[1]))] as [
         string,
         number[],
       ],

@@ -73,7 +73,7 @@ export default function NodeList() {
         {
           header: "CPU",
           cell: (node) => {
-            const m = getForNode(node.Status.Addr);
+            const m = getForNode(node.Description.Hostname, node.Status.Addr);
             return (
               <span className="tabular-nums">
                 {m.cpu != null ? `${Math.round(m.cpu)}%` : "\u2014"}
@@ -84,7 +84,7 @@ export default function NodeList() {
         {
           header: "Memory",
           cell: (node) => {
-            const m = getForNode(node.Status.Addr);
+            const m = getForNode(node.Description.Hostname, node.Status.Addr);
             return (
               <span className="tabular-nums">
                 {m.memory != null ? `${Math.round(m.memory)}%` : "\u2014"}
@@ -95,7 +95,7 @@ export default function NodeList() {
         {
           header: "CPU (1h)",
           cell: (node) => {
-            const m = getForNode(node.Status.Addr);
+            const m = getForNode(node.Description.Hostname, node.Status.Addr);
             if (m.cpuHistory.length > 1) {
               return <Sparkline data={m.cpuHistory} />;
             }
@@ -152,7 +152,7 @@ export default function NodeList() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {nodes.map((node) => {
-            const m = getForNode(node.Status.Addr);
+            const m = getForNode(node.Description.Hostname, node.Status.Addr);
             return (
               <ResourceCard
                 key={node.ID}

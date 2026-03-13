@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   prometheus:
-    image: prom/prometheus:v3.3.0
+    image: prom/prometheus:v3.10.0
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -29,7 +29,6 @@ services:
     volumes:
       - /:/rootfs:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /run/docker/containerd/containerd.sock:/run/containerd/containerd.sock:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
     networks:
@@ -46,6 +45,7 @@ services:
 
   node-exporter:
     image: prom/node-exporter:v1.9.0
+    hostname: "{{.Node.Hostname}}"
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro

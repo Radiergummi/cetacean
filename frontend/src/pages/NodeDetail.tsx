@@ -13,6 +13,7 @@ import { LoadingDetail } from "../components/LoadingSkeleton";
 import { MetricsPanel, NodeResourceGauges } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import TasksTable from "../components/TasksTable";
+import { useInstanceResolver } from "../hooks/useInstanceResolver";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { formatBytes } from "../lib/formatBytes";
@@ -25,6 +26,7 @@ export default function NodeDetail() {
 
   const monitoring = useMonitoringStatus();
   const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
+  const { resolve } = useInstanceResolver();
   const [error, setError] = useState(false);
 
   const fetchData = useCallback(() => {
@@ -58,7 +60,9 @@ export default function NodeDetail() {
     return <LoadingDetail />;
   }
 
-  const addr = node.Status.Addr || "";
+  const hostname = node.Description.Hostname || "";
+  const instance = resolve(hostname) || "";
+  const instanceFilter = instance ? `instance="${escapePromQL(instance)}"` : `instance=~"${escapePromQL(node.Status.Addr)}:.*"`;
 
   return (
     <div className="flex flex-col gap-6">
@@ -73,7 +77,7 @@ export default function NodeDetail() {
       {hasPrometheus && (
         <div className="rounded-lg border bg-card p-4">
           <ErrorBoundary inline>
-            <NodeResourceGauges instance={addr} />
+            <NodeResourceGauges instance={instance || undefined} />
           </ErrorBoundary>
         </div>
       )}
@@ -87,7 +91,7 @@ export default function NodeDetail() {
           label="OS"
           value={`${node.Description.Platform.OS} ${node.Description.Platform.Architecture}`}
         />
-        <InfoCard label="Address" value={addr} />
+        <InfoCard label="Address" value={node.Status.Addr || ""} />
         <InfoCard
           label="CPUs"
           value={`${(node.Description.Resources.NanoCPUs / 1_000_000_000).toFixed(0)}`}
@@ -121,22 +125,22 @@ export default function NodeDetail() {
             charts={[
               {
                 title: "CPU Usage",
-                query: `100 - (avg(rate(node_cpu_seconds_total{mode="idle",instance=~"${escapePromQL(addr)}:.*"}[5m])) * 100)`,
+                query: `100 - (avg(rate(node_cpu_seconds_total{mode="idle",${instanceFilter}}[5m])) * 100)`,
                 unit: "%",
               },
               {
                 title: "Memory Usage",
-                query: `(1 - node_memory_MemAvailable_bytes{instance=~"${escapePromQL(addr)}:.*"} / node_memory_MemTotal_bytes{instance=~"${escapePromQL(addr)}:.*"}) * 100`,
+                query: `(1 - node_memory_MemAvailable_bytes{${instanceFilter}} / node_memory_MemTotal_bytes{${instanceFilter}}) * 100`,
                 unit: "%",
               },
               {
                 title: "Disk I/O",
-                query: `sum(rate(node_disk_read_bytes_total{instance=~"${escapePromQL(addr)}:.*"}[5m]))`,
+                query: `sum(rate(node_disk_read_bytes_total{${instanceFilter}}[5m]))`,
                 unit: "bytes/s",
               },
               {
                 title: "Network I/O",
-                query: `sum(rate(node_network_receive_bytes_total{device!="lo",instance=~"${escapePromQL(addr)}:.*"}[5m]))`,
+                query: `sum(rate(node_network_receive_bytes_total{device!="lo",${instanceFilter}}[5m]))`,
                 unit: "bytes/s",
               },
             ]}
