@@ -3,10 +3,14 @@ package api
 import (
 	"net/http"
 	"net/http/pprof"
+
+	"github.com/radiergummi/cetacean/internal/auth"
 )
 
-func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Handler, openapiSpec []byte, scalarJS []byte, enablePprof bool) http.Handler {
+func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Handler, openapiSpec []byte, scalarJS []byte, enablePprof bool, authProvider auth.Provider) http.Handler {
 	mux := http.NewServeMux()
+
+	authProvider.RegisterRoutes(mux)
 
 	// Meta endpoints (no content negotiation, no discovery links)
 	mux.HandleFunc("GET /-/health", h.HandleHealth)
@@ -99,6 +103,7 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 	handler = requestLogger(handler)
 	handler = discoveryLinks(handler)
 	handler = negotiate(handler)
+	handler = auth.Middleware(authProvider)(handler)
 	handler = securityHeaders(handler)
 	handler = recovery(handler)
 	handler = requestID(handler)

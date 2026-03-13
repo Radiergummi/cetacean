@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/api"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/docker"
@@ -54,6 +55,27 @@ func main() {
 	cfg, err := config.Load(fc, flags)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
+		os.Exit(1)
+	}
+
+	authCfg, err := config.LoadAuth()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "auth configuration error: %v\n", err)
+		os.Exit(1)
+	}
+
+	var authProvider auth.Provider
+	switch authCfg.Mode {
+	case "none":
+		authProvider = &auth.NoneProvider{}
+	default:
+		fmt.Fprintf(os.Stderr, "auth mode %q not yet implemented\n", authCfg.Mode)
+		os.Exit(1)
+	}
+
+	tlsCfg := config.LoadTLS()
+	if err := config.ValidateTLS(tlsCfg); err != nil {
+		fmt.Fprintf(os.Stderr, "TLS configuration error: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -130,7 +152,7 @@ func main() {
 		slog.Warn("pprof endpoints enabled", "path", "/debug/pprof/")
 	}
 
-	router := api.NewRouter(handlers, broadcaster, promProxy, spa, openapiSpec, scalarJS, cfg.Pprof)
+	router := api.NewRouter(handlers, broadcaster, promProxy, spa, openapiSpec, scalarJS, cfg.Pprof, authProvider)
 
 	server := &http.Server{
 		Addr:         cfg.ListenAddr,
@@ -151,10 +173,18 @@ func main() {
 		}
 	}()
 
-	slog.Info("server started", "addr", cfg.ListenAddr, "version", version.Version, "commit", version.Commit)
-	if err := server.ListenAndServe(); err != http.ErrServerClosed {
-		slog.Error("server error", "error", err)
-		os.Exit(1)
+	slog.Info("server started", "addr", cfg.ListenAddr, "version", version.Version, "commit", version.Commit, "auth", authCfg.Mode)
+	if tlsCfg.Enabled() {
+		slog.Info("TLS enabled", "cert", tlsCfg.Cert, "key", tlsCfg.Key)
+		if err := server.ListenAndServeTLS(tlsCfg.Cert, tlsCfg.Key); err != http.ErrServerClosed {
+			slog.Error("server error", "error", err)
+			os.Exit(1)
+		}
+	} else {
+		if err := server.ListenAndServe(); err != http.ErrServerClosed {
+			slog.Error("server error", "error", err)
+			os.Exit(1)
+		}
 	}
 }
 

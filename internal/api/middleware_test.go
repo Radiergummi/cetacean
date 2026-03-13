@@ -7,6 +7,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -261,7 +262,7 @@ func TestNewRouter_Smoke(t *testing.T) {
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}
 	spa := NewSPAHandler(fs.FS(fsys))
 
-	router := NewRouter(h, b, prom, spa, []byte("openapi: '3.1.0'"), nil, false)
+	router := NewRouter(h, b, prom, spa, []byte("openapi: '3.1.0'"), nil, false, &auth.NoneProvider{})
 	if router == nil {
 		t.Fatal("NewRouter returned nil")
 	}
