@@ -379,11 +379,10 @@ export default function ServiceDetail() {
           )}
 
           {taskTemplate.RestartPolicy && (
-            <div className="rounded-lg border p-4 flex flex-col gap-3">
+            <div className="flex flex-col gap-2">
               <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Restart Policy
               </h3>
-
               <KVTable
                 rows={[
                   taskTemplate.RestartPolicy.Condition && [
@@ -408,7 +407,7 @@ export default function ServiceDetail() {
           )}
 
           {taskTemplate.LogDriver && (
-            <div className="rounded-lg border p-4 flex flex-col gap-3">
+            <div className="flex flex-col gap-2">
               <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Log Driver
               </h3>
@@ -426,21 +425,19 @@ export default function ServiceDetail() {
           )}
 
           {service.Spec.UpdateConfig && (
-            <div className="rounded-lg border p-4 flex flex-col gap-3">
+            <div className="flex flex-col gap-2">
               <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Update Config
               </h3>
-
               <KVTable rows={updateConfigRows(service.Spec.UpdateConfig)} />
             </div>
           )}
 
           {service.Spec.RollbackConfig && (
-            <div className="rounded-lg border p-4 flex flex-col gap-3">
+            <div className="flex flex-col gap-2">
               <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Rollback Config
               </h3>
-
               <KVTable rows={updateConfigRows(service.Spec.RollbackConfig)} />
             </div>
           )}
