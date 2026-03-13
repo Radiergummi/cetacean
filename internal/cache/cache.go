@@ -298,7 +298,7 @@ func (c *Cache) SetTask(t swarm.Task) {
 			old.DesiredState != t.DesiredState ||
 			old.Status.Err != t.Status.Err ||
 			old.NodeID != t.NodeID ||
-			old.Meta.Version != t.Meta.Version
+			old.Version != t.Version
 		c.removeTaskIndex(old)
 	}
 	c.tasks[t.ID] = t
