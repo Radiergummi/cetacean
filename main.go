@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"embed"
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -19,6 +22,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/version"
+	"tailscale.com/tsnet"
 )
 
 //go:embed frontend/dist/*
@@ -65,11 +69,48 @@ func main() {
 	}
 
 	var authProvider auth.Provider
+	var tsnetServer *tsnet.Server
+	var tsnetLn net.Listener
 	switch authCfg.Mode {
 	case "none":
 		authProvider = &auth.NoneProvider{}
+	case "oidc":
+		authProvider, err = auth.NewOIDCProvider(context.Background(), auth.OIDCProviderConfig{
+			Issuer:       authCfg.OIDC.Issuer,
+			ClientID:     authCfg.OIDC.ClientID,
+			ClientSecret: authCfg.OIDC.ClientSecret,
+			RedirectURL:  authCfg.OIDC.RedirectURL,
+			Scopes:       authCfg.OIDC.Scopes,
+		})
+		if err != nil {
+			slog.Error("OIDC provider setup failed", "error", err)
+			os.Exit(1)
+		}
+	case "tailscale":
+		if authCfg.Tailscale.Mode == "tsnet" {
+			authProvider, tsnetServer, tsnetLn, err = auth.NewTailscaleTsnetProvider(
+				authCfg.Tailscale.Hostname,
+				authCfg.Tailscale.AuthKey,
+				authCfg.Tailscale.StateDir,
+			)
+			if err != nil {
+				slog.Error("tsnet setup failed", "error", err)
+				os.Exit(1)
+			}
+			defer tsnetServer.Close()
+			defer tsnetLn.Close()
+			// TODO: dual listener logic — serve full router on tsnetLn,
+			// meta-only handler on regular listener
+			_ = tsnetLn
+		} else {
+			authProvider = auth.NewTailscaleLocalProvider()
+		}
+	case "cert":
+		authProvider = &auth.CertProvider{}
+	case "headers":
+		authProvider = auth.NewHeadersProvider(authCfg.Headers)
 	default:
-		fmt.Fprintf(os.Stderr, "auth mode %q not yet implemented\n", authCfg.Mode)
+		fmt.Fprintf(os.Stderr, "unknown auth mode %q\n", authCfg.Mode)
 		os.Exit(1)
 	}
 
@@ -160,6 +201,23 @@ func main() {
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 0, // SSE requires no server-level write timeout; JSON handlers set per-request deadlines
 		IdleTimeout:  120 * time.Second,
+	}
+
+	if authCfg.Mode == "cert" {
+		caCert, err := os.ReadFile(authCfg.Cert.CA)
+		if err != nil {
+			slog.Error("failed to read CA cert", "error", err)
+			os.Exit(1)
+		}
+		caPool := x509.NewCertPool()
+		if !caPool.AppendCertsFromPEM(caCert) {
+			slog.Error("failed to parse CA cert")
+			os.Exit(1)
+		}
+		server.TLSConfig = &tls.Config{
+			ClientCAs:  caPool,
+			ClientAuth: tls.RequireAndVerifyClientCert,
+		}
 	}
 
 	// Graceful shutdown
