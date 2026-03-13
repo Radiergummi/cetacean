@@ -1,0 +1,65 @@
+package auth
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+
+	json "github.com/goccy/go-json"
+	"tailscale.com/client/local"
+	"tailscale.com/client/tailscale/apitype"
+)
+
+// WhoIsClient abstracts the Tailscale WhoIs API for testing.
+type WhoIsClient interface {
+	WhoIs(ctx context.Context, remoteAddr string) (*apitype.WhoIsResponse, error)
+}
+
+// TailscaleProvider authenticates requests using the local Tailscale daemon's
+// WhoIs API to identify connecting peers by their remote address.
+type TailscaleProvider struct {
+	client WhoIsClient
+}
+
+// NewTailscaleLocalProvider creates a TailscaleProvider that uses the local
+// Tailscale daemon to identify peers.
+func NewTailscaleLocalProvider() *TailscaleProvider {
+	return &TailscaleProvider{client: &local.Client{}}
+}
+
+// Authenticate identifies the Tailscale peer by calling WhoIs on the request's
+// remote address. Returns an error if the caller is not on the tailnet.
+func (p *TailscaleProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (*Identity, error) {
+	who, err := p.client.WhoIs(r.Context(), r.RemoteAddr)
+	if err != nil {
+		return nil, fmt.Errorf("tailscale whois: %w", err)
+	}
+
+	return &Identity{
+		Subject:     fmt.Sprintf("%d", who.UserProfile.ID),
+		DisplayName: who.UserProfile.DisplayName,
+		Email:       who.UserProfile.LoginName,
+		Provider:    "tailscale",
+		Raw: map[string]any{
+			"user_id":    int64(who.UserProfile.ID),
+			"login_name": who.UserProfile.LoginName,
+			"node_name":  who.Node.Name,
+		},
+	}, nil
+}
+
+// RegisterRoutes registers the Tailscale auth routes on the given mux.
+func (p *TailscaleProvider) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /auth/whoami", p.handleWhoami)
+}
+
+func (p *TailscaleProvider) handleWhoami(w http.ResponseWriter, r *http.Request) {
+	id, err := p.Authenticate(w, r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(id)
+}
