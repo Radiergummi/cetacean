@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-03-13
+
+### Fixed
+- SSE test data race under `-race` flag (thread-safe flushRecorder)
+- CI: use latest golangci-lint for Go 1.26 compatibility
+- CI: fix release notes extraction format for GitHub Actions
+- Bump hono to 4.12.7 (prototype pollution CVE, transitive dev dep)
+
 ## [0.1.0] - 2026-03-12
 
 ### Added
