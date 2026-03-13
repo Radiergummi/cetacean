@@ -1,6 +1,10 @@
 package auth
 
-import "net/http"
+import (
+	"net/http"
+
+	json "github.com/goccy/go-json"
+)
 
 // NoneProvider always returns a static anonymous identity.
 type NoneProvider struct{}
@@ -15,4 +19,9 @@ func (p *NoneProvider) Authenticate(_ http.ResponseWriter, _ *http.Request) (*Id
 	return anonymousIdentity, nil
 }
 
-func (p *NoneProvider) RegisterRoutes(_ *http.ServeMux) {}
+func (p *NoneProvider) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /auth/whoami", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(anonymousIdentity)
+	})
+}

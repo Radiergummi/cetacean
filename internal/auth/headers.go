@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 
+	json "github.com/goccy/go-json"
+
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
@@ -72,5 +74,14 @@ func (p *HeadersProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (
 	}, nil
 }
 
-// RegisterRoutes is a no-op for the headers provider.
-func (p *HeadersProvider) RegisterRoutes(_ *http.ServeMux) {}
+func (p *HeadersProvider) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /auth/whoami", func(w http.ResponseWriter, r *http.Request) {
+		id, err := p.Authenticate(nil, r)
+		if err != nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(id)
+	})
+}
