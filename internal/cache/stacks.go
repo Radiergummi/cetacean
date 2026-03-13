@@ -51,7 +51,7 @@ func (c *Cache) removeFromStack(resource, id string, labels map[string]string) {
 	case "volume":
 		s.Volumes = removeStr(s.Volumes, id)
 	}
-	if len(s.Services)+len(s.Configs)+len(s.Secrets)+len(s.Networks)+len(s.Volumes) == 0 {
+	if len(s.Services) == 0 {
 		delete(c.stacks, ns)
 	} else {
 		c.stacks[ns] = s
@@ -108,6 +108,12 @@ func (c *Cache) rebuildStacks() {
 
 	result := make(map[string]Stack, len(stacks))
 	for name, s := range stacks {
+		// Only include stacks that have at least one service; stacks with
+		// only leftover volumes/configs/secrets/networks are ghost stacks
+		// from removed deployments and should not appear in the stacks list.
+		if len(s.Services) == 0 {
+			continue
+		}
 		result[name] = *s
 	}
 	c.stacks = result

@@ -331,24 +331,11 @@ func TestCache_Stack_PartialRemoval(t *testing.T) {
 	cfg.Spec.Labels = labels
 	c.SetConfig(cfg)
 
-	// Remove service — stack should still exist because config remains
+	// Remove service — stack should be gone (stacks require at least one service)
 	c.DeleteService("svc1")
 
-	stack, ok := c.GetStack("mystack")
-	if !ok {
-		t.Fatal("expected stack to still exist")
-	}
-	if len(stack.Services) != 0 {
-		t.Errorf("expected 0 services, got %d", len(stack.Services))
-	}
-	if len(stack.Configs) != 1 {
-		t.Errorf("expected 1 config, got %d", len(stack.Configs))
-	}
-
-	// Remove config — stack should be gone
-	c.DeleteConfig("cfg1")
 	if _, ok := c.GetStack("mystack"); ok {
-		t.Fatal("expected stack to be removed when empty")
+		t.Fatal("expected stack to be removed when last service is deleted")
 	}
 }
 
@@ -619,19 +606,12 @@ func TestCache_ReplaceStacks_CrossResourceRebuild(t *testing.T) {
 	cfg.Spec.Labels = labels
 	c.SetConfig(cfg)
 
-	// Replace services with empty — stack should still exist from config
+	// Replace services with empty — stack should be gone (requires services)
 	c.replaceServices(nil)
 	c.rebuildStacksSynced()
 
-	stack, ok := c.GetStack("mystack")
-	if !ok {
-		t.Fatal("expected stack to survive — config still references it")
-	}
-	if len(stack.Services) != 0 {
-		t.Errorf("expected 0 services after replace, got %d", len(stack.Services))
-	}
-	if len(stack.Configs) != 1 {
-		t.Errorf("expected 1 config, got %d", len(stack.Configs))
+	if _, ok := c.GetStack("mystack"); ok {
+		t.Fatal("expected stack to be removed when no services remain")
 	}
 }
 
