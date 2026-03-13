@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/http"
 
-	json "github.com/goccy/go-json"
 	"tailscale.com/client/local"
 	"tailscale.com/client/tailscale/apitype"
 	"tailscale.com/tsnet"
@@ -76,18 +75,6 @@ func (p *TailscaleProvider) Authenticate(_ http.ResponseWriter, r *http.Request)
 	}, nil
 }
 
-// RegisterRoutes registers the Tailscale auth routes on the given mux.
 func (p *TailscaleProvider) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /auth/whoami", p.handleWhoami)
-}
-
-func (p *TailscaleProvider) handleWhoami(w http.ResponseWriter, r *http.Request) {
-	id, err := p.Authenticate(w, r)
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(id)
+	mux.HandleFunc("GET /auth/whoami", WhoamiHandler(p))
 }

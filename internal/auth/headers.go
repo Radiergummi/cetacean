@@ -2,11 +2,10 @@ package auth
 
 import (
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
-
-	json "github.com/goccy/go-json"
 
 	"github.com/radiergummi/cetacean/internal/config"
 )
@@ -28,7 +27,7 @@ func (p *HeadersProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (
 	if p.cfg.SecretHeader != "" {
 		got := r.Header.Get(p.cfg.SecretHeader)
 		if subtle.ConstantTimeCompare([]byte(got), []byte(p.cfg.SecretValue)) != 1 {
-			return nil, fmt.Errorf("invalid proxy secret")
+			return nil, errors.New("invalid proxy secret")
 		}
 	}
 
@@ -75,13 +74,5 @@ func (p *HeadersProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (
 }
 
 func (p *HeadersProvider) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /auth/whoami", func(w http.ResponseWriter, r *http.Request) {
-		id, err := p.Authenticate(nil, r)
-		if err != nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(id)
-	})
+	mux.HandleFunc("GET /auth/whoami", WhoamiHandler(p))
 }

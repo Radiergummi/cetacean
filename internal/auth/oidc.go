@@ -6,12 +6,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	json "github.com/goccy/go-json"
 	"golang.org/x/oauth2"
 )
 
@@ -83,27 +83,7 @@ func (p *OIDCProvider) Authenticate(w http.ResponseWriter, r *http.Request) (*Id
 
 	// 3. Browser request: redirect to OIDC authorize endpoint.
 	if strings.Contains(r.Header.Get("Accept"), "text/html") {
-		state := generateState()
-
-		http.SetCookie(w, &http.Cookie{
-			Name:     "cetacean_auth_state",
-			Value:    state,
-			Path:     "/auth",
-			MaxAge:   300,
-			HttpOnly: true,
-			SameSite: http.SameSiteLaxMode,
-		})
-
-		http.SetCookie(w, &http.Cookie{
-			Name:     "cetacean_auth_redirect",
-			Value:    r.URL.RequestURI(),
-			Path:     "/auth",
-			MaxAge:   300,
-			HttpOnly: true,
-			SameSite: http.SameSiteLaxMode,
-		})
-
-		http.Redirect(w, r, p.oauth2Config.AuthCodeURL(state), http.StatusFound)
+		p.redirectToLogin(w, r, r.URL.RequestURI())
 		return nil, nil
 	}
 
@@ -116,10 +96,21 @@ func (p *OIDCProvider) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /auth/login", p.handleLogin)
 	mux.HandleFunc("GET /auth/callback", p.handleCallback)
 	mux.HandleFunc("GET /auth/logout", p.handleLogout)
-	mux.HandleFunc("GET /auth/whoami", p.handleWhoami)
+	mux.HandleFunc("GET /auth/whoami", WhoamiHandler(p))
 }
 
 func (p *OIDCProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
+	redirect := r.URL.Query().Get("redirect")
+	if redirect == "" {
+		redirect = "/"
+	}
+	p.redirectToLogin(w, r, redirect)
+}
+
+// redirectToLogin sets CSRF state and redirect cookies, then redirects to the
+// OIDC authorization endpoint. Shared by Authenticate (browser redirect) and
+// handleLogin (explicit login route).
+func (p *OIDCProvider) redirectToLogin(w http.ResponseWriter, r *http.Request, redirect string) {
 	state := generateState()
 
 	http.SetCookie(w, &http.Cookie{
@@ -130,11 +121,6 @@ func (p *OIDCProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
-
-	redirect := r.URL.Query().Get("redirect")
-	if redirect == "" {
-		redirect = "/"
-	}
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     "cetacean_auth_redirect",
@@ -161,27 +147,37 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read redirect URL before clearing cookies.
+	redirectURL := "/"
+	if c, err := r.Cookie("cetacean_auth_redirect"); err == nil && c.Value != "" {
+		redirectURL = c.Value
+	}
+
 	// Exchange code for token.
 	oauth2Token, err := p.oauth2Config.Exchange(r.Context(), r.URL.Query().Get("code"))
 	if err != nil {
+		slog.Error("oidc token exchange failed", "error", err)
 		http.Error(w, "token exchange failed", http.StatusInternalServerError)
 		return
 	}
 
 	rawIDToken, ok := oauth2Token.Extra("id_token").(string)
 	if !ok {
+		slog.Error("oidc response missing id_token")
 		http.Error(w, "missing id_token", http.StatusInternalServerError)
 		return
 	}
 
 	idToken, err := p.verifier.Verify(r.Context(), rawIDToken)
 	if err != nil {
+		slog.Error("oidc id_token verification failed", "error", err)
 		http.Error(w, "invalid id_token", http.StatusInternalServerError)
 		return
 	}
 
 	var claims map[string]any
 	if err := idToken.Claims(&claims); err != nil {
+		slog.Error("oidc claims parsing failed", "error", err)
 		http.Error(w, "failed to parse claims", http.StatusInternalServerError)
 		return
 	}
@@ -199,22 +195,8 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	p.session.Set(w, identity, ttl)
 
 	// Clear state cookies.
-	http.SetCookie(w, &http.Cookie{
-		Name:   "cetacean_auth_state",
-		Path:   "/auth",
-		MaxAge: -1,
-	})
-	http.SetCookie(w, &http.Cookie{
-		Name:   "cetacean_auth_redirect",
-		Path:   "/auth",
-		MaxAge: -1,
-	})
-
-	// Redirect to original URL.
-	redirectURL := "/"
-	if c, err := r.Cookie("cetacean_auth_redirect"); err == nil && c.Value != "" {
-		redirectURL = c.Value
-	}
+	http.SetCookie(w, &http.Cookie{Name: "cetacean_auth_state", Path: "/auth", MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{Name: "cetacean_auth_redirect", Path: "/auth", MaxAge: -1})
 
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
@@ -222,17 +204,6 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 func (p *OIDCProvider) handleLogout(w http.ResponseWriter, r *http.Request) {
 	p.session.Clear(w)
 	http.Redirect(w, r, "/", http.StatusFound)
-}
-
-func (p *OIDCProvider) handleWhoami(w http.ResponseWriter, r *http.Request) {
-	id, err := p.session.Get(r)
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(id)
 }
 
 // claimsToIdentity extracts identity fields from an OIDC claims map.
@@ -269,7 +240,7 @@ func extractBearerToken(r *http.Request) string {
 	if !strings.HasPrefix(auth, "Bearer ") {
 		return ""
 	}
-	return strings.TrimPrefix(auth, "Bearer ")
+	return auth[7:]
 }
 
 // generateState returns 16 random bytes hex-encoded for CSRF protection.

@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
-
-	json "github.com/goccy/go-json"
 )
 
 // CertProvider authenticates requests using mTLS client certificates.
@@ -49,15 +47,7 @@ func (p *CertProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (*Id
 }
 
 func (p *CertProvider) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /auth/whoami", func(w http.ResponseWriter, r *http.Request) {
-		id, err := p.Authenticate(nil, r)
-		if err != nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(id)
-	})
+	mux.HandleFunc("GET /auth/whoami", WhoamiHandler(p))
 }
 
 func formatSerial(n *big.Int) string {
