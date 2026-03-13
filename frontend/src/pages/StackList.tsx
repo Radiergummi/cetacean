@@ -72,9 +72,13 @@ export default function StackList() {
 }
 
 function stackHealth(s: StackSummary): "healthy" | "warning" | "critical" {
-  if ((s.tasksByState["failed"] ?? 0) > 0) return "critical";
   const running = s.tasksByState["running"] ?? 0;
-  if (running < s.desiredTasks) return "warning";
+  if (running < s.desiredTasks) {
+    // Only critical if there are failed tasks AND we're not fully running
+    if ((s.tasksByState["failed"] ?? 0) > 0 || (s.tasksByState["rejected"] ?? 0) > 0)
+      return "critical";
+    return "warning";
+  }
   return "healthy";
 }
 
