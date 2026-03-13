@@ -877,7 +877,8 @@ func TestCache_ListStackSummaries(t *testing.T) {
 	}
 }
 
-func uint64Ptr(v uint64) *uint64 { return &v }
+//go:fix inline
+func uint64Ptr(v uint64) *uint64 { return new(v) }
 
 func TestReplaceAll_PartialSync(t *testing.T) {
 	c := New(nil)
@@ -1016,8 +1017,6 @@ func TestCache_ServicesUsingVolume(t *testing.T) {
 	}
 }
 
-func ptr[T any](v T) *T { return &v }
-
 func TestCache_SetService_EmitsCrossRefEvents(t *testing.T) {
 	var events []Event
 	c := New(func(e Event) { events = append(events, e) })
@@ -1142,7 +1141,7 @@ func TestSnapshot_ConvergenceAndReservations(t *testing.T) {
 		ID: "svc1",
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: "web"},
-			Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: ptr(uint64(2))}},
+			Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: new(uint64(2))}},
 			TaskTemplate: swarm.TaskSpec{
 				Resources: &swarm.ResourceRequirements{
 					Reservations: &swarm.Resources{NanoCPUs: 500_000_000, MemoryBytes: 256 * 1024 * 1024},
@@ -1156,7 +1155,7 @@ func TestSnapshot_ConvergenceAndReservations(t *testing.T) {
 		ID: "svc2",
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: "api"},
-			Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: ptr(uint64(3))}},
+			Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: new(uint64(3))}},
 		},
 	})
 	c.SetTask(swarm.Task{ID: "t3", ServiceID: "svc2", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})

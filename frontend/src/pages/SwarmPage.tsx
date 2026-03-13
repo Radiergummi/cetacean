@@ -2,7 +2,8 @@ import { Check, Copy } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { Plugin, SwarmInfo } from "../api/types";
-import { KVTable, ResourceId, SectionHeader, Timestamp } from "../components/data";
+import CollapsibleSection from "../components/CollapsibleSection";
+import { KVTable, MetadataGrid, ResourceId, Timestamp } from "../components/data";
 import { formatNs } from "../lib/formatNs";
 import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
@@ -124,7 +125,7 @@ export default function SwarmPage() {
       />
 
       {/* Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <MetadataGrid>
         <ResourceId label="Cluster ID" id={swarm.ID} />
         <Timestamp label="Created" date={swarm.CreatedAt} />
         <Timestamp label="Updated" date={swarm.UpdatedAt} />
@@ -134,12 +135,11 @@ export default function SwarmPage() {
           label="Data Path Port"
           value={swarm.DataPathPort ? String(swarm.DataPathPort) : "—"}
         />
-      </div>
+      </MetadataGrid>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Raft */}
-        <section>
-          <SectionHeader title="Raft" />
+        <CollapsibleSection title="Raft">
           <KVTable
             rows={[
               ["Snapshot Interval", String(spec.Raft.SnapshotInterval)],
@@ -152,11 +152,10 @@ export default function SwarmPage() {
               ["Heartbeat Tick", `${spec.Raft.HeartbeatTick} ticks`],
             ]}
           />
-        </section>
+        </CollapsibleSection>
 
         {/* CA Configuration */}
-        <section>
-          <SectionHeader title="CA Configuration" />
+        <CollapsibleSection title="CA Configuration">
           <KVTable
             rows={[
               spec.CAConfig.NodeCertExpiry !== 0 && [
@@ -171,11 +170,10 @@ export default function SwarmPage() {
               ]) ?? []),
             ]}
           />
-        </section>
+        </CollapsibleSection>
 
         {/* Orchestration */}
-        <section>
-          <SectionHeader title="Orchestration" />
+        <CollapsibleSection title="Orchestration">
           <KVTable
             rows={[
               [
@@ -186,11 +184,10 @@ export default function SwarmPage() {
               ],
             ]}
           />
-        </section>
+        </CollapsibleSection>
 
         {/* Dispatcher */}
-        <section>
-          <SectionHeader title="Dispatcher" />
+        <CollapsibleSection title="Dispatcher">
           <KVTable
             rows={[
               spec.Dispatcher.HeartbeatPeriod !== 0 && [
@@ -199,20 +196,18 @@ export default function SwarmPage() {
               ],
             ]}
           />
-        </section>
+        </CollapsibleSection>
 
         {/* Encryption */}
-        <section>
-          <SectionHeader title="Encryption" />
+        <CollapsibleSection title="Encryption">
           <KVTable
             rows={[["Auto-Lock Managers", spec.EncryptionConfig.AutoLockManagers ? "Yes" : "No"]]}
           />
-        </section>
+        </CollapsibleSection>
 
         {/* Task Defaults */}
         {spec.TaskDefaults.LogDriver && (
-          <section>
-            <SectionHeader title="Task Defaults" />
+          <CollapsibleSection title="Task Defaults">
             <KVTable
               rows={[
                 ["Log Driver", spec.TaskDefaults.LogDriver.Name],
@@ -223,14 +218,13 @@ export default function SwarmPage() {
                   : []),
               ]}
             />
-          </section>
+          </CollapsibleSection>
         )}
       </div>
 
       {/* Plugins */}
       {plugins.length > 0 && (
-        <section>
-          <SectionHeader title="Plugins" />
+        <CollapsibleSection title="Plugins">
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full">
               <thead>
@@ -262,7 +256,7 @@ export default function SwarmPage() {
               </tbody>
             </table>
           </div>
-        </section>
+        </CollapsibleSection>
       )}
     </div>
   );

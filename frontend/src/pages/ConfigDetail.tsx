@@ -1,12 +1,15 @@
+import { Copy } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import ActivitySection from "../components/ActivitySection";
 import CodeBlock from "../components/CodeBlock";
+import CollapsibleSection from "../components/CollapsibleSection";
+import { IconButton } from "../components/IconButton";
 import {
   LabelSection,
+  MetadataGrid,
   ResourceId,
   ResourceLink,
-  SectionHeader,
   Timestamp,
 } from "../components/data";
 import FetchError from "../components/FetchError";
@@ -43,20 +46,28 @@ export default function ConfigDetail() {
         breadcrumbs={[{ label: "Configs", to: "/configs" }, { label: name }]}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <MetadataGrid>
         <ResourceId label="ID" id={config.ID} />
         <ResourceLink label="Stack" name={stack} to={`/stacks/${stack}`} />
         <Timestamp label="Created" date={config.CreatedAt} />
         <Timestamp label="Updated" date={config.UpdatedAt} />
-      </div>
+      </MetadataGrid>
 
       <LabelSection entries={labelEntries} />
 
       {decoded != null && (
-        <div>
-          <SectionHeader title="Data" />
+        <CollapsibleSection
+          title="Data"
+          controls={
+            <IconButton
+              onClick={() => navigator.clipboard.writeText(decoded)}
+              title="Copy"
+              icon={<Copy className="size-3.5" />}
+            />
+          }
+        >
           <CodeBlock code={decoded} />
-        </div>
+        </CollapsibleSection>
       )}
 
       <ServiceRefList

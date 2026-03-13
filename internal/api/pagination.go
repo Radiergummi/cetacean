@@ -52,14 +52,8 @@ func parsePagination(r *http.Request) PageParams {
 func applyPagination[T any](items []T, p PageParams) CollectionResponse[T] {
 	total := len(items)
 
-	start := p.Offset
-	if start > total {
-		start = total
-	}
-	end := start + p.Limit
-	if end > total {
-		end = total
-	}
+	start := min(p.Offset, total)
+	end := min(start+p.Limit, total)
 
 	result := items[start:end]
 	if result == nil {
@@ -82,10 +76,7 @@ func writePaginationLinks(w http.ResponseWriter, r *http.Request, total, limit, 
 		links = append(links, buildLink(offset+limit)+`; rel="next"`)
 	}
 	if offset > 0 {
-		prev := offset - limit
-		if prev < 0 {
-			prev = 0
-		}
+		prev := max(offset-limit, 0)
 		links = append(links, buildLink(prev)+`; rel="prev"`)
 	}
 	if len(links) > 0 {
@@ -99,18 +90,29 @@ func sortItems[T any](items []T, key, dir string, accessors map[string]func(T) s
 		return items
 	}
 
-	cp := make([]T, len(items))
-	copy(cp, items)
+	// Pre-compute lowered sort keys to avoid repeated strings.ToLower in comparisons.
+	keys := make([]string, len(items))
+	for i, item := range items {
+		keys[i] = strings.ToLower(accessor(item))
+	}
+
+	// Build an index slice and sort it.
+	idx := make([]int, len(items))
+	for i := range idx {
+		idx[i] = i
+	}
 
 	desc := strings.EqualFold(dir, "desc")
-	slices.SortStableFunc(cp, func(a, b T) int {
-		av := strings.ToLower(accessor(a))
-		bv := strings.ToLower(accessor(b))
+	slices.SortStableFunc(idx, func(a, b int) int {
 		if desc {
-			return cmp.Compare(bv, av)
+			return cmp.Compare(keys[b], keys[a])
 		}
-		return cmp.Compare(av, bv)
+		return cmp.Compare(keys[a], keys[b])
 	})
 
+	cp := make([]T, len(items))
+	for i, j := range idx {
+		cp[i] = items[j]
+	}
 	return cp
 }

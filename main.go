@@ -13,11 +13,11 @@ import (
 	"syscall"
 	"time"
 
-	"cetacean/internal/api"
-	"cetacean/internal/cache"
-	"cetacean/internal/config"
-	"cetacean/internal/docker"
-	"cetacean/internal/version"
+	"github.com/radiergummi/cetacean/internal/api"
+	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/docker"
+	"github.com/radiergummi/cetacean/internal/version"
 )
 
 //go:embed frontend/dist/*
@@ -59,7 +59,7 @@ func main() {
 	dockerClient, err := docker.NewClient(cfg.DockerHost)
 	if err != nil {
 		slog.Error("docker client failed", "error", err)
-		os.Exit(1)
+		os.Exit(1) //nolint:gocritic // defers are trivial cleanup; OS reclaims on exit
 	}
 	defer dockerClient.Close() //nolint:errcheck // best-effort shutdown close
 

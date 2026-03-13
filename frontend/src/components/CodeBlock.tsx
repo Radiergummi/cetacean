@@ -1,4 +1,3 @@
-import { Copy } from "lucide-react";
 import type React from "react";
 
 interface Props {
@@ -140,17 +139,10 @@ export default function CodeBlock({ code }: Props) {
 
   return (
     <div className="rounded-lg border overflow-hidden">
-      <div className="flex items-center justify-between ps-3 pe-1.5 pt-1.5">
+      <div className="ps-3 pt-1.5">
         <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
           {format}
         </span>
-        <button
-          onClick={() => navigator.clipboard.writeText(formatted)}
-          title="Copy"
-          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-        >
-          <Copy className="size-3.5" />
-        </button>
       </div>
 
       <pre className="p-4 text-sm font-mono overflow-x-auto whitespace-pre-wrap break-all">

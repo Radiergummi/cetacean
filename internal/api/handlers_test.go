@@ -13,7 +13,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
 
-	"cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 func closedReady() <-chan struct{} {
@@ -142,11 +142,17 @@ func TestHandleClusterMetrics_WithPrometheus(t *testing.T) {
 	}
 
 	var resp struct {
-		CPU    struct{ Percent float64 } `json:"cpu"`
-		Memory struct{ Percent float64 } `json:"memory"`
-		Disk   struct{ Percent float64 } `json:"disk"`
+		CPU struct {
+			Percent float64 `json:"percent"`
+		} `json:"cpu"`
+		Memory struct {
+			Percent float64 `json:"percent"`
+		} `json:"memory"`
+		Disk struct {
+			Percent float64 `json:"percent"`
+		} `json:"disk"`
 	}
-	json.NewDecoder(w.Body).Decode(&resp)
+	json.NewDecoder(w.Body).Decode(&resp) //nolint:errcheck // test code
 	if resp.CPU.Percent == 0 {
 		t.Error("expected non-zero CPU percent")
 	}
@@ -1424,7 +1430,8 @@ func TestHandleListNodes_Search(t *testing.T) {
 	}
 }
 
-func uint64Ptr(v uint64) *uint64 { return &v }
+//go:fix inline
+func uint64Ptr(v uint64) *uint64 { return new(v) }
 
 func TestHandleStackSummary(t *testing.T) {
 	c := cache.New(nil)
@@ -1911,7 +1918,7 @@ func TestHandleSearch_EmptyQuery(t *testing.T) {
 
 func TestHandleSearch_CapsAtThreePerType(t *testing.T) {
 	c := cache.New(nil)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		c.SetService(swarm.Service{
 			ID: fmt.Sprintf("svc%d", i),
 			Spec: swarm.ServiceSpec{

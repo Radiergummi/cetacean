@@ -2,12 +2,13 @@ import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { Network } from "../api/types";
 import ActivitySection from "../components/ActivitySection";
+import CollapsibleSection from "../components/CollapsibleSection";
 import {
   KeyValuePills,
   LabelSection,
+  MetadataGrid,
   ResourceId,
   ResourceLink,
-  SectionHeader,
   Timestamp,
 } from "../components/data";
 import FetchError from "../components/FetchError";
@@ -44,8 +45,7 @@ function IPAMPanel({ network }: { network: Network }) {
   if (!ipam?.Config?.length) return null;
 
   return (
-    <div>
-      <SectionHeader title="IPAM Configuration" />
+    <CollapsibleSection title="IPAM Configuration">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {ipam.Config.map((cfg, i) => (
           <div key={i} className="rounded-lg border bg-card p-4">
@@ -83,7 +83,7 @@ function IPAMPanel({ network }: { network: Network }) {
           IPAM Driver: <span className="font-mono">{ipam.Driver}</span>
         </div>
       )}
-    </div>
+    </CollapsibleSection>
   );
 }
 
@@ -106,23 +106,22 @@ export default function NetworkDetail() {
         breadcrumbs={[{ label: "Networks", to: "/networks" }, { label: network.Name }]}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <MetadataGrid>
         <ResourceId label="ID" id={network.Id} />
         <InfoCard label="Driver" value={network.Driver} />
         <InfoCard label="Scope" value={network.Scope} />
         <ResourceLink label="Stack" name={stack} to={`/stacks/${stack}`} />
         <Timestamp label="Created" date={network.Created} />
-      </div>
+      </MetadataGrid>
 
       <NetworkFlags network={network} />
 
       <IPAMPanel network={network} />
 
       {options.length > 0 && (
-        <div>
-          <SectionHeader title="Driver Options" />
+        <CollapsibleSection title="Driver Options">
           <KeyValuePills entries={options} />
-        </div>
+        </CollapsibleSection>
       )}
 
       <LabelSection entries={labelEntries} />

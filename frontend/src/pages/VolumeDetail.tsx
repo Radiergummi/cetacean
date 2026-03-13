@@ -1,11 +1,12 @@
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import ActivitySection from "../components/ActivitySection";
+import CollapsibleSection from "../components/CollapsibleSection";
 import {
   KeyValuePills,
   LabelSection,
+  MetadataGrid,
   ResourceLink,
-  SectionHeader,
   Timestamp,
 } from "../components/data";
 import FetchError from "../components/FetchError";
@@ -35,19 +36,18 @@ export default function VolumeDetail() {
         breadcrumbs={[{ label: "Volumes", to: "/volumes" }, { label: volume.Name }]}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <MetadataGrid>
         <InfoCard label="Driver" value={volume.Driver} />
         <InfoCard label="Scope" value={volume.Scope} />
         <ResourceLink label="Stack" name={stack} to={`/stacks/${stack}`} />
         <Timestamp label="Created" date={volume.CreatedAt} />
         <InfoCard className="col-span-2" label="Mountpoint" value={volume.Mountpoint} />
-      </div>
+      </MetadataGrid>
 
       {options.length > 0 && (
-        <div>
-          <SectionHeader title="Driver Options" />
+        <CollapsibleSection title="Driver Options">
           <KeyValuePills entries={options} />
-        </div>
+        </CollapsibleSection>
       )}
 
       <LabelSection entries={labelEntries} />

@@ -1,5 +1,7 @@
 package cache
 
+import "slices"
+
 const stackLabel = "com.docker.stack.namespace"
 
 // addToStack incrementally adds a resource to the appropriate stack. Must be called with c.mu held for writing.
@@ -112,10 +114,8 @@ func (c *Cache) rebuildStacks() {
 }
 
 func appendUnique(sl []string, v string) []string {
-	for _, s := range sl {
-		if s == v {
-			return sl
-		}
+	if slices.Contains(sl, v) {
+		return sl
 	}
 	return append(sl, v)
 }

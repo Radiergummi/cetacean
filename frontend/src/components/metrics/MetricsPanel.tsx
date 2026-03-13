@@ -1,9 +1,11 @@
 import type React from "react";
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { RefreshCw, Play, Square, ChevronRight } from "lucide-react";
+import { RefreshCw, Play, Square } from "lucide-react";
 import TimeSeriesChart from "./TimeSeriesChart";
 import type { Threshold } from "./TimeSeriesChart";
+import CollapsibleSection from "../CollapsibleSection";
+import { IconButton } from "../IconButton";
 import SegmentedControl from "../SegmentedControl";
 import type { Segment } from "../SegmentedControl";
 
@@ -41,7 +43,6 @@ export default function MetricsPanel({ charts, header }: Props) {
   };
   const [refreshKey, setRefreshKey] = useState(0);
   const [autoRefresh, setAutoRefresh] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     if (!autoRefresh) return;
@@ -52,57 +53,33 @@ export default function MetricsPanel({ charts, header }: Props) {
   const controls = (
     <div className="flex flex-wrap items-center gap-2">
       <SegmentedControl segments={RANGE_SEGMENTS} value={range} onChange={setRange} />
-      <button
+      <IconButton
         onClick={() => setRefreshKey((k) => k + 1)}
-        className="h-8 w-8 flex items-center justify-center rounded-md border hover:bg-muted"
         title="Refresh"
-      >
-        <RefreshCw className="size-3.5" />
-      </button>
-      <button
-        onClick={() => setAutoRefresh((v) => !v)}
-        aria-pressed={autoRefresh}
-        title={autoRefresh ? "Pause auto-refresh" : "Auto-refresh (30s)"}
-        className="h-8 w-8 flex items-center justify-center rounded-md border hover:bg-muted aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:border-primary"
-      >
-        {autoRefresh ? <Square className="size-3.5" /> : <Play className="size-3.5" />}
-      </button>
-    </div>
-  );
-
-  const toggle = (
-    <button
-      type="button"
-      onClick={() => setCollapsed((c) => !c)}
-      className="flex items-center gap-1.5 text-sm font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-    >
-      <ChevronRight
-        data-open={!collapsed || undefined}
-        className="h-4 w-4 transition-transform data-open:rotate-90"
+        icon={<RefreshCw className="size-3.5" />}
       />
-      {header ?? "Metrics"}
-    </button>
+      <IconButton
+        onClick={() => setAutoRefresh((v) => !v)}
+        title={autoRefresh ? "Pause auto-refresh" : "Auto-refresh (30s)"}
+        icon={autoRefresh ? <Square className="size-3.5" /> : <Play className="size-3.5" />}
+        active={autoRefresh}
+      />
+    </div>
   );
 
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-4 min-h-8">
-        {toggle}
-        {!collapsed && <div className="ml-auto">{controls}</div>}
+    <CollapsibleSection title={typeof header === "string" ? header : "Metrics"} controls={controls}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {charts.map((chart) => (
+          <TimeSeriesChart
+            key={chart.query}
+            {...chart}
+            range={range}
+            refreshKey={refreshKey}
+            syncKey="metrics"
+          />
+        ))}
       </div>
-      {!collapsed && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {charts.map((chart) => (
-            <TimeSeriesChart
-              key={chart.query}
-              {...chart}
-              range={range}
-              refreshKey={refreshKey}
-              syncKey="metrics"
-            />
-          ))}
-        </div>
-      )}
-    </div>
+    </CollapsibleSection>
   );
 }

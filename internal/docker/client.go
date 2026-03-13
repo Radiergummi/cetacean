@@ -16,7 +16,7 @@ import (
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 
-	"cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 // LogKind selects between service and task logs.

@@ -22,50 +22,37 @@ type DetailResponse struct {
 // MarshalJSON produces deterministic output: @context, @id, @type first,
 // then extra keys in sorted order.
 func (d DetailResponse) MarshalJSON() ([]byte, error) {
-	// Pre-allocate: 3 fixed keys + extras.
 	keys := make([]string, 0, len(d.extra))
 	for k := range d.extra {
 		keys = append(keys, k)
 	}
 	slices.Sort(keys)
 
-	// Build ordered key-value pairs.
-	ordered := make([]orderedKV, 0, 3+len(keys))
-	ordered = append(ordered,
-		orderedKV{"@context", d.context},
-		orderedKV{"@id", d.id},
-		orderedKV{"@type", d.typ},
-	)
+	// Estimate capacity: fixed fields ~80 bytes + extras.
+	buf := make([]byte, 0, 256)
+	buf = append(buf, `{"@context":"`...)
+	buf = append(buf, d.context...)
+	buf = append(buf, `","@id":"`...)
+	buf = append(buf, d.id...)
+	buf = append(buf, `","@type":"`...)
+	buf = append(buf, d.typ...)
+	buf = append(buf, '"')
+
 	for _, k := range keys {
-		ordered = append(ordered, orderedKV{k, d.extra[k]})
-	}
-	return marshalOrdered(ordered)
-}
-
-type orderedKV struct {
-	key string
-	val any
-}
-
-// marshalOrdered serializes key-value pairs as a JSON object in the given order.
-func marshalOrdered(pairs []orderedKV) ([]byte, error) {
-	buf := []byte{'{'}
-	for i, kv := range pairs {
-		if i > 0 {
-			buf = append(buf, ',')
-		}
-		key, err := json.Marshal(kv.key)
-		if err != nil {
-			return nil, err
-		}
-		val, err := json.Marshal(kv.val)
+		buf = append(buf, ',')
+		key, err := json.Marshal(k)
 		if err != nil {
 			return nil, err
 		}
 		buf = append(buf, key...)
 		buf = append(buf, ':')
+		val, err := json.Marshal(d.extra[k])
+		if err != nil {
+			return nil, err
+		}
 		buf = append(buf, val...)
 	}
+
 	buf = append(buf, '}')
 	return buf, nil
 }

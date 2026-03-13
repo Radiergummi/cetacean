@@ -1,4 +1,3 @@
-import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
@@ -7,18 +6,9 @@ import FetchError from "../components/FetchError";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
+import CollapsibleSection from "../components/CollapsibleSection";
 import SimpleTable from "../components/SimpleTable";
 import { useResourceStream } from "../hooks/useResourceStream";
-import SectionHeader from "../components/data/SectionHeader";
-
-function StackSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <SectionHeader title={title} />
-      {children}
-    </div>
-  );
-}
 
 export default function StackDetail() {
   const { name } = useParams<{ name: string }>();
@@ -110,7 +100,7 @@ export default function StackDetail() {
       />
 
       {stack.services?.length > 0 && (
-        <StackSection title="Services">
+        <CollapsibleSection title="Services">
           <SimpleTable
             columns={["Name", "Image", "Mode", "Tasks"]}
             items={stack.services}
@@ -144,11 +134,11 @@ export default function StackDetail() {
               </>
             )}
           />
-        </StackSection>
+        </CollapsibleSection>
       )}
 
       {stack.configs?.length > 0 && (
-        <StackSection title="Configs">
+        <CollapsibleSection title="Configs">
           <SimpleTable
             items={stack.configs}
             keyFn={({ ID }) => ID}
@@ -160,11 +150,11 @@ export default function StackDetail() {
               </td>
             )}
           />
-        </StackSection>
+        </CollapsibleSection>
       )}
 
       {stack.secrets?.length > 0 && (
-        <StackSection title="Secrets">
+        <CollapsibleSection title="Secrets">
           <SimpleTable
             items={stack.secrets}
             keyFn={({ ID }) => ID}
@@ -176,11 +166,11 @@ export default function StackDetail() {
               </td>
             )}
           />
-        </StackSection>
+        </CollapsibleSection>
       )}
 
       {stack.networks?.length > 0 && (
-        <StackSection title="Networks">
+        <CollapsibleSection title="Networks">
           <SimpleTable
             columns={["Name", "Driver"]}
             items={stack.networks}
@@ -196,11 +186,11 @@ export default function StackDetail() {
               </>
             )}
           />
-        </StackSection>
+        </CollapsibleSection>
       )}
 
       {stack.volumes?.length > 0 && (
-        <StackSection title="Volumes">
+        <CollapsibleSection title="Volumes">
           <SimpleTable
             items={stack.volumes}
             keyFn={({ Name }) => Name}
@@ -212,7 +202,7 @@ export default function StackDetail() {
               </td>
             )}
           />
-        </StackSection>
+        </CollapsibleSection>
       )}
     </div>
   );

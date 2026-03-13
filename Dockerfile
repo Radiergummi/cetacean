@@ -21,9 +21,9 @@ COPY --from=frontend /app/frontend/dist ./frontend/dist
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -ldflags "-s -w \
-    -X cetacean/internal/version.Version=${VERSION} \
-    -X cetacean/internal/version.Commit=${COMMIT} \
-    -X cetacean/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -X github.com/radiergummi/cetacean/internal/version.Version=${VERSION} \
+    -X github.com/radiergummi/cetacean/internal/version.Commit=${COMMIT} \
+    -X github.com/radiergummi/cetacean/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     -o cetacean .
 
 # Stage 3: Minimal runtime

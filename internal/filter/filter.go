@@ -3,6 +3,7 @@ package filter
 import (
 	"fmt"
 	"strconv"
+	"sync"
 
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
@@ -10,7 +11,7 @@ import (
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
 
-	"cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 // Program is a compiled filter expression.
@@ -19,7 +20,49 @@ type Program = *vm.Program
 // Compile parses and compiles a filter expression string.
 // Returns an error if the expression is syntactically invalid.
 func Compile(expression string) (Program, error) {
-	return expr.Compile(expression, expr.AsBool())
+	if prog, ok := compileCache.get(expression); ok {
+		return prog, nil
+	}
+	prog, err := expr.Compile(expression, expr.AsBool())
+	if err != nil {
+		return nil, err
+	}
+	compileCache.put(expression, prog)
+	return prog, nil
+}
+
+const compileCacheSize = 64
+
+var compileCache = newProgramCache(compileCacheSize)
+
+type programCache struct {
+	mu      sync.RWMutex
+	entries map[string]Program
+	cap     int
+}
+
+func newProgramCache(cap int) *programCache {
+	return &programCache{entries: make(map[string]Program, cap), cap: cap}
+}
+
+func (c *programCache) get(key string) (Program, bool) {
+	c.mu.RLock()
+	p, ok := c.entries[key]
+	c.mu.RUnlock()
+	return p, ok
+}
+
+func (c *programCache) put(key string, prog Program) {
+	c.mu.Lock()
+	if len(c.entries) >= c.cap {
+		// Evict one random entry.
+		for k := range c.entries {
+			delete(c.entries, k)
+			break
+		}
+	}
+	c.entries[key] = prog
+	c.mu.Unlock()
 }
 
 // Evaluate runs a compiled program against an environment map.
@@ -36,18 +79,23 @@ func Evaluate(prog Program, env map[string]any) (bool, error) {
 }
 
 // NodeEnv builds an expression environment from a swarm.Node.
-func NodeEnv(n swarm.Node) map[string]any {
-	return map[string]any{
-		"id":           n.ID,
-		"name":         n.Description.Hostname,
-		"state":        string(n.Status.State),
-		"role":         string(n.Spec.Role),
-		"availability": string(n.Spec.Availability),
+func NodeEnv(n swarm.Node, m map[string]any) map[string]any {
+	if m == nil {
+		m = make(map[string]any, 5)
 	}
+	m["id"] = n.ID
+	m["name"] = n.Description.Hostname
+	m["state"] = string(n.Status.State)
+	m["role"] = string(n.Spec.Role)
+	m["availability"] = string(n.Spec.Availability)
+	return m
 }
 
 // ServiceEnv builds an expression environment from a swarm.Service.
-func ServiceEnv(s swarm.Service) map[string]any {
+func ServiceEnv(s swarm.Service, m map[string]any) map[string]any {
+	if m == nil {
+		m = make(map[string]any, 5)
+	}
 	mode := "replicated"
 	if s.Spec.Mode.Global != nil {
 		mode = "global"
@@ -56,18 +104,19 @@ func ServiceEnv(s swarm.Service) map[string]any {
 	if s.Spec.TaskTemplate.ContainerSpec != nil {
 		image = s.Spec.TaskTemplate.ContainerSpec.Image
 	}
-	stack := s.Spec.Labels["com.docker.stack.namespace"]
-	return map[string]any{
-		"id":    s.ID,
-		"name":  s.Spec.Name,
-		"image": image,
-		"mode":  mode,
-		"stack": stack,
-	}
+	m["id"] = s.ID
+	m["name"] = s.Spec.Name
+	m["image"] = image
+	m["mode"] = mode
+	m["stack"] = s.Spec.Labels["com.docker.stack.namespace"]
+	return m
 }
 
 // TaskEnv builds an expression environment from a swarm.Task.
-func TaskEnv(t swarm.Task) map[string]any {
+func TaskEnv(t swarm.Task, m map[string]any) map[string]any {
+	if m == nil {
+		m = make(map[string]any, 9)
+	}
 	var image string
 	if t.Spec.ContainerSpec != nil {
 		image = t.Spec.ContainerSpec.Image
@@ -76,64 +125,73 @@ func TaskEnv(t swarm.Task) map[string]any {
 	if t.Status.ContainerStatus != nil {
 		exitCode = strconv.Itoa(t.Status.ContainerStatus.ExitCode)
 	}
-	return map[string]any{
-		"id":            t.ID,
-		"state":         string(t.Status.State),
-		"desired_state": string(t.DesiredState),
-		"image":         image,
-		"exit_code":     exitCode,
-		"error":         t.Status.Err,
-		"service":       t.ServiceID,
-		"node":          t.NodeID,
-		"slot":          t.Slot,
-	}
+	m["id"] = t.ID
+	m["state"] = string(t.Status.State)
+	m["desired_state"] = string(t.DesiredState)
+	m["image"] = image
+	m["exit_code"] = exitCode
+	m["error"] = t.Status.Err
+	m["service"] = t.ServiceID
+	m["node"] = t.NodeID
+	m["slot"] = t.Slot
+	return m
 }
 
 // ConfigEnv builds an expression environment from a swarm.Config.
-func ConfigEnv(c swarm.Config) map[string]any {
-	return map[string]any{
-		"id":   c.ID,
-		"name": c.Spec.Name,
+func ConfigEnv(c swarm.Config, m map[string]any) map[string]any {
+	if m == nil {
+		m = make(map[string]any, 2)
 	}
+	m["id"] = c.ID
+	m["name"] = c.Spec.Name
+	return m
 }
 
 // SecretEnv builds an expression environment from a swarm.Secret.
-func SecretEnv(s swarm.Secret) map[string]any {
-	return map[string]any{
-		"id":   s.ID,
-		"name": s.Spec.Name,
+func SecretEnv(s swarm.Secret, m map[string]any) map[string]any {
+	if m == nil {
+		m = make(map[string]any, 2)
 	}
+	m["id"] = s.ID
+	m["name"] = s.Spec.Name
+	return m
 }
 
 // NetworkEnv builds an expression environment from a network.Summary.
-func NetworkEnv(n network.Summary) map[string]any {
-	return map[string]any{
-		"id":     n.ID,
-		"name":   n.Name,
-		"driver": n.Driver,
-		"scope":  n.Scope,
+func NetworkEnv(n network.Summary, m map[string]any) map[string]any {
+	if m == nil {
+		m = make(map[string]any, 4)
 	}
+	m["id"] = n.ID
+	m["name"] = n.Name
+	m["driver"] = n.Driver
+	m["scope"] = n.Scope
+	return m
 }
 
 // VolumeEnv builds an expression environment from a volume.Volume.
-func VolumeEnv(v volume.Volume) map[string]any {
-	return map[string]any{
-		"name":   v.Name,
-		"driver": v.Driver,
-		"scope":  v.Scope,
+func VolumeEnv(v volume.Volume, m map[string]any) map[string]any {
+	if m == nil {
+		m = make(map[string]any, 3)
 	}
+	m["name"] = v.Name
+	m["driver"] = v.Driver
+	m["scope"] = v.Scope
+	return m
 }
 
 // StackEnv builds an expression environment from a cache.Stack.
-func StackEnv(s cache.Stack) map[string]any {
-	return map[string]any{
-		"name":     s.Name,
-		"services": len(s.Services),
-		"configs":  len(s.Configs),
-		"secrets":  len(s.Secrets),
-		"networks": len(s.Networks),
-		"volumes":  len(s.Volumes),
+func StackEnv(s cache.Stack, m map[string]any) map[string]any {
+	if m == nil {
+		m = make(map[string]any, 6)
 	}
+	m["name"] = s.Name
+	m["services"] = len(s.Services)
+	m["configs"] = len(s.Configs)
+	m["secrets"] = len(s.Secrets)
+	m["networks"] = len(s.Networks)
+	m["volumes"] = len(s.Volumes)
+	return m
 }
 
 // ResourceEnv builds an expression environment from an interface{} resource,
@@ -141,19 +199,19 @@ func StackEnv(s cache.Stack) map[string]any {
 func ResourceEnv(resource any) map[string]any {
 	switch r := resource.(type) {
 	case swarm.Node:
-		return NodeEnv(r)
+		return NodeEnv(r, nil)
 	case swarm.Service:
-		return ServiceEnv(r)
+		return ServiceEnv(r, nil)
 	case swarm.Task:
-		return TaskEnv(r)
+		return TaskEnv(r, nil)
 	case swarm.Config:
-		return ConfigEnv(r)
+		return ConfigEnv(r, nil)
 	case swarm.Secret:
-		return SecretEnv(r)
+		return SecretEnv(r, nil)
 	case network.Summary:
-		return NetworkEnv(r)
+		return NetworkEnv(r, nil)
 	case volume.Volume:
-		return VolumeEnv(r)
+		return VolumeEnv(r, nil)
 	default:
 		return nil
 	}

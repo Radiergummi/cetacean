@@ -8,11 +8,10 @@ import { useSearchParam } from "../hooks/useSearchParam";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { api } from "../api/client";
 import type { Node } from "../api/types";
-import { SearchInput } from "../components/search";
+import ListToolbar from "../components/ListToolbar";
 import PageHeader from "../components/PageHeader";
 import DataTable, { type Column } from "../components/DataTable";
 import SortIndicator from "../components/SortIndicator";
-import ViewToggle from "../components/ViewToggle";
 import TaskStatusBadge from "../components/TaskStatusBadge";
 import ResourceCard from "../components/ResourceCard";
 import { ResourceGauge, Sparkline, NodeResourceGauges } from "../components/metrics";
@@ -134,10 +133,7 @@ export default function NodeList() {
           </ErrorBoundary>
         </div>
       )}
-      <div className="flex items-stretch gap-3 mb-4">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search nodes..." />
-        <ViewToggle mode={viewMode} onChange={setViewMode} />
-      </div>
+      <ListToolbar search={search} onSearchChange={setSearch} placeholder="Search nodes..." viewMode={viewMode} onViewModeChange={setViewMode} />
       {nodes.length === 0 ? (
         <EmptyState message={search ? "No nodes match your search" : "No nodes found"} />
       ) : viewMode === "table" ? (

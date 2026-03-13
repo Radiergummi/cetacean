@@ -25,7 +25,7 @@ func TestHistory_Append(t *testing.T) {
 
 func TestHistory_RingOverflow(t *testing.T) {
 	h := NewHistory(3)
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		h.Append(HistoryEntry{Type: "service", Action: "update", Name: names[i]})
 	}
 
@@ -83,7 +83,7 @@ func TestHistory_FilterByResourceID(t *testing.T) {
 
 func TestHistory_Limit(t *testing.T) {
 	h := NewHistory(100)
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		h.Append(HistoryEntry{Type: "service", Name: "x"})
 	}
 

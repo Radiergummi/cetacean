@@ -8,13 +8,13 @@ import DiskUsageSection from "../components/DiskUsageSection";
 import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
+import { LabelSection, MetadataGrid } from "../components/data";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import { MetricsPanel, NodeResourceGauges } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import TasksTable from "../components/TasksTable";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
-import { LabelSection } from "../components/data";
 import { formatBytes } from "../lib/formatBytes";
 
 export default function NodeDetail() {
@@ -78,7 +78,7 @@ export default function NodeDetail() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <MetadataGrid>
         <InfoCard label="Role" value={node.Spec.Role} />
         <InfoCard label="Status" value={node.Status.State} />
         <InfoCard label="Availability" value={node.Spec.Availability} />
@@ -100,7 +100,7 @@ export default function NodeDetail() {
             <InfoCard label="Manager Address" value={node.ManagerStatus.Addr} />
           </>
         )}
-      </div>
+      </MetadataGrid>
 
       {node.Spec.Labels && Object.keys(node.Spec.Labels).length > 0 && (
         <LabelSection

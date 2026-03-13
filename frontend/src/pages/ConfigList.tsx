@@ -6,10 +6,9 @@ import { useViewMode } from "../hooks/useViewMode";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { api } from "../api/client";
 import type { Config } from "../api/types";
-import { SearchInput } from "../components/search";
+import ListToolbar from "../components/ListToolbar";
 import PageHeader from "../components/PageHeader";
 import SortIndicator from "../components/SortIndicator";
-import ViewToggle from "../components/ViewToggle";
 import ResourceCard from "../components/ResourceCard";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
@@ -67,10 +66,7 @@ export default function ConfigList() {
   return (
     <div>
       <PageHeader title="Configs" />
-      <div className="flex items-stretch gap-3 mb-4">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search configs..." />
-        <ViewToggle mode={viewMode} onChange={setViewMode} />
-      </div>
+      <ListToolbar search={search} onSearchChange={setSearch} placeholder="Search configs..." viewMode={viewMode} onViewModeChange={setViewMode} />
       {configs.length === 0 ? (
         <EmptyState message={search ? "No configs match your search" : "No configs found"} />
       ) : viewMode === "table" ? (

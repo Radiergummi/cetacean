@@ -7,7 +7,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 func TestRequestLogger(t *testing.T) {

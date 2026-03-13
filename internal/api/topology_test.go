@@ -8,7 +8,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
 
-	"cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 func TestHandleNetworkTopology(t *testing.T) {

@@ -25,10 +25,10 @@ export default function MonitoringStatus({ status, source }: Props) {
     if (dismissed) return null;
     return (
       <Banner
-        icon={<BarChart3 className="size-5 text-blue-400 shrink-0" />}
-        border="border-blue-500/30"
-        bg="bg-blue-500/10"
-        textColor="text-blue-200"
+        icon={<BarChart3 className="size-5 text-blue-600 dark:text-blue-400 shrink-0" />}
+        border="border-blue-300 dark:border-blue-500/30"
+        bg="bg-blue-50 dark:bg-blue-500/10"
+        textColor="text-blue-800 dark:text-blue-200"
         onDismiss={() => {
           localStorage.setItem(DISMISS_KEY, "true");
           setDismissed(true);
@@ -38,12 +38,12 @@ export default function MonitoringStatus({ status, source }: Props) {
           <strong>Monitoring not configured.</strong> Deploy the monitoring stack to enable CPU,
           memory, and disk metrics across your cluster.
         </p>
-        <pre className="mt-2 text-xs bg-blue-500/10 rounded px-2 py-1 overflow-x-auto">
+        <pre className="mt-2 text-xs bg-blue-100 dark:bg-blue-500/10 rounded px-2 py-1 overflow-x-auto max-w-fit">
           docker stack deploy -c docker-compose.monitoring.yml cetacean-monitoring
         </pre>
-        <p className="mt-1 text-xs text-blue-300/70">
+        <p className="mt-3 text-xs">
           Then set{" "}
-          <code className="rounded bg-blue-500/20 px-1 py-0.5 font-mono">
+          <code className="rounded bg-blue-100 dark:bg-blue-500/20 px-1 py-0.5 font-mono">
             CETACEAN_PROMETHEUS_URL
           </code>{" "}
           and restart Cetacean.
@@ -56,10 +56,10 @@ export default function MonitoringStatus({ status, source }: Props) {
   if (!status.prometheusReachable) {
     return (
       <Banner
-        icon={<AlertTriangle className="size-5 text-amber-400 shrink-0" />}
-        border="border-amber-500/30"
-        bg="bg-amber-500/10"
-        textColor="text-amber-200"
+        icon={<AlertTriangle className="size-5 text-amber-600 dark:text-amber-400 shrink-0" />}
+        border="border-amber-300 dark:border-amber-500/30"
+        bg="bg-amber-50 dark:bg-amber-500/10"
+        textColor="text-amber-800 dark:text-amber-200"
       >
         <p className="text-sm">
           <strong>Cannot reach Prometheus</strong> — metrics unavailable. Check that the Prometheus
@@ -94,10 +94,10 @@ export default function MonitoringStatus({ status, source }: Props) {
 
   return (
     <Banner
-      icon={<BarChart3 className="size-5 text-blue-400 shrink-0" />}
-      border="border-blue-500/30"
-      bg="bg-blue-500/10"
-      textColor="text-blue-200"
+      icon={<BarChart3 className="size-5 text-blue-600 dark:text-blue-400 shrink-0" />}
+      border="border-blue-300 dark:border-blue-500/30"
+      bg="bg-blue-50 dark:bg-blue-500/10"
+      textColor="text-blue-800 dark:text-blue-200"
       onDismiss={() => {
         localStorage.setItem(DISMISS_KEY, "true");
         setDismissed(true);
@@ -137,7 +137,7 @@ function Banner({
       {onDismiss && (
         <button
           onClick={onDismiss}
-          className="text-current opacity-40 hover:opacity-70 transition-opacity shrink-0"
+          className="text-current opacity-40 hover:opacity-70 transition-opacity shrink-0 cursor-pointer"
           aria-label="Dismiss"
         >
           <X className="size-4" />

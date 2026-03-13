@@ -1,9 +1,15 @@
 import { Search } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from "react";
 import SearchPalette from "./SearchPalette";
 
-export default function GlobalSearch() {
+export interface GlobalSearchHandle {
+  open: () => void;
+}
+
+const GlobalSearch = forwardRef<GlobalSearchHandle>(function GlobalSearch(_, ref) {
   const [open, setOpen] = useState(false);
+
+  useImperativeHandle(ref, () => ({ open: () => setOpen(true) }), []);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -29,10 +35,12 @@ export default function GlobalSearch() {
         <Search className="size-4 xl:size-3.5" />
         <span className="hidden xl:inline">Search…</span>
         <kbd className="hidden xl:inline-flex items-center rounded border bg-muted px-1 text-[10px] font-medium font-sans">
-          {navigator.platform?.includes("Mac") ? "⌘" : "Ctrl"} K
+          {navigator.platform?.includes("Mac") ? "⌘" : "Ctrl"} K
         </kbd>
       </button>
       {open && <SearchPalette onClose={close} />}
     </>
   );
-}
+});
+
+export default GlobalSearch;

@@ -27,19 +27,32 @@ describe("ThemeToggle", () => {
     expect(screen.getByRole("button")).toBeInTheDocument();
   });
 
-  it("toggles theme on click", () => {
+  it("cycles through light → dark → system on click", () => {
     render(<ThemeToggle />);
-    // Starts in light mode
-    expect(screen.getByTitle("Switch to dark mode")).toBeInTheDocument();
+    // Starts in system mode (no localStorage value)
+    expect(screen.getByTitle("Theme: System")).toBeInTheDocument();
 
+    // system → light
     fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByTitle("Theme: Light")).toBeInTheDocument();
+    expect(store.get("theme")).toBe("light");
+
+    // light → dark
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByTitle("Theme: Dark")).toBeInTheDocument();
     expect(document.documentElement.classList.contains("dark")).toBe(true);
     expect(store.get("theme")).toBe("dark");
+
+    // dark → system
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByTitle("Theme: System")).toBeInTheDocument();
+    expect(store.get("theme")).toBe("system");
   });
 
   it("reads initial theme from localStorage", () => {
     store.set("theme", "dark");
     render(<ThemeToggle />);
-    expect(screen.getByTitle("Switch to light mode")).toBeInTheDocument();
+    expect(screen.getByTitle("Theme: Dark")).toBeInTheDocument();
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
   });
 });

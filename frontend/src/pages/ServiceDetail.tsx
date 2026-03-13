@@ -5,7 +5,7 @@ import { api } from "../api/client";
 import type { HistoryEntry, Service, Task } from "../api/types";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
-import { ContainerImage, KVTable, ResourceLink, Timestamp } from "../components/data";
+import { ContainerImage, KVTable, MetadataGrid, ResourceLink, Timestamp } from "../components/data";
 import { formatNs } from "../lib/formatNs";
 import { escapePromQL } from "../lib/utils";
 import ErrorBoundary from "../components/ErrorBoundary";
@@ -107,19 +107,10 @@ export default function ServiceDetail() {
       />
 
       {/* Overview cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <MetadataGrid>
         <ContainerImage image={containerSpec.Image} />
         <ReplicaCard service={service} tasks={tasks} />
-        <InfoCard
-          label="Update Status"
-          value={
-            service.UpdateStatus
-              ? `${service.UpdateStatus.State} ${timeAgo(
-                  service.UpdateStatus.CompletedAt || service.UpdateStatus.StartedAt || "",
-                )}`
-              : undefined
-          }
-        />
+        <ServiceStatusCard service={service} />
         <ResourceLink
           label="Stack"
           name={labels["com.docker.stack.namespace"]}
@@ -127,7 +118,7 @@ export default function ServiceDetail() {
         />
         <Timestamp label="Created" date={service.CreatedAt} />
         <Timestamp label="Updated" date={service.UpdatedAt} />
-      </div>
+      </MetadataGrid>
 
       {/* Tasks */}
       <TasksTable tasks={tasks} variant="service" />
@@ -486,6 +477,61 @@ export default function ServiceDetail() {
         <LogViewer serviceId={id!} header="Logs" />
       </ErrorBoundary>
     </div>
+  );
+}
+
+const statusStyles: Record<string, string> = {
+  stable: "text-green-600 dark:text-green-400",
+  updating: "text-blue-600 dark:text-blue-400",
+  rollback_started: "text-amber-600 dark:text-amber-400",
+  paused: "text-amber-600 dark:text-amber-400",
+  rollback_paused: "text-amber-600 dark:text-amber-400",
+  rollback_completed: "text-amber-600 dark:text-amber-400",
+};
+
+const statusLabels: Record<string, string> = {
+  stable: "Stable",
+  updating: "Updating",
+  completed: "Stable",
+  paused: "Paused",
+  rollback_started: "Rolling back",
+  rollback_paused: "Rollback paused",
+  rollback_completed: "Rolled back",
+};
+
+function serviceStatusLabel(service: Service): { label: string; color: string } {
+  const state = service.UpdateStatus?.State;
+  if (!state || state === "completed") {
+    return { label: "Stable", color: statusStyles.stable };
+  }
+  return {
+    label: statusLabels[state] || state,
+    color: statusStyles[state] || statusStyles.stable,
+  };
+}
+
+function ServiceStatusCard({ service }: { service: Service }) {
+  const { label, color } = serviceStatusLabel(service);
+  const ts = service.UpdateStatus?.CompletedAt || service.UpdateStatus?.StartedAt;
+  const msg = service.UpdateStatus?.Message;
+
+  return (
+    <InfoCard
+      label="Status"
+      value={
+        <div className="flex flex-col">
+          <span className={`text-base font-medium ${color}`}>{label}</span>
+          {ts && (
+            <span className="text-xs text-muted-foreground">{timeAgo(ts)}</span>
+          )}
+          {msg && label !== "Stable" && (
+            <span className="text-xs text-muted-foreground truncate" title={msg}>
+              {msg}
+            </span>
+          )}
+        </div>
+      }
+    />
   );
 }
 

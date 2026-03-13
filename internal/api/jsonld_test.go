@@ -96,7 +96,7 @@ func TestDetailResponse_DeterministicSerialization(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		got, err := json.Marshal(resp)
 		if err != nil {
 			t.Fatal(err)

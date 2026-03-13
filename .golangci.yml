@@ -4,6 +4,18 @@ linters:
   default: standard
   enable:
     - misspell
+    - bodyclose       # unclosed HTTP response bodies (Docker/Prometheus calls)
+    - noctx           # HTTP requests without context
+    - gosec           # security issues
+    - errorlint       # incorrect error wrapping/comparison (Go 1.13+)
+    - gocritic        # broad bug/perf/style checks
+    - fatcontext      # context.WithValue/Cancel in loops
+    - durationcheck   # duration multiplication bugs
+    - nilerr          # returning nil error when err != nil
+    - musttag         # missing struct tags in marshaled types
+    - canonicalheader # non-canonical HTTP header keys
+    - exhaustive      # non-exhaustive enum switches
+    - modernize       # suggests modern Go idioms
   settings:
     errcheck:
       exclude-functions:
@@ -17,11 +29,32 @@ linters:
         - (*net/http.Server).Shutdown
         - os.Unsetenv
         - (net/http.ResponseWriter).Write
+    exhaustive:
+      default-signifies-exhaustive: true
+    gosec:
+      excludes:
+        - G104  # unhandled errors — covered by errcheck with finer control
+        - G115  # integer overflow on uint64→int for Docker Replicas (bounded)
+        - G304  # file inclusion via variable — snapshot paths are from config
+        - G306  # WriteFile permissions in tests
+        - G704  # SSRF — Prometheus proxy URL comes from server config, not user input
+        - G705  # XSS — response body is server-generated JSON, not user content
+        - G706  # log injection — false positive on panic recovery logging
+    gocritic:
+      disabled-checks:
+        - ifElseChain  # stylistic, not a bug
+  exclusions:
+    presets:
+      - std-error-handling
+      - common-false-positives
+    rules:
+      - path: '(.+)_test\.go'
+        linters:
+          - noctx    # httptest.NewRequest without context is fine in tests
+          - musttag  # test-only structs don't need json tags
+    paths:
+      - frontend
 
 formatters:
   enable:
     - gofmt
-
-issues:
-  exclude-dirs:
-    - frontend

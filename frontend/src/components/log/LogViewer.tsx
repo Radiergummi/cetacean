@@ -2,7 +2,6 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
-  ChevronRight,
   Copy,
   Download,
   FileText,
@@ -16,6 +15,7 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SectionToggle, useSectionCollapse } from "../CollapsibleSection";
 import { Spinner } from "../Spinner";
 import { LogTable } from "./LogTable";
 import type { LogLine } from "./log-utils";
@@ -35,7 +35,9 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
   const logId = (serviceId || taskId)!;
   const isTask = !!taskId;
 
-  const [collapsed, setCollapsed] = useState(false);
+  const { open, toggle: toggleCollapse } = useSectionCollapse(
+    header ? String(header) : "Logs",
+  );
   const [wrapLines, setWrapLines] = useState(false);
   const [streamFilter, setStreamFilter] = useState<"all" | "stdout" | "stderr">("all");
   const [pinnedLines, setPinnedLines] = useState<LogLine[]>([]);
@@ -115,21 +117,16 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
   }, [formatLogs, logId]);
 
   const toggle = header ? (
-    <button
-      type="button"
-      onClick={() => setCollapsed((previous) => !previous)}
+    <SectionToggle
+      title={header}
+      open={open}
+      onToggle={toggleCollapse}
       className="flex items-center gap-1.5 text-sm font-medium uppercase tracking-wider text-muted-foreground
             hover:text-foreground transition-colors cursor-pointer mr-auto"
-    >
-      <ChevronRight
-        data-open={!collapsed || undefined}
-        className="h-4 w-4 transition-transform data-open:rotate-90"
-      />
-      {header}
-    </button>
+    />
   ) : null;
 
-  if (collapsed) {
+  if (!open) {
     return <div className="min-h-8 flex items-center">{toggle}</div>;
   }
 

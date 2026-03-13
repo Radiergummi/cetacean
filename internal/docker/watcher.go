@@ -12,7 +12,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
 
-	"cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 // DockerClient abstracts the Docker API methods used by the Watcher.
@@ -266,10 +266,7 @@ func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced
 	close(work)
 
 	var wg sync.WaitGroup
-	workers := workerCount
-	if len(batch) < workers {
-		workers = len(batch)
-	}
+	workers := min(len(batch), workerCount)
 	for range workers {
 		wg.Go(func() {
 			for key := range work {
@@ -281,7 +278,7 @@ func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced
 }
 
 func (w *Watcher) applyRemove(key eventKey) {
-	switch key.resourceType {
+	switch key.resourceType { //nolint:exhaustive // only swarm resource types are relevant
 	case events.NodeEventType:
 		w.store.DeleteNode(key.id)
 	case events.ServiceEventType:

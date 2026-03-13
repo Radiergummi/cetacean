@@ -30,7 +30,7 @@ func etagMatch(header, etag string) bool {
 	opaqueTag := strings.TrimPrefix(etag, `"`)
 	opaqueTag = strings.TrimSuffix(opaqueTag, `"`)
 
-	for _, candidate := range strings.Split(header, ",") {
+	for candidate := range strings.SplitSeq(header, ",") {
 		candidate = strings.TrimSpace(candidate)
 		// Strip weak prefix if present.
 		candidate = strings.TrimPrefix(candidate, "W/")

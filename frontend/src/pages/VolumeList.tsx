@@ -9,9 +9,8 @@ import { SkeletonTable } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import ResourceCard from "../components/ResourceCard";
 import ResourceName from "../components/ResourceName";
-import { SearchInput } from "../components/search";
+import ListToolbar from "../components/ListToolbar";
 import SortIndicator from "../components/SortIndicator";
-import ViewToggle from "../components/ViewToggle";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
@@ -69,10 +68,7 @@ export default function VolumeList() {
   return (
     <div>
       <PageHeader title="Volumes" />
-      <div className="flex items-stretch gap-3 mb-4">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search volumes..." />
-        <ViewToggle mode={viewMode} onChange={setViewMode} />
-      </div>
+      <ListToolbar search={search} onSearchChange={setSearch} placeholder="Search volumes..." viewMode={viewMode} onViewModeChange={setViewMode} />
       {volumes.length === 0 ? (
         <EmptyState message={search ? "No volumes match your search" : "No volumes found"} />
       ) : viewMode === "table" ? (

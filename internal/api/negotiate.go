@@ -51,7 +51,7 @@ func negotiate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Vary", "Accept")
 
-		ct := ContentTypeJSON
+		var ct ContentType
 		path := r.URL.Path
 
 		// Extension suffix takes priority over Accept header.
@@ -144,10 +144,10 @@ func parseAccept(accept string) ContentType {
 		// Split media type from parameters (;q=...)
 		mediaType := part
 		q := 1.0
-		if idx := strings.Index(part, ";"); idx != -1 {
-			mediaType = strings.TrimSpace(part[:idx])
-			params := part[idx+1:]
-			for _, param := range strings.Split(params, ";") {
+		if before, after, ok := strings.Cut(part, ";"); ok {
+			mediaType = strings.TrimSpace(before)
+			params := after
+			for param := range strings.SplitSeq(params, ";") {
 				param = strings.TrimSpace(param)
 				if strings.HasPrefix(param, "q=") {
 					if v, err := strconv.ParseFloat(param[2:], 64); err == nil {

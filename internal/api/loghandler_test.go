@@ -13,8 +13,8 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
-	"cetacean/internal/cache"
-	"cetacean/internal/docker"
+	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/docker"
 )
 
 // mockLogStreamer returns pre-built Docker multiplex frames.
@@ -126,9 +126,9 @@ func TestHandleServiceLogs_SSE(t *testing.T) {
 
 	// Parse first event — extract data line
 	var line LogLine
-	for _, raw := range strings.Split(events[0], "\n") {
-		if strings.HasPrefix(raw, "data: ") {
-			if err := json.Unmarshal([]byte(strings.TrimPrefix(raw, "data: ")), &line); err != nil {
+	for raw := range strings.SplitSeq(events[0], "\n") {
+		if after, ok := strings.CutPrefix(raw, "data: "); ok {
+			if err := json.Unmarshal([]byte(after), &line); err != nil {
 				t.Fatal(err)
 			}
 		}

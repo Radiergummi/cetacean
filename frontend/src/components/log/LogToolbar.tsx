@@ -1,4 +1,3 @@
-import type React from "react";
 import { useState, useEffect, useRef } from "react";
 import { X, Clock, ChevronDown } from "lucide-react";
 import type { TimeRange, Level } from "./log-utils";
@@ -192,26 +191,4 @@ export function StreamFilterToggle({
   );
 }
 
-export function ToolbarButton({
-  onClick,
-  title,
-  icon,
-  active,
-}: {
-  onClick: () => void;
-  title: string;
-  icon: React.ReactNode;
-  active?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      aria-pressed={active || undefined}
-      className="h-8 w-8 flex items-center justify-center rounded-md border border-border bg-background hover:bg-muted aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:border-primary"
-    >
-      {icon}
-    </button>
-  );
-}
+export { IconButton as ToolbarButton } from "../IconButton";

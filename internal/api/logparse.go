@@ -61,7 +61,7 @@ func readDockerLogFrames(r io.Reader, emit func(LogLine)) error {
 		}
 
 		raw := strings.TrimRight(string(payload), "\n")
-		for _, line := range strings.Split(raw, "\n") {
+		for line := range strings.SplitSeq(raw, "\n") {
 			if line == "" {
 				continue
 			}
@@ -115,18 +115,18 @@ func parseDetails(line string) (map[string]string, string) {
 
 	// Find the end of the details section: first space followed by a timestamp
 	// or message content.
-	spaceIdx := strings.IndexByte(line, ' ')
-	if spaceIdx < 0 {
+	before, after, ok := strings.Cut(line, " ")
+	if !ok {
 		return nil, line
 	}
 
 	attrs := make(map[string]string)
-	for _, pair := range strings.Split(line[:spaceIdx], ",") {
-		eq := strings.IndexByte(pair, '=')
-		if eq < 0 {
+	for pair := range strings.SplitSeq(before, ",") {
+		before, after, ok := strings.Cut(pair, "=")
+		if !ok {
 			continue
 		}
-		key, val := pair[:eq], pair[eq+1:]
+		key, val := before, after
 		if short, ok := detailKeyMap[key]; ok {
 			attrs[short] = val
 		} else {
@@ -136,7 +136,7 @@ func parseDetails(line string) (map[string]string, string) {
 	if len(attrs) == 0 {
 		return nil, line
 	}
-	return attrs, line[spaceIdx+1:]
+	return attrs, after
 }
 
 // StreamDockerLogs reads Docker multiplexed log frames and sends parsed lines to ch.

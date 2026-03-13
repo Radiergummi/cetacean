@@ -1,4 +1,4 @@
-module cetacean
+module github.com/radiergummi/cetacean
 
 go 1.26.1
 

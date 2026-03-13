@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { DiskUsageSummary } from "../api/types";
 import { formatBytes } from "../lib/formatBytes";
-import SectionHeader from "./data/SectionHeader";
+import CollapsibleSection from "./CollapsibleSection";
 
 const typeLabels: Record<string, string> = {
   images: "Images",
@@ -146,9 +146,8 @@ export default function DiskUsageSection({ nodeId }: { nodeId?: string }) {
   }
 
   return (
-    <div>
-      <SectionHeader title="Docker Disk Usage" />
+    <CollapsibleSection title="Docker Disk Usage">
       {data ? <DiskUsageTable data={data} /> : <DiskUsageLoading />}
-    </div>
+    </CollapsibleSection>
   );
 }

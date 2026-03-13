@@ -1,5 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { type ReactNode, type RefObject, useRef } from "react";
+import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from "react";
 
 interface Column<T> {
   header: ReactNode;
@@ -19,20 +19,28 @@ interface Props<T> {
 const VIRTUAL_THRESHOLD = 100;
 const ROW_HEIGHT_ESTIMATE = 48;
 
-function PlainBody<T>({ columns, data, keyFn, rowClassName, onRowClick }: Props<T>) {
+function PlainBody<T>({
+  columns,
+  data,
+  keyFn,
+  rowClassName,
+  onRowClick,
+  selectedIndex,
+}: Props<T> & { selectedIndex: number }) {
   return (
     <tbody>
-      {data.map((item) => (
+      {data.map((item, index) => (
         <tr
           key={keyFn(item)}
           data-clickable={onRowClick ? "" : undefined}
-          className={`border-b last:border-b-0 data-clickable:cursor-pointer data-clickable:hover:bg-muted/50 ${
+          data-selected={index === selectedIndex || undefined}
+          className={`border-b last:border-b-0 data-clickable:cursor-pointer data-clickable:hover:bg-muted/50 data-selected:bg-accent data-selected:text-accent-foreground ${
             rowClassName?.(item) ?? ""
           }`}
           onClick={onRowClick ? () => onRowClick(item) : undefined}
         >
-          {columns.map((column, index) => (
-            <td key={index} className={`p-3 text-sm ${column.className ?? ""}`}>
+          {columns.map((column, colIndex) => (
+            <td key={colIndex} className={`p-3 text-sm ${column.className ?? ""}`}>
               {column.cell(item)}
             </td>
           ))}
@@ -49,7 +57,8 @@ function VirtualBody<T>({
   rowClassName,
   onRowClick,
   scrollRef,
-}: Props<T> & { scrollRef: RefObject<HTMLDivElement | null> }) {
+  selectedIndex,
+}: Props<T> & { scrollRef: RefObject<HTMLDivElement | null>; selectedIndex: number }) {
   const virtualizer = useVirtualizer({
     count: data.length,
     getScrollElement: () => scrollRef.current,
@@ -59,6 +68,13 @@ function VirtualBody<T>({
 
   const virtualItems = virtualizer.getVirtualItems();
   const totalSize = virtualizer.getTotalSize();
+
+  // Scroll selected row into view
+  useEffect(() => {
+    if (selectedIndex >= 0) {
+      virtualizer.scrollToIndex(selectedIndex, { align: "auto" });
+    }
+  }, [selectedIndex, virtualizer]);
 
   return (
     <tbody>
@@ -75,12 +91,13 @@ function VirtualBody<T>({
             ref={virtualizer.measureElement}
             data-index={virtualRow.index}
             data-clickable={onRowClick ? "" : undefined}
+            data-selected={virtualRow.index === selectedIndex || undefined}
             data-last={virtualRow.index === data.length - 1 || undefined}
-            className={`border-b data-last:border-b-0 data-clickable:cursor-pointer data-clickable:hover:bg-muted/50 ${rowClassName?.(item) ?? ""}`}
+            className={`border-b data-last:border-b-0 data-clickable:cursor-pointer data-clickable:hover:bg-muted/50 data-selected:bg-accent data-selected:text-accent-foreground ${rowClassName?.(item) ?? ""}`}
             onClick={onRowClick ? () => onRowClick(item) : undefined}
           >
-            {columns.map((column, index) => (
-              <td key={index} className={`p-3 text-sm ${column.className ?? ""}`}>
+            {columns.map((column, colIndex) => (
+              <td key={colIndex} className={`p-3 text-sm ${column.className ?? ""}`}>
                 {column.cell(item)}
               </td>
             ))}
@@ -102,12 +119,53 @@ function VirtualBody<T>({
 export default function DataTable<T>({ columns, data, keyFn, rowClassName, onRowClick }: Props<T>) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const useVirtual = data.length > VIRTUAL_THRESHOLD;
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+
+  // Reset selection when data changes
+  useEffect(() => {
+    setSelectedIndex(-1);
+  }, [data]);
+
+  // Scroll selected plain row into view
+  useEffect(() => {
+    if (useVirtual || selectedIndex < 0) return;
+    const row = scrollRef.current?.querySelector(`tbody tr:nth-child(${selectedIndex + 1})`);
+    row?.scrollIntoView({ block: "nearest" });
+  }, [selectedIndex, useVirtual]);
+
+  const onKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      if (!data.length) return;
+
+      switch (event.key) {
+        case "ArrowDown":
+        case "j":
+          event.preventDefault();
+          setSelectedIndex((i) => Math.min(i + 1, data.length - 1));
+          break;
+        case "ArrowUp":
+        case "k":
+          event.preventDefault();
+          setSelectedIndex((i) => Math.max(i - 1, 0));
+          break;
+        case "Enter":
+          if (selectedIndex >= 0 && selectedIndex < data.length && onRowClick) {
+            event.preventDefault();
+            onRowClick(data[selectedIndex]);
+          }
+          break;
+      }
+    },
+    [data, selectedIndex, onRowClick],
+  );
 
   return (
     <div
       ref={scrollRef}
+      tabIndex={0}
       data-virtual={useVirtual || undefined}
-      className="overflow-x-auto rounded-lg border data-virtual:max-h-[calc(100vh-16rem)] data-virtual:overflow-y-auto"
+      className="overflow-x-auto rounded-lg border data-virtual:max-h-[calc(100vh-16rem)] data-virtual:overflow-y-auto outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+      onKeyDown={onKeyDown}
     >
       <table className="w-full">
         <thead className="sticky top-0 z-10 bg-background">
@@ -134,6 +192,7 @@ export default function DataTable<T>({ columns, data, keyFn, rowClassName, onRow
             rowClassName={rowClassName}
             onRowClick={onRowClick}
             scrollRef={scrollRef}
+            selectedIndex={selectedIndex}
           />
         ) : (
           <PlainBody
@@ -142,6 +201,7 @@ export default function DataTable<T>({ columns, data, keyFn, rowClassName, onRow
             keyFn={keyFn}
             rowClassName={rowClassName}
             onRowClick={onRowClick}
+            selectedIndex={selectedIndex}
           />
         )}
       </table>

@@ -31,7 +31,7 @@ func TestETagConditionalRequest(t *testing.T) {
 	data := map[string]string{"status": "ok"}
 
 	// First request: should get 200 + ETag header
-	r1 := httptest.NewRequest("GET", "/test", nil)
+	r1 := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
 	w1 := httptest.NewRecorder()
 	writeJSONWithETag(w1, r1, data)
 
@@ -47,7 +47,7 @@ func TestETagConditionalRequest(t *testing.T) {
 	}
 
 	// Second request with matching If-None-Match: should get 304 + empty body
-	r2 := httptest.NewRequest("GET", "/test", nil)
+	r2 := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
 	r2.Header.Set("If-None-Match", etag)
 	w2 := httptest.NewRecorder()
 	writeJSONWithETag(w2, r2, data)
@@ -67,7 +67,7 @@ func TestETagConditionalRequest(t *testing.T) {
 func TestETagMismatch(t *testing.T) {
 	data := map[string]string{"status": "ok"}
 
-	r := httptest.NewRequest("GET", "/test", nil)
+	r := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
 	r.Header.Set("If-None-Match", `"stale-etag-value"`)
 	w := httptest.NewRecorder()
 	writeJSONWithETag(w, r, data)
@@ -115,13 +115,13 @@ func TestETagConditionalMultiValue(t *testing.T) {
 	data := map[string]string{"status": "ok"}
 
 	// Get the ETag for this data.
-	r1 := httptest.NewRequest("GET", "/test", nil)
+	r1 := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
 	w1 := httptest.NewRecorder()
 	writeJSONWithETag(w1, r1, data)
 	etag := w1.Header().Get("ETag")
 
 	// Send If-None-Match with multiple ETags including the correct one.
-	r2 := httptest.NewRequest("GET", "/test", nil)
+	r2 := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
 	r2.Header.Set("If-None-Match", `"stale", `+etag+`, "other"`)
 	w2 := httptest.NewRecorder()
 	writeJSONWithETag(w2, r2, data)
@@ -135,13 +135,13 @@ func TestETagConditionalWeak(t *testing.T) {
 	data := map[string]string{"status": "ok"}
 
 	// Get the ETag.
-	r1 := httptest.NewRequest("GET", "/test", nil)
+	r1 := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
 	w1 := httptest.NewRecorder()
 	writeJSONWithETag(w1, r1, data)
 	etag := w1.Header().Get("ETag")
 
 	// Send weak version of the same ETag.
-	r2 := httptest.NewRequest("GET", "/test", nil)
+	r2 := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
 	r2.Header.Set("If-None-Match", "W/"+etag)
 	w2 := httptest.NewRecorder()
 	writeJSONWithETag(w2, r2, data)
@@ -154,7 +154,7 @@ func TestETagConditionalWeak(t *testing.T) {
 func TestETagConditionalWildcard(t *testing.T) {
 	data := map[string]string{"status": "ok"}
 
-	r := httptest.NewRequest("GET", "/test", nil)
+	r := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
 	r.Header.Set("If-None-Match", "*")
 	w := httptest.NewRecorder()
 	writeJSONWithETag(w, r, data)

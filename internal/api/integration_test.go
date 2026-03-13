@@ -12,14 +12,14 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
-	"cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 func setupIntegrationRouter(t *testing.T) http.Handler {
 	t.Helper()
 	c := cache.New(nil)
 	// Populate with enough data for pagination testing (default limit=50).
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		c.SetNode(swarm.Node{
 			ID:          fmt.Sprintf("node-%d", i),
 			Description: swarm.NodeDescription{Hostname: fmt.Sprintf("worker-%d", i)},

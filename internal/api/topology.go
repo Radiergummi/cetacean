@@ -66,22 +66,16 @@ func (h *Handlers) HandleNetworkTopology(w http.ResponseWriter, r *http.Request)
 	services := h.cache.ListServices()
 	networks := h.cache.ListNetworks()
 
-	// Build overlay network lookup.
-	overlayNets := make(map[string]TopoNetwork)
+	// Build overlay network ID set for fast filtering.
+	overlaySet := make(map[string]struct{}, len(networks))
 	for _, n := range networks {
 		if n.Driver == "overlay" {
-			overlayNets[n.ID] = TopoNetwork{
-				ID:     n.ID,
-				Name:   n.Name,
-				Driver: n.Driver,
-				Scope:  n.Scope,
-				Stack:  n.Labels["com.docker.stack.namespace"],
-			}
+			overlaySet[n.ID] = struct{}{}
 		}
 	}
 
-	// Build service nodes and track which overlay networks each service is on.
-	svcNetworks := make(map[string]map[string]struct{}) // serviceID -> set of overlay networkIDs
+	// Build service nodes and netServices (network → service list) in one pass.
+	netServices := make(map[string][]string)
 	nodes := make([]TopoServiceNode, 0, len(services))
 	for _, svc := range services {
 		replicas := replicaCount(svc)
@@ -108,7 +102,7 @@ func (h *Handlers) HandleNetworkTopology(w http.ResponseWriter, r *http.Request)
 
 		var networkAliases map[string][]string
 		for _, na := range svc.Spec.TaskTemplate.Networks {
-			if _, ok := overlayNets[na.Target]; ok && len(na.Aliases) > 0 {
+			if _, ok := overlaySet[na.Target]; ok && len(na.Aliases) > 0 {
 				if networkAliases == nil {
 					networkAliases = make(map[string][]string)
 				}
@@ -128,42 +122,46 @@ func (h *Handlers) HandleNetworkTopology(w http.ResponseWriter, r *http.Request)
 			NetworkAliases: networkAliases,
 		})
 
-		nets := make(map[string]struct{})
+		// Build netServices directly — no intermediate svcNetworks map.
 		for _, vip := range svc.Endpoint.VirtualIPs {
-			if _, ok := overlayNets[vip.NetworkID]; ok {
-				nets[vip.NetworkID] = struct{}{}
+			if _, ok := overlaySet[vip.NetworkID]; ok {
+				netServices[vip.NetworkID] = append(netServices[vip.NetworkID], svc.ID)
 			}
 		}
-		svcNetworks[svc.ID] = nets
 	}
 
-	// Build edges for each pair of services sharing overlay networks.
-	edges := make([]TopoEdge, 0)
-	for i := 0; i < len(services); i++ {
-		for j := i + 1; j < len(services); j++ {
-			a, b := services[i].ID, services[j].ID
-			var shared []string
-			for netID := range svcNetworks[a] {
-				if _, ok := svcNetworks[b][netID]; ok {
-					shared = append(shared, netID)
+	// Build edges: for each network, emit an edge for every pair of services.
+	// Deduplicate with a set keyed by the ordered pair.
+	type edgeKey struct{ a, b string }
+	edgeMap := make(map[edgeKey][]string)
+	for netID, svcs := range netServices {
+		for i := range svcs {
+			for j := i + 1; j < len(svcs); j++ {
+				a, b := svcs[i], svcs[j]
+				if a > b {
+					a, b = b, a
 				}
-			}
-			if len(shared) > 0 {
-				edges = append(edges, TopoEdge{Source: a, Target: b, Networks: shared})
+				edgeMap[edgeKey{a, b}] = append(edgeMap[edgeKey{a, b}], netID)
 			}
 		}
+	}
+	edges := make([]TopoEdge, 0, len(edgeMap))
+	for k, nets := range edgeMap {
+		edges = append(edges, TopoEdge{Source: k.a, Target: k.b, Networks: nets})
 	}
 
-	// Collect only overlay networks that are actually referenced.
-	usedNets := make(map[string]struct{})
-	for _, nets := range svcNetworks {
-		for id := range nets {
-			usedNets[id] = struct{}{}
+	// Build TopoNetwork only for networks that have services attached.
+	topoNetworks := make([]TopoNetwork, 0, len(netServices))
+	for _, n := range networks {
+		if _, used := netServices[n.ID]; used {
+			topoNetworks = append(topoNetworks, TopoNetwork{
+				ID:     n.ID,
+				Name:   n.Name,
+				Driver: n.Driver,
+				Scope:  n.Scope,
+				Stack:  n.Labels["com.docker.stack.namespace"],
+			})
 		}
-	}
-	topoNetworks := make([]TopoNetwork, 0, len(usedNets))
-	for id := range usedNets {
-		topoNetworks = append(topoNetworks, overlayNets[id])
 	}
 
 	writeJSONWithETag(w, r, NetworkTopology{
@@ -229,8 +227,8 @@ func replicaCount(svc swarm.Service) int {
 }
 
 func stripImageDigest(image string) string {
-	if i := strings.Index(image, "@sha256:"); i != -1 {
-		return image[:i]
+	if before, _, ok := strings.Cut(image, "@sha256:"); ok {
+		return before
 	}
 	return image
 }

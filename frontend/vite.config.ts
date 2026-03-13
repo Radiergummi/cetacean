@@ -16,6 +16,12 @@ export default defineConfig({
       "^/(nodes|services|tasks|configs|secrets|networks|volumes|stacks|search|events|topology|cluster|swarm|plugins|disk-usage|history|notifications|api|-|debug)":
         {
           target: "http://localhost:9000",
+          bypass(req) {
+            // Let the SPA handle browser navigations (Accept: text/html)
+            if (req.headers.accept?.includes("text/html")) {
+              return "/index.html";
+            }
+          },
         },
     },
   },

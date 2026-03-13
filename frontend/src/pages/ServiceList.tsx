@@ -6,12 +6,11 @@ import { useSortParams } from "../hooks/useSort";
 import { useViewMode } from "../hooks/useViewMode";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { api } from "../api/client";
-import type { ServiceListItem } from "../api/types";
-import { SearchInput } from "../components/search";
+import type { Service, ServiceListItem } from "../api/types";
+import ListToolbar from "../components/ListToolbar";
 import PageHeader from "../components/PageHeader";
 import DataTable, { type Column } from "../components/DataTable";
 import SortIndicator from "../components/SortIndicator";
-import ViewToggle from "../components/ViewToggle";
 import ResourceCard from "../components/ResourceCard";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
@@ -86,8 +85,8 @@ export default function ServiceList() {
       },
     },
     {
-      header: "Update Status",
-      cell: (svc) => svc.UpdateStatus?.State || "\u2014",
+      header: "Status",
+      cell: (svc) => <ServiceStatusBadge service={svc} />,
     },
   ];
 
@@ -103,10 +102,7 @@ export default function ServiceList() {
   return (
     <div>
       <PageHeader title="Services" />
-      <div className="flex items-stretch gap-3 mb-4">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search services..." />
-        <ViewToggle mode={viewMode} onChange={setViewMode} />
-      </div>
+      <ListToolbar search={search} onSearchChange={setSearch} placeholder="Search services..." viewMode={viewMode} onViewModeChange={setViewMode} />
       {services.length === 0 ? (
         <EmptyState message={search ? "No services match your search" : "No services found"} />
       ) : viewMode === "table" ? (
@@ -132,7 +128,7 @@ export default function ServiceList() {
                     desired != null && (
                       <ReplicaHealth running={svc.RunningTasks} desired={desired} />
                     ),
-                    svc.UpdateStatus?.State,
+                    <ServiceStatusBadge service={svc} />,
                   ].filter(Boolean) as React.ReactNode[]
                 }
               />
@@ -142,4 +138,30 @@ export default function ServiceList() {
       )}
     </div>
   );
+}
+
+const statusLabels: Record<string, string> = {
+  updating: "Updating",
+  completed: "Stable",
+  paused: "Paused",
+  rollback_started: "Rolling back",
+  rollback_paused: "Rollback paused",
+  rollback_completed: "Rolled back",
+};
+
+const statusColors: Record<string, string> = {
+  stable: "text-green-600 dark:text-green-400",
+  updating: "text-blue-600 dark:text-blue-400",
+  rollback_started: "text-amber-600 dark:text-amber-400",
+  paused: "text-amber-600 dark:text-amber-400",
+  rollback_paused: "text-amber-600 dark:text-amber-400",
+  rollback_completed: "text-amber-600 dark:text-amber-400",
+};
+
+function ServiceStatusBadge({ service }: { service: Pick<Service, "UpdateStatus"> }) {
+  const state = service.UpdateStatus?.State;
+  const label = !state || state === "completed" ? "Stable" : (statusLabels[state] || state);
+  const color = statusColors[state || "stable"] || statusColors.stable;
+
+  return <span className={`text-sm font-medium ${color}`}>{label}</span>;
 }

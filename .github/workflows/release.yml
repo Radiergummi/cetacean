@@ -45,9 +45,9 @@ jobs:
           COMMIT: ${{ github.sha }}
         run: |
           go build -ldflags "-s -w \
-            -X cetacean/internal/version.Version=$VERSION \
-            -X cetacean/internal/version.Commit=${COMMIT::8} \
-            -X cetacean/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -X github.com/radiergummi/cetacean/internal/version.Version=$VERSION \
+            -X github.com/radiergummi/cetacean/internal/version.Commit=${COMMIT::8} \
+            -X github.com/radiergummi/cetacean/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             -o "cetacean-${{ matrix.os }}-${{ matrix.arch }}" .
       - uses: actions/upload-artifact@v7
         with:
@@ -123,9 +123,27 @@ jobs:
       - name: Generate checksums
         run: sha256sum cetacean-* > checksums.txt
 
+      - name: Extract changelog for this version
+        id: changelog
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          # Extract the section for this version from CHANGELOG.md
+          awk "/^## \\[${VERSION}\\]/{found=1; next} /^## \\[/{if(found) exit} found" CHANGELOG.md > release-notes.md
+          # Fall back to auto-generated notes if no section found
+          if [ ! -s release-notes.md ]; then
+            echo "auto" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" --generate-notes cetacean-* checksums.txt
+        run: |
+          if [ -s release-notes.md ]; then
+            gh release create "$TAG" --notes-file release-notes.md cetacean-* checksums.txt
+          else
+            gh release create "$TAG" --generate-notes cetacean-* checksums.txt
+          fi

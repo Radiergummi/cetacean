@@ -3,6 +3,7 @@ package cache
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
@@ -10,7 +11,7 @@ import (
 )
 
 func populateCache(c *Cache, n int) {
-	for i := 0; i < n; i++ {
+	for i := range n {
 		stack := fmt.Sprintf("stack-%d", i%5)
 		id := fmt.Sprintf("id-%d", i)
 
@@ -256,6 +257,198 @@ func BenchmarkSnapshotParallel(b *testing.B) {
 			})
 		})
 	}
+}
+
+// --- Set operations (remaining resource types) ---
+
+func BenchmarkSetConfig(b *testing.B) {
+	cfg := swarm.Config{
+		ID: "bench-cfg",
+		Spec: swarm.ConfigSpec{
+			Annotations: swarm.Annotations{
+				Name:   "bench-cfg",
+				Labels: map[string]string{"com.docker.stack.namespace": "bench-stack"},
+			},
+		},
+	}
+	for _, n := range sizes {
+		c := newPopulatedCache(n)
+		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
+			for b.Loop() {
+				c.SetConfig(cfg)
+			}
+		})
+	}
+}
+
+func BenchmarkSetSecret(b *testing.B) {
+	sec := swarm.Secret{
+		ID: "bench-sec",
+		Spec: swarm.SecretSpec{
+			Annotations: swarm.Annotations{
+				Name:   "bench-sec",
+				Labels: map[string]string{"com.docker.stack.namespace": "bench-stack"},
+			},
+		},
+	}
+	for _, n := range sizes {
+		c := newPopulatedCache(n)
+		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
+			for b.Loop() {
+				c.SetSecret(sec)
+			}
+		})
+	}
+}
+
+func BenchmarkSetNetwork(b *testing.B) {
+	net := network.Summary{
+		ID:     "bench-net",
+		Name:   "bench-net",
+		Labels: map[string]string{"com.docker.stack.namespace": "bench-stack"},
+	}
+	for _, n := range sizes {
+		c := newPopulatedCache(n)
+		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
+			for b.Loop() {
+				c.SetNetwork(net)
+			}
+		})
+	}
+}
+
+func BenchmarkSetVolume(b *testing.B) {
+	vol := volume.Volume{
+		Name:   "bench-vol",
+		Labels: map[string]string{"com.docker.stack.namespace": "bench-stack"},
+	}
+	for _, n := range sizes {
+		c := newPopulatedCache(n)
+		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
+			for b.Loop() {
+				c.SetVolume(vol)
+			}
+		})
+	}
+}
+
+// --- ListStackSummaries ---
+
+func BenchmarkListStackSummaries(b *testing.B) {
+	for _, n := range sizes {
+		c := newPopulatedCache(n)
+		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
+			for b.Loop() {
+				c.ListStackSummaries()
+			}
+		})
+	}
+}
+
+// --- ReplaceAll (full sync) ---
+
+func BenchmarkReplaceAll(b *testing.B) {
+	for _, n := range sizes {
+		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
+			data := FullSyncData{
+				HasNodes: true, HasServices: true, HasTasks: true,
+				HasConfigs: true, HasSecrets: true,
+				HasNetworks: true, HasVolumes: true,
+			}
+			for i := range n {
+				stack := fmt.Sprintf("stack-%d", i%5)
+				id := fmt.Sprintf("id-%d", i)
+				data.Nodes = append(data.Nodes, swarm.Node{ID: id})
+				data.Services = append(data.Services, swarm.Service{
+					ID: id,
+					Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{
+						Name:   fmt.Sprintf("svc-%d", i),
+						Labels: map[string]string{"com.docker.stack.namespace": stack},
+					}},
+				})
+				data.Tasks = append(data.Tasks, swarm.Task{
+					ID: id, ServiceID: fmt.Sprintf("id-%d", i%10), NodeID: fmt.Sprintf("id-%d", i%10),
+				})
+				data.Configs = append(data.Configs, swarm.Config{
+					ID: id,
+					Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{
+						Name:   fmt.Sprintf("cfg-%d", i),
+						Labels: map[string]string{"com.docker.stack.namespace": stack},
+					}},
+				})
+				data.Secrets = append(data.Secrets, swarm.Secret{
+					ID: id,
+					Spec: swarm.SecretSpec{Annotations: swarm.Annotations{
+						Name:   fmt.Sprintf("sec-%d", i),
+						Labels: map[string]string{"com.docker.stack.namespace": stack},
+					}},
+				})
+				data.Networks = append(data.Networks, network.Summary{
+					ID: id, Name: fmt.Sprintf("net-%d", i),
+					Labels: map[string]string{"com.docker.stack.namespace": stack},
+				})
+				data.Volumes = append(data.Volumes, volume.Volume{
+					Name:   fmt.Sprintf("vol-%d", i),
+					Labels: map[string]string{"com.docker.stack.namespace": stack},
+				})
+			}
+
+			c := New(nil)
+			b.ResetTimer()
+			for b.Loop() {
+				c.ReplaceAll(data)
+			}
+		})
+	}
+}
+
+// --- History ---
+
+func BenchmarkHistoryAppend(b *testing.B) {
+	h := NewHistory(10000)
+	entry := HistoryEntry{
+		Type:       "service",
+		Action:     "update",
+		ResourceID: "svc-1",
+		Name:       "mystack_web",
+		Summary:    "service updated",
+		Timestamp:  time.Now(),
+	}
+	for b.Loop() {
+		h.Append(entry)
+	}
+}
+
+func BenchmarkHistoryList(b *testing.B) {
+	h := NewHistory(10000)
+	// Fill the ring buffer.
+	for i := range 10000 {
+		h.Append(HistoryEntry{
+			Type:       []string{"service", "task", "node", "config"}[i%4],
+			Action:     "update",
+			ResourceID: fmt.Sprintf("id-%d", i%100),
+			Name:       fmt.Sprintf("resource-%d", i),
+		})
+	}
+
+	b.Run("unfiltered", func(b *testing.B) {
+		q := HistoryQuery{Limit: 50}
+		for b.Loop() {
+			h.List(q)
+		}
+	})
+	b.Run("by_type", func(b *testing.B) {
+		q := HistoryQuery{Type: "service", Limit: 50}
+		for b.Loop() {
+			h.List(q)
+		}
+	})
+	b.Run("by_resource", func(b *testing.B) {
+		q := HistoryQuery{Type: "service", ResourceID: "id-0", Limit: 50}
+		for b.Loop() {
+			h.List(q)
+		}
+	})
 }
 
 // --- Concurrent read + write ---

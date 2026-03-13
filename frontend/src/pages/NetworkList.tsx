@@ -6,10 +6,9 @@ import { useViewMode } from "../hooks/useViewMode";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { api } from "../api/client";
 import type { Network } from "../api/types";
-import { SearchInput } from "../components/search";
+import ListToolbar from "../components/ListToolbar";
 import PageHeader from "../components/PageHeader";
 import SortIndicator from "../components/SortIndicator";
-import ViewToggle from "../components/ViewToggle";
 import ResourceCard from "../components/ResourceCard";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
@@ -66,10 +65,7 @@ export default function NetworkList() {
   return (
     <div>
       <PageHeader title="Networks" />
-      <div className="flex items-stretch gap-3 mb-4">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search networks..." />
-        <ViewToggle mode={viewMode} onChange={setViewMode} />
-      </div>
+      <ListToolbar search={search} onSearchChange={setSearch} placeholder="Search networks..." viewMode={viewMode} onViewModeChange={setViewMode} />
       {networks.length === 0 ? (
         <EmptyState message={search ? "No networks match your search" : "No networks found"} />
       ) : viewMode === "table" ? (

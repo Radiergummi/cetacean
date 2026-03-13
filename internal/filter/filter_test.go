@@ -7,7 +7,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
 
-	"cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 func TestCompile_Valid(t *testing.T) {
@@ -99,7 +99,7 @@ func TestNodeEnv(t *testing.T) {
 		Availability: swarm.NodeAvailabilityActive,
 	}, Status: swarm.NodeStatus{State: swarm.NodeStateReady}}
 	n.Description.Hostname = "manager-01"
-	env := NodeEnv(n)
+	env := NodeEnv(n, nil)
 
 	if env["id"] != "n1" {
 		t.Errorf("id=%v", env["id"])
@@ -132,7 +132,7 @@ func TestServiceEnv(t *testing.T) {
 			Mode: swarm.ServiceMode{Global: &swarm.GlobalService{}},
 		},
 	}
-	env := ServiceEnv(s)
+	env := ServiceEnv(s, nil)
 
 	if env["name"] != "web" {
 		t.Errorf("name=%v", env["name"])
@@ -152,7 +152,7 @@ func TestServiceEnv_Replicated(t *testing.T) {
 	s := swarm.Service{Spec: swarm.ServiceSpec{
 		Mode: swarm.ServiceMode{Replicated: &swarm.ReplicatedService{}},
 	}}
-	env := ServiceEnv(s)
+	env := ServiceEnv(s, nil)
 	if env["mode"] != "replicated" {
 		t.Errorf("mode=%v", env["mode"])
 	}
@@ -174,7 +174,7 @@ func TestTaskEnv(t *testing.T) {
 		},
 		DesiredState: swarm.TaskStateRunning,
 	}
-	env := TaskEnv(task)
+	env := TaskEnv(task, nil)
 
 	if env["state"] != "failed" {
 		t.Errorf("state=%v", env["state"])
@@ -201,7 +201,7 @@ func TestTaskEnv(t *testing.T) {
 
 func TestNetworkEnv(t *testing.T) {
 	n := network.Summary{ID: "n1", Name: "overlay_net", Driver: "overlay", Scope: "swarm"}
-	env := NetworkEnv(n)
+	env := NetworkEnv(n, nil)
 
 	if env["driver"] != "overlay" {
 		t.Errorf("driver=%v", env["driver"])
@@ -213,7 +213,7 @@ func TestNetworkEnv(t *testing.T) {
 
 func TestVolumeEnv(t *testing.T) {
 	v := volume.Volume{Name: "data", Driver: "local", Scope: "local"}
-	env := VolumeEnv(v)
+	env := VolumeEnv(v, nil)
 
 	if env["name"] != "data" {
 		t.Errorf("name=%v", env["name"])
@@ -229,7 +229,7 @@ func TestStackEnv(t *testing.T) {
 		Services: []string{"s1", "s2"},
 		Configs:  []string{"c1"},
 	}
-	env := StackEnv(s)
+	env := StackEnv(s, nil)
 
 	if env["name"] != "mystack" {
 		t.Errorf("name=%v", env["name"])
@@ -273,7 +273,7 @@ func TestResourceEnv_Dispatch(t *testing.T) {
 
 func TestConfigEnv(t *testing.T) {
 	c := swarm.Config{ID: "c1", Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "app-config"}}}
-	env := ConfigEnv(c)
+	env := ConfigEnv(c, nil)
 	if env["id"] != "c1" {
 		t.Errorf("id=%v", env["id"])
 	}
@@ -284,7 +284,7 @@ func TestConfigEnv(t *testing.T) {
 
 func TestSecretEnv(t *testing.T) {
 	s := swarm.Secret{ID: "s1", Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "tls-cert"}}}
-	env := SecretEnv(s)
+	env := SecretEnv(s, nil)
 	if env["id"] != "s1" {
 		t.Errorf("id=%v", env["id"])
 	}
@@ -301,7 +301,7 @@ func TestTaskEnv_NilContainerSpec(t *testing.T) {
 		Spec:   swarm.TaskSpec{ContainerSpec: nil},
 		Status: swarm.TaskStatus{State: swarm.TaskStateRunning, ContainerStatus: nil},
 	}
-	env := TaskEnv(task)
+	env := TaskEnv(task, nil)
 	if env["image"] != "" {
 		t.Errorf("image=%v, want empty", env["image"])
 	}
@@ -315,7 +315,7 @@ func TestServiceEnv_NilContainerSpec(t *testing.T) {
 		ID:   "s1",
 		Spec: swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{ContainerSpec: nil}},
 	}
-	env := ServiceEnv(s)
+	env := ServiceEnv(s, nil)
 	if env["image"] != "" {
 		t.Errorf("image=%v, want empty", env["image"])
 	}
@@ -328,7 +328,7 @@ func TestServiceEnv_NoStackLabel(t *testing.T) {
 			Annotations: swarm.Annotations{Name: "web", Labels: map[string]string{"other": "val"}},
 		},
 	}
-	env := ServiceEnv(s)
+	env := ServiceEnv(s, nil)
 	if env["stack"] != "" {
 		t.Errorf("stack=%v, want empty", env["stack"])
 	}

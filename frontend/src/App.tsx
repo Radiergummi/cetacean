@@ -1,11 +1,13 @@
 import { Menu, X } from "lucide-react";
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
-import { BrowserRouter, Link, Route, Routes, useLocation } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { BrowserRouter, Link, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import ConnectionStatus from "./components/ConnectionStatus";
 import ErrorBoundary from "./components/ErrorBoundary";
-import { GlobalSearch } from "./components/search";
+import { GlobalSearch, type GlobalSearchHandle } from "./components/search";
+import ShortcutsHelp from "./components/ShortcutsHelp";
 import ThemeToggle from "./components/ThemeToggle";
+import { useHotkeys } from "./hooks/useHotkeys";
 import { ConnectionProvider, SSE_EVENT_TYPES } from "./hooks/useResourceStream";
 import ClusterOverview from "./pages/ClusterOverview";
 import ConfigDetail from "./pages/ConfigDetail";
@@ -30,6 +32,28 @@ import VolumeList from "./pages/VolumeList";
 
 function Layout({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const navigate = useNavigate();
+  const searchRef = useRef<GlobalSearchHandle>(null);
+
+  useHotkeys({
+    "?": useCallback(() => setShortcutsOpen((o) => !o), []),
+    "/": useCallback(() => searchRef.current?.open(), []),
+    Escape: useCallback(() => {
+      if (shortcutsOpen) setShortcutsOpen(false);
+      else navigate(-1);
+    }, [shortcutsOpen, navigate]),
+    "g h": useCallback(() => navigate("/"), [navigate]),
+    "g n": useCallback(() => navigate("/nodes"), [navigate]),
+    "g s": useCallback(() => navigate("/services"), [navigate]),
+    "g k": useCallback(() => navigate("/stacks"), [navigate]),
+    "g c": useCallback(() => navigate("/configs"), [navigate]),
+    "g x": useCallback(() => navigate("/secrets"), [navigate]),
+    "g w": useCallback(() => navigate("/networks"), [navigate]),
+    "g v": useCallback(() => navigate("/volumes"), [navigate]),
+    "g i": useCallback(() => navigate("/swarm"), [navigate]),
+    "g t": useCallback(() => navigate("/topology"), [navigate]),
+  });
 
   return (
     <div className="min-h-screen bg-background">
@@ -52,7 +76,7 @@ function Layout({ children }: { children: React.ReactNode }) {
               </div>
 
               <ThemeToggle />
-              <GlobalSearch />
+              <GlobalSearch ref={searchRef} />
 
               <button
                 className="lg:hidden p-2 rounded-md hover:bg-muted"
@@ -76,6 +100,7 @@ function Layout({ children }: { children: React.ReactNode }) {
       <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 pb-48">
         <ErrorBoundary>{children}</ErrorBoundary>
       </main>
+      {shortcutsOpen && <ShortcutsHelp onClose={() => setShortcutsOpen(false)} />}
     </div>
   );
 }

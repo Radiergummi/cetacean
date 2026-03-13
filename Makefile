@@ -19,9 +19,9 @@ fmt-check:
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
-LDFLAGS := -X cetacean/internal/version.Version=$(VERSION) \
-           -X cetacean/internal/version.Commit=$(COMMIT) \
-           -X cetacean/internal/version.Date=$(DATE)
+LDFLAGS := -X github.com/radiergummi/cetacean/internal/version.Version=$(VERSION) \
+           -X github.com/radiergummi/cetacean/internal/version.Commit=$(COMMIT) \
+           -X github.com/radiergummi/cetacean/internal/version.Date=$(DATE)
 
 build:
 	cd frontend && npm run build

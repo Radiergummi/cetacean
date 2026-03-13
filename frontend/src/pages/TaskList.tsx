@@ -5,7 +5,7 @@ import { useSortParams } from "../hooks/useSort";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { api } from "../api/client";
 import type { Task } from "../api/types";
-import { SearchInput } from "../components/search";
+import ListToolbar from "../components/ListToolbar";
 import PageHeader from "../components/PageHeader";
 import DataTable, { type Column } from "../components/DataTable";
 import SortIndicator from "../components/SortIndicator";
@@ -94,9 +94,7 @@ export default function TaskList() {
   return (
     <div>
       <PageHeader title="Tasks" />
-      <div className="flex items-stretch gap-3 mb-4">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search tasks..." />
-      </div>
+      <ListToolbar search={search} onSearchChange={setSearch} placeholder="Search tasks..." />
       {tasks.length === 0 ? (
         <EmptyState message={search ? "No tasks match your search" : "No tasks found"} />
       ) : (

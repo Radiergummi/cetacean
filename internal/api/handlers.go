@@ -19,10 +19,10 @@ import (
 	"github.com/docker/docker/api/types/volume"
 	json "github.com/goccy/go-json"
 
-	"cetacean/internal/cache"
-	"cetacean/internal/docker"
-	"cetacean/internal/filter"
-	"cetacean/internal/version"
+	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/docker"
+	"github.com/radiergummi/cetacean/internal/filter"
+	"github.com/radiergummi/cetacean/internal/version"
 )
 
 const defaultLogLimit = 500
@@ -93,7 +93,7 @@ func (h *Handlers) HandleReady(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"status": "ready"})
 }
 
-func writeJSON(w http.ResponseWriter, v interface{}) {
+func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(v)
 }
@@ -105,16 +105,49 @@ func searchFilter[T any](items []T, query string, name func(T) string) []T {
 	q := strings.ToLower(query)
 	var filtered []T
 	for _, item := range items {
-		if strings.Contains(strings.ToLower(name(item)), q) {
+		if containsFold(name(item), q) {
 			filtered = append(filtered, item)
 		}
 	}
 	return filtered
 }
 
+// containsFold reports whether s contains substr using case-insensitive
+// comparison. substr must already be lowercased. Zero allocations.
+func containsFold(s, substrLower string) bool {
+	if len(substrLower) == 0 {
+		return true
+	}
+	if len(substrLower) > len(s) {
+		return false
+	}
+	for i := 0; i <= len(s)-len(substrLower); i++ {
+		if asciiToLower(s[i]) == substrLower[0] {
+			match := true
+			for j := 1; j < len(substrLower); j++ {
+				if asciiToLower(s[i+j]) != substrLower[j] {
+					match = false
+					break
+				}
+			}
+			if match {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func asciiToLower(c byte) byte {
+	if c >= 'A' && c <= 'Z' {
+		return c + 32
+	}
+	return c
+}
+
 const maxFilterLen = 512
 
-func exprFilter[T any](items []T, expr string, env func(T) map[string]any, w http.ResponseWriter, r *http.Request) ([]T, bool) {
+func exprFilter[T any](items []T, expr string, env func(T, map[string]any) map[string]any, w http.ResponseWriter, r *http.Request) ([]T, bool) {
 	if expr == "" {
 		return items, true
 	}
@@ -138,8 +171,10 @@ func exprFilter[T any](items []T, expr string, env func(T) map[string]any, w htt
 		return nil, false
 	}
 	var filtered []T
+	var m map[string]any
 	for _, item := range items {
-		ok, err := filter.Evaluate(prog, env(item))
+		m = env(item, m)
+		ok, err := filter.Evaluate(prog, m)
 		if err != nil {
 			writeProblemTyped(w, r, ProblemDetail{
 				Type:   "urn:cetacean:error:filter-invalid",
@@ -795,10 +830,7 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	// use a larger tail to ensure we fetch enough lines beyond the cursor.
 	tail := limit
 	if since != "" || until != "" {
-		tail = limit * 10
-		if tail > maxLogLimit {
-			tail = maxLogLimit
-		}
+		tail = min(limit*10, maxLogLimit)
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
@@ -1196,7 +1228,7 @@ type searchResult struct {
 
 func labelsMatch(labels map[string]string, q string) bool {
 	for k, v := range labels {
-		if strings.Contains(strings.ToLower(k), q) || strings.Contains(strings.ToLower(v), q) {
+		if containsFold(k, q) || containsFold(v, q) {
 			return true
 		}
 	}
@@ -1233,30 +1265,46 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		count   int
 	}
 
-	// Build service name lookup for tasks
+	// Fixed-size array indexed by search type for lock-free parallel writes.
+	const (
+		stServices = iota
+		stStacks
+		stNodes
+		stTasks
+		stConfigs
+		stSecrets
+		stNetworks
+		stVolumes
+		stCount
+	)
+	var allResults [stCount]typeResults
+
+	// Build service name lookup for tasks (needed by services + tasks searches).
 	services := h.cache.ListServices()
 	svcNames := make(map[string]string, len(services))
 	for _, s := range services {
 		svcNames[s.ID] = s.Spec.Name
 	}
 
-	var sections []typeResults
+	var wg sync.WaitGroup
+	wg.Add(stCount)
 
 	// Services
-	{
+	go func() {
+		defer wg.Done()
 		var matches []searchResult
 		count := 0
 		for _, s := range services {
-			hit := strings.Contains(strings.ToLower(s.Spec.Name), ql)
+			hit := containsFold(s.Spec.Name, ql)
 			if !hit && s.Spec.TaskTemplate.ContainerSpec != nil {
-				hit = strings.Contains(strings.ToLower(s.Spec.TaskTemplate.ContainerSpec.Image), ql)
+				hit = containsFold(s.Spec.TaskTemplate.ContainerSpec.Image, ql)
 			}
 			if !hit {
 				hit = labelsMatch(s.Spec.Labels, ql)
 			}
 			if hit {
 				count++
-				if limit == 0 || len(matches) < limit {
+				if len(matches) < limit {
 					detail := ""
 					if s.Spec.TaskTemplate.ContainerSpec != nil {
 						detail = s.Spec.TaskTemplate.ContainerSpec.Image
@@ -1287,20 +1335,19 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		if count > 0 {
-			sections = append(sections, typeResults{"services", matches, count})
-		}
-	}
+		allResults[stServices] = typeResults{"services", matches, count}
+	}()
 
 	// Stacks
-	{
+	go func() {
+		defer wg.Done()
 		stacks := h.cache.ListStacks()
 		var matches []searchResult
 		count := 0
 		for _, s := range stacks {
-			if strings.Contains(strings.ToLower(s.Name), ql) {
+			if containsFold(s.Name, ql) {
 				count++
-				if limit == 0 || len(matches) < limit {
+				if len(matches) < limit {
 					matches = append(matches, searchResult{
 						ID:     s.Name,
 						Name:   s.Name,
@@ -1309,27 +1356,26 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		if count > 0 {
-			sections = append(sections, typeResults{"stacks", matches, count})
-		}
-	}
+		allResults[stStacks] = typeResults{"stacks", matches, count}
+	}()
 
 	// Nodes
-	{
+	go func() {
+		defer wg.Done()
 		nodes := h.cache.ListNodes()
 		var matches []searchResult
 		count := 0
 		for _, n := range nodes {
-			hit := strings.Contains(strings.ToLower(n.Description.Hostname), ql)
+			hit := containsFold(n.Description.Hostname, ql)
 			if !hit {
-				hit = strings.Contains(strings.ToLower(n.Status.Addr), ql)
+				hit = containsFold(n.Status.Addr, ql)
 			}
 			if !hit {
 				hit = labelsMatch(n.Spec.Labels, ql)
 			}
 			if hit {
 				count++
-				if limit == 0 || len(matches) < limit {
+				if len(matches) < limit {
 					matches = append(matches, searchResult{
 						ID:     n.ID,
 						Name:   n.Description.Hostname,
@@ -1338,13 +1384,12 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		if count > 0 {
-			sections = append(sections, typeResults{"nodes", matches, count})
-		}
-	}
+		allResults[stNodes] = typeResults{"nodes", matches, count}
+	}()
 
 	// Tasks
-	{
+	go func() {
+		defer wg.Done()
 		tasks := h.cache.ListTasks()
 		var matches []searchResult
 		count := 0
@@ -1352,16 +1397,16 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 			svcName := svcNames[t.ServiceID]
 			taskName := fmt.Sprintf("%s.%d", svcName, t.Slot)
 
-			hit := strings.Contains(strings.ToLower(svcName), ql)
+			hit := containsFold(svcName, ql)
 			if !hit && t.Spec.ContainerSpec != nil {
-				hit = strings.Contains(strings.ToLower(t.Spec.ContainerSpec.Image), ql)
+				hit = containsFold(t.Spec.ContainerSpec.Image, ql)
 			}
 			if !hit && t.Spec.ContainerSpec != nil {
 				hit = labelsMatch(t.Spec.ContainerSpec.Labels, ql)
 			}
 			if hit {
 				count++
-				if limit == 0 || len(matches) < limit {
+				if len(matches) < limit {
 					detail := ""
 					if t.Spec.ContainerSpec != nil {
 						detail = t.Spec.ContainerSpec.Image
@@ -1378,24 +1423,23 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		if count > 0 {
-			sections = append(sections, typeResults{"tasks", matches, count})
-		}
-	}
+		allResults[stTasks] = typeResults{"tasks", matches, count}
+	}()
 
 	// Configs
-	{
+	go func() {
+		defer wg.Done()
 		configs := h.cache.ListConfigs()
 		var matches []searchResult
 		count := 0
 		for _, c := range configs {
-			hit := strings.Contains(strings.ToLower(c.Spec.Name), ql)
+			hit := containsFold(c.Spec.Name, ql)
 			if !hit {
 				hit = labelsMatch(c.Spec.Labels, ql)
 			}
 			if hit {
 				count++
-				if limit == 0 || len(matches) < limit {
+				if len(matches) < limit {
 					matches = append(matches, searchResult{
 						ID:     c.ID,
 						Name:   c.Spec.Name,
@@ -1404,25 +1448,24 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		if count > 0 {
-			sections = append(sections, typeResults{"configs", matches, count})
-		}
-	}
+		allResults[stConfigs] = typeResults{"configs", matches, count}
+	}()
 
 	// Secrets
-	{
+	go func() {
+		defer wg.Done()
 		secrets := h.cache.ListSecrets()
 		var matches []searchResult
 		count := 0
 		for _, s := range secrets {
 			s.Spec.Data = nil
-			hit := strings.Contains(strings.ToLower(s.Spec.Name), ql)
+			hit := containsFold(s.Spec.Name, ql)
 			if !hit {
 				hit = labelsMatch(s.Spec.Labels, ql)
 			}
 			if hit {
 				count++
-				if limit == 0 || len(matches) < limit {
+				if len(matches) < limit {
 					matches = append(matches, searchResult{
 						ID:     s.ID,
 						Name:   s.Spec.Name,
@@ -1431,24 +1474,23 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		if count > 0 {
-			sections = append(sections, typeResults{"secrets", matches, count})
-		}
-	}
+		allResults[stSecrets] = typeResults{"secrets", matches, count}
+	}()
 
 	// Networks
-	{
+	go func() {
+		defer wg.Done()
 		networks := h.cache.ListNetworks()
 		var matches []searchResult
 		count := 0
 		for _, n := range networks {
-			hit := strings.Contains(strings.ToLower(n.Name), ql)
+			hit := containsFold(n.Name, ql)
 			if !hit {
 				hit = labelsMatch(n.Labels, ql)
 			}
 			if hit {
 				count++
-				if limit == 0 || len(matches) < limit {
+				if len(matches) < limit {
 					matches = append(matches, searchResult{
 						ID:     n.ID,
 						Name:   n.Name,
@@ -1457,24 +1499,23 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		if count > 0 {
-			sections = append(sections, typeResults{"networks", matches, count})
-		}
-	}
+		allResults[stNetworks] = typeResults{"networks", matches, count}
+	}()
 
 	// Volumes
-	{
+	go func() {
+		defer wg.Done()
 		volumes := h.cache.ListVolumes()
 		var matches []searchResult
 		count := 0
 		for _, v := range volumes {
-			hit := strings.Contains(strings.ToLower(v.Name), ql)
+			hit := containsFold(v.Name, ql)
 			if !hit {
 				hit = labelsMatch(v.Labels, ql)
 			}
 			if hit {
 				count++
-				if limit == 0 || len(matches) < limit {
+				if len(matches) < limit {
 					matches = append(matches, searchResult{
 						ID:     v.Name,
 						Name:   v.Name,
@@ -1483,18 +1524,20 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		if count > 0 {
-			sections = append(sections, typeResults{"volumes", matches, count})
-		}
-	}
+		allResults[stVolumes] = typeResults{"volumes", matches, count}
+	}()
 
-	results := make(map[string][]searchResult, len(sections))
-	counts := make(map[string]int, len(sections))
+	wg.Wait()
+
+	results := make(map[string][]searchResult, stCount)
+	counts := make(map[string]int, stCount)
 	total := 0
-	for _, s := range sections {
-		results[s.key] = s.results
-		counts[s.key] = s.count
-		total += s.count
+	for _, s := range allResults {
+		if s.count > 0 {
+			results[s.key] = s.results
+			counts[s.key] = s.count
+			total += s.count
+		}
 	}
 
 	writeJSONWithETag(w, r, NewDetailResponse("/search", "SearchResult", map[string]any{

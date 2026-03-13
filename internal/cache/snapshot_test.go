@@ -56,7 +56,9 @@ func TestLoadSnapshot_FileNotExists(t *testing.T) {
 func TestLoadSnapshot_InvalidVersion(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "snapshot.json")
-	os.WriteFile(path, []byte(`{"version":999}`), 0644)
+	if err := os.WriteFile(path, []byte(`{"version":999}`), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	c := New(nil)
 	err := c.LoadFromDisk(path)
@@ -70,7 +72,9 @@ func TestWriteSnapshot_AtomicRename(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "snapshot.json")
 
-	c.WriteToDisk(path)
+	if err := c.WriteToDisk(path); err != nil {
+		t.Fatal(err)
+	}
 
 	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
 		t.Error("temp file should not exist after successful write")

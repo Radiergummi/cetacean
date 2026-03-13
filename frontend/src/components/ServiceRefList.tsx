@@ -1,8 +1,8 @@
 import { Link } from "react-router-dom";
 import type { ServiceRef } from "../api/types";
 import { Badge } from "./ui/badge";
+import CollapsibleSection from "./CollapsibleSection";
 import ResourceName from "./ResourceName";
-import SectionHeader from "./data/SectionHeader";
 
 interface Props {
   services: ServiceRef[];
@@ -12,8 +12,7 @@ interface Props {
 
 export default function ServiceRefList({ services, label, emptyMessage }: Props) {
   return (
-    <div>
-      <SectionHeader title={label} />
+    <CollapsibleSection title={label}>
       {services.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {services.map((svc) => (
@@ -30,6 +29,6 @@ export default function ServiceRefList({ services, label, emptyMessage }: Props)
       ) : (
         <p className="text-sm text-muted-foreground">{emptyMessage}</p>
       )}
-    </div>
+    </CollapsibleSection>
   );
 }

@@ -13,7 +13,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
 
-	"cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 type sseClient struct {
@@ -97,7 +97,7 @@ func (b *Broadcaster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var match func(cache.Event) bool
 	if t := r.URL.Query().Get("types"); t != "" {
 		types := make(map[string]bool)
-		for _, typ := range strings.Split(t, ",") {
+		for typ := range strings.SplitSeq(t, ",") {
 			types[strings.TrimSpace(typ)] = true
 		}
 		match = func(e cache.Event) bool { return types[e.Type] }
@@ -269,12 +269,12 @@ func stackMatcher(c *cache.Cache, name string) func(cache.Event) bool {
 
 // sseEvent is the JSON-LD enriched wire format for SSE event payloads.
 type sseEvent struct {
-	AtID     string      `json:"@id,omitempty"`
-	AtType   string      `json:"@type,omitempty"`
-	Type     string      `json:"type"`
-	Action   string      `json:"action"`
-	ID       string      `json:"id"`
-	Resource interface{} `json:"resource,omitempty"`
+	AtID     string `json:"@id,omitempty"`
+	AtType   string `json:"@type,omitempty"`
+	Type     string `json:"type"`
+	Action   string `json:"action"`
+	ID       string `json:"id"`
+	Resource any    `json:"resource,omitempty"`
 }
 
 func toSSEEvent(e cache.Event) sseEvent {

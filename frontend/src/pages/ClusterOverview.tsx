@@ -6,6 +6,7 @@ import type { HistoryEntry } from "../api/types";
 import { useResourceStream } from "../hooks/useResourceStream";
 import PageHeader from "../components/PageHeader";
 import ActivityFeed from "../components/ActivityFeed";
+import CollapsibleSection from "../components/CollapsibleSection";
 import DiskUsageSection from "../components/DiskUsageSection";
 import { MonitoringStatus, CapacitySection } from "../components/metrics";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
@@ -126,20 +127,14 @@ export default function ClusterOverview() {
 
       {/* Two-column: Capacity + Activity */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-            Capacity
-          </h2>
+        <CollapsibleSection title="Capacity">
           <CapacitySection snapshot={snapshot} />
-        </div>
-        <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-            Recent Activity
-          </h2>
+        </CollapsibleSection>
+        <CollapsibleSection title="Recent Activity">
           <div className="max-h-80 overflow-y-auto rounded-lg border bg-card p-4">
             <ActivityFeed entries={history} loading={historyLoading} />
           </div>
-        </div>
+        </CollapsibleSection>
       </div>
 
       <DiskUsageSection />

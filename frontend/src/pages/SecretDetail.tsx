@@ -1,7 +1,7 @@
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import ActivitySection from "../components/ActivitySection";
-import { LabelSection, ResourceId, ResourceLink, Timestamp } from "../components/data";
+import { LabelSection, MetadataGrid, ResourceId, ResourceLink, Timestamp } from "../components/data";
 import FetchError from "../components/FetchError";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
@@ -28,16 +28,12 @@ export default function SecretDetail() {
         breadcrumbs={[{ label: "Secrets", to: "/secrets" }, { label: name }]}
       />
 
-      <p className="text-sm text-muted-foreground">
-        Metadata only. Secret values are never exposed.
-      </p>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <MetadataGrid>
         <ResourceId label="ID" id={secret.ID} />
         <ResourceLink label="Stack" name={stack} to={`/stacks/${stack}`} />
         <Timestamp label="Created" date={secret.CreatedAt} />
         <Timestamp label="Updated" date={secret.UpdatedAt} />
-      </div>
+      </MetadataGrid>
 
       <LabelSection entries={labelEntries} />
 

@@ -10,7 +10,7 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
-	"cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 // waitForClients polls until the broadcaster has at least n clients registered.
@@ -119,7 +119,7 @@ func TestSSE_BatchesRapidEvents(t *testing.T) {
 	waitForClients(t, b, 1)
 
 	// Send 5 events as fast as possible so they land in the same batch window
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		b.Broadcast(cache.Event{Type: "task", Action: "update", ID: fmt.Sprintf("t%d", i)})
 	}
 
@@ -144,7 +144,7 @@ func TestSSE_BatchesRapidEvents(t *testing.T) {
 
 	// If we got a batch event, verify it contains a JSON array
 	if hasBatch {
-		for _, line := range strings.Split(body, "\n") {
+		for line := range strings.SplitSeq(body, "\n") {
 			if strings.HasPrefix(line, "data: [") {
 				// Verify it's a valid JSON array containing our events
 				if !strings.Contains(line, `"t0"`) || !strings.Contains(line, `"t4"`) {
@@ -198,7 +198,7 @@ func TestSSE_BatchEventContainsJSONLD(t *testing.T) {
 	waitForClients(t, b, 1)
 
 	// Send multiple events fast to trigger batching
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		b.Broadcast(cache.Event{Type: "task", Action: "update", ID: fmt.Sprintf("t%d", i)})
 	}
 
@@ -265,7 +265,7 @@ func TestSSE_429OnConnectionLimit(t *testing.T) {
 
 	// Artificially fill up clients to max
 	b.mu.Lock()
-	for i := 0; i < maxSSEClients; i++ {
+	for range maxSSEClients {
 		c := &sseClient{
 			events: make(chan cache.Event, 1),
 			done:   make(chan struct{}),
