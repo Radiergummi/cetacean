@@ -7,6 +7,7 @@ import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
 import { ContainerImage, KVTable, MetadataGrid, ResourceLink, Timestamp } from "../components/data";
 import { formatNs } from "../lib/formatNs";
+import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { escapePromQL } from "../lib/utils";
 import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
@@ -30,6 +31,7 @@ export default function ServiceDetail() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const monitoring = useMonitoringStatus();
   const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
+  const hasCadvisor = !!monitoring?.cadvisor?.targets;
   const [error, setError] = useState(false);
   const [networkNames, setNetworkNames] = useState<Record<string, string>>({});
 
@@ -68,6 +70,14 @@ export default function ServiceDetail() {
   useEffect(fetchData, [fetchData]);
 
   useResourceStream(`/services/${id}`, fetchData);
+
+  const serviceName = service?.Spec.Name || "";
+  const taskMetrics = useTaskMetrics(
+    serviceName
+      ? `container_label_com_docker_swarm_service_name="${escapePromQL(serviceName)}"`
+      : "",
+    hasCadvisor && !!serviceName,
+  );
 
   if (error) {
     return <FetchError message="Failed to load service" />;
@@ -121,7 +131,7 @@ export default function ServiceDetail() {
       </MetadataGrid>
 
       {/* Tasks */}
-      <TasksTable tasks={tasks} variant="service" />
+      <TasksTable tasks={tasks} variant="service" metrics={hasCadvisor ? taskMetrics : undefined} />
 
       {hasPrometheus && (
         <ErrorBoundary inline>
