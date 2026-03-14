@@ -140,6 +140,13 @@ func (b *Broadcaster) serveSSE(w http.ResponseWriter, r *http.Request, match fun
 	defer func() {
 		b.mu.Lock()
 		delete(b.clients, client)
+		// Close the done channel if it wasn't already closed by Broadcaster.Close(),
+		// so any goroutine selecting on it can unblock.
+		select {
+		case <-client.done:
+		default:
+			close(client.done)
+		}
 		b.mu.Unlock()
 	}()
 

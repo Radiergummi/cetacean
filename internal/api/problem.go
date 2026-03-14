@@ -54,6 +54,7 @@ func writeProblemTyped(w http.ResponseWriter, r *http.Request, p ProblemDetail) 
 
 func writeProblemJSON(w http.ResponseWriter, p ProblemDetail) {
 	w.Header().Set("Content-Type", "application/problem+json")
+	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(p.Status)
 	_ = json.NewEncoder(w).Encode(p)
 }

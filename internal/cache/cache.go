@@ -769,9 +769,8 @@ func (c *Cache) rebuildServiceRefIndexes() {
 }
 
 // serviceRefsFromIndex looks up the reverse index and returns ServiceRef slices.
+// Caller must hold c.mu (at least RLock).
 func (c *Cache) serviceRefsFromIndex(idx map[string]map[string]struct{}, key string) []ServiceRef {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
 	svcIDs := idx[key]
 	if len(svcIDs) == 0 {
 		return nil
@@ -787,21 +786,29 @@ func (c *Cache) serviceRefsFromIndex(idx map[string]map[string]struct{}, key str
 
 // ServicesUsingConfig returns services that reference the given config ID.
 func (c *Cache) ServicesUsingConfig(configID string) []ServiceRef {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.serviceRefsFromIndex(c.svcsByConfig, configID)
 }
 
 // ServicesUsingSecret returns services that reference the given secret ID.
 func (c *Cache) ServicesUsingSecret(secretID string) []ServiceRef {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.serviceRefsFromIndex(c.svcsBySecret, secretID)
 }
 
 // ServicesUsingNetwork returns services that reference the given network ID.
 func (c *Cache) ServicesUsingNetwork(networkID string) []ServiceRef {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.serviceRefsFromIndex(c.svcsByNetwork, networkID)
 }
 
 // ServicesUsingVolume returns services that mount the given volume name.
 func (c *Cache) ServicesUsingVolume(volumeName string) []ServiceRef {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.serviceRefsFromIndex(c.svcsByVolume, volumeName)
 }
 

@@ -26,4 +26,4 @@ services:
 networks:
   monitoring:
     external: true
-    name: cetacean-monitoring_monitoring
+    name: monitoring_monitoring

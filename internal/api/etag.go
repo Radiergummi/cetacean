@@ -49,6 +49,7 @@ func etagMatch(header, etag string) bool {
 func writeJSONWithETag(w http.ResponseWriter, r *http.Request, v any) {
 	body, err := json.Marshal(v)
 	if err != nil {
+		w.Header().Set("Cache-Control", "no-store")
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -56,6 +57,7 @@ func writeJSONWithETag(w http.ResponseWriter, r *http.Request, v any) {
 	etag := computeETag(body)
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-cache")
 
 	if etagMatch(r.Header.Get("If-None-Match"), etag) {
 		w.WriteHeader(http.StatusNotModified)

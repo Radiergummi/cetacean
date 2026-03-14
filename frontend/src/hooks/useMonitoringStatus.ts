@@ -6,7 +6,7 @@ const TTL_MS = 60_000;
 
 let cached: MonitoringStatus | null = null;
 let cachedAt: number | null = null;
-let inflight: Promise<void> | null = null;
+let inflight: Promise<MonitoringStatus> | null = null;
 
 export function _resetMonitoringStatusCache() {
   cached = null;
@@ -18,25 +18,32 @@ export function useMonitoringStatus(): MonitoringStatus | null {
   const [status, setStatus] = useState<MonitoringStatus | null>(cached);
 
   useEffect(() => {
-    if (cached != null && cachedAt != null && Date.now() - cachedAt < TTL_MS) return;
-    if (cached != null) {
-      cached = null;
-      inflight = null;
+    let cancelled = false;
+
+    if (cached != null && cachedAt != null && Date.now() - cachedAt < TTL_MS) {
+      if (status !== cached) setStatus(cached);
+      return;
     }
+
     if (!inflight) {
-      inflight = api
-        .monitoringStatus()
-        .then((s) => {
-          cached = s;
-          cachedAt = Date.now();
-        })
-        .catch(() => {
-          inflight = null;
-        });
+      inflight = api.monitoringStatus().catch(() => {
+        inflight = null;
+        return null as unknown as MonitoringStatus;
+      });
     }
-    inflight.then(() => {
-      if (cached != null) setStatus(cached);
+
+    inflight.then((s) => {
+      if (cancelled) return;
+      if (s != null) {
+        cached = s;
+        cachedAt = Date.now();
+        setStatus(s);
+      }
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return status;

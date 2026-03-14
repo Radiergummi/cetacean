@@ -95,6 +95,7 @@ func (h *Handlers) HandleReady(w http.ResponseWriter, r *http.Request) {
 
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(v)
 }
 
@@ -203,9 +204,10 @@ func (h *Handlers) getLocalNodeID() string {
 		id, err := h.systemClient.LocalNodeID(ctx)
 		if err != nil {
 			slog.Warn("failed to get local node ID", "error", err)
+		} else if id != "" {
+			h.localNodeID = id
+			h.localNodeDone = true
 		}
-		h.localNodeID = id
-		h.localNodeDone = true
 	}
 	return h.localNodeID
 }
