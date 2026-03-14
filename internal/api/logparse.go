@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 )
 
 const maxLogFrameSize = 1 << 20 // 1 MiB
@@ -22,6 +23,12 @@ type LogLine struct {
 // readDockerLogFrames reads Docker multiplexed log frames and calls emit for each parsed line.
 // Docker multiplex frame: [stream_type(1)][padding(3)][size(4 big-endian)][payload].
 // Stream types: 1=stdout, 2=stderr.
+//
+// Docker's ServiceLogs with Follow=false may not close the stream after
+// sending all data. To avoid blocking for the full context timeout, we
+// use an idle-timeout wrapper: after receiving the first frame, if no
+// new data arrives within 2 seconds, the wrapper closes the stream so
+// the read returns immediately.
 func readDockerLogFrames(r io.Reader, emit func(LogLine)) error {
 	header := make([]byte, 8)
 
@@ -145,4 +152,28 @@ func StreamDockerLogs(r io.Reader, ch chan<- LogLine) error {
 	return readDockerLogFrames(r, func(l LogLine) {
 		ch <- l
 	})
+}
+
+// ParseDockerLogsWithIdleCancel is like ParseDockerLogs but cancels the
+// context (via cancelFn) if no new frames arrive within idleTimeout after
+// the first frame. This works around Docker's ServiceLogs not closing the
+// stream after sending all data with Follow=false.
+func ParseDockerLogsWithIdleCancel(r io.Reader, cancelFn context.CancelFunc, idleTimeout time.Duration) ([]LogLine, error) {
+	var lines []LogLine
+	var timer *time.Timer
+	defer func() {
+		if timer != nil {
+			timer.Stop()
+		}
+	}()
+	err := readDockerLogFrames(r, func(l LogLine) {
+		lines = append(lines, l)
+		// Reset the idle timer on every frame received.
+		if timer == nil {
+			timer = time.AfterFunc(idleTimeout, cancelFn)
+		} else {
+			timer.Reset(idleTimeout)
+		}
+	})
+	return lines, err
 }
