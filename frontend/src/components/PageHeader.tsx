@@ -1,5 +1,6 @@
 import { ChevronRight } from "lucide-react";
 import type React from "react";
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
 
 interface Crumb {
@@ -15,6 +16,12 @@ interface Props {
 }
 
 export default function PageHeader({ title, subtitle, breadcrumbs, actions }: Props) {
+  useEffect(() => {
+    const text = typeof title === "string" ? title : null;
+    if (text) document.title = `${text} · Cetacean`;
+    return () => { document.title = "Cetacean"; };
+  }, [title]);
+
   return (
     <header className="mb-6">
       {breadcrumbs && breadcrumbs.length > 0 && (
