@@ -1,10 +1,21 @@
 package auth
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
 )
+
+// AuthError is an authentication error that carries a WWW-Authenticate
+// header value per RFC 9110. Providers return this to advertise their
+// authentication scheme in the 401 response.
+type AuthError struct {
+	Msg            string
+	WWWAuthenticate string
+}
+
+func (e *AuthError) Error() string { return e.Msg }
 
 // Middleware returns HTTP middleware that authenticates requests using the
 // given provider. Exempt paths (meta endpoints, API docs, static assets,
@@ -23,6 +34,10 @@ func Middleware(provider Provider) func(http.Handler) http.Handler {
 					"path", r.URL.Path,
 					"error", err,
 				)
+				var authErr *AuthError
+				if errors.As(err, &authErr) && authErr.WWWAuthenticate != "" {
+					w.Header().Set("WWW-Authenticate", authErr.WWWAuthenticate)
+				}
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}

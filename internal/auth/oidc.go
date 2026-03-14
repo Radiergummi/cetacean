@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -72,7 +71,10 @@ func (p *OIDCProvider) Authenticate(w http.ResponseWriter, r *http.Request) (*Id
 	if token := extractBearerToken(r); token != "" {
 		idToken, err := p.verifier.Verify(r.Context(), token)
 		if err != nil {
-			return nil, fmt.Errorf("invalid bearer token: %w", err)
+			return nil, &AuthError{
+				Msg:             fmt.Sprintf("invalid bearer token: %v", err),
+				WWWAuthenticate: `Bearer error="invalid_token"`,
+			}
 		}
 
 		var claims map[string]any
@@ -93,8 +95,11 @@ func (p *OIDCProvider) Authenticate(w http.ResponseWriter, r *http.Request) (*Id
 		return nil, nil
 	}
 
-	// 4. API request: return error.
-	return nil, errors.New("authentication required")
+	// 4. API request: no credentials.
+	return nil, &AuthError{
+		Msg:             "authentication required",
+		WWWAuthenticate: "Bearer",
+	}
 }
 
 // RegisterRoutes registers the OIDC auth routes on the given mux.

@@ -107,6 +107,43 @@ func TestMiddleware_AuthError_Returns401(t *testing.T) {
 	}
 }
 
+// bearerProvider returns an AuthError with WWW-Authenticate header.
+type bearerProvider struct{}
+
+func (p *bearerProvider) Authenticate(_ http.ResponseWriter, _ *http.Request) (*Identity, error) {
+	return nil, &AuthError{Msg: "authentication required", WWWAuthenticate: "Bearer"}
+}
+func (p *bearerProvider) RegisterRoutes(_ *http.ServeMux) {}
+
+func TestMiddleware_AuthError_SetsWWWAuthenticate(t *testing.T) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("inner handler should not be called")
+	})
+
+	handler := Middleware(&bearerProvider{})(inner)
+	r := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+	if got := w.Header().Get("WWW-Authenticate"); got != "Bearer" {
+		t.Errorf("WWW-Authenticate = %q, want %q", got, "Bearer")
+	}
+}
+
+func TestMiddleware_PlainError_NoWWWAuthenticate(t *testing.T) {
+	handler := Middleware(&failProvider{})(http.NotFoundHandler())
+	r := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	if got := w.Header().Get("WWW-Authenticate"); got != "" {
+		t.Errorf("WWW-Authenticate = %q, want empty", got)
+	}
+}
+
 func TestMiddleware_RedirectProvider_InnerNotCalled(t *testing.T) {
 	called := false
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

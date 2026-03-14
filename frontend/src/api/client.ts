@@ -33,6 +33,14 @@ const headers = { Accept: "application/json" };
 async function fetchJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(path, { headers, signal });
   if (!res.ok) {
+    // OIDC 401: server sets WWW-Authenticate: Bearer, redirect to login
+    if (res.status === 401 && res.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
+      const redirect = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = `/auth/login?redirect=${redirect}`;
+      // Return a never-resolving promise to prevent callers from handling the error
+      // while the browser navigates away
+      return new Promise<T>(() => {});
+    }
     let message = `${res.status} ${res.statusText}`;
     try {
       const body = await res.json();
