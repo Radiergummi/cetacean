@@ -14,7 +14,6 @@ import TaskStatusBadge from "../components/TaskStatusBadge";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
-import { formatBytes } from "../lib/formatBytes";
 import { escapePromQL } from "../lib/utils";
 
 export default function TaskDetail() {
@@ -109,19 +108,12 @@ export default function TaskDetail() {
       )}
 
       {hasCadvisor && task.Status.State === "running" && myMetrics && (
-        <div className="mb-6 flex items-center justify-center gap-8">
+        <div className="mb-6 flex items-center justify-center">
           <ResourceGauge
             label="CPU"
             value={myMetrics.currentCpu}
             subtitle={
               myMetrics.currentCpu != null ? `${myMetrics.currentCpu.toFixed(1)}%` : undefined
-            }
-          />
-          <ResourceGauge
-            label="Memory"
-            value={null}
-            subtitle={
-              myMetrics.currentMemory != null ? formatBytes(myMetrics.currentMemory) : undefined
             }
           />
         </div>

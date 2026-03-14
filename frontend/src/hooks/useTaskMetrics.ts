@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../api/client";
 
 export interface TaskMetricsData {
@@ -17,10 +17,9 @@ export function useTaskMetrics(
   refreshInterval = 30_000,
 ): Map<string, TaskMetricsData> {
   const [metrics, setMetrics] = useState<Map<string, TaskMetricsData>>(EMPTY_MAP);
-  const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || !filter) {
       setMetrics(EMPTY_MAP);
       return;
     }
@@ -79,8 +78,8 @@ export function useTaskMetrics(
     };
 
     fetchMetrics();
-    intervalRef.current = setInterval(fetchMetrics, refreshInterval);
-    return () => clearInterval(intervalRef.current);
+    const timer = setInterval(fetchMetrics, refreshInterval);
+    return () => clearInterval(timer);
   }, [filter, enabled, refreshInterval]);
 
   return metrics;
