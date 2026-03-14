@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Task } from "../api/types";
+import type { TaskMetricsData } from "../hooks/useTaskMetrics";
 import { statusColor } from "../lib/statusColor";
 import CollapsibleSection from "./CollapsibleSection";
 import ResourceName from "./ResourceName";
 import TaskStateFilter from "./TaskStateFilter";
 import TaskStatusBadge from "./TaskStatusBadge";
+import { TaskSparkline } from "./metrics";
 import TimeAgo from "./TimeAgo";
 
 type Variant = "node" | "service";
@@ -13,9 +15,10 @@ type Variant = "node" | "service";
 interface TasksTableProps {
   tasks: Task[];
   variant: Variant;
+  metrics?: Map<string, TaskMetricsData>;
 }
 
-export default function TasksTable({ tasks, variant }: TasksTableProps) {
+export default function TasksTable({ tasks, variant, metrics }: TasksTableProps) {
   const [stateFilter, setStateFilter] = useState<string | null>(null);
 
   const filteredTasks = useMemo(() => {
@@ -53,6 +56,8 @@ export default function TasksTable({ tasks, variant }: TasksTableProps) {
               {variant === "node" && <th className="text-left p-3 text-sm font-medium">Service</th>}
               <th className="text-left p-3 text-sm font-medium">Task</th>
               <th className="text-left p-3 text-sm font-medium">State</th>
+              {metrics && <th className="text-left p-3 text-sm font-medium">CPU</th>}
+              {metrics && <th className="text-left p-3 text-sm font-medium">Memory</th>}
               {variant === "service" && <th className="text-left p-3 text-sm font-medium">Node</th>}
               <th className="text-left p-3 text-sm font-medium">Desired</th>
               <th className="text-left p-3 text-sm font-medium">Error</th>
@@ -96,6 +101,33 @@ export default function TasksTable({ tasks, variant }: TasksTableProps) {
                   <td className="p-3 text-sm">
                     <TaskStatusBadge state={State} />
                   </td>
+
+                  {metrics && (
+                    <td className="p-3 text-sm">
+                      {State === "running" ? (
+                        <TaskSparkline
+                          data={metrics.get(ID)?.cpu}
+                          currentValue={metrics.get(ID)?.currentCpu}
+                          type="cpu"
+                        />
+                      ) : (
+                        "\u2014"
+                      )}
+                    </td>
+                  )}
+                  {metrics && (
+                    <td className="p-3 text-sm">
+                      {State === "running" ? (
+                        <TaskSparkline
+                          data={metrics.get(ID)?.memory}
+                          currentValue={metrics.get(ID)?.currentMemory}
+                          type="memory"
+                        />
+                      ) : (
+                        "\u2014"
+                      )}
+                    </td>
+                  )}
 
                   {variant === "service" && (
                     <td className="p-3 text-sm">
