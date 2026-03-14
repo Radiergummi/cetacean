@@ -1,6 +1,8 @@
 import { useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useSwarmResource } from "../hooks/useSwarmResource";
+import { useTaskMetrics } from "../hooks/useTaskMetrics";
+import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useSortParams } from "../hooks/useSort";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { api } from "../api/client";
@@ -10,6 +12,7 @@ import PageHeader from "../components/PageHeader";
 import DataTable, { type Column } from "../components/DataTable";
 import SortIndicator from "../components/SortIndicator";
 import TaskStatusBadge from "../components/TaskStatusBadge";
+import { TaskSparkline } from "../components/metrics";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
 import { SkeletonTable } from "../components/LoadingSkeleton";
@@ -32,6 +35,14 @@ export default function TaskList() {
     "task",
     (t: Task) => t.ID,
   );
+
+  const monitoring = useMonitoringStatus();
+  const hasCadvisor = !!monitoring?.cadvisor?.targets;
+  const taskMetrics = useTaskMetrics(
+    `container_label_com_docker_swarm_task_id!=""`,
+    hasCadvisor,
+  );
+
   const columns: Column<Task>[] = [
     {
       header: "Service",
@@ -50,6 +61,36 @@ export default function TaskList() {
       cell: (t) => <TaskStatusBadge state={t.Status.State} />,
       onHeaderClick: () => toggle("state"),
     },
+    ...(hasCadvisor
+      ? [
+          {
+            header: "CPU",
+            cell: (t: Task) =>
+              t.Status.State === "running" ? (
+                <TaskSparkline
+                  data={taskMetrics.get(t.ID)?.cpu}
+                  currentValue={taskMetrics.get(t.ID)?.currentCpu}
+                  type="cpu"
+                />
+              ) : (
+                "\u2014"
+              ),
+          },
+          {
+            header: "Memory",
+            cell: (t: Task) =>
+              t.Status.State === "running" ? (
+                <TaskSparkline
+                  data={taskMetrics.get(t.ID)?.memory}
+                  currentValue={taskMetrics.get(t.ID)?.currentMemory}
+                  type="memory"
+                />
+              ) : (
+                "\u2014"
+              ),
+          },
+        ]
+      : []),
     {
       header: "Desired",
       cell: (t) => t.DesiredState,
@@ -86,7 +127,7 @@ export default function TaskList() {
     return (
       <div>
         <PageHeader title="Tasks" />
-        <SkeletonTable columns={6} />
+        <SkeletonTable columns={hasCadvisor ? 8 : 6} />
       </div>
     );
   if (error) return <FetchError message={error.message} onRetry={retry} />;
