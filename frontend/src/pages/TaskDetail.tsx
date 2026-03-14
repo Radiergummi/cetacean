@@ -8,9 +8,14 @@ import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import { LogViewer } from "../components/log";
+import { MetricsPanel, ResourceGauge } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import TaskStatusBadge from "../components/TaskStatusBadge";
+import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
+import { useTaskMetrics } from "../hooks/useTaskMetrics";
+import { formatBytes } from "../lib/formatBytes";
+import { escapePromQL } from "../lib/utils";
 
 export default function TaskDetail() {
   const { id } = useParams<{ id: string }>();
@@ -30,6 +35,15 @@ export default function TaskDetail() {
   useEffect(fetchData, [fetchData]);
 
   useResourceStream(`/tasks/${id}`, fetchData);
+
+  const monitoring = useMonitoringStatus();
+  const hasCadvisor = !!monitoring?.cadvisor?.targets;
+  const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
+  const taskMetrics = useTaskMetrics(
+    id ? `container_label_com_docker_swarm_task_id="${escapePromQL(id)}"` : "",
+    hasCadvisor && !!id && task?.Status.State === "running",
+  );
+  const myMetrics = id ? taskMetrics.get(id) : undefined;
 
   if (error) {
     return <FetchError message="Failed to load task" />;
@@ -92,6 +106,44 @@ export default function TaskDetail() {
           </div>
           <div className="text-sm">{task.Status.Message}</div>
         </div>
+      )}
+
+      {hasCadvisor && task.Status.State === "running" && myMetrics && (
+        <div className="mb-6 flex items-center justify-center gap-8">
+          <ResourceGauge
+            label="CPU"
+            value={myMetrics.currentCpu}
+            subtitle={myMetrics.currentCpu != null ? `${myMetrics.currentCpu.toFixed(1)}%` : undefined}
+          />
+          <ResourceGauge
+            label="Memory"
+            value={null}
+            subtitle={myMetrics.currentMemory != null ? formatBytes(myMetrics.currentMemory) : undefined}
+          />
+        </div>
+      )}
+
+      {hasPrometheus && task.Status.State === "running" && (
+        <ErrorBoundary inline>
+          <MetricsPanel
+            header="Task Metrics"
+            charts={[
+              {
+                title: "CPU Usage",
+                query: `sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_task_id="${escapePromQL(id!)}"}[5m])) * 100`,
+                unit: "%",
+                yMin: 0,
+              },
+              {
+                title: "Memory Usage",
+                query: `sum(container_memory_usage_bytes{container_label_com_docker_swarm_task_id="${escapePromQL(id!)}"})`,
+                unit: "bytes",
+                yMin: 0,
+                color: "#34d399",
+              },
+            ]}
+          />
+        </ErrorBoundary>
       )}
 
       <div className="mb-6">
