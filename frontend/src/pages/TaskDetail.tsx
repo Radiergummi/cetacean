@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
-import type { Task } from "../api/types";
+import type { Service, Task } from "../api/types";
 import { ContainerImage, ResourceId, ResourceLink, Timestamp } from "../components/data";
 import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
@@ -14,11 +14,13 @@ import TaskStatusBadge from "../components/TaskStatusBadge";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
+import { formatBytes } from "../lib/formatBytes";
 import { escapePromQL } from "../lib/utils";
 
 export default function TaskDetail() {
   const { id } = useParams<{ id: string }>();
   const [task, setTask] = useState<Task | null>(null);
+  const [service, setService] = useState<Service | null>(null);
   const [error, setError] = useState(false);
 
   const fetchData = useCallback(() => {
@@ -27,7 +29,13 @@ export default function TaskDetail() {
     }
     api
       .task(id)
-      .then(setTask)
+      .then((t) => {
+        setTask(t);
+        api
+          .service(t.ServiceID)
+          .then(setService)
+          .catch(() => {});
+      })
       .catch(() => setError(true));
   }, [id]);
 
@@ -108,12 +116,19 @@ export default function TaskDetail() {
       )}
 
       {hasCadvisor && task.Status.State === "running" && myMetrics && (
-        <div className="mb-6 flex items-center justify-center">
+        <div className="mb-6 flex items-center justify-center gap-8">
           <ResourceGauge
             label="CPU"
-            value={myMetrics.currentCpu}
+            value={cpuGaugePercent(myMetrics.currentCpu, service)}
             subtitle={
               myMetrics.currentCpu != null ? `${myMetrics.currentCpu.toFixed(1)}%` : undefined
+            }
+          />
+          <ResourceGauge
+            label="Memory"
+            value={memGaugePercent(myMetrics.currentMemory, service)}
+            subtitle={
+              myMetrics.currentMemory != null ? formatBytes(myMetrics.currentMemory) : undefined
             }
           />
         </div>
@@ -149,4 +164,20 @@ export default function TaskDetail() {
       </div>
     </div>
   );
+}
+
+function cpuGaugePercent(currentCpu: number | null, service: Service | null): number | null {
+  if (currentCpu == null) return null;
+  const limitNano = service?.Spec.TaskTemplate.Resources?.Limits?.NanoCPUs;
+  // currentCpu is % of 1 vCPU (e.g. 150 = 1.5 cores). Convert limit from
+  // nanoseconds to the same unit: 1e9 nano = 1 core = 100%.
+  if (limitNano) return currentCpu / (limitNano / 1e7);
+  return currentCpu;
+}
+
+function memGaugePercent(currentMemory: number | null, service: Service | null): number | null {
+  if (currentMemory == null) return null;
+  const limitBytes = service?.Spec.TaskTemplate.Resources?.Limits?.MemoryBytes;
+  if (limitBytes) return (currentMemory / limitBytes) * 100;
+  return 100;
 }
