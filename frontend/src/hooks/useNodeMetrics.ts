@@ -94,9 +94,7 @@ export function useNodeMetrics() {
 function parseInstant(resp: PrometheusResponse | null): [string, number][] | null {
   const results = resp?.data?.result;
   if (!results?.length) return null;
-  return results.map(
-    (r) => [r.metric?.instance || "", Number(r.value?.[1])] as [string, number],
-  );
+  return results.map((r) => [r.metric?.instance || "", Number(r.value?.[1])] as [string, number]);
 }
 
 function parseRange(resp: PrometheusResponse | null): [string, number[]][] | null {
@@ -104,9 +102,6 @@ function parseRange(resp: PrometheusResponse | null): [string, number[]][] | nul
   if (!results?.length) return null;
   return results.map(
     (r) =>
-      [r.metric?.instance || "", (r.values || []).map((v) => Number(v[1]))] as [
-        string,
-        number[],
-      ],
+      [r.metric?.instance || "", (r.values || []).map((v) => Number(v[1]))] as [string, number[]],
   );
 }

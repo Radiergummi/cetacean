@@ -70,7 +70,9 @@ export default function NodeDetail() {
 
   const hostname = node.Description.Hostname || "";
   const instance = resolve(hostname) || "";
-  const instanceFilter = instance ? `instance="${escapePromQL(instance)}"` : `instance=~"${escapePromQL(node.Status.Addr)}:.*"`;
+  const instanceFilter = instance
+    ? `instance="${escapePromQL(instance)}"`
+    : `instance=~"${escapePromQL(node.Status.Addr)}:.*"`;
 
   return (
     <div className="flex flex-col gap-6">

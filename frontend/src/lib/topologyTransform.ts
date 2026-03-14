@@ -123,7 +123,11 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
     if (existing) {
       for (const netId of edge.networks) existing.networks.add(netId);
     } else {
-      edgeMap.set(key, { source: edge.source, target: edge.target, networks: new Set(edge.networks) });
+      edgeMap.set(key, {
+        source: edge.source,
+        target: edge.target,
+        networks: new Set(edge.networks),
+      });
     }
   }
 

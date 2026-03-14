@@ -113,12 +113,16 @@ export default function TaskDetail() {
           <ResourceGauge
             label="CPU"
             value={myMetrics.currentCpu}
-            subtitle={myMetrics.currentCpu != null ? `${myMetrics.currentCpu.toFixed(1)}%` : undefined}
+            subtitle={
+              myMetrics.currentCpu != null ? `${myMetrics.currentCpu.toFixed(1)}%` : undefined
+            }
           />
           <ResourceGauge
             label="Memory"
             value={null}
-            subtitle={myMetrics.currentMemory != null ? formatBytes(myMetrics.currentMemory) : undefined}
+            subtitle={
+              myMetrics.currentMemory != null ? formatBytes(myMetrics.currentMemory) : undefined
+            }
           />
         </div>
       )}

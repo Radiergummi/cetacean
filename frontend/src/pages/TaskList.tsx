@@ -38,10 +38,7 @@ export default function TaskList() {
 
   const monitoring = useMonitoringStatus();
   const hasCadvisor = !!monitoring?.cadvisor?.targets;
-  const taskMetrics = useTaskMetrics(
-    `container_label_com_docker_swarm_task_id!=""`,
-    hasCadvisor,
-  );
+  const taskMetrics = useTaskMetrics(`container_label_com_docker_swarm_task_id!=""`, hasCadvisor);
 
   const columns: Column<Task>[] = [
     {

@@ -19,7 +19,9 @@ export default function PageHeader({ title, subtitle, breadcrumbs, actions }: Pr
   useEffect(() => {
     const text = typeof title === "string" ? title : null;
     if (text) document.title = `${text} · Cetacean`;
-    return () => { document.title = "Cetacean"; };
+    return () => {
+      document.title = "Cetacean";
+    };
   }, [title]);
 
   return (
