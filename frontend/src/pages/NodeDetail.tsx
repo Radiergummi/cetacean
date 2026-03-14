@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { escapePromQL } from "../lib/utils";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
@@ -26,6 +27,7 @@ export default function NodeDetail() {
 
   const monitoring = useMonitoringStatus();
   const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
+  const hasCadvisor = !!monitoring?.cadvisor?.targets;
   const { resolve } = useInstanceResolver();
   const [error, setError] = useState(false);
 
@@ -51,6 +53,12 @@ export default function NodeDetail() {
   useEffect(fetchData, [fetchData]);
 
   useResourceStream(`/nodes/${id}`, fetchData);
+
+  const nodeId = node?.ID || "";
+  const taskMetrics = useTaskMetrics(
+    nodeId ? `container_label_com_docker_swarm_node_id="${escapePromQL(nodeId)}"` : "",
+    hasCadvisor && !!nodeId,
+  );
 
   if (error) {
     return <FetchError message="Failed to load node" />;
@@ -112,7 +120,7 @@ export default function NodeDetail() {
         />
       )}
 
-      <TasksTable tasks={tasks} variant="node" />
+      <TasksTable tasks={tasks} variant="node" metrics={hasCadvisor ? taskMetrics : undefined} />
 
       <DiskUsageSection nodeId={node.ID} />
 
