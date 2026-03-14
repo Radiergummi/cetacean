@@ -27,6 +27,7 @@ class MockEventSource {
 vi.mock("../api/client", () => ({
   api: {
     services: vi.fn(),
+    monitoringStatus: vi.fn().mockResolvedValue(null),
   },
 }));
 
