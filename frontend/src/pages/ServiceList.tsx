@@ -7,14 +7,17 @@ import { useViewMode } from "../hooks/useViewMode";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { api } from "../api/client";
 import type { Service, ServiceListItem } from "../api/types";
+import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import ListToolbar from "../components/ListToolbar";
 import PageHeader from "../components/PageHeader";
 import DataTable, { type Column } from "../components/DataTable";
 import SortIndicator from "../components/SortIndicator";
 import ResourceCard from "../components/ResourceCard";
 import EmptyState from "../components/EmptyState";
+import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
 import { SkeletonTable } from "../components/LoadingSkeleton";
+import { MetricsPanel } from "../components/metrics";
 import ResourceName from "../components/ResourceName";
 
 function ReplicaHealth({ running, desired }: { running: number; desired: number }) {
@@ -48,6 +51,11 @@ export default function ServiceList() {
   );
   const [viewMode, setViewMode] = useViewMode("services");
   const navigate = useNavigate();
+  const monitoring = useMonitoringStatus();
+  const hasCadvisor =
+    monitoring?.prometheusConfigured &&
+    monitoring?.prometheusReachable &&
+    !!monitoring?.cadvisor?.targets;
 
   const columns: Column<ServiceListItem>[] = [
     {
@@ -77,6 +85,18 @@ export default function ServiceList() {
       onHeaderClick: () => toggle("mode"),
     },
     {
+      header: "Ports",
+      cell: (svc) => {
+        const ports = svc.Endpoint?.Ports;
+        if (!ports || ports.length === 0) return null;
+        return (
+          <span className="font-mono text-xs text-muted-foreground">
+            {ports.map((p) => `${p.PublishedPort}/${p.Protocol}`).join(", ")}
+          </span>
+        );
+      },
+    },
+    {
       header: "Replicas",
       cell: (svc) => {
         const desired = svc.Spec.Mode.Replicated?.Replicas;
@@ -94,7 +114,7 @@ export default function ServiceList() {
     return (
       <div>
         <PageHeader title="Services" />
-        <SkeletonTable columns={5} />
+        <SkeletonTable columns={6} />
       </div>
     );
   if (error) return <FetchError message={error.message} onRetry={retry} />;
@@ -102,6 +122,29 @@ export default function ServiceList() {
   return (
     <div>
       <PageHeader title="Services" />
+      {hasCadvisor && (
+        <div className="mb-6">
+          <ErrorBoundary inline>
+            <MetricsPanel
+              header="Resource Usage by Service"
+              charts={[
+                {
+                  title: "CPU Usage (top 10)",
+                  query: `topk(10, sum by (container_label_com_docker_swarm_service_name)(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name!=""}[5m])) * 100)`,
+                  unit: "%",
+                  yMin: 0,
+                },
+                {
+                  title: "Memory Usage (top 10)",
+                  query: `topk(10, sum by (container_label_com_docker_swarm_service_name)(container_memory_usage_bytes{container_label_com_docker_swarm_service_name!=""}))`,
+                  unit: "bytes",
+                  yMin: 0,
+                },
+              ]}
+            />
+          </ErrorBoundary>
+        </div>
+      )}
       <ListToolbar
         search={search}
         onSearchChange={setSearch}
@@ -134,6 +177,14 @@ export default function ServiceList() {
                     desired != null && (
                       <ReplicaHealth running={svc.RunningTasks} desired={desired} />
                     ),
+                    svc.Endpoint?.Ports &&
+                      svc.Endpoint.Ports.length > 0 && (
+                        <span className="font-mono text-xs">
+                          {svc.Endpoint.Ports.map((p) => `${p.PublishedPort}/${p.Protocol}`).join(
+                            ", ",
+                          )}
+                        </span>
+                      ),
                     <ServiceStatusBadge service={svc} />,
                   ].filter(Boolean) as React.ReactNode[]
                 }

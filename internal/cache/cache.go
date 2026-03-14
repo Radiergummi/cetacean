@@ -117,12 +117,16 @@ func New(onChange OnChangeFunc) *Cache {
 func (c *Cache) History() *History { return c.history }
 
 func (c *Cache) notify(e Event) {
-	c.history.Append(HistoryEntry{
-		Type:       e.Type,
-		Action:     e.Action,
-		ResourceID: e.ID,
-		Name:       ExtractName(e),
-	})
+	// Sync events are internal bookkeeping; broadcast them to SSE clients
+	// but don't record them in history where they drown out real changes.
+	if e.Type != "sync" {
+		c.history.Append(HistoryEntry{
+			Type:       e.Type,
+			Action:     e.Action,
+			ResourceID: e.ID,
+			Name:       ExtractName(e),
+		})
+	}
 	if c.onChange != nil {
 		c.onChange(e)
 	}

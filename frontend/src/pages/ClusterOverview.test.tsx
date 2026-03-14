@@ -44,6 +44,10 @@ vi.mock("../components/metrics", () => ({
   CapacitySection: () => <div data-testid="capacity-section" />,
 }));
 
+vi.mock("../components/metrics/MetricsPanel", () => ({
+  default: () => <div data-testid="metrics-panel" />,
+}));
+
 vi.mock("../components/ActivityFeed", () => ({
   default: () => <div data-testid="activity-feed" />,
 }));

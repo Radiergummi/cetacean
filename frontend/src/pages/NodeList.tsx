@@ -14,7 +14,7 @@ import DataTable, { type Column } from "../components/DataTable";
 import SortIndicator from "../components/SortIndicator";
 import TaskStatusBadge from "../components/TaskStatusBadge";
 import ResourceCard from "../components/ResourceCard";
-import { ResourceGauge, Sparkline, NodeResourceGauges } from "../components/metrics";
+import { ResourceGauge, Sparkline, NodeResourceGauges, MetricsPanel } from "../components/metrics";
 import EmptyState from "../components/EmptyState";
 import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
@@ -40,6 +40,7 @@ export default function NodeList() {
   const navigate = useNavigate();
   const monitoring = useMonitoringStatus();
   const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
+  const hasNodeExporter = hasPrometheus && !!monitoring?.nodeExporter?.targets;
   const { getForNode } = useNodeMetrics();
 
   const baseColumns: Column<Node>[] = [
@@ -58,13 +59,31 @@ export default function NodeList() {
     },
     {
       header: <SortIndicator label="Role" active={sortKey === "role"} dir={sortDir} />,
-      cell: (node) => node.Spec.Role,
+      cell: (node) => (
+        <span className="flex items-center gap-1.5">
+          {node.Spec.Role}
+          {node.ManagerStatus?.Leader && (
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-500">
+              leader
+            </span>
+          )}
+        </span>
+      ),
       onHeaderClick: () => toggle("role"),
+    },
+    {
+      header: <SortIndicator label="Availability" active={sortKey === "availability"} dir={sortDir} />,
+      cell: (node) => node.Spec.Availability,
+      onHeaderClick: () => toggle("availability"),
     },
     {
       header: <SortIndicator label="Status" active={sortKey === "status"} dir={sortDir} />,
       cell: (node) => <TaskStatusBadge state={node.Status.State} />,
       onHeaderClick: () => toggle("status"),
+    },
+    {
+      header: "Address",
+      cell: (node) => <span className="tabular-nums">{node.Status.Addr}</span>,
     },
   ];
 
@@ -133,6 +152,29 @@ export default function NodeList() {
           </ErrorBoundary>
         </div>
       )}
+      {hasNodeExporter && (
+        <div className="mb-6">
+          <ErrorBoundary inline>
+            <MetricsPanel
+              header="Resource Utilization by Node"
+              charts={[
+                {
+                  title: "CPU Utilization",
+                  query: `100 - (avg by (instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)`,
+                  unit: "%",
+                  yMin: 0,
+                },
+                {
+                  title: "Memory Utilization",
+                  query: `(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100`,
+                  unit: "%",
+                  yMin: 0,
+                },
+              ]}
+            />
+          </ErrorBoundary>
+        </div>
+      )}
       <ListToolbar
         search={search}
         onSearchChange={setSearch}
@@ -160,7 +202,7 @@ export default function NodeList() {
                 to={`/nodes/${node.ID}`}
                 badge={<TaskStatusBadge state={node.Status.State} />}
                 meta={[
-                  node.Spec.Role,
+                  node.ManagerStatus?.Leader ? "leader" : node.Spec.Role,
                   node.Spec.Availability,
                   `v${node.Description.Engine.EngineVersion}`,
                 ]}
