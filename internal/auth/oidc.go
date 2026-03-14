@@ -235,12 +235,13 @@ func claimsToIdentity(claims map[string]any) *Identity {
 }
 
 // extractBearerToken extracts the token from an Authorization: Bearer header.
+// The scheme comparison is case-insensitive per RFC 6750 Section 2.1.
 func extractBearerToken(r *http.Request) string {
 	auth := r.Header.Get("Authorization")
-	if !strings.HasPrefix(auth, "Bearer ") {
-		return ""
+	if len(auth) > 7 && strings.EqualFold(auth[:7], "bearer ") {
+		return auth[7:]
 	}
-	return auth[7:]
+	return ""
 }
 
 // generateState returns 16 random bytes hex-encoded for CSRF protection.

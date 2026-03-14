@@ -220,9 +220,12 @@ func TestExtractBearerToken(t *testing.T) {
 		want   string
 	}{
 		{"Bearer abc123", "abc123"},
-		{"bearer abc123", ""},
+		{"bearer abc123", "abc123"},
+		{"BEARER abc123", "abc123"},
 		{"Basic abc123", ""},
 		{"", ""},
+		{"Bearer", ""},
+		{"Bearer ", ""},
 	}
 
 	for _, tt := range tests {
