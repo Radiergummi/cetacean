@@ -169,15 +169,15 @@ export default function TaskDetail() {
 function cpuGaugePercent(currentCpu: number | null, service: Service | null): number | null {
   if (currentCpu == null) return null;
   const limitNano = service?.Spec.TaskTemplate.Resources?.Limits?.NanoCPUs;
+  if (!limitNano) return null;
   // currentCpu is % of 1 vCPU (e.g. 150 = 1.5 cores). Convert limit from
   // nanoseconds to the same unit: 1e9 nano = 1 core = 100%.
-  if (limitNano) return currentCpu / (limitNano / 1e7);
-  return currentCpu;
+  return currentCpu / (limitNano / 1e7);
 }
 
 function memGaugePercent(currentMemory: number | null, service: Service | null): number | null {
   if (currentMemory == null) return null;
   const limitBytes = service?.Spec.TaskTemplate.Resources?.Limits?.MemoryBytes;
-  if (limitBytes) return (currentMemory / limitBytes) * 100;
-  return 100;
+  if (!limitBytes) return null;
+  return (currentMemory / limitBytes) * 100;
 }
