@@ -27,7 +27,7 @@ function DiskUsageTable({ data }: { data: DiskUsageSummary[] }) {
 
   return (
     <div className="rounded-lg border bg-card overflow-x-auto">
-      <table className="w-full min-w-max text-sm">
+      <table className="w-full min-w-max whitespace-nowrap text-sm">
         <thead>
           <tr className="border-b bg-muted/50">
             <th className="text-left p-3 font-medium">Type</th>
@@ -73,7 +73,7 @@ function DiskUsageTable({ data }: { data: DiskUsageSummary[] }) {
 function DiskUsageLoading() {
   return (
     <div className="rounded-lg border bg-card overflow-x-auto">
-      <table className="w-full min-w-max text-sm">
+      <table className="w-full min-w-max whitespace-nowrap text-sm">
         <thead>
           <tr className="border-b bg-muted/50">
             <th className="text-left p-3 font-medium">Type</th>

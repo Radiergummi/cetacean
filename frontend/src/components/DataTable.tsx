@@ -40,7 +40,7 @@ function PlainBody<T>({
           onClick={onRowClick ? () => onRowClick(item) : undefined}
         >
           {columns.map((column, colIndex) => (
-            <td key={colIndex} className={`p-3 text-sm ${column.className ?? ""}`}>
+            <td key={colIndex} className={`p-3 text-sm whitespace-nowrap ${column.className ?? ""}`}>
               {column.cell(item)}
             </td>
           ))}
@@ -97,7 +97,7 @@ function VirtualBody<T>({
             onClick={onRowClick ? () => onRowClick(item) : undefined}
           >
             {columns.map((column, colIndex) => (
-              <td key={colIndex} className={`p-3 text-sm ${column.className ?? ""}`}>
+              <td key={colIndex} className={`p-3 text-sm whitespace-nowrap ${column.className ?? ""}`}>
                 {column.cell(item)}
               </td>
             ))}
