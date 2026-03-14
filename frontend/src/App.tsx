@@ -2,15 +2,13 @@ import { Menu, X } from "lucide-react";
 import type React from "react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { BrowserRouter, Link, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { api } from "./api/client";
-import type { Identity } from "./api/types";
 import ConnectionStatus from "./components/ConnectionStatus";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { GlobalSearch, type GlobalSearchHandle } from "./components/search";
 import ShortcutsHelp from "./components/ShortcutsHelp";
 import ShortcutTooltip from "./components/ShortcutTooltip";
 import ThemeToggle from "./components/ThemeToggle";
-import { AuthContext, useAuth } from "./hooks/useAuth";
+import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { ConnectionProvider, SSE_EVENT_TYPES } from "./hooks/useResourceStream";
 
@@ -155,22 +153,6 @@ function UserBadge() {
       {identity.displayName || identity.email || identity.subject}
     </span>
   );
-}
-
-function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<{ identity: Identity | null; loading: boolean }>({
-    identity: null,
-    loading: true,
-  });
-
-  useEffect(() => {
-    api
-      .whoami()
-      .then((identity) => setState({ identity, loading: false }))
-      .catch(() => setState({ identity: null, loading: false }));
-  }, []);
-
-  return <AuthContext value={state}>{children}</AuthContext>;
 }
 
 function ConnectionTracker({ children }: { children: React.ReactNode }) {
