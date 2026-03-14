@@ -167,7 +167,7 @@ export default function DataTable<T>({ columns, data, keyFn, rowClassName, onRow
       className="overflow-x-auto rounded-lg border data-virtual:max-h-[calc(100vh-16rem)] data-virtual:overflow-y-auto outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
       onKeyDown={onKeyDown}
     >
-      <table className="w-full">
+      <table className="w-full min-w-max">
         <thead className="sticky top-0 z-10 bg-background">
           <tr className="border-b bg-muted/50">
             {columns.map((column, index) => (

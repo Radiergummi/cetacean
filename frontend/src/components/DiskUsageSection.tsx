@@ -26,8 +26,8 @@ function DiskUsageTable({ data }: { data: DiskUsageSummary[] }) {
   const reclaimable = data.reduce((sum, d) => sum + d.reclaimable, 0);
 
   return (
-    <div className="rounded-lg border bg-card overflow-hidden">
-      <table className="w-full text-sm">
+    <div className="rounded-lg border bg-card overflow-x-auto">
+      <table className="w-full min-w-max text-sm">
         <thead>
           <tr className="border-b bg-muted/50">
             <th className="text-left p-3 font-medium">Type</th>
@@ -72,8 +72,8 @@ function DiskUsageTable({ data }: { data: DiskUsageSummary[] }) {
 
 function DiskUsageLoading() {
   return (
-    <div className="rounded-lg border bg-card overflow-hidden">
-      <table className="w-full text-sm">
+    <div className="rounded-lg border bg-card overflow-x-auto">
+      <table className="w-full min-w-max text-sm">
         <thead>
           <tr className="border-b bg-muted/50">
             <th className="text-left p-3 font-medium">Type</th>

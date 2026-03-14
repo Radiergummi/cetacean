@@ -47,7 +47,7 @@ export default function TasksTable({ tasks, variant }: TasksTableProps) {
       controls={<TaskStateFilter tasks={tasks} active={stateFilter} onChange={setStateFilter} />}
     >
       <div className="overflow-auto rounded-lg border max-h-96">
-        <table className="w-full">
+        <table className="w-full min-w-max">
           <thead className="sticky top-0 z-10 bg-background">
             <tr className="border-b bg-muted/50">
               {variant === "node" && <th className="text-left p-3 text-sm font-medium">Service</th>}
