@@ -62,9 +62,29 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Set up structured logging
+	var logHandler slog.Handler
+	opts := &slog.HandlerOptions{Level: cfg.SlogLevel()}
+	if cfg.LogFormat == "text" {
+		logHandler = slog.NewTextHandler(os.Stdout, opts)
+	} else {
+		logHandler = slog.NewJSONHandler(os.Stdout, opts)
+	}
+	slog.SetDefault(slog.New(logHandler))
+
 	authCfg, err := config.LoadAuth()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "auth configuration error: %v\n", err)
+		os.Exit(1)
+	}
+
+	tlsCfg := config.LoadTLS()
+	if err := config.ValidateTLS(tlsCfg); err != nil {
+		fmt.Fprintf(os.Stderr, "TLS configuration error: %v\n", err)
+		os.Exit(1)
+	}
+	if authCfg.Mode == "cert" && !tlsCfg.Enabled() {
+		fmt.Fprintf(os.Stderr, "cert auth mode requires CETACEAN_TLS_CERT and CETACEAN_TLS_KEY\n")
 		os.Exit(1)
 	}
 
@@ -113,26 +133,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "unknown auth mode %q\n", authCfg.Mode)
 		os.Exit(1)
 	}
-
-	tlsCfg := config.LoadTLS()
-	if err := config.ValidateTLS(tlsCfg); err != nil {
-		fmt.Fprintf(os.Stderr, "TLS configuration error: %v\n", err)
-		os.Exit(1)
-	}
-	if authCfg.Mode == "cert" && !tlsCfg.Enabled() {
-		fmt.Fprintf(os.Stderr, "cert auth mode requires CETACEAN_TLS_CERT and CETACEAN_TLS_KEY\n")
-		os.Exit(1)
-	}
-
-	// Set up structured logging
-	var logHandler slog.Handler
-	opts := &slog.HandlerOptions{Level: cfg.SlogLevel()}
-	if cfg.LogFormat == "text" {
-		logHandler = slog.NewTextHandler(os.Stdout, opts)
-	} else {
-		logHandler = slog.NewJSONHandler(os.Stdout, opts)
-	}
-	slog.SetDefault(slog.New(logHandler))
 
 	// SSE broadcaster
 	broadcaster := api.NewBroadcaster(cfg.SSEBatchInterval)

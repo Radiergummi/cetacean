@@ -46,9 +46,6 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 		if id.Raw["subject_header"] != "X-User" {
 			t.Errorf("Raw[subject_header] = %v, want %q", id.Raw["subject_header"], "X-User")
 		}
-		if id.Raw["subject"] != "alice" {
-			t.Errorf("Raw[subject] = %v, want %q", id.Raw["subject"], "alice")
-		}
 	})
 
 	t.Run("missing subject header", func(t *testing.T) {

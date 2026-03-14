@@ -3,6 +3,7 @@ import type React from "react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { BrowserRouter, Link, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { api } from "./api/client";
+import type { Identity } from "./api/types";
 import ConnectionStatus from "./components/ConnectionStatus";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { GlobalSearch, type GlobalSearchHandle } from "./components/search";
@@ -157,7 +158,7 @@ function UserBadge() {
 }
 
 function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<{ identity: import("./api/types").Identity | null; loading: boolean }>({
+  const [state, setState] = useState<{ identity: Identity | null; loading: boolean }>({
     identity: null,
     loading: true,
   });

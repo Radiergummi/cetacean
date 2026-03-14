@@ -68,7 +68,6 @@ func (p *HeadersProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (
 		Groups:      groups,
 		Raw: map[string]any{
 			"subject_header": p.cfg.Subject,
-			"subject":        subject,
 		},
 	}, nil
 }

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	json "github.com/goccy/go-json"
+
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 )
@@ -83,7 +85,11 @@ func (p *OIDCProvider) Authenticate(w http.ResponseWriter, r *http.Request) (*Id
 
 	// 3. Browser request: redirect to OIDC authorize endpoint.
 	if strings.Contains(r.Header.Get("Accept"), "text/html") {
-		p.redirectToLogin(w, r, r.URL.RequestURI())
+		redirect := r.URL.RequestURI()
+		if !isRelativePath(redirect) {
+			redirect = "/"
+		}
+		p.redirectToLogin(w, r, redirect)
 		return nil, nil
 	}
 
@@ -96,12 +102,12 @@ func (p *OIDCProvider) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /auth/login", p.handleLogin)
 	mux.HandleFunc("GET /auth/callback", p.handleCallback)
 	mux.HandleFunc("GET /auth/logout", p.handleLogout)
-	mux.HandleFunc("GET /auth/whoami", WhoamiHandler(p))
+	mux.HandleFunc("GET /auth/whoami", p.handleWhoami)
 }
 
 func (p *OIDCProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 	redirect := r.URL.Query().Get("redirect")
-	if redirect == "" {
+	if !isRelativePath(redirect) {
 		redirect = "/"
 	}
 	p.redirectToLogin(w, r, redirect)
@@ -149,7 +155,7 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Read redirect URL before clearing cookies.
 	redirectURL := "/"
-	if c, err := r.Cookie("cetacean_auth_redirect"); err == nil && c.Value != "" {
+	if c, err := r.Cookie("cetacean_auth_redirect"); err == nil && isRelativePath(c.Value) {
 		redirectURL = c.Value
 	}
 
@@ -201,6 +207,32 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
+// handleWhoami returns the current identity from session cookie or Bearer
+// token, without triggering OIDC redirects. Returns 401 if unauthenticated.
+func (p *OIDCProvider) handleWhoami(w http.ResponseWriter, r *http.Request) {
+	// Check session cookie.
+	if id, err := p.session.Get(r); err == nil {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(id)
+		return
+	}
+
+	// Check Bearer token.
+	if token := extractBearerToken(r); token != "" {
+		idToken, err := p.verifier.Verify(r.Context(), token)
+		if err == nil {
+			var claims map[string]any
+			if err := idToken.Claims(&claims); err == nil {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(claimsToIdentity(claims))
+				return
+			}
+		}
+	}
+
+	http.Error(w, "Unauthorized", http.StatusUnauthorized)
+}
+
 func (p *OIDCProvider) handleLogout(w http.ResponseWriter, r *http.Request) {
 	p.session.Clear(w)
 	http.Redirect(w, r, "/", http.StatusFound)
@@ -242,6 +274,12 @@ func extractBearerToken(r *http.Request) string {
 		return auth[7:]
 	}
 	return ""
+}
+
+// isRelativePath returns true if s is a non-empty relative path (starts with /).
+// Rejects absolute URLs, protocol-relative URLs, and empty strings.
+func isRelativePath(s string) bool {
+	return len(s) > 0 && s[0] == '/' && (len(s) == 1 || s[1] != '/')
 }
 
 // generateState returns 16 random bytes hex-encoded for CSRF protection.

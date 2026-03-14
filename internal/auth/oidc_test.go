@@ -240,6 +240,26 @@ func TestExtractBearerToken(t *testing.T) {
 	}
 }
 
+func TestIsRelativePath(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		{"/", true},
+		{"/nodes", true},
+		{"/nodes?sort=name", true},
+		{"", false},
+		{"//evil.com", false},
+		{"https://evil.com", false},
+		{"javascript:alert(1)", false},
+	}
+	for _, tt := range tests {
+		if got := isRelativePath(tt.input); got != tt.want {
+			t.Errorf("isRelativePath(%q) = %v, want %v", tt.input, got, tt.want)
+		}
+	}
+}
+
 func TestGenerateState(t *testing.T) {
 	s := generateState()
 	if len(s) != 32 { // 16 bytes = 32 hex chars
