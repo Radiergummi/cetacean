@@ -24,14 +24,17 @@ export function useSwarmResource<T>(
   const [error, setError] = useState<Error | null>(null);
   const getIdRef = useRef(getId);
   getIdRef.current = getId;
+  const hasLoadedRef = useRef(false);
 
   const load = useCallback(() => {
-    setLoading(true);
+    // Only show loading skeleton on initial load, not on search/sort refetches
+    if (!hasLoadedRef.current) setLoading(true);
     setError(null);
     fetchFn()
       .then((resp) => {
         setData(resp.items);
         setTotal(resp.total);
+        hasLoadedRef.current = true;
       })
       .catch(setError)
       .finally(() => setLoading(false));
