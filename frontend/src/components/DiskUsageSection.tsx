@@ -98,43 +98,30 @@ function externalTooltipHandler(context: {
         return;
     }
 
-    const datasetIndex = model.dataPoints[0].datasetIndex;
     const idx = model.dataPoints[0].dataIndex;
-    const dataset = chart.data.datasets[datasetIndex];
-    const rawData = (dataset as unknown as { _rawData: DiskUsageSummary[] })._rawData;
-    const ring = (dataset as unknown as { _ring: string })._ring;
+    const rawData = (chart.data.datasets[0] as unknown as { _rawData: DiskUsageSummary[] })._rawData;
+    if (!rawData?.[idx]) return;
 
-    if (!rawData) return;
+    const d = rawData[idx];
+    const total = rawData.reduce((sum, r) => sum + r.totalSize, 0);
+    const color = getChartColor(idx);
+    const label = typeMeta[d.type]?.label ?? d.type;
+    const size = formatBytes(d.totalSize);
+    const pct = total > 0 ? Math.round((d.totalSize / total) * 100) : 0;
+    const pctText = `${pct}% of total`;
 
-    let label: string;
-    let color: string;
-    let size: string;
-    let pctText: string;
+    const el = buildTooltipEl(color, label, size, pctText);
 
-    if (ring === "outer") {
-        const d = rawData[idx];
-        if (!d) return;
-        const total = rawData.reduce((sum, r) => sum + r.totalSize, 0);
-        color = getChartColor(idx);
-        label = typeMeta[d.type]?.label ?? d.type;
-        size = formatBytes(d.totalSize);
-        const pct = total > 0 ? Math.round((d.totalSize / total) * 100) : 0;
-        pctText = `${pct}% of total`;
-    } else {
-        const typeIdx = Math.floor(idx / 2);
-        const isReclaimable = idx % 2 === 1;
-        const d = rawData[typeIdx];
-        if (!d) return;
-        color = getChartColor(typeIdx);
-        label = typeMeta[d.type]?.label ?? d.type;
-        const value = isReclaimable ? d.reclaimable : d.totalSize - d.reclaimable;
-        size = formatBytes(value);
-        const pct = d.totalSize > 0 ? Math.round((value / d.totalSize) * 100) : 0;
-        pctText = isReclaimable ? `${pct}% reclaimable` : `${pct}% in use`;
-        if (isReclaimable) color = color + "66";
+    // Add reclaimable info line
+    if (d.reclaimable > 0) {
+        const reclaimRow = document.createElement("div");
+        reclaimRow.className = "text-muted-foreground mt-0.5 text-right text-[10px]";
+        const reclaimPct = Math.round((d.reclaimable / d.totalSize) * 100);
+        reclaimRow.textContent = `${formatBytes(d.reclaimable)} reclaimable (${reclaimPct}%)`;
+        el.appendChild(reclaimRow);
     }
 
-    element.replaceChildren(buildTooltipEl(color, label, size, pctText));
+    element.replaceChildren(el);
 
     Object.assign(element.style, {
         opacity: "1",
@@ -147,48 +134,18 @@ function externalTooltipHandler(context: {
 function DoughnutChart({data}: { data: DiskUsageSummary[] }) {
     const total = useMemo(() => data.reduce((sum, {totalSize}) => sum + totalSize, 0), [data]);
 
-    const chartData = useMemo(() => {
-        const outerData = data.map((d) => d.totalSize);
-        const outerColors = data.map((_, i) => getChartColor(i));
-
-        const innerData: number[] = [];
-        const innerColors: string[] = [];
-        for (let i = 0; i < data.length; i++) {
-            const d = data[i];
-            const color = getChartColor(i);
-            const nonReclaim = d.totalSize - d.reclaimable;
-            innerData.push(nonReclaim, d.reclaimable);
-            innerColors.push(color, color + "66");
-        }
-
-        return {
-            labels: data.map((d) => typeMeta[d.type]?.label ?? d.type),
-            datasets: [
-                {
-                    data: withMinSlice(outerData),
-                    backgroundColor: outerColors,
-                    borderWidth: 0,
-                    borderRadius: 4,
-                    spacing: 3,
-                    hoverOffset: 3,
-                    weight: 2,
-                    _rawData: data,
-                    _ring: "outer" as const,
-                },
-                {
-                    data: withMinSlice(innerData, total),
-                    backgroundColor: innerColors,
-                    borderWidth: 0,
-                    borderRadius: 3,
-                    spacing: 2,
-                    hoverOffset: 3,
-                    weight: 1,
-                    _rawData: data,
-                    _ring: "inner" as const,
-                },
-            ],
-        };
-    }, [data, total]);
+    const chartData = useMemo(() => ({
+        labels: data.map((d) => typeMeta[d.type]?.label ?? d.type),
+        datasets: [{
+            data: withMinSlice(data.map((d) => d.totalSize)),
+            backgroundColor: data.map((_, i) => getChartColor(i)),
+            borderWidth: 0,
+            borderRadius: 4,
+            spacing: 3,
+            hoverOffset: 3,
+            _rawData: data,
+        }],
+    }), [data]);
 
     const centerTextPlugin = useMemo(
         () => (
