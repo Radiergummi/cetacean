@@ -42,6 +42,8 @@ interface Props {
   from?: number;
   to?: number;
   onRangeSelect?: (from: number, to: number) => void;
+  onSeriesDoubleClick?: (seriesLabel: string) => void;
+  onSeriesInfo?: (series: { label: string; color: string }[]) => void;
 }
 
 type State = "loading" | "data" | "empty" | "error";
@@ -122,6 +124,8 @@ export default function TimeSeriesChart({
   from,
   to,
   onRangeSelect,
+  onSeriesDoubleClick,
+  onSeriesInfo,
 }: Props) {
   const chartRef = useRef<ChartJS<"line"> | null>(null);
   const tooltipElRef = useRef<HTMLDivElement>(null);
@@ -182,6 +186,7 @@ export default function TimeSeriesChart({
         }));
 
         setFetchedData({ labels, timestamps, series });
+        onSeriesInfo?.(series.map((s) => ({ label: s.label, color: s.color })));
         setIsolatedIndex(null);
         setState("data");
       })
@@ -274,6 +279,19 @@ export default function TimeSeriesChart({
         tooltipRef.current(null);
         sync.publish(chartId, -1);
         chart.draw();
+        return;
+      }
+      if (args.event.type === "dblclick") {
+        const elements = chart.getElementsAtEventForMode(
+          args.event.native as Event,
+          "nearest",
+          { intersect: false, axis: "x" },
+          false,
+        );
+        if (elements.length > 0 && onSeriesDoubleClick) {
+          const label = chart.data.datasets[elements[0].datasetIndex]?.label;
+          if (label) onSeriesDoubleClick(label);
+        }
         return;
       }
       if (args.event.type === "click") {
@@ -404,6 +422,7 @@ export default function TimeSeriesChart({
     responsive: true,
     maintainAspectRatio: false,
     animation: false,
+    events: ['mousemove', 'mouseout', 'click', 'dblclick', 'touchstart', 'touchmove'] as unknown as undefined,
     interaction: {
       mode: "index",
       intersect: false,
@@ -456,7 +475,7 @@ export default function TimeSeriesChart({
         {unit && <span className="text-xs text-muted-foreground">{unit}</span>}
       </div>
 
-      {state === "loading" && <div className="h-[200px] rounded bg-muted/50" />}
+      {state === "loading" && !fetchedData && <div className="h-[200px] rounded bg-muted/50" />}
 
       {state === "error" && (
         <div className="h-[200px] rounded bg-destructive/5 border border-destructive/20 flex items-center justify-center">
@@ -483,6 +502,11 @@ export default function TimeSeriesChart({
       )}
 
       <div className="relative">
+        {state === "loading" && fetchedData && (
+          <div className="absolute top-2 right-2 z-10">
+            <RefreshCw className="size-3.5 animate-spin text-muted-foreground" />
+          </div>
+        )}
         <div className="overflow-hidden rounded-b-lg" hidden={state !== "data"}>
           {chartData && (
             <div className="h-[200px]">

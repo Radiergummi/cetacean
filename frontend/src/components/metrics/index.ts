@@ -1,4 +1,5 @@
 export { default as MetricsPanel } from "./MetricsPanel";
+export { default as StackDrillDownChart } from "./StackDrillDownChart";
 export { default as TimeSeriesChart } from "./TimeSeriesChart";
 export type { Threshold } from "./TimeSeriesChart";
 export { default as ResourceGauge } from "./ResourceGauge";
