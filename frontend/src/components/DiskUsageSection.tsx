@@ -48,7 +48,7 @@ function withMinSlice(values: number[], total?: number): number[] {
     return values.map((v) => Math.max(v, sum * minFraction));
 }
 
-function buildTooltipEl(color: string, label: string, size: string, pct: string): HTMLDivElement {
+function buildTooltipEl(color: string, label: string, size: string, pctText: string): HTMLDivElement {
     const element = document.createElement("div");
 
     const row = document.createElement("div");
@@ -70,7 +70,7 @@ function buildTooltipEl(color: string, label: string, size: string, pct: string)
 
     const pctRow = document.createElement("div");
     pctRow.className = "text-muted-foreground mt-0.5 text-right";
-    pctRow.textContent = `${pct} of total`;
+    pctRow.textContent = pctText;
 
     element.append(row, pctRow);
 
@@ -79,7 +79,7 @@ function buildTooltipEl(color: string, label: string, size: string, pct: string)
 
 function externalTooltipHandler(context: {
     chart: ChartJS;
-    tooltip: { opacity: number; dataPoints?: { dataIndex: number }[]; caretX: number; caretY: number };
+    tooltip: { opacity: number; dataPoints?: { dataIndex: number; datasetIndex: number }[]; caretX: number; caretY: number };
 }) {
     const {chart, tooltip: model} = context;
     const canvas = chart.canvas;
@@ -96,24 +96,43 @@ function externalTooltipHandler(context: {
         return;
     }
 
+    const datasetIndex = model.dataPoints[0].datasetIndex;
     const idx = model.dataPoints[0].dataIndex;
-    const meta = chart.data.datasets[0];
-    const rawData = (
-        meta as unknown as { _rawData: DiskUsageSummary[] }
-    )._rawData;
-    if (!rawData?.[idx]) {
-        return;
+    const dataset = chart.data.datasets[datasetIndex];
+    const rawData = (dataset as unknown as { _rawData: DiskUsageSummary[] })._rawData;
+    const ring = (dataset as unknown as { _ring: string })._ring;
+
+    if (!rawData) return;
+
+    let label: string;
+    let color: string;
+    let size: string;
+    let pctText: string;
+
+    if (ring === "outer") {
+        const d = rawData[idx];
+        if (!d) return;
+        const total = rawData.reduce((sum, r) => sum + r.totalSize, 0);
+        color = getChartColor(idx);
+        label = typeMeta[d.type]?.label ?? d.type;
+        size = formatBytes(d.totalSize);
+        const pct = total > 0 ? Math.round((d.totalSize / total) * 100) : 0;
+        pctText = `${pct}% of total`;
+    } else {
+        const typeIdx = Math.floor(idx / 2);
+        const isReclaimable = idx % 2 === 1;
+        const d = rawData[typeIdx];
+        if (!d) return;
+        color = getChartColor(typeIdx);
+        label = typeMeta[d.type]?.label ?? d.type;
+        const value = isReclaimable ? d.reclaimable : d.totalSize - d.reclaimable;
+        size = formatBytes(value);
+        const pct = d.totalSize > 0 ? Math.round((value / d.totalSize) * 100) : 0;
+        pctText = isReclaimable ? `${pct}% reclaimable` : `${pct}% in use`;
+        if (isReclaimable) color = color + "66";
     }
 
-    const {totalSize, type} = rawData[idx];
-    const total = rawData.reduce((sum, {totalSize}) => sum + totalSize, 0);
-    const color = getChartColor(idx);
-    const label = typeMeta[type]?.label ?? type;
-    const pct = total > 0 ? Math.round((
-        totalSize / total
-    ) * 100) + "%" : "0%";
-
-    element.replaceChildren(buildTooltipEl(color, label, formatBytes(totalSize), pct));
+    element.replaceChildren(buildTooltipEl(color, label, size, pctText));
 
     Object.assign(element.style, {
         opacity: "1",
@@ -136,19 +155,47 @@ function DoughnutChart({data}: { data: DiskUsageSummary[] }) {
     }
 
     const chartData = useMemo(() => {
-        const dataset = {
-            data: withMinSlice(data.map((d) => d.totalSize)),
-            backgroundColor: data.map((_, index) => getChartColor(index)),
-            borderWidth: 0,
-            borderRadius: 4,
-            spacing: 3,
-            hoverOffset: 3,
-            _rawData: data,
-        };
+        const outerData = data.map((d) => d.totalSize);
+        const outerColors = data.map((_, i) => getChartColor(i));
+
+        const innerData: number[] = [];
+        const innerColors: string[] = [];
+        for (let i = 0; i < data.length; i++) {
+            const d = data[i];
+            const color = getChartColor(i);
+            const nonReclaim = d.totalSize - d.reclaimable;
+            innerData.push(nonReclaim, d.reclaimable);
+            innerColors.push(color, color + "66");
+        }
+
+        const total = data.reduce((s, d) => s + d.totalSize, 0);
 
         return {
-            labels: data.map(({type}) => typeMeta[type]?.label ?? type),
-            datasets: [dataset],
+            labels: data.map((d) => typeMeta[d.type]?.label ?? d.type),
+            datasets: [
+                {
+                    data: withMinSlice(outerData),
+                    backgroundColor: outerColors,
+                    borderWidth: 0,
+                    borderRadius: 4,
+                    spacing: 3,
+                    hoverOffset: 3,
+                    weight: 2,
+                    _rawData: data,
+                    _ring: "outer" as const,
+                },
+                {
+                    data: withMinSlice(innerData, total),
+                    backgroundColor: innerColors,
+                    borderWidth: 0,
+                    borderRadius: 3,
+                    spacing: 2,
+                    hoverOffset: 3,
+                    weight: 1,
+                    _rawData: data,
+                    _ring: "inner" as const,
+                },
+            ],
         };
     }, [data]);
 
