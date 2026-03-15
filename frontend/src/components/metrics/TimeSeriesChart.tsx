@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import { RefreshCw, BarChart3 } from "lucide-react";
+import { RefreshCw, BarChart3, LineChart, AreaChart } from "lucide-react";
 import {
   Chart as ChartJS,
   LineElement,
@@ -45,6 +45,7 @@ interface Props {
   onRangeSelect?: (from: number, to: number) => void;
   onSeriesDoubleClick?: (seriesLabel: string) => void;
   onSeriesInfo?: (series: { label: string; color: string }[]) => void;
+  stackable?: boolean;
 }
 
 type State = "loading" | "data" | "empty" | "error";
@@ -127,6 +128,7 @@ export default function TimeSeriesChart({
   onRangeSelect,
   onSeriesDoubleClick,
   onSeriesInfo,
+  stackable,
 }: Props) {
   const chartRef = useRef<ChartJS<"line"> | null>(null);
   const tooltipElRef = useRef<HTMLDivElement>(null);
@@ -146,6 +148,12 @@ export default function TimeSeriesChart({
   onSeriesDoubleClickRef.current = onSeriesDoubleClick;
   const onRangeSelectRef = useRef(onRangeSelect);
   onRangeSelectRef.current = onRangeSelect;
+
+  const [stacked, setStacked] = useState(false);
+  const stackedRef = useRef(false);
+  stackedRef.current = stacked;
+  const originalSeriesRef = useRef(fetchedData?.series);
+  if (fetchedData) originalSeriesRef.current = fetchedData.series;
 
   const [isolatedIndex, setIsolatedIndex] = useState<number | null>(null);
   const justZoomedRef = useRef(false);
@@ -237,6 +245,21 @@ export default function TimeSeriesChart({
         labels: fetchedData.labels,
         datasets: fetchedData.series.map((s, i) => {
           const dimmed = isolatedIndex != null && isolatedIndex !== i;
+          if (stacked) {
+            return {
+              label: s.label,
+              data: dimmed ? s.data.map(() => 0) : s.data,
+              borderColor: s.color,
+              borderWidth: 1,
+              pointRadius: 0,
+              pointHoverRadius: dimmed ? 0 : 3,
+              pointHoverBackgroundColor: s.color,
+              pointHoverBorderWidth: 0,
+              tension: 0.3,
+              fill: "stack" as const,
+              backgroundColor: s.color + "66",
+            };
+          }
           return {
             label: s.label,
             data: s.data,
@@ -375,6 +398,19 @@ export default function TimeSeriesChart({
       }
       items.sort((a, b) => b.raw - a.raw);
 
+      if (stackedRef.current && originalSeriesRef.current) {
+        const total = originalSeriesRef.current.reduce((sum, ser) => {
+          const v = ser.data[idx];
+          return sum + (v ?? 0);
+        }, 0);
+        items.push({
+          label: "Total",
+          color: "transparent",
+          value: formatValue(total, unitRef.current),
+          raw: total,
+        });
+      }
+
       const fetched = fetchedDataRef.current;
       const timestamp = fetched?.timestamps[idx];
       const time = timestamp ? new Date(timestamp * 1000).toLocaleTimeString() : "";
@@ -480,6 +516,7 @@ export default function TimeSeriesChart({
       x: { display: false },
       y: {
         display: false,
+        stacked: stacked || undefined,
         min: yMin,
         suggestedMax,
       },
@@ -487,15 +524,33 @@ export default function TimeSeriesChart({
     elements: {
       point: { radius: 0 },
     },
-  }), [yMin, suggestedMax]);
+  }), [yMin, suggestedMax, stacked]);
 
   const plugins = useMemo(() => [thresholdPlugin, crosshairPlugin], [thresholdPlugin, crosshairPlugin]);
 
   return (
     <div className="rounded-lg border bg-card overflow-visible">
-      <div className="flex items-center justify-between px-4 pt-4 pb-2">
+      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
         <span className="text-sm font-medium">{title}</span>
-        {unit && <span className="text-xs text-muted-foreground">{unit}</span>}
+        {stackable && (
+          <div className="flex items-center gap-0.5 ml-1">
+            <button
+              onClick={() => setStacked(false)}
+              className={`p-0.5 rounded ${!stacked ? "bg-muted" : "hover:bg-muted/50"}`}
+              title="Line chart"
+            >
+              <LineChart className="size-3.5" />
+            </button>
+            <button
+              onClick={() => setStacked(true)}
+              className={`p-0.5 rounded ${stacked ? "bg-muted" : "hover:bg-muted/50"}`}
+              title="Stacked area"
+            >
+              <AreaChart className="size-3.5" />
+            </button>
+          </div>
+        )}
+        {unit && <span className="text-xs text-muted-foreground ml-auto">{unit}</span>}
       </div>
 
       {state === "loading" && !fetchedData && <div className="h-[200px] rounded bg-muted/50" />}
