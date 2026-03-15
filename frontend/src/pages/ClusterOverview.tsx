@@ -8,8 +8,7 @@ import PageHeader from "../components/PageHeader";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
 import DiskUsageSection from "../components/DiskUsageSection";
-import MetricsPanel from "../components/metrics/MetricsPanel";
-import { MonitoringStatus, CapacitySection } from "../components/metrics";
+import { MetricsPanel, MonitoringStatus, CapacitySection, StackDrillDownChart } from "../components/metrics";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 
 export default function ClusterOverview() {
@@ -148,23 +147,22 @@ export default function ClusterOverview() {
 
       {hasCadvisor && (
         <div className="mb-6">
-          <MetricsPanel
-            header="Resource Usage by Service"
-            charts={[
-              {
-                title: "CPU Usage (top 10)",
-                query: `topk(10, sum by (container_label_com_docker_swarm_service_name)(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name!=""}[5m])) * 100)`,
-                unit: "%",
-                yMin: 0,
-              },
-              {
-                title: "Memory Usage (top 10)",
-                query: `topk(10, sum by (container_label_com_docker_swarm_service_name)(container_memory_usage_bytes{container_label_com_docker_swarm_service_name!=""}))`,
-                unit: "bytes",
-                yMin: 0,
-              },
-            ]}
-          />
+          <MetricsPanel header="Resource Usage by Stack">
+            <StackDrillDownChart
+              title="CPU Usage (by Stack)"
+              stackQuery={`topk(10, sum by (container_label_com_docker_stack_namespace)(rate(container_cpu_usage_seconds_total{container_label_com_docker_stack_namespace!=""}[5m])) * 100)`}
+              serviceQueryTemplate={`sum by (container_label_com_docker_swarm_service_name)(rate(container_cpu_usage_seconds_total{container_label_com_docker_stack_namespace="<STACK>", container_label_com_docker_swarm_service_name!=""}[5m])) * 100`}
+              unit="%"
+              yMin={0}
+            />
+            <StackDrillDownChart
+              title="Memory Usage (by Stack)"
+              stackQuery={`topk(10, sum by (container_label_com_docker_stack_namespace)(container_memory_usage_bytes{container_label_com_docker_stack_namespace!=""}))`}
+              serviceQueryTemplate={`sum by (container_label_com_docker_swarm_service_name)(container_memory_usage_bytes{container_label_com_docker_stack_namespace="<STACK>", container_label_com_docker_swarm_service_name!=""})`}
+              unit="bytes"
+              yMin={0}
+            />
+          </MetricsPanel>
         </div>
       )}
 

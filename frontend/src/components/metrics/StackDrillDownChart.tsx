@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { ChevronLeft } from "lucide-react";
 import TimeSeriesChart from "./TimeSeriesChart";
 import type { Threshold } from "./TimeSeriesChart";
+import { useMetricsPanelContext } from "./MetricsPanel";
 
 interface Props {
   title: string;
@@ -32,6 +33,14 @@ export default function StackDrillDownChart({
   onRangeSelect,
   thresholds,
 }: Props) {
+  const panel = useMetricsPanelContext();
+  const effectiveRange = range ?? panel?.range ?? "1h";
+  const effectiveFrom = from ?? panel?.from;
+  const effectiveTo = to ?? panel?.to;
+  const effectiveRefreshKey = refreshKey ?? panel?.refreshKey;
+  const effectiveSyncKey = syncKey ?? panel?.syncKey;
+  const effectiveOnRangeSelect = onRangeSelect ?? panel?.onRangeSelect;
+
   const [drillStack, setDrillStack] = useState<string | null>(null);
   const [showLegend, setShowLegend] = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -71,12 +80,12 @@ export default function StackDrillDownChart({
         query={query}
         unit={unit}
         yMin={yMin}
-        range={range}
-        from={from}
-        to={to}
-        refreshKey={refreshKey}
-        syncKey={syncKey}
-        onRangeSelect={onRangeSelect}
+        range={effectiveRange}
+        from={effectiveFrom}
+        to={effectiveTo}
+        refreshKey={effectiveRefreshKey}
+        syncKey={effectiveSyncKey}
+        onRangeSelect={effectiveOnRangeSelect}
         thresholds={thresholds}
         onSeriesDoubleClick={drillStack ? undefined : handleSeriesDoubleClick}
         onSeriesInfo={setSeriesInfo}

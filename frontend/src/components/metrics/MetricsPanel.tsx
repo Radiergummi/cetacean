@@ -1,5 +1,5 @@
 import type React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, createContext, useContext } from "react";
 import { useSearchParams } from "react-router-dom";
 import { RefreshCw, Play, Square } from "lucide-react";
 import TimeSeriesChart from "./TimeSeriesChart";
@@ -11,6 +11,21 @@ import SegmentedControl from "../SegmentedControl";
 import type { Segment } from "../SegmentedControl";
 import RangePicker from "./RangePicker";
 
+export interface MetricsPanelContextValue {
+  range: string;
+  from?: number;
+  to?: number;
+  refreshKey: number;
+  syncKey: string;
+  onRangeSelect: (from: number, to: number) => void;
+}
+
+const MetricsPanelContext = createContext<MetricsPanelContextValue | null>(null);
+
+export function useMetricsPanelContext(): MetricsPanelContextValue | null {
+  return useContext(MetricsPanelContext);
+}
+
 interface ChartDef {
   title: string;
   query: string;
@@ -21,14 +36,15 @@ interface ChartDef {
 }
 
 interface Props {
-  charts: ChartDef[];
+  charts?: ChartDef[];
+  children?: React.ReactNode;
   header?: React.ReactNode;
 }
 
 const RANGES = ["1h", "6h", "24h", "7d"] as const;
 const RANGE_SEGMENTS: Segment<string>[] = RANGES.map((r) => ({ value: r, label: r }));
 
-export default function MetricsPanel({ charts, header }: Props) {
+export default function MetricsPanel({ charts, children, header }: Props) {
   const [params, setParams] = useSearchParams();
   const range = params.get("range") ?? "1h";
 
@@ -97,22 +113,24 @@ export default function MetricsPanel({ charts, header }: Props) {
 
   return (
     <CollapsibleSection title={typeof header === "string" ? header : "Metrics"} controls={controls}>
-      <ChartSyncProvider syncKey="metrics">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {charts.map((chart) => (
-            <TimeSeriesChart
-              key={chart.query}
-              {...chart}
-              range={range}
-              from={customFrom ?? undefined}
-              to={customTo ?? undefined}
-              refreshKey={refreshKey}
-              syncKey="metrics"
-              onRangeSelect={setCustomRange}
-            />
-          ))}
-        </div>
-      </ChartSyncProvider>
+      <MetricsPanelContext.Provider value={{ range, from: customFrom ?? undefined, to: customTo ?? undefined, refreshKey, syncKey: "metrics", onRangeSelect: setCustomRange }}>
+        <ChartSyncProvider syncKey="metrics">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {children ?? charts?.map((chart) => (
+              <TimeSeriesChart
+                key={chart.query}
+                {...chart}
+                range={range}
+                from={customFrom ?? undefined}
+                to={customTo ?? undefined}
+                refreshKey={refreshKey}
+                syncKey="metrics"
+                onRangeSelect={setCustomRange}
+              />
+            ))}
+          </div>
+        </ChartSyncProvider>
+      </MetricsPanelContext.Provider>
     </CollapsibleSection>
   );
 }
