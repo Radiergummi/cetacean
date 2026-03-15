@@ -16,7 +16,7 @@ import zoomPlugin from "chartjs-plugin-zoom";
 import { Line } from "react-chartjs-2";
 import { api } from "../../api/client";
 import { getChartColor } from "../../lib/chartColors";
-import { formatBytes } from "../../lib/formatBytes";
+import { formatMetricValue } from "../../lib/formatMetricValue";
 import { generateMockSeries } from "../../lib/mockChartData";
 import { useChartSync } from "./ChartSyncProvider";
 
@@ -66,14 +66,7 @@ const RANGE_SECONDS: Record<string, number> = {
 };
 
 
-function formatValue(v: number, unit?: string): string {
-  if (unit === "bytes" || unit === "bytes/s") {
-    return formatBytes(v) + (unit === "bytes/s" ? "/s" : "");
-  }
-  if (unit === "%") return `${v.toFixed(1)}%`;
-  if (unit === "cores") return `${v.toFixed(3)}`;
-  return v.toFixed(2);
-}
+const formatValue = formatMetricValue;
 
 function seriesLabel(metric: Record<string, string> | undefined, fallback?: string): string {
   if (!metric) return fallback ?? "value";
@@ -279,15 +272,14 @@ export default function TimeSeriesChart({
     };
   }, [fetchedData, isolatedIndex, stacked]);
 
-  // Compute y-axis bounds
-  let suggestedMax: number | undefined;
-  if (thresholds?.length && fetchedData) {
+  const suggestedMax = useMemo<number | undefined>(() => {
+    if (!thresholds?.length || !fetchedData) return undefined;
     const dataMax = Math.max(...fetchedData.series.flatMap((s) => s.data));
     let hi = dataMax;
     for (const t of thresholds) hi = Math.max(hi, t.value);
     const lo = yMin ?? Math.min(...fetchedData.series.flatMap((s) => s.data));
-    suggestedMax = hi + (hi - lo) * 0.1 || hi + 1;
-  }
+    return hi + (hi - lo) * 0.1 || hi + 1;
+  }, [thresholds, fetchedData, yMin]);
 
   const thresholdPlugin = useMemo<Plugin<"line">>(() => ({
     id: "thresholdLines",

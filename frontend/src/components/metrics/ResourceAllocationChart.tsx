@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import {
   Chart as ChartJS,
   BarElement,
@@ -9,7 +9,7 @@ import {
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import { getChartColor } from "../../lib/chartColors";
-import { formatBytes } from "../../lib/formatBytes";
+import { formatMetricValue } from "../../lib/formatMetricValue";
 
 ChartJS.register(BarElement, CategoryScale, LinearScale);
 
@@ -21,13 +21,10 @@ interface BarChartProps {
   unit: "%" | "bytes";
 }
 
-function formatBarValue(v: number, unit: "%" | "bytes"): string {
-  if (unit === "%") return `${v.toFixed(1)}%`;
-  return formatBytes(v);
-}
-
 function AllocationBar({ title, reserved, actual, limit, unit }: BarChartProps) {
   const color = getChartColor(0);
+  const limitRef = useRef(limit);
+  limitRef.current = limit;
 
   const chartData = useMemo(() => {
     const labels: string[] = [];
@@ -52,10 +49,11 @@ function AllocationBar({ title, reserved, actual, limit, unit }: BarChartProps) 
   const limitPlugin = useMemo<Plugin<"bar">>(() => ({
     id: "limitMarker",
     afterDatasetsDraw(chart) {
-      if (limit == null) return;
+      const lim = limitRef.current;
+      if (lim == null) return;
       const { ctx, chartArea, scales } = chart;
       if (!chartArea || !scales.x) return;
-      const xPixel = scales.x.getPixelForValue(limit);
+      const xPixel = scales.x.getPixelForValue(lim);
       if (xPixel < chartArea.left || xPixel > chartArea.right) return;
       ctx.save();
       ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--destructive").trim() || "#ef4444";
@@ -67,7 +65,7 @@ function AllocationBar({ title, reserved, actual, limit, unit }: BarChartProps) 
       ctx.stroke();
       ctx.restore();
     },
-  }), [limit]);
+  }), []);
 
   const maxVal = Math.max(reserved ?? 0, actual ?? 0, limit ?? 0) * 1.15;
 
@@ -80,7 +78,7 @@ function AllocationBar({ title, reserved, actual, limit, unit }: BarChartProps) 
       legend: { display: false },
       tooltip: {
         callbacks: {
-          label: (ctx) => ` ${formatBarValue(ctx.parsed.x ?? 0, unit)}`,
+          label: (ctx) => ` ${formatMetricValue(ctx.parsed.x ?? 0, unit)}`,
         },
       },
     },
@@ -109,7 +107,7 @@ function AllocationBar({ title, reserved, actual, limit, unit }: BarChartProps) 
         <span className="text-sm font-medium">{title}</span>
         {limit != null && (
           <span className="text-[11px] text-muted-foreground">
-            Limit: {formatBarValue(limit, unit)}
+            Limit: {formatMetricValue(limit, unit)}
           </span>
         )}
       </div>

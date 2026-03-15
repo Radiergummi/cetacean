@@ -195,18 +195,16 @@ export default function ServiceDetail() {
       )}
 
       {(cpuReserved != null || cpuLimit != null || memReserved != null || memLimit != null) && (
-        <div className="mb-6">
-          <CollapsibleSection title="Resource Allocation">
-            <ResourceAllocationChart
-              cpuReserved={cpuReserved}
-              cpuLimit={cpuLimit}
-              cpuActual={cpuActual}
-              memReserved={memReserved}
-              memLimit={memLimit}
-              memActual={memActual}
-            />
-          </CollapsibleSection>
-        </div>
+        <CollapsibleSection title="Resource Allocation">
+          <ResourceAllocationChart
+            cpuReserved={cpuReserved}
+            cpuLimit={cpuLimit}
+            cpuActual={cpuActual}
+            memReserved={memReserved}
+            memLimit={memLimit}
+            memActual={memActual}
+          />
+        </CollapsibleSection>
       )}
 
       {/* Container configuration */}
