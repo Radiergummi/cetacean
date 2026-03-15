@@ -16,6 +16,7 @@ import zoomPlugin from "chartjs-plugin-zoom";
 import { Line } from "react-chartjs-2";
 import { api } from "../../api/client";
 import { getChartColor } from "../../lib/chartColors";
+import { generateMockSeries } from "../../lib/mockChartData";
 import { useChartSync } from "./ChartSyncProvider";
 
 ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Filler, ChartTooltip, zoomPlugin);
@@ -184,6 +185,15 @@ export default function TimeSeriesChart({
         if (cancelled) return;
 
         if (!resp.data?.result?.length) {
+          if (import.meta.env.DEV) {
+            // In dev mode, show mock data so charts can be debugged without Prometheus data
+            const mock = generateMockSeries(title, unit, start, end, step, colorOverride);
+            setFetchedData(mock);
+            onSeriesInfo?.(mock.series.map((s) => ({ label: s.label, color: s.color })));
+            setIsolatedIndex(null);
+            setState("data");
+            return;
+          }
           setState("empty");
           return;
         }

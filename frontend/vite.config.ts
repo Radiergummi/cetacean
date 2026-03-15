@@ -13,7 +13,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "^/(nodes|services|tasks|configs|secrets|networks|volumes|stacks|search|events|topology|cluster|swarm|plugins|disk-usage|history|notifications|api|-|debug)":
+      "^/(nodes|services|tasks|configs|secrets|networks|volumes|stacks|search|events|topology|cluster|swarm|plugins|disk-usage|history|notifications|prometheus|api|-|debug)":
         {
           target: "http://localhost:9000",
           bypass(req) {
