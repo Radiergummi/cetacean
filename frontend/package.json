@@ -19,6 +19,7 @@
     "@tanstack/react-virtual": "^3.13.21",
     "@xyflow/react": "^12.10.1",
     "chart.js": "^4.5.1",
+    "chartjs-plugin-zoom": "^2.2.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "elkjs": "^0.11.1",
