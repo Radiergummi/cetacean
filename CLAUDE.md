@@ -91,7 +91,7 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 - **`filter/`** — Expression-based filtering using `expr-lang/expr`. Each resource type has an env builder exposing fields for filter expressions.
 
 ### Frontend (`frontend/src/`)
-- React 19 + TypeScript + Vite, Tailwind CSS v4, shadcn/ui components, uPlot for time-series charts
+- React 19 + TypeScript + Vite, Tailwind CSS v4, shadcn/ui components, Chart.js for time-series and doughnut charts
 - **`api/client.ts`** — Fetch wrapper for all API endpoints. All requests include `Accept: application/json` header (required for content negotiation — without it, resource paths serve the SPA HTML). Detail methods: `api.node(id)`, `api.service(id)`, `api.task(id)`, `api.stack(name)`, `api.config(id)`, `api.secret(id)`, `api.network(id)`, `api.volume(name)`. Global search: `api.search(q, limit?)`.
 - **`api/types.ts`** — TypeScript types matching the Go JSON responses. Detail response types bundle the resource + `ServiceRef[]` cross-references.
 - **`hooks/useResourceStream.ts`** — Opens a per-path `EventSource` and dispatches parsed SSE events to a listener. Replaces the old single-connection SSE context. Also exports `ConnectionProvider`/`useConnection` for connection status UI.
@@ -101,7 +101,7 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 - **`components/`** — Key components:
   - `DataTable` — auto-virtualizes above 100 rows via `@tanstack/react-virtual`
   - `log/` — Modular log viewer: `LogViewer` (orchestrator), `LogTable` (virtual/plain rendering), `LogMessage` (line renderer with JSON pretty-print), `LogToolbar` (time range, stream/level filters), `useLogData` (fetch + SSE streaming + pagination), `useLogFilter` (search/level/task filtering), `useLogTimeRange` (URL-persisted time range), `log-utils` (types, constants, formatters)
-  - `metrics/` — `TimeSeriesChart` (uPlot canvas), `MetricsPanel` (range picker + N charts), `ResourceGauge` (SVG half-circle), `NodeResourceGauges`, `CapacitySection` (cluster utilization bars), `MonitoringStatus` (auto-detection banner with 4 states: unconfigured, unreachable, partial, healthy)
+  - `metrics/` — `TimeSeriesChart` (Chart.js canvas), `MetricsPanel` (range picker + N charts), `ResourceGauge` (SVG half-circle), `NodeResourceGauges`, `CapacitySection` (cluster utilization bars), `MonitoringStatus` (auto-detection banner with 4 states: unconfigured, unreachable, partial, healthy)
   - `search/` — `GlobalSearch` (nav bar trigger + Cmd+K), `SearchPalette` (command palette with grouped results, keyboard nav, 2s polling), `SearchInput`
   - `ActivitySection` — recent resource change history feed (wraps `ActivityFeed`)
   - `CollapsibleSection` — collapsible wrapper with localStorage-persisted open/closed state
