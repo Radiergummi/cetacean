@@ -1,17 +1,16 @@
 package config
 
 import (
-	"os"
 	"testing"
 	"time"
 )
 
 func TestLoad_Defaults(t *testing.T) {
-	os.Unsetenv("CETACEAN_DOCKER_HOST")
-	os.Unsetenv("CETACEAN_PROMETHEUS_URL")
-	os.Unsetenv("CETACEAN_LISTEN_ADDR")
+	t.Setenv("CETACEAN_DOCKER_HOST", "")
+	t.Setenv("CETACEAN_PROMETHEUS_URL", "")
+	t.Setenv("CETACEAN_LISTEN_ADDR", "")
 
-	cfg, err := Load()
+	cfg, err := Load(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -23,7 +22,7 @@ func TestLoad_Defaults(t *testing.T) {
 func TestLoad_WithRequiredEnv(t *testing.T) {
 	t.Setenv("CETACEAN_PROMETHEUS_URL", "http://prometheus:9090")
 
-	cfg, err := Load()
+	cfg, err := Load(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -47,7 +46,7 @@ func TestLoad_AllEnvVars(t *testing.T) {
 	t.Setenv("CETACEAN_DATA_DIR", "/tmp/data")
 	t.Setenv("CETACEAN_SNAPSHOT", "false")
 
-	cfg, err := Load()
+	cfg, err := Load(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -99,88 +98,149 @@ func TestSlogLevel(t *testing.T) {
 	}
 }
 
-func TestEnvBool(t *testing.T) {
-	tests := []struct {
-		value    string
-		fallback bool
-		want     bool
-	}{
-		{"true", false, true},
-		{"1", false, true},
-		{"TRUE", false, true},
-		{"false", true, false},
-		{"0", true, false},
-		{"FALSE", true, false},
-		{"", true, true},        // empty → fallback
-		{"", false, false},      // empty → fallback
-		{"maybe", true, true},   // unknown → fallback
-		{"maybe", false, false}, // unknown → fallback
-	}
-	for _, tt := range tests {
-		t.Run(tt.value, func(t *testing.T) {
-			key := "TEST_ENVBOOL_" + tt.value
-			if tt.value != "" {
-				t.Setenv(key, tt.value)
-			}
-			got := envBool(key, tt.fallback)
-			if got != tt.want {
-				t.Errorf("envBool(%q, %v)=%v, want %v", tt.value, tt.fallback, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestEnvDuration(t *testing.T) {
-	t.Run("valid values", func(t *testing.T) {
-		tests := []struct {
-			value    string
-			fallback time.Duration
-			want     time.Duration
-		}{
-			{"50ms", 100 * time.Millisecond, 50 * time.Millisecond},
-			{"2s", 100 * time.Millisecond, 2 * time.Second},
-			{"", 100 * time.Millisecond, 100 * time.Millisecond}, // empty → fallback
-		}
-		for _, tt := range tests {
-			t.Run(tt.value, func(t *testing.T) {
-				key := "TEST_ENVDUR_" + tt.value
-				if tt.value != "" {
-					t.Setenv(key, tt.value)
-				}
-				got, err := envDuration(key, tt.fallback)
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				if got != tt.want {
-					t.Errorf("envDuration(%q, %v)=%v, want %v", tt.value, tt.fallback, got, tt.want)
-				}
-			})
-		}
-	})
-
-	t.Run("invalid values return error", func(t *testing.T) {
-		for _, value := range []string{"invalid", "-5ms", "0"} {
-			t.Run(value, func(t *testing.T) {
-				key := "TEST_ENVDUR_ERR_" + value
-				t.Setenv(key, value)
-				_, err := envDuration(key, 100*time.Millisecond)
-				if err == nil {
-					t.Errorf("envDuration(%q) should return error for %q", key, value)
-				}
-			})
-		}
-	})
-}
-
 func TestLoad_SSEBatchInterval(t *testing.T) {
 	t.Setenv("CETACEAN_PROMETHEUS_URL", "http://prom:9090")
 	t.Setenv("CETACEAN_SSE_BATCH_INTERVAL", "200ms")
 
-	cfg, err := Load()
+	cfg, err := Load(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if cfg.SSEBatchInterval != 200*time.Millisecond {
 		t.Errorf("SSEBatchInterval=%v, want 200ms", cfg.SSEBatchInterval)
+	}
+}
+
+func TestLoad_FlagOverridesEnv(t *testing.T) {
+	t.Setenv("CETACEAN_LISTEN_ADDR", ":8080")
+
+	listen := ":9090"
+	flags := &Flags{Listen: &listen}
+
+	cfg, err := Load(nil, flags)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.ListenAddr != ":9090" {
+		t.Errorf("ListenAddr=%s, want :9090 (flag should override env)", cfg.ListenAddr)
+	}
+}
+
+func TestLoad_EnvOverridesFile(t *testing.T) {
+	t.Setenv("CETACEAN_LISTEN_ADDR", ":8080")
+
+	listen := ":7070"
+	fc := &fileConfig{
+		Server: &fileServer{ListenAddr: &listen},
+	}
+
+	cfg, err := Load(fc, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.ListenAddr != ":8080" {
+		t.Errorf("ListenAddr=%s, want :8080 (env should override file)", cfg.ListenAddr)
+	}
+}
+
+func TestLoad_FileOverridesDefault(t *testing.T) {
+	t.Setenv("CETACEAN_LISTEN_ADDR", "")
+
+	listen := ":7070"
+	fc := &fileConfig{
+		Server: &fileServer{ListenAddr: &listen},
+	}
+
+	cfg, err := Load(fc, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.ListenAddr != ":7070" {
+		t.Errorf("ListenAddr=%s, want :7070 (file should override default)", cfg.ListenAddr)
+	}
+}
+
+func TestLoad_FullPrecedence(t *testing.T) {
+	t.Setenv("CETACEAN_LISTEN_ADDR", ":8080")
+
+	fileListen := ":7070"
+	fc := &fileConfig{
+		Server: &fileServer{ListenAddr: &fileListen},
+	}
+
+	flagListen := ":9090"
+	flags := &Flags{Listen: &flagListen}
+
+	cfg, err := Load(fc, flags)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.ListenAddr != ":9090" {
+		t.Errorf("ListenAddr=%s, want :9090 (flag > env > file > default)", cfg.ListenAddr)
+	}
+}
+
+func TestLoad_FileConfig(t *testing.T) {
+	t.Setenv("CETACEAN_DOCKER_HOST", "")
+	t.Setenv("CETACEAN_PROMETHEUS_URL", "")
+	t.Setenv("CETACEAN_LISTEN_ADDR", "")
+	t.Setenv("CETACEAN_LOG_LEVEL", "")
+	t.Setenv("CETACEAN_LOG_FORMAT", "")
+	t.Setenv("CETACEAN_DATA_DIR", "")
+	t.Setenv("CETACEAN_SNAPSHOT", "")
+	t.Setenv("CETACEAN_PPROF", "")
+
+	listen := ":7070"
+	pprof := true
+	batch := "50ms"
+	host := "tcp://myhost:2375"
+	promURL := "http://myprom:9090"
+	level := "debug"
+	format := "text"
+	dataDir := "/var/lib/cetacean"
+	snapshot := false
+
+	fc := &fileConfig{
+		Server: &fileServer{
+			ListenAddr: &listen,
+			Pprof:      &pprof,
+			SSE:        &fileSSE{BatchInterval: &batch},
+		},
+		Docker:  &fileDocker{Host: &host},
+		Prom:    &fileProm{URL: &promURL},
+		Logging: &fileLogging{Level: &level, Format: &format},
+		Storage: &fileStorage{DataDir: &dataDir, Snapshot: &snapshot},
+	}
+
+	cfg, err := Load(fc, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.ListenAddr != ":7070" {
+		t.Errorf("ListenAddr=%s", cfg.ListenAddr)
+	}
+	if cfg.Pprof != true {
+		t.Errorf("Pprof=%v", cfg.Pprof)
+	}
+	if cfg.SSEBatchInterval != 50*time.Millisecond {
+		t.Errorf("SSEBatchInterval=%v", cfg.SSEBatchInterval)
+	}
+	if cfg.DockerHost != "tcp://myhost:2375" {
+		t.Errorf("DockerHost=%s", cfg.DockerHost)
+	}
+	if cfg.PrometheusURL != "http://myprom:9090" {
+		t.Errorf("PrometheusURL=%s", cfg.PrometheusURL)
+	}
+	if cfg.LogLevel != "debug" {
+		t.Errorf("LogLevel=%s", cfg.LogLevel)
+	}
+	if cfg.LogFormat != "text" {
+		t.Errorf("LogFormat=%s", cfg.LogFormat)
+	}
+	if cfg.DataDir != "/var/lib/cetacean" {
+		t.Errorf("DataDir=%s", cfg.DataDir)
+	}
+	if cfg.Snapshot != false {
+		t.Errorf("Snapshot=%v", cfg.Snapshot)
 	}
 }

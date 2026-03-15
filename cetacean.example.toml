@@ -1,0 +1,26 @@
+# Cetacean configuration file
+# Copy to cetacean.toml and adjust as needed.
+# All values shown are defaults. Uncomment to override.
+#
+# Precedence: CLI flag > environment variable > config file > default
+
+[server]
+# listen_addr = ":9000"           # CETACEAN_LISTEN_ADDR
+# pprof = false                   # CETACEAN_PPROF
+
+[server.sse]
+# batch_interval = "100ms"        # CETACEAN_SSE_BATCH_INTERVAL
+
+[docker]
+# host = "unix:///var/run/docker.sock"  # CETACEAN_DOCKER_HOST
+
+[prometheus]
+# url = ""                        # CETACEAN_PROMETHEUS_URL
+
+[logging]
+# level = "info"                  # CETACEAN_LOG_LEVEL  (debug, info, warn, error)
+# format = "json"                 # CETACEAN_LOG_FORMAT (json, text)
+
+[storage]
+# data_dir = "./data"             # CETACEAN_DATA_DIR
+# snapshot = true                 # CETACEAN_SNAPSHOT

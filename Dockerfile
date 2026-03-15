@@ -24,10 +24,10 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     -X github.com/radiergummi/cetacean/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     -o cetacean .
 
-FROM alpine:3.23
-RUN apk add --no-cache ca-certificates
+FROM scratch
+COPY --from=backend /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=backend /app/cetacean /usr/local/bin/cetacean
 EXPOSE 9000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
-  CMD wget -qO- http://localhost:9000/-/ready || exit 1
+CMD ["cetacean", "healthcheck"]
 ENTRYPOINT ["cetacean"]
