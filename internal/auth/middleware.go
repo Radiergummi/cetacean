@@ -11,7 +11,7 @@ import (
 // header value per RFC 9110. Providers return this to advertise their
 // authentication scheme in the 401 response.
 type AuthError struct {
-	Msg            string
+	Msg             string
 	WWWAuthenticate string
 }
 

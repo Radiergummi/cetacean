@@ -32,12 +32,12 @@ type OIDCProviderConfig struct {
 
 // OIDCProvider implements Provider using OpenID Connect authorization code flow.
 type OIDCProvider struct {
-	oauth2Config         oauth2.Config
-	verifier             *oidc.IDTokenVerifier
-	session              *SessionCodec
-	issuer               string // for RFC 9207 iss validation
-	issRequired          bool   // true if IdP advertises authorization_response_iss_parameter_supported
-	endSessionEndpoint   string // RFC 9722 RP-initiated logout; empty if not supported
+	oauth2Config          oauth2.Config
+	verifier              *oidc.IDTokenVerifier
+	session               *SessionCodec
+	issuer                string // for RFC 9207 iss validation
+	issRequired           bool   // true if IdP advertises authorization_response_iss_parameter_supported
+	endSessionEndpoint    string // RFC 9722 RP-initiated logout; empty if not supported
 	postLogoutRedirectURL string // derived from RedirectURL origin
 }
 

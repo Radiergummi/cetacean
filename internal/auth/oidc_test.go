@@ -309,9 +309,9 @@ func TestClaimsToIdentity_GroupsWithNonStrings(t *testing.T) {
 func TestClaimsToIdentity_WrongTypes(t *testing.T) {
 	// Claims with wrong types should be handled gracefully.
 	claims := map[string]any{
-		"sub":    42,        // number instead of string
-		"name":   true,      // bool instead of string
-		"email":  []any{},   // array instead of string
+		"sub":    42,      // number instead of string
+		"name":   true,    // bool instead of string
+		"email":  []any{}, // array instead of string
 		"groups": "not-an-array",
 	}
 

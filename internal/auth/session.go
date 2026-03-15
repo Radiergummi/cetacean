@@ -20,9 +20,9 @@ const cookieName = "cetacean_session"
 // sessionEnvelope is the signed payload stored in the cookie. It wraps the
 // identity with a server-side expiry timestamp that cannot be tampered with.
 type sessionEnvelope struct {
-	Identity     *Identity `json:"id"`
-	ExpiresAt    int64     `json:"exp"`
-	IDTokenHint  string    `json:"idt,omitempty"` // raw ID token for RP-initiated logout (RFC 9722)
+	Identity    *Identity `json:"id"`
+	ExpiresAt   int64     `json:"exp"`
+	IDTokenHint string    `json:"idt,omitempty"` // raw ID token for RP-initiated logout (RFC 9722)
 }
 
 // SessionCodec signs and verifies session cookies using HMAC-SHA256.

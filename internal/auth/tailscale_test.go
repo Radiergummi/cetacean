@@ -13,9 +13,9 @@ import (
 )
 
 type mockWhoIsClient struct {
-	result   *apitype.WhoIsResponse
-	err      error
-	gotAddr  string // records the remoteAddr passed to WhoIs
+	result  *apitype.WhoIsResponse
+	err     error
+	gotAddr string // records the remoteAddr passed to WhoIs
 }
 
 func (m *mockWhoIsClient) WhoIs(_ context.Context, remoteAddr string) (*apitype.WhoIsResponse, error) {
@@ -197,8 +197,8 @@ func TestValidateTailscaleAddr(t *testing.T) {
 		{"10.0.0.1:80", true},
 		{"172.16.0.1:443", true},
 		{"8.8.8.8:53", true},
-		{"100.63.255.255:80", true},  // just below 100.64.0.0/10
-		{"100.128.0.0:80", true},     // just above 100.64.0.0/10
+		{"100.63.255.255:80", true}, // just below 100.64.0.0/10
+		{"100.128.0.0:80", true},    // just above 100.64.0.0/10
 
 		// IPv6 outside ULA.
 		{"[::1]:80", true},

@@ -107,11 +107,11 @@ func (idp *mockIDPServer) issueIDToken(t *testing.T, nonce string, expiry time.T
 
 	now := time.Now()
 	claims := josejwt.Claims{
-		Issuer:    idp.server.URL,
-		Subject:   "user-42",
-		Audience:  josejwt.Audience{idp.clientID},
-		IssuedAt:  josejwt.NewNumericDate(now),
-		Expiry:    josejwt.NewNumericDate(expiry),
+		Issuer:   idp.server.URL,
+		Subject:  "user-42",
+		Audience: josejwt.Audience{idp.clientID},
+		IssuedAt: josejwt.NewNumericDate(now),
+		Expiry:   josejwt.NewNumericDate(expiry),
 	}
 
 	extra := map[string]any{
@@ -1326,4 +1326,3 @@ func errorAs(err error, target any) bool {
 	}
 	return false
 }
-
