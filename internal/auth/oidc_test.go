@@ -4,7 +4,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/coreos/go-oidc/v3/oidc"
 )
 
 // newMockOIDCServer creates a test server that serves OIDC discovery and JWKS
@@ -80,21 +84,57 @@ func TestOIDCProvider_Authenticate_BrowserRedirect(t *testing.T) {
 		t.Fatal("expected Location header on redirect")
 	}
 
-	// Should have set state and redirect cookies.
-	var hasState, hasRedirect bool
+	// Should have set state, nonce, verifier, and redirect cookies — all with Secure flag.
+	var hasState, hasNonce, hasVerifier, hasRedirect bool
 	for _, c := range resp.Cookies() {
-		if c.Name == "cetacean_auth_state" {
+		switch c.Name {
+		case "cetacean_auth_state":
 			hasState = true
-		}
-		if c.Name == "cetacean_auth_redirect" {
+			if !c.Secure {
+				t.Error("state cookie missing Secure flag")
+			}
+		case "cetacean_auth_nonce":
+			hasNonce = true
+			if !c.Secure {
+				t.Error("nonce cookie missing Secure flag")
+			}
+		case "cetacean_auth_verifier":
+			hasVerifier = true
+			if !c.Secure {
+				t.Error("verifier cookie missing Secure flag")
+			}
+			if !c.HttpOnly {
+				t.Error("verifier cookie missing HttpOnly flag")
+			}
+		case "cetacean_auth_redirect":
 			hasRedirect = true
+			if !c.Secure {
+				t.Error("redirect cookie missing Secure flag")
+			}
 		}
 	}
 	if !hasState {
 		t.Error("missing cetacean_auth_state cookie")
 	}
+	if !hasNonce {
+		t.Error("missing cetacean_auth_nonce cookie")
+	}
+	if !hasVerifier {
+		t.Error("missing cetacean_auth_verifier cookie")
+	}
 	if !hasRedirect {
 		t.Error("missing cetacean_auth_redirect cookie")
+	}
+
+	// Verify the authorize URL includes nonce and PKCE parameters.
+	if !strings.Contains(location, "nonce=") {
+		t.Error("authorize URL missing nonce parameter")
+	}
+	if !strings.Contains(location, "code_challenge=") {
+		t.Error("authorize URL missing code_challenge parameter")
+	}
+	if !strings.Contains(location, "code_challenge_method=S256") {
+		t.Error("authorize URL missing code_challenge_method=S256")
 	}
 }
 
@@ -175,15 +215,31 @@ func TestOIDCProvider_RegisterRoutes_Login(t *testing.T) {
 		t.Fatal("expected Location header")
 	}
 
-	// Should have set state cookie.
-	var hasState bool
+	// Should have set state, nonce, and verifier cookies.
+	var hasState, hasNonce, hasVerifier bool
 	for _, c := range resp.Cookies() {
-		if c.Name == "cetacean_auth_state" {
+		switch c.Name {
+		case "cetacean_auth_state":
 			hasState = true
+		case "cetacean_auth_nonce":
+			hasNonce = true
+		case "cetacean_auth_verifier":
+			hasVerifier = true
 		}
 	}
 	if !hasState {
 		t.Error("missing cetacean_auth_state cookie")
+	}
+	if !hasNonce {
+		t.Error("missing cetacean_auth_nonce cookie")
+	}
+	if !hasVerifier {
+		t.Error("missing cetacean_auth_verifier cookie")
+	}
+
+	// Verify PKCE parameters in authorize URL.
+	if !strings.Contains(location, "code_challenge=") {
+		t.Error("authorize URL missing code_challenge parameter")
 	}
 }
 
@@ -252,6 +308,11 @@ func TestIsRelativePath(t *testing.T) {
 		{"//evil.com", false},
 		{"https://evil.com", false},
 		{"javascript:alert(1)", false},
+		{"/path\\segment", false},
+		{"/\\evil.com", false},
+		{"/a\\b\\c", false},
+		{"\\evil.com", false},
+		{"/%5cevil.com", true}, // encoded backslash stays encoded, safe
 	}
 	for _, tt := range tests {
 		if got := isRelativePath(tt.input); got != tt.want {
@@ -270,5 +331,429 @@ func TestGenerateState(t *testing.T) {
 	s2 := generateState()
 	if s == s2 {
 		t.Error("two generateState calls returned same value")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Authenticate edge cases
+// ---------------------------------------------------------------------------
+
+func TestOIDCProvider_Authenticate_ExpiredSession(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+
+	// Create a valid session.
+	rec := httptest.NewRecorder()
+	p.session.Set(rec, &Identity{Subject: "user-123", Provider: "oidc"}, time.Hour)
+	sessionCookie := rec.Result().Cookies()[0]
+
+	// Advance clock past expiry.
+	p.session.now = func() time.Time { return time.Now().Add(2 * time.Hour) }
+
+	// API request: should get an auth error.
+	r := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+	r.AddCookie(sessionCookie)
+	r.Header.Set("Accept", "application/json")
+	w := httptest.NewRecorder()
+
+	id, err := p.Authenticate(w, r)
+	if err == nil {
+		t.Fatal("expected error for expired session")
+	}
+	if id != nil {
+		t.Fatal("expected nil identity")
+	}
+
+	// Browser request: should redirect to login.
+	r = httptest.NewRequest(http.MethodGet, "/nodes", nil)
+	r.AddCookie(sessionCookie)
+	r.Header.Set("Accept", "text/html")
+	w = httptest.NewRecorder()
+
+	id, err = p.Authenticate(w, r)
+	if err != nil {
+		t.Fatalf("browser request shouldn't error: %v", err)
+	}
+	if id != nil {
+		t.Fatal("expected nil identity for redirect")
+	}
+	if w.Result().StatusCode != http.StatusFound {
+		t.Errorf("status = %d, want %d", w.Result().StatusCode, http.StatusFound)
+	}
+}
+
+func TestOIDCProvider_Authenticate_TamperedSession(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+
+	r := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+	r.AddCookie(&http.Cookie{Name: cookieName, Value: "tampered.garbage"})
+	r.Header.Set("Accept", "application/json")
+	w := httptest.NewRecorder()
+
+	id, err := p.Authenticate(w, r)
+	if err == nil {
+		t.Fatal("expected error for tampered session")
+	}
+	if id != nil {
+		t.Fatal("expected nil identity")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// AZP validation (OIDC Core Section 3.1.3.7)
+// ---------------------------------------------------------------------------
+
+func TestValidateAzp_SingleAudience(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+
+	token := &oidc.IDToken{Audience: []string{"test-client"}}
+	if err := p.validateAzp(token, map[string]any{}); err != nil {
+		t.Errorf("single audience should pass: %v", err)
+	}
+}
+
+func TestValidateAzp_MultiAudience_ValidAzp(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+
+	token := &oidc.IDToken{Audience: []string{"test-client", "other-client"}}
+	claims := map[string]any{"azp": "test-client"}
+	if err := p.validateAzp(token, claims); err != nil {
+		t.Errorf("valid azp should pass: %v", err)
+	}
+}
+
+func TestValidateAzp_MultiAudience_MissingAzp(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+
+	token := &oidc.IDToken{Audience: []string{"test-client", "other-client"}}
+	if err := p.validateAzp(token, map[string]any{}); err == nil {
+		t.Error("missing azp should fail for multi-audience token")
+	}
+}
+
+func TestValidateAzp_MultiAudience_WrongAzp(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+
+	token := &oidc.IDToken{Audience: []string{"test-client", "other-client"}}
+	claims := map[string]any{"azp": "wrong-client"}
+	if err := p.validateAzp(token, claims); err == nil {
+		t.Error("wrong azp should fail")
+	}
+}
+
+// authFlowCookieNames are the cookies set during the OIDC login redirect
+// that must be cleared on every callback exit path.
+var authFlowCookieNames = []string{
+	"cetacean_auth_state",
+	"cetacean_auth_nonce",
+	"cetacean_auth_verifier",
+	"cetacean_auth_redirect",
+}
+
+// assertAuthFlowCookiesCleared verifies that all auth flow cookies are deleted
+// (MaxAge == -1) in the response.
+func assertAuthFlowCookiesCleared(t *testing.T, resp *http.Response) {
+	t.Helper()
+	cleared := make(map[string]bool)
+	for _, c := range resp.Cookies() {
+		if c.MaxAge == -1 {
+			cleared[c.Name] = true
+		}
+	}
+	for _, name := range authFlowCookieNames {
+		if !cleared[name] {
+			t.Errorf("auth flow cookie %q was not cleared (MaxAge=-1)", name)
+		}
+	}
+}
+
+// addAuthFlowCookies adds all four auth flow cookies to a request, simulating
+// a browser returning from the IdP authorization endpoint.
+func addAuthFlowCookies(r *http.Request, state, nonce, verifier, redirect string) {
+	r.AddCookie(&http.Cookie{Name: "cetacean_auth_state", Value: state})
+	r.AddCookie(&http.Cookie{Name: "cetacean_auth_nonce", Value: nonce})
+	r.AddCookie(&http.Cookie{Name: "cetacean_auth_verifier", Value: verifier})
+	r.AddCookie(&http.Cookie{Name: "cetacean_auth_redirect", Value: redirect})
+}
+
+func TestCallback_IdPError_ClearsCookies(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+	mux := http.NewServeMux()
+	p.RegisterRoutes(mux)
+
+	r := httptest.NewRequest(http.MethodGet, "/auth/callback?error=access_denied&error_description=user+denied", nil)
+	addAuthFlowCookies(r, "some-state", "some-nonce", "some-verifier", "/nodes")
+	w := httptest.NewRecorder()
+
+	mux.ServeHTTP(w, r)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusForbidden)
+	}
+	assertAuthFlowCookiesCleared(t, resp)
+}
+
+func TestCallback_IssuerMismatch_ClearsCookies(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+	mux := http.NewServeMux()
+	p.RegisterRoutes(mux)
+
+	r := httptest.NewRequest(http.MethodGet, "/auth/callback?code=abc&state=test-state&iss=https://evil.example.com", nil)
+	addAuthFlowCookies(r, "test-state", "some-nonce", "some-verifier", "/")
+	w := httptest.NewRecorder()
+
+	mux.ServeHTTP(w, r)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+	assertAuthFlowCookiesCleared(t, resp)
+}
+
+func TestCallback_MissingStateCookie_ClearsCookies(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+	mux := http.NewServeMux()
+	p.RegisterRoutes(mux)
+
+	r := httptest.NewRequest(http.MethodGet, "/auth/callback?code=abc&state=test-state", nil)
+	// Deliberately omit the state cookie; add the others.
+	r.AddCookie(&http.Cookie{Name: "cetacean_auth_nonce", Value: "some-nonce"})
+	r.AddCookie(&http.Cookie{Name: "cetacean_auth_verifier", Value: "some-verifier"})
+	r.AddCookie(&http.Cookie{Name: "cetacean_auth_redirect", Value: "/"})
+	w := httptest.NewRecorder()
+
+	mux.ServeHTTP(w, r)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+	assertAuthFlowCookiesCleared(t, resp)
+}
+
+func TestCallback_StateMismatch_ClearsCookies(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+	mux := http.NewServeMux()
+	p.RegisterRoutes(mux)
+
+	r := httptest.NewRequest(http.MethodGet, "/auth/callback?code=abc&state=wrong-state", nil)
+	addAuthFlowCookies(r, "correct-state", "some-nonce", "some-verifier", "/")
+	w := httptest.NewRecorder()
+
+	mux.ServeHTTP(w, r)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+	assertAuthFlowCookiesCleared(t, resp)
+}
+
+func TestCallback_MissingNonceCookie_ClearsCookies(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+	mux := http.NewServeMux()
+	p.RegisterRoutes(mux)
+
+	state := "matching-state"
+	r := httptest.NewRequest(http.MethodGet, "/auth/callback?code=abc&state="+state, nil)
+	r.AddCookie(&http.Cookie{Name: "cetacean_auth_state", Value: state})
+	// Deliberately omit nonce cookie.
+	r.AddCookie(&http.Cookie{Name: "cetacean_auth_verifier", Value: "some-verifier"})
+	r.AddCookie(&http.Cookie{Name: "cetacean_auth_redirect", Value: "/"})
+	w := httptest.NewRecorder()
+
+	mux.ServeHTTP(w, r)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+	assertAuthFlowCookiesCleared(t, resp)
+}
+
+func TestCallback_MissingVerifierCookie_ClearsCookies(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+	mux := http.NewServeMux()
+	p.RegisterRoutes(mux)
+
+	state := "matching-state"
+	r := httptest.NewRequest(http.MethodGet, "/auth/callback?code=abc&state="+state, nil)
+	r.AddCookie(&http.Cookie{Name: "cetacean_auth_state", Value: state})
+	r.AddCookie(&http.Cookie{Name: "cetacean_auth_nonce", Value: "some-nonce"})
+	// Deliberately omit verifier cookie.
+	r.AddCookie(&http.Cookie{Name: "cetacean_auth_redirect", Value: "/"})
+	w := httptest.NewRecorder()
+
+	mux.ServeHTTP(w, r)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+	assertAuthFlowCookiesCleared(t, resp)
+}
+
+func TestCallback_TokenExchangeFails_ClearsCookies(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+	mux := http.NewServeMux()
+	p.RegisterRoutes(mux)
+
+	// Token exchange will fail because the mock server has no /token endpoint.
+	state := "matching-state"
+	r := httptest.NewRequest(http.MethodGet, "/auth/callback?code=invalid-code&state="+state, nil)
+	addAuthFlowCookies(r, state, "some-nonce", "some-verifier", "/services")
+	w := httptest.NewRecorder()
+
+	mux.ServeHTTP(w, r)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusInternalServerError)
+	}
+	assertAuthFlowCookiesCleared(t, resp)
+}
+
+func TestLogout_SameOrigin_ClearsSession(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+	mux := http.NewServeMux()
+	p.RegisterRoutes(mux)
+
+	r := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	r.Header.Set("Sec-Fetch-Site", "same-origin")
+	r.Host = "app.example.com"
+	w := httptest.NewRecorder()
+
+	mux.ServeHTTP(w, r)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusSeeOther)
+	}
+	if loc := resp.Header.Get("Location"); loc != "/" {
+		t.Errorf("Location = %q, want %q", loc, "/")
+	}
+
+	// Session cookie should be cleared.
+	var sessionCleared bool
+	for _, c := range resp.Cookies() {
+		if c.Name == cookieName && c.MaxAge == -1 {
+			sessionCleared = true
+		}
+	}
+	if !sessionCleared {
+		t.Error("session cookie was not cleared")
+	}
+}
+
+func TestLogout_CrossSite_Rejected(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+	mux := http.NewServeMux()
+	p.RegisterRoutes(mux)
+
+	r := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	r.Header.Set("Sec-Fetch-Site", "cross-site")
+	r.Host = "app.example.com"
+	w := httptest.NewRecorder()
+
+	mux.ServeHTTP(w, r)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusForbidden)
+	}
+}
+
+func TestLogout_CrossOriginHeader_Rejected(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+	mux := http.NewServeMux()
+	p.RegisterRoutes(mux)
+
+	// No Sec-Fetch-Site, but Origin mismatches Host — falls back to Origin check.
+	r := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	r.Header.Set("Origin", "https://evil.example.com")
+	r.Host = "app.example.com"
+	w := httptest.NewRecorder()
+
+	mux.ServeHTTP(w, r)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusForbidden)
+	}
+}
+
+func TestLogout_MatchingOriginHeader_Accepted(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+	mux := http.NewServeMux()
+	p.RegisterRoutes(mux)
+
+	// No Sec-Fetch-Site, but Origin matches Host.
+	r := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	r.Header.Set("Origin", "https://app.example.com")
+	r.Host = "app.example.com"
+	w := httptest.NewRecorder()
+
+	mux.ServeHTTP(w, r)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusSeeOther)
+	}
+}
+
+func TestLogout_NonBrowserClient_Accepted(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+	mux := http.NewServeMux()
+	p.RegisterRoutes(mux)
+
+	// Non-browser clients send neither Sec-Fetch-Site nor Origin.
+	// CrossOriginProtection allows these through since CSRF is a browser attack.
+	r := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	r.Host = "app.example.com"
+	w := httptest.NewRecorder()
+
+	mux.ServeHTTP(w, r)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusSeeOther)
+	}
+}
+
+func TestLogout_GETMethod_Rejected(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+	mux := http.NewServeMux()
+	p.RegisterRoutes(mux)
+
+	r := httptest.NewRequest(http.MethodGet, "/auth/logout", nil)
+	r.Host = "app.example.com"
+	w := httptest.NewRecorder()
+
+	mux.ServeHTTP(w, r)
+
+	resp := w.Result()
+	// Go 1.22+ mux returns 405 Method Not Allowed for wrong method.
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusMethodNotAllowed)
 	}
 }

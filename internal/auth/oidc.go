@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
 	"log/slog"
@@ -25,6 +26,7 @@ type OIDCProviderConfig struct {
 	ClientSecret string
 	RedirectURL  string
 	Scopes       []string
+	SessionKey   string // hex-encoded 32-byte key; random if empty
 }
 
 // OIDCProvider implements Provider using OpenID Connect authorization code flow.
@@ -32,6 +34,7 @@ type OIDCProvider struct {
 	oauth2Config oauth2.Config
 	verifier     *oidc.IDTokenVerifier
 	session      *SessionCodec
+	issuer       string // for RFC 9207 iss validation
 }
 
 // NewOIDCProvider creates an OIDCProvider by performing OIDC discovery on the issuer.
@@ -51,10 +54,21 @@ func NewOIDCProvider(ctx context.Context, cfg OIDCProviderConfig) (*OIDCProvider
 
 	verifier := provider.Verifier(&oidc.Config{ClientID: cfg.ClientID})
 
+	var session *SessionCodec
+	if cfg.SessionKey != "" {
+		session, err = NewSessionCodecWithKey(cfg.SessionKey)
+		if err != nil {
+			return nil, fmt.Errorf("oidc session key: %w", err)
+		}
+	} else {
+		session = NewSessionCodec()
+	}
+
 	return &OIDCProvider{
 		oauth2Config: oauth2Cfg,
 		verifier:     verifier,
-		session:      NewSessionCodec(),
+		session:      session,
+		issuer:       cfg.Issuer,
 	}, nil
 }
 
@@ -82,6 +96,13 @@ func (p *OIDCProvider) Authenticate(w http.ResponseWriter, r *http.Request) (*Id
 			return nil, fmt.Errorf("failed to parse token claims: %w", err)
 		}
 
+		if err := p.validateAzp(idToken, claims); err != nil {
+			return nil, &AuthError{
+				Msg:             fmt.Sprintf("invalid bearer token: %v", err),
+				WWWAuthenticate: `Bearer error="invalid_token"`,
+			}
+		}
+
 		return claimsToIdentity(claims), nil
 	}
 
@@ -103,10 +124,13 @@ func (p *OIDCProvider) Authenticate(w http.ResponseWriter, r *http.Request) (*Id
 }
 
 // RegisterRoutes registers the OIDC auth routes on the given mux.
+// The logout endpoint uses http.CrossOriginProtection (Go 1.25+) to prevent
+// cross-site logout attacks. It checks Sec-Fetch-Site first, then falls back
+// to Origin-vs-Host comparison, and allows non-browser clients through.
 func (p *OIDCProvider) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /auth/login", p.handleLogin)
 	mux.HandleFunc("GET /auth/callback", p.handleCallback)
-	mux.HandleFunc("GET /auth/logout", p.handleLogout)
+	mux.Handle("POST /auth/logout", http.NewCrossOriginProtection().Handler(http.HandlerFunc(p.handleLogout)))
 	mux.HandleFunc("GET /auth/whoami", p.handleWhoami)
 }
 
@@ -118,11 +142,13 @@ func (p *OIDCProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 	p.redirectToLogin(w, r, redirect)
 }
 
-// redirectToLogin sets CSRF state and redirect cookies, then redirects to the
-// OIDC authorization endpoint. Shared by Authenticate (browser redirect) and
-// handleLogin (explicit login route).
+// redirectToLogin sets CSRF state, nonce, PKCE verifier, and redirect cookies,
+// then redirects to the OIDC authorization endpoint. Shared by Authenticate
+// (browser redirect) and handleLogin (explicit login route).
 func (p *OIDCProvider) redirectToLogin(w http.ResponseWriter, r *http.Request, redirect string) {
 	state := generateState()
+	nonce := generateState() // same entropy, different purpose
+	verifier := oauth2.GenerateVerifier()
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     "cetacean_auth_state",
@@ -130,6 +156,27 @@ func (p *OIDCProvider) redirectToLogin(w http.ResponseWriter, r *http.Request, r
 		Path:     "/auth",
 		MaxAge:   300,
 		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "cetacean_auth_nonce",
+		Value:    nonce,
+		Path:     "/auth",
+		MaxAge:   300,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "cetacean_auth_verifier",
+		Value:    verifier,
+		Path:     "/auth",
+		MaxAge:   300,
+		HttpOnly: true,
+		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 	})
 
@@ -139,22 +186,65 @@ func (p *OIDCProvider) redirectToLogin(w http.ResponseWriter, r *http.Request, r
 		Path:     "/auth",
 		MaxAge:   300,
 		HttpOnly: true,
+		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	http.Redirect(w, r, p.oauth2Config.AuthCodeURL(state), http.StatusFound)
+	http.Redirect(w, r, p.oauth2Config.AuthCodeURL(
+		state,
+		oidc.Nonce(nonce),
+		oauth2.S256ChallengeOption(verifier),
+	), http.StatusFound)
 }
 
 func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
-	// Validate state.
+	// Clear auth flow cookies immediately, before any early return can bypass
+	// them. Set-Cookie deletion headers are written before WriteHeader, so
+	// they're included in every response — both error and success paths.
+	// This prevents PKCE verifiers and state values from lingering in the
+	// browser after a failed callback.
+	clearAuthFlowCookies(w)
+
+	// Check for IdP-returned errors (e.g. access_denied).
+	if errCode := r.URL.Query().Get("error"); errCode != "" {
+		desc := r.URL.Query().Get("error_description")
+		slog.Warn("oidc authorization error", "error", errCode, "description", desc)
+		http.Error(w, "authorization denied", http.StatusForbidden)
+		return
+	}
+
+	// RFC 9207: validate iss parameter if present (mix-up attack protection).
+	if iss := r.URL.Query().Get("iss"); iss != "" {
+		if subtle.ConstantTimeCompare([]byte(iss), []byte(p.issuer)) != 1 {
+			slog.Error("oidc issuer mismatch in callback", "expected", p.issuer, "got", iss)
+			http.Error(w, "issuer mismatch", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Validate state (constant-time comparison).
 	stateCookie, err := r.Cookie("cetacean_auth_state")
 	if err != nil {
 		http.Error(w, "missing state cookie", http.StatusBadRequest)
 		return
 	}
 
-	if r.URL.Query().Get("state") != stateCookie.Value {
+	if subtle.ConstantTimeCompare([]byte(r.URL.Query().Get("state")), []byte(stateCookie.Value)) != 1 {
 		http.Error(w, "state mismatch", http.StatusBadRequest)
+		return
+	}
+
+	// Read nonce cookie for ID token verification.
+	nonceCookie, err := r.Cookie("cetacean_auth_nonce")
+	if err != nil {
+		http.Error(w, "missing nonce cookie", http.StatusBadRequest)
+		return
+	}
+
+	// Read PKCE verifier cookie.
+	verifierCookie, err := r.Cookie("cetacean_auth_verifier")
+	if err != nil {
+		http.Error(w, "missing verifier cookie", http.StatusBadRequest)
 		return
 	}
 
@@ -164,8 +254,8 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 		redirectURL = c.Value
 	}
 
-	// Exchange code for token.
-	oauth2Token, err := p.oauth2Config.Exchange(r.Context(), r.URL.Query().Get("code"))
+	// Exchange code for token with PKCE verifier.
+	oauth2Token, err := p.oauth2Config.Exchange(r.Context(), r.URL.Query().Get("code"), oauth2.VerifierOption(verifierCookie.Value))
 	if err != nil {
 		slog.Error("oidc token exchange failed", "error", err)
 		http.Error(w, "token exchange failed", http.StatusInternalServerError)
@@ -186,6 +276,13 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Verify nonce matches what we sent in the authorization request.
+	if subtle.ConstantTimeCompare([]byte(idToken.Nonce), []byte(nonceCookie.Value)) != 1 {
+		slog.Error("oidc nonce mismatch")
+		http.Error(w, "nonce mismatch", http.StatusBadRequest)
+		return
+	}
+
 	var claims map[string]any
 	if err := idToken.Claims(&claims); err != nil {
 		slog.Error("oidc claims parsing failed", "error", err)
@@ -193,54 +290,98 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := p.validateAzp(idToken, claims); err != nil {
+		slog.Error("oidc azp validation failed", "error", err)
+		http.Error(w, "azp validation failed", http.StatusBadRequest)
+		return
+	}
+
 	identity := claimsToIdentity(claims)
 
-	// Session TTL: use token expiry capped at maxSessionTTL.
+	// Session TTL: use ID token expiry (authentication validity) capped at maxSessionTTL.
+	// ID token exp is more appropriate than access token exp, which represents
+	// authorization scope lifetime rather than authentication session validity.
 	ttl := maxSessionTTL
-	if !oauth2Token.Expiry.IsZero() {
-		if remaining := time.Until(oauth2Token.Expiry); remaining > 0 && remaining < ttl {
+	if !idToken.Expiry.IsZero() {
+		if remaining := time.Until(idToken.Expiry); remaining > 0 && remaining < ttl {
 			ttl = remaining
 		}
 	}
 
 	p.session.Set(w, identity, ttl)
 
-	// Clear state cookies.
-	http.SetCookie(w, &http.Cookie{Name: "cetacean_auth_state", Path: "/auth", MaxAge: -1})
-	http.SetCookie(w, &http.Cookie{Name: "cetacean_auth_redirect", Path: "/auth", MaxAge: -1})
-
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
-// handleWhoami returns the current identity from session cookie or Bearer
-// token, without triggering OIDC redirects. Returns 401 if unauthenticated.
-func (p *OIDCProvider) handleWhoami(w http.ResponseWriter, r *http.Request) {
-	// Check session cookie.
+// clearAuthFlowCookies deletes all temporary cookies used during the OIDC
+// authorization code flow.
+func clearAuthFlowCookies(w http.ResponseWriter) {
+	for _, name := range []string{
+		"cetacean_auth_state",
+		"cetacean_auth_nonce",
+		"cetacean_auth_verifier",
+		"cetacean_auth_redirect",
+	} {
+		http.SetCookie(w, &http.Cookie{Name: name, Path: "/auth", MaxAge: -1})
+	}
+}
+
+// authenticateQuiet checks session cookie and Bearer token without triggering
+// OIDC redirects. Returns the identity or an error.
+func (p *OIDCProvider) authenticateQuiet(r *http.Request) (*Identity, error) {
 	if id, err := p.session.Get(r); err == nil {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(id)
-		return
+		return id, nil
 	}
 
-	// Check Bearer token.
 	if token := extractBearerToken(r); token != "" {
 		idToken, err := p.verifier.Verify(r.Context(), token)
-		if err == nil {
-			var claims map[string]any
-			if err := idToken.Claims(&claims); err == nil {
-				w.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(w).Encode(claimsToIdentity(claims))
-				return
-			}
+		if err != nil {
+			return nil, fmt.Errorf("invalid bearer token: %w", err)
 		}
+		var claims map[string]any
+		if err := idToken.Claims(&claims); err != nil {
+			return nil, fmt.Errorf("failed to parse claims: %w", err)
+		}
+		if err := p.validateAzp(idToken, claims); err != nil {
+			return nil, fmt.Errorf("invalid bearer token: %w", err)
+		}
+		return claimsToIdentity(claims), nil
 	}
 
-	http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	return nil, fmt.Errorf("authentication required")
+}
+
+func (p *OIDCProvider) handleWhoami(w http.ResponseWriter, r *http.Request) {
+	id, err := p.authenticateQuiet(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(id)
 }
 
 func (p *OIDCProvider) handleLogout(w http.ResponseWriter, r *http.Request) {
 	p.session.Clear(w)
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// validateAzp enforces OIDC Core Section 3.1.3.7 rules 4-5: if the ID Token
+// contains multiple audiences, the azp (authorized party) claim MUST be present
+// and MUST equal the client_id.
+func (p *OIDCProvider) validateAzp(idToken *oidc.IDToken, claims map[string]any) error {
+	if len(idToken.Audience) <= 1 {
+		return nil
+	}
+	azp, _ := claims["azp"].(string)
+	if azp == "" {
+		return fmt.Errorf("multi-audience token missing required azp claim")
+	}
+	if azp != p.oauth2Config.ClientID {
+		return fmt.Errorf("azp claim %q does not match client_id %q", azp, p.oauth2Config.ClientID)
+	}
+	return nil
 }
 
 // claimsToIdentity extracts identity fields from an OIDC claims map.
@@ -282,9 +423,19 @@ func extractBearerToken(r *http.Request) string {
 }
 
 // isRelativePath returns true if s is a non-empty relative path (starts with /).
-// Rejects absolute URLs, protocol-relative URLs, and empty strings.
+// Rejects absolute URLs, protocol-relative URLs, backslash sequences (some
+// browsers treat \ as /), and empty strings.
 func isRelativePath(s string) bool {
-	return len(s) > 0 && s[0] == '/' && (len(s) == 1 || s[1] != '/')
+	if len(s) == 0 || s[0] != '/' {
+		return false
+	}
+	if len(s) > 1 && s[1] == '/' {
+		return false
+	}
+	if strings.Contains(s, "\\") {
+		return false
+	}
+	return true
 }
 
 // generateState returns 16 random bytes hex-encoded for CSRF protection.

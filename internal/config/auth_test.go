@@ -51,7 +51,7 @@ func TestLoadAuth_OIDCHappyPath(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_OIDC_ISSUER", "https://issuer.example.com")
 	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_ID", "client-id")
 	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET", "secret")
-	t.Setenv("CETACEAN_AUTH_OIDC_REDIRECT_URL", "https://app.example.com/callback")
+	t.Setenv("CETACEAN_AUTH_OIDC_REDIRECT_URL", "https://app.example.com/auth/callback")
 	t.Setenv("CETACEAN_AUTH_OIDC_SCOPES", "openid, custom")
 
 	cfg, err := LoadAuth()
@@ -63,6 +63,65 @@ func TestLoadAuth_OIDCHappyPath(t *testing.T) {
 	}
 	if len(cfg.OIDC.Scopes) != 2 || cfg.OIDC.Scopes[0] != "openid" || cfg.OIDC.Scopes[1] != "custom" {
 		t.Errorf("unexpected scopes: %v", cfg.OIDC.Scopes)
+	}
+}
+
+func TestLoadAuth_OIDCRejectsHTTPRedirectURL(t *testing.T) {
+	t.Setenv("CETACEAN_AUTH_MODE", "oidc")
+	t.Setenv("CETACEAN_AUTH_OIDC_ISSUER", "https://issuer.example.com")
+	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_ID", "client-id")
+	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET", "secret")
+	t.Setenv("CETACEAN_AUTH_OIDC_REDIRECT_URL", "http://app.example.com/auth/callback")
+
+	_, err := LoadAuth()
+	if err == nil {
+		t.Fatal("expected error for HTTP redirect URL")
+	}
+}
+
+func TestLoadAuth_OIDCAllowsLocalhostHTTP(t *testing.T) {
+	t.Setenv("CETACEAN_AUTH_MODE", "oidc")
+	t.Setenv("CETACEAN_AUTH_OIDC_ISSUER", "https://issuer.example.com")
+	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_ID", "client-id")
+	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET", "secret")
+	t.Setenv("CETACEAN_AUTH_OIDC_REDIRECT_URL", "http://localhost/auth/callback")
+
+	cfg, err := LoadAuth()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.OIDC.RedirectURL != "http://localhost/auth/callback" {
+		t.Errorf("unexpected redirect URL: %q", cfg.OIDC.RedirectURL)
+	}
+}
+
+func TestLoadAuth_OIDCAllows127001HTTP(t *testing.T) {
+	t.Setenv("CETACEAN_AUTH_MODE", "oidc")
+	t.Setenv("CETACEAN_AUTH_OIDC_ISSUER", "https://issuer.example.com")
+	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_ID", "client-id")
+	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET", "secret")
+	t.Setenv("CETACEAN_AUTH_OIDC_REDIRECT_URL", "http://127.0.0.1:8080/auth/callback")
+
+	_, err := LoadAuth()
+	if err != nil {
+		t.Fatalf("unexpected error for loopback HTTP: %v", err)
+	}
+}
+
+func TestLoadAuth_OIDCSessionKey(t *testing.T) {
+	t.Setenv("CETACEAN_AUTH_MODE", "oidc")
+	t.Setenv("CETACEAN_AUTH_OIDC_ISSUER", "https://issuer.example.com")
+	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_ID", "client-id")
+	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET", "secret")
+	t.Setenv("CETACEAN_AUTH_OIDC_REDIRECT_URL", "https://app.example.com/auth/callback")
+	t.Setenv("CETACEAN_AUTH_OIDC_SESSION_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+
+	cfg, err := LoadAuth()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.OIDC.SessionKey == "" {
+		t.Error("expected SessionKey to be set")
 	}
 }
 

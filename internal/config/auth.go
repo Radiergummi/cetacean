@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 )
@@ -20,6 +21,7 @@ type OIDCConfig struct {
 	ClientSecret string
 	RedirectURL  string
 	Scopes       []string
+	SessionKey   string // hex-encoded 32-byte HMAC key; random per-process if empty
 }
 
 type TailscaleConfig struct {
@@ -59,6 +61,7 @@ func LoadAuth() (*AuthConfig, error) {
 			ClientSecret: os.Getenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET"),
 			RedirectURL:  os.Getenv("CETACEAN_AUTH_OIDC_REDIRECT_URL"),
 			Scopes:       parseScopes(envOr("CETACEAN_AUTH_OIDC_SCOPES", "openid,profile,email")),
+			SessionKey:   os.Getenv("CETACEAN_AUTH_OIDC_SESSION_KEY"),
 		},
 		Tailscale: TailscaleConfig{
 			Mode:     envOr("CETACEAN_AUTH_TAILSCALE_MODE", "local"),
@@ -88,6 +91,9 @@ func LoadAuth() (*AuthConfig, error) {
 		if cfg.OIDC.Issuer == "" || cfg.OIDC.ClientID == "" || cfg.OIDC.ClientSecret == "" || cfg.OIDC.RedirectURL == "" {
 			return nil, fmt.Errorf("oidc mode requires CETACEAN_AUTH_OIDC_ISSUER, CETACEAN_AUTH_OIDC_CLIENT_ID, CETACEAN_AUTH_OIDC_CLIENT_SECRET, and CETACEAN_AUTH_OIDC_REDIRECT_URL")
 		}
+		if err := validateRedirectURL(cfg.OIDC.RedirectURL); err != nil {
+			return nil, err
+		}
 	case "tailscale":
 		if cfg.Tailscale.Mode != "local" && cfg.Tailscale.Mode != "tsnet" {
 			return nil, fmt.Errorf("tailscale mode must be \"local\" or \"tsnet\", got %q", cfg.Tailscale.Mode)
@@ -109,6 +115,23 @@ func LoadAuth() (*AuthConfig, error) {
 	}
 
 	return cfg, nil
+}
+
+// validateRedirectURL ensures the redirect URI uses HTTPS per OAuth 2.1 Section 2.3.1.
+// Loopback addresses (127.0.0.1, [::1], localhost) are exempt and may use HTTP.
+func validateRedirectURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("invalid redirect URL: %w", err)
+	}
+	if u.Scheme == "https" {
+		return nil
+	}
+	host := u.Hostname()
+	if host == "127.0.0.1" || host == "::1" || host == "localhost" {
+		return nil
+	}
+	return fmt.Errorf("CETACEAN_AUTH_OIDC_REDIRECT_URL must use HTTPS (got %q); loopback addresses are exempt per OAuth 2.1", u.Scheme+"://"+u.Host)
 }
 
 func parseScopes(s string) []string {

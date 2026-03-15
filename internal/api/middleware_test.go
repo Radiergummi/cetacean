@@ -127,6 +127,9 @@ func TestSecurityHeaders(t *testing.T) {
 	if got := w.Header().Get("Content-Security-Policy"); got != "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:" {
 		t.Errorf("Content-Security-Policy=%q, want default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:", got)
 	}
+	if got := w.Header().Get("Referrer-Policy"); got != "no-referrer" {
+		t.Errorf("Referrer-Policy=%q, want no-referrer", got)
+	}
 }
 
 func TestDiscoveryLinks_AddedToAPIRoutes(t *testing.T) {

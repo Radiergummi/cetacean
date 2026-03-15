@@ -162,3 +162,58 @@ func TestMiddleware_RedirectProvider_InnerNotCalled(t *testing.T) {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusFound)
 	}
 }
+
+func TestIsExempt_Complete(t *testing.T) {
+	cases := []struct {
+		path string
+		want bool
+	}{
+		// Meta endpoints.
+		{"/-/health", true},
+		{"/-/ready", true},
+		{"/-/metrics/status", true},
+
+		// API docs.
+		{"/api", true},
+		{"/api/context.jsonld", true},
+		{"/api/scalar.js", true},
+
+		// Static assets.
+		{"/assets/index.js", true},
+		{"/assets/style.css", true},
+		{"/assets/fonts/inter.woff2", true},
+
+		// Auth routes.
+		{"/auth", true},
+		{"/auth/login", true},
+		{"/auth/callback", true},
+		{"/auth/logout", true},
+		{"/auth/whoami", true},
+
+		// Application routes — NOT exempt.
+		{"/", false},
+		{"/nodes", false},
+		{"/services", false},
+		{"/services/abc123", false},
+		{"/stacks", false},
+		{"/configs", false},
+		{"/secrets", false},
+		{"/networks", false},
+		{"/volumes", false},
+		{"/topology", false},
+		{"/search", false},
+		{"/swarm", false},
+		{"/cluster", false},
+		{"/events", false},
+		{"/history", false},
+
+		// Debug endpoints — intentionally NOT exempt (require auth).
+		{"/debug/pprof/", false},
+		{"/debug/pprof/heap", false},
+	}
+	for _, tt := range cases {
+		if got := isExempt(tt.path); got != tt.want {
+			t.Errorf("isExempt(%q) = %v, want %v", tt.path, got, tt.want)
+		}
+	}
+}

@@ -101,6 +101,7 @@ func main() {
 			ClientSecret: authCfg.OIDC.ClientSecret,
 			RedirectURL:  authCfg.OIDC.RedirectURL,
 			Scopes:       authCfg.OIDC.Scopes,
+			SessionKey:   authCfg.OIDC.SessionKey,
 		})
 		if err != nil {
 			slog.Error("OIDC provider setup failed", "error", err)
