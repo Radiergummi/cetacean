@@ -142,7 +142,7 @@ function DoughnutChart({data}: { data: DiskUsageSummary[] }) {
             borderWidth: 0,
             borderRadius: 4,
             spacing: 3,
-            hoverOffset: 3,
+            hoverOffset: 8,
             _rawData: data,
         }],
     }), [data]);
