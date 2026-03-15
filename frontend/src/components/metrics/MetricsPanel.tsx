@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { RefreshCw, Play, Square } from "lucide-react";
 import TimeSeriesChart from "./TimeSeriesChart";
+import { ChartSyncProvider } from "./ChartSyncProvider";
 import type { Threshold } from "./TimeSeriesChart";
 import CollapsibleSection from "../CollapsibleSection";
 import { IconButton } from "../IconButton";
@@ -69,17 +70,19 @@ export default function MetricsPanel({ charts, header }: Props) {
 
   return (
     <CollapsibleSection title={typeof header === "string" ? header : "Metrics"} controls={controls}>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {charts.map((chart) => (
-          <TimeSeriesChart
-            key={chart.query}
-            {...chart}
-            range={range}
-            refreshKey={refreshKey}
-            syncKey="metrics"
-          />
-        ))}
-      </div>
+      <ChartSyncProvider syncKey="metrics">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {charts.map((chart) => (
+            <TimeSeriesChart
+              key={chart.query}
+              {...chart}
+              range={range}
+              refreshKey={refreshKey}
+              syncKey="metrics"
+            />
+          ))}
+        </div>
+      </ChartSyncProvider>
     </CollapsibleSection>
   );
 }

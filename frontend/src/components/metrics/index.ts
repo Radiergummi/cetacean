@@ -7,3 +7,4 @@ export { default as Sparkline } from "./Sparkline";
 export { default as CapacitySection } from "./CapacitySection";
 export { default as MonitoringStatus } from "./MonitoringStatus";
 export { default as TaskSparkline } from "./TaskSparkline";
+export { ChartSyncProvider, useChartSync } from "./ChartSyncProvider";
