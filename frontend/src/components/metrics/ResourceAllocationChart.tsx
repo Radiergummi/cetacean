@@ -46,56 +46,64 @@ function AllocationBar({ title, reserved, actual, limit, unit }: BarChartProps) 
     };
   }, [reserved, actual, color]);
 
-  const limitPlugin = useMemo<Plugin<"bar">>(() => ({
-    id: "limitMarker",
-    afterDatasetsDraw(chart) {
-      const lim = limitRef.current;
-      if (lim == null) return;
-      const { ctx, chartArea, scales } = chart;
-      if (!chartArea || !scales.x) return;
-      const xPixel = scales.x.getPixelForValue(lim);
-      if (xPixel < chartArea.left || xPixel > chartArea.right) return;
-      ctx.save();
-      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--destructive").trim() || "#ef4444";
-      ctx.lineWidth = 2;
-      ctx.setLineDash([6, 4]);
-      ctx.beginPath();
-      ctx.moveTo(xPixel, chartArea.top);
-      ctx.lineTo(xPixel, chartArea.bottom);
-      ctx.stroke();
-      ctx.restore();
-    },
-  }), []);
+  const limitPlugin = useMemo<Plugin<"bar">>(
+    () => ({
+      id: "limitMarker",
+      afterDatasetsDraw(chart) {
+        const lim = limitRef.current;
+        if (lim == null) return;
+        const { ctx, chartArea, scales } = chart;
+        if (!chartArea || !scales.x) return;
+        const xPixel = scales.x.getPixelForValue(lim);
+        if (xPixel < chartArea.left || xPixel > chartArea.right) return;
+        ctx.save();
+        ctx.strokeStyle =
+          getComputedStyle(document.documentElement).getPropertyValue("--destructive").trim() ||
+          "#ef4444";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(xPixel, chartArea.top);
+        ctx.lineTo(xPixel, chartArea.bottom);
+        ctx.stroke();
+        ctx.restore();
+      },
+    }),
+    [],
+  );
 
   const maxVal = Math.max(reserved ?? 0, actual ?? 0, limit ?? 0) * 1.15;
 
-  const options = useMemo<ChartOptions<"bar">>(() => ({
-    indexAxis: "y" as const,
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        callbacks: {
-          label: (ctx) => ` ${formatMetricValue(ctx.parsed.x ?? 0, unit)}`,
+  const options = useMemo<ChartOptions<"bar">>(
+    () => ({
+      indexAxis: "y" as const,
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => ` ${formatMetricValue(ctx.parsed.x ?? 0, unit)}`,
+          },
         },
       },
-    },
-    scales: {
-      x: {
-        display: false,
-        min: 0,
-        max: maxVal,
-      },
-      y: {
-        grid: { display: false },
-        ticks: {
-          font: { size: 11 },
+      scales: {
+        x: {
+          display: false,
+          min: 0,
+          max: maxVal,
+        },
+        y: {
+          grid: { display: false },
+          ticks: {
+            font: { size: 11 },
+          },
         },
       },
-    },
-  }), [unit, maxVal]);
+    }),
+    [unit, maxVal],
+  );
 
   const plugins = useMemo(() => [limitPlugin], [limitPlugin]);
 
@@ -144,12 +152,24 @@ export default function ResourceAllocationChart({
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {hasCpu && (
         <div className="rounded-lg border bg-card p-4">
-          <AllocationBar title="CPU" reserved={cpuReserved} actual={cpuActual} limit={cpuLimit} unit="%" />
+          <AllocationBar
+            title="CPU"
+            reserved={cpuReserved}
+            actual={cpuActual}
+            limit={cpuLimit}
+            unit="%"
+          />
         </div>
       )}
       {hasMem && (
         <div className="rounded-lg border bg-card p-4">
-          <AllocationBar title="Memory" reserved={memReserved} actual={memActual} limit={memLimit} unit="bytes" />
+          <AllocationBar
+            title="Memory"
+            reserved={memReserved}
+            actual={memActual}
+            limit={memLimit}
+            unit="bytes"
+          />
         </div>
       )}
     </div>

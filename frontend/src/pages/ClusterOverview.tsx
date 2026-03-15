@@ -8,7 +8,12 @@ import PageHeader from "../components/PageHeader";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
 import DiskUsageSection from "../components/DiskUsageSection";
-import { MetricsPanel, MonitoringStatus, CapacitySection, StackDrillDownChart } from "../components/metrics";
+import {
+  MetricsPanel,
+  MonitoringStatus,
+  CapacitySection,
+  StackDrillDownChart,
+} from "../components/metrics";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 
 export default function ClusterOverview() {

@@ -177,14 +177,13 @@ export default function ServiceList() {
                     desired != null && (
                       <ReplicaHealth running={svc.RunningTasks} desired={desired} />
                     ),
-                    svc.Endpoint?.Ports &&
-                      svc.Endpoint.Ports.length > 0 && (
-                        <span className="font-mono text-xs">
-                          {svc.Endpoint.Ports.map((p) => `${p.PublishedPort}/${p.Protocol}`).join(
-                            ", ",
-                          )}
-                        </span>
-                      ),
+                    svc.Endpoint?.Ports && svc.Endpoint.Ports.length > 0 && (
+                      <span className="font-mono text-xs">
+                        {svc.Endpoint.Ports.map((p) => `${p.PublishedPort}/${p.Protocol}`).join(
+                          ", ",
+                        )}
+                      </span>
+                    ),
                     <ServiceStatusBadge service={svc} />,
                   ].filter(Boolean) as React.ReactNode[]
                 }

@@ -72,7 +72,9 @@ export default function NodeList() {
       onHeaderClick: () => toggle("role"),
     },
     {
-      header: <SortIndicator label="Availability" active={sortKey === "availability"} dir={sortDir} />,
+      header: (
+        <SortIndicator label="Availability" active={sortKey === "availability"} dir={sortDir} />
+      ),
       cell: (node) => node.Spec.Availability,
       onHeaderClick: () => toggle("availability"),
     },

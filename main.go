@@ -30,7 +30,28 @@ var openapiSpec []byte
 var scalarJS []byte
 
 func main() {
-	cfg, err := config.Load()
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		os.Exit(runHealthcheck())
+	}
+
+	flags, err := config.ParseFlags(os.Args[1:])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "flag error: %v\n", err)
+		os.Exit(2)
+	}
+
+	if flags.Version {
+		fmt.Printf("cetacean %s (commit %s, built %s)\n", version.Version, version.Commit, version.Date)
+		os.Exit(0)
+	}
+
+	fc, err := config.LoadFile(flags.Config)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
+		os.Exit(1)
+	}
+
+	cfg, err := config.Load(fc, flags)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
 		os.Exit(1)
@@ -66,7 +87,7 @@ func main() {
 	snapshotPath := ""
 	if cfg.Snapshot {
 		snapshotPath = filepath.Join(cfg.DataDir, "snapshot.json")
-		if err := os.MkdirAll(cfg.DataDir, 0700); err != nil {
+		if err := os.MkdirAll(cfg.DataDir, 0700); err != nil { //nolint:gosec // DataDir is operator-configured, not user input
 			slog.Warn("could not create data dir", "error", err)
 		}
 		if err := stateCache.LoadFromDisk(snapshotPath); err != nil {
@@ -135,4 +156,33 @@ func main() {
 		slog.Error("server error", "error", err)
 		os.Exit(1)
 	}
+}
+
+func runHealthcheck() int {
+	addr := os.Getenv("CETACEAN_LISTEN_ADDR")
+	if addr == "" {
+		addr = ":9000"
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://localhost"+addr+"/-/ready", nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "healthcheck failed: %v\n", err)
+		return 1
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "healthcheck failed: %v\n", err)
+		return 1
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Fprintf(os.Stderr, "healthcheck failed: status %d\n", resp.StatusCode)
+		return 1
+	}
+	return 0
 }

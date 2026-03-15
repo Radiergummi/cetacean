@@ -1,9 +1,7 @@
 package config
 
 import (
-	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 )
@@ -20,22 +18,65 @@ type Config struct {
 	Pprof            bool          // CETACEAN_PPROF, default false
 }
 
-func Load() (*Config, error) {
-	batchInterval, err := envDuration("CETACEAN_SSE_BATCH_INTERVAL", 100*time.Millisecond)
+// Load merges configuration from flags, environment variables, a TOML
+// config file, and hardcoded defaults (in that precedence order).
+// Pass nil for fc and/or flags to skip those layers.
+func Load(fc *fileConfig, flags *Flags) (*Config, error) {
+	if flags == nil {
+		flags = &Flags{}
+	}
+
+	// Extract file-level pointers (safely handle nil sub-structs).
+	var (
+		fListen     *string
+		fPprof      *bool
+		fSSEBatch   *string
+		fDockerHost *string
+		fPromURL    *string
+		fLogLevel   *string
+		fLogFormat  *string
+		fDataDir    *string
+		fSnapshot   *bool
+	)
+	if fc != nil {
+		if fc.Server != nil {
+			fListen = fc.Server.ListenAddr
+			fPprof = fc.Server.Pprof
+			if fc.Server.SSE != nil {
+				fSSEBatch = fc.Server.SSE.BatchInterval
+			}
+		}
+		if fc.Docker != nil {
+			fDockerHost = fc.Docker.Host
+		}
+		if fc.Prom != nil {
+			fPromURL = fc.Prom.URL
+		}
+		if fc.Logging != nil {
+			fLogLevel = fc.Logging.Level
+			fLogFormat = fc.Logging.Format
+		}
+		if fc.Storage != nil {
+			fDataDir = fc.Storage.DataDir
+			fSnapshot = fc.Storage.Snapshot
+		}
+	}
+
+	batchInterval, err := resolveDuration(nil, "CETACEAN_SSE_BATCH_INTERVAL", fSSEBatch, 100*time.Millisecond)
 	if err != nil {
 		return nil, err
 	}
 
 	cfg := &Config{
-		DockerHost:       envOr("CETACEAN_DOCKER_HOST", "unix:///var/run/docker.sock"),
-		PrometheusURL:    os.Getenv("CETACEAN_PROMETHEUS_URL"),
-		ListenAddr:       envOr("CETACEAN_LISTEN_ADDR", ":9000"),
-		LogLevel:         envOr("CETACEAN_LOG_LEVEL", "info"),
-		LogFormat:        envOr("CETACEAN_LOG_FORMAT", "json"),
-		DataDir:          envOr("CETACEAN_DATA_DIR", "./data"),
-		Snapshot:         envBool("CETACEAN_SNAPSHOT", true),
+		DockerHost:       resolve(flags.DockerHost, "CETACEAN_DOCKER_HOST", fDockerHost, "unix:///var/run/docker.sock"),
+		PrometheusURL:    resolve(flags.PrometheusURL, "CETACEAN_PROMETHEUS_URL", fPromURL, ""),
+		ListenAddr:       resolve(flags.Listen, "CETACEAN_LISTEN_ADDR", fListen, ":9000"),
+		LogLevel:         resolve(flags.LogLevel, "CETACEAN_LOG_LEVEL", fLogLevel, "info"),
+		LogFormat:        resolve(flags.LogFormat, "CETACEAN_LOG_FORMAT", fLogFormat, "json"),
+		DataDir:          resolve(nil, "CETACEAN_DATA_DIR", fDataDir, "./data"),
+		Snapshot:         resolveBool(nil, "CETACEAN_SNAPSHOT", fSnapshot, true),
 		SSEBatchInterval: batchInterval,
-		Pprof:            envBool("CETACEAN_PPROF", false),
+		Pprof:            resolveBool(flags.Pprof, "CETACEAN_PPROF", fPprof, false),
 	}
 
 	return cfg, nil
@@ -51,39 +92,5 @@ func (c *Config) SlogLevel() slog.Level {
 		return slog.LevelError
 	default:
 		return slog.LevelInfo
-	}
-}
-
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
-
-func envDuration(key string, fallback time.Duration) (time.Duration, error) {
-	v := os.Getenv(key)
-	if v == "" {
-		return fallback, nil
-	}
-	d, err := time.ParseDuration(v)
-	if err != nil {
-		return 0, fmt.Errorf("invalid %s %q: %w", key, v, err)
-	}
-	if d <= 0 {
-		return 0, fmt.Errorf("invalid %s %q: must be positive", key, v)
-	}
-	return d, nil
-}
-
-func envBool(key string, fallback bool) bool {
-	v := os.Getenv(key)
-	switch strings.ToLower(v) {
-	case "true", "1":
-		return true
-	case "false", "0":
-		return false
-	default:
-		return fallback
 	}
 }

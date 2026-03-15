@@ -21,7 +21,15 @@ import { formatMetricValue } from "../../lib/formatMetricValue";
 import { generateMockSeries } from "../../lib/mockChartData";
 import { useChartSync } from "./ChartSyncProvider";
 
-ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Filler, ChartTooltip, zoomPlugin);
+ChartJS.register(
+  LineElement,
+  PointElement,
+  LinearScale,
+  CategoryScale,
+  Filler,
+  ChartTooltip,
+  zoomPlugin,
+);
 
 export interface Threshold {
   label: string;
@@ -66,7 +74,6 @@ const RANGE_SECONDS: Record<string, number> = {
   "7d": 604800,
 };
 
-
 const formatValue = formatMetricValue;
 
 function seriesLabel(metric: Record<string, string> | undefined, fallback?: string): string {
@@ -79,7 +86,11 @@ function seriesLabel(metric: Record<string, string> | undefined, fallback?: stri
 }
 
 /** Create a vertical gradient fill for a series color. */
-function makeGradient(ctx: CanvasRenderingContext2D, chartArea: { top: number; bottom: number }, color: string) {
+function makeGradient(
+  ctx: CanvasRenderingContext2D,
+  chartArea: { top: number; bottom: number },
+  color: string,
+) {
   const grad = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
   grad.addColorStop(0, color + "30");
   grad.addColorStop(1, color + "00");
@@ -280,240 +291,265 @@ export default function TimeSeriesChart({
     return hi + (hi - lo) * 0.1 || hi + 1;
   }, [thresholds, fetchedData, yMin]);
 
-  const thresholdPlugin = useMemo<Plugin<"line">>(() => ({
-    id: "thresholdLines",
-    afterDatasetsDraw(chart) {
-      const ts = thresholdsRef.current;
-      if (!ts?.length) return;
-      const { ctx, chartArea, scales } = chart;
-      const yScale = scales.y;
-      if (!yScale || !chartArea) return;
+  const thresholdPlugin = useMemo<Plugin<"line">>(
+    () => ({
+      id: "thresholdLines",
+      afterDatasetsDraw(chart) {
+        const ts = thresholdsRef.current;
+        if (!ts?.length) return;
+        const { ctx, chartArea, scales } = chart;
+        const yScale = scales.y;
+        if (!yScale || !chartArea) return;
 
-      for (const t of ts) {
-        const yPos = yScale.getPixelForValue(t.value);
-        if (yPos < chartArea.top || yPos > chartArea.top + chartArea.height) continue;
-        ctx.save();
-        ctx.strokeStyle = t.color;
-        ctx.lineWidth = 1.5;
-        if (t.dash) ctx.setLineDash(t.dash);
-        ctx.beginPath();
-        ctx.moveTo(chartArea.left, yPos);
-        ctx.lineTo(chartArea.right, yPos);
-        ctx.stroke();
-        ctx.restore();
-      }
-    },
-  }), []);
-
-  const crosshairPlugin = useMemo<Plugin<"line">>(() => ({
-    id: "crosshair",
-    afterEvent(chart, args) {
-      if (args.event.type === "mouseout") {
-        tooltipRef.current(null);
-        sync.publish(chartId, -1);
-        chart.draw();
-        return;
-      }
-      if (args.event.type === "dblclick") {
-        const elements = chart.getElementsAtEventForMode(
-          args.event.native as Event,
-          "nearest",
-          { intersect: false, axis: "x" },
-          false,
-        );
-        if (elements.length > 0 && onSeriesDoubleClickRef.current) {
-          const label = chart.data.datasets[elements[0].datasetIndex]?.label;
-          if (label) onSeriesDoubleClickRef.current(label);
-        }
-        return;
-      }
-      if (args.event.type === "click") {
-        if (justZoomedRef.current) {
-          justZoomedRef.current = false;
-          return;
-        }
-        const { x: cx, y: cy } = args.event;
-        if (cx == null || cy == null) return;
-        const elements = chart.getElementsAtEventForMode(
-          args.event.native as Event,
-          "nearest",
-          { intersect: false, axis: "x" },
-          false,
-        );
-        if (elements.length > 0) {
-          const clickedIdx = elements[0].datasetIndex;
-          setIsolatedIndex((prev) => (prev === clickedIdx ? null : clickedIdx));
-        } else {
-          setIsolatedIndex(null);
-        }
-        return;
-      }
-      if (args.event.type !== "mousemove") return;
-
-      const { x } = args.event;
-      if (x == null) return;
-      const { chartArea, scales } = chart;
-      if (!chartArea || !scales.x) return;
-      if (x < chartArea.left || x > chartArea.right) {
-        tooltipRef.current(null);
-        return;
-      }
-
-      const xScale = scales.x;
-      const xVal = xScale.getValueForPixel(x);
-      if (xVal == null) return;
-      const idx = Math.round(xVal);
-      const ds = chart.data.datasets;
-      if (idx < 0 || !ds.length || idx >= (ds[0].data?.length ?? 0)) return;
-
-      const items: TooltipData["series"] = [];
-      for (const dataset of ds) {
-        const v = dataset.data[idx] as number;
-        if (v == null) continue;
-        items.push({
-          label: dataset.label ?? "value",
-          color: dataset.borderColor as string,
-          value: formatValue(v, unitRef.current),
-          raw: v,
-        });
-      }
-      const ts = thresholdsRef.current;
-      if (ts?.length) {
         for (const t of ts) {
-          items.push({ label: t.label, color: t.color, value: formatValue(t.value, unitRef.current), raw: t.value, dashed: true });
-        }
-      }
-      items.sort((a, b) => b.raw - a.raw);
-
-      if (stackedRef.current && fetchedDataRef.current?.series) {
-        const total = fetchedDataRef.current.series.reduce((sum, ser) => {
-          const v = ser.data[idx];
-          return sum + (v ?? 0);
-        }, 0);
-        items.unshift({
-          label: "Total",
-          color: "transparent",
-          value: formatValue(total, unitRef.current),
-          raw: total,
-        });
-      }
-
-      const fetched = fetchedDataRef.current;
-      const timestamp = fetched?.timestamps[idx];
-      const time = timestamp ? new Date(timestamp * 1000).toLocaleTimeString() : "";
-
-      tooltipRef.current({
-        time,
-        series: items,
-        x: x,
-        chartWidth: chartArea.right,
-        top: chartArea.top + 8,
-      });
-
-      if (timestamp != null) sync.publish(chartId, timestamp);
-    },
-    afterDraw(chart) {
-      const { ctx, chartArea } = chart;
-      if (!chartArea) return;
-      // Draw crosshair line at cursor position
-      const active = chart.getActiveElements();
-      if (active.length) {
-        const x = active[0].element.x;
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(x, chartArea.top);
-        ctx.lineTo(x, chartArea.bottom);
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = "rgba(136,136,136,0.3)";
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      // Draw synced crosshair from sibling chart (uses cached index)
-      const syncIdx = syncIndexRef.current;
-      if (syncIdx != null && syncIdx >= 0) {
-        const xPixel = chart.scales.x?.getPixelForValue(syncIdx);
-        if (xPixel != null && xPixel >= chartArea.left && xPixel <= chartArea.right) {
+          const yPos = yScale.getPixelForValue(t.value);
+          if (yPos < chartArea.top || yPos > chartArea.top + chartArea.height) continue;
           ctx.save();
+          ctx.strokeStyle = t.color;
+          ctx.lineWidth = 1.5;
+          if (t.dash) ctx.setLineDash(t.dash);
           ctx.beginPath();
-          ctx.moveTo(xPixel, chartArea.top);
-          ctx.lineTo(xPixel, chartArea.bottom);
-          ctx.lineWidth = 1;
-          ctx.strokeStyle = "rgba(136,136,136,0.2)";
-          ctx.setLineDash([4, 4]);
+          ctx.moveTo(chartArea.left, yPos);
+          ctx.lineTo(chartArea.right, yPos);
           ctx.stroke();
-
-          const datasets = chart.data.datasets;
-          for (let si = 0; si < datasets.length; si++) {
-            const val = datasets[si].data[syncIdx] as number;
-            if (val == null) continue;
-            const yPixel = chart.scales.y.getPixelForValue(val);
-            ctx.beginPath();
-            ctx.arc(xPixel, yPixel, 3, 0, Math.PI * 2);
-            ctx.fillStyle = datasets[si].borderColor as string;
-            ctx.fill();
-          }
           ctx.restore();
         }
-      }
-    },
-  }), [chartId, sync]);
+      },
+    }),
+    [],
+  );
 
-  const options = useMemo<ChartOptions<"line">>(() => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: false,
-    // dblclick is not in Chart.js's type union but is dispatched by the browser canvas
-    events: ['mousemove', 'mouseout', 'click', 'dblclick', 'touchstart', 'touchmove'] as unknown as ChartOptions<"line">["events"],
-    interaction: {
-      mode: "index",
-      intersect: false,
-    },
-    layout: { padding: 0 },
-    plugins: {
-      legend: { display: false },
-      tooltip: { enabled: false },
-      zoom: {
+  const crosshairPlugin = useMemo<Plugin<"line">>(
+    () => ({
+      id: "crosshair",
+      afterEvent(chart, args) {
+        if (args.event.type === "mouseout") {
+          tooltipRef.current(null);
+          sync.publish(chartId, -1);
+          chart.draw();
+          return;
+        }
+        if (args.event.type === "dblclick") {
+          const elements = chart.getElementsAtEventForMode(
+            args.event.native as Event,
+            "nearest",
+            { intersect: false, axis: "x" },
+            false,
+          );
+          if (elements.length > 0 && onSeriesDoubleClickRef.current) {
+            const label = chart.data.datasets[elements[0].datasetIndex]?.label;
+            if (label) onSeriesDoubleClickRef.current(label);
+          }
+          return;
+        }
+        if (args.event.type === "click") {
+          if (justZoomedRef.current) {
+            justZoomedRef.current = false;
+            return;
+          }
+          const { x: cx, y: cy } = args.event;
+          if (cx == null || cy == null) return;
+          const elements = chart.getElementsAtEventForMode(
+            args.event.native as Event,
+            "nearest",
+            { intersect: false, axis: "x" },
+            false,
+          );
+          if (elements.length > 0) {
+            const clickedIdx = elements[0].datasetIndex;
+            setIsolatedIndex((prev) => (prev === clickedIdx ? null : clickedIdx));
+          } else {
+            setIsolatedIndex(null);
+          }
+          return;
+        }
+        if (args.event.type !== "mousemove") return;
+
+        const { x } = args.event;
+        if (x == null) return;
+        const { chartArea, scales } = chart;
+        if (!chartArea || !scales.x) return;
+        if (x < chartArea.left || x > chartArea.right) {
+          tooltipRef.current(null);
+          return;
+        }
+
+        const xScale = scales.x;
+        const xVal = xScale.getValueForPixel(x);
+        if (xVal == null) return;
+        const idx = Math.round(xVal);
+        const ds = chart.data.datasets;
+        if (idx < 0 || !ds.length || idx >= (ds[0].data?.length ?? 0)) return;
+
+        const items: TooltipData["series"] = [];
+        for (const dataset of ds) {
+          const v = dataset.data[idx] as number;
+          if (v == null) continue;
+          items.push({
+            label: dataset.label ?? "value",
+            color: dataset.borderColor as string,
+            value: formatValue(v, unitRef.current),
+            raw: v,
+          });
+        }
+        const ts = thresholdsRef.current;
+        if (ts?.length) {
+          for (const t of ts) {
+            items.push({
+              label: t.label,
+              color: t.color,
+              value: formatValue(t.value, unitRef.current),
+              raw: t.value,
+              dashed: true,
+            });
+          }
+        }
+        items.sort((a, b) => b.raw - a.raw);
+
+        if (stackedRef.current && fetchedDataRef.current?.series) {
+          const total = fetchedDataRef.current.series.reduce((sum, ser) => {
+            const v = ser.data[idx];
+            return sum + (v ?? 0);
+          }, 0);
+          items.unshift({
+            label: "Total",
+            color: "transparent",
+            value: formatValue(total, unitRef.current),
+            raw: total,
+          });
+        }
+
+        const fetched = fetchedDataRef.current;
+        const timestamp = fetched?.timestamps[idx];
+        const time = timestamp ? new Date(timestamp * 1000).toLocaleTimeString() : "";
+
+        tooltipRef.current({
+          time,
+          series: items,
+          x: x,
+          chartWidth: chartArea.right,
+          top: chartArea.top + 8,
+        });
+
+        if (timestamp != null) sync.publish(chartId, timestamp);
+      },
+      afterDraw(chart) {
+        const { ctx, chartArea } = chart;
+        if (!chartArea) return;
+        // Draw crosshair line at cursor position
+        const active = chart.getActiveElements();
+        if (active.length) {
+          const x = active[0].element.x;
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(x, chartArea.top);
+          ctx.lineTo(x, chartArea.bottom);
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = "rgba(136,136,136,0.3)";
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Draw synced crosshair from sibling chart (uses cached index)
+        const syncIdx = syncIndexRef.current;
+        if (syncIdx != null && syncIdx >= 0) {
+          const xPixel = chart.scales.x?.getPixelForValue(syncIdx);
+          if (xPixel != null && xPixel >= chartArea.left && xPixel <= chartArea.right) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(xPixel, chartArea.top);
+            ctx.lineTo(xPixel, chartArea.bottom);
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = "rgba(136,136,136,0.2)";
+            ctx.setLineDash([4, 4]);
+            ctx.stroke();
+
+            const datasets = chart.data.datasets;
+            for (let si = 0; si < datasets.length; si++) {
+              const val = datasets[si].data[syncIdx] as number;
+              if (val == null) continue;
+              const yPixel = chart.scales.y.getPixelForValue(val);
+              ctx.beginPath();
+              ctx.arc(xPixel, yPixel, 3, 0, Math.PI * 2);
+              ctx.fillStyle = datasets[si].borderColor as string;
+              ctx.fill();
+            }
+            ctx.restore();
+          }
+        }
+      },
+    }),
+    [chartId, sync],
+  );
+
+  const options = useMemo<ChartOptions<"line">>(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      // dblclick is not in Chart.js's type union but is dispatched by the browser canvas
+      events: [
+        "mousemove",
+        "mouseout",
+        "click",
+        "dblclick",
+        "touchstart",
+        "touchmove",
+      ] as unknown as ChartOptions<"line">["events"],
+      interaction: {
+        mode: "index",
+        intersect: false,
+      },
+      layout: { padding: 0 },
+      plugins: {
+        legend: { display: false },
+        tooltip: { enabled: false },
         zoom: {
-          drag: {
-            enabled: true,
-            backgroundColor: "rgba(100, 143, 255, 0.1)",
-            borderColor: "rgba(100, 143, 255, 0.3)",
-            borderWidth: 1,
-            threshold: 5,
-          },
-          mode: "x" as const,
-          onZoom: ({ chart }: { chart: ChartJS }) => {
-            justZoomedRef.current = true;
-            const data = fetchedDataRef.current;
-            const cb = onRangeSelectRef.current;
-            if (!cb || !data) return;
-            const xScale = chart.scales.x;
-            const minIdx = Math.max(0, Math.floor(xScale.min));
-            const maxIdx = Math.min(data.timestamps.length - 1, Math.ceil(xScale.max));
-            const fromTs = data.timestamps[minIdx];
-            const toTs = data.timestamps[maxIdx];
-            if (fromTs && toTs) cb(fromTs, toTs);
-            chart.resetZoom();
+          zoom: {
+            drag: {
+              enabled: true,
+              backgroundColor: "rgba(100, 143, 255, 0.1)",
+              borderColor: "rgba(100, 143, 255, 0.3)",
+              borderWidth: 1,
+              threshold: 5,
+            },
+            mode: "x" as const,
+            onZoom: ({ chart }: { chart: ChartJS }) => {
+              justZoomedRef.current = true;
+              const data = fetchedDataRef.current;
+              const cb = onRangeSelectRef.current;
+              if (!cb || !data) return;
+              const xScale = chart.scales.x;
+              const minIdx = Math.max(0, Math.floor(xScale.min));
+              const maxIdx = Math.min(data.timestamps.length - 1, Math.ceil(xScale.max));
+              const fromTs = data.timestamps[minIdx];
+              const toTs = data.timestamps[maxIdx];
+              if (fromTs && toTs) cb(fromTs, toTs);
+              chart.resetZoom();
+            },
           },
         },
       },
-    },
-    scales: {
-      x: { display: false },
-      y: {
-        display: false,
-        stacked: stacked || undefined,
-        min: yMin,
-        suggestedMax,
+      scales: {
+        x: { display: false },
+        y: {
+          display: false,
+          stacked: stacked || undefined,
+          min: yMin,
+          suggestedMax,
+        },
       },
-    },
-    elements: {
-      point: { radius: 0 },
-    },
-  }), [yMin, suggestedMax, stacked]);
+      elements: {
+        point: { radius: 0 },
+      },
+    }),
+    [yMin, suggestedMax, stacked],
+  );
 
-  const plugins = useMemo(() => [thresholdPlugin, crosshairPlugin], [thresholdPlugin, crosshairPlugin]);
+  const plugins = useMemo(
+    () => [thresholdPlugin, crosshairPlugin],
+    [thresholdPlugin, crosshairPlugin],
+  );
 
   return (
     <div className="rounded-lg border bg-card overflow-visible">
@@ -575,12 +611,7 @@ export default function TimeSeriesChart({
         <div className="overflow-hidden rounded-b-lg" hidden={state !== "data"}>
           {chartData && (
             <div className="h-[200px]">
-              <Line
-                ref={chartRef}
-                data={chartData}
-                options={options}
-                plugins={plugins}
-              />
+              <Line ref={chartRef} data={chartData} options={options} plugins={plugins} />
             </div>
           )}
         </div>
@@ -600,7 +631,10 @@ export default function TimeSeriesChart({
               {tooltip.series.map((s) => (
                 <div key={s.label} className="flex items-center gap-2 whitespace-nowrap">
                   {s.dashed ? (
-                    <span className="w-3 shrink-0 border-t-2 border-dashed" style={{ borderColor: s.color }} />
+                    <span
+                      className="w-3 shrink-0 border-t-2 border-dashed"
+                      style={{ borderColor: s.color }}
+                    />
                   ) : (
                     <span className="w-1 shrink-0 h-3 rounded-sm" style={{ background: s.color }} />
                   )}
