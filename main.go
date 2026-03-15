@@ -113,6 +113,7 @@ func main() {
 				authCfg.Tailscale.Hostname,
 				authCfg.Tailscale.AuthKey,
 				authCfg.Tailscale.StateDir,
+				authCfg.Tailscale.Capability,
 			)
 			if err != nil {
 				slog.Error("tsnet setup failed", "error", err)
@@ -121,7 +122,7 @@ func main() {
 			defer tsnetServer.Close()
 			defer tsnetLn.Close()
 		} else {
-			authProvider = auth.NewTailscaleLocalProvider()
+			authProvider = auth.NewTailscaleLocalProvider(authCfg.Tailscale.Capability)
 		}
 	case "cert":
 		authProvider = &auth.CertProvider{}

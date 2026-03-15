@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -232,6 +233,118 @@ func TestLoadAuth_HeadersHappyPath(t *testing.T) {
 	}
 	if cfg.Headers.SecretValue != "s3cret" {
 		t.Errorf("unexpected secret value: %q", cfg.Headers.SecretValue)
+	}
+}
+
+func TestLoadAuth_HeadersRequiresSecretOrTrustedProxies(t *testing.T) {
+	t.Setenv("CETACEAN_AUTH_MODE", "headers")
+	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
+	// Neither secret nor trusted proxies set.
+
+	_, err := LoadAuth()
+	if err == nil {
+		t.Fatal("expected error when neither secret nor trusted proxies are set")
+	}
+	if !strings.Contains(err.Error(), "CETACEAN_AUTH_HEADERS_SECRET_HEADER or CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadAuth_HeadersTrustedProxiesOnly(t *testing.T) {
+	t.Setenv("CETACEAN_AUTH_MODE", "headers")
+	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
+	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "10.0.0.0/8, 192.168.1.1")
+
+	cfg, err := LoadAuth()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.Headers.TrustedProxies) != 2 {
+		t.Fatalf("expected 2 trusted proxies, got %d", len(cfg.Headers.TrustedProxies))
+	}
+	if cfg.Headers.TrustedProxies[0].String() != "10.0.0.0/8" {
+		t.Errorf("proxy[0] = %s, want 10.0.0.0/8", cfg.Headers.TrustedProxies[0])
+	}
+	// Bare IP should be converted to /32.
+	if cfg.Headers.TrustedProxies[1].String() != "192.168.1.1/32" {
+		t.Errorf("proxy[1] = %s, want 192.168.1.1/32", cfg.Headers.TrustedProxies[1])
+	}
+}
+
+func TestLoadAuth_HeadersTrustedProxiesIPv6(t *testing.T) {
+	t.Setenv("CETACEAN_AUTH_MODE", "headers")
+	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
+	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "fd00::/8, ::1")
+
+	cfg, err := LoadAuth()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.Headers.TrustedProxies) != 2 {
+		t.Fatalf("expected 2 trusted proxies, got %d", len(cfg.Headers.TrustedProxies))
+	}
+}
+
+func TestLoadAuth_HeadersTrustedProxiesInvalid(t *testing.T) {
+	t.Setenv("CETACEAN_AUTH_MODE", "headers")
+	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
+	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "not-an-ip")
+
+	_, err := LoadAuth()
+	if err == nil {
+		t.Fatal("expected error for invalid trusted proxy")
+	}
+	if !strings.Contains(err.Error(), "not a valid CIDR or IP address") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadAuth_HeadersBothSecretAndTrustedProxies(t *testing.T) {
+	t.Setenv("CETACEAN_AUTH_MODE", "headers")
+	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
+	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_HEADER", "X-Secret")
+	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_VALUE", "s3cret")
+	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "10.0.0.0/8")
+
+	cfg, err := LoadAuth()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Headers.SecretValue != "s3cret" {
+		t.Errorf("unexpected secret: %q", cfg.Headers.SecretValue)
+	}
+	if len(cfg.Headers.TrustedProxies) != 1 {
+		t.Errorf("expected 1 trusted proxy, got %d", len(cfg.Headers.TrustedProxies))
+	}
+}
+
+func TestParseTrustedProxies(t *testing.T) {
+	tests := []struct {
+		input   string
+		want    int
+		wantErr bool
+	}{
+		{"10.0.0.1", 1, false},
+		{"10.0.0.0/8", 1, false},
+		{"10.0.0.1, 172.16.0.0/12, 192.168.1.1", 3, false},
+		{"::1", 1, false},
+		{"fd00::/8", 1, false},
+		{" 10.0.0.1 , 10.0.0.2 ", 2, false},
+		{"10.0.0.1,,10.0.0.2", 2, false},
+		{"", 0, false},
+		{",,,", 0, false},
+		{"not-valid", 0, true},
+		{"10.0.0.1, bad, 10.0.0.2", 0, true},
+	}
+	for _, tt := range tests {
+		prefixes, err := parseTrustedProxies(tt.input)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("parseTrustedProxies(%q) error = %v, wantErr = %v", tt.input, err, tt.wantErr)
+			continue
+		}
+		if len(prefixes) != tt.want {
+			t.Errorf("parseTrustedProxies(%q) = %d prefixes, want %d", tt.input, len(prefixes), tt.want)
+		}
 	}
 }
 

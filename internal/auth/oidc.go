@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -31,10 +32,13 @@ type OIDCProviderConfig struct {
 
 // OIDCProvider implements Provider using OpenID Connect authorization code flow.
 type OIDCProvider struct {
-	oauth2Config oauth2.Config
-	verifier     *oidc.IDTokenVerifier
-	session      *SessionCodec
-	issuer       string // for RFC 9207 iss validation
+	oauth2Config         oauth2.Config
+	verifier             *oidc.IDTokenVerifier
+	session              *SessionCodec
+	issuer               string // for RFC 9207 iss validation
+	issRequired          bool   // true if IdP advertises authorization_response_iss_parameter_supported
+	endSessionEndpoint   string // RFC 9722 RP-initiated logout; empty if not supported
+	postLogoutRedirectURL string // derived from RedirectURL origin
 }
 
 // NewOIDCProvider creates an OIDCProvider by performing OIDC discovery on the issuer.
@@ -54,6 +58,23 @@ func NewOIDCProvider(ctx context.Context, cfg OIDCProviderConfig) (*OIDCProvider
 
 	verifier := provider.Verifier(&oidc.Config{ClientID: cfg.ClientID})
 
+	// Extract additional discovery claims for RFC 9207 and RFC 9722.
+	var disco struct {
+		IssSupported       bool   `json:"authorization_response_iss_parameter_supported"`
+		EndSessionEndpoint string `json:"end_session_endpoint"`
+	}
+	if err := provider.Claims(&disco); err != nil {
+		return nil, fmt.Errorf("oidc discovery claims: %w", err)
+	}
+
+	// Derive post-logout redirect URL from the configured redirect URL origin.
+	var postLogoutRedirectURL string
+	if disco.EndSessionEndpoint != "" {
+		if u, err := url.Parse(cfg.RedirectURL); err == nil {
+			postLogoutRedirectURL = u.Scheme + "://" + u.Host + "/"
+		}
+	}
+
 	var session *SessionCodec
 	if cfg.SessionKey != "" {
 		session, err = NewSessionCodecWithKey(cfg.SessionKey)
@@ -65,10 +86,13 @@ func NewOIDCProvider(ctx context.Context, cfg OIDCProviderConfig) (*OIDCProvider
 	}
 
 	return &OIDCProvider{
-		oauth2Config: oauth2Cfg,
-		verifier:     verifier,
-		session:      session,
-		issuer:       cfg.Issuer,
+		oauth2Config:          oauth2Cfg,
+		verifier:              verifier,
+		session:               session,
+		issuer:                cfg.Issuer,
+		issRequired:           disco.IssSupported,
+		endSessionEndpoint:    disco.EndSessionEndpoint,
+		postLogoutRedirectURL: postLogoutRedirectURL,
 	}, nil
 }
 
@@ -213,8 +237,16 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// RFC 9207: validate iss parameter if present (mix-up attack protection).
-	if iss := r.URL.Query().Get("iss"); iss != "" {
+	// RFC 9207: validate iss parameter for mix-up attack protection.
+	// If the IdP advertises authorization_response_iss_parameter_supported,
+	// the iss parameter MUST be present. Always validate it when present.
+	iss := r.URL.Query().Get("iss")
+	if iss == "" && p.issRequired {
+		slog.Error("oidc callback missing required iss parameter (IdP advertises authorization_response_iss_parameter_supported)")
+		http.Error(w, "missing iss parameter", http.StatusBadRequest)
+		return
+	}
+	if iss != "" {
 		if subtle.ConstantTimeCompare([]byte(iss), []byte(p.issuer)) != 1 {
 			slog.Error("oidc issuer mismatch in callback", "expected", p.issuer, "got", iss)
 			http.Error(w, "issuer mismatch", http.StatusBadRequest)
@@ -308,7 +340,8 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	p.session.Set(w, identity, ttl)
+	// Store the raw ID token for RP-initiated logout (RFC 9722 id_token_hint).
+	p.session.Set(w, identity, ttl, rawIDToken)
 
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
@@ -362,8 +395,32 @@ func (p *OIDCProvider) handleWhoami(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(id)
 }
 
+// handleLogout clears the local session and, if the IdP supports it,
+// redirects to the IdP's end_session_endpoint per RFC 9722.
 func (p *OIDCProvider) handleLogout(w http.ResponseWriter, r *http.Request) {
+	// Read the ID token hint before clearing the session.
+	var idTokenHint string
+	if env, err := p.session.GetEnvelope(r); err == nil {
+		idTokenHint = env.IDTokenHint
+	}
+
 	p.session.Clear(w)
+
+	// If the IdP advertises an end_session_endpoint, redirect there.
+	if p.endSessionEndpoint != "" {
+		q := url.Values{
+			"client_id": {p.oauth2Config.ClientID},
+		}
+		if idTokenHint != "" {
+			q.Set("id_token_hint", idTokenHint)
+		}
+		if p.postLogoutRedirectURL != "" {
+			q.Set("post_logout_redirect_uri", p.postLogoutRedirectURL)
+		}
+		http.Redirect(w, r, p.endSessionEndpoint+"?"+q.Encode(), http.StatusSeeOther)
+		return
+	}
+
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 

@@ -20,8 +20,9 @@ const cookieName = "cetacean_session"
 // sessionEnvelope is the signed payload stored in the cookie. It wraps the
 // identity with a server-side expiry timestamp that cannot be tampered with.
 type sessionEnvelope struct {
-	Identity  *Identity `json:"id"`
-	ExpiresAt int64     `json:"exp"`
+	Identity     *Identity `json:"id"`
+	ExpiresAt    int64     `json:"exp"`
+	IDTokenHint  string    `json:"idt,omitempty"` // raw ID token for RP-initiated logout (RFC 9722)
 }
 
 // SessionCodec signs and verifies session cookies using HMAC-SHA256.
@@ -54,7 +55,8 @@ func NewSessionCodecWithKey(hexKey string) (*SessionCodec, error) {
 
 // Set serializes the identity with an expiry, signs it, and sets it as a cookie.
 // Raw claims are excluded to keep the cookie compact (browsers enforce ~4KB).
-func (s *SessionCodec) Set(w http.ResponseWriter, id *Identity, ttl time.Duration) {
+// The optional idTokenHint is stored for RP-initiated logout (RFC 9722).
+func (s *SessionCodec) Set(w http.ResponseWriter, id *Identity, ttl time.Duration, idTokenHint ...string) {
 	// Strip Raw claims to avoid cookie bloat from large IdP claim sets.
 	compact := &Identity{
 		Subject:     id.Subject,
@@ -66,6 +68,9 @@ func (s *SessionCodec) Set(w http.ResponseWriter, id *Identity, ttl time.Duratio
 	env := sessionEnvelope{
 		Identity:  compact,
 		ExpiresAt: s.now().Add(ttl).Unix(),
+	}
+	if len(idTokenHint) > 0 {
+		env.IDTokenHint = idTokenHint[0]
 	}
 
 	payload, err := json.Marshal(env)
@@ -93,6 +98,15 @@ func (s *SessionCodec) Set(w http.ResponseWriter, id *Identity, ttl time.Duratio
 // Get reads and verifies the session cookie, returning the identity.
 // Returns an error if the cookie is missing, tampered, or expired.
 func (s *SessionCodec) Get(r *http.Request) (*Identity, error) {
+	env, err := s.GetEnvelope(r)
+	if err != nil {
+		return nil, err
+	}
+	return env.Identity, nil
+}
+
+// GetEnvelope reads and verifies the session cookie, returning the full envelope.
+func (s *SessionCodec) GetEnvelope(r *http.Request) (*sessionEnvelope, error) {
 	c, err := r.Cookie(cookieName)
 	if err != nil {
 		return nil, err
@@ -130,7 +144,7 @@ func (s *SessionCodec) Get(r *http.Request) (*Identity, error) {
 		return nil, errors.New("auth: session expired")
 	}
 
-	return env.Identity, nil
+	return &env, nil
 }
 
 // Clear deletes the session cookie.

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -270,6 +271,67 @@ func TestClaimsToIdentity(t *testing.T) {
 	}
 }
 
+func TestClaimsToIdentity_MissingFields(t *testing.T) {
+	// Empty claims map — all fields should be zero-valued.
+	id := claimsToIdentity(map[string]any{})
+
+	if id.Subject != "" {
+		t.Errorf("Subject = %q, want empty", id.Subject)
+	}
+	if id.DisplayName != "" {
+		t.Errorf("DisplayName = %q, want empty", id.DisplayName)
+	}
+	if id.Email != "" {
+		t.Errorf("Email = %q, want empty", id.Email)
+	}
+	if len(id.Groups) != 0 {
+		t.Errorf("Groups = %v, want empty", id.Groups)
+	}
+	if id.Provider != "oidc" {
+		t.Errorf("Provider = %q, want %q", id.Provider, "oidc")
+	}
+}
+
+func TestClaimsToIdentity_GroupsWithNonStrings(t *testing.T) {
+	// Groups array containing non-string elements should be skipped.
+	claims := map[string]any{
+		"sub":    "user-1",
+		"groups": []any{"admin", 42, true, nil, "dev"},
+	}
+
+	id := claimsToIdentity(claims)
+
+	if len(id.Groups) != 2 || id.Groups[0] != "admin" || id.Groups[1] != "dev" {
+		t.Errorf("Groups = %v, want [admin dev]", id.Groups)
+	}
+}
+
+func TestClaimsToIdentity_WrongTypes(t *testing.T) {
+	// Claims with wrong types should be handled gracefully.
+	claims := map[string]any{
+		"sub":    42,        // number instead of string
+		"name":   true,      // bool instead of string
+		"email":  []any{},   // array instead of string
+		"groups": "not-an-array",
+	}
+
+	id := claimsToIdentity(claims)
+
+	// All should be zero-valued since type assertions fail.
+	if id.Subject != "" {
+		t.Errorf("Subject = %q, want empty", id.Subject)
+	}
+	if id.DisplayName != "" {
+		t.Errorf("DisplayName = %q, want empty", id.DisplayName)
+	}
+	if id.Email != "" {
+		t.Errorf("Email = %q, want empty", id.Email)
+	}
+	if len(id.Groups) != 0 {
+		t.Errorf("Groups = %v, want empty", id.Groups)
+	}
+}
+
 func TestExtractBearerToken(t *testing.T) {
 	tests := []struct {
 		header string
@@ -443,6 +505,98 @@ func TestValidateAzp_MultiAudience_WrongAzp(t *testing.T) {
 	claims := map[string]any{"azp": "wrong-client"}
 	if err := p.validateAzp(token, claims); err == nil {
 		t.Error("wrong azp should fail")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Login redirect safety tests
+// ---------------------------------------------------------------------------
+
+func TestLogin_RejectsAbsoluteURL(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+
+	r := httptest.NewRequest(http.MethodGet, "/auth/login?redirect=https://evil.com/steal", nil)
+	w := httptest.NewRecorder()
+	p.handleLogin(w, r)
+
+	// Should redirect to IdP, but the redirect cookie should contain "/"
+	// (the fallback), not the absolute URL.
+	for _, c := range w.Result().Cookies() {
+		if c.Name == "cetacean_auth_redirect" {
+			if c.Value != "/" {
+				t.Errorf("redirect cookie = %q, want %q (absolute URL should be rejected)", c.Value, "/")
+			}
+			return
+		}
+	}
+	t.Fatal("missing cetacean_auth_redirect cookie")
+}
+
+func TestLogin_RejectsProtocolRelativeURL(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+
+	r := httptest.NewRequest(http.MethodGet, "/auth/login?redirect=//evil.com/steal", nil)
+	w := httptest.NewRecorder()
+	p.handleLogin(w, r)
+
+	for _, c := range w.Result().Cookies() {
+		if c.Name == "cetacean_auth_redirect" {
+			if c.Value != "/" {
+				t.Errorf("redirect cookie = %q, want %q (protocol-relative URL should be rejected)", c.Value, "/")
+			}
+			return
+		}
+	}
+	t.Fatal("missing cetacean_auth_redirect cookie")
+}
+
+func TestLogin_RejectsBackslashURL(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+
+	r := httptest.NewRequest(http.MethodGet, "/auth/login?redirect=/path\\evil", nil)
+	w := httptest.NewRecorder()
+	p.handleLogin(w, r)
+
+	for _, c := range w.Result().Cookies() {
+		if c.Name == "cetacean_auth_redirect" {
+			if c.Value != "/" {
+				t.Errorf("redirect cookie = %q, want %q (backslash URL should be rejected)", c.Value, "/")
+			}
+			return
+		}
+	}
+	t.Fatal("missing cetacean_auth_redirect cookie")
+}
+
+func TestCallback_RejectsAbsoluteRedirectCookie(t *testing.T) {
+	idp := newMockIDP(t, "test-client")
+	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
+
+	cookies, state, nonce, _ := initiateLogin(t, p)
+
+	idToken := idp.issueIDToken(t, nonce, time.Now().Add(time.Hour))
+	idp.setTokenHandler(t, idToken, time.Now().Add(time.Hour))
+
+	// Tamper with the redirect cookie to contain an absolute URL.
+	var tamperedCookies []*http.Cookie
+	for _, c := range cookies {
+		if c.Name == "cetacean_auth_redirect" {
+			c.Value = "https://evil.com/steal"
+		}
+		tamperedCookies = append(tamperedCookies, c)
+	}
+
+	query := url.Values{"code": {"code"}, "state": {state}}
+	r := buildCallbackRequest(tamperedCookies, query)
+	w := httptest.NewRecorder()
+	p.handleCallback(w, r)
+
+	// Should succeed but redirect to "/" (the fallback), not the tampered URL.
+	if loc := w.Result().Header.Get("Location"); loc != "/" {
+		t.Errorf("redirect = %q, want %q (absolute URL in cookie should be rejected)", loc, "/")
 	}
 }
 

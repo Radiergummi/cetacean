@@ -8,11 +8,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
-	josejwt "github.com/go-jose/go-jose/v4/jwt"
 	"github.com/go-jose/go-jose/v4"
+	josejwt "github.com/go-jose/go-jose/v4/jwt"
 )
 
 // mockIDPServer is a configurable mock OIDC identity provider that serves
@@ -23,6 +24,14 @@ type mockIDPServer struct {
 	key      *rsa.PrivateKey
 	keyID    string
 	clientID string
+
+	// issSupported controls whether the discovery document advertises
+	// authorization_response_iss_parameter_supported (RFC 9207).
+	issSupported bool
+
+	// endSessionEndpoint controls whether the discovery document advertises
+	// an end_session_endpoint (RFC 9722). Set before calling newProviderWithIDP.
+	endSessionEndpoint bool
 
 	// tokenHandler can be overridden per-test to customize the token response.
 	tokenHandler http.HandlerFunc
@@ -46,12 +55,17 @@ func newMockIDP(t *testing.T, clientID string) *mockIDPServer {
 
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		endSession := ""
+		if idp.endSessionEndpoint {
+			endSession = fmt.Sprintf(`, "end_session_endpoint": %q`, idp.server.URL+"/logout")
+		}
 		fmt.Fprintf(w, `{
 			"issuer": %q,
 			"authorization_endpoint": %q,
 			"token_endpoint": %q,
-			"jwks_uri": %q
-		}`, idp.server.URL, idp.server.URL+"/authorize", idp.server.URL+"/token", idp.server.URL+"/jwks")
+			"jwks_uri": %q,
+			"authorization_response_iss_parameter_supported": %v%s
+		}`, idp.server.URL, idp.server.URL+"/authorize", idp.server.URL+"/token", idp.server.URL+"/jwks", idp.issSupported, endSession)
 	})
 
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
@@ -1000,6 +1014,300 @@ func findCookie(cookies []*http.Cookie, name string) *http.Cookie {
 		}
 	}
 	return nil
+}
+
+// --- RFC 9722: RP-initiated logout ---
+
+func TestLogout_RFC9722_RedirectsToEndSessionEndpoint(t *testing.T) {
+	idp := newMockIDP(t, "test-client")
+	idp.endSessionEndpoint = true
+	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
+
+	// Complete a login flow so we have a session with an ID token hint.
+	cookies, state, nonce, _ := initiateLogin(t, p)
+	idToken := idp.issueIDToken(t, nonce, time.Now().Add(time.Hour))
+	idp.setTokenHandler(t, idToken, time.Now().Add(time.Hour))
+
+	query := url.Values{"code": {"code"}, "state": {state}}
+	callbackReq := buildCallbackRequest(cookies, query)
+	callbackRec := httptest.NewRecorder()
+	p.handleCallback(callbackRec, callbackReq)
+
+	if callbackRec.Result().StatusCode != http.StatusFound {
+		t.Fatalf("callback: status = %d, want %d", callbackRec.Result().StatusCode, http.StatusFound)
+	}
+
+	sessionCookie := findCookie(callbackRec.Result().Cookies(), cookieName)
+	if sessionCookie == nil {
+		t.Fatal("missing session cookie after login")
+	}
+
+	// Now logout.
+	logoutReq := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	logoutReq.AddCookie(sessionCookie)
+	logoutRec := httptest.NewRecorder()
+	p.handleLogout(logoutRec, logoutReq)
+
+	resp := logoutRec.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("logout: status = %d, want %d", resp.StatusCode, http.StatusSeeOther)
+	}
+
+	location := resp.Header.Get("Location")
+	u, err := url.Parse(location)
+	if err != nil {
+		t.Fatalf("parse Location: %v", err)
+	}
+
+	// Should redirect to the IdP's end_session_endpoint.
+	if !strings.HasPrefix(location, idp.server.URL+"/logout") {
+		t.Errorf("Location = %q, want prefix %q", location, idp.server.URL+"/logout")
+	}
+
+	// Must include client_id.
+	if got := u.Query().Get("client_id"); got != "test-client" {
+		t.Errorf("client_id = %q, want %q", got, "test-client")
+	}
+
+	// Must include id_token_hint (the raw JWT from login).
+	hint := u.Query().Get("id_token_hint")
+	if hint == "" {
+		t.Error("missing id_token_hint in logout redirect")
+	}
+	if hint != idToken {
+		t.Error("id_token_hint does not match the ID token from login")
+	}
+
+	// Must include post_logout_redirect_uri.
+	postLogout := u.Query().Get("post_logout_redirect_uri")
+	if postLogout != "http://localhost/" {
+		t.Errorf("post_logout_redirect_uri = %q, want %q", postLogout, "http://localhost/")
+	}
+
+	// Session cookie should be cleared.
+	clearedSession := findCookie(resp.Cookies(), cookieName)
+	if clearedSession == nil || clearedSession.MaxAge != -1 {
+		t.Error("session cookie not cleared on logout")
+	}
+}
+
+func TestLogout_RFC9722_NoEndSession_LocalLogout(t *testing.T) {
+	// IdP does NOT advertise end_session_endpoint.
+	idp := newMockIDP(t, "test-client")
+	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
+
+	r := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	w := httptest.NewRecorder()
+	p.handleLogout(w, r)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusSeeOther)
+	}
+	if loc := resp.Header.Get("Location"); loc != "/" {
+		t.Errorf("Location = %q, want %q (local redirect)", loc, "/")
+	}
+}
+
+func TestLogout_RFC9722_NoSession_StillRedirectsToIdP(t *testing.T) {
+	// End session endpoint is available but no session cookie.
+	// Should still redirect to IdP (without id_token_hint).
+	idp := newMockIDP(t, "test-client")
+	idp.endSessionEndpoint = true
+	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
+
+	r := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	w := httptest.NewRecorder()
+	p.handleLogout(w, r)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusSeeOther)
+	}
+
+	location := resp.Header.Get("Location")
+	u, err := url.Parse(location)
+	if err != nil {
+		t.Fatalf("parse Location: %v", err)
+	}
+
+	if !strings.HasPrefix(location, idp.server.URL+"/logout") {
+		t.Errorf("Location = %q, want prefix %q", location, idp.server.URL+"/logout")
+	}
+	if got := u.Query().Get("client_id"); got != "test-client" {
+		t.Errorf("client_id = %q, want %q", got, "test-client")
+	}
+	// No id_token_hint since there was no session.
+	if got := u.Query().Get("id_token_hint"); got != "" {
+		t.Errorf("id_token_hint = %q, want empty (no session)", got)
+	}
+}
+
+func TestCallback_StoresIDTokenHintInSession(t *testing.T) {
+	idp := newMockIDP(t, "test-client")
+	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
+
+	cookies, state, nonce, _ := initiateLogin(t, p)
+	idToken := idp.issueIDToken(t, nonce, time.Now().Add(time.Hour))
+	idp.setTokenHandler(t, idToken, time.Now().Add(time.Hour))
+
+	query := url.Values{"code": {"code"}, "state": {state}}
+	r := buildCallbackRequest(cookies, query)
+	w := httptest.NewRecorder()
+	p.handleCallback(w, r)
+
+	if w.Result().StatusCode != http.StatusFound {
+		t.Fatalf("callback: status = %d, want %d", w.Result().StatusCode, http.StatusFound)
+	}
+
+	sessionCookie := findCookie(w.Result().Cookies(), cookieName)
+	if sessionCookie == nil {
+		t.Fatal("missing session cookie")
+	}
+
+	// Read the envelope and verify the ID token hint is stored.
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(sessionCookie)
+	env, err := p.session.GetEnvelope(req)
+	if err != nil {
+		t.Fatalf("GetEnvelope: %v", err)
+	}
+	if env.IDTokenHint != idToken {
+		t.Errorf("IDTokenHint = %q, want the raw ID token", env.IDTokenHint)
+	}
+}
+
+// --- RFC 9207: mandatory iss parameter when IdP advertises support ---
+
+func TestCallback_RFC9207_IssRequired_MissingIss_Rejected(t *testing.T) {
+	idp := newMockIDP(t, "test-client")
+	idp.issSupported = true
+	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
+
+	cookies, state, nonce, _ := initiateLogin(t, p)
+
+	idToken := idp.issueIDToken(t, nonce, time.Now().Add(time.Hour))
+	idp.setTokenHandler(t, idToken, time.Now().Add(time.Hour))
+
+	// Callback WITHOUT iss parameter — should be rejected.
+	query := url.Values{
+		"code":  {"code"},
+		"state": {state},
+	}
+	r := buildCallbackRequest(cookies, query)
+	w := httptest.NewRecorder()
+	p.handleCallback(w, r)
+
+	if w.Result().StatusCode != http.StatusBadRequest {
+		t.Errorf("missing iss (required): status = %d, want %d", w.Result().StatusCode, http.StatusBadRequest)
+	}
+}
+
+func TestCallback_RFC9207_IssRequired_ValidIss_Accepted(t *testing.T) {
+	idp := newMockIDP(t, "test-client")
+	idp.issSupported = true
+	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
+
+	cookies, state, nonce, _ := initiateLogin(t, p)
+
+	idToken := idp.issueIDToken(t, nonce, time.Now().Add(time.Hour))
+	idp.setTokenHandler(t, idToken, time.Now().Add(time.Hour))
+
+	// Callback WITH correct iss parameter — should succeed.
+	query := url.Values{
+		"code":  {"code"},
+		"state": {state},
+		"iss":   {idp.server.URL},
+	}
+	r := buildCallbackRequest(cookies, query)
+	w := httptest.NewRecorder()
+	p.handleCallback(w, r)
+
+	if w.Result().StatusCode != http.StatusFound {
+		t.Errorf("valid iss (required): status = %d, want %d", w.Result().StatusCode, http.StatusFound)
+	}
+}
+
+func TestCallback_RFC9207_IssRequired_WrongIss_Rejected(t *testing.T) {
+	idp := newMockIDP(t, "test-client")
+	idp.issSupported = true
+	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
+
+	cookies, state, nonce, _ := initiateLogin(t, p)
+
+	idToken := idp.issueIDToken(t, nonce, time.Now().Add(time.Hour))
+	idp.setTokenHandler(t, idToken, time.Now().Add(time.Hour))
+
+	query := url.Values{
+		"code":  {"code"},
+		"state": {state},
+		"iss":   {"https://evil-idp.example.com"},
+	}
+	r := buildCallbackRequest(cookies, query)
+	w := httptest.NewRecorder()
+	p.handleCallback(w, r)
+
+	if w.Result().StatusCode != http.StatusBadRequest {
+		t.Errorf("wrong iss (required): status = %d, want %d", w.Result().StatusCode, http.StatusBadRequest)
+	}
+}
+
+func TestCallback_RFC9207_IssNotRequired_MissingIss_Accepted(t *testing.T) {
+	// When IdP does NOT advertise iss support, missing iss is fine.
+	idp := newMockIDP(t, "test-client")
+	// issSupported defaults to false
+	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
+
+	cookies, state, nonce, _ := initiateLogin(t, p)
+
+	idToken := idp.issueIDToken(t, nonce, time.Now().Add(time.Hour))
+	idp.setTokenHandler(t, idToken, time.Now().Add(time.Hour))
+
+	query := url.Values{
+		"code":  {"code"},
+		"state": {state},
+	}
+	r := buildCallbackRequest(cookies, query)
+	w := httptest.NewRecorder()
+	p.handleCallback(w, r)
+
+	if w.Result().StatusCode != http.StatusFound {
+		t.Errorf("missing iss (not required): status = %d, want %d", w.Result().StatusCode, http.StatusFound)
+	}
+}
+
+func TestCallback_RFC9207_IssRequired_ClearsCookies(t *testing.T) {
+	idp := newMockIDP(t, "test-client")
+	idp.issSupported = true
+	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
+
+	cookies, state, _, _ := initiateLogin(t, p)
+
+	// Missing iss should still clear auth flow cookies.
+	query := url.Values{
+		"code":  {"code"},
+		"state": {state},
+	}
+	r := buildCallbackRequest(cookies, query)
+	w := httptest.NewRecorder()
+	p.handleCallback(w, r)
+
+	cleared := map[string]bool{}
+	for _, c := range w.Result().Cookies() {
+		if c.MaxAge == -1 {
+			cleared[c.Name] = true
+		}
+	}
+	for _, name := range []string{
+		"cetacean_auth_state",
+		"cetacean_auth_nonce",
+		"cetacean_auth_verifier",
+		"cetacean_auth_redirect",
+	} {
+		if !cleared[name] {
+			t.Errorf("cookie %s not cleared on missing iss error", name)
+		}
+	}
 }
 
 // errorAs is a generic wrapper to avoid importing errors in the test.

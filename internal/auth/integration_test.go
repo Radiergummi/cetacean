@@ -135,6 +135,142 @@ func TestIntegration_HeadersMode_MissingHeaders(t *testing.T) {
 	}
 }
 
+func TestIntegration_HeadersMode_ValidSecret(t *testing.T) {
+	provider := auth.NewHeadersProvider(config.HeadersConfig{
+		Subject:      "X-User",
+		SecretHeader: "X-Proxy-Secret",
+		SecretValue:  "s3cret",
+	})
+	mw := auth.Middleware(provider)
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := auth.IdentityFromContext(r.Context())
+		if id == nil {
+			t.Fatal("expected identity in context")
+		}
+		if id.Subject != "alice" {
+			t.Errorf("subject = %q, want %q", id.Subject, "alice")
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := mw(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+	req.Header.Set("X-User", "alice")
+	req.Header.Set("X-Proxy-Secret", "s3cret")
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestIntegration_HeadersMode_InvalidSecret(t *testing.T) {
+	provider := auth.NewHeadersProvider(config.HeadersConfig{
+		Subject:      "X-User",
+		SecretHeader: "X-Proxy-Secret",
+		SecretValue:  "s3cret",
+	})
+	mw := auth.Middleware(provider)
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("inner handler should not be called")
+	})
+
+	handler := mw(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+	req.Header.Set("X-User", "alice")
+	req.Header.Set("X-Proxy-Secret", "wrong")
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestIntegration_HeadersMode_MissingSecretHeader(t *testing.T) {
+	provider := auth.NewHeadersProvider(config.HeadersConfig{
+		Subject:      "X-User",
+		SecretHeader: "X-Proxy-Secret",
+		SecretValue:  "s3cret",
+	})
+	mw := auth.Middleware(provider)
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("inner handler should not be called")
+	})
+
+	handler := mw(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+	req.Header.Set("X-User", "alice")
+	// X-Proxy-Secret not set.
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestIntegration_HeadersMode_GroupsParsing(t *testing.T) {
+	provider := auth.NewHeadersProvider(config.HeadersConfig{
+		Subject: "X-User",
+		Groups:  "X-Groups",
+	})
+	mw := auth.Middleware(provider)
+
+	tests := []struct {
+		name       string
+		groups     string
+		wantGroups []string
+	}{
+		{"comma separated", "admin, dev, ops", []string{"admin", "dev", "ops"}},
+		{"single group", "admin", []string{"admin"}},
+		{"only commas", ",,,", nil},
+		{"empty string", "", nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				id := auth.IdentityFromContext(r.Context())
+				if id == nil {
+					t.Fatal("expected identity in context")
+				}
+				if len(id.Groups) != len(tt.wantGroups) {
+					t.Errorf("groups = %v (len %d), want %v (len %d)", id.Groups, len(id.Groups), tt.wantGroups, len(tt.wantGroups))
+					return
+				}
+				for i, g := range tt.wantGroups {
+					if id.Groups[i] != g {
+						t.Errorf("groups[%d] = %q, want %q", i, id.Groups[i], g)
+					}
+				}
+				w.WriteHeader(http.StatusOK)
+			})
+
+			handler := mw(inner)
+
+			req := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+			req.Header.Set("X-User", "alice")
+			if tt.groups != "" {
+				req.Header.Set("X-Groups", tt.groups)
+			}
+
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+			}
+		})
+	}
+}
+
 func TestIntegration_CertMode_ValidCert(t *testing.T) {
 	provider := &auth.CertProvider{}
 	mw := auth.Middleware(provider)

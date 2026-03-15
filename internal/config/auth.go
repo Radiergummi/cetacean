@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/netip"
 	"net/url"
 	"os"
 	"strings"
@@ -25,10 +26,11 @@ type OIDCConfig struct {
 }
 
 type TailscaleConfig struct {
-	Mode     string // "local" or "tsnet"
-	AuthKey  string
-	Hostname string
-	StateDir string
+	Mode       string // "local" or "tsnet"
+	AuthKey    string
+	Hostname   string
+	StateDir   string
+	Capability string // app capability name for groups (e.g. "example.com/cap/cetacean")
 }
 
 type CertConfig struct {
@@ -36,12 +38,13 @@ type CertConfig struct {
 }
 
 type HeadersConfig struct {
-	Subject     string
-	Name        string
-	Email       string
-	Groups      string
-	SecretHeader string
-	SecretValue  string
+	Subject        string
+	Name           string
+	Email          string
+	Groups         string
+	SecretHeader   string
+	SecretValue    string
+	TrustedProxies []netip.Prefix // parsed from comma-separated CIDRs/IPs
 }
 
 var validModes = map[string]bool{
@@ -54,20 +57,21 @@ var validModes = map[string]bool{
 
 func LoadAuth() (*AuthConfig, error) {
 	cfg := &AuthConfig{
-		Mode: envOr("CETACEAN_AUTH_MODE", "none"),
+		Mode: resolve(nil, "CETACEAN_AUTH_MODE", nil, "none"),
 		OIDC: OIDCConfig{
 			Issuer:       os.Getenv("CETACEAN_AUTH_OIDC_ISSUER"),
 			ClientID:     os.Getenv("CETACEAN_AUTH_OIDC_CLIENT_ID"),
 			ClientSecret: os.Getenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET"),
 			RedirectURL:  os.Getenv("CETACEAN_AUTH_OIDC_REDIRECT_URL"),
-			Scopes:       parseScopes(envOr("CETACEAN_AUTH_OIDC_SCOPES", "openid,profile,email")),
+			Scopes:       parseScopes(resolve(nil, "CETACEAN_AUTH_OIDC_SCOPES", nil, "openid,profile,email")),
 			SessionKey:   os.Getenv("CETACEAN_AUTH_OIDC_SESSION_KEY"),
 		},
 		Tailscale: TailscaleConfig{
-			Mode:     envOr("CETACEAN_AUTH_TAILSCALE_MODE", "local"),
-			AuthKey:  os.Getenv("CETACEAN_AUTH_TAILSCALE_AUTHKEY"),
-			Hostname: envOr("CETACEAN_AUTH_TAILSCALE_HOSTNAME", "cetacean"),
-			StateDir: os.Getenv("CETACEAN_AUTH_TAILSCALE_STATE_DIR"),
+			Mode:       resolve(nil, "CETACEAN_AUTH_TAILSCALE_MODE", nil, "local"),
+			AuthKey:    os.Getenv("CETACEAN_AUTH_TAILSCALE_AUTHKEY"),
+			Hostname:   resolve(nil, "CETACEAN_AUTH_TAILSCALE_HOSTNAME", nil, "cetacean"),
+			StateDir:   os.Getenv("CETACEAN_AUTH_TAILSCALE_STATE_DIR"),
+			Capability: os.Getenv("CETACEAN_AUTH_TAILSCALE_CAPABILITY"),
 		},
 		Cert: CertConfig{
 			CA: os.Getenv("CETACEAN_AUTH_CERT_CA"),
@@ -109,8 +113,18 @@ func LoadAuth() (*AuthConfig, error) {
 		if cfg.Headers.Subject == "" {
 			return nil, fmt.Errorf("headers mode requires CETACEAN_AUTH_HEADERS_SUBJECT")
 		}
+		if raw := os.Getenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES"); raw != "" {
+			prefixes, err := parseTrustedProxies(raw)
+			if err != nil {
+				return nil, err
+			}
+			cfg.Headers.TrustedProxies = prefixes
+		}
 		if cfg.Headers.SecretHeader != "" && cfg.Headers.SecretValue == "" {
 			return nil, fmt.Errorf("CETACEAN_AUTH_HEADERS_SECRET_HEADER requires CETACEAN_AUTH_HEADERS_SECRET_VALUE")
+		}
+		if cfg.Headers.SecretHeader == "" && len(cfg.Headers.TrustedProxies) == 0 {
+			return nil, fmt.Errorf("headers mode requires CETACEAN_AUTH_HEADERS_SECRET_HEADER or CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES (or both); without either, any client can spoof identity headers")
 		}
 	}
 
@@ -132,6 +146,34 @@ func validateRedirectURL(raw string) error {
 		return nil
 	}
 	return fmt.Errorf("CETACEAN_AUTH_OIDC_REDIRECT_URL must use HTTPS (got %q); loopback addresses are exempt per OAuth 2.1", u.Scheme+"://"+u.Host)
+}
+
+// parseTrustedProxies parses a comma-separated list of CIDRs and/or IP
+// addresses into netip.Prefix values. Bare IPs are converted to single-host
+// prefixes (e.g. "10.0.0.1" → "10.0.0.1/32").
+func parseTrustedProxies(raw string) ([]netip.Prefix, error) {
+	var prefixes []netip.Prefix
+	for _, s := range strings.Split(raw, ",") {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+
+		// Try as CIDR first.
+		if prefix, err := netip.ParsePrefix(s); err == nil {
+			prefixes = append(prefixes, prefix)
+			continue
+		}
+
+		// Try as bare IP → single-host prefix.
+		if addr, err := netip.ParseAddr(s); err == nil {
+			prefixes = append(prefixes, netip.PrefixFrom(addr, addr.BitLen()))
+			continue
+		}
+
+		return nil, fmt.Errorf("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES: %q is not a valid CIDR or IP address", s)
+	}
+	return prefixes, nil
 }
 
 func parseScopes(s string) []string {

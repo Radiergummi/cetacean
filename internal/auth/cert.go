@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -13,7 +12,10 @@ type CertProvider struct{}
 
 func (p *CertProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (*Identity, error) {
 	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
-		return nil, errors.New("client certificate required")
+		return nil, &AuthError{
+			Msg:             "client certificate required",
+			WWWAuthenticate: "mutual-tls",
+		}
 	}
 
 	cert := r.TLS.PeerCertificates[0]
@@ -34,13 +36,23 @@ func (p *CertProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (*Id
 		id.Email = cert.EmailAddresses[0]
 	}
 
-	// Check for SPIFFE URI SAN.
+	// Identity extraction priority per design spec:
+	// 1. SPIFFE URI SAN → subject
+	// 2. Email SAN → subject (if CN is empty)
+	// 3. CN → subject + display name
 	for _, uri := range cert.URIs {
 		if uri.Scheme == "spiffe" {
 			id.Subject = uri.String()
 			id.Raw["spiffe_id"] = uri.String()
+			if id.DisplayName == "" {
+				id.DisplayName = uri.Path
+			}
 			break
 		}
+	}
+
+	if id.Subject == "" && id.Email != "" {
+		id.Subject = id.Email
 	}
 
 	return id, nil
