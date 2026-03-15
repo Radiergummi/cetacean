@@ -355,7 +355,14 @@ func clearAuthFlowCookies(w http.ResponseWriter) {
 		"cetacean_auth_verifier",
 		"cetacean_auth_redirect",
 	} {
-		http.SetCookie(w, &http.Cookie{Name: name, Path: "/auth", MaxAge: -1})
+		http.SetCookie(w, &http.Cookie{
+			Name:     name,
+			Path:     "/auth",
+			MaxAge:   -1,
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteLaxMode,
+		})
 	}
 }
 
@@ -486,7 +493,9 @@ func isRelativePath(s string) bool {
 	if len(s) == 0 || s[0] != '/' {
 		return false
 	}
-	if len(s) > 1 && s[1] == '/' {
+	// Reject protocol-relative URLs (//host) and backslash variants (/\host)
+	// that some browsers normalize to //host.
+	if len(s) > 1 && (s[1] == '/' || s[1] == '\\') {
 		return false
 	}
 	if strings.Contains(s, "\\") {
