@@ -199,7 +199,7 @@ function DoughnutChart({data}: { data: DiskUsageSummary[] }) {
     if (total === 0) return null;
 
     return (
-        <div className="relative flex items-center justify-center h-full w-full max-h-64 p-2">
+        <div className="relative flex items-center justify-center h-full w-full overflow-visible">
             <Doughnut data={chartData} options={options} plugins={plugins}/>
         </div>
     );
