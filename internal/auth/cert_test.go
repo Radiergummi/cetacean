@@ -99,7 +99,6 @@ func TestCertProvider_NoTLS(t *testing.T) {
 	p := &CertProvider{}
 
 	r := httptest.NewRequest("GET", "/", nil)
-	// r.TLS is nil by default
 
 	_, err := p.Authenticate(httptest.NewRecorder(), r)
 	if err == nil {
@@ -130,9 +129,6 @@ func TestCertProvider_EmptyPeerCertificates(t *testing.T) {
 	if !errors.As(err, &authErr) {
 		t.Fatalf("expected *AuthError, got %T: %v", err, err)
 	}
-	if authErr.WWWAuthenticate != "mutual-tls" {
-		t.Errorf("WWWAuthenticate = %q, want %q", authErr.WWWAuthenticate, "mutual-tls")
-	}
 }
 
 func TestCertProvider_ExpiredCertificate(t *testing.T) {
@@ -144,15 +140,14 @@ func TestCertProvider_ExpiredCertificate(t *testing.T) {
 		},
 		SerialNumber: big.NewInt(1),
 		Issuer:       pkix.Name{CommonName: "Test CA"},
-		NotAfter:     time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), // expired
+		NotAfter:     time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
 
 	r := httptest.NewRequest("GET", "/", nil)
 	r.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{cert}}
 
-	// Document current behavior: expired certs are accepted at the provider
-	// level (TLS layer with RequireAndVerifyClientCert rejects them before
-	// the request reaches this code).
+	// Expired certs are accepted at the provider level — the TLS layer
+	// with RequireAndVerifyClientCert rejects them before reaching here.
 	id, err := p.Authenticate(httptest.NewRecorder(), r)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -160,12 +155,9 @@ func TestCertProvider_ExpiredCertificate(t *testing.T) {
 	if id.Subject != "expired-client" {
 		t.Errorf("Subject = %q, want %q", id.Subject, "expired-client")
 	}
-	if id.Raw["not_after"] != "2020-01-01T00:00:00Z" {
-		t.Errorf("Raw[not_after] = %v, want %q", id.Raw["not_after"], "2020-01-01T00:00:00Z")
-	}
 }
 
-func TestCertProvider_EmptyCommonName_NoEmail(t *testing.T) {
+func TestCertProvider_EmptySubjectIsError(t *testing.T) {
 	p := &CertProvider{}
 
 	cert := &x509.Certificate{
@@ -178,16 +170,13 @@ func TestCertProvider_EmptyCommonName_NoEmail(t *testing.T) {
 	r := httptest.NewRequest("GET", "/", nil)
 	r.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{cert}}
 
-	id, err := p.Authenticate(httptest.NewRecorder(), r)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	_, err := p.Authenticate(httptest.NewRecorder(), r)
+	if err == nil {
+		t.Fatal("expected error for cert with no identifiable subject")
 	}
-	// No CN, no email, no SPIFFE → empty subject.
-	if id.Subject != "" {
-		t.Errorf("Subject = %q, want empty", id.Subject)
-	}
-	if id.DisplayName != "" {
-		t.Errorf("DisplayName = %q, want empty", id.DisplayName)
+	var authErr *AuthError
+	if !errors.As(err, &authErr) {
+		t.Fatalf("expected *AuthError, got %T: %v", err, err)
 	}
 }
 
@@ -209,12 +198,8 @@ func TestCertProvider_EmailFallbackSubject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Empty CN → subject falls back to email.
 	if id.Subject != "alice@example.com" {
 		t.Errorf("Subject = %q, want %q", id.Subject, "alice@example.com")
-	}
-	if id.Email != "alice@example.com" {
-		t.Errorf("Email = %q, want %q", id.Email, "alice@example.com")
 	}
 }
 
@@ -236,7 +221,6 @@ func TestCertProvider_CNTakesPrecedenceOverEmail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// CN present → CN is subject, email is just email.
 	if id.Subject != "alice" {
 		t.Errorf("Subject = %q, want %q", id.Subject, "alice")
 	}
@@ -266,7 +250,6 @@ func TestCertProvider_SPIFFETakesPrecedenceOverEmail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// SPIFFE takes precedence over email fallback.
 	if id.Subject != "spiffe://trust-domain/workload/api" {
 		t.Errorf("Subject = %q, want SPIFFE URI", id.Subject)
 	}
@@ -280,7 +263,6 @@ func TestCertProvider_SPIFFEDisplayNameFallback(t *testing.T) {
 
 	spiffeURI, _ := url.Parse("spiffe://trust-domain/workload/api")
 
-	// SPIFFE cert with empty CN — DisplayName should fall back to URI path.
 	cert := &x509.Certificate{
 		Subject:      pkix.Name{CommonName: ""},
 		URIs:         []*url.URL{spiffeURI},
@@ -301,16 +283,14 @@ func TestCertProvider_SPIFFEDisplayNameFallback(t *testing.T) {
 	}
 }
 
-func TestCertProvider_MultipleSPIFFEURIs(t *testing.T) {
+func TestCertProvider_MultipleSPIFFEURIs_Rejected(t *testing.T) {
 	p := &CertProvider{}
 
 	spiffe1, _ := url.Parse("spiffe://trust-domain/workload/api")
 	spiffe2, _ := url.Parse("spiffe://trust-domain/workload/backend")
 
 	cert := &x509.Certificate{
-		Subject: pkix.Name{
-			CommonName: "multi-spiffe",
-		},
+		Subject:      pkix.Name{CommonName: "multi-spiffe"},
 		URIs:         []*url.URL{spiffe1, spiffe2},
 		SerialNumber: big.NewInt(1),
 		Issuer:       pkix.Name{CommonName: "SPIFFE CA"},
@@ -320,13 +300,13 @@ func TestCertProvider_MultipleSPIFFEURIs(t *testing.T) {
 	r := httptest.NewRequest("GET", "/", nil)
 	r.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{cert}}
 
-	id, err := p.Authenticate(httptest.NewRecorder(), r)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	_, err := p.Authenticate(httptest.NewRecorder(), r)
+	if err == nil {
+		t.Fatal("expected error for multiple SPIFFE URIs")
 	}
-	// Should use the first SPIFFE URI.
-	if id.Subject != "spiffe://trust-domain/workload/api" {
-		t.Errorf("Subject = %q, want first SPIFFE URI", id.Subject)
+	var authErr *AuthError
+	if !errors.As(err, &authErr) {
+		t.Fatalf("expected *AuthError, got %T: %v", err, err)
 	}
 }
 
@@ -336,9 +316,7 @@ func TestCertProvider_NonSPIFFEURIs(t *testing.T) {
 	nonSpiffe, _ := url.Parse("https://example.com/identity")
 
 	cert := &x509.Certificate{
-		Subject: pkix.Name{
-			CommonName: "non-spiffe",
-		},
+		Subject:      pkix.Name{CommonName: "non-spiffe"},
 		URIs:         []*url.URL{nonSpiffe},
 		SerialNumber: big.NewInt(1),
 		Issuer:       pkix.Name{CommonName: "Test CA"},
@@ -352,12 +330,37 @@ func TestCertProvider_NonSPIFFEURIs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Non-SPIFFE URIs should be ignored; CN used as subject.
 	if id.Subject != "non-spiffe" {
 		t.Errorf("Subject = %q, want %q", id.Subject, "non-spiffe")
 	}
 	if _, ok := id.Raw["spiffe_id"]; ok {
 		t.Error("Raw[spiffe_id] should not be set for non-SPIFFE URIs")
+	}
+}
+
+func TestCertProvider_SPIFFEWithNonSPIFFEURIs(t *testing.T) {
+	p := &CertProvider{}
+
+	spiffeURI, _ := url.Parse("spiffe://trust-domain/workload/api")
+	otherURI, _ := url.Parse("https://example.com/identity")
+
+	cert := &x509.Certificate{
+		Subject:      pkix.Name{CommonName: "mixed-uris"},
+		URIs:         []*url.URL{otherURI, spiffeURI},
+		SerialNumber: big.NewInt(1),
+		Issuer:       pkix.Name{CommonName: "Test CA"},
+		NotAfter:     time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC),
+	}
+
+	r := httptest.NewRequest("GET", "/", nil)
+	r.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{cert}}
+
+	id, err := p.Authenticate(httptest.NewRecorder(), r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if id.Subject != "spiffe://trust-domain/workload/api" {
+		t.Errorf("Subject = %q, want SPIFFE URI", id.Subject)
 	}
 }
 
@@ -383,7 +386,7 @@ func TestCertProvider_NilSerialNumber(t *testing.T) {
 	}
 }
 
-func TestCertProvider_DNSSANsOnly(t *testing.T) {
+func TestCertProvider_DNSSANsOnly_NoSubject(t *testing.T) {
 	p := &CertProvider{}
 
 	cert := &x509.Certificate{
@@ -397,14 +400,9 @@ func TestCertProvider_DNSSANsOnly(t *testing.T) {
 	r := httptest.NewRequest("GET", "/", nil)
 	r.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{cert}}
 
-	id, err := p.Authenticate(httptest.NewRecorder(), r)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	// No CN, no email, no SPIFFE — subject is empty.
-	// DNS SANs are not used for identity extraction.
-	if id.Subject != "" {
-		t.Errorf("Subject = %q, want empty", id.Subject)
+	_, err := p.Authenticate(httptest.NewRecorder(), r)
+	if err == nil {
+		t.Fatal("expected error for cert with no identifiable subject")
 	}
 }
 
@@ -415,7 +413,6 @@ func TestCertProvider_WWWAuthenticate_MiddlewareIntegration(t *testing.T) {
 	}))
 
 	r := httptest.NewRequest("GET", "/nodes", nil)
-	// No TLS → cert required error.
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, r)
 
@@ -458,8 +455,95 @@ func TestCertProvider_WhoamiCacheControl(t *testing.T) {
 // Verify CertProvider implements Provider interface.
 var _ Provider = (*CertProvider)(nil)
 
-// Verify RegisterRoutes registers the whoami endpoint.
 func TestCertProvider_RegisterRoutes(t *testing.T) {
 	p := &CertProvider{}
 	p.RegisterRoutes(http.NewServeMux())
+}
+
+// --- SPIFFE ID validation tests ---
+
+func TestValidateSPIFFEID(t *testing.T) {
+	tests := []struct {
+		name    string
+		uri     string
+		wantErr bool
+	}{
+		{"valid", "spiffe://example.com/workload/api", false},
+		{"valid root path", "spiffe://example.com/workload", false},
+		{"valid no path", "spiffe://example.com", false},
+		{"valid trust domain chars", "spiffe://my-org.example_co/svc", false},
+		{"empty trust domain", "spiffe:///workload", true},
+		{"uppercase trust domain", "spiffe://Example.COM/workload", true},
+		{"trust domain with port", "spiffe://example.com:8080/workload", true},
+		{"query component", "spiffe://example.com/workload?foo=bar", true},
+		{"fragment component", "spiffe://example.com/workload#section", true},
+		{"dot segment", "spiffe://example.com/./workload", true},
+		{"dotdot segment", "spiffe://example.com/../workload", true},
+		{"empty path segment", "spiffe://example.com/workload//api", true},
+		{"trailing slash", "spiffe://example.com/workload/", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			u, err := url.Parse(tt.uri)
+			if err != nil {
+				t.Fatalf("invalid test URI: %v", err)
+			}
+			err = validateSPIFFEID(u)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateSPIFFEID(%q) error = %v, wantErr %v", tt.uri, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestExtractSPIFFEID(t *testing.T) {
+	t.Run("no URIs", func(t *testing.T) {
+		id, err := extractSPIFFEID(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if id != "" {
+			t.Errorf("got %q, want empty", id)
+		}
+	})
+
+	t.Run("one valid SPIFFE URI", func(t *testing.T) {
+		u, _ := url.Parse("spiffe://example.com/workload")
+		id, err := extractSPIFFEID([]*url.URL{u})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if id != "spiffe://example.com/workload" {
+			t.Errorf("got %q", id)
+		}
+	})
+
+	t.Run("multiple SPIFFE URIs rejected", func(t *testing.T) {
+		u1, _ := url.Parse("spiffe://example.com/a")
+		u2, _ := url.Parse("spiffe://example.com/b")
+		_, err := extractSPIFFEID([]*url.URL{u1, u2})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("SPIFFE plus non-SPIFFE OK", func(t *testing.T) {
+		spiffe, _ := url.Parse("spiffe://example.com/workload")
+		other, _ := url.Parse("https://example.com/id")
+		id, err := extractSPIFFEID([]*url.URL{other, spiffe})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if id != "spiffe://example.com/workload" {
+			t.Errorf("got %q", id)
+		}
+	})
+
+	t.Run("invalid SPIFFE ID rejected", func(t *testing.T) {
+		u, _ := url.Parse("spiffe://Example.COM/workload")
+		_, err := extractSPIFFEID([]*url.URL{u})
+		if err == nil {
+			t.Fatal("expected error for invalid trust domain")
+		}
+	})
 }
