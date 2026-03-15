@@ -14,7 +14,7 @@ import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import { LogViewer } from "../components/log";
-import { MetricsPanel, type Threshold } from "../components/metrics";
+import { MetricsPanel, ResourceAllocationChart, type Threshold } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
 import SimpleTable from "../components/SimpleTable";
@@ -34,6 +34,8 @@ export default function ServiceDetail() {
   const hasCadvisor = !!monitoring?.cadvisor?.targets;
   const [error, setError] = useState(false);
   const [networkNames, setNetworkNames] = useState<Record<string, string>>({});
+  const [cpuActual, setCpuActual] = useState<number | undefined>();
+  const [memActual, setMemActual] = useState<number | undefined>();
 
   const fetchData = useCallback(() => {
     if (!id) {
@@ -79,6 +81,29 @@ export default function ServiceDetail() {
     hasCadvisor && !!serviceName,
   );
 
+  useEffect(() => {
+    if (!serviceName || !hasCadvisor) return;
+    let cancelled = false;
+
+    api.metricsQuery(
+      `sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name="${escapePromQL(serviceName)}"}[5m])) * 100`
+    ).then((resp) => {
+      if (cancelled) return;
+      const val = resp.data?.result?.[0]?.value?.[1];
+      if (val != null) setCpuActual(Number(val));
+    }).catch(() => {});
+
+    api.metricsQuery(
+      `sum(container_memory_usage_bytes{container_label_com_docker_swarm_service_name="${escapePromQL(serviceName)}"})`
+    ).then((resp) => {
+      if (cancelled) return;
+      const val = resp.data?.result?.[0]?.value?.[1];
+      if (val != null) setMemActual(Number(val));
+    }).catch(() => {});
+
+    return () => { cancelled = true; };
+  }, [serviceName, hasCadvisor]);
+
   if (error) {
     return <FetchError message="Failed to load service" />;
   }
@@ -105,6 +130,21 @@ export default function ServiceDetail() {
     containerSpec.StopGracePeriod != null ||
     containerSpec.Init != null ||
     containerSpec.ReadOnly;
+
+  const runningTasks = tasks?.filter((t) => t.Status?.State === "running").length ?? 0;
+  const resources = service?.Spec?.TaskTemplate?.Resources;
+  const cpuReserved = resources?.Reservations?.NanoCPUs
+    ? (resources.Reservations.NanoCPUs / 1e9) * 100 * runningTasks
+    : undefined;
+  const cpuLimit = resources?.Limits?.NanoCPUs
+    ? (resources.Limits.NanoCPUs / 1e9) * 100 * runningTasks
+    : undefined;
+  const memReserved = resources?.Reservations?.MemoryBytes
+    ? resources.Reservations.MemoryBytes * runningTasks
+    : undefined;
+  const memLimit = resources?.Limits?.MemoryBytes
+    ? resources.Limits.MemoryBytes * runningTasks
+    : undefined;
 
   return (
     <div className="flex flex-col gap-6">
@@ -156,6 +196,21 @@ export default function ServiceDetail() {
             ]}
           />
         </ErrorBoundary>
+      )}
+
+      {(cpuReserved != null || cpuLimit != null || memReserved != null || memLimit != null) && (
+        <div className="mb-6">
+          <CollapsibleSection title="Resource Allocation">
+            <ResourceAllocationChart
+              cpuReserved={cpuReserved}
+              cpuLimit={cpuLimit}
+              cpuActual={cpuActual}
+              memReserved={memReserved}
+              memLimit={memLimit}
+              memActual={memActual}
+            />
+          </CollapsibleSection>
+        </div>
       )}
 
       {/* Container configuration */}
