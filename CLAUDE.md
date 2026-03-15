@@ -101,13 +101,16 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 - **`components/`** — Key components:
   - `DataTable` — auto-virtualizes above 100 rows via `@tanstack/react-virtual`
   - `log/` — Modular log viewer: `LogViewer` (orchestrator), `LogTable` (virtual/plain rendering), `LogMessage` (line renderer with JSON pretty-print), `LogToolbar` (time range, stream/level filters), `useLogData` (fetch + SSE streaming + pagination), `useLogFilter` (search/level/task filtering), `useLogTimeRange` (URL-persisted time range), `log-utils` (types, constants, formatters)
-  - `metrics/` — `TimeSeriesChart` (Chart.js canvas), `MetricsPanel` (range picker + N charts), `ResourceGauge` (SVG half-circle), `NodeResourceGauges`, `CapacitySection` (cluster utilization bars), `MonitoringStatus` (auto-detection banner with 4 states: unconfigured, unreachable, partial, healthy)
+  - `metrics/` — Chart.js-based visualizations with shared CVD-safe color palette (`lib/chartColors.ts`). `TimeSeriesChart` (line + stacked area toggle, linked crosshairs via `ChartSyncProvider`, click-to-isolate, brush-to-zoom via chartjs-plugin-zoom), `StackDrillDownChart` (wraps TimeSeriesChart with double-click stack→service drill-down + toggleable legend), `MetricsPanel` (range picker with presets + custom datetime range, auto-refresh, wraps charts in `ChartSyncProvider` + `MetricsPanelContext`), `ResourceAllocationChart` (horizontal bar chart showing reserved vs. actual usage with limit markers), `RangePicker` (custom date-time range dropdown with quick presets), `ResourceGauge` (SVG half-circle), `NodeResourceGauges`, `CapacitySection` (cluster utilization bars), `MonitoringStatus` (auto-detection banner with 4 states: unconfigured, unreachable, partial, healthy)
   - `search/` — `GlobalSearch` (nav bar trigger + Cmd+K), `SearchPalette` (command palette with grouped results, keyboard nav, 2s polling), `SearchInput`
   - `ActivitySection` — recent resource change history feed (wraps `ActivityFeed`)
   - `CollapsibleSection` — collapsible wrapper with localStorage-persisted open/closed state
   - `SimpleTable` — lightweight generic table (used where `DataTable` is overkill)
   - `data/LabelSection` — key-value label display section
   - `InfoCard`, `ResourceCard`, `PageHeader`, `FetchError`, `EmptyState`, `LoadingSkeleton`
+- **`lib/chartColors.ts`** — Shared IBM Carbon/Wong CVD-safe chart color palette (10 colors). `getChartColor(index)` reads from CSS custom properties (`--chart-1` through `--chart-10`) with hex fallbacks, cached after first call.
+- **`lib/chartTooltip.ts`** — Shared `CHART_TOOLTIP_CLASS` constant for chart tooltip styling (used by both React and imperative tooltip renderers)
+- **`lib/mockChartData.ts`** — Dev-only mock data generator for charts when Prometheus returns empty (used via `import.meta.env.DEV` guard)
 - **`lib/searchConstants.ts`** — Shared constants for search UI: `TYPE_ORDER`, `TYPE_LABELS`, `statusColor`, `resourcePath`
 - **`lib/parseStackLabels.ts`** — Filters out `com.docker.stack.namespace` from labels, returns remaining entries + stack name
 - **`pages/`** — All resource types have list + detail pages. Detail pages subscribe to SSE for real-time updates. List pages use `useSwarmResource` for SSE-driven optimistic updates. `SearchPage` at `/search?q=` for full global search results. `SwarmPage` at `/swarm` shows cluster info, join tokens, raft/CA/orchestration config, task defaults, and installed plugins. `Topology` at `/topology` with logical (services grouped by stack) and physical (tasks grouped by node) views.
@@ -140,8 +143,10 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 ## Frontend Patterns
 - **List pages**: `useSwarmResource` hook + `DataTable`/`ResourceCard` with `onRowClick`/`to` for navigation
 - **Detail pages**: `useDetailResource` hook (or manual `useState` + `useResourceStream`) connects to per-resource SSE path (e.g. `/nodes/{id}`) and re-fetches on change events. Each detail page gets its own `EventSource` connection scoped to that resource.
-- **URL as state**: search (`?q=`), sort (`?sort=&dir=`), metrics range (`?range=`) all URL-persisted
+- **URL as state**: search (`?q=`), sort (`?sort=&dir=`), metrics range (`?range=`), custom time range (`?from=&to=`) all URL-persisted
 - **View persistence**: table/grid toggle saved in localStorage per resource type via `useViewMode`
+- **Chart interactions**: click-to-isolate (single click dims other series to 30%), linked crosshairs across charts in same `MetricsPanel` (dashed line + dots on siblings), brush-to-zoom (drag to select time range, 5px threshold distinguishes from clicks), stacked area toggle (line/area icons in chart header), double-click to drill down (stack→services in `StackDrillDownChart`)
+- **Chart architecture**: `ChartSyncProvider` (pub/sub context for crosshair sync), `MetricsPanelContext` (provides range/refresh/onRangeSelect to children), memoized Chart.js plugins read state via refs to avoid stale closures, `chartjs-plugin-zoom` for brush-to-zoom
 - **Error tiers**: `FetchError` (page-level), `ErrorBoundary` (wraps MetricsPanel/LogViewer), component-internal error states
 - **Global search**: `Cmd+K` opens `SearchPalette` command palette; `/search?q=` for full-page results. Palette polls every 2s for live state updates (orbs/spinners) but preserves result order to avoid UI jank. Results grouped by type in fixed order: services > stacks > nodes > tasks > configs > secrets > networks > volumes
 - **Cross-references**: detail pages show "Used by Services" tables with links; configs/secrets link to stacks via label
@@ -157,8 +162,12 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 None — all previously known test failures have been fixed.
 
 ## Design Documents
-Design specs and implementation plans are in `docs/plans/`. Key recent ones:
-- `2026-03-10-global-search-design.md` — Global search feature design
-- `2026-03-10-global-search.md` — Global search implementation plan
-- `2026-03-11-monitoring-onboarding.md` — Monitoring onboarding design (auto-detection, compose split, guided setup UI)
-- `2026-03-11-monitoring-onboarding-plan.md` — Monitoring onboarding implementation plan
+Design specs and implementation plans are in `docs/plans/` and `docs/superpowers/`. Key recent ones:
+- `docs/plans/2026-03-10-global-search-design.md` — Global search feature design
+- `docs/plans/2026-03-10-global-search.md` — Global search implementation plan
+- `docs/plans/2026-03-11-monitoring-onboarding.md` — Monitoring onboarding design (auto-detection, compose split, guided setup UI)
+- `docs/plans/2026-03-11-monitoring-onboarding-plan.md` — Monitoring onboarding implementation plan
+- `docs/superpowers/specs/2026-03-15-chart-refinements-design.md` — Chart refinements design (CVD-safe palette, linked crosshairs, click-to-isolate, brush-to-zoom, stack drill-down, tooltip transitions)
+- `docs/superpowers/plans/2026-03-15-chart-refinements.md` — Chart refinements implementation plan
+- `docs/superpowers/specs/2026-03-15-new-chart-types-design.md` — New chart types design (stacked area, horizontal bar, multi-ring doughnut)
+- `docs/superpowers/plans/2026-03-15-new-chart-types.md` — New chart types implementation plan
