@@ -154,6 +154,7 @@ export default function ClusterOverview() {
               serviceQueryTemplate={`sum by (container_label_com_docker_swarm_service_name)(rate(container_cpu_usage_seconds_total{container_label_com_docker_stack_namespace="<STACK>", container_label_com_docker_swarm_service_name!=""}[5m])) * 100`}
               unit="%"
               yMin={0}
+              stackable
             />
             <StackDrillDownChart
               title="Memory Usage (by Stack)"
@@ -161,6 +162,7 @@ export default function ClusterOverview() {
               serviceQueryTemplate={`sum by (container_label_com_docker_swarm_service_name)(container_memory_usage_bytes{container_label_com_docker_stack_namespace="<STACK>", container_label_com_docker_swarm_service_name!=""})`}
               unit="bytes"
               yMin={0}
+              stackable
             />
           </MetricsPanel>
         </div>

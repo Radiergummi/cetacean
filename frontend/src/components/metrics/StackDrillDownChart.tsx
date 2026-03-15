@@ -17,6 +17,7 @@ interface Props {
   syncKey?: string;
   onRangeSelect?: (from: number, to: number) => void;
   thresholds?: Threshold[];
+  stackable?: boolean;
 }
 
 export default function StackDrillDownChart({
@@ -32,6 +33,7 @@ export default function StackDrillDownChart({
   syncKey,
   onRangeSelect,
   thresholds,
+  stackable,
 }: Props) {
   const panel = useMetricsPanelContext();
   const effectiveRange = range ?? panel?.range ?? "1h";
@@ -88,6 +90,7 @@ export default function StackDrillDownChart({
         onRangeSelect={effectiveOnRangeSelect}
         thresholds={thresholds}
         onSeriesDoubleClick={drillStack ? undefined : handleSeriesDoubleClick}
+        stackable={stackable}
         onSeriesInfo={setSeriesInfo}
       />
       <div className="mt-1">
