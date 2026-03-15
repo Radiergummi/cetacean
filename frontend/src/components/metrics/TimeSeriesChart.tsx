@@ -1,8 +1,22 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { RefreshCw, BarChart3 } from "lucide-react";
-import uPlot from "uplot";
-import "uplot/dist/uPlot.min.css";
+import {
+  Chart as ChartJS,
+  LineElement,
+  PointElement,
+  LinearScale,
+  CategoryScale,
+  Filler,
+  Tooltip as ChartTooltip,
+  type ChartData,
+  type ChartOptions,
+  type Plugin,
+} from "chart.js";
+import { Line } from "react-chartjs-2";
 import { api } from "../../api/client";
+import { getChartColor } from "../../lib/chartColors";
+
+ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Filler, ChartTooltip);
 
 export interface Threshold {
   label: string;
@@ -29,13 +43,9 @@ type State = "loading" | "data" | "empty" | "error";
 
 interface TooltipData {
   time: string;
-  series: { label: string; color: string; value: string; dashed?: boolean }[];
-  /** Cursor x relative to the plot area. */
-  cursorX: number;
-  /** Plot area left offset in CSS pixels. */
-  plotLeft: number;
-  /** Plot area width in CSS pixels. */
-  plotWidth: number;
+  series: { label: string; color: string; value: string; raw: number; dashed?: boolean }[];
+  x: number;
+  chartWidth: number;
   top: number;
 }
 
@@ -46,31 +56,6 @@ const RANGE_SECONDS: Record<string, number> = {
   "7d": 604800,
 };
 
-const CHART_COLORS = [
-  "#4f8cf6", // blue
-  "#f59e0b", // amber/orange
-  "#34d399", // green
-  "#ef4444", // red
-  "#a78bfa", // purple
-  "#22d3ee", // cyan
-  "#e879a8", // magenta
-  "#facc15", // yellow
-];
-
-/** Create a vertical gradient fill for a series color. */
-function gradientFill(color: string): uPlot.Series.Fill {
-  return (u: uPlot, seriesIdx: number) => {
-    const s = u.series[seriesIdx];
-    const yScale = u.scales[s.scale!];
-    if (yScale.min == null || yScale.max == null) return color + "18";
-    const y0 = u.valToPos(yScale.min, s.scale!, true);
-    const y1 = u.valToPos(yScale.max, s.scale!, true);
-    const grad = u.ctx.createLinearGradient(0, y1, 0, y0);
-    grad.addColorStop(0, color + "00");
-    grad.addColorStop(1, color + "30");
-    return grad;
-  };
-}
 
 function formatValue(v: number, unit?: string): string {
   if (unit === "bytes" || unit === "bytes/s") {
@@ -93,13 +78,31 @@ function seriesLabel(metric: Record<string, string> | undefined, fallback?: stri
   return fallback ?? "value";
 }
 
+/** Create a vertical gradient fill for a series color. */
+function makeGradient(ctx: CanvasRenderingContext2D, chartArea: { top: number; bottom: number }, color: string) {
+  const grad = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+  grad.addColorStop(0, color + "30");
+  grad.addColorStop(1, color + "00");
+  return grad;
+}
+
 const TOOLTIP_GAP = 20;
 
 function tooltipLeft(tt: TooltipData, el: HTMLDivElement | null): number {
   const w = el?.offsetWidth ?? 0;
-  const showLeft = tt.cursorX > tt.plotWidth / 2;
-  if (showLeft) return tt.plotLeft + tt.cursorX - w - TOOLTIP_GAP;
-  return tt.plotLeft + tt.cursorX + TOOLTIP_GAP;
+  const showLeft = tt.x > tt.chartWidth / 2;
+  if (showLeft) return tt.x - w - TOOLTIP_GAP;
+  return tt.x + TOOLTIP_GAP;
+}
+
+interface FetchedData {
+  labels: string[];
+  timestamps: number[];
+  series: {
+    label: string;
+    color: string;
+    data: number[];
+  }[];
 }
 
 export default function TimeSeriesChart({
@@ -109,18 +112,21 @@ export default function TimeSeriesChart({
   unit,
   refreshKey,
   thresholds,
-  syncKey,
   yMin,
   color: colorOverride,
 }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<uPlot | null>(null);
+  const chartRef = useRef<ChartJS<"line"> | null>(null);
   const tooltipElRef = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<State>("loading");
   const [errorMsg, setErrorMsg] = useState("");
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
+  const [fetchedData, setFetchedData] = useState<FetchedData | null>(null);
   const tooltipRef = useRef(setTooltip);
   tooltipRef.current = setTooltip;
+  const unitRef = useRef(unit);
+  unitRef.current = unit;
+  const thresholdsRef = useRef(thresholds);
+  thresholdsRef.current = thresholds;
 
   const fetchData = useCallback(() => {
     setState("loading");
@@ -142,169 +148,17 @@ export default function TimeSeriesChart({
           return;
         }
 
-        const series = resp.data.result;
-        const timestamps = series[0].values!.map((v) => Number(v[0]));
-        const data: uPlot.AlignedData = [
-          timestamps,
-          ...series.map((s) => s.values!.map((v) => Number(v[1]))),
-        ];
+        const result = resp.data.result;
+        const timestamps = result[0].values!.map((v) => Number(v[0]));
+        const labels = timestamps.map((ts) => new Date(ts * 1000).toLocaleTimeString());
 
-        if (chartRef.current) chartRef.current.destroy();
-        if (!containerRef.current) return;
+        const series = result.map((s, i) => ({
+          label: seriesLabel(s.metric, result.length === 1 ? title : undefined),
+          color: colorOverride ?? getChartColor(i),
+          data: s.values!.map((v) => Number(v[1])),
+        }));
 
-        const thresholdPlugin: uPlot.Plugin = {
-          hooks: {
-            draw: [
-              (u: uPlot) => {
-                if (!thresholds?.length) return;
-                const ctx = u.ctx;
-                const yAxis = u.scales.y;
-                if (yAxis.min == null || yAxis.max == null) return;
-                const plotLeft = u.bbox.left;
-                const plotWidth = u.bbox.width;
-
-                for (const t of thresholds) {
-                  const yPos = u.valToPos(t.value, "y", true);
-                  if (yPos < u.bbox.top || yPos > u.bbox.top + u.bbox.height) continue;
-
-                  ctx.save();
-                  ctx.strokeStyle = t.color;
-                  ctx.lineWidth = 1.5;
-                  if (t.dash) ctx.setLineDash(t.dash);
-                  ctx.beginPath();
-                  ctx.moveTo(plotLeft, yPos);
-                  ctx.lineTo(plotLeft + plotWidth, yPos);
-                  ctx.stroke();
-                  ctx.restore();
-                }
-              },
-            ],
-          },
-        };
-
-        const crosshairPlugin: uPlot.Plugin = {
-          hooks: {
-            setCursor: [
-              (u: uPlot) => {
-                const { idx } = u.cursor;
-                if (idx == null) {
-                  tooltipRef.current(null);
-                  return;
-                }
-                const ts = u.data[0][idx];
-                const items: TooltipData["series"] = [];
-                for (let i = 1; i < u.series.length; i++) {
-                  const s = u.series[i];
-                  if (!s.show) continue;
-                  const v = u.data[i][idx];
-                  if (v == null) continue;
-                  items.push({
-                    label: String(s.label ?? `series ${i}`),
-                    color: String(s.stroke ?? "#888"),
-                    value: formatValue(v, unit),
-                  });
-                }
-                if (thresholds?.length) {
-                  for (const t of thresholds) {
-                    items.push({
-                      label: t.label,
-                      color: t.color,
-                      value: formatValue(t.value, unit),
-                      dashed: true,
-                    });
-                  }
-                }
-                const cursorX = u.valToPos(ts, "x");
-                const plotLeft = u.bbox.left / devicePixelRatio;
-                const plotWidth = u.bbox.width / devicePixelRatio;
-                tooltipRef.current({
-                  time: new Date(ts * 1000).toLocaleTimeString(),
-                  series: items,
-                  cursorX,
-                  plotLeft,
-                  plotWidth,
-                  top: u.bbox.top / devicePixelRatio + 8,
-                });
-              },
-            ],
-            // @ts-expect-error uPlot types don't include drawCursor but it works
-            drawCursor: [
-              (u: uPlot) => {
-                const { idx } = u.cursor;
-                if (idx == null) return;
-                const cx = Math.round(u.valToPos(u.data[0][idx], "x", true));
-                const { ctx } = u;
-                ctx.save();
-                ctx.beginPath();
-                ctx.moveTo(cx, u.bbox.top);
-                ctx.lineTo(cx, u.bbox.top + u.bbox.height);
-                ctx.lineWidth = 1;
-                ctx.strokeStyle = "rgba(136,136,136,0.3)";
-                ctx.stroke();
-                ctx.restore();
-              },
-            ],
-          },
-        };
-
-        const opts: uPlot.Options = {
-          width: containerRef.current.clientWidth || 600,
-          height: 200,
-          plugins: [thresholdPlugin, crosshairPlugin],
-          legend: { show: false },
-          padding: [0, 0, 0, 0],
-          cursor: {
-            drag: { x: false, y: false },
-            sync: syncKey ? { key: syncKey, setSeries: true, scales: ["x", null] } : undefined,
-            x: false,
-            y: false,
-            points: {
-              size: 6,
-              fill: "currentColor",
-              stroke: "transparent",
-              width: 0,
-            },
-          },
-          focus: { alpha: 0.3 },
-          series: [
-            {},
-            ...series.map((_s, i) => {
-              const color = colorOverride ?? CHART_COLORS[i % CHART_COLORS.length];
-              return {
-                label: seriesLabel(_s.metric, series.length === 1 ? title : undefined),
-                stroke: color,
-                width: 1.5,
-                fill: gradientFill(color),
-                paths: uPlot.paths.spline!(),
-                points: { show: false },
-              };
-            }),
-          ],
-          scales: {
-            y: {
-              range: (_u: uPlot, dataMin: number, dataMax: number) => {
-                let lo = yMin != null ? Math.min(yMin, dataMin) : dataMin;
-                let hi = dataMax;
-                if (thresholds?.length) {
-                  for (const t of thresholds) {
-                    hi = Math.max(hi, t.value);
-                  }
-                }
-                const pad = (hi - lo) * 0.1 || 1;
-                return [lo, hi + pad];
-              },
-            },
-          },
-          axes: [
-            { show: false },
-            {
-              show: false,
-              grid: { stroke: "rgba(136,136,136,0.08)", width: 1 },
-            },
-          ],
-        };
-
-        chartRef.current = new uPlot(opts, data, containerRef.current);
+        setFetchedData({ labels, timestamps, series });
         setState("data");
       })
       .catch((err) => {
@@ -317,34 +171,177 @@ export default function TimeSeriesChart({
     return () => {
       cancelled = true;
     };
-  }, [query, range]);
+  }, [query, range, title, colorOverride]);
 
   useEffect(() => {
     const cancel = fetchData();
     return () => {
       cancel?.();
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
-      }
     };
   }, [fetchData, refreshKey]);
 
-  // Resize observer
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => {
-      if (chartRef.current && el.clientWidth > 0) {
-        chartRef.current.setSize({ width: el.clientWidth, height: 200 });
+  const chartData: ChartData<"line"> | null = fetchedData
+    ? {
+        labels: fetchedData.labels,
+        datasets: fetchedData.series.map((s) => ({
+          label: s.label,
+          data: s.data,
+          borderColor: s.color,
+          borderWidth: 1.5,
+          pointRadius: 0,
+          pointHoverRadius: 3,
+          pointHoverBackgroundColor: s.color,
+          pointHoverBorderWidth: 0,
+          tension: 0.3,
+          fill: true,
+          backgroundColor: (ctx: { chart: ChartJS }) => {
+            const chart = ctx.chart;
+            if (!chart.chartArea) return s.color + "18";
+            return makeGradient(chart.ctx, chart.chartArea, s.color);
+          },
+        })),
       }
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+    : null;
+
+  // Compute y-axis bounds
+  let suggestedMax: number | undefined;
+  if (thresholds?.length && fetchedData) {
+    const dataMax = Math.max(...fetchedData.series.flatMap((s) => s.data));
+    let hi = dataMax;
+    for (const t of thresholds) hi = Math.max(hi, t.value);
+    const lo = yMin ?? Math.min(...fetchedData.series.flatMap((s) => s.data));
+    suggestedMax = hi + (hi - lo) * 0.1 || hi + 1;
+  }
+
+  const thresholdPlugin: Plugin<"line"> = {
+    id: "thresholdLines",
+    afterDatasetsDraw(chart) {
+      const ts = thresholdsRef.current;
+      if (!ts?.length) return;
+      const { ctx, chartArea, scales } = chart;
+      const yScale = scales.y;
+      if (!yScale || !chartArea) return;
+
+      for (const t of ts) {
+        const yPos = yScale.getPixelForValue(t.value);
+        if (yPos < chartArea.top || yPos > chartArea.bottom) continue;
+        ctx.save();
+        ctx.strokeStyle = t.color;
+        ctx.lineWidth = 1.5;
+        if (t.dash) ctx.setLineDash(t.dash);
+        ctx.beginPath();
+        ctx.moveTo(chartArea.left, yPos);
+        ctx.lineTo(chartArea.right, yPos);
+        ctx.stroke();
+        ctx.restore();
+      }
+    },
+  };
+
+  const crosshairPlugin: Plugin<"line"> = {
+    id: "crosshair",
+    afterEvent(chart, args) {
+      if (args.event.type === "mouseout") {
+        tooltipRef.current(null);
+        chart.draw();
+        return;
+      }
+      if (args.event.type !== "mousemove") return;
+
+      const { x } = args.event;
+      if (x == null) return;
+      const { chartArea, scales } = chart;
+      if (!chartArea || !scales.x) return;
+      if (x < chartArea.left || x > chartArea.right) {
+        tooltipRef.current(null);
+        return;
+      }
+
+      // Find nearest data index
+      const xScale = scales.x;
+      const xVal = xScale.getValueForPixel(x);
+      if (xVal == null) return;
+      const idx = Math.round(xVal);
+      const ds = chart.data.datasets;
+      if (idx < 0 || !ds.length || idx >= (ds[0].data?.length ?? 0)) return;
+
+      const items: TooltipData["series"] = [];
+      for (const dataset of ds) {
+        const v = dataset.data[idx] as number;
+        if (v == null) continue;
+        items.push({
+          label: dataset.label ?? "value",
+          color: dataset.borderColor as string,
+          value: formatValue(v, unitRef.current),
+          raw: v,
+        });
+      }
+      const ts = thresholdsRef.current;
+      if (ts?.length) {
+        for (const t of ts) {
+          items.push({ label: t.label, color: t.color, value: formatValue(t.value, unitRef.current), raw: t.value, dashed: true });
+        }
+      }
+      items.sort((a, b) => b.raw - a.raw);
+
+      const fetched = fetchedData;
+      const timestamp = fetched?.timestamps[idx];
+      const time = timestamp ? new Date(timestamp * 1000).toLocaleTimeString() : "";
+
+      tooltipRef.current({
+        time,
+        series: items,
+        x: x,
+        chartWidth: chartArea.right,
+        top: chartArea.top + 8,
+      });
+    },
+    afterDraw(chart) {
+      const { ctx, chartArea } = chart;
+      if (!chartArea) return;
+      // Draw crosshair line at cursor position
+      const active = chart.getActiveElements();
+      if (!active.length) return;
+      const x = active[0].element.x;
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(x, chartArea.top);
+      ctx.lineTo(x, chartArea.bottom);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(136,136,136,0.3)";
+      ctx.stroke();
+      ctx.restore();
+    },
+  };
+
+  const options: ChartOptions<"line"> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    interaction: {
+      mode: "index",
+      intersect: false,
+    },
+    layout: { padding: 0 },
+    plugins: {
+      legend: { display: false },
+      tooltip: { enabled: false },
+    },
+    scales: {
+      x: { display: false },
+      y: {
+        display: false,
+        min: yMin,
+        suggestedMax,
+      },
+    },
+    elements: {
+      point: { radius: 0 },
+    },
+  };
 
   return (
-    <div className="rounded-lg border bg-card overflow-hidden">
+    <div className="rounded-lg border bg-card overflow-visible">
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
         <span className="text-sm font-medium">{title}</span>
         {unit && <span className="text-xs text-muted-foreground">{unit}</span>}
@@ -377,7 +374,18 @@ export default function TimeSeriesChart({
       )}
 
       <div className="relative">
-        <div ref={containerRef} hidden={state !== "data"} />
+        <div className="overflow-hidden rounded-b-lg" hidden={state !== "data"}>
+          {chartData && (
+            <div className="h-[200px]">
+              <Line
+                ref={chartRef}
+                data={chartData}
+                options={options}
+                plugins={[thresholdPlugin, crosshairPlugin]}
+              />
+            </div>
+          )}
+        </div>
         {tooltip && state === "data" && (
           <div
             ref={tooltipElRef}
