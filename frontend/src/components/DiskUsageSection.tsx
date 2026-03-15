@@ -41,13 +41,11 @@ function reclaimableCell(reclaimable: number, total: number) {
 }
 
 /** Ensure very small slices are still visible by enforcing a minimum display value. */
-function withMinSlice(data: DiskUsageSummary[]): number[] {
-    const total = data.reduce((sum, d) => sum + d.totalSize, 0);
-    if (total === 0) {
-        return data.map(() => 0);
-    }
+function withMinSlice(values: number[], total?: number): number[] {
+    const sum = total ?? values.reduce((s, v) => s + v, 0);
+    if (sum === 0) return values.map(() => 0);
     const minFraction = 0.04;
-    return data.map((d) => Math.max(d.totalSize, total * minFraction));
+    return values.map((v) => Math.max(v, sum * minFraction));
 }
 
 function buildTooltipEl(color: string, label: string, size: string, pct: string): HTMLDivElement {
@@ -139,7 +137,7 @@ function DoughnutChart({data}: { data: DiskUsageSummary[] }) {
 
     const chartData = useMemo(() => {
         const dataset = {
-            data: withMinSlice(data),
+            data: withMinSlice(data.map((d) => d.totalSize)),
             backgroundColor: data.map((_, index) => getChartColor(index)),
             borderWidth: 0,
             borderRadius: 4,
