@@ -25,11 +25,16 @@
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
   --link: oklch(0.488 0.243 264.376);
-  --chart-1: oklch(0.809 0.105 251.813);
-  --chart-2: oklch(0.623 0.214 259.815);
-  --chart-3: oklch(0.546 0.245 262.881);
-  --chart-4: oklch(0.488 0.243 264.376);
-  --chart-5: oklch(0.424 0.199 265.638);
+  --chart-1: #648FFF;
+  --chart-2: #FFB000;
+  --chart-3: #DC267F;
+  --chart-4: #785EF0;
+  --chart-5: #FE6100;
+  --chart-6: #02D4F5;
+  --chart-7: #FFD966;
+  --chart-8: #CF9FFF;
+  --chart-9: #FF85B3;
+  --chart-10: #47C1BF;
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -61,11 +66,16 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.809 0.105 251.813);
-  --chart-2: oklch(0.623 0.214 259.815);
-  --chart-3: oklch(0.546 0.245 262.881);
-  --chart-4: oklch(0.488 0.243 264.376);
-  --chart-5: oklch(0.424 0.199 265.638);
+  --chart-1: #648FFF;
+  --chart-2: #FFB000;
+  --chart-3: #DC267F;
+  --chart-4: #785EF0;
+  --chart-5: #FE6100;
+  --chart-6: #02D4F5;
+  --chart-7: #FFD966;
+  --chart-8: #CF9FFF;
+  --chart-9: #FF85B3;
+  --chart-10: #47C1BF;
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -102,6 +112,11 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
+  --color-chart-9: var(--chart-9);
+  --color-chart-10: var(--chart-10);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -147,13 +162,6 @@
   background: transparent;
 }
 
-/* uPlot cursor crosshair line */
-.u-cursor-x {
-  border-right: 1px solid oklch(from var(--foreground) l c h / 30%) !important;
-}
-.u-cursor-y {
-  display: none !important;
-}
 
 @keyframes fade-in {
   from {
