@@ -15,7 +15,9 @@ export function ChartSyncProvider({ children }: { children: ReactNode }) {
 
   const subscribe = useCallback((chartId: string, listener: Listener) => {
     listenersRef.current.set(chartId, listener);
-    return () => { listenersRef.current.delete(chartId); };
+    return () => {
+      listenersRef.current.delete(chartId);
+    };
   }, []);
 
   const publish = useCallback((chartId: string, timestamp: number) => {
@@ -24,15 +26,13 @@ export function ChartSyncProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const clear = useCallback(() => { listenersRef.current.clear(); }, []);
+  const clear = useCallback(() => {
+    listenersRef.current.clear();
+  }, []);
 
   const value = useMemo(() => ({ subscribe, publish, clear }), [subscribe, publish, clear]);
 
-  return (
-    <ChartSyncContext.Provider value={value}>
-      {children}
-    </ChartSyncContext.Provider>
-  );
+  return <ChartSyncContext.Provider value={value}>{children}</ChartSyncContext.Provider>;
 }
 
 export function useChartSync(): ChartSyncApi {

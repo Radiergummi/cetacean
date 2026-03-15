@@ -26,13 +26,24 @@ export function generateMockSeries(
   const seriesCount = title.toLowerCase().includes("top") ? 6 : 2;
 
   const mockNames = [
-    "webapp-production", "webapp-staging", "control-plane",
-    "monitoring", "agent-playground", "data-pipeline",
-    "auth-service", "api-gateway", "cache-layer", "worker-pool",
+    "webapp-production",
+    "webapp-staging",
+    "control-plane",
+    "monitoring",
+    "agent-playground",
+    "data-pipeline",
+    "auth-service",
+    "api-gateway",
+    "cache-layer",
+    "worker-pool",
   ];
 
   const series = Array.from({ length: seriesCount }, (_, i) => {
-    const base = isPct ? 10 + Math.random() * 40 : isBytes ? 1e8 + Math.random() * 2e9 : Math.random() * 100;
+    const base = isPct
+      ? 10 + Math.random() * 40
+      : isBytes
+        ? 1e8 + Math.random() * 2e9
+        : Math.random() * 100;
     const volatility = base * 0.15;
     let val = base;
     const data = timestamps.map(() => {

@@ -65,23 +65,32 @@ export default function MetricsPanel({ charts, children, header }: Props) {
   const customTo = toParam ? Number(toParam) : null;
   const isCustomRange = customFrom != null && customTo != null;
 
-  const setCustomRange = useCallback((from: number, to: number) => {
-    setParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set("from", String(Math.floor(from)));
-      next.set("to", String(Math.floor(to)));
-      next.delete("range");
-      return next;
-    }, { replace: true });
-  }, [setParams]);
+  const setCustomRange = useCallback(
+    (from: number, to: number) => {
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("from", String(Math.floor(from)));
+          next.set("to", String(Math.floor(to)));
+          next.delete("range");
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setParams],
+  );
 
   const clearCustomRange = useCallback(() => {
-    setParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.delete("from");
-      next.delete("to");
-      return next;
-    }, { replace: true });
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("from");
+        next.delete("to");
+        return next;
+      },
+      { replace: true },
+    );
   }, [setParams]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [autoRefresh, setAutoRefresh] = useState(false);
@@ -92,14 +101,30 @@ export default function MetricsPanel({ charts, children, header }: Props) {
     return () => clearInterval(interval);
   }, [autoRefresh]);
 
-  const panelCtx = useMemo<MetricsPanelContextValue>(() => ({
-    range, from: customFrom ?? undefined, to: customTo ?? undefined, refreshKey, onRangeSelect: setCustomRange,
-  }), [range, customFrom, customTo, refreshKey, setCustomRange]);
+  const panelCtx = useMemo<MetricsPanelContextValue>(
+    () => ({
+      range,
+      from: customFrom ?? undefined,
+      to: customTo ?? undefined,
+      refreshKey,
+      onRangeSelect: setCustomRange,
+    }),
+    [range, customFrom, customTo, refreshKey, setCustomRange],
+  );
 
   const controls = (
     <div className="flex flex-wrap items-center gap-2">
-      <SegmentedControl segments={RANGE_SEGMENTS} value={isCustomRange ? "" : range} onChange={setRange} />
-      <RangePicker from={customFrom} to={customTo} onApply={setCustomRange} onClear={clearCustomRange} />
+      <SegmentedControl
+        segments={RANGE_SEGMENTS}
+        value={isCustomRange ? "" : range}
+        onChange={setRange}
+      />
+      <RangePicker
+        from={customFrom}
+        to={customTo}
+        onApply={setCustomRange}
+        onClear={clearCustomRange}
+      />
       <IconButton
         onClick={() => setRefreshKey((k) => k + 1)}
         title="Refresh"
@@ -119,17 +144,18 @@ export default function MetricsPanel({ charts, children, header }: Props) {
       <MetricsPanelContext.Provider value={panelCtx}>
         <ChartSyncProvider>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {children ?? charts?.map((chart) => (
-              <TimeSeriesChart
-                key={chart.query}
-                {...chart}
-                range={range}
-                from={customFrom ?? undefined}
-                to={customTo ?? undefined}
-                refreshKey={refreshKey}
-                onRangeSelect={setCustomRange}
-              />
-            ))}
+            {children ??
+              charts?.map((chart) => (
+                <TimeSeriesChart
+                  key={chart.query}
+                  {...chart}
+                  range={range}
+                  from={customFrom ?? undefined}
+                  to={customTo ?? undefined}
+                  refreshKey={refreshKey}
+                  onRangeSelect={setCustomRange}
+                />
+              ))}
           </div>
         </ChartSyncProvider>
       </MetricsPanelContext.Provider>

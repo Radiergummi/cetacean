@@ -87,17 +87,25 @@ export default function ServiceDetail() {
     const escaped = escapePromQL(serviceName);
 
     Promise.all([
-      api.metricsQuery(`sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name="${escaped}"}[5m])) * 100`),
-      api.metricsQuery(`sum(container_memory_usage_bytes{container_label_com_docker_swarm_service_name="${escaped}"})`),
-    ]).then(([cpuResp, memResp]) => {
-      if (cancelled) return;
-      const cpuVal = cpuResp.data?.result?.[0]?.value?.[1];
-      const memVal = memResp.data?.result?.[0]?.value?.[1];
-      if (cpuVal != null) setCpuActual(Number(cpuVal));
-      if (memVal != null) setMemActual(Number(memVal));
-    }).catch(() => {});
+      api.metricsQuery(
+        `sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name="${escaped}"}[5m])) * 100`,
+      ),
+      api.metricsQuery(
+        `sum(container_memory_usage_bytes{container_label_com_docker_swarm_service_name="${escaped}"})`,
+      ),
+    ])
+      .then(([cpuResp, memResp]) => {
+        if (cancelled) return;
+        const cpuVal = cpuResp.data?.result?.[0]?.value?.[1];
+        const memVal = memResp.data?.result?.[0]?.value?.[1];
+        if (cpuVal != null) setCpuActual(Number(cpuVal));
+        if (memVal != null) setMemActual(Number(memVal));
+      })
+      .catch(() => {});
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [serviceName, hasCadvisor]);
 
   if (error) {
@@ -142,23 +150,26 @@ export default function ServiceDetail() {
     ? resources.Limits.MemoryBytes * runningTasks
     : undefined;
 
-  const metricsCharts = useMemo(() => [
-    {
-      title: "CPU Usage",
-      query: `sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name="${escapePromQL(name)}"}[5m])) * 100`,
-      unit: "%",
-      thresholds: cpuThresholds(service),
-      yMin: 0,
-    },
-    {
-      title: "Memory Usage",
-      query: `sum(container_memory_usage_bytes{container_label_com_docker_swarm_service_name="${escapePromQL(name)}"})`,
-      unit: "bytes",
-      thresholds: memoryThresholds(service),
-      yMin: 0,
-      color: "#34d399",
-    },
-  ], [name, service]);
+  const metricsCharts = useMemo(
+    () => [
+      {
+        title: "CPU Usage",
+        query: `sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name="${escapePromQL(name)}"}[5m])) * 100`,
+        unit: "%",
+        thresholds: cpuThresholds(service),
+        yMin: 0,
+      },
+      {
+        title: "Memory Usage",
+        query: `sum(container_memory_usage_bytes{container_label_com_docker_swarm_service_name="${escapePromQL(name)}"})`,
+        unit: "bytes",
+        thresholds: memoryThresholds(service),
+        yMin: 0,
+        color: "#34d399",
+      },
+    ],
+    [name, service],
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -189,10 +200,7 @@ export default function ServiceDetail() {
 
       {hasPrometheus && (
         <ErrorBoundary inline>
-          <MetricsPanel
-            header="Metrics"
-            charts={metricsCharts}
-          />
+          <MetricsPanel header="Metrics" charts={metricsCharts} />
         </ErrorBoundary>
       )}
 

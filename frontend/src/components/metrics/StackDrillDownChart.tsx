@@ -53,9 +53,7 @@ export default function StackDrillDownChart({
     setDrillStack(null);
   }, []);
 
-  const effectiveStackQuery = showAll
-    ? stackQuery.replace("topk(10,", "topk(30,")
-    : stackQuery;
+  const effectiveStackQuery = showAll ? stackQuery.replace("topk(10,", "topk(30,") : stackQuery;
 
   const query = drillStack
     ? serviceQueryTemplate.replace("<STACK>", drillStack)

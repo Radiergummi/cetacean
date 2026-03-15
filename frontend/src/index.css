@@ -25,16 +25,16 @@
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
   --link: oklch(0.488 0.243 264.376);
-  --chart-1: #648FFF;
-  --chart-2: #FFB000;
-  --chart-3: #DC267F;
-  --chart-4: #785EF0;
-  --chart-5: #FE6100;
-  --chart-6: #02D4F5;
-  --chart-7: #FFD966;
-  --chart-8: #CF9FFF;
-  --chart-9: #FF85B3;
-  --chart-10: #47C1BF;
+  --chart-1: #648fff;
+  --chart-2: #ffb000;
+  --chart-3: #dc267f;
+  --chart-4: #785ef0;
+  --chart-5: #fe6100;
+  --chart-6: #02d4f5;
+  --chart-7: #ffd966;
+  --chart-8: #cf9fff;
+  --chart-9: #ff85b3;
+  --chart-10: #47c1bf;
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -66,16 +66,16 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
-  --chart-1: #648FFF;
-  --chart-2: #FFB000;
-  --chart-3: #DC267F;
-  --chart-4: #785EF0;
-  --chart-5: #FE6100;
-  --chart-6: #02D4F5;
-  --chart-7: #FFD966;
-  --chart-8: #CF9FFF;
-  --chart-9: #FF85B3;
-  --chart-10: #47C1BF;
+  --chart-1: #648fff;
+  --chart-2: #ffb000;
+  --chart-3: #dc267f;
+  --chart-4: #785ef0;
+  --chart-5: #fe6100;
+  --chart-6: #02d4f5;
+  --chart-7: #ffd966;
+  --chart-8: #cf9fff;
+  --chart-9: #ff85b3;
+  --chart-10: #47c1bf;
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -161,7 +161,6 @@
 .log-panel tbody tr:nth-child(even) {
   background: transparent;
 }
-
 
 @keyframes fade-in {
   from {
