@@ -16,6 +16,7 @@ import zoomPlugin from "chartjs-plugin-zoom";
 import { Line } from "react-chartjs-2";
 import { api } from "../../api/client";
 import { getChartColor } from "../../lib/chartColors";
+import { formatBytes } from "../../lib/formatBytes";
 import { generateMockSeries } from "../../lib/mockChartData";
 import { useChartSync } from "./ChartSyncProvider";
 
@@ -35,7 +36,6 @@ interface Props {
   unit?: string;
   refreshKey?: number;
   thresholds?: Threshold[];
-  syncKey?: string;
   /** Force y-axis minimum value (e.g. 0 to always start at zero). */
   yMin?: number;
   /** Override the default series color. */
@@ -68,10 +68,7 @@ const RANGE_SECONDS: Record<string, number> = {
 
 function formatValue(v: number, unit?: string): string {
   if (unit === "bytes" || unit === "bytes/s") {
-    if (v >= 1e9) return `${(v / 1e9).toFixed(1)} GB${unit === "bytes/s" ? "/s" : ""}`;
-    if (v >= 1e6) return `${(v / 1e6).toFixed(1)} MB${unit === "bytes/s" ? "/s" : ""}`;
-    if (v >= 1e3) return `${(v / 1e3).toFixed(1)} KB${unit === "bytes/s" ? "/s" : ""}`;
-    return `${v.toFixed(0)} B${unit === "bytes/s" ? "/s" : ""}`;
+    return formatBytes(v) + (unit === "bytes/s" ? "/s" : "");
   }
   if (unit === "%") return `${v.toFixed(1)}%`;
   if (unit === "cores") return `${v.toFixed(3)}`;

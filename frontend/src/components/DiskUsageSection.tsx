@@ -240,17 +240,19 @@ function DoughnutChart({data}: { data: DiskUsageSummary[] }) {
         [],
     );
 
+    const plugins = useMemo(() => [centerTextPlugin], [centerTextPlugin]);
+
     if (total === 0) return null;
 
     return (
         <div className="relative flex items-center justify-center h-full w-full max-h-64 p-2">
-            <Doughnut data={chartData} options={options} plugins={[centerTextPlugin]}/>
+            <Doughnut data={chartData} options={options} plugins={plugins}/>
         </div>
     );
 }
 
 function DiskUsageTable({data}: { data: DiskUsageSummary[] }) {
-    const sorted = data.toSorted(({totalSize: a}, {totalSize: b}) => b - a);
+    const sorted = [...data].sort((a, b) => b.totalSize - a.totalSize);
     const colorMap = buildColorMap(sorted);
     const total = data.reduce((sum, {totalSize}) => sum + totalSize, 0);
     const reclaimable = data.reduce((sum, {reclaimable}) => sum + reclaimable, 0);
@@ -269,25 +271,25 @@ function DiskUsageTable({data}: { data: DiskUsageSummary[] }) {
                     </tr>
                     </thead>
                     <tbody>
-                    {sorted.map(({active, count, reclaimable, totalSize, type}) => {
-                        const meta = typeMeta[type];
+                    {sorted.map((d) => {
+                        const meta = typeMeta[d.type];
                         const Icon = meta?.icon;
-                        const color = colorMap[type];
+                        const color = colorMap[d.type];
                         return (
-                            <tr key={type} className="border-b last:border-b-0">
+                            <tr key={d.type} className="border-b last:border-b-0">
                                 <td className="p-3">
                                     <span className="inline-flex items-center gap-2">
                                         {Icon && <Icon className="size-4" style={{color}}/>}
-                                        {meta?.label ?? type}
+                                        {meta?.label ?? d.type}
                                     </span>
                                 </td>
-                                <td className="p-3 text-right tabular-nums">{count}</td>
-                                <td className="p-3 text-right tabular-nums">{active}</td>
+                                <td className="p-3 text-right tabular-nums">{d.count}</td>
+                                <td className="p-3 text-right tabular-nums">{d.active}</td>
                                 <td className="p-3 text-right tabular-nums">
-                                    {totalSize > 0 ? formatBytes(totalSize) : "0 B"}
+                                    {d.totalSize > 0 ? formatBytes(d.totalSize) : "0 B"}
                                 </td>
                                 <td className="p-3 text-right tabular-nums text-muted-foreground">
-                                    {reclaimableCell(reclaimable, totalSize)}
+                                    {reclaimableCell(d.reclaimable, d.totalSize)}
                                 </td>
                             </tr>
                         );

@@ -2,7 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach } from "vitest";
 
-// uPlot requires matchMedia which jsdom does not provide
+// Chart.js requires matchMedia which jsdom does not provide
 Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: (query: string) => ({

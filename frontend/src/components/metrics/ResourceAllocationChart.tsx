@@ -58,7 +58,7 @@ function AllocationBar({ title, reserved, actual, limit, unit }: BarChartProps) 
       const xPixel = scales.x.getPixelForValue(limit);
       if (xPixel < chartArea.left || xPixel > chartArea.right) return;
       ctx.save();
-      ctx.strokeStyle = getComputedStyle(chart.canvas).getPropertyValue("--destructive").trim() || "#ef4444";
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--destructive").trim() || "#ef4444";
       ctx.lineWidth = 2;
       ctx.setLineDash([6, 4]);
       ctx.beginPath();

@@ -84,21 +84,17 @@ export default function ServiceDetail() {
   useEffect(() => {
     if (!serviceName || !hasCadvisor) return;
     let cancelled = false;
+    const escaped = escapePromQL(serviceName);
 
-    api.metricsQuery(
-      `sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name="${escapePromQL(serviceName)}"}[5m])) * 100`
-    ).then((resp) => {
+    Promise.all([
+      api.metricsQuery(`sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name="${escaped}"}[5m])) * 100`),
+      api.metricsQuery(`sum(container_memory_usage_bytes{container_label_com_docker_swarm_service_name="${escaped}"})`),
+    ]).then(([cpuResp, memResp]) => {
       if (cancelled) return;
-      const val = resp.data?.result?.[0]?.value?.[1];
-      if (val != null) setCpuActual(Number(val));
-    }).catch(() => {});
-
-    api.metricsQuery(
-      `sum(container_memory_usage_bytes{container_label_com_docker_swarm_service_name="${escapePromQL(serviceName)}"})`
-    ).then((resp) => {
-      if (cancelled) return;
-      const val = resp.data?.result?.[0]?.value?.[1];
-      if (val != null) setMemActual(Number(val));
+      const cpuVal = cpuResp.data?.result?.[0]?.value?.[1];
+      const memVal = memResp.data?.result?.[0]?.value?.[1];
+      if (cpuVal != null) setCpuActual(Number(cpuVal));
+      if (memVal != null) setMemActual(Number(memVal));
     }).catch(() => {});
 
     return () => { cancelled = true; };

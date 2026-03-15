@@ -127,7 +127,6 @@ export default function MetricsPanel({ charts, children, header }: Props) {
                 from={customFrom ?? undefined}
                 to={customTo ?? undefined}
                 refreshKey={refreshKey}
-                syncKey="metrics"
                 onRangeSelect={setCustomRange}
               />
             ))}

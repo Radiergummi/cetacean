@@ -14,7 +14,6 @@ interface Props {
   from?: number;
   to?: number;
   refreshKey?: number;
-  syncKey?: string;
   onRangeSelect?: (from: number, to: number) => void;
   thresholds?: Threshold[];
   stackable?: boolean;
@@ -30,7 +29,6 @@ export default function StackDrillDownChart({
   from,
   to,
   refreshKey,
-  syncKey,
   onRangeSelect,
   thresholds,
   stackable,
@@ -40,7 +38,6 @@ export default function StackDrillDownChart({
   const effectiveFrom = from ?? panel?.from;
   const effectiveTo = to ?? panel?.to;
   const effectiveRefreshKey = refreshKey ?? panel?.refreshKey;
-  const effectiveSyncKey = syncKey;
   const effectiveOnRangeSelect = onRangeSelect ?? panel?.onRangeSelect;
 
   const [drillStack, setDrillStack] = useState<string | null>(null);
@@ -86,7 +83,6 @@ export default function StackDrillDownChart({
         from={effectiveFrom}
         to={effectiveTo}
         refreshKey={effectiveRefreshKey}
-        syncKey={effectiveSyncKey}
         onRangeSelect={effectiveOnRangeSelect}
         thresholds={thresholds}
         onSeriesDoubleClick={drillStack ? undefined : handleSeriesDoubleClick}
