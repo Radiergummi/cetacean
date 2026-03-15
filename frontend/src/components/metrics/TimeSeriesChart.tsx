@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { RefreshCw, BarChart3 } from "lucide-react";
 import {
   Chart as ChartJS,
@@ -15,6 +15,7 @@ import {
 import { Line } from "react-chartjs-2";
 import { api } from "../../api/client";
 import { getChartColor } from "../../lib/chartColors";
+import { useChartSync } from "./ChartSyncProvider";
 
 ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Filler, ChartTooltip);
 
@@ -127,6 +128,17 @@ export default function TimeSeriesChart({
   unitRef.current = unit;
   const thresholdsRef = useRef(thresholds);
   thresholdsRef.current = thresholds;
+
+  const chartId = useMemo(() => `tsc-${Math.random().toString(36).slice(2, 8)}`, []);
+  const sync = useChartSync();
+  const syncTimestampRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return sync.subscribe(chartId, (timestamp) => {
+      syncTimestampRef.current = timestamp > 0 ? timestamp : null;
+      chartRef.current?.draw();
+    });
+  }, [chartId, sync]);
 
   const fetchData = useCallback(() => {
     setState("loading");
@@ -243,6 +255,7 @@ export default function TimeSeriesChart({
     afterEvent(chart, args) {
       if (args.event.type === "mouseout") {
         tooltipRef.current(null);
+        sync.publish(chartId, -1);
         chart.draw();
         return;
       }
@@ -295,22 +308,57 @@ export default function TimeSeriesChart({
         chartWidth: chartArea.right,
         top: chartArea.top + 8,
       });
+
+      if (timestamp != null) sync.publish(chartId, timestamp);
     },
     afterDraw(chart) {
       const { ctx, chartArea } = chart;
       if (!chartArea) return;
       // Draw crosshair line at cursor position
       const active = chart.getActiveElements();
-      if (!active.length) return;
-      const x = active[0].element.x;
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(x, chartArea.top);
-      ctx.lineTo(x, chartArea.bottom);
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = "rgba(136,136,136,0.3)";
-      ctx.stroke();
-      ctx.restore();
+      if (active.length) {
+        const x = active[0].element.x;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x, chartArea.top);
+        ctx.lineTo(x, chartArea.bottom);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "rgba(136,136,136,0.3)";
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Draw synced crosshair from sibling chart
+      const syncTs = syncTimestampRef.current;
+      if (syncTs != null && syncTs > 0 && fetchedData) {
+        const idx = fetchedData.timestamps.findIndex((t) => t >= syncTs);
+        if (idx >= 0) {
+          const xPixel = chart.scales.x?.getPixelForValue(idx);
+          if (xPixel != null && xPixel >= chartArea.left && xPixel <= chartArea.right) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(xPixel, chartArea.top);
+            ctx.lineTo(xPixel, chartArea.bottom);
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = "rgba(136,136,136,0.2)";
+            ctx.setLineDash([4, 4]);
+            ctx.stroke();
+
+            // Draw dots on each series
+            const datasets = chart.data.datasets;
+            for (let si = 0; si < datasets.length; si++) {
+              const val = datasets[si].data[idx] as number;
+              if (val == null) continue;
+              const yPixel = chart.scales.y.getPixelForValue(val);
+              ctx.beginPath();
+              ctx.arc(xPixel, yPixel, 3, 0, Math.PI * 2);
+              ctx.fillStyle = datasets[si].borderColor as string;
+              ctx.fill();
+            }
+            ctx.restore();
+          }
+        }
+      }
     },
   };
 
