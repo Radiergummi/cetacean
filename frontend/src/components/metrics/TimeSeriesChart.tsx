@@ -16,6 +16,7 @@ import zoomPlugin from "chartjs-plugin-zoom";
 import { Line } from "react-chartjs-2";
 import { api } from "../../api/client";
 import { getChartColor } from "../../lib/chartColors";
+import { CHART_TOOLTIP_CLASS } from "../../lib/chartTooltip";
 import { formatMetricValue } from "../../lib/formatMetricValue";
 import { generateMockSeries } from "../../lib/mockChartData";
 import { useChartSync } from "./ChartSyncProvider";
@@ -234,31 +235,29 @@ export default function TimeSeriesChart({
       labels: fetchedData.labels,
       datasets: fetchedData.series.map((s, i) => {
         const dimmed = isolatedIndex != null && isolatedIndex !== i;
-        if (stacked) {
-          return {
-            label: s.label,
-            data: dimmed ? s.data.map(() => 0) : s.data,
-            borderColor: s.color,
-            borderWidth: 1,
-            pointRadius: 0,
-            pointHoverRadius: dimmed ? 0 : 3,
-            pointHoverBackgroundColor: s.color,
-            pointHoverBorderWidth: 0,
-            tension: 0.3,
-            fill: "stack" as const,
-            backgroundColor: s.color + "66",
-          };
-        }
-        return {
+        const base = {
           label: s.label,
-          data: s.data,
-          borderColor: dimmed ? s.color + "4D" : s.color,
-          borderWidth: 1.5,
           pointRadius: 0,
           pointHoverRadius: dimmed ? 0 : 3,
           pointHoverBackgroundColor: s.color,
           pointHoverBorderWidth: 0,
           tension: 0.3,
+        };
+        if (stacked) {
+          return {
+            ...base,
+            data: dimmed ? s.data.map(() => 0) : s.data,
+            borderColor: s.color,
+            borderWidth: 1,
+            fill: "stack" as const,
+            backgroundColor: s.color + "66",
+          };
+        }
+        return {
+          ...base,
+          data: s.data,
+          borderColor: dimmed ? s.color + "4D" : s.color,
+          borderWidth: 1.5,
           fill: !dimmed,
           backgroundColor: dimmed
             ? "transparent"
@@ -387,11 +386,11 @@ export default function TimeSeriesChart({
       items.sort((a, b) => b.raw - a.raw);
 
       if (stackedRef.current && fetchedDataRef.current?.series) {
-        const total = fetchedDataRef.current?.series.reduce((sum, ser) => {
+        const total = fetchedDataRef.current.series.reduce((sum, ser) => {
           const v = ser.data[idx];
           return sum + (v ?? 0);
         }, 0);
-        items.push({
+        items.unshift({
           label: "Total",
           color: "transparent",
           value: formatValue(total, unitRef.current),
@@ -587,7 +586,7 @@ export default function TimeSeriesChart({
         </div>
         <div
           ref={tooltipElRef}
-          className="absolute pointer-events-none z-20 rounded-md ring-1 ring-border/50 bg-popover/80 backdrop-blur-sm backdrop-saturate-200 px-3 py-2.5 text-xs leading-snug shadow-lg"
+          className={CHART_TOOLTIP_CLASS}
           style={{
             left: tooltip ? tooltipLeft(tooltip, tooltipElRef.current) : 0,
             top: tooltip?.top ?? 0,

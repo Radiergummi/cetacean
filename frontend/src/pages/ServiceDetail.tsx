@@ -1,5 +1,5 @@
 import { Globe, Shuffle } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { HistoryEntry, Service, Task } from "../api/types";
@@ -142,6 +142,24 @@ export default function ServiceDetail() {
     ? resources.Limits.MemoryBytes * runningTasks
     : undefined;
 
+  const metricsCharts = useMemo(() => [
+    {
+      title: "CPU Usage",
+      query: `sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name="${escapePromQL(name)}"}[5m])) * 100`,
+      unit: "%",
+      thresholds: cpuThresholds(service),
+      yMin: 0,
+    },
+    {
+      title: "Memory Usage",
+      query: `sum(container_memory_usage_bytes{container_label_com_docker_swarm_service_name="${escapePromQL(name)}"})`,
+      unit: "bytes",
+      thresholds: memoryThresholds(service),
+      yMin: 0,
+      color: "#34d399",
+    },
+  ], [name, service]);
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -173,23 +191,7 @@ export default function ServiceDetail() {
         <ErrorBoundary inline>
           <MetricsPanel
             header="Metrics"
-            charts={[
-              {
-                title: "CPU Usage",
-                query: `sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name="${escapePromQL(name)}"}[5m])) * 100`,
-                unit: "%",
-                thresholds: cpuThresholds(service),
-                yMin: 0,
-              },
-              {
-                title: "Memory Usage",
-                query: `sum(container_memory_usage_bytes{container_label_com_docker_swarm_service_name="${escapePromQL(name)}"})`,
-                unit: "bytes",
-                thresholds: memoryThresholds(service),
-                yMin: 0,
-                color: "#34d399",
-              },
-            ]}
+            charts={metricsCharts}
           />
         </ErrorBoundary>
       )}

@@ -6,6 +6,7 @@ import {api} from "../api/client";
 import type {DiskUsageSummary} from "../api/types";
 import {formatBytes} from "../lib/formatBytes";
 import {getChartColor} from "../lib/chartColors";
+import {CHART_TOOLTIP_CLASS} from "../lib/chartTooltip";
 import CollapsibleSection from "./CollapsibleSection";
 
 ChartJS.register(ArcElement, Tooltip);
@@ -88,7 +89,7 @@ function externalTooltipHandler(context: {
     if (!element) {
         element = document.createElement("div");
         element.className =
-            "chartjs-tooltip absolute pointer-events-none z-20 rounded-md ring-1 ring-border/50 bg-popover/80 backdrop-blur-sm backdrop-saturate-200 px-3 py-2.5 text-xs leading-snug shadow-lg";
+            `chartjs-tooltip ${CHART_TOOLTIP_CLASS}`;
         canvas.parentElement?.appendChild(element);
     }
 
