@@ -12,12 +12,13 @@ import {
   type ChartOptions,
   type Plugin,
 } from "chart.js";
+import zoomPlugin from "chartjs-plugin-zoom";
 import { Line } from "react-chartjs-2";
 import { api } from "../../api/client";
 import { getChartColor } from "../../lib/chartColors";
 import { useChartSync } from "./ChartSyncProvider";
 
-ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Filler, ChartTooltip);
+ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Filler, ChartTooltip, zoomPlugin);
 
 export interface Threshold {
   label: string;
@@ -38,6 +39,9 @@ interface Props {
   yMin?: number;
   /** Override the default series color. */
   color?: string;
+  from?: number;
+  to?: number;
+  onRangeSelect?: (from: number, to: number) => void;
 }
 
 type State = "loading" | "data" | "empty" | "error";
@@ -115,6 +119,9 @@ export default function TimeSeriesChart({
   thresholds,
   yMin,
   color: colorOverride,
+  from,
+  to,
+  onRangeSelect,
 }: Props) {
   const chartRef = useRef<ChartJS<"line"> | null>(null);
   const tooltipElRef = useRef<HTMLDivElement>(null);
@@ -148,13 +155,14 @@ export default function TimeSeriesChart({
 
     const rangeSec = RANGE_SECONDS[range] || 3600;
     const now = Math.floor(Date.now() / 1000);
-    const start = now - rangeSec;
-    const step = Math.max(Math.floor(rangeSec / 300), 15);
+    const start = from ?? now - rangeSec;
+    const end = to ?? now;
+    const step = Math.max(Math.floor((end - start) / 300), 15);
 
     let cancelled = false;
 
     api
-      .metricsQueryRange(query, String(start), String(now), String(step))
+      .metricsQueryRange(query, String(start), String(end), String(step))
       .then((resp) => {
         if (cancelled) return;
 
@@ -187,7 +195,7 @@ export default function TimeSeriesChart({
     return () => {
       cancelled = true;
     };
-  }, [query, range, title, colorOverride]);
+  }, [query, range, from, to, title, colorOverride]);
 
   useEffect(() => {
     const cancel = fetchData();
@@ -404,6 +412,29 @@ export default function TimeSeriesChart({
     plugins: {
       legend: { display: false },
       tooltip: { enabled: false },
+      zoom: {
+        zoom: {
+          drag: {
+            enabled: true,
+            backgroundColor: "rgba(100, 143, 255, 0.1)",
+            borderColor: "rgba(100, 143, 255, 0.3)",
+            borderWidth: 1,
+            threshold: 5,
+          },
+          mode: "x" as const,
+          onZoom: ({ chart }: { chart: ChartJS }) => {
+            justZoomedRef.current = true;
+            if (!onRangeSelect || !fetchedData) return;
+            const xScale = chart.scales.x;
+            const minIdx = Math.max(0, Math.floor(xScale.min));
+            const maxIdx = Math.min(fetchedData.timestamps.length - 1, Math.ceil(xScale.max));
+            const fromTs = fetchedData.timestamps[minIdx];
+            const toTs = fetchedData.timestamps[maxIdx];
+            if (fromTs && toTs) onRangeSelect(fromTs, toTs);
+            chart.resetZoom();
+          },
+        },
+      },
     },
     scales: {
       x: { display: false },
