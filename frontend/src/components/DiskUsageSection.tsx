@@ -145,6 +145,7 @@ function DoughnutChart({data}: { data: DiskUsageSummary[] }) {
             borderWidth: 0,
             borderRadius: 4,
             spacing: 3,
+            hoverOffset: 3,
             _rawData: data,
         };
 
