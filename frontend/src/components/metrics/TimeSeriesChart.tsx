@@ -386,29 +386,33 @@ export default function TimeSeriesChart({
             </div>
           )}
         </div>
-        {tooltip && state === "data" && (
-          <div
-            ref={tooltipElRef}
-            className="absolute pointer-events-none z-20 rounded-md ring-1 ring-border/50 bg-popover/80 backdrop-blur-sm backdrop-saturate-200 px-3 py-2.5 text-xs leading-snug shadow-lg"
-            style={{ left: tooltipLeft(tooltip, tooltipElRef.current), top: tooltip.top }}
-          >
-            <div className="font-semibold mb-1.5 text-foreground">{tooltip.time}</div>
-            {tooltip.series.map((s) => (
-              <div key={s.label} className="flex items-center gap-2 whitespace-nowrap">
-                {s.dashed ? (
-                  <span
-                    className="w-3 shrink-0 border-t-2 border-dashed"
-                    style={{ borderColor: s.color }}
-                  />
-                ) : (
-                  <span className="w-1 shrink-0 h-3 rounded-sm" style={{ background: s.color }} />
-                )}
-                <span className="text-muted-foreground">{s.label}</span>
-                <span className="font-semibold ms-auto ps-4 text-foreground">{s.value}</span>
-              </div>
-            ))}
-          </div>
-        )}
+        <div
+          ref={tooltipElRef}
+          className="absolute pointer-events-none z-20 rounded-md ring-1 ring-border/50 bg-popover/80 backdrop-blur-sm backdrop-saturate-200 px-3 py-2.5 text-xs leading-snug shadow-lg"
+          style={{
+            left: tooltip ? tooltipLeft(tooltip, tooltipElRef.current) : 0,
+            top: tooltip?.top ?? 0,
+            opacity: tooltip && state === "data" ? 1 : 0,
+            transition: tooltip ? "opacity 50ms ease" : "opacity 100ms ease",
+          }}
+        >
+          {tooltip && (
+            <>
+              <div className="font-semibold mb-1.5 text-foreground">{tooltip.time}</div>
+              {tooltip.series.map((s) => (
+                <div key={s.label} className="flex items-center gap-2 whitespace-nowrap">
+                  {s.dashed ? (
+                    <span className="w-3 shrink-0 border-t-2 border-dashed" style={{ borderColor: s.color }} />
+                  ) : (
+                    <span className="w-1 shrink-0 h-3 rounded-sm" style={{ background: s.color }} />
+                  )}
+                  <span className="text-muted-foreground">{s.label}</span>
+                  <span className="font-semibold ms-auto ps-4 text-foreground">{s.value}</span>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
