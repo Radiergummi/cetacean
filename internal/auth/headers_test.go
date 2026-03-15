@@ -193,7 +193,7 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
-		r.Header.Set("x-user", "alice") // lowercase
+		r.Header.Set("X-User", "alice") // Go canonicalizes headers; case insensitivity is guaranteed by net/http
 
 		id, err := p.Authenticate(httptest.NewRecorder(), r)
 		if err != nil {

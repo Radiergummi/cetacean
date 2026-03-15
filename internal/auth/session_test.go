@@ -226,7 +226,7 @@ func TestSessionCodecConcurrentAccess(t *testing.T) {
 	cookie := w.Result().Cookies()[0]
 
 	errs := make(chan error, 100)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		go func() {
 			req := httptest.NewRequest("GET", "/", nil)
 			req.AddCookie(cookie)
@@ -234,7 +234,7 @@ func TestSessionCodecConcurrentAccess(t *testing.T) {
 			errs <- err
 		}()
 	}
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		if err := <-errs; err != nil {
 			t.Errorf("concurrent Get failed: %v", err)
 		}

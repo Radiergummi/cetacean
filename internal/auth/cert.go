@@ -116,7 +116,7 @@ func validateSPIFFEID(u *url.URL) error {
 		return fmt.Errorf("SPIFFE ID trust domain exceeds 255 characters: %s", td)
 	}
 	for _, c := range td {
-		if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '_') {
+		if (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '.' && c != '-' && c != '_' {
 			return fmt.Errorf("SPIFFE ID trust domain contains invalid character %q: %s", c, raw)
 		}
 	}
@@ -129,8 +129,7 @@ func validateSPIFFEID(u *url.URL) error {
 
 	// Validate path segments: no empty segments, no "." or "..".
 	if path != "" {
-		segments := strings.Split(path[1:], "/") // skip leading /
-		for _, seg := range segments {
+		for seg := range strings.SplitSeq(path[1:], "/") { // skip leading /
 			if seg == "" {
 				return fmt.Errorf("SPIFFE ID path contains empty segment: %s", raw)
 			}

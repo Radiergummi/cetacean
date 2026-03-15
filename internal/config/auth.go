@@ -153,7 +153,7 @@ func validateRedirectURL(raw string) error {
 // prefixes (e.g. "10.0.0.1" → "10.0.0.1/32").
 func parseTrustedProxies(raw string) ([]netip.Prefix, error) {
 	var prefixes []netip.Prefix
-	for _, s := range strings.Split(raw, ",") {
+	for s := range strings.SplitSeq(raw, ",") {
 		s = strings.TrimSpace(s)
 		if s == "" {
 			continue
@@ -178,7 +178,7 @@ func parseTrustedProxies(raw string) ([]netip.Prefix, error) {
 
 func parseScopes(s string) []string {
 	var scopes []string
-	for _, part := range strings.Split(s, ",") {
+	for part := range strings.SplitSeq(s, ",") {
 		part = strings.TrimSpace(part)
 		if part != "" {
 			scopes = append(scopes, part)

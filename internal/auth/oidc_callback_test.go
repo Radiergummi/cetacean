@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -979,7 +980,7 @@ func TestAuthenticate_ExpiredBearerToken(t *testing.T) {
 	}
 
 	var authErr *AuthError
-	if !errorAs(err, &authErr) {
+	if !errors.As(err, &authErr) {
 		t.Fatalf("expected AuthError, got %T: %v", err, err)
 	}
 	if authErr.WWWAuthenticate != `Bearer error="invalid_token"` {
@@ -1308,21 +1309,4 @@ func TestCallback_RFC9207_IssRequired_ClearsCookies(t *testing.T) {
 			t.Errorf("cookie %s not cleared on missing iss error", name)
 		}
 	}
-}
-
-// errorAs is a generic wrapper to avoid importing errors in the test.
-func errorAs(err error, target any) bool {
-	// Use type assertion pattern matching AuthError specifically.
-	switch t := target.(type) {
-	case **AuthError:
-		for err != nil {
-			if ae, ok := err.(*AuthError); ok {
-				*t = ae
-				return true
-			}
-			// No wrapping in AuthError, so this is sufficient.
-			return false
-		}
-	}
-	return false
 }

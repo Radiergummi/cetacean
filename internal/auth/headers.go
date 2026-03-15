@@ -68,7 +68,7 @@ func (p *HeadersProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (
 	var groups []string
 	if p.cfg.Groups != "" {
 		if v := r.Header.Get(p.cfg.Groups); v != "" {
-			for _, g := range strings.Split(v, ",") {
+			for g := range strings.SplitSeq(v, ",") {
 				g = strings.TrimSpace(g)
 				if g != "" {
 					groups = append(groups, g)

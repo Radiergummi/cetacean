@@ -130,7 +130,7 @@ func main() {
 		authProvider = auth.NewHeadersProvider(authCfg.Headers)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown auth mode %q\n", authCfg.Mode)
-		os.Exit(1)
+		os.Exit(1) //nolint:gocritic // exitAfterDefer: tsnet defers only run in the tailscale case, not here
 	}
 
 	// SSE broadcaster
@@ -311,7 +311,7 @@ func serveDualListeners(ctx context.Context, cfg *config.Config, tlsCfg config.T
 	}
 
 	// Graceful shutdown of both servers
-	go func() {
+	go func() { //nolint:gosec // G118: context.Background is correct here — ctx is done, we need a fresh timeout
 		<-ctx.Done()
 		slog.Info("shutting down", "cause", context.Cause(ctx))
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
