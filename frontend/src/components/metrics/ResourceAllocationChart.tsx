@@ -9,6 +9,7 @@ import {
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import { getChartColor } from "../../lib/chartColors";
+import { formatBytes } from "../../lib/formatBytes";
 
 ChartJS.register(BarElement, CategoryScale, LinearScale);
 
@@ -22,41 +23,31 @@ interface BarChartProps {
 
 function formatBarValue(v: number, unit: "%" | "bytes"): string {
   if (unit === "%") return `${v.toFixed(1)}%`;
-  if (v >= 1e9) return `${(v / 1e9).toFixed(1)} GB`;
-  if (v >= 1e6) return `${(v / 1e6).toFixed(1)} MB`;
-  if (v >= 1e3) return `${(v / 1e3).toFixed(1)} KB`;
-  return `${v.toFixed(0)} B`;
+  return formatBytes(v);
 }
 
 function AllocationBar({ title, reserved, actual, limit, unit }: BarChartProps) {
   const color = getChartColor(0);
-  const hasData = reserved != null || actual != null;
-  if (!hasData) return null;
 
-  const labels: string[] = [];
-  const values: number[] = [];
-  const colors: string[] = [];
-
-  if (reserved != null) {
-    labels.push("Reserved");
-    values.push(reserved);
-    colors.push(color + "4D");
-  }
-  if (actual != null) {
-    labels.push("Actual");
-    values.push(actual);
-    colors.push(color);
-  }
-
-  const chartData = {
-    labels,
-    datasets: [{
-      data: values,
-      backgroundColor: colors,
-      borderRadius: 4,
-      barThickness: 20,
-    }],
-  };
+  const chartData = useMemo(() => {
+    const labels: string[] = [];
+    const values: number[] = [];
+    const colors: string[] = [];
+    if (reserved != null) {
+      labels.push("Reserved");
+      values.push(reserved);
+      colors.push(color + "4D");
+    }
+    if (actual != null) {
+      labels.push("Actual");
+      values.push(actual);
+      colors.push(color);
+    }
+    return {
+      labels,
+      datasets: [{ data: values, backgroundColor: colors, borderRadius: 4, barThickness: 20 }],
+    };
+  }, [reserved, actual, color]);
 
   const limitPlugin = useMemo<Plugin<"bar">>(() => ({
     id: "limitMarker",
@@ -78,7 +69,7 @@ function AllocationBar({ title, reserved, actual, limit, unit }: BarChartProps) 
     },
   }), [limit]);
 
-  const maxVal = Math.max(...values, limit ?? 0) * 1.15;
+  const maxVal = Math.max(reserved ?? 0, actual ?? 0, limit ?? 0) * 1.15;
 
   const options = useMemo<ChartOptions<"bar">>(() => ({
     indexAxis: "y" as const,
@@ -109,6 +100,8 @@ function AllocationBar({ title, reserved, actual, limit, unit }: BarChartProps) 
   }), [unit, maxVal]);
 
   const plugins = useMemo(() => [limitPlugin], [limitPlugin]);
+
+  if (reserved == null && actual == null) return null;
 
   return (
     <div>

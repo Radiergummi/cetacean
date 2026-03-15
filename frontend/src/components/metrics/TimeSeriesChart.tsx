@@ -152,8 +152,6 @@ export default function TimeSeriesChart({
   const [stacked, setStacked] = useState(false);
   const stackedRef = useRef(false);
   stackedRef.current = stacked;
-  const originalSeriesRef = useRef(fetchedData?.series);
-  if (fetchedData) originalSeriesRef.current = fetchedData.series;
 
   const [isolatedIndex, setIsolatedIndex] = useState<number | null>(null);
   const justZoomedRef = useRef(false);
@@ -240,48 +238,49 @@ export default function TimeSeriesChart({
     };
   }, [fetchData, refreshKey]);
 
-  const chartData: ChartData<"line"> | null = fetchedData
-    ? {
-        labels: fetchedData.labels,
-        datasets: fetchedData.series.map((s, i) => {
-          const dimmed = isolatedIndex != null && isolatedIndex !== i;
-          if (stacked) {
-            return {
-              label: s.label,
-              data: dimmed ? s.data.map(() => 0) : s.data,
-              borderColor: s.color,
-              borderWidth: 1,
-              pointRadius: 0,
-              pointHoverRadius: dimmed ? 0 : 3,
-              pointHoverBackgroundColor: s.color,
-              pointHoverBorderWidth: 0,
-              tension: 0.3,
-              fill: "stack" as const,
-              backgroundColor: s.color + "66",
-            };
-          }
+  const chartData = useMemo<ChartData<"line"> | null>(() => {
+    if (!fetchedData) return null;
+    return {
+      labels: fetchedData.labels,
+      datasets: fetchedData.series.map((s, i) => {
+        const dimmed = isolatedIndex != null && isolatedIndex !== i;
+        if (stacked) {
           return {
             label: s.label,
-            data: s.data,
-            borderColor: dimmed ? s.color + "4D" : s.color,
-            borderWidth: 1.5,
+            data: dimmed ? s.data.map(() => 0) : s.data,
+            borderColor: s.color,
+            borderWidth: 1,
             pointRadius: 0,
             pointHoverRadius: dimmed ? 0 : 3,
             pointHoverBackgroundColor: s.color,
             pointHoverBorderWidth: 0,
             tension: 0.3,
-            fill: !dimmed,
-            backgroundColor: dimmed
-              ? "transparent"
-              : (ctx: { chart: ChartJS }) => {
-                  const chart = ctx.chart;
-                  if (!chart.chartArea) return s.color + "18";
-                  return makeGradient(chart.ctx, chart.chartArea, s.color);
-                },
+            fill: "stack" as const,
+            backgroundColor: s.color + "66",
           };
-        }),
-      }
-    : null;
+        }
+        return {
+          label: s.label,
+          data: s.data,
+          borderColor: dimmed ? s.color + "4D" : s.color,
+          borderWidth: 1.5,
+          pointRadius: 0,
+          pointHoverRadius: dimmed ? 0 : 3,
+          pointHoverBackgroundColor: s.color,
+          pointHoverBorderWidth: 0,
+          tension: 0.3,
+          fill: !dimmed,
+          backgroundColor: dimmed
+            ? "transparent"
+            : (ctx: { chart: ChartJS }) => {
+                const chart = ctx.chart;
+                if (!chart.chartArea) return s.color + "18";
+                return makeGradient(chart.ctx, chart.chartArea, s.color);
+              },
+        };
+      }),
+    };
+  }, [fetchedData, isolatedIndex, stacked]);
 
   // Compute y-axis bounds
   let suggestedMax: number | undefined;
@@ -398,8 +397,8 @@ export default function TimeSeriesChart({
       }
       items.sort((a, b) => b.raw - a.raw);
 
-      if (stackedRef.current && originalSeriesRef.current) {
-        const total = originalSeriesRef.current.reduce((sum, ser) => {
+      if (stackedRef.current && fetchedDataRef.current?.series) {
+        const total = fetchedDataRef.current?.series.reduce((sum, ser) => {
           const v = ser.data[idx];
           return sum + (v ?? 0);
         }, 0);

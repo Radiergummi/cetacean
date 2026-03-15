@@ -141,18 +141,14 @@ function externalTooltipHandler(context: {
         top: model.caretY - 10 + "px",
         pointerEvents: "none",
         zIndex: "20",
-        transition: model.opacity === 0 ? "opacity 100ms ease" : "opacity 50ms ease",
+        transition: "opacity 50ms ease",
     });
     element.className =
         "chartjs-tooltip absolute pointer-events-none z-20 rounded-md ring-1 ring-border/50 bg-popover/80 backdrop-blur-sm backdrop-saturate-200 px-3 py-2.5 text-xs leading-snug shadow-lg";
 }
 
 function DoughnutChart({data}: { data: DiskUsageSummary[] }) {
-    const total = data.reduce((sum, {totalSize}) => sum + totalSize, 0);
-
-    if (total === 0) {
-        return null;
-    }
+    const total = useMemo(() => data.reduce((sum, {totalSize}) => sum + totalSize, 0), [data]);
 
     const chartData = useMemo(() => {
         const outerData = data.map((d) => d.totalSize);
@@ -167,8 +163,6 @@ function DoughnutChart({data}: { data: DiskUsageSummary[] }) {
             innerData.push(nonReclaim, d.reclaimable);
             innerColors.push(color, color + "66");
         }
-
-        const total = data.reduce((s, d) => s + d.totalSize, 0);
 
         return {
             labels: data.map((d) => typeMeta[d.type]?.label ?? d.type),
@@ -197,7 +191,7 @@ function DoughnutChart({data}: { data: DiskUsageSummary[] }) {
                 },
             ],
         };
-    }, [data]);
+    }, [data, total]);
 
     const centerTextPlugin = useMemo(
         () => (
@@ -245,6 +239,8 @@ function DoughnutChart({data}: { data: DiskUsageSummary[] }) {
         ),
         [],
     );
+
+    if (total === 0) return null;
 
     return (
         <div className="relative flex items-center justify-center h-full w-full max-h-64 p-2">
