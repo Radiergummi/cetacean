@@ -124,7 +124,7 @@ function externalTooltipHandler(context: {
         top: model.caretY - 10 + "px",
         pointerEvents: "none",
         zIndex: "20",
-        transition: "opacity 0.1s ease",
+        transition: model.opacity === 0 ? "opacity 100ms ease" : "opacity 50ms ease",
     });
     element.className =
         "chartjs-tooltip absolute pointer-events-none z-20 rounded-md ring-1 ring-border/50 bg-popover/80 backdrop-blur-sm backdrop-saturate-200 px-3 py-2.5 text-xs leading-snug shadow-lg";
