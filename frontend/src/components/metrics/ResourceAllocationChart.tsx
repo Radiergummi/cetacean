@@ -1,0 +1,166 @@
+import { useMemo } from "react";
+import {
+  Chart as ChartJS,
+  BarElement,
+  CategoryScale,
+  LinearScale,
+  type ChartOptions,
+  type Plugin,
+} from "chart.js";
+import { Bar } from "react-chartjs-2";
+import { getChartColor } from "../../lib/chartColors";
+
+ChartJS.register(BarElement, CategoryScale, LinearScale);
+
+interface BarChartProps {
+  title: string;
+  reserved?: number;
+  actual?: number;
+  limit?: number;
+  unit: "%" | "bytes";
+}
+
+function formatBarValue(v: number, unit: "%" | "bytes"): string {
+  if (unit === "%") return `${v.toFixed(1)}%`;
+  if (v >= 1e9) return `${(v / 1e9).toFixed(1)} GB`;
+  if (v >= 1e6) return `${(v / 1e6).toFixed(1)} MB`;
+  if (v >= 1e3) return `${(v / 1e3).toFixed(1)} KB`;
+  return `${v.toFixed(0)} B`;
+}
+
+function AllocationBar({ title, reserved, actual, limit, unit }: BarChartProps) {
+  const color = getChartColor(0);
+  const hasData = reserved != null || actual != null;
+  if (!hasData) return null;
+
+  const labels: string[] = [];
+  const values: number[] = [];
+  const colors: string[] = [];
+
+  if (reserved != null) {
+    labels.push("Reserved");
+    values.push(reserved);
+    colors.push(color + "4D");
+  }
+  if (actual != null) {
+    labels.push("Actual");
+    values.push(actual);
+    colors.push(color);
+  }
+
+  const chartData = {
+    labels,
+    datasets: [{
+      data: values,
+      backgroundColor: colors,
+      borderRadius: 4,
+      barThickness: 20,
+    }],
+  };
+
+  const limitPlugin = useMemo<Plugin<"bar">>(() => ({
+    id: "limitMarker",
+    afterDatasetsDraw(chart) {
+      if (limit == null) return;
+      const { ctx, chartArea, scales } = chart;
+      if (!chartArea || !scales.x) return;
+      const xPixel = scales.x.getPixelForValue(limit);
+      if (xPixel < chartArea.left || xPixel > chartArea.right) return;
+      ctx.save();
+      ctx.strokeStyle = getComputedStyle(chart.canvas).getPropertyValue("--destructive").trim() || "#ef4444";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(xPixel, chartArea.top);
+      ctx.lineTo(xPixel, chartArea.bottom);
+      ctx.stroke();
+      ctx.restore();
+    },
+  }), [limit]);
+
+  const maxVal = Math.max(...values, limit ?? 0) * 1.15;
+
+  const options = useMemo<ChartOptions<"bar">>(() => ({
+    indexAxis: "y" as const,
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => ` ${formatBarValue(ctx.parsed.x ?? 0, unit)}`,
+        },
+      },
+    },
+    scales: {
+      x: {
+        display: false,
+        min: 0,
+        max: maxVal,
+      },
+      y: {
+        grid: { display: false },
+        ticks: {
+          font: { size: 11 },
+        },
+      },
+    },
+  }), [unit, maxVal]);
+
+  const plugins = useMemo(() => [limitPlugin], [limitPlugin]);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-medium">{title}</span>
+        {limit != null && (
+          <span className="text-[11px] text-muted-foreground">
+            Limit: {formatBarValue(limit, unit)}
+          </span>
+        )}
+      </div>
+      <div className="h-[80px]">
+        <Bar data={chartData} options={options} plugins={plugins} />
+      </div>
+    </div>
+  );
+}
+
+interface Props {
+  cpuReserved?: number;
+  cpuLimit?: number;
+  cpuActual?: number;
+  memReserved?: number;
+  memLimit?: number;
+  memActual?: number;
+}
+
+export default function ResourceAllocationChart({
+  cpuReserved,
+  cpuLimit,
+  cpuActual,
+  memReserved,
+  memLimit,
+  memActual,
+}: Props) {
+  const hasCpu = cpuReserved != null || cpuActual != null || cpuLimit != null;
+  const hasMem = memReserved != null || memActual != null || memLimit != null;
+
+  if (!hasCpu && !hasMem) return null;
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {hasCpu && (
+        <div className="rounded-lg border bg-card p-4">
+          <AllocationBar title="CPU" reserved={cpuReserved} actual={cpuActual} limit={cpuLimit} unit="%" />
+        </div>
+      )}
+      {hasMem && (
+        <div className="rounded-lg border bg-card p-4">
+          <AllocationBar title="Memory" reserved={memReserved} actual={memActual} limit={memLimit} unit="bytes" />
+        </div>
+      )}
+    </div>
+  );
+}
