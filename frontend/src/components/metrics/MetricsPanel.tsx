@@ -1,5 +1,5 @@
 import type React from "react";
-import { useState, useEffect, createContext, useContext } from "react";
+import { useState, useEffect, useCallback, useMemo, createContext, useContext } from "react";
 import { useSearchParams } from "react-router-dom";
 import { RefreshCw, Play, Square } from "lucide-react";
 import TimeSeriesChart from "./TimeSeriesChart";
@@ -16,7 +16,6 @@ export interface MetricsPanelContextValue {
   from?: number;
   to?: number;
   refreshKey: number;
-  syncKey: string;
   onRangeSelect: (from: number, to: number) => void;
 }
 
@@ -66,7 +65,7 @@ export default function MetricsPanel({ charts, children, header }: Props) {
   const customTo = toParam ? Number(toParam) : null;
   const isCustomRange = customFrom != null && customTo != null;
 
-  const setCustomRange = (from: number, to: number) => {
+  const setCustomRange = useCallback((from: number, to: number) => {
     setParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set("from", String(Math.floor(from)));
@@ -74,16 +73,16 @@ export default function MetricsPanel({ charts, children, header }: Props) {
       next.delete("range");
       return next;
     }, { replace: true });
-  };
+  }, [setParams]);
 
-  const clearCustomRange = () => {
+  const clearCustomRange = useCallback(() => {
     setParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete("from");
       next.delete("to");
       return next;
     }, { replace: true });
-  };
+  }, [setParams]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [autoRefresh, setAutoRefresh] = useState(false);
 
@@ -92,6 +91,10 @@ export default function MetricsPanel({ charts, children, header }: Props) {
     const interval = setInterval(() => setRefreshKey((k) => k + 1), 30000);
     return () => clearInterval(interval);
   }, [autoRefresh]);
+
+  const panelCtx = useMemo<MetricsPanelContextValue>(() => ({
+    range, from: customFrom ?? undefined, to: customTo ?? undefined, refreshKey, onRangeSelect: setCustomRange,
+  }), [range, customFrom, customTo, refreshKey, setCustomRange]);
 
   const controls = (
     <div className="flex flex-wrap items-center gap-2">
@@ -113,8 +116,8 @@ export default function MetricsPanel({ charts, children, header }: Props) {
 
   return (
     <CollapsibleSection title={typeof header === "string" ? header : "Metrics"} controls={controls}>
-      <MetricsPanelContext.Provider value={{ range, from: customFrom ?? undefined, to: customTo ?? undefined, refreshKey, syncKey: "metrics", onRangeSelect: setCustomRange }}>
-        <ChartSyncProvider syncKey="metrics">
+      <MetricsPanelContext.Provider value={panelCtx}>
+        <ChartSyncProvider>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {children ?? charts?.map((chart) => (
               <TimeSeriesChart

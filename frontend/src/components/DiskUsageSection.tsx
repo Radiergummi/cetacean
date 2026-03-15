@@ -141,7 +141,6 @@ function DoughnutChart({data}: { data: DiskUsageSummary[] }) {
         const dataset = {
             data: withMinSlice(data),
             backgroundColor: data.map((_, index) => getChartColor(index)),
-            hoverBackgroundColor: data.map((_, index) => getChartColor(index)),
             borderWidth: 0,
             borderRadius: 4,
             spacing: 3,

@@ -25,7 +25,7 @@ export default function StackDrillDownChart({
   serviceQueryTemplate,
   unit,
   yMin,
-  range = "1h",
+  range,
   from,
   to,
   refreshKey,
@@ -38,7 +38,7 @@ export default function StackDrillDownChart({
   const effectiveFrom = from ?? panel?.from;
   const effectiveTo = to ?? panel?.to;
   const effectiveRefreshKey = refreshKey ?? panel?.refreshKey;
-  const effectiveSyncKey = syncKey ?? panel?.syncKey;
+  const effectiveSyncKey = syncKey;
   const effectiveOnRangeSelect = onRangeSelect ?? panel?.onRangeSelect;
 
   const [drillStack, setDrillStack] = useState<string | null>(null);

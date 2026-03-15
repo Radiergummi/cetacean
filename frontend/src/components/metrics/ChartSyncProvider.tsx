@@ -1,4 +1,4 @@
-import { createContext, useContext, useRef, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useRef, useCallback, useMemo, type ReactNode } from "react";
 
 type Listener = (timestamp: number) => void;
 
@@ -10,7 +10,7 @@ interface ChartSyncApi {
 
 const ChartSyncContext = createContext<ChartSyncApi | null>(null);
 
-export function ChartSyncProvider({ syncKey: _syncKey, children }: { syncKey: string; children: ReactNode }) {
+export function ChartSyncProvider({ children }: { children: ReactNode }) {
   const listenersRef = useRef<Map<string, Listener>>(new Map());
 
   const subscribe = useCallback((chartId: string, listener: Listener) => {
@@ -26,8 +26,10 @@ export function ChartSyncProvider({ syncKey: _syncKey, children }: { syncKey: st
 
   const clear = useCallback(() => { listenersRef.current.clear(); }, []);
 
+  const value = useMemo(() => ({ subscribe, publish, clear }), [subscribe, publish, clear]);
+
   return (
-    <ChartSyncContext.Provider value={{ subscribe, publish, clear }}>
+    <ChartSyncContext.Provider value={value}>
       {children}
     </ChartSyncContext.Provider>
   );

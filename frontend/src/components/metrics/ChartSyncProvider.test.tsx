@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { ChartSyncProvider, useChartSync } from "./ChartSyncProvider";
 
 function wrapper({ children }: { children: ReactNode }) {
-  return <ChartSyncProvider syncKey="test">{children}</ChartSyncProvider>;
+  return <ChartSyncProvider>{children}</ChartSyncProvider>;
 }
 
 describe("ChartSyncProvider", () => {

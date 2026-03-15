@@ -139,6 +139,12 @@ export default function TimeSeriesChart({
   unitRef.current = unit;
   const thresholdsRef = useRef(thresholds);
   thresholdsRef.current = thresholds;
+  const fetchedDataRef = useRef(fetchedData);
+  fetchedDataRef.current = fetchedData;
+  const onSeriesDoubleClickRef = useRef(onSeriesDoubleClick);
+  onSeriesDoubleClickRef.current = onSeriesDoubleClick;
+  const onRangeSelectRef = useRef(onRangeSelect);
+  onRangeSelectRef.current = onRangeSelect;
 
   const [isolatedIndex, setIsolatedIndex] = useState<number | null>(null);
   const justZoomedRef = useRef(false);
@@ -146,10 +152,17 @@ export default function TimeSeriesChart({
   const chartId = useMemo(() => `tsc-${Math.random().toString(36).slice(2, 8)}`, []);
   const sync = useChartSync();
   const syncTimestampRef = useRef<number | null>(null);
+  const syncIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     return sync.subscribe(chartId, (timestamp) => {
       syncTimestampRef.current = timestamp > 0 ? timestamp : null;
+      const data = fetchedDataRef.current;
+      if (timestamp > 0 && data) {
+        syncIndexRef.current = data.timestamps.findIndex((t) => t >= timestamp);
+      } else {
+        syncIndexRef.current = null;
+      }
       chartRef.current?.draw();
     });
   }, [chartId, sync]);
@@ -247,7 +260,7 @@ export default function TimeSeriesChart({
     suggestedMax = hi + (hi - lo) * 0.1 || hi + 1;
   }
 
-  const thresholdPlugin: Plugin<"line"> = {
+  const thresholdPlugin = useMemo<Plugin<"line">>(() => ({
     id: "thresholdLines",
     afterDatasetsDraw(chart) {
       const ts = thresholdsRef.current;
@@ -258,7 +271,7 @@ export default function TimeSeriesChart({
 
       for (const t of ts) {
         const yPos = yScale.getPixelForValue(t.value);
-        if (yPos < chartArea.top || yPos > chartArea.bottom) continue;
+        if (yPos < chartArea.top || yPos > chartArea.top + chartArea.height) continue;
         ctx.save();
         ctx.strokeStyle = t.color;
         ctx.lineWidth = 1.5;
@@ -270,9 +283,9 @@ export default function TimeSeriesChart({
         ctx.restore();
       }
     },
-  };
+  }), []);
 
-  const crosshairPlugin: Plugin<"line"> = {
+  const crosshairPlugin = useMemo<Plugin<"line">>(() => ({
     id: "crosshair",
     afterEvent(chart, args) {
       if (args.event.type === "mouseout") {
@@ -288,9 +301,9 @@ export default function TimeSeriesChart({
           { intersect: false, axis: "x" },
           false,
         );
-        if (elements.length > 0 && onSeriesDoubleClick) {
+        if (elements.length > 0 && onSeriesDoubleClickRef.current) {
           const label = chart.data.datasets[elements[0].datasetIndex]?.label;
-          if (label) onSeriesDoubleClick(label);
+          if (label) onSeriesDoubleClickRef.current(label);
         }
         return;
       }
@@ -326,7 +339,6 @@ export default function TimeSeriesChart({
         return;
       }
 
-      // Find nearest data index
       const xScale = scales.x;
       const xVal = xScale.getValueForPixel(x);
       if (xVal == null) return;
@@ -353,7 +365,7 @@ export default function TimeSeriesChart({
       }
       items.sort((a, b) => b.raw - a.raw);
 
-      const fetched = fetchedData;
+      const fetched = fetchedDataRef.current;
       const timestamp = fetched?.timestamps[idx];
       const time = timestamp ? new Date(timestamp * 1000).toLocaleTimeString() : "";
 
@@ -384,45 +396,42 @@ export default function TimeSeriesChart({
         ctx.restore();
       }
 
-      // Draw synced crosshair from sibling chart
-      const syncTs = syncTimestampRef.current;
-      if (syncTs != null && syncTs > 0 && fetchedData) {
-        const idx = fetchedData.timestamps.findIndex((t) => t >= syncTs);
-        if (idx >= 0) {
-          const xPixel = chart.scales.x?.getPixelForValue(idx);
-          if (xPixel != null && xPixel >= chartArea.left && xPixel <= chartArea.right) {
-            ctx.save();
-            ctx.beginPath();
-            ctx.moveTo(xPixel, chartArea.top);
-            ctx.lineTo(xPixel, chartArea.bottom);
-            ctx.lineWidth = 1;
-            ctx.strokeStyle = "rgba(136,136,136,0.2)";
-            ctx.setLineDash([4, 4]);
-            ctx.stroke();
+      // Draw synced crosshair from sibling chart (uses cached index)
+      const syncIdx = syncIndexRef.current;
+      if (syncIdx != null && syncIdx >= 0) {
+        const xPixel = chart.scales.x?.getPixelForValue(syncIdx);
+        if (xPixel != null && xPixel >= chartArea.left && xPixel <= chartArea.right) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(xPixel, chartArea.top);
+          ctx.lineTo(xPixel, chartArea.bottom);
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = "rgba(136,136,136,0.2)";
+          ctx.setLineDash([4, 4]);
+          ctx.stroke();
 
-            // Draw dots on each series
-            const datasets = chart.data.datasets;
-            for (let si = 0; si < datasets.length; si++) {
-              const val = datasets[si].data[idx] as number;
-              if (val == null) continue;
-              const yPixel = chart.scales.y.getPixelForValue(val);
-              ctx.beginPath();
-              ctx.arc(xPixel, yPixel, 3, 0, Math.PI * 2);
-              ctx.fillStyle = datasets[si].borderColor as string;
-              ctx.fill();
-            }
-            ctx.restore();
+          const datasets = chart.data.datasets;
+          for (let si = 0; si < datasets.length; si++) {
+            const val = datasets[si].data[syncIdx] as number;
+            if (val == null) continue;
+            const yPixel = chart.scales.y.getPixelForValue(val);
+            ctx.beginPath();
+            ctx.arc(xPixel, yPixel, 3, 0, Math.PI * 2);
+            ctx.fillStyle = datasets[si].borderColor as string;
+            ctx.fill();
           }
+          ctx.restore();
         }
       }
     },
-  };
+  }), [chartId, sync]);
 
-  const options: ChartOptions<"line"> = {
+  const options = useMemo<ChartOptions<"line">>(() => ({
     responsive: true,
     maintainAspectRatio: false,
     animation: false,
-    events: ['mousemove', 'mouseout', 'click', 'dblclick', 'touchstart', 'touchmove'] as unknown as undefined,
+    // dblclick is not in Chart.js's type union but is dispatched by the browser canvas
+    events: ['mousemove', 'mouseout', 'click', 'dblclick', 'touchstart', 'touchmove'] as unknown as ChartOptions<"line">["events"],
     interaction: {
       mode: "index",
       intersect: false,
@@ -443,13 +452,15 @@ export default function TimeSeriesChart({
           mode: "x" as const,
           onZoom: ({ chart }: { chart: ChartJS }) => {
             justZoomedRef.current = true;
-            if (!onRangeSelect || !fetchedData) return;
+            const data = fetchedDataRef.current;
+            const cb = onRangeSelectRef.current;
+            if (!cb || !data) return;
             const xScale = chart.scales.x;
             const minIdx = Math.max(0, Math.floor(xScale.min));
-            const maxIdx = Math.min(fetchedData.timestamps.length - 1, Math.ceil(xScale.max));
-            const fromTs = fetchedData.timestamps[minIdx];
-            const toTs = fetchedData.timestamps[maxIdx];
-            if (fromTs && toTs) onRangeSelect(fromTs, toTs);
+            const maxIdx = Math.min(data.timestamps.length - 1, Math.ceil(xScale.max));
+            const fromTs = data.timestamps[minIdx];
+            const toTs = data.timestamps[maxIdx];
+            if (fromTs && toTs) cb(fromTs, toTs);
             chart.resetZoom();
           },
         },
@@ -466,7 +477,9 @@ export default function TimeSeriesChart({
     elements: {
       point: { radius: 0 },
     },
-  };
+  }), [yMin, suggestedMax]);
+
+  const plugins = useMemo(() => [thresholdPlugin, crosshairPlugin], [thresholdPlugin, crosshairPlugin]);
 
   return (
     <div className="rounded-lg border bg-card overflow-visible">
@@ -514,7 +527,7 @@ export default function TimeSeriesChart({
                 ref={chartRef}
                 data={chartData}
                 options={options}
-                plugins={[thresholdPlugin, crosshairPlugin]}
+                plugins={plugins}
               />
             </div>
           )}
