@@ -129,6 +129,9 @@ export default function TimeSeriesChart({
   const thresholdsRef = useRef(thresholds);
   thresholdsRef.current = thresholds;
 
+  const [isolatedIndex, setIsolatedIndex] = useState<number | null>(null);
+  const justZoomedRef = useRef(false);
+
   const chartId = useMemo(() => `tsc-${Math.random().toString(36).slice(2, 8)}`, []);
   const sync = useChartSync();
   const syncTimestampRef = useRef<number | null>(null);
@@ -171,6 +174,7 @@ export default function TimeSeriesChart({
         }));
 
         setFetchedData({ labels, timestamps, series });
+        setIsolatedIndex(null);
         setState("data");
       })
       .catch((err) => {
@@ -195,23 +199,28 @@ export default function TimeSeriesChart({
   const chartData: ChartData<"line"> | null = fetchedData
     ? {
         labels: fetchedData.labels,
-        datasets: fetchedData.series.map((s) => ({
-          label: s.label,
-          data: s.data,
-          borderColor: s.color,
-          borderWidth: 1.5,
-          pointRadius: 0,
-          pointHoverRadius: 3,
-          pointHoverBackgroundColor: s.color,
-          pointHoverBorderWidth: 0,
-          tension: 0.3,
-          fill: true,
-          backgroundColor: (ctx: { chart: ChartJS }) => {
-            const chart = ctx.chart;
-            if (!chart.chartArea) return s.color + "18";
-            return makeGradient(chart.ctx, chart.chartArea, s.color);
-          },
-        })),
+        datasets: fetchedData.series.map((s, i) => {
+          const dimmed = isolatedIndex != null && isolatedIndex !== i;
+          return {
+            label: s.label,
+            data: s.data,
+            borderColor: dimmed ? s.color + "4D" : s.color,
+            borderWidth: 1.5,
+            pointRadius: 0,
+            pointHoverRadius: dimmed ? 0 : 3,
+            pointHoverBackgroundColor: s.color,
+            pointHoverBorderWidth: 0,
+            tension: 0.3,
+            fill: !dimmed,
+            backgroundColor: dimmed
+              ? "transparent"
+              : (ctx: { chart: ChartJS }) => {
+                  const chart = ctx.chart;
+                  if (!chart.chartArea) return s.color + "18";
+                  return makeGradient(chart.ctx, chart.chartArea, s.color);
+                },
+          };
+        }),
       }
     : null;
 
@@ -257,6 +266,27 @@ export default function TimeSeriesChart({
         tooltipRef.current(null);
         sync.publish(chartId, -1);
         chart.draw();
+        return;
+      }
+      if (args.event.type === "click") {
+        if (justZoomedRef.current) {
+          justZoomedRef.current = false;
+          return;
+        }
+        const { x: cx, y: cy } = args.event;
+        if (cx == null || cy == null) return;
+        const elements = chart.getElementsAtEventForMode(
+          args.event.native as Event,
+          "nearest",
+          { intersect: false, axis: "x" },
+          false,
+        );
+        if (elements.length > 0) {
+          const clickedIdx = elements[0].datasetIndex;
+          setIsolatedIndex((prev) => (prev === clickedIdx ? null : clickedIdx));
+        } else {
+          setIsolatedIndex(null);
+        }
         return;
       }
       if (args.event.type !== "mousemove") return;
