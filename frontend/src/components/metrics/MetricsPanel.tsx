@@ -9,6 +9,7 @@ import CollapsibleSection from "../CollapsibleSection";
 import { IconButton } from "../IconButton";
 import SegmentedControl from "../SegmentedControl";
 import type { Segment } from "../SegmentedControl";
+import RangePicker from "./RangePicker";
 
 interface ChartDef {
   title: string;
@@ -42,6 +43,31 @@ export default function MetricsPanel({ charts, header }: Props) {
       { replace: true },
     );
   };
+
+  const fromParam = params.get("from");
+  const toParam = params.get("to");
+  const customFrom = fromParam ? Number(fromParam) : null;
+  const customTo = toParam ? Number(toParam) : null;
+  const isCustomRange = customFrom != null && customTo != null;
+
+  const setCustomRange = (from: number, to: number) => {
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("from", String(Math.floor(from)));
+      next.set("to", String(Math.floor(to)));
+      next.delete("range");
+      return next;
+    }, { replace: true });
+  };
+
+  const clearCustomRange = () => {
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("from");
+      next.delete("to");
+      return next;
+    }, { replace: true });
+  };
   const [refreshKey, setRefreshKey] = useState(0);
   const [autoRefresh, setAutoRefresh] = useState(false);
 
@@ -53,7 +79,8 @@ export default function MetricsPanel({ charts, header }: Props) {
 
   const controls = (
     <div className="flex flex-wrap items-center gap-2">
-      <SegmentedControl segments={RANGE_SEGMENTS} value={range} onChange={setRange} />
+      <SegmentedControl segments={RANGE_SEGMENTS} value={isCustomRange ? "" : range} onChange={setRange} />
+      <RangePicker from={customFrom} to={customTo} onApply={setCustomRange} onClear={clearCustomRange} />
       <IconButton
         onClick={() => setRefreshKey((k) => k + 1)}
         title="Refresh"
@@ -77,8 +104,11 @@ export default function MetricsPanel({ charts, header }: Props) {
               key={chart.query}
               {...chart}
               range={range}
+              from={customFrom ?? undefined}
+              to={customTo ?? undefined}
               refreshKey={refreshKey}
               syncKey="metrics"
+              onRangeSelect={setCustomRange}
             />
           ))}
         </div>
