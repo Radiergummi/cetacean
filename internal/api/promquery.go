@@ -79,3 +79,47 @@ func (pc *PromClient) InstantQuery(ctx context.Context, query string) ([]PromRes
 	}
 	return results, nil
 }
+
+func (pc *PromClient) RangeQueryRaw(ctx context.Context, query, start, end, step string) ([]byte, error) {
+	u := pc.baseURL + "/api/v1/query_range?query=" + url.QueryEscape(query) +
+		"&start=" + url.QueryEscape(start) + "&end=" + url.QueryEscape(end) +
+		"&step=" + url.QueryEscape(step)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := pc.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("prometheus returned %d: %s", resp.StatusCode, string(body))
+	}
+	return body, nil
+}
+
+func (pc *PromClient) InstantQueryRaw(ctx context.Context, query string) ([]byte, error) {
+	u := pc.baseURL + "/api/v1/query?query=" + url.QueryEscape(query)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := pc.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("prometheus returned %d: %s", resp.StatusCode, string(body))
+	}
+	return body, nil
+}
