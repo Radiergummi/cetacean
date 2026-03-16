@@ -22,7 +22,10 @@ export default function SimpleTable<T>({
           <thead className="sticky top-0 z-10 bg-background">
             <tr className="border-b bg-muted/50">
               {columns.map((col) => (
-                <th key={col} className="text-left p-3 text-sm font-medium">
+                <th
+                  key={col}
+                  className="p-3 text-left text-sm font-medium"
+                >
                   {col}
                 </th>
               ))}
@@ -31,7 +34,10 @@ export default function SimpleTable<T>({
         )}
         <tbody>
           {items.map((item, i) => (
-            <tr key={keyFn(item, i)} className="border-b last:border-b-0">
+            <tr
+              key={keyFn(item, i)}
+              className="border-b last:border-b-0"
+            >
               {renderRow(item, i)}
             </tr>
           ))}

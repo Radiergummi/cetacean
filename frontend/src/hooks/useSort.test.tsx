@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
-import { renderHook, act } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
-import type { ReactNode } from "react";
 import { useSort } from "./useSort";
+import { renderHook, act } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { MemoryRouter } from "react-router-dom";
+import { describe, it, expect } from "vitest";
 
 interface Item {
   name: string;

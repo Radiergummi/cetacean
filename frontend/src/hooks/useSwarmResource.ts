@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { useResourceStream } from "./useResourceStream";
 import type { PagedResponse } from "../api/types";
+import { useResourceStream } from "./useResourceStream";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 const ssePathMap: Record<string, string> = {
   node: "/nodes",

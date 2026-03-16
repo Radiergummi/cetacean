@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { render } from "@testing-library/react";
 import { LoadingPage, LoadingDetail } from "./LoadingSkeleton";
+import { render } from "@testing-library/react";
+import { describe, it, expect } from "vitest";
 
 describe("LoadingPage", () => {
   it("renders skeleton elements", () => {

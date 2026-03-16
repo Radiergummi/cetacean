@@ -26,7 +26,10 @@ export default function ResourceGauge({ label, value, subtitle, size = "md" }: P
 
   return (
     <div className="flex flex-col items-center gap-0.5">
-      <div className="relative" style={{ width: s.size, height: s.size / 2 + s.stroke }}>
+      <div
+        className="relative"
+        style={{ width: s.size, height: s.size / 2 + s.stroke }}
+      >
         <svg
           width={s.size}
           height={s.size / 2 + s.stroke}
@@ -53,13 +56,13 @@ export default function ResourceGauge({ label, value, subtitle, size = "md" }: P
           )}
         </svg>
         <div className="absolute inset-0 flex items-end justify-center pb-0.5">
-          <span className={`${s.text} font-semibold tabular-nums leading-none`}>
+          <span className={`${s.text} leading-none font-semibold tabular-nums`}>
             {value != null ? `${Math.round(pct)}%` : "\u2014"}
           </span>
         </div>
       </div>
       <span className={`${s.label} font-medium text-muted-foreground`}>{label}</span>
-      {subtitle && <span className="text-[10px] text-muted-foreground/70 -mt-0.5">{subtitle}</span>}
+      {subtitle && <span className="-mt-0.5 text-[10px] text-muted-foreground/70">{subtitle}</span>}
     </div>
   );
 }

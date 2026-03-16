@@ -155,7 +155,7 @@
   @apply h-100 rounded-lg border bg-muted/30;
 }
 .dark .log-panel {
-  @apply bg-gray-950 border-gray-800;
+  @apply border-gray-800 bg-gray-950;
 }
 /* Disable alternating row stripes inside the log viewer */
 .log-panel tbody tr:nth-child(even) {

@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
 import { api } from "../../api/client";
 import { escapePromQL } from "../../lib/utils";
 import ResourceGauge from "./ResourceGauge";
+import { useState, useEffect, useCallback } from "react";
 
 interface GaugeDef {
   label: string;
@@ -68,7 +68,11 @@ export default function NodeResourceGauges({ instance }: Props) {
   return (
     <div className="flex items-center justify-center gap-8 py-2">
       {GAUGES.map((g, i) => (
-        <ResourceGauge key={g.label} label={g.label} value={values[i]} />
+        <ResourceGauge
+          key={g.label}
+          label={g.label}
+          value={values[i]}
+        />
       ))}
     </div>
   );

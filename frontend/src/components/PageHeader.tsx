@@ -27,12 +27,18 @@ export default function PageHeader({ title, subtitle, breadcrumbs, actions }: Pr
   return (
     <header className="mb-6">
       {breadcrumbs && breadcrumbs.length > 0 && (
-        <nav className="flex items-center gap-1 text-sm text-muted-foreground mb-1.5">
+        <nav className="mb-1.5 flex items-center gap-1 text-sm text-muted-foreground">
           {breadcrumbs.map(({ label, to }, index) => (
-            <span key={index} className="flex items-center gap-1">
+            <span
+              key={index}
+              className="flex items-center gap-1"
+            >
               {index > 0 && <ChevronRight className="size-3.5" />}
               {to ? (
-                <Link to={to} className="hover:text-foreground transition-colors">
+                <Link
+                  to={to}
+                  className="transition-colors hover:text-foreground"
+                >
                   {label}
                 </Link>
               ) : (
@@ -43,12 +49,12 @@ export default function PageHeader({ title, subtitle, breadcrumbs, actions }: Pr
         </nav>
       )}
 
-      <div className="flex items-center justify-between gap-4 mt-6">
+      <div className="mt-6 flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight tabular-nums slashed-zero">
+          <h1 className="text-2xl font-semibold tracking-tight slashed-zero tabular-nums">
             {title}
           </h1>
-          {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
+          {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
         </div>
         {actions && <div className="flex items-center gap-2">{actions}</div>}
       </div>

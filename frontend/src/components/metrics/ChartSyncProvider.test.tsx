@@ -1,7 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
+import { ChartSyncProvider, useChartSync } from "./ChartSyncProvider";
 import { renderHook, act } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { ChartSyncProvider, useChartSync } from "./ChartSyncProvider";
+import { describe, it, expect, vi } from "vitest";
 
 function wrapper({ children }: { children: ReactNode }) {
   return <ChartSyncProvider>{children}</ChartSyncProvider>;

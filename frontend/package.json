@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "oxlint",
+    "dev": "vite",
     "fmt": "oxfmt --write .",
     "fmt:check": "oxfmt --check .",
+    "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"

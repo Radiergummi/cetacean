@@ -1,21 +1,21 @@
-import { useCallback } from "react";
-import { useNavigate } from "react-router-dom";
-import { useSwarmResource } from "../hooks/useSwarmResource";
-import { useSortParams } from "../hooks/useSort";
-import { useViewMode } from "../hooks/useViewMode";
-import { useSearchParam } from "../hooks/useSearchParam";
 import { api } from "../api/client";
 import type { Config } from "../api/types";
-import ListToolbar from "../components/ListToolbar";
-import PageHeader from "../components/PageHeader";
-import SortIndicator from "../components/SortIndicator";
-import ResourceCard from "../components/ResourceCard";
+import DataTable, { type Column } from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
+import ListToolbar from "../components/ListToolbar";
 import { SkeletonTable } from "../components/LoadingSkeleton";
+import PageHeader from "../components/PageHeader";
+import ResourceCard from "../components/ResourceCard";
 import ResourceName from "../components/ResourceName";
-import DataTable, { type Column } from "../components/DataTable";
+import SortIndicator from "../components/SortIndicator";
 import TimeAgo from "../components/TimeAgo";
+import { useSearchParam } from "../hooks/useSearchParam";
+import { useSortParams } from "../hooks/useSort";
+import { useSwarmResource } from "../hooks/useSwarmResource";
+import { useViewMode } from "../hooks/useViewMode";
+import { useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function ConfigList() {
   const navigate = useNavigate();
@@ -37,17 +37,35 @@ export default function ConfigList() {
 
   const columns: Column<Config>[] = [
     {
-      header: <SortIndicator label="Name" active={sortKey === "name"} dir={sortDir} />,
+      header: (
+        <SortIndicator
+          label="Name"
+          active={sortKey === "name"}
+          dir={sortDir}
+        />
+      ),
       cell: (c) => <ResourceName name={c.Spec.Name || c.ID} />,
       onHeaderClick: () => toggle("name"),
     },
     {
-      header: <SortIndicator label="Created" active={sortKey === "created"} dir={sortDir} />,
+      header: (
+        <SortIndicator
+          label="Created"
+          active={sortKey === "created"}
+          dir={sortDir}
+        />
+      ),
       cell: (c) => (c.CreatedAt ? <TimeAgo date={c.CreatedAt} /> : "\u2014"),
       onHeaderClick: () => toggle("created"),
     },
     {
-      header: <SortIndicator label="Updated" active={sortKey === "updated"} dir={sortDir} />,
+      header: (
+        <SortIndicator
+          label="Updated"
+          active={sortKey === "updated"}
+          dir={sortDir}
+        />
+      ),
       cell: (c) => (c.UpdatedAt ? <TimeAgo date={c.UpdatedAt} /> : "\u2014"),
       onHeaderClick: () => toggle("updated"),
     },
@@ -61,7 +79,13 @@ export default function ConfigList() {
         <SkeletonTable columns={3} />
       </div>
     );
-  if (error) return <FetchError message={error.message} onRetry={retry} />;
+  if (error)
+    return (
+      <FetchError
+        message={error.message}
+        onRetry={retry}
+      />
+    );
 
   return (
     <div>
@@ -83,7 +107,7 @@ export default function ConfigList() {
           onRowClick={(c) => navigate(`/configs/${c.ID}`)}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {configs.map((cfg) => (
             <ResourceCard
               key={cfg.ID}

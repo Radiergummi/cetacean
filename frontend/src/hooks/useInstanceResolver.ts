@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
 import { api } from "../api/client";
 import { useMonitoringStatus } from "./useMonitoringStatus";
+import { useState, useEffect, useCallback } from "react";
 
 /**
  * Resolves Docker Swarm node hostnames to Prometheus instance labels.

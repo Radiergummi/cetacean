@@ -22,7 +22,11 @@ export default function Sparkline({ data, width = 80, height = 24, color = "#636
     .join(" ");
 
   return (
-    <svg width={width} height={height} className="inline-block align-middle">
+    <svg
+      width={width}
+      height={height}
+      className="inline-block align-middle"
+    >
       <polyline
         points={points}
         fill="none"

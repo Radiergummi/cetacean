@@ -1,5 +1,5 @@
-import ELK, { type ElkNode, type ElkExtendedEdge } from "elkjs/lib/elk.bundled.js";
 import type { Node, Edge } from "@xyflow/react";
+import ELK, { type ElkNode, type ElkExtendedEdge } from "elkjs/lib/elk.bundled.js";
 
 const elk = new ELK();
 

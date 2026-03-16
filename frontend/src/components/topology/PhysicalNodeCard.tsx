@@ -1,6 +1,6 @@
+import ResourceName from "../ResourceName";
 import type { NodeProps } from "@xyflow/react";
 import { useNavigate } from "react-router-dom";
-import ResourceName from "../ResourceName";
 
 type ServiceSummary = {
   serviceId: string;
@@ -37,9 +37,9 @@ export default function PhysicalNodeCard({ data }: NodeProps & { data: PhysicalN
         borderColor: "var(--color-border)",
       }}
     >
-      <div className="flex items-center gap-2 mb-3">
+      <div className="mb-3 flex items-center gap-2">
         <span className="text-sm font-semibold text-muted-foreground">{data.label}</span>
-        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
           {data.role === "manager" ? "Manager" : "Worker"}
         </span>
         <span
@@ -58,13 +58,19 @@ export default function PhysicalNodeCard({ data }: NodeProps & { data: PhysicalN
           {data.services.map((svc) => (
             <div
               key={svc.serviceId}
-              className="border rounded-lg bg-card shadow-sm p-2.5 cursor-pointer hover:shadow-md transition-shadow"
+              className="cursor-pointer rounded-lg border bg-card p-2.5 shadow-sm transition-shadow hover:shadow-md"
               onClick={() => navigate(`/services/${svc.serviceId}`)}
             >
-              <div className="font-medium text-xs truncate mb-0.5" title={svc.serviceName}>
+              <div
+                className="mb-0.5 truncate text-xs font-medium"
+                title={svc.serviceName}
+              >
                 <ResourceName name={svc.serviceName} />
               </div>
-              <div className="text-[11px] text-muted-foreground truncate mb-1" title={svc.image}>
+              <div
+                className="mb-1 truncate text-[11px] text-muted-foreground"
+                title={svc.image}
+              >
                 {svc.image}
               </div>
               <div className="flex items-center gap-1.5 text-xs">

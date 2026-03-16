@@ -77,7 +77,7 @@ export function HighlightedText({
         return isMatch ? (
           <mark
             key={index}
-            className="bg-yellow-200 dark:bg-yellow-500/40 text-yellow-900 dark:text-yellow-200 rounded-xs px-px"
+            className="rounded-xs bg-yellow-200 px-px text-yellow-900 dark:bg-yellow-500/40 dark:text-yellow-200"
           >
             {part}
           </mark>

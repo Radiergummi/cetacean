@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
 import { useConnection } from "../hooks/useResourceStream";
+import { useEffect, useRef, useState } from "react";
 
 export default function ConnectionStatus() {
   const { connected, lastEventAt } = useConnection();
@@ -51,9 +51,9 @@ export default function ConnectionStatus() {
       <div
         data-connected={connected || undefined}
         data-pulsing={pulsing || undefined}
-        className="size-2 rounded-full transition-shadow duration-300 bg-red-500 animate-pulse data-connected:bg-green-500 data-connected:animate-none data-pulsing:shadow-[0_0_6px_2px_rgba(34,197,94,0.5)]"
+        className="size-2 animate-pulse rounded-full bg-red-500 transition-shadow duration-300 data-connected:animate-none data-connected:bg-green-500 data-pulsing:shadow-[0_0_6px_2px_rgba(34,197,94,0.5)]"
       />
-      <span className="text-xs text-muted-foreground hidden sm:inline">
+      <span className="hidden text-xs text-muted-foreground sm:inline">
         {connected ? (
           <>
             <span>Live</span>

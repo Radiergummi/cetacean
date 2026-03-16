@@ -1,7 +1,7 @@
+import type { MonitoringStatus as Status } from "../../api/types";
+import { AlertTriangle, BarChart3, X } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
-import { AlertTriangle, BarChart3, X } from "lucide-react";
-import type { MonitoringStatus as Status } from "../../api/types";
 
 const DISMISS_KEY = "cetacean:dismiss-monitoring-banner";
 
@@ -25,7 +25,7 @@ export default function MonitoringStatus({ status, source }: Props) {
     if (dismissed) return null;
     return (
       <Banner
-        icon={<BarChart3 className="size-5 text-blue-600 dark:text-blue-400 shrink-0" />}
+        icon={<BarChart3 className="size-5 shrink-0 text-blue-600 dark:text-blue-400" />}
         border="border-blue-300 dark:border-blue-500/30"
         bg="bg-blue-50 dark:bg-blue-500/10"
         textColor="text-blue-800 dark:text-blue-200"
@@ -38,12 +38,12 @@ export default function MonitoringStatus({ status, source }: Props) {
           <strong>Monitoring not configured.</strong> Deploy the monitoring stack to enable CPU,
           memory, and disk metrics across your cluster.
         </p>
-        <pre className="mt-2 text-xs bg-blue-100 dark:bg-blue-500/10 rounded px-2 py-1 overflow-x-auto max-w-fit">
+        <pre className="mt-2 max-w-fit overflow-x-auto rounded bg-blue-100 px-2 py-1 text-xs dark:bg-blue-500/10">
           docker stack deploy -c compose.monitoring.yaml cetacean-monitoring
         </pre>
         <p className="mt-3 text-xs">
           Then set{" "}
-          <code className="rounded bg-blue-100 dark:bg-blue-500/20 px-1 py-0.5 font-mono">
+          <code className="rounded bg-blue-100 px-1 py-0.5 font-mono dark:bg-blue-500/20">
             CETACEAN_PROMETHEUS_URL
           </code>{" "}
           and restart Cetacean.
@@ -56,7 +56,7 @@ export default function MonitoringStatus({ status, source }: Props) {
   if (!status.prometheusReachable) {
     return (
       <Banner
-        icon={<AlertTriangle className="size-5 text-amber-600 dark:text-amber-400 shrink-0" />}
+        icon={<AlertTriangle className="size-5 shrink-0 text-amber-600 dark:text-amber-400" />}
         border="border-amber-300 dark:border-amber-500/30"
         bg="bg-amber-50 dark:bg-amber-500/10"
         textColor="text-amber-800 dark:text-amber-200"
@@ -94,7 +94,7 @@ export default function MonitoringStatus({ status, source }: Props) {
 
   return (
     <Banner
-      icon={<BarChart3 className="size-5 text-blue-600 dark:text-blue-400 shrink-0" />}
+      icon={<BarChart3 className="size-5 shrink-0 text-blue-600 dark:text-blue-400" />}
       border="border-blue-300 dark:border-blue-500/30"
       bg="bg-blue-50 dark:bg-blue-500/10"
       textColor="text-blue-800 dark:text-blue-200"
@@ -106,7 +106,7 @@ export default function MonitoringStatus({ status, source }: Props) {
       <p className="text-sm">
         <strong>Monitoring partially configured</strong>
       </p>
-      <ul className="mt-1 text-sm list-disc list-inside space-y-0.5">
+      <ul className="mt-1 list-inside list-disc space-y-0.5 text-sm">
         {hints.map((h) => (
           <li key={h}>{h}</li>
         ))}
@@ -131,13 +131,13 @@ function Banner({
   children: React.ReactNode;
 }) {
   return (
-    <div className={`flex items-start gap-3 rounded-lg border ${border} ${bg} px-4 py-3 mb-4`}>
+    <div className={`flex items-start gap-3 rounded-lg border ${border} ${bg} mb-4 px-4 py-3`}>
       {icon}
       <div className={`flex-1 ${textColor}`}>{children}</div>
       {onDismiss && (
         <button
           onClick={onDismiss}
-          className="text-current opacity-40 hover:opacity-70 transition-opacity shrink-0 cursor-pointer"
+          className="shrink-0 cursor-pointer text-current opacity-40 transition-opacity hover:opacity-70"
           aria-label="Dismiss"
         >
           <X className="size-4" />

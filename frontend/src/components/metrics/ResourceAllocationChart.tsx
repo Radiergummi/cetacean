@@ -1,4 +1,5 @@
-import { useMemo, useRef } from "react";
+import { getChartColor } from "../../lib/chartColors";
+import { formatMetricValue } from "../../lib/formatMetricValue";
 import {
   Chart as ChartJS,
   BarElement,
@@ -7,9 +8,8 @@ import {
   type ChartOptions,
   type Plugin,
 } from "chart.js";
+import { useMemo, useRef } from "react";
 import { Bar } from "react-chartjs-2";
-import { getChartColor } from "../../lib/chartColors";
-import { formatMetricValue } from "../../lib/formatMetricValue";
 
 ChartJS.register(BarElement, CategoryScale, LinearScale);
 
@@ -111,7 +111,7 @@ function AllocationBar({ title, reserved, actual, limit, unit }: BarChartProps) 
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
+      <div className="mb-2 flex items-center justify-between">
         <span className="text-sm font-medium">{title}</span>
         {limit != null && (
           <span className="text-[11px] text-muted-foreground">
@@ -120,7 +120,11 @@ function AllocationBar({ title, reserved, actual, limit, unit }: BarChartProps) 
         )}
       </div>
       <div className="h-[80px]">
-        <Bar data={chartData} options={options} plugins={plugins} />
+        <Bar
+          data={chartData}
+          options={options}
+          plugins={plugins}
+        />
       </div>
     </div>
   );
@@ -149,7 +153,7 @@ export default function ResourceAllocationChart({
   if (!hasCpu && !hasMem) return null;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       {hasCpu && (
         <div className="rounded-lg border bg-card p-4">
           <AllocationBar

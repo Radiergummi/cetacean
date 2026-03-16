@@ -1,7 +1,3 @@
-import { AreaChart, Calendar, LineChart, Pause, Play, RefreshCw, X } from "lucide-react";
-import type React from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import CollapsibleSection from "../CollapsibleSection";
 import { IconButton } from "../IconButton";
 import type { Segment } from "../SegmentedControl";
@@ -10,6 +6,10 @@ import { ChartSyncProvider } from "./ChartSyncProvider";
 import { MetricsPanelContext, type MetricsPanelContextValue } from "./MetricsPanelContext";
 import type { Threshold } from "./TimeSeriesChart";
 import TimeSeriesChart from "./TimeSeriesChart";
+import { AreaChart, Calendar, LineChart, Pause, Play, RefreshCw, X } from "lucide-react";
+import type React from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 function formatRange(from: number, to: number): string {
   const f = new Date(from * 1000);
@@ -168,7 +168,7 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
       {drillStack && (
         <button
           onClick={() => setDrillStack(null)}
-          className="flex items-center gap-1 px-2 py-1.5 text-xs rounded-md bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20"
+          className="flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2 py-1.5 text-xs text-primary hover:bg-primary/20"
           title="Clear stack filter (Esc)"
         >
           <span className="font-medium">{drillStack}</span>
@@ -190,7 +190,7 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
         overflowActive={isCustomRange}
         overflowLabel={
           isCustomRange ? (
-            <span className="py-0.5 flex items-center gap-1 text-xs">
+            <span className="flex items-center gap-1 py-0.5 text-xs">
               {customRangeLabel}
               <X
                 className="size-3 opacity-60 hover:opacity-100"
@@ -204,12 +204,12 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
         }
         overflowContent={(close) => (
           <div className="w-64 p-2">
-            <div className="grid grid-cols-2 gap-1.5 mb-3">
+            <div className="mb-3 grid grid-cols-2 gap-1.5">
               {QUICK_PRESETS.map(({ label, seconds }) => (
                 <button
                   key={label}
                   onClick={() => handlePreset(seconds, close)}
-                  className="px-2 py-1.5 rounded-md text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  className="rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                 >
                   {label}
                 </button>
@@ -259,10 +259,13 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
   );
 
   return (
-    <CollapsibleSection title={typeof header === "string" ? header : "Metrics"} controls={controls}>
+    <CollapsibleSection
+      title={typeof header === "string" ? header : "Metrics"}
+      controls={controls}
+    >
       <MetricsPanelContext.Provider value={panelCtx}>
         <ChartSyncProvider>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {children ??
               charts?.map((chart) => (
                 <TimeSeriesChart

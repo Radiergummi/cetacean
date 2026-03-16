@@ -1,4 +1,3 @@
-import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import ActivitySection from "../components/ActivitySection";
 import {
@@ -14,6 +13,7 @@ import PageHeader from "../components/PageHeader";
 import ServiceRefList from "../components/ServiceRefList";
 import { useDetailResource } from "../hooks/useDetailResource";
 import { parseStackLabels } from "../lib/parseStackLabels";
+import { useParams } from "react-router-dom";
 
 export default function SecretDetail() {
   const { id } = useParams<{ id: string }>();
@@ -35,10 +35,23 @@ export default function SecretDetail() {
       />
 
       <MetadataGrid>
-        <ResourceId label="ID" id={secret.ID} />
-        <ResourceLink label="Stack" name={stack} to={`/stacks/${stack}`} />
-        <Timestamp label="Created" date={secret.CreatedAt} />
-        <Timestamp label="Updated" date={secret.UpdatedAt} />
+        <ResourceId
+          label="ID"
+          id={secret.ID}
+        />
+        <ResourceLink
+          label="Stack"
+          name={stack}
+          to={`/stacks/${stack}`}
+        />
+        <Timestamp
+          label="Created"
+          date={secret.CreatedAt}
+        />
+        <Timestamp
+          label="Updated"
+          date={secret.UpdatedAt}
+        />
       </MetadataGrid>
 
       <LabelSection entries={labelEntries} />

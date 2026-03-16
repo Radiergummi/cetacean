@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
 import EmptyState from "./EmptyState";
+import { render, screen } from "@testing-library/react";
+import { describe, it, expect } from "vitest";
 
 describe("EmptyState", () => {
   it("renders default message", () => {

@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
 import ErrorBoundary from "./ErrorBoundary";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 
 let shouldThrow = false;
 
@@ -10,12 +10,12 @@ function ThrowingComponent() {
 }
 
 // Suppress console.error for expected errors
-const originalError = console.error;
+const originalError = console.error; // eslint-disable-line no-console
 beforeAll(() => {
-  console.error = vi.fn();
+  console.error = vi.fn(); // eslint-disable-line no-console
 });
 afterAll(() => {
-  console.error = originalError;
+  console.error = originalError; // eslint-disable-line no-console
 });
 
 describe("ErrorBoundary", () => {

@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
 import { computeLayout } from "./layoutElk";
 import type { Node, Edge } from "@xyflow/react";
+import { describe, it, expect } from "vitest";
 
 describe("computeLayout (ELK)", () => {
   it("assigns positions to nodes in LR order", async () => {

@@ -1,20 +1,20 @@
-import { useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import type { Volume } from "../api/types";
 import DataTable, { type Column } from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
+import ListToolbar from "../components/ListToolbar";
 import { SkeletonTable } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import ResourceCard from "../components/ResourceCard";
 import ResourceName from "../components/ResourceName";
-import ListToolbar from "../components/ListToolbar";
 import SortIndicator from "../components/SortIndicator";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useViewMode } from "../hooks/useViewMode";
+import { useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function VolumeList() {
   const navigate = useNavigate();
@@ -36,17 +36,35 @@ export default function VolumeList() {
 
   const columns: Column<Volume>[] = [
     {
-      header: <SortIndicator label="Name" active={sortKey === "name"} dir={sortDir} />,
+      header: (
+        <SortIndicator
+          label="Name"
+          active={sortKey === "name"}
+          dir={sortDir}
+        />
+      ),
       cell: (v) => <ResourceName name={v.Name} />,
       onHeaderClick: () => toggle("name"),
     },
     {
-      header: <SortIndicator label="Driver" active={sortKey === "driver"} dir={sortDir} />,
+      header: (
+        <SortIndicator
+          label="Driver"
+          active={sortKey === "driver"}
+          dir={sortDir}
+        />
+      ),
       cell: (v) => v.Driver,
       onHeaderClick: () => toggle("driver"),
     },
     {
-      header: <SortIndicator label="Scope" active={sortKey === "scope"} dir={sortDir} />,
+      header: (
+        <SortIndicator
+          label="Scope"
+          active={sortKey === "scope"}
+          dir={sortDir}
+        />
+      ),
       cell: (v) => v.Scope,
       onHeaderClick: () => toggle("scope"),
     },
@@ -62,7 +80,12 @@ export default function VolumeList() {
     );
   }
   if (error) {
-    return <FetchError message={error.message} onRetry={retry} />;
+    return (
+      <FetchError
+        message={error.message}
+        onRetry={retry}
+      />
+    );
   }
 
   return (
@@ -85,7 +108,7 @@ export default function VolumeList() {
           onRowClick={(v) => navigate(`/volumes/${v.Name}`)}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {volumes.map(({ Driver, Name, Scope }) => (
             <ResourceCard
               key={Name}

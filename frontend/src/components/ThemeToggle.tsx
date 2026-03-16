@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
+import { useState, useEffect } from "react";
 
 type Theme = "light" | "dark" | "system";
 
@@ -42,7 +42,7 @@ export default function ThemeToggle() {
   return (
     <button
       onClick={() => setTheme(CYCLE[(CYCLE.indexOf(theme) + 1) % CYCLE.length])}
-      className="size-8 flex items-center justify-center rounded-md hover:bg-muted transition cursor-pointer"
+      className="flex size-8 cursor-pointer items-center justify-center rounded-md transition hover:bg-muted"
       title={`Theme: ${labels[theme]}`}
     >
       <Icon className="size-4" />

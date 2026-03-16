@@ -1,6 +1,6 @@
+import { AlertTriangle } from "lucide-react";
 import { Component } from "react";
 import type { ErrorInfo, ReactNode } from "react";
-import { AlertTriangle } from "lucide-react";
 
 interface Props {
   children: ReactNode;
@@ -20,6 +20,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    // eslint-disable-next-line no-console
     console.error("ErrorBoundary caught:", error, info.componentStack);
   }
 
@@ -27,7 +28,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     if (this.state.error) {
       if (this.props.inline) {
         return (
-          <div className="flex items-center gap-2 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-3 text-sm text-red-700 dark:text-red-400">
+          <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-400">
             <AlertTriangle className="size-4 shrink-0" />
             <span className="truncate">{this.state.error.message}</span>
             <button
@@ -41,12 +42,12 @@ export default class ErrorBoundary extends Component<Props, State> {
       }
       return (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <AlertTriangle className="size-12 text-red-500 mb-4" />
-          <h2 className="text-lg font-semibold mb-2">Something went wrong</h2>
-          <p className="text-sm text-muted-foreground mb-4 max-w-md">{this.state.error.message}</p>
+          <AlertTriangle className="mb-4 size-12 text-red-500" />
+          <h2 className="mb-2 text-lg font-semibold">Something went wrong</h2>
+          <p className="mb-4 max-w-md text-sm text-muted-foreground">{this.state.error.message}</p>
           <button
             onClick={() => this.setState({ error: null })}
-            className="px-4 py-2 text-sm font-medium rounded-md border hover:bg-muted"
+            className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
           >
             Try again
           </button>

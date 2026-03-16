@@ -18,10 +18,17 @@ export default function ListToolbar({
   onViewModeChange,
 }: Props) {
   return (
-    <div className="flex items-stretch gap-3 mb-4">
-      <SearchInput value={search} onChange={onSearchChange} placeholder={placeholder} />
+    <div className="mb-4 flex items-stretch gap-3">
+      <SearchInput
+        value={search}
+        onChange={onSearchChange}
+        placeholder={placeholder}
+      />
       {viewMode != null && onViewModeChange && (
-        <ViewToggle mode={viewMode} onChange={onViewModeChange} />
+        <ViewToggle
+          mode={viewMode}
+          onChange={onViewModeChange}
+        />
       )}
     </div>
   );

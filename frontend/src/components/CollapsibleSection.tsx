@@ -48,7 +48,7 @@ export function SectionToggle({
       onClick={onToggle}
       className={
         className ??
-        "flex items-center gap-1.5 text-sm font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+        "flex cursor-pointer items-center gap-1.5 text-sm font-medium tracking-wider text-muted-foreground uppercase transition-colors hover:text-foreground"
       }
     >
       <ChevronRight
@@ -75,9 +75,13 @@ export default function CollapsibleSection({
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-3 min-h-8">
-        <SectionToggle title={title} open={open} onToggle={toggle} />
-        {open && controls && <div className="flex items-center gap-2 ml-auto">{controls}</div>}
+      <div className="mb-3 flex min-h-8 items-center gap-2">
+        <SectionToggle
+          title={title}
+          open={open}
+          onToggle={toggle}
+        />
+        {open && controls && <div className="ml-auto flex items-center gap-2">{controls}</div>}
       </div>
       {open && children}
     </div>

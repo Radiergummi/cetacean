@@ -14,5 +14,10 @@ export default function Timestamp({
 
   const value = relative ? <TimeAgo date={date} /> : new Date(date).toLocaleString();
 
-  return <InfoCard label={label} value={value} />;
+  return (
+    <InfoCard
+      label={label}
+      value={value}
+    />
+  );
 }

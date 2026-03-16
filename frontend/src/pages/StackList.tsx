@@ -1,15 +1,15 @@
-import { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import type { StackSummary } from "../api/types";
-import { useResourceStream } from "../hooks/useResourceStream";
-import { useSearchParam } from "../hooks/useSearchParam";
-import { SearchInput } from "../components/search";
-import PageHeader from "../components/PageHeader";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
 import { SkeletonTable } from "../components/LoadingSkeleton";
+import PageHeader from "../components/PageHeader";
+import { SearchInput } from "../components/search";
+import { useResourceStream } from "../hooks/useResourceStream";
+import { useSearchParam } from "../hooks/useSearchParam";
 import { formatBytes } from "../lib/formatBytes";
+import { useState, useEffect, useCallback } from "react";
+import { Link } from "react-router-dom";
 
 export default function StackList() {
   const [search, , setSearch] = useSearchParam("q");
@@ -50,20 +50,33 @@ export default function StackList() {
         <SkeletonTable columns={6} />
       </div>
     );
-  if (error) return <FetchError message={error.message} onRetry={load} />;
+  if (error)
+    return (
+      <FetchError
+        message={error.message}
+        onRetry={load}
+      />
+    );
 
   return (
     <div>
       <PageHeader title="Stacks" />
       <div className="mb-4">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search stacks..." />
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Search stacks..."
+        />
       </div>
       {filtered.length === 0 ? (
         <EmptyState message={search ? "No stacks match your search" : "No stacks found"} />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((stack) => (
-            <StackCard key={stack.name} stack={stack} />
+            <StackCard
+              key={stack.name}
+              stack={stack}
+            />
           ))}
         </div>
       )}
@@ -103,14 +116,14 @@ function StackCard({ stack }: { stack: StackSummary }) {
   return (
     <Link
       to={`/stacks/${stack.name}`}
-      className={`block rounded-lg border p-4 hover:border-foreground/20 hover:shadow-sm transition-all ${HEALTH_BORDER[health]}`}
+      className={`block rounded-lg border p-4 transition-all hover:border-foreground/20 hover:shadow-sm ${HEALTH_BORDER[health]}`}
     >
       {/* Header */}
-      <div className="flex items-center gap-2 mb-3">
-        <span className={`shrink-0 w-2.5 h-2.5 rounded-full ${HEALTH_COLORS[health]}`} />
-        <span className="font-medium truncate">{stack.name}</span>
+      <div className="mb-3 flex items-center gap-2">
+        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${HEALTH_COLORS[health]}`} />
+        <span className="truncate font-medium">{stack.name}</span>
         {stack.updatingServices > 0 && (
-          <span className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+          <span className="ml-auto rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
             Updating {stack.updatingServices}
           </span>
         )}
@@ -118,14 +131,14 @@ function StackCard({ stack }: { stack: StackSummary }) {
 
       {/* Task bar */}
       <div className="mb-3">
-        <div className="flex justify-between text-xs text-muted-foreground mb-1">
+        <div className="mb-1 flex justify-between text-xs text-muted-foreground">
           <span>Tasks</span>
           <span className="tabular-nums">
             {running}/{desired}
           </span>
         </div>
         {desired > 0 ? (
-          <div className="h-2 rounded-full bg-muted overflow-hidden flex">
+          <div className="flex h-2 overflow-hidden rounded-full bg-muted">
             <div
               className={`${pct >= 100 ? "bg-green-500" : "bg-yellow-500"} transition-all`}
               style={{ width: `${pct}%` }}
@@ -155,7 +168,7 @@ function StackCard({ stack }: { stack: StackSummary }) {
       )}
 
       {/* Resource counts footer */}
-      <div className="flex gap-3 mt-3 pt-3 border-t text-[10px] text-muted-foreground">
+      <div className="mt-3 flex gap-3 border-t pt-3 text-[10px] text-muted-foreground">
         <span>{stack.serviceCount} svc</span>
         {stack.configCount > 0 && <span>{stack.configCount} cfg</span>}
         {stack.secretCount > 0 && <span>{stack.secretCount} sec</span>}
@@ -182,13 +195,13 @@ function ResourceBar({
 
   return (
     <div className="mb-2">
-      <div className="flex justify-between text-xs text-muted-foreground mb-0.5">
+      <div className="mb-0.5 flex justify-between text-xs text-muted-foreground">
         <span>{label}</span>
         <span className="tabular-nums">
           {format(used)} / {format(limit)}
         </span>
       </div>
-      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
         <div
           className={`h-full rounded-full ${color} transition-all`}
           style={{ width: `${pct}%` }}

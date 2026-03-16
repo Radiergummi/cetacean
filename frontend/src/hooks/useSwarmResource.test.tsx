@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { useSwarmResource } from "./useSwarmResource";
 import { renderHook, waitFor, act } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { useSwarmResource } from "./useSwarmResource";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 interface Item {
   ID: string;

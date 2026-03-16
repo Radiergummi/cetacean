@@ -10,7 +10,7 @@ export default function ResourceName({ name }: { name: string }) {
 
   return (
     <span className="inline-flex items-baseline">
-      <span className="text-muted-foreground font-normal">{prefix}/</span>
+      <span className="font-normal text-muted-foreground">{prefix}/</span>
       <strong className="font-semibold">{rest}</strong>
     </span>
   );

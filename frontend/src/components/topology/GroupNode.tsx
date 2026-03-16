@@ -14,14 +14,14 @@ export default function GroupNode({ data }: NodeProps & { data: GroupData }) {
 
   return (
     <div
-      className="w-full h-full rounded-xl bg-muted/10 p-4"
+      className="h-full w-full rounded-xl bg-muted/10 p-4"
       style={{
         borderWidth: 1,
         borderStyle: "dashed",
         borderColor: data.color ?? "var(--color-border)",
       }}
     >
-      <div className="flex items-center gap-2 mb-2">
+      <div className="mb-2 flex items-center gap-2">
         <span
           className="text-sm font-semibold"
           style={{ color: data.color ?? "var(--color-muted-foreground)" }}
@@ -30,7 +30,7 @@ export default function GroupNode({ data }: NodeProps & { data: GroupData }) {
         </span>
 
         {isNode && data.role && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
             {data.role === "manager" ? "Manager" : "Worker"}
           </span>
         )}

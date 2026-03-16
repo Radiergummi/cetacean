@@ -1,7 +1,7 @@
-import { useCallback, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import type { TimeRange } from "./log-utils";
 import { formatShortDate, LABEL_TO_RANGE_KEY, RANGE_DURATIONS } from "./log-utils";
+import { useCallback, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 export function useLogTimeRange() {
   const [params, setParams] = useSearchParams();

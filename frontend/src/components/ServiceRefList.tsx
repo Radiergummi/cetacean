@@ -1,8 +1,8 @@
-import { Link } from "react-router-dom";
 import type { ServiceRef } from "../api/types";
-import { Badge } from "./ui/badge";
 import CollapsibleSection from "./CollapsibleSection";
 import ResourceName from "./ResourceName";
+import { Badge } from "./ui/badge";
+import { Link } from "react-router-dom";
 
 interface Props {
   services: ServiceRef[];

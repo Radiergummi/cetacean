@@ -1,21 +1,21 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { ReactFlow, ReactFlowProvider, Background, type Node, type Edge } from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
 import { api } from "../api/client";
 import type { NetworkTopology, PlacementTopology } from "../api/types";
-import PageHeader from "../components/PageHeader";
+import "@xyflow/react/dist/style.css";
 import EmptyState from "../components/EmptyState";
 import { LoadingPage } from "../components/LoadingSkeleton";
+import PageHeader from "../components/PageHeader";
 import SegmentedControl from "../components/SegmentedControl";
+import GroupNode from "../components/topology/GroupNode";
+import { HighlightProvider } from "../components/topology/HighlightContext";
+import NetworkEdge from "../components/topology/NetworkEdge";
+import PhysicalNodeCard from "../components/topology/PhysicalNodeCard";
+import ServiceCardNode from "../components/topology/ServiceCardNode";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { computeLayout } from "../lib/layoutElk";
 import { buildLogicalFlow, buildPhysicalFlow, hashColor } from "../lib/topologyTransform";
-import ServiceCardNode from "../components/topology/ServiceCardNode";
-import PhysicalNodeCard from "../components/topology/PhysicalNodeCard";
-import GroupNode from "../components/topology/GroupNode";
-import NetworkEdge from "../components/topology/NetworkEdge";
-import { HighlightProvider } from "../components/topology/HighlightContext";
+import { ReactFlow, ReactFlowProvider, Background, type Node, type Edge } from "@xyflow/react";
 import { Network, Server } from "lucide-react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 const logicalNodeTypes = {
   stackGroup: GroupNode,
@@ -30,13 +30,16 @@ function StackLegend({ stackColors }: { stackColors: Map<string, string> }) {
   if (stackColors.size === 0) return null;
 
   return (
-    <div className="absolute bottom-3 left-3 z-10 rounded-lg border bg-card/90 backdrop-blur-sm p-3 text-xs shadow-sm">
-      <div className="font-medium text-muted-foreground mb-1.5">Stacks</div>
+    <div className="absolute bottom-3 left-3 z-10 rounded-lg border bg-card/90 p-3 text-xs shadow-sm backdrop-blur-sm">
+      <div className="mb-1.5 font-medium text-muted-foreground">Stacks</div>
       <div className="flex flex-col gap-1">
         {[...stackColors.entries()].map(([stack, color]) => (
-          <span key={stack} className="flex items-center gap-1.5">
+          <span
+            key={stack}
+            className="flex items-center gap-1.5"
+          >
             <span
-              className="inline-block size-3 rounded-full shrink-0"
+              className="inline-block size-3 shrink-0 rounded-full"
               style={{ backgroundColor: color }}
             />
             {stack}
@@ -118,7 +121,7 @@ function LogicalView({ data }: { data: NetworkTopology }) {
     return (
       <EmptyState
         message="No overlay networks found"
-        icon={<Network className="size-10 mb-3 opacity-40" />}
+        icon={<Network className="mb-3 size-10 opacity-40" />}
       />
     );
   }
@@ -127,7 +130,10 @@ function LogicalView({ data }: { data: NetworkTopology }) {
 
   return (
     <HighlightProvider edges={rawEdges}>
-      <div className="relative" style={{ height: "calc(100vh - 12rem)" }}>
+      <div
+        className="relative"
+        style={{ height: "calc(100vh - 12rem)" }}
+      >
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -153,7 +159,7 @@ function PhysicalView({ data }: { data: PlacementTopology }) {
     return (
       <EmptyState
         message="No nodes found in the cluster"
-        icon={<Server className="size-10 mb-3 opacity-40" />}
+        icon={<Server className="mb-3 size-10 opacity-40" />}
       />
     );
   }
@@ -244,10 +250,10 @@ export default function Topology() {
       {loading && <LoadingPage />}
 
       {error && (
-        <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <div className="flex h-64 flex-col items-center justify-center gap-3">
           <p className="text-sm text-destructive">{error}</p>
           <button
-            className="text-sm px-3 py-1.5 rounded-md bg-muted hover:bg-muted/80"
+            className="rounded-md bg-muted px-3 py-1.5 text-sm hover:bg-muted/80"
             onClick={fetchData}
           >
             Retry
@@ -255,7 +261,7 @@ export default function Topology() {
         </div>
       )}
 
-      <div className="ring-1 ring-border rounded-lg">
+      <div className="rounded-lg ring-1 ring-border">
         {!loading && !error && view === "logical" && networkData && (
           <ReactFlowProvider>
             <LogicalView data={networkData} />

@@ -1,5 +1,5 @@
-import type React from "react";
 import InfoCard from "../InfoCard";
+import type React from "react";
 
 export default function ResourceLink({
   label,
@@ -14,5 +14,11 @@ export default function ResourceLink({
     return null;
   }
 
-  return <InfoCard label={label} value={name} href={to} />;
+  return (
+    <InfoCard
+      label={label}
+      value={name}
+      href={to}
+    />
+  );
 }

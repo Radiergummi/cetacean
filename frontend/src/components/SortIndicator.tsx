@@ -1,5 +1,5 @@
-import { ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import type { SortDir } from "../hooks/useSort";
+import { ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 
 export default function SortIndicator({
   label,

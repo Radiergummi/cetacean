@@ -1,10 +1,7 @@
-import { Copy } from "lucide-react";
-import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import ActivitySection from "../components/ActivitySection";
 import CodeBlock from "../components/CodeBlock";
 import CollapsibleSection from "../components/CollapsibleSection";
-import { IconButton } from "../components/IconButton";
 import {
   LabelSection,
   MetadataGrid,
@@ -13,11 +10,14 @@ import {
   Timestamp,
 } from "../components/data";
 import FetchError from "../components/FetchError";
+import { IconButton } from "../components/IconButton";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import ServiceRefList from "../components/ServiceRefList";
 import { useDetailResource } from "../hooks/useDetailResource";
 import { parseStackLabels } from "../lib/parseStackLabels";
+import { Copy } from "lucide-react";
+import { useParams } from "react-router-dom";
 
 export default function ConfigDetail() {
   const { id } = useParams<{ id: string }>();
@@ -47,10 +47,23 @@ export default function ConfigDetail() {
       />
 
       <MetadataGrid>
-        <ResourceId label="ID" id={config.ID} />
-        <ResourceLink label="Stack" name={stack} to={`/stacks/${stack}`} />
-        <Timestamp label="Created" date={config.CreatedAt} />
-        <Timestamp label="Updated" date={config.UpdatedAt} />
+        <ResourceId
+          label="ID"
+          id={config.ID}
+        />
+        <ResourceLink
+          label="Stack"
+          name={stack}
+          to={`/stacks/${stack}`}
+        />
+        <Timestamp
+          label="Created"
+          date={config.CreatedAt}
+        />
+        <Timestamp
+          label="Updated"
+          date={config.UpdatedAt}
+        />
       </MetadataGrid>
 
       <LabelSection entries={labelEntries} />

@@ -41,7 +41,13 @@ export default function ContainerImage({
 
   const inner = (
     <>
-      {favicon && <img src={favicon} alt="" className="h-4 w-4 shrink-0" />}
+      {favicon && (
+        <img
+          src={favicon}
+          alt=""
+          className="h-4 w-4 shrink-0"
+        />
+      )}
       {display}
     </>
   );
@@ -59,5 +65,10 @@ export default function ContainerImage({
     <span className="inline-flex items-center gap-1.5">{inner}</span>
   );
 
-  return <InfoCard label={label} value={value} />;
+  return (
+    <InfoCard
+      label={label}
+      value={value}
+    />
+  );
 }

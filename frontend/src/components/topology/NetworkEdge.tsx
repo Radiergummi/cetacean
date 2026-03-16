@@ -1,7 +1,7 @@
+import { useHighlight } from "./HighlightContext";
 import { EdgeLabelRenderer, type EdgeProps, getSmoothStepPath } from "@xyflow/react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useHighlight } from "./HighlightContext";
 
 type NetworkInfo = {
   id: string;
@@ -138,7 +138,7 @@ export default function NetworkEdge({
           strokeWidth,
         }}
         fill="none"
-        className="react-flow__edge-path transition-all data-dimmed:opacity-15 data-highlighted:opacity-100 data-highlighted:[stroke-dasharray:6_4] data-highlighted:topology-edge-flow"
+        className="react-flow__edge-path data-highlighted:topology-edge-flow transition-all data-dimmed:opacity-15 data-highlighted:opacity-100 data-highlighted:[stroke-dasharray:6_4]"
       />
       {/* Hover target (wide invisible path) */}
       <path
@@ -152,7 +152,7 @@ export default function NetworkEdge({
       <EdgeLabelRenderer>
         {data.sourceAliases && !dimmed && (
           <div
-            className="absolute rounded bg-muted/90 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground pointer-events-none whitespace-nowrap"
+            className="pointer-events-none absolute rounded bg-muted/90 px-1.5 py-0.5 font-mono text-[10px] whitespace-nowrap text-muted-foreground"
             style={{
               transform: `translate(-100%, -50%) translate(${sourceX - 4}px, ${sourceY}px)`,
             }}
@@ -162,7 +162,7 @@ export default function NetworkEdge({
         )}
         {data.targetAliases && !dimmed && (
           <div
-            className="absolute rounded bg-muted/90 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground pointer-events-none whitespace-nowrap"
+            className="pointer-events-none absolute rounded bg-muted/90 px-1.5 py-0.5 font-mono text-[10px] whitespace-nowrap text-muted-foreground"
             style={{
               transform: `translate(0%, -50%) translate(${targetX + 4}px, ${targetY}px)`,
             }}
@@ -172,7 +172,7 @@ export default function NetworkEdge({
         )}
         {hovered && (
           <div
-            className="absolute rounded-lg bg-popover border shadow-md px-2.5 py-1.5 text-xs"
+            className="absolute rounded-lg border bg-popover px-2.5 py-1.5 text-xs shadow-md"
             style={{
               transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
               zIndex: 1000,
@@ -181,14 +181,14 @@ export default function NetworkEdge({
             {data.networks.map((net) => (
               <div
                 key={net.id}
-                className="flex items-center gap-1.5 py-0.5 cursor-pointer hover:underline"
+                className="flex cursor-pointer items-center gap-1.5 py-0.5 hover:underline"
                 onMouseDown={(e) => {
                   e.stopPropagation();
                   navigate(`/networks/${net.id}`);
                 }}
               >
                 <span
-                  className="inline-block size-2 rounded-full shrink-0"
+                  className="inline-block size-2 shrink-0 rounded-full"
                   style={{ backgroundColor: net.color ?? "var(--color-muted-foreground)" }}
                 />
                 <span className="font-medium">{net.name}</span>

@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
 import { CHART_COLORS, getChartColor } from "./chartColors";
+import { describe, it, expect } from "vitest";
 
 describe("chartColors", () => {
   it("exports 10 fallback colors", () => {

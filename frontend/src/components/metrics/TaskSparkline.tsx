@@ -20,13 +20,16 @@ function formatValue(value: number | null | undefined, type: "cpu" | "memory"): 
 
 export default function TaskSparkline({ data, currentValue, type }: Props) {
   if (!data?.length) {
-    return <span className="text-muted-foreground text-xs">{"\u2014"}</span>;
+    return <span className="text-xs text-muted-foreground">{"\u2014"}</span>;
   }
 
   return (
     <span className="inline-flex items-center gap-1.5">
-      <Sparkline data={data} color={COLORS[type]} />
-      <span className="text-xs tabular-nums whitespace-nowrap">
+      <Sparkline
+        data={data}
+        color={COLORS[type]}
+      />
+      <span className="text-xs whitespace-nowrap tabular-nums">
         {formatValue(currentValue, type)}
       </span>
     </span>

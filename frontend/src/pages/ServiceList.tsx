@@ -1,24 +1,24 @@
-import type React from "react";
-import { useCallback } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useSwarmResource } from "../hooks/useSwarmResource";
-import { useSortParams } from "../hooks/useSort";
-import { useViewMode } from "../hooks/useViewMode";
-import { useSearchParam } from "../hooks/useSearchParam";
 import { api } from "../api/client";
 import type { Service, ServiceListItem } from "../api/types";
-import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
-import ListToolbar from "../components/ListToolbar";
-import PageHeader from "../components/PageHeader";
 import DataTable, { type Column } from "../components/DataTable";
-import SortIndicator from "../components/SortIndicator";
-import ResourceCard from "../components/ResourceCard";
 import EmptyState from "../components/EmptyState";
 import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
+import ListToolbar from "../components/ListToolbar";
 import { SkeletonTable } from "../components/LoadingSkeleton";
 import { MetricsPanel } from "../components/metrics";
+import PageHeader from "../components/PageHeader";
+import ResourceCard from "../components/ResourceCard";
 import ResourceName from "../components/ResourceName";
+import SortIndicator from "../components/SortIndicator";
+import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { useSearchParam } from "../hooks/useSearchParam";
+import { useSortParams } from "../hooks/useSort";
+import { useSwarmResource } from "../hooks/useSwarmResource";
+import { useViewMode } from "../hooks/useViewMode";
+import type React from "react";
+import { useCallback } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 function ReplicaHealth({ running, desired }: { running: number; desired: number }) {
   const healthy = running >= desired && desired > 0;
@@ -26,7 +26,7 @@ function ReplicaHealth({ running, desired }: { running: number; desired: number 
   return (
     <span
       data-healthy={healthy || undefined}
-      className="tabular-nums font-medium text-red-600 dark:text-red-400 data-healthy:text-green-600 dark:data-healthy:text-green-400"
+      className="font-medium text-red-600 tabular-nums data-healthy:text-green-600 dark:text-red-400 dark:data-healthy:text-green-400"
     >
       {running}/{desired}
     </span>
@@ -59,11 +59,17 @@ export default function ServiceList() {
 
   const columns: Column<ServiceListItem>[] = [
     {
-      header: <SortIndicator label="Name" active={sortKey === "name"} dir={sortDir} />,
+      header: (
+        <SortIndicator
+          label="Name"
+          active={sortKey === "name"}
+          dir={sortDir}
+        />
+      ),
       cell: (svc) => (
         <Link
           to={`/services/${svc.ID}`}
-          className="text-link hover:underline font-medium"
+          className="font-medium text-link hover:underline"
           onClick={(e) => e.stopPropagation()}
         >
           <ResourceName name={svc.Spec.Name} />
@@ -80,7 +86,13 @@ export default function ServiceList() {
       ),
     },
     {
-      header: <SortIndicator label="Mode" active={sortKey === "mode"} dir={sortDir} />,
+      header: (
+        <SortIndicator
+          label="Mode"
+          active={sortKey === "mode"}
+          dir={sortDir}
+        />
+      ),
       cell: (svc) => (svc.Spec.Mode.Replicated ? "replicated" : "global"),
       onHeaderClick: () => toggle("mode"),
     },
@@ -101,7 +113,12 @@ export default function ServiceList() {
       cell: (svc) => {
         const desired = svc.Spec.Mode.Replicated?.Replicas;
         if (desired == null) return "\u2014";
-        return <ReplicaHealth running={svc.RunningTasks} desired={desired} />;
+        return (
+          <ReplicaHealth
+            running={svc.RunningTasks}
+            desired={desired}
+          />
+        );
       },
     },
     {
@@ -117,7 +134,13 @@ export default function ServiceList() {
         <SkeletonTable columns={6} />
       </div>
     );
-  if (error) return <FetchError message={error.message} onRetry={retry} />;
+  if (error)
+    return (
+      <FetchError
+        message={error.message}
+        onRetry={retry}
+      />
+    );
 
   return (
     <div>
@@ -162,7 +185,7 @@ export default function ServiceList() {
           onRowClick={(svc) => navigate(`/services/${svc.ID}`)}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {services.map((svc) => {
             const desired = svc.Spec.Mode.Replicated?.Replicas;
             return (
@@ -175,16 +198,26 @@ export default function ServiceList() {
                   [
                     svc.Spec.Mode.Replicated ? "replicated" : "global",
                     desired != null && (
-                      <ReplicaHealth running={svc.RunningTasks} desired={desired} />
+                      <ReplicaHealth
+                        key="replicas"
+                        running={svc.RunningTasks}
+                        desired={desired}
+                      />
                     ),
                     svc.Endpoint?.Ports && svc.Endpoint.Ports.length > 0 && (
-                      <span className="font-mono text-xs">
+                      <span
+                        key="ports"
+                        className="font-mono text-xs"
+                      >
                         {svc.Endpoint.Ports.map((p) => `${p.PublishedPort}/${p.Protocol}`).join(
                           ", ",
                         )}
                       </span>
                     ),
-                    <ServiceStatusBadge service={svc} />,
+                    <ServiceStatusBadge
+                      key="status"
+                      service={svc}
+                    />,
                   ].filter(Boolean) as React.ReactNode[]
                 }
               />

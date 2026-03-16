@@ -56,11 +56,11 @@ export default function ShortcutsHelp({ onClose }: { onClose: () => void }) {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 bg-background/60 backdrop-blur-sm animate-[fade-in_150ms_ease-out]"
+      className="fixed inset-0 z-50 animate-[fade-in_150ms_ease-out] bg-background/60 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="mx-auto mt-[10vh] max-w-lg rounded-lg border bg-popover shadow-lg animate-[slide-down_150ms_ease-out] overflow-hidden"
+        className="mx-auto mt-[10vh] max-w-lg animate-[slide-down_150ms_ease-out] overflow-hidden rounded-lg border bg-popover shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b px-4 py-3">
@@ -69,10 +69,10 @@ export default function ShortcutsHelp({ onClose }: { onClose: () => void }) {
             Esc
           </kbd>
         </div>
-        <div className="max-h-[60vh] overflow-y-auto p-4 space-y-5">
+        <div className="max-h-[60vh] space-y-5 overflow-y-auto p-4">
           {groups.map((group) => (
             <div key={group.title}>
-              <h3 className="text-xs font-medium uppercase text-muted-foreground mb-2">
+              <h3 className="mb-2 text-xs font-medium text-muted-foreground uppercase">
                 {group.title}
               </h3>
               <div className="space-y-1.5">
@@ -85,8 +85,8 @@ export default function ShortcutsHelp({ onClose }: { onClose: () => void }) {
                     <span className="flex items-center gap-1">
                       {shortcut.keys.map((key, i) => (
                         <span key={i}>
-                          {i > 0 && <span className="text-muted-foreground text-xs mx-0.5" />}
-                          <kbd className="inline-flex items-center justify-center min-w-5 rounded border bg-muted px-1.5 py-0.5 text-xs font-medium">
+                          {i > 0 && <span className="mx-0.5 text-xs text-muted-foreground" />}
+                          <kbd className="inline-flex min-w-5 items-center justify-center rounded border bg-muted px-1.5 py-0.5 text-xs font-medium">
                             {key}
                           </kbd>
                         </span>

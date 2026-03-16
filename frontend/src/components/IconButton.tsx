@@ -17,8 +17,7 @@ export function IconButton({
       onClick={onClick}
       title={title}
       aria-pressed={active || undefined}
-      className="size-8 flex items-center justify-center rounded-md border border-border bg-background hover:bg-muted
-      aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:border-primary cursor-pointer"
+      className="flex size-8 cursor-pointer items-center justify-center rounded-md border border-border bg-background hover:bg-muted aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground"
     >
       {icon}
     </button>

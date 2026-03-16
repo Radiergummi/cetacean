@@ -1,22 +1,27 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import type { SearchResponse } from "../api/types";
 import EmptyState from "../components/EmptyState";
 import { SkeletonTable } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
+import ResourceName from "../components/ResourceName";
 import { SearchInput } from "../components/search";
 import { useSearchParam } from "../hooks/useSearchParam";
-import { Loader2 } from "lucide-react";
-import ResourceName from "../components/ResourceName";
 import { resourcePath, statusColor, TYPE_LABELS, TYPE_ORDER } from "../lib/searchConstants";
+import { Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 function StateOrb({ state }: { state: string }) {
   if (state === "updating") {
-    return <Loader2 className="size-3 shrink-0 text-blue-500 animate-spin" />;
+    return <Loader2 className="size-3 shrink-0 animate-spin text-blue-500" />;
   }
   const color = statusColor(state);
-  return <span className={`inline-block size-2 rounded-full shrink-0 ${color}`} title={state} />;
+  return (
+    <span
+      className={`inline-block size-2 shrink-0 rounded-full ${color}`}
+      title={state}
+    />
+  );
 }
 
 export default function SearchPage() {
@@ -63,10 +68,19 @@ export default function SearchPage() {
       <PageHeader title="Search" />
 
       <div className="mb-6">
-        <SearchInput value={input} onChange={setInput} placeholder="Search all resources…" />
+        <SearchInput
+          value={input}
+          onChange={setInput}
+          placeholder="Search all resources…"
+        />
       </div>
 
-      {loading && <SkeletonTable columns={3} rows={8} />}
+      {loading && (
+        <SkeletonTable
+          columns={3}
+          rows={8}
+        />
+      )}
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
@@ -84,7 +98,10 @@ export default function SearchPage() {
             }
 
             return (
-              <li key={type} className="contents">
+              <li
+                key={type}
+                className="contents"
+              >
                 <section>
                   <header className="mb-2">
                     <h2 className="text-sm font-medium text-muted-foreground">
@@ -95,20 +112,23 @@ export default function SearchPage() {
                     </h2>
                   </header>
 
-                  <ul className="rounded-lg border divide-y">
+                  <ul className="divide-y rounded-lg border">
                     {items.map((item) => (
-                      <li key={item.id} className="contents">
+                      <li
+                        key={item.id}
+                        className="contents"
+                      >
                         <Link
                           to={resourcePath(type, item.id)!}
-                          className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors"
+                          className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-muted/50"
                         >
                           {item.state && <StateOrb state={item.state} />}
-                          <span className="font-medium text-sm truncate">
+                          <span className="truncate text-sm font-medium">
                             <ResourceName name={item.name} />
                           </span>
 
                           {item.detail && (
-                            <span className="text-xs text-muted-foreground truncate">
+                            <span className="truncate text-xs text-muted-foreground">
                               {item.detail}
                             </span>
                           )}

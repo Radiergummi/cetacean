@@ -1,14 +1,8 @@
-import { Globe, Shuffle } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { HistoryEntry, Service, Task } from "../api/types";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
 import { ContainerImage, KVTable, MetadataGrid, ResourceLink, Timestamp } from "../components/data";
-import { formatNs } from "../lib/formatNs";
-import { useTaskMetrics } from "../hooks/useTaskMetrics";
-import { escapePromQL } from "../lib/utils";
 import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
@@ -22,7 +16,13 @@ import TasksTable from "../components/TasksTable";
 import { timeAgo } from "../components/TimeAgo";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
+import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { formatBytes } from "../lib/formatBytes";
+import { formatNs } from "../lib/formatNs";
+import { escapePromQL } from "../lib/utils";
+import { Globe, Shuffle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
 
 export default function ServiceDetail() {
   const { id } = useParams<{ id: string }>();
@@ -188,23 +188,39 @@ export default function ServiceDetail() {
       {/* Overview cards */}
       <MetadataGrid>
         <ContainerImage image={containerSpec.Image} />
-        <ReplicaCard service={service} tasks={tasks} />
+        <ReplicaCard
+          service={service}
+          tasks={tasks}
+        />
         <ServiceStatusCard service={service} />
         <ResourceLink
           label="Stack"
           name={labels["com.docker.stack.namespace"]}
           to={`/stacks/${labels["com.docker.stack.namespace"]}`}
         />
-        <Timestamp label="Created" date={service.CreatedAt} />
-        <Timestamp label="Updated" date={service.UpdatedAt} />
+        <Timestamp
+          label="Created"
+          date={service.CreatedAt}
+        />
+        <Timestamp
+          label="Updated"
+          date={service.UpdatedAt}
+        />
       </MetadataGrid>
 
       {/* Tasks */}
-      <TasksTable tasks={tasks} variant="service" metrics={hasCadvisor ? taskMetrics : undefined} />
+      <TasksTable
+        tasks={tasks}
+        variant="service"
+        metrics={hasCadvisor ? taskMetrics : undefined}
+      />
 
       {hasPrometheus && (
         <ErrorBoundary inline>
-          <MetricsPanel header="Metrics" charts={metricsCharts} />
+          <MetricsPanel
+            header="Metrics"
+            charts={metricsCharts}
+          />
         </ErrorBoundary>
       )}
 
@@ -223,7 +239,10 @@ export default function ServiceDetail() {
 
       {/* Container configuration */}
       {hasContainerConfig && (
-        <CollapsibleSection title="Container Configuration" defaultOpen={false}>
+        <CollapsibleSection
+          title="Container Configuration"
+          defaultOpen={false}
+        >
           <KVTable
             rows={[
               containerSpec.Command && ["Command", containerSpec.Command.join(" ")],
@@ -245,7 +264,10 @@ export default function ServiceDetail() {
 
       {/* Environment variables */}
       {containerSpec.Env && containerSpec.Env.length > 0 && (
-        <CollapsibleSection title="Environment Variables" defaultOpen={false}>
+        <CollapsibleSection
+          title="Environment Variables"
+          defaultOpen={false}
+        >
           <SimpleTable
             columns={["Variable", "Value"]}
             items={containerSpec.Env}
@@ -267,7 +289,10 @@ export default function ServiceDetail() {
 
       {/* Healthcheck */}
       {containerSpec.Healthcheck && (
-        <CollapsibleSection title="Healthcheck" defaultOpen={false}>
+        <CollapsibleSection
+          title="Healthcheck"
+          defaultOpen={false}
+        >
           <KVTable
             rows={[
               containerSpec.Healthcheck.Test && ["Test", containerSpec.Healthcheck.Test.join(" ")],
@@ -294,12 +319,15 @@ export default function ServiceDetail() {
 
       {/* Labels */}
       {nonStackLabels.length > 0 && (
-        <CollapsibleSection title="Labels" defaultOpen={false}>
+        <CollapsibleSection
+          title="Labels"
+          defaultOpen={false}
+        >
           <div className="flex flex-wrap gap-2">
             {nonStackLabels.map(([key, value]) => (
               <span
                 key={key}
-                className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-mono"
+                className="inline-flex items-center rounded-md border px-2 py-0.5 font-mono text-xs"
               >
                 <span className="text-muted-foreground">{key}=</span>
                 {value}
@@ -311,13 +339,16 @@ export default function ServiceDetail() {
 
       {/* Ports */}
       {service.Endpoint?.Ports && service.Endpoint.Ports.length > 0 && (
-        <CollapsibleSection title="Ports" defaultOpen={false}>
+        <CollapsibleSection
+          title="Ports"
+          defaultOpen={false}
+        >
           <div className="flex flex-wrap gap-2">
             {service.Endpoint.Ports.map(
               ({ Protocol, PublishMode, PublishedPort, TargetPort }, index) => (
                 <span
                   key={index}
-                  className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-mono"
+                  className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 font-mono text-sm"
                 >
                   <span className="font-semibold">{PublishedPort}</span>
                   <span className="text-muted-foreground">&rarr;</span>
@@ -334,7 +365,10 @@ export default function ServiceDetail() {
 
       {/* Mounts */}
       {containerSpec.Mounts && containerSpec.Mounts.length > 0 && (
-        <CollapsibleSection title="Mounts" defaultOpen={false}>
+        <CollapsibleSection
+          title="Mounts"
+          defaultOpen={false}
+        >
           <SimpleTable
             columns={["Type", "Source", "Target", "Read Only"]}
             items={containerSpec.Mounts}
@@ -346,7 +380,10 @@ export default function ServiceDetail() {
                 </td>
                 <td className="p-3 font-mono text-xs">
                   {Type === "volume" && Source ? (
-                    <Link to={`/volumes/${Source}`} className="text-link hover:underline">
+                    <Link
+                      to={`/volumes/${Source}`}
+                      className="text-link hover:underline"
+                    >
                       <ResourceName name={Source} />
                     </Link>
                   ) : (
@@ -363,7 +400,10 @@ export default function ServiceDetail() {
 
       {/* Networks */}
       {taskTemplate.Networks && taskTemplate.Networks.length > 0 && (
-        <CollapsibleSection title="Networks" defaultOpen={false}>
+        <CollapsibleSection
+          title="Networks"
+          defaultOpen={false}
+        >
           <SimpleTable
             columns={["Network", "Virtual IP", "Aliases"]}
             items={taskTemplate.Networks}
@@ -373,7 +413,10 @@ export default function ServiceDetail() {
               return (
                 <>
                   <td className="p-3 text-sm">
-                    <Link to={`/networks/${Target}`} className="text-link hover:underline">
+                    <Link
+                      to={`/networks/${Target}`}
+                      className="text-link hover:underline"
+                    >
                       <ResourceName name={networkNames[Target] || Target} />
                     </Link>
                   </td>
@@ -388,7 +431,10 @@ export default function ServiceDetail() {
 
       {/* Configs */}
       {containerSpec.Configs && containerSpec.Configs.length > 0 && (
-        <CollapsibleSection title="Configs" defaultOpen={false}>
+        <CollapsibleSection
+          title="Configs"
+          defaultOpen={false}
+        >
           <SimpleTable
             columns={["Name", "Target"]}
             items={containerSpec.Configs}
@@ -396,7 +442,10 @@ export default function ServiceDetail() {
             renderRow={({ ConfigID, ConfigName, File }) => (
               <>
                 <td className="p-3 text-sm">
-                  <Link to={`/configs/${ConfigID}`} className="text-link hover:underline">
+                  <Link
+                    to={`/configs/${ConfigID}`}
+                    className="text-link hover:underline"
+                  >
                     <ResourceName name={ConfigName} />
                   </Link>
                 </td>
@@ -409,7 +458,10 @@ export default function ServiceDetail() {
 
       {/* Secrets */}
       {containerSpec.Secrets && containerSpec.Secrets.length > 0 && (
-        <CollapsibleSection title="Secrets" defaultOpen={false}>
+        <CollapsibleSection
+          title="Secrets"
+          defaultOpen={false}
+        >
           <SimpleTable
             columns={["Name", "Target"]}
             items={containerSpec.Secrets}
@@ -417,7 +469,10 @@ export default function ServiceDetail() {
             renderRow={({ File, SecretID, SecretName }) => (
               <>
                 <td className="p-3 text-sm">
-                  <Link to={`/secrets/${SecretID}`} className="text-link hover:underline">
+                  <Link
+                    to={`/secrets/${SecretID}`}
+                    className="text-link hover:underline"
+                  >
                     <ResourceName name={SecretName} />
                   </Link>
                 </td>
@@ -429,11 +484,14 @@ export default function ServiceDetail() {
       )}
 
       {/* Deploy: Resources, Placement, Restart, Update, Rollback */}
-      <CollapsibleSection title="Deploy Configuration" defaultOpen={false}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <CollapsibleSection
+        title="Deploy Configuration"
+        defaultOpen={false}
+      >
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {taskTemplate.Resources && (
-            <div className="rounded-lg border p-4 flex flex-col gap-3">
-              <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <div className="flex flex-col gap-3 rounded-lg border p-4">
+              <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 Resources
               </h3>
 
@@ -442,8 +500,8 @@ export default function ServiceDetail() {
           )}
 
           {taskTemplate.Placement && (
-            <div className="rounded-lg border p-4 flex flex-col gap-3">
-              <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <div className="flex flex-col gap-3 rounded-lg border p-4">
+              <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 Placement
               </h3>
 
@@ -453,7 +511,7 @@ export default function ServiceDetail() {
 
           {taskTemplate.RestartPolicy && (
             <div className="flex flex-col gap-2">
-              <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 Restart Policy
               </h3>
               <KVTable
@@ -481,7 +539,7 @@ export default function ServiceDetail() {
 
           {taskTemplate.LogDriver && (
             <div className="flex flex-col gap-2">
-              <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 Log Driver
               </h3>
               <KVTable
@@ -499,7 +557,7 @@ export default function ServiceDetail() {
 
           {service.Spec.UpdateConfig && (
             <div className="flex flex-col gap-2">
-              <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 Update Config
               </h3>
               <KVTable rows={updateConfigRows(service.Spec.UpdateConfig)} />
@@ -508,7 +566,7 @@ export default function ServiceDetail() {
 
           {service.Spec.RollbackConfig && (
             <div className="flex flex-col gap-2">
-              <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 Rollback Config
               </h3>
               <KVTable rows={updateConfigRows(service.Spec.RollbackConfig)} />
@@ -516,8 +574,8 @@ export default function ServiceDetail() {
           )}
 
           {service.Spec.EndpointSpec?.Mode && (
-            <div className="rounded-lg border p-4 flex flex-col gap-3">
-              <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <div className="flex flex-col gap-3 rounded-lg border p-4">
+              <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 Endpoint Mode
               </h3>
 
@@ -544,7 +602,10 @@ export default function ServiceDetail() {
       )}
 
       <ErrorBoundary inline>
-        <LogViewer serviceId={id!} header="Logs" />
+        <LogViewer
+          serviceId={id!}
+          header="Logs"
+        />
       </ErrorBoundary>
     </div>
   );
@@ -593,7 +654,10 @@ function ServiceStatusCard({ service }: { service: Service }) {
           <span className={`text-base font-medium ${color}`}>{label}</span>
           {ts && <span className="text-xs text-muted-foreground">{timeAgo(ts)}</span>}
           {msg && label !== "Stable" && (
-            <span className="text-xs text-muted-foreground truncate" title={msg}>
+            <span
+              className="truncate text-xs text-muted-foreground"
+              title={msg}
+            >
               {msg}
             </span>
           )}
@@ -620,7 +684,12 @@ function updateConfigRows(cfg: UpdateConfigShape) {
 function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[] }) {
   const replicated = service.Spec.Mode.Replicated;
   if (!replicated) {
-    return <InfoCard label="Mode" value="global" />;
+    return (
+      <InfoCard
+        label="Mode"
+        value="global"
+      />
+    );
   }
 
   const desired = replicated.Replicas ?? 0;
@@ -630,18 +699,23 @@ function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[] }) {
     <>
       <span className="tabular-nums">
         <span className="text-2xl font-bold">{running}</span>
-        <span className="text-muted-foreground font-normal text-lg">/{desired}</span>
+        <span className="text-lg font-normal text-muted-foreground">/{desired}</span>
       </span>
 
       {!healthy && (
-        <div className="text-xs text-red-600 dark:text-red-400 mt-1">
+        <div className="mt-1 text-xs text-red-600 dark:text-red-400">
           {desired - running} replica{desired - running !== 1 ? "s" : ""} not running
         </div>
       )}
     </>
   );
 
-  return <InfoCard label="Replicas" value={value} />;
+  return (
+    <InfoCard
+      label="Replicas"
+      value={value}
+    />
+  );
 }
 
 const mountTypeColors: Record<string, string> = {
@@ -754,7 +828,7 @@ function PlacementPanel({ placement }: { placement: PlacementShape }) {
             {preferences.map((p, i) => (
               <span
                 key={i}
-                className="inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-mono"
+                className="inline-flex items-center rounded-md border px-2.5 py-1 font-mono text-xs"
               >
                 {p.Spread?.SpreadDescriptor}
               </span>
@@ -803,8 +877,11 @@ function ResourceLimitsBar({
         </div>
       </div>
       {limit && reserved ? (
-        <div className="h-2 rounded-full bg-muted overflow-hidden">
-          <div className="h-full rounded-full bg-blue-500" style={{ width: `${reservedPct}%` }} />
+        <div className="h-2 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-blue-500"
+            style={{ width: `${reservedPct}%` }}
+          />
         </div>
       ) : null}
     </div>

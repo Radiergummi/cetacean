@@ -1,3 +1,12 @@
+import { SectionToggle, useSectionCollapse } from "../CollapsibleSection";
+import { Spinner } from "../Spinner";
+import type { LogLine } from "./log-utils";
+import { logLineKey } from "./log-utils";
+import { LogTable } from "./LogTable";
+import { LevelFilter, StreamFilterToggle, TimeRangeSelector, ToolbarButton } from "./LogToolbar";
+import { useLogData } from "./useLogData";
+import { useLogFilter } from "./useLogFilter";
+import { useLogTimeRange } from "./useLogTimeRange";
 import {
   AlertTriangle,
   ArrowDown,
@@ -15,15 +24,6 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SectionToggle, useSectionCollapse } from "../CollapsibleSection";
-import { Spinner } from "../Spinner";
-import { LogTable } from "./LogTable";
-import type { LogLine } from "./log-utils";
-import { logLineKey } from "./log-utils";
-import { LevelFilter, StreamFilterToggle, TimeRangeSelector, ToolbarButton } from "./LogToolbar";
-import { useLogData } from "./useLogData";
-import { useLogFilter } from "./useLogFilter";
-import { useLogTimeRange } from "./useLogTimeRange";
 
 interface Props {
   serviceId?: string;
@@ -119,23 +119,28 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
       title={header}
       open={open}
       onToggle={toggleCollapse}
-      className="flex items-center gap-1.5 text-sm font-medium uppercase tracking-wider text-muted-foreground
-            hover:text-foreground transition-colors cursor-pointer mr-auto"
+      className="mr-auto flex cursor-pointer items-center gap-1.5 text-sm font-medium tracking-wider text-muted-foreground uppercase transition-colors hover:text-foreground"
     />
   ) : null;
 
   if (!open) {
-    return <div className="min-h-8 flex items-center">{toggle}</div>;
+    return <div className="flex min-h-8 items-center">{toggle}</div>;
   }
 
   return (
-    <div id="logs" className="flex flex-col gap-2">
-      <nav role="toolbar" className="flex flex-wrap items-center gap-1.5 min-h-8">
+    <div
+      id="logs"
+      className="flex flex-col gap-2"
+    >
+      <nav
+        role="toolbar"
+        className="flex min-h-8 flex-wrap items-center gap-1.5"
+      >
         {toggle}
 
         {data.live && (
-          <span className="flex items-center gap-1.5 text-xs text-green-500 me-2 starting:opacity-0 opacity-100 transition">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+          <span className="me-2 flex items-center gap-1.5 text-xs text-green-500 opacity-100 transition starting:opacity-0">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-500" />
             Live
           </span>
         )}
@@ -169,32 +174,42 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
           active={wrapLines}
         />
 
-        <div className="w-px h-5 bg-border mx-0.5" />
+        <div className="mx-0.5 h-5 w-px bg-border" />
 
-        <StreamFilterToggle value={streamFilter} onChange={setStreamFilter} />
-        <LevelFilter value={levelFilter} onChange={setLevelFilter} />
+        <StreamFilterToggle
+          value={streamFilter}
+          onChange={setStreamFilter}
+        />
+        <LevelFilter
+          value={levelFilter}
+          onChange={setLevelFilter}
+        />
 
-        <div className="w-px h-5 bg-border mx-0.5" />
+        <div className="mx-0.5 h-5 w-px bg-border" />
 
-        <ToolbarButton onClick={copyLogs} title="Copy" icon={<Copy className="size-3.5" />} />
+        <ToolbarButton
+          onClick={copyLogs}
+          title="Copy"
+          icon={<Copy className="size-3.5" />}
+        />
         <ToolbarButton
           onClick={downloadLogs}
           title="Download"
           icon={<Download className="size-3.5" />}
         />
 
-        <div className="w-px h-5 bg-border mx-0.5" />
+        <div className="mx-0.5 h-5 w-px bg-border" />
 
         {/* Search */}
         <div className="relative flex items-center">
-          <Search className="size-3.5 absolute left-2 text-muted-foreground pointer-events-none" />
+          <Search className="pointer-events-none absolute left-2 size-3.5 text-muted-foreground" />
           <input
             ref={searchRef}
             type="text"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Filter logs..."
-            className="h-8 pl-7 pr-16 text-xs border rounded-md bg-background font-mono w-56"
+            className="h-8 w-56 rounded-md border bg-background pr-16 pl-7 font-mono text-xs"
             onKeyDown={(event) => {
               if (event.key === "Escape") {
                 setSearch("");
@@ -214,7 +229,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
             <button
               onClick={() => setCaseSensitive(!caseSensitive)}
               aria-pressed={caseSensitive}
-              className="px-1 py-0.5 text-[10px] rounded font-mono font-bold text-muted-foreground hover:text-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground"
+              className="rounded px-1 py-0.5 font-mono text-[10px] font-bold text-muted-foreground hover:text-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground"
               title="Case sensitive"
             >
               Aa
@@ -222,7 +237,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
             <button
               onClick={() => setUseRegex(!useRegex)}
               aria-pressed={useRegex}
-              className="px-1 py-0.5 text-[10px] rounded font-mono font-bold text-muted-foreground hover:text-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground"
+              className="rounded px-1 py-0.5 font-mono text-[10px] font-bold text-muted-foreground hover:text-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground"
               title="Regex"
             >
               .*
@@ -230,7 +245,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
             {search && (
               <button
                 onClick={() => setSearch("")}
-                className="text-muted-foreground hover:text-foreground p-0.5"
+                className="p-0.5 text-muted-foreground hover:text-foreground"
               >
                 <X className="size-3" />
               </button>
@@ -257,7 +272,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
         {taskFilter && (
           <button
             onClick={() => setTaskFilter(null)}
-            className="flex items-center gap-1 px-2 py-1.5 text-xs rounded-md bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20"
+            className="flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2 py-1.5 text-xs text-primary hover:bg-primary/20"
             title="Clear task filter"
           >
             <span className="font-mono">{taskFilter.slice(0, 8)}</span>
@@ -279,14 +294,14 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
           <div className="flex flex-col items-center gap-3 text-center">
             <AlertTriangle className="size-6 text-red-500 dark:text-red-400" />
             <div>
-              <p className="text-red-600 dark:text-red-400 text-sm font-medium mb-1">
+              <p className="mb-1 text-sm font-medium text-red-600 dark:text-red-400">
                 Failed to load logs
               </p>
-              <p className="text-muted-foreground text-xs mb-3">{data.error}</p>
+              <p className="mb-3 text-xs text-muted-foreground">{data.error}</p>
             </div>
             <button
               onClick={data.fetchLogs}
-              className="px-4 py-1.5 text-sm rounded-md border hover:bg-muted"
+              className="rounded-md border px-4 py-1.5 text-sm hover:bg-muted"
             >
               Retry
             </button>
@@ -301,7 +316,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
         </div>
       ) : filtered.length === 0 ? (
         <div className="log-panel flex items-center justify-center">
-          <p className="text-muted-foreground text-sm">No matching log lines</p>
+          <p className="text-sm text-muted-foreground">No matching log lines</p>
         </div>
       ) : (
         <div className="relative">
@@ -328,7 +343,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
               onClick={data.loadOlder}
               disabled={data.loadingOlder}
               data-pinned={pinnedLines.length || undefined}
-              className="absolute top-3 data-[pinned='1']:top-8 data-[pinned='2']:top-13 data-[pinned='3']:top-18 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full bg-card text-foreground border shadow-lg hover:bg-muted transition-colors"
+              className="absolute top-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs text-foreground shadow-lg transition-colors hover:bg-muted data-[pinned='1']:top-8 data-[pinned='2']:top-13 data-[pinned='3']:top-18"
             >
               {data.loadingOlder ? <Spinner className="size-3" /> : <ArrowUp className="size-3" />}
               Load older
@@ -338,7 +353,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
           {!data.following ? (
             <button
               onClick={() => data.setFollowing(true)}
-              className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full bg-card text-foreground border shadow-lg hover:bg-muted transition-colors"
+              className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs text-foreground shadow-lg transition-colors hover:bg-muted"
             >
               <ArrowDown className="size-3" />
               Jump to bottom
@@ -347,7 +362,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
             <button
               onClick={data.loadNewer}
               disabled={data.loadingNewer}
-              className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full bg-card text-foreground border shadow-lg hover:bg-muted transition-colors"
+              className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs text-foreground shadow-lg transition-colors hover:bg-muted"
             >
               Load newer
               {data.loadingNewer ? (

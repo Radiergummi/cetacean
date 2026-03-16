@@ -19,12 +19,12 @@ export default function InfoCard({
     <div
       className={`flex flex-col justify-between gap-1 rounded-lg border bg-card p-4 ${className}`}
     >
-      <span className="block text-xs font-medium uppercase tracking-wider text-muted-foreground">
+      <span className="block text-xs font-medium tracking-wider text-muted-foreground uppercase">
         {label}
       </span>
 
       <div
-        className="inline-flex items-center gap-2 text-base font-medium truncate"
+        className="inline-flex items-center gap-2 truncate text-base font-medium"
         title={isString ? value : undefined}
       >
         {value && href && isString ? (
@@ -38,7 +38,10 @@ export default function InfoCard({
               {value}
             </a>
           ) : (
-            <Link to={href} className="text-link hover:underline">
+            <Link
+              to={href}
+              className="text-link hover:underline"
+            >
               {value}
             </Link>
           )

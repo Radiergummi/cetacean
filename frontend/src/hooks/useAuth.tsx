@@ -1,7 +1,7 @@
-import type React from "react";
-import { createContext, useContext, useEffect, useState } from "react";
 import { api } from "@/api/client";
 import type { Identity } from "@/api/types";
+import type React from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 interface AuthState {
   identity: Identity | null;
