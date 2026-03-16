@@ -191,6 +191,10 @@ export const api = {
     const params = new URLSearchParams({ query, start, end, step });
     return fetchJSON<PrometheusResponse>(`/-/metrics/query_range?${params}`);
   },
+  metricsStreamURL: (query: string, step: number, range: number): string => {
+    const params = new URLSearchParams({ query, step: String(step), range: String(range) });
+    return `/-/metrics/query_range?${params}`;
+  },
   notificationRules: () =>
     fetchJSON<CollectionResponse<NotificationRuleStatus>>("/notifications/rules").then(
       (r) => r.items,
