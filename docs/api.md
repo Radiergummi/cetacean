@@ -1,3 +1,7 @@
+---
+title: API Reference
+---
+
 # Cetacean API Reference
 
 Read-only observability API for Docker Swarm Mode clusters.
@@ -230,10 +234,52 @@ Valid types: `node`, `service`, `task`, `config`, `secret`, `network`, `volume`,
 
 The server assigns incrementing `id:` values to each event. EventSource clients automatically send `Last-Event-ID` on reconnect.
 
+### Per-resource SSE
+
+In addition to the global `/events` stream, every list and detail endpoint supports SSE via content negotiation. Request `Accept: text/event-stream` on any resource URL to receive updates scoped to that resource.
+
+**List endpoints** stream events for all resources of that type:
+
+```bash
+# Stream all service changes
+curl -H "Accept: text/event-stream" http://localhost:9000/services
+
+# Stream all task changes
+curl -H "Accept: text/event-stream" http://localhost:9000/tasks
+```
+
+**Detail endpoints** stream events for a single resource:
+
+```bash
+# Stream changes to one node
+curl -H "Accept: text/event-stream" http://localhost:9000/nodes/abc123
+
+# Stream changes to a stack (includes its services, tasks, configs, etc.)
+curl -H "Accept: text/event-stream" http://localhost:9000/stacks/myapp
+```
+
+Events use the same format as `/events`. Stack streams include events for all member resources (services, tasks, configs, secrets, networks, volumes).
+
+### Metrics SSE
+
+The `/-/metrics/query_range` endpoint supports SSE for live-updating charts. Request `text/event-stream` to receive periodic metric updates instead of a one-shot JSON proxy response.
+
+```bash
+curl -H "Accept: text/event-stream" "http://localhost:9000/-/metrics/query_range?query=up&step=15&range=3600"
+```
+
+| Event | Description |
+|---|---|
+| `initial` | Full range query result on connect (same shape as Prometheus `query_range`). |
+| `point` | Single instant query result appended at each tick. |
+
+The stream runs instant queries on each tick interval and pushes new data points. Clients append `point` events to their existing data to build a rolling window.
+
 ### Connection limits
 
-- **256** max concurrent SSE clients on `/events`
+- **256** max concurrent SSE clients on `/events` and per-resource streams
 - **128** max concurrent log stream connections
+- **64** max concurrent metrics stream connections
 
 When limits are reached, the server returns `429 Too Many Requests` with a `Retry-After: 5` header.
 
@@ -249,7 +295,7 @@ No content negotiation. No discovery `Link` headers.
 | GET | `/-/ready` | Readiness probe. 503 until first sync completes. |
 | GET | `/-/metrics/status` | Monitoring auto-detection status (Prometheus, node-exporter, cAdvisor). |
 | GET | `/-/metrics/query` | Proxied Prometheus instant query. |
-| GET | `/-/metrics/query_range` | Proxied Prometheus range query. |
+| GET | `/-/metrics/query_range` | Proxied Prometheus range query. Supports [SSE for live updates](#metrics-sse). |
 
 ```bash
 curl http://localhost:9000/-/health

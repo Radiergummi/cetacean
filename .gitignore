@@ -35,6 +35,13 @@ go.work.sum
 # Runtime data
 /data/
 
+# Design docs (local-only)
+docs/plans/
+docs/superpowers/
+docs/frontend-overhaul.md
+docs/task-state-timeline-design.md
+docs/task-state-timeline-plan.md
+
 # Build output
 cetacean
 frontend/dist/

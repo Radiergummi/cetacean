@@ -169,12 +169,4 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 None — all previously known test failures have been fixed.
 
 ## Design Documents
-Design specs and implementation plans are in `docs/plans/` and `docs/superpowers/`. Key recent ones:
-- `docs/plans/2026-03-10-global-search-design.md` — Global search feature design
-- `docs/plans/2026-03-10-global-search.md` — Global search implementation plan
-- `docs/plans/2026-03-11-monitoring-onboarding.md` — Monitoring onboarding design (auto-detection, compose split, guided setup UI)
-- `docs/plans/2026-03-11-monitoring-onboarding-plan.md` — Monitoring onboarding implementation plan
-- `docs/superpowers/specs/2026-03-15-chart-refinements-design.md` — Chart refinements design (CVD-safe palette, linked crosshairs, click-to-isolate, brush-to-zoom, stack drill-down, tooltip transitions)
-- `docs/superpowers/plans/2026-03-15-chart-refinements.md` — Chart refinements implementation plan
-- `docs/superpowers/specs/2026-03-15-new-chart-types-design.md` — New chart types design (stacked area, horizontal bar, multi-ring doughnut)
-- `docs/superpowers/plans/2026-03-15-new-chart-types.md` — New chart types implementation plan
+Design specs and implementation plans are in `docs/plans/` and `docs/superpowers/` (gitignored, local-only).
