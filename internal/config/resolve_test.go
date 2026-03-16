@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -37,6 +39,89 @@ func TestResolve(t *testing.T) {
 	t.Run("default when nothing set", func(t *testing.T) {
 		t.Setenv("TEST_RES", "")
 		got := resolve(nil, "TEST_RES", nil, "default")
+		if got != "default" {
+			t.Errorf("got %s, want default", got)
+		}
+	})
+}
+
+func TestResolveSecret(t *testing.T) {
+	t.Run("flag wins over everything", func(t *testing.T) {
+		t.Setenv("TEST_SEC", "env")
+		flag := "flag"
+		file := "file"
+		got, err := resolveSecret(&flag, "TEST_SEC", &file, "default")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != "flag" {
+			t.Errorf("got %s, want flag", got)
+		}
+	})
+
+	t.Run("env wins over _FILE", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "secret")
+		if err := os.WriteFile(path, []byte("from-file"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("TEST_SEC", "env")
+		t.Setenv("TEST_SEC_FILE", path)
+		got, err := resolveSecret(nil, "TEST_SEC", nil, "default")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != "env" {
+			t.Errorf("got %s, want env", got)
+		}
+	})
+
+	t.Run("_FILE reads file contents", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "secret")
+		if err := os.WriteFile(path, []byte("s3cret\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("TEST_SEC", "")
+		t.Setenv("TEST_SEC_FILE", path)
+		got, err := resolveSecret(nil, "TEST_SEC", nil, "default")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != "s3cret" {
+			t.Errorf("got %q, want s3cret (trailing newline should be trimmed)", got)
+		}
+	})
+
+	t.Run("_FILE missing file returns error", func(t *testing.T) {
+		t.Setenv("TEST_SEC", "")
+		t.Setenv("TEST_SEC_FILE", "/nonexistent/secret")
+		_, err := resolveSecret(nil, "TEST_SEC", nil, "default")
+		if err == nil {
+			t.Error("expected error for missing secret file")
+		}
+	})
+
+	t.Run("config file fallback", func(t *testing.T) {
+		t.Setenv("TEST_SEC", "")
+		t.Setenv("TEST_SEC_FILE", "")
+		file := "from-config"
+		got, err := resolveSecret(nil, "TEST_SEC", &file, "default")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != "from-config" {
+			t.Errorf("got %s, want from-config", got)
+		}
+	})
+
+	t.Run("default when nothing set", func(t *testing.T) {
+		t.Setenv("TEST_SEC", "")
+		t.Setenv("TEST_SEC_FILE", "")
+		got, err := resolveSecret(nil, "TEST_SEC", nil, "default")
+		if err != nil {
+			t.Fatal(err)
+		}
 		if got != "default" {
 			t.Errorf("got %s, want default", got)
 		}

@@ -24,16 +24,11 @@ function SegmentButton<T extends string>({
       disabled={disabled}
       onClick={onClick}
       aria-current={active || undefined}
-      className="group/seg inline-flex items-center gap-1.5 rounded-sm px-3 py-1 text-sm font-medium transition
-            cursor-pointer text-muted-foreground hover:text-foreground disabled:text-muted-foreground/40
-            disabled:cursor-default aria-current:bg-primary aria-current:text-primary-foreground aria-current:shadow-sm"
+      className="group/seg inline-flex cursor-pointer items-center gap-1.5 rounded-sm px-3 py-1 text-sm font-medium text-muted-foreground transition hover:text-foreground disabled:cursor-default disabled:text-muted-foreground/40 aria-current:bg-primary aria-current:text-primary-foreground aria-current:shadow-sm"
     >
       <span>{label}</span>
       {badge != null && (
-        <span
-          className="inline-flex items-center justify-center min-size-4 px-1 rounded-full text-[10px]
-                    font-semibold tabular-nums bg-foreground/5 group-aria-current/seg:bg-accent/25"
-        >
+        <span className="min-size-4 inline-flex items-center justify-center rounded-full bg-foreground/5 px-1 text-[10px] font-semibold tabular-nums group-aria-current/seg:bg-accent/25">
           {badge}
         </span>
       )}
@@ -91,7 +86,7 @@ export default function SegmentedControl<T extends string>({
   const close = () => setOpen(false);
 
   return (
-    <div className="inline-flex h-8 px-0.5 items-center gap-0.5 rounded-md bg-card ring-1 ring-input ring-inset">
+    <div className="inline-flex h-8 items-center gap-0.5 rounded-md bg-card px-0.5 ring-1 ring-input ring-inset">
       {visible.map((segment) => (
         <SegmentButton
           key={segment.value}
@@ -102,20 +97,21 @@ export default function SegmentedControl<T extends string>({
       ))}
 
       {hasOverflow && (
-        <div className="relative" ref={menuRef}>
+        <div
+          className="relative"
+          ref={menuRef}
+        >
           <button
             onClick={() => setOpen((o) => !o)}
             aria-current={isActive || undefined}
-            className="inline-flex items-center px-2 py-1 rounded-sm cursor-pointer transition gap-1 text-sm
-                        text-muted-foreground hover:text-foreground aria-current:bg-primary
-                        aria-current:text-primary-foreground aria-current:shadow-sm"
+            className="inline-flex cursor-pointer items-center gap-1 rounded-sm px-2 py-1 text-sm text-muted-foreground transition hover:text-foreground aria-current:bg-primary aria-current:text-primary-foreground aria-current:shadow-sm"
           >
             {overflowLabel ?? (activeOverflow ? <span>{activeOverflow.label}</span> : undefined)}
             {overflowIcon ?? <ChevronDown className="size-3" />}
           </button>
 
           {open && (
-            <div className="absolute right-0 top-full mt-1 z-50 min-w-36 rounded-md border bg-popover p-1 shadow-md">
+            <div className="absolute top-full right-0 z-50 mt-1 min-w-36 rounded-md border bg-popover p-1 shadow-md">
               {overflowContent
                 ? overflowContent(close)
                 : overflow.map(({ badge, disabled, label, value: segmentValue }) => (
@@ -127,15 +123,11 @@ export default function SegmentedControl<T extends string>({
                         onChange(segmentValue);
                         setOpen(false);
                       }}
-                      className="flex w-full items-center justify-between gap-3 rounded-sm px-2 py-1.5
-                                        text-sm text-popover-foreground hover:bg-accent hover:text-accent-foreground
-                                        disabled:text-muted-foreground/40 disabled:cursor-default
-                                        disabled:hover:bg-transparent aria-selected:bg-accent
-                                        aria-selected:text-accent-foreground"
+                      className="flex w-full items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-sm text-popover-foreground hover:bg-accent hover:text-accent-foreground disabled:cursor-default disabled:text-muted-foreground/40 disabled:hover:bg-transparent aria-selected:bg-accent aria-selected:text-accent-foreground"
                     >
                       <span>{label}</span>
                       {badge != null && (
-                        <span className="text-xs tabular-nums text-muted-foreground">{badge}</span>
+                        <span className="text-xs text-muted-foreground tabular-nums">{badge}</span>
                       )}
                     </button>
                   ))}

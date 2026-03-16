@@ -4,9 +4,9 @@ export default function KeyValuePills({ entries }: { entries: [string, string][]
       {entries.map(([key, value]) => (
         <li
           key={key}
-          className="inline-flex items-baseline rounded-md border text-xs font-mono overflow-hidden"
+          className="inline-flex items-baseline overflow-hidden rounded-md border font-mono text-xs"
         >
-          <span className="px-2 py-1 text-muted-foreground bg-muted/50 ">{key}</span>
+          <span className="bg-muted/50 px-2 py-1 text-muted-foreground">{key}</span>
           {value ? <span className="px-2 py-1">{value}</span> : undefined}
         </li>
       ))}

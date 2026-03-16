@@ -1,13 +1,13 @@
-import { ArcElement, Chart as ChartJS, Tooltip } from "chart.js";
-import { Box, Container, Hammer, HardDrive, type LucideIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { Doughnut } from "react-chartjs-2";
 import { api } from "../api/client";
 import type { DiskUsageSummary } from "../api/types";
 import { getChartColor } from "../lib/chartColors";
 import { CHART_TOOLTIP_CLASS } from "../lib/chartTooltip";
 import { formatBytes } from "../lib/formatBytes";
 import CollapsibleSection from "./CollapsibleSection";
+import { ArcElement, Chart as ChartJS, Tooltip } from "chart.js";
+import { Box, Container, Hammer, HardDrive, type LucideIcon } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Doughnut } from "react-chartjs-2";
 
 ChartJS.register(ArcElement, Tooltip);
 
@@ -223,8 +223,12 @@ function DoughnutChart({ data }: { data: DiskUsageSummary[] }) {
   }
 
   return (
-    <div className="relative w-full h-72">
-      <Doughnut data={chartData} options={options} plugins={plugins} />
+    <div className="relative h-72 w-full">
+      <Doughnut
+        data={chartData}
+        options={options}
+        plugins={plugins}
+      />
     </div>
   );
 }
@@ -237,15 +241,15 @@ function DiskUsageTable({ data }: { data: DiskUsageSummary[] }) {
 
   return (
     <div className="flex items-center gap-4">
-      <div className="flex-1 rounded-lg border bg-card overflow-x-auto">
-        <table className="w-full min-w-max whitespace-nowrap text-sm">
+      <div className="flex-1 overflow-x-auto rounded-lg border bg-card">
+        <table className="w-full min-w-max text-sm whitespace-nowrap">
           <thead>
             <tr className="border-b bg-muted/50">
-              <th className="text-left p-3 font-medium">Type</th>
-              <th className="text-right p-3 font-medium">Count</th>
-              <th className="text-right p-3 font-medium">Active</th>
-              <th className="text-right p-3 font-medium">Size</th>
-              <th className="text-right p-3 font-medium">Reclaimable</th>
+              <th className="p-3 text-left font-medium">Type</th>
+              <th className="p-3 text-right font-medium">Count</th>
+              <th className="p-3 text-right font-medium">Active</th>
+              <th className="p-3 text-right font-medium">Size</th>
+              <th className="p-3 text-right font-medium">Reclaimable</th>
             </tr>
           </thead>
           <tbody>
@@ -254,10 +258,18 @@ function DiskUsageTable({ data }: { data: DiskUsageSummary[] }) {
               const Icon = meta?.icon;
               const color = colorMap[type];
               return (
-                <tr key={type} className="border-b last:border-b-0">
+                <tr
+                  key={type}
+                  className="border-b last:border-b-0"
+                >
                   <td className="p-3">
                     <span className="inline-flex items-center gap-2">
-                      {Icon && <Icon className="size-4" style={{ color }} />}
+                      {Icon && (
+                        <Icon
+                          className="size-4"
+                          style={{ color }}
+                        />
+                      )}
                       {meta?.label ?? type}
                     </span>
                   </td>
@@ -266,7 +278,7 @@ function DiskUsageTable({ data }: { data: DiskUsageSummary[] }) {
                   <td className="p-3 text-right tabular-nums">
                     {totalSize > 0 ? formatBytes(totalSize) : "0 B"}
                   </td>
-                  <td className="p-3 text-right tabular-nums text-muted-foreground">
+                  <td className="p-3 text-right text-muted-foreground tabular-nums">
                     {reclaimableCell(reclaimable, totalSize)}
                   </td>
                 </tr>
@@ -279,8 +291,8 @@ function DiskUsageTable({ data }: { data: DiskUsageSummary[] }) {
                 <td className="p-3 font-medium">Total</td>
                 <td className="p-3" />
                 <td className="p-3" />
-                <td className="p-3 text-right tabular-nums font-medium">{formatBytes(total)}</td>
-                <td className="p-3 text-right tabular-nums text-muted-foreground font-medium">
+                <td className="p-3 text-right font-medium tabular-nums">{formatBytes(total)}</td>
+                <td className="p-3 text-right font-medium text-muted-foreground tabular-nums">
                   {reclaimableCell(reclaimable, total)}
                 </td>
               </tr>
@@ -288,7 +300,7 @@ function DiskUsageTable({ data }: { data: DiskUsageSummary[] }) {
           )}
         </table>
       </div>
-      <div className="w-1/3 max-h-56 flex items-center justify-center">
+      <div className="flex max-h-56 w-1/3 items-center justify-center">
         <DoughnutChart data={sorted} />
       </div>
     </div>
@@ -298,34 +310,37 @@ function DiskUsageTable({ data }: { data: DiskUsageSummary[] }) {
 function DiskUsageLoading() {
   return (
     <div className="flex items-stretch gap-4">
-      <div className="flex-1 rounded-lg border bg-card overflow-x-auto">
-        <table className="w-full min-w-max whitespace-nowrap text-sm">
+      <div className="flex-1 overflow-x-auto rounded-lg border bg-card">
+        <table className="w-full min-w-max text-sm whitespace-nowrap">
           <thead>
             <tr className="border-b bg-muted/50">
-              <th className="text-left p-3 font-medium">Type</th>
-              <th className="text-right p-3 font-medium">Count</th>
-              <th className="text-right p-3 font-medium">Active</th>
-              <th className="text-right p-3 font-medium">Size</th>
-              <th className="text-right p-3 font-medium">Reclaimable</th>
+              <th className="p-3 text-left font-medium">Type</th>
+              <th className="p-3 text-right font-medium">Count</th>
+              <th className="p-3 text-right font-medium">Active</th>
+              <th className="p-3 text-right font-medium">Size</th>
+              <th className="p-3 text-right font-medium">Reclaimable</th>
             </tr>
           </thead>
           <tbody>
             {[1, 2, 3, 4].map((index) => (
-              <tr key={index} className="border-b last:border-b-0">
+              <tr
+                key={index}
+                className="border-b last:border-b-0"
+              >
                 <td className="p-3">
-                  <div className="h-4 w-24 bg-muted rounded animate-pulse" />
+                  <div className="h-4 w-24 animate-pulse rounded bg-muted" />
                 </td>
                 <td className="p-3">
-                  <div className="h-4 w-8 bg-muted rounded animate-pulse ml-auto" />
+                  <div className="ml-auto h-4 w-8 animate-pulse rounded bg-muted" />
                 </td>
                 <td className="p-3">
-                  <div className="h-4 w-8 bg-muted rounded animate-pulse ml-auto" />
+                  <div className="ml-auto h-4 w-8 animate-pulse rounded bg-muted" />
                 </td>
                 <td className="p-3">
-                  <div className="h-4 w-16 bg-muted rounded animate-pulse ml-auto" />
+                  <div className="ml-auto h-4 w-16 animate-pulse rounded bg-muted" />
                 </td>
                 <td className="p-3">
-                  <div className="h-4 w-24 bg-muted rounded animate-pulse ml-auto" />
+                  <div className="ml-auto h-4 w-24 animate-pulse rounded bg-muted" />
                 </td>
               </tr>
             ))}
@@ -333,8 +348,8 @@ function DiskUsageLoading() {
         </table>
       </div>
 
-      <div className="w-1/3 shrink-0 flex items-center justify-center">
-        <div className="size-30 rounded-full bg-muted animate-pulse" />
+      <div className="flex w-1/3 shrink-0 items-center justify-center">
+        <div className="size-30 animate-pulse rounded-full bg-muted" />
       </div>
     </div>
   );

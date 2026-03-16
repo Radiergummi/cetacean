@@ -12,6 +12,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers/gorillamux"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -85,7 +86,7 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 		w.Write([]byte("<html></html>"))
 	})
 	promProxy := http.NotFoundHandler()
-	router := NewRouter(h, b, promProxy, noopSPA, specBytes, nil, false)
+	router := NewRouter(h, b, promProxy, noopSPA, specBytes, nil, false, &auth.NoneProvider{})
 
 	tests := []struct {
 		name       string

@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
-import type { ReactNode } from "react";
-import StackList from "./StackList";
 import type { StackSummary } from "../api/types";
+import StackList from "./StackList";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { MemoryRouter } from "react-router-dom";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 class MockEventSource {
   static instance: MockEventSource;

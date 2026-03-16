@@ -1,20 +1,25 @@
-import { Search } from "lucide-react";
-import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import type { SearchResourceType, SearchResponse, SearchResult } from "../../api/types";
 import { resourcePath, statusColor, TYPE_LABELS, TYPE_ORDER } from "../../lib/searchConstants";
-import { Spinner } from "../Spinner";
 import ResourceName from "../ResourceName";
+import { Spinner } from "../Spinner";
+import { Search } from "lucide-react";
+import type React from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 
 function StateOrb({ state }: { state: string }) {
   if (state === "updating") {
     return <Spinner className="size-3 shrink-0 text-blue-500" />;
   }
   const color = statusColor(state);
-  return <span className={`inline-block size-2 rounded-full shrink-0 ${color}`} title={state} />;
+  return (
+    <span
+      className={`inline-block size-2 shrink-0 rounded-full ${color}`}
+      title={state}
+    />
+  );
 }
 
 interface FlatItem {
@@ -47,7 +52,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   const abortRef = useRef<AbortController | null>(null);
   const navigate = useNavigate();
 
-  const flat = response ? flattenResults(response) : [];
+  const flat = useMemo(() => (response ? flattenResults(response) : []), [response]);
   const hasResponse = response !== null;
 
   const doSearch = useCallback((query: string) => {
@@ -201,17 +206,17 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 bg-background/60 backdrop-blur-sm animate-[fade-in_150ms_ease-out]"
+      className="fixed inset-0 z-50 animate-[fade-in_150ms_ease-out] bg-background/60 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="mx-auto mt-[15vh] max-w-lg rounded-lg border bg-popover shadow-lg animate-[slide-down_150ms_ease-out]"
+        className="mx-auto mt-[15vh] max-w-lg animate-[slide-down_150ms_ease-out] rounded-lg border bg-popover shadow-lg"
         onClick={(event) => event.stopPropagation()}
         onKeyDown={onKeyDown}
       >
         {/* Search input */}
         <div className="flex items-center gap-2 border-b px-3 py-2.5">
-          <Search className="size-4 text-muted-foreground shrink-0" />
+          <Search className="size-4 shrink-0 text-muted-foreground" />
           <input
             ref={inputRef}
             type="text"
@@ -234,7 +239,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
             {groups.map(({ items, type }) => (
               <li key={type}>
                 <section>
-                  <header className="px-3 py-1.5 text-xs font-medium uppercase text-muted-foreground">
+                  <header className="px-3 py-1.5 text-xs font-medium text-muted-foreground uppercase">
                     <span>{TYPE_LABELS[type]}</span>
                   </header>
 
@@ -242,16 +247,16 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
                     <button
                       key={`${type}-${result.id}`}
                       data-active={index === highlightIndex || undefined}
-                      className="flex w-full justify-between items-center gap-2 px-3 py-1.5 text-sm text-left cursor-pointer text-foreground hover:bg-accent/50 data-active:bg-accent data-active:text-accent-foreground"
+                      className="flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-1.5 text-left text-sm text-foreground hover:bg-accent/50 data-active:bg-accent data-active:text-accent-foreground"
                       onClick={() => goTo({ type, result })}
                       onMouseEnter={() => setHighlightIndex(index)}
                     >
-                      <span className="truncate font-medium flex items-center gap-1.5">
+                      <span className="flex items-center gap-1.5 truncate font-medium">
                         {result.state && <StateOrb state={result.state} />}
                         <ResourceName name={result.name} />
                       </span>
                       {result.detail && (
-                        <span className="truncate text-muted-foreground text-xs">
+                        <span className="truncate text-xs text-muted-foreground">
                           {result.detail}
                         </span>
                       )}

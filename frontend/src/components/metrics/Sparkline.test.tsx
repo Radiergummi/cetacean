@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { render } from "@testing-library/react";
 import Sparkline from "./Sparkline";
+import { render } from "@testing-library/react";
+import { describe, it, expect } from "vitest";
 
 describe("Sparkline", () => {
   it("renders nothing for insufficient data", () => {
@@ -18,7 +18,13 @@ describe("Sparkline", () => {
   });
 
   it("uses custom dimensions", () => {
-    const { container } = render(<Sparkline data={[1, 2]} width={100} height={32} />);
+    const { container } = render(
+      <Sparkline
+        data={[1, 2]}
+        width={100}
+        height={32}
+      />,
+    );
     const svg = container.querySelector("svg");
     expect(svg?.getAttribute("width")).toBe("100");
     expect(svg?.getAttribute("height")).toBe("32");

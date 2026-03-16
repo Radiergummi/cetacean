@@ -1,7 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
 import DataTable from "./DataTable";
 import type { Column } from "./DataTable";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
 
 interface Item {
   id: string;
@@ -20,26 +20,51 @@ const data: Item[] = [
 
 describe("DataTable", () => {
   it("renders headers", () => {
-    render(<DataTable columns={columns} data={data} keyFn={(i) => i.id} />);
+    render(
+      <DataTable
+        columns={columns}
+        data={data}
+        keyFn={(i) => i.id}
+      />,
+    );
     expect(screen.getByText("ID")).toBeInTheDocument();
     expect(screen.getByText("Name")).toBeInTheDocument();
   });
 
   it("renders rows", () => {
-    render(<DataTable columns={columns} data={data} keyFn={(i) => i.id} />);
+    render(
+      <DataTable
+        columns={columns}
+        data={data}
+        keyFn={(i) => i.id}
+      />,
+    );
     expect(screen.getByText("Alpha")).toBeInTheDocument();
     expect(screen.getByText("Beta")).toBeInTheDocument();
   });
 
   it("calls onRowClick", () => {
     const onClick = vi.fn();
-    render(<DataTable columns={columns} data={data} keyFn={(i) => i.id} onRowClick={onClick} />);
+    render(
+      <DataTable
+        columns={columns}
+        data={data}
+        keyFn={(i) => i.id}
+        onRowClick={onClick}
+      />,
+    );
     fireEvent.click(screen.getByText("Alpha"));
     expect(onClick).toHaveBeenCalledWith(data[0]);
   });
 
   it("renders empty table", () => {
-    const { container } = render(<DataTable columns={columns} data={[]} keyFn={(i) => i.id} />);
+    const { container } = render(
+      <DataTable
+        columns={columns}
+        data={[]}
+        keyFn={(i) => i.id}
+      />,
+    );
     expect(container.querySelectorAll("tbody tr")).toHaveLength(0);
   });
 });

@@ -1,15 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
-import { useTaskMetrics } from "../hooks/useTaskMetrics";
-import { escapePromQL } from "../lib/utils";
-import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { HistoryEntry, Node, Task } from "../api/types";
 import ActivitySection from "../components/ActivitySection";
+import { LabelSection, MetadataGrid } from "../components/data";
 import DiskUsageSection from "../components/DiskUsageSection";
 import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
-import { LabelSection, MetadataGrid } from "../components/data";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import { MetricsPanel, NodeResourceGauges } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
@@ -17,7 +13,11 @@ import TasksTable from "../components/TasksTable";
 import { useInstanceResolver } from "../hooks/useInstanceResolver";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
+import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { formatBytes } from "../lib/formatBytes";
+import { escapePromQL } from "../lib/utils";
+import { useCallback, useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 
 export default function NodeDetail() {
   const { id } = useParams<{ id: string }>();
@@ -93,25 +93,49 @@ export default function NodeDetail() {
       )}
 
       <MetadataGrid>
-        <InfoCard label="Role" value={node.Spec.Role} />
-        <InfoCard label="Status" value={node.Status.State} />
-        <InfoCard label="Availability" value={node.Spec.Availability} />
-        <InfoCard label="Engine" value={node.Description.Engine.EngineVersion} />
+        <InfoCard
+          label="Role"
+          value={node.Spec.Role}
+        />
+        <InfoCard
+          label="Status"
+          value={node.Status.State}
+        />
+        <InfoCard
+          label="Availability"
+          value={node.Spec.Availability}
+        />
+        <InfoCard
+          label="Engine"
+          value={node.Description.Engine.EngineVersion}
+        />
         <InfoCard
           label="OS"
           value={`${node.Description.Platform.OS} ${node.Description.Platform.Architecture}`}
         />
-        <InfoCard label="Address" value={node.Status.Addr || ""} />
+        <InfoCard
+          label="Address"
+          value={node.Status.Addr || ""}
+        />
         <InfoCard
           label="CPUs"
           value={`${(node.Description.Resources.NanoCPUs / 1_000_000_000).toFixed(0)}`}
         />
-        <InfoCard label="Memory" value={formatBytes(node.Description.Resources.MemoryBytes)} />
+        <InfoCard
+          label="Memory"
+          value={formatBytes(node.Description.Resources.MemoryBytes)}
+        />
 
         {node.ManagerStatus && (
           <>
-            <InfoCard label="Manager" value={node.ManagerStatus.Leader ? "Leader" : "Reachable"} />
-            <InfoCard label="Manager Address" value={node.ManagerStatus.Addr} />
+            <InfoCard
+              label="Manager"
+              value={node.ManagerStatus.Leader ? "Leader" : "Reachable"}
+            />
+            <InfoCard
+              label="Manager Address"
+              value={node.ManagerStatus.Addr}
+            />
           </>
         )}
       </MetadataGrid>
@@ -122,7 +146,11 @@ export default function NodeDetail() {
         />
       )}
 
-      <TasksTable tasks={tasks} variant="node" metrics={hasCadvisor ? taskMetrics : undefined} />
+      <TasksTable
+        tasks={tasks}
+        variant="node"
+        metrics={hasCadvisor ? taskMetrics : undefined}
+      />
 
       <DiskUsageSection nodeId={node.ID} />
 

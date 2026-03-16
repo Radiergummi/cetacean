@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import { api, type ClusterSnapshot, type ClusterMetrics } from "../../api/client";
 import { formatBytes } from "../../lib/formatBytes";
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 
 function barColor(percent: number, isReservation: boolean): string {
   const high = isReservation ? 95 : 90;
@@ -28,23 +28,23 @@ function Bar({
   return (
     <div
       data-clickable={onClick ? "" : undefined}
-      className="rounded-lg border bg-card p-4 data-clickable:cursor-pointer data-clickable:hover:border-foreground/20 data-clickable:transition-colors"
+      className="rounded-lg border bg-card p-4 data-clickable:cursor-pointer data-clickable:transition-colors data-clickable:hover:border-foreground/20"
       onClick={onClick}
     >
-      <div className="flex justify-between text-xs text-muted-foreground mb-2">
+      <div className="mb-2 flex justify-between text-xs text-muted-foreground">
         <span className="font-medium">
           {label}
           {isReservation ? " (reserved)" : ""}
         </span>
         <span className="tabular-nums">{clamped.toFixed(0)}%</span>
       </div>
-      <div className="h-2 rounded-full bg-muted overflow-hidden">
+      <div className="h-2 overflow-hidden rounded-full bg-muted">
         <div
           className={`h-full rounded-full transition-all ${barColor(clamped, isReservation)}`}
           style={{ width: `${clamped}%` }}
         />
       </div>
-      <div className="text-xs text-muted-foreground mt-1.5">{detail}</div>
+      <div className="mt-1.5 text-xs text-muted-foreground">{detail}</div>
     </div>
   );
 }
@@ -77,10 +77,13 @@ export default function CapacitySection({ snapshot }: { snapshot: ClusterSnapsho
     return (
       <div className="space-y-3">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="rounded-lg border bg-card p-4">
-            <div className="h-3 w-16 bg-muted rounded mb-2" />
+          <div
+            key={i}
+            className="rounded-lg border bg-card p-4"
+          >
+            <div className="mb-2 h-3 w-16 rounded bg-muted" />
             <div className="h-2 rounded-full bg-muted" />
-            <div className="h-3 w-24 bg-muted rounded mt-1.5" />
+            <div className="mt-1.5 h-3 w-24 rounded bg-muted" />
           </div>
         ))}
       </div>

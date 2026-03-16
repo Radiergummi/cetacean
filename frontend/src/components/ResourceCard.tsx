@@ -23,12 +23,12 @@ export default function ResourceCard({
         data-has-body={hasBody || undefined}
         className="flex items-center justify-between data-has-body:mb-3"
       >
-        <span className="font-medium truncate tabular-nums slashed-zero">{title}</span>
+        <span className="truncate font-medium slashed-zero tabular-nums">{title}</span>
         {badge}
       </div>
 
       {subtitle && (
-        <div className="text-xs font-mono text-muted-foreground truncate mb-3">{subtitle}</div>
+        <div className="mb-3 truncate font-mono text-xs text-muted-foreground">{subtitle}</div>
       )}
 
       {children && <div className="mb-3">{children}</div>}
@@ -47,7 +47,7 @@ export default function ResourceCard({
     return (
       <Link
         to={to}
-        className="rounded-lg border bg-card p-4 hover:border-foreground/20 hover:shadow-sm transition-all"
+        className="rounded-lg border bg-card p-4 transition-all hover:border-foreground/20 hover:shadow-sm"
       >
         {content}
       </Link>

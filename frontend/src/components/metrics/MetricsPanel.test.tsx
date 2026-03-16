@@ -1,8 +1,8 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
-import type { ReactNode } from "react";
 import MetricsPanel from "./MetricsPanel";
+import { render, screen, fireEvent } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { MemoryRouter } from "react-router-dom";
+import { describe, it, expect, vi } from "vitest";
 
 // Mock TimeSeriesChart since it uses Chart.js which needs a real DOM
 vi.mock("./TimeSeriesChart", () => ({

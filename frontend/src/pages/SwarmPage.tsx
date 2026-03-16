@@ -1,10 +1,7 @@
-import { Check, Copy } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { Plugin, SwarmInfo } from "../api/types";
 import CollapsibleSection from "../components/CollapsibleSection";
 import { KVTable, MetadataGrid, ResourceId, Timestamp } from "../components/data";
-import { formatNs } from "../lib/formatNs";
 import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
 import { LoadingDetail } from "../components/LoadingSkeleton";
@@ -19,6 +16,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../components/ui/dialog";
+import { formatNs } from "../lib/formatNs";
+import { Check, Copy } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 
 function JoinTokenDialog({
   label,
@@ -43,7 +43,16 @@ function JoinTokenDialog({
 
   return (
     <Dialog>
-      <DialogTrigger render={<Button variant={variant} size="sm" />}>Join {label}</DialogTrigger>
+      <DialogTrigger
+        render={
+          <Button
+            variant={variant}
+            size="sm"
+          />
+        }
+      >
+        Join {label}
+      </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Join as {label}</DialogTitle>
@@ -51,11 +60,14 @@ function JoinTokenDialog({
             Run this command on the node you want to join to the swarm.
           </DialogDescription>
         </DialogHeader>
-        <pre className="text-xs font-mono leading-normal bg-muted/50 rounded-lg p-3 break-all select-all wrap-anywhere max-w-full whitespace-normal">
+        <pre className="max-w-full rounded-lg bg-muted/50 p-3 font-mono text-xs leading-normal wrap-anywhere break-all whitespace-normal select-all">
           {joinCmd}
         </pre>
         <DialogFooter>
-          <Button variant="ghost" onClick={copyToClipboard}>
+          <Button
+            variant="ghost"
+            onClick={copyToClipboard}
+          >
             {copied ? (
               <>
                 <Check data-icon="inline-start" />
@@ -126,18 +138,33 @@ export default function SwarmPage() {
 
       {/* Overview */}
       <MetadataGrid>
-        <ResourceId label="Cluster ID" id={swarm.ID} />
-        <Timestamp label="Created" date={swarm.CreatedAt} />
-        <Timestamp label="Updated" date={swarm.UpdatedAt} />
-        <InfoCard label="Default Address Pool" value={swarm.DefaultAddrPool?.join(", ") || "—"} />
-        <InfoCard label="Subnet Size" value={swarm.SubnetSize ? `/${swarm.SubnetSize}` : "—"} />
+        <ResourceId
+          label="Cluster ID"
+          id={swarm.ID}
+        />
+        <Timestamp
+          label="Created"
+          date={swarm.CreatedAt}
+        />
+        <Timestamp
+          label="Updated"
+          date={swarm.UpdatedAt}
+        />
+        <InfoCard
+          label="Default Address Pool"
+          value={swarm.DefaultAddrPool?.join(", ") || "—"}
+        />
+        <InfoCard
+          label="Subnet Size"
+          value={swarm.SubnetSize ? `/${swarm.SubnetSize}` : "—"}
+        />
         <InfoCard
           label="Data Path Port"
           value={swarm.DataPathPort ? String(swarm.DataPathPort) : "—"}
         />
       </MetadataGrid>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Raft */}
         <CollapsibleSection title="Raft">
           <KVTable
@@ -228,7 +255,7 @@ export default function SwarmPage() {
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full">
               <thead>
-                <tr className="border-b text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <tr className="border-b text-left text-xs font-medium tracking-wider text-muted-foreground uppercase">
                   <th className="p-3">Name</th>
                   <th className="p-3">Type</th>
                   <th className="p-3">Status</th>
@@ -236,7 +263,10 @@ export default function SwarmPage() {
               </thead>
               <tbody>
                 {plugins.map(({ Config: { Interface }, Enabled, Id, Name }) => (
-                  <tr key={Id ?? Name} className="border-b last:border-b-0">
+                  <tr
+                    key={Id ?? Name}
+                    className="border-b last:border-b-0"
+                  >
                     <td className="p-3 font-mono text-xs">{Name}</td>
                     <td className="p-3 text-sm text-muted-foreground">
                       {Interface.Types.map(({ Capability }) => Capability).join(", ") || "—"}
@@ -244,9 +274,7 @@ export default function SwarmPage() {
                     <td className="p-3">
                       <span
                         data-enabled={Enabled || undefined}
-                        className="inline-flex items-center rounded-full px-2 py-0.5 text-xs
-                                            font-medium bg-muted text-muted-foreground data-enabled:bg-green-500/10
-                                            data-enabled:text-green-500"
+                        className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground data-enabled:bg-green-500/10 data-enabled:text-green-500"
                       >
                         {Enabled ? "Enabled" : "Disabled"}
                       </span>

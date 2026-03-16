@@ -1,10 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { Link } from "react-router-dom";
-import { TrendingUp, TrendingDown } from "lucide-react";
 import { api, type ClusterSnapshot } from "../api/client";
 import type { HistoryEntry } from "../api/types";
-import { useResourceStream } from "../hooks/useResourceStream";
-import PageHeader from "../components/PageHeader";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
 import DiskUsageSection from "../components/DiskUsageSection";
@@ -14,7 +9,12 @@ import {
   CapacitySection,
   StackDrillDownChart,
 } from "../components/metrics";
+import PageHeader from "../components/PageHeader";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { useResourceStream } from "../hooks/useResourceStream";
+import { TrendingUp, TrendingDown } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Link } from "react-router-dom";
 
 export default function ClusterOverview() {
   const [snapshot, setSnapshot] = useState<ClusterSnapshot | null>(null);
@@ -73,11 +73,14 @@ export default function ClusterOverview() {
     return (
       <div>
         <PageHeader title="Cluster Overview" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="rounded-lg border bg-card p-6">
-              <div className="h-4 w-20 bg-muted rounded mb-2" />
-              <div className="h-8 w-12 bg-muted rounded" />
+            <div
+              key={i}
+              className="rounded-lg border bg-card p-6"
+            >
+              <div className="mb-2 h-4 w-20 rounded bg-muted" />
+              <div className="h-8 w-12 rounded bg-muted" />
             </div>
           ))}
         </div>
@@ -97,7 +100,7 @@ export default function ClusterOverview() {
       {monitoring && <MonitoringStatus status={monitoring} />}
 
       {/* Health Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <HealthCard
           label="Nodes"
           primary={`${snapshot.nodesReady}/${snapshot.nodeCount} ready`}
@@ -139,20 +142,26 @@ export default function ClusterOverview() {
       </div>
 
       {/* Two-column: Capacity + Activity */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
         <CollapsibleSection title="Capacity">
           <CapacitySection snapshot={snapshot} />
         </CollapsibleSection>
         <CollapsibleSection title="Recent Activity">
           <div className="max-h-80 overflow-y-auto rounded-lg border bg-card p-4">
-            <ActivityFeed entries={history} loading={historyLoading} />
+            <ActivityFeed
+              entries={history}
+              loading={historyLoading}
+            />
           </div>
         </CollapsibleSection>
       </div>
 
       {hasPrometheus && (
         <div className="mb-6">
-          <MetricsPanel header="Resource Usage by Stack" stackable>
+          <MetricsPanel
+            header="Resource Usage by Stack"
+            stackable
+          >
             <StackDrillDownChart
               title="CPU Usage (by Stack)"
               stackQuery={`topk(10, sum by (container_label_com_docker_stack_namespace)(rate(container_cpu_usage_seconds_total{container_label_com_docker_stack_namespace!=""}[5m])) * 100)`}
@@ -217,9 +226,9 @@ function HealthCard({
   return (
     <Link
       to={to}
-      className={`block rounded-lg border p-5 cursor-pointer hover:border-foreground/20 hover:shadow-sm transition-all ${borderColor} ${bgTint}`}
+      className={`block cursor-pointer rounded-lg border p-5 transition-all hover:border-foreground/20 hover:shadow-sm ${borderColor} ${bgTint}`}
     >
-      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1.5">
+      <div className="mb-1.5 text-xs font-medium tracking-wider text-muted-foreground uppercase">
         {label}
       </div>
       <div className="flex items-center gap-2">
@@ -234,7 +243,7 @@ function HealthCard({
           </span>
         )}
       </div>
-      <div className="text-xs text-muted-foreground mt-1">{secondary}</div>
+      <div className="mt-1 text-xs text-muted-foreground">{secondary}</div>
     </Link>
   );
 }

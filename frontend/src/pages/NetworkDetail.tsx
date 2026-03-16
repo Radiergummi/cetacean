@@ -1,4 +1,3 @@
-import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { Network } from "../api/types";
 import ActivitySection from "../components/ActivitySection";
@@ -18,6 +17,7 @@ import PageHeader from "../components/PageHeader";
 import ServiceRefList from "../components/ServiceRefList";
 import { useDetailResource } from "../hooks/useDetailResource";
 import { parseStackLabels } from "../lib/parseStackLabels";
+import { useParams } from "react-router-dom";
 
 function NetworkFlags({ network }: { network: Network }) {
   const flags = [];
@@ -46,32 +46,35 @@ function IPAMPanel({ network }: { network: Network }) {
 
   return (
     <CollapsibleSection title="IPAM Configuration">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {ipam.Config.map((cfg, i) => (
-          <div key={i} className="rounded-lg border bg-card p-4">
+          <div
+            key={i}
+            className="rounded-lg border bg-card p-4"
+          >
             <div className="space-y-2">
               {cfg.Subnet && (
                 <div>
-                  <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-0.5">
+                  <div className="mb-0.5 text-xs font-medium tracking-wider text-muted-foreground uppercase">
                     Subnet
                   </div>
-                  <div className="text-sm font-mono">{cfg.Subnet}</div>
+                  <div className="font-mono text-sm">{cfg.Subnet}</div>
                 </div>
               )}
               {cfg.Gateway && (
                 <div>
-                  <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-0.5">
+                  <div className="mb-0.5 text-xs font-medium tracking-wider text-muted-foreground uppercase">
                     Gateway
                   </div>
-                  <div className="text-sm font-mono">{cfg.Gateway}</div>
+                  <div className="font-mono text-sm">{cfg.Gateway}</div>
                 </div>
               )}
               {cfg.IPRange && (
                 <div>
-                  <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-0.5">
+                  <div className="mb-0.5 text-xs font-medium tracking-wider text-muted-foreground uppercase">
                     IP Range
                   </div>
-                  <div className="text-sm font-mono">{cfg.IPRange}</div>
+                  <div className="font-mono text-sm">{cfg.IPRange}</div>
                 </div>
               )}
             </div>
@@ -107,11 +110,27 @@ export default function NetworkDetail() {
       />
 
       <MetadataGrid>
-        <ResourceId label="ID" id={network.Id} />
-        <InfoCard label="Driver" value={network.Driver} />
-        <InfoCard label="Scope" value={network.Scope} />
-        <ResourceLink label="Stack" name={stack} to={`/stacks/${stack}`} />
-        <Timestamp label="Created" date={network.Created} />
+        <ResourceId
+          label="ID"
+          id={network.Id}
+        />
+        <InfoCard
+          label="Driver"
+          value={network.Driver}
+        />
+        <InfoCard
+          label="Scope"
+          value={network.Scope}
+        />
+        <ResourceLink
+          label="Stack"
+          name={stack}
+          to={`/stacks/${stack}`}
+        />
+        <Timestamp
+          label="Created"
+          date={network.Created}
+        />
       </MetadataGrid>
 
       <NetworkFlags network={network} />

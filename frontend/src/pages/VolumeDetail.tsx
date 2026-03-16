@@ -1,4 +1,3 @@
-import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import ActivitySection from "../components/ActivitySection";
 import CollapsibleSection from "../components/CollapsibleSection";
@@ -16,6 +15,7 @@ import PageHeader from "../components/PageHeader";
 import ServiceRefList from "../components/ServiceRefList";
 import { useDetailResource } from "../hooks/useDetailResource";
 import { parseStackLabels } from "../lib/parseStackLabels";
+import { useParams } from "react-router-dom";
 
 export default function VolumeDetail() {
   const { name } = useParams<{ name: string }>();
@@ -37,11 +37,28 @@ export default function VolumeDetail() {
       />
 
       <MetadataGrid>
-        <InfoCard label="Driver" value={volume.Driver} />
-        <InfoCard label="Scope" value={volume.Scope} />
-        <ResourceLink label="Stack" name={stack} to={`/stacks/${stack}`} />
-        <Timestamp label="Created" date={volume.CreatedAt} />
-        <InfoCard className="col-span-2" label="Mountpoint" value={volume.Mountpoint} />
+        <InfoCard
+          label="Driver"
+          value={volume.Driver}
+        />
+        <InfoCard
+          label="Scope"
+          value={volume.Scope}
+        />
+        <ResourceLink
+          label="Stack"
+          name={stack}
+          to={`/stacks/${stack}`}
+        />
+        <Timestamp
+          label="Created"
+          date={volume.CreatedAt}
+        />
+        <InfoCard
+          className="col-span-2"
+          label="Mountpoint"
+          value={volume.Mountpoint}
+        />
       </MetadataGrid>
 
       {options.length > 0 && (

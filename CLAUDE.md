@@ -62,6 +62,25 @@ docker stack deploy -c compose.monitoring.yaml monitoring  # Deploy standalone m
 | `CETACEAN_LOG_LEVEL` | `info` | No |
 | `CETACEAN_SSE_BATCH_INTERVAL` | `100ms` | No |
 | `CETACEAN_PPROF` | `false` | No (enable pprof endpoints at `/debug/pprof/`) |
+| `CETACEAN_AUTH_MODE` | `none` | No (`none`, `oidc`, `tailscale`, `cert`, `headers`) |
+| `CETACEAN_AUTH_OIDC_ISSUER` | — | Yes (if OIDC mode) |
+| `CETACEAN_AUTH_OIDC_CLIENT_ID` | — | Yes (if OIDC mode) |
+| `CETACEAN_AUTH_OIDC_CLIENT_SECRET` | — | Yes (if OIDC mode) |
+| `CETACEAN_AUTH_OIDC_REDIRECT_URL` | — | Yes (if OIDC mode) |
+| `CETACEAN_AUTH_OIDC_SCOPES` | `openid,profile,email` | No |
+| `CETACEAN_AUTH_TAILSCALE_MODE` | `local` | No (`local` or `tsnet`) |
+| `CETACEAN_AUTH_TAILSCALE_AUTHKEY` | — | Yes (if tsnet mode) |
+| `CETACEAN_AUTH_TAILSCALE_HOSTNAME` | `cetacean` | No |
+| `CETACEAN_AUTH_TAILSCALE_STATE_DIR` | — | No |
+| `CETACEAN_AUTH_CERT_CA` | — | Yes (if cert mode) |
+| `CETACEAN_AUTH_HEADERS_SUBJECT` | — | Yes (if headers mode) |
+| `CETACEAN_AUTH_HEADERS_NAME` | — | No |
+| `CETACEAN_AUTH_HEADERS_EMAIL` | — | No |
+| `CETACEAN_AUTH_HEADERS_GROUPS` | — | No |
+| `CETACEAN_AUTH_HEADERS_SECRET_HEADER` | — | No |
+| `CETACEAN_AUTH_HEADERS_SECRET_VALUE` | — | Yes (if secret header set) |
+| `CETACEAN_TLS_CERT` | — | No (Yes for cert mode) |
+| `CETACEAN_TLS_KEY` | — | No (Yes for cert mode) |
 
 ## Architecture
 
@@ -69,13 +88,14 @@ docker stack deploy -c compose.monitoring.yaml monitoring  # Deploy standalone m
 Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cache.go` (in-memory maps, `sync.RWMutex`) → `api/handlers.go` (REST JSON) + `api/sse.go` (real-time broadcast) → Browser
 
 ### Backend (`internal/`)
-- **`config/`** — Env var parsing. All config is optional; Prometheus metrics disabled if URL unset.
+- **`auth/`** — Pluggable authentication. `Provider` interface with `Authenticate(w, r) (*Identity, error)` and `RegisterRoutes(mux)`. Five providers: `NoneProvider` (anonymous), `OIDCProvider` (auth code flow + Bearer tokens, signed ephemeral session cookies), `TailscaleProvider` (local daemon or tsnet), `CertProvider` (mTLS client certs + SPIFFE), `HeadersProvider` (trusted proxy headers). Auth middleware sits between `securityHeaders` and `negotiate` in the chain. Routes `/-/*`, `/api*`, `/assets/*`, `/auth/*` are exempt from auth. Each provider registers `GET /auth/whoami`.
+- **`config/`** — Env var parsing. All config is optional; Prometheus metrics disabled if URL unset. Auth config via `LoadAuth()`, TLS config via `LoadTLS()`.
 - **`cache/`** — Thread-safe in-memory store using `sync.RWMutex`. Holds nodes, services, tasks, configs, secrets, networks, volumes. Stacks are derived from `com.docker.stack.namespace` labels and rebuilt on every mutation. Cross-reference methods (`ServicesUsingConfig`, `ServicesUsingSecret`, `ServicesUsingNetwork`, `ServicesUsingVolume`) scan services to find which ones use a given resource. Every Set/Delete fires an `OnChangeFunc` callback that feeds the SSE broadcaster.
 - **`cache/history.go`** — Ring buffer (10,000 entries) of resource change events, queryable by type/resourceId.
 - **`cache/snapshot.go`** — Atomic disk persistence with versioned JSON format.
 - **`docker/client.go`** — Thin wrapper over the Docker Engine API. List, Inspect, and Events methods for all resource types.
 - **`docker/watcher.go`** — Full sync on startup (7 parallel goroutines), then subscribes to Docker event stream. Re-syncs every 5 minutes and on reconnect. Container events are mapped to task updates via `com.docker.swarm.task.id` attribute. 50ms debounce with 4-worker inspect pool.
-- **`api/router.go`** — stdlib `net/http.ServeMux` with Go 1.22+ method routing. Resources live at top-level paths (e.g., `GET /nodes`, `GET /services/{id}`), meta endpoints under `/-/` (health, ready, metrics), and API docs at `/api`. Content negotiation middleware (`negotiate`) resolves `Accept` header or `.json`/`.html` extension suffix, storing the result in context. Dispatch helpers (`contentNegotiated`, `contentNegotiatedWithSSE`, `sseOnly`) route to JSON handler, SSE handler, or SPA based on negotiated type. All list and detail endpoints support per-resource SSE streaming via `contentNegotiatedWithSSE` — `streamList` filters by type, `streamResource` filters by type+id. Additional non-CRUD endpoints: `/cluster`, `/cluster/metrics`, `/swarm`, `/disk-usage`, `/plugins`, `/stacks/summary`, `/history`, `/topology/networks`, `/topology/placement`. Middleware chain: requestID → recovery → securityHeaders → negotiate → discoveryLinks → requestLogger. SPA fallback registered last on `/`.
+- **`api/router.go`** — stdlib `net/http.ServeMux` with Go 1.22+ method routing. Resources live at top-level paths (e.g., `GET /nodes`, `GET /services/{id}`), meta endpoints under `/-/` (health, ready, metrics), and API docs at `/api`. Content negotiation middleware (`negotiate`) resolves `Accept` header or `.json`/`.html` extension suffix, storing the result in context. Dispatch helpers (`contentNegotiated`, `contentNegotiatedWithSSE`, `sseOnly`) route to JSON handler, SSE handler, or SPA based on negotiated type. All list and detail endpoints support per-resource SSE streaming via `contentNegotiatedWithSSE` — `streamList` filters by type, `streamResource` filters by type+id. Additional non-CRUD endpoints: `/cluster`, `/cluster/metrics`, `/swarm`, `/disk-usage`, `/plugins`, `/stacks/summary`, `/history`, `/topology/networks`, `/topology/placement`. Middleware chain: requestID → recovery → securityHeaders → auth → negotiate → discoveryLinks → requestLogger. SPA fallback registered last on `/`.
 - **`api/handlers.go`** — REST handlers. All read-only, serve cache data as JSON. List endpoints support `?search=`, `?filter=` (expr-lang expressions), `?sort=`, `?dir=`, `?limit=`, `?offset=` and return `CollectionResponse` with JSON-LD metadata + pagination Link headers. Detail endpoints return JSON-LD wrapped responses (`@context`, `@id`, `@type`) with the resource + cross-referenced services. All JSON responses include ETag for conditional 304 responses. `HandleSearch` provides cross-resource global search. `DockerLogStreamer` interface decouples log streaming for testability. Task list/detail endpoints return `EnrichedTask` (adds `ServiceName`, `NodeHostname` to raw `swarm.Task`). Log-tail SSE connections are capped at 128 concurrent.
 - **`api/sse.go`** — `Broadcaster` manages up to 256 SSE clients. Per-resource SSE: list endpoints stream events filtered by type, detail endpoints stream events filtered by type+id. Legacy `GET /events` endpoint supports `?types=` filter. Event batching within configurable interval. Slow clients get events dropped (non-blocking send to buffered channel). SSE events include the full resource in the `resource` field for optimistic client-side updates.
 - **`api/prometheus.go`** — Reverse proxy to Prometheus, only allows `/query` and `/query_range` paths with whitelisted query params. 10MB response limit, 30s timeout.
@@ -99,6 +119,7 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 - **`hooks/useDetailResource.ts`** — Generic hook for detail pages: fetches resource + history, subscribes to per-resource SSE stream via `useResourceStream`, re-fetches on change events.
 - **`hooks/useSwarmResource.ts`** — Generic fetch + SSE subscription hook for resource lists. Connects to per-resource SSE path (e.g. `/nodes`, `/services`) via `useResourceStream`. Performs optimistic in-place updates (upsert/remove) on SSE events without full refetch; falls back to full reload on `sync` events.
 - **`hooks/useMonitoringStatus.ts`** — Replaces `usePrometheusConfigured`. Returns full detection status (Prometheus reachable, node-exporter/cAdvisor target counts vs. cluster node count). Used by `MonitoringStatus` component (replaces `PrometheusBanner`).
+- **`hooks/useAuth.ts`** — Auth context and `useAuth` hook. `AuthProvider` wraps the app, fetches identity from `/auth/whoami` on mount. `UserBadge` displays identity in the nav bar (hidden in `none` mode).
 - **`components/`** — Key components:
   - `DataTable` — auto-virtualizes above 100 rows via `@tanstack/react-virtual`
   - `log/` — Modular log viewer: `LogViewer` (orchestrator), `LogTable` (virtual/plain rendering), `LogMessage` (line renderer with JSON pretty-print), `LogToolbar` (time range, stream/level filters), `useLogData` (fetch + SSE streaming + pagination), `useLogFilter` (search/level/task filtering), `useLogTimeRange` (URL-persisted time range), `log-utils` (types, constants, formatters)
@@ -139,7 +160,7 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 - Networks use `network.Summary` (which aliases `network.Inspect`) — the list and inspect types are identical in the Docker SDK
 - Secret data is always cleared before API responses (`sec.Spec.Data = nil`) — in list, detail, stack detail, and search endpoints
 - Config data is returned base64-encoded (from Docker SDK); frontend decodes with `atob()`
-- No authentication — designed to run behind a reverse proxy
+- Authentication is pluggable via `CETACEAN_AUTH_MODE` (default `none`). Modes: `none` (anonymous), `oidc`, `tailscale`, `cert`, `headers`. Auth middleware exempts `/-/*`, `/api*`, `/assets/*`, `/auth/*` routes. `GET /auth/whoami` returns the current identity. OIDC uses signed ephemeral cookies (invalidate on restart) for browser sessions and Bearer token validation for machines. TLS termination available in any mode via `CETACEAN_TLS_CERT`/`KEY`, required for cert mode.
 - pprof endpoints are opt-in via `CETACEAN_PPROF=true`, exposed at `/debug/pprof/` (registered without method prefix to support POST for `go tool pprof`)
 - Global search (`GET /search?q=&limit=`) searches names, images, labels across all resource types. `limit=0` returns up to 1000 per type; default is 3 per type. Response includes optional `state` field for services (derived from running/desired tasks + UpdateStatus) and tasks
 - Task list endpoints return `EnrichedTask` with `ServiceName` and `NodeHostname` populated from cache cross-references
@@ -168,5 +189,10 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 ## Known Pre-existing Issues
 None — all previously known test failures have been fixed.
 
-## Design Documents
-Design specs and implementation plans are in `docs/plans/` and `docs/superpowers/` (gitignored, local-only).
+## End-User Documentation
+- `docs/getting-started.md` — Installation, quick start, first run
+- `docs/configuration.md` — Environment variables, CLI flags, health checks, timeouts
+- `docs/monitoring.md` — Prometheus, node-exporter, cAdvisor setup
+- `docs/authentication.md` — Authentication providers (none, OIDC, Tailscale, cert, headers)
+- `docs/dashboard.md` — UI guide: navigation, keyboard shortcuts, search, charts, logs
+- `docs/api.md` — API reference: endpoints, query parameters, filters, response formats, SSE

@@ -1,6 +1,3 @@
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { Pin, PinOff } from "lucide-react";
-import { type RefObject, useCallback, useEffect, useState } from "react";
 import type { LogLine } from "./log-utils";
 import {
   formatTime,
@@ -11,6 +8,9 @@ import {
   logLineKey,
 } from "./log-utils";
 import { LogMessage } from "./LogMessage";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { Pin, PinOff } from "lucide-react";
+import { type RefObject, useCallback, useEffect, useState } from "react";
 
 export interface LogTableProps {
   containerRef: RefObject<HTMLDivElement | null>;
@@ -71,12 +71,12 @@ function LogRow({
       data-index={dataIndex}
       data-json={jsonLine ? "" : undefined}
       data-highlight={highlight || undefined}
-      className="hover:bg-muted/50 group data-json:cursor-pointer data-highlight:bg-yellow-500/10"
+      className="group hover:bg-muted/50 data-highlight:bg-yellow-500/10 data-json:cursor-pointer"
       onClick={onToggle && jsonLine ? () => onToggle(line.index) : undefined}
     >
-      <td className={`${onTogglePin ? "w-6" : "w-0.75"} ps-0.75 align-stretch relative`}>
+      <td className={`${onTogglePin ? "w-6" : "w-0.75"} align-stretch relative ps-0.75`}>
         <div
-          className={`w-0.75 min-h-full ${LEVEL_BAR[line.level]} absolute left-0 top-0 bottom-0`}
+          className={`min-h-full w-0.75 ${LEVEL_BAR[line.level]} absolute top-0 bottom-0 left-0`}
         />
         {onTogglePin && (
           <button
@@ -86,8 +86,7 @@ function LogRow({
               onTogglePin(line);
             }}
             aria-pressed={isPinned || undefined}
-            className="flex items-center justify-center p-1 opacity-0 group-hover:opacity-100
-                        text-muted-foreground hover:text-foreground aria-pressed:opacity-100 aria-pressed:text-primary"
+            className="flex items-center justify-center p-1 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground aria-pressed:text-primary aria-pressed:opacity-100"
             title={isPinned ? "Unpin line" : "Pin line"}
           >
             <PinIcon className="size-2.5" />
@@ -95,14 +94,14 @@ function LogRow({
         )}
       </td>
       <td
-        className="pe-2 py-px text-muted-foreground whitespace-nowrap align-top select-all"
+        className="py-px pe-2 align-top whitespace-nowrap text-muted-foreground select-all"
         title={line.timestamp}
       >
         {formatTime(line.timestamp)}
       </td>
       {showAttrs && (
         <td
-          className="pe-2 py-px whitespace-nowrap align-top font-mono"
+          className="py-px pe-2 align-top font-mono whitespace-nowrap"
           title={
             line.attrs?.taskId ? `Filter by task ${line.attrs.taskId.slice(0, 12)}` : undefined
           }
@@ -115,7 +114,7 @@ function LogRow({
 
                 onTaskFilter(line.attrs!.taskId!);
               }}
-              className="text-muted-foreground/60 hover:text-primary hover:underline cursor-pointer"
+              className="cursor-pointer text-muted-foreground/60 hover:text-primary hover:underline"
             >
               {line.attrs.taskId.slice(0, 8).trim()}
             </button>
@@ -128,7 +127,7 @@ function LogRow({
       )}
       <td
         data-wrap={wrapLines || isExpanded || undefined}
-        className="pe-2 py-px text-foreground whitespace-pre data-wrap:whitespace-pre-wrap data-wrap:break-all"
+        className="py-px pe-2 whitespace-pre text-foreground data-wrap:break-all data-wrap:whitespace-pre-wrap"
       >
         <LogMessage
           line={line}
@@ -175,36 +174,40 @@ export function LogTable({
   }, []);
 
   return (
-    <div ref={containerRef} onScroll={handleScroll} className="log-panel overflow-auto">
+    <div
+      ref={containerRef}
+      onScroll={handleScroll}
+      className="log-panel overflow-auto"
+    >
       <table className="w-full border-collapse font-mono text-xs leading-5">
         {pinnedLines && pinnedLines.length > 0 && (
-          <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm border-b shadow-md">
+          <thead className="sticky top-0 z-10 border-b bg-muted/80 shadow-md backdrop-blur-sm">
             {pinnedLines.map((line) => (
               <tr
                 key={logLineKey(line)}
                 onClick={() => onTogglePin?.(line)}
                 className="cursor-pointer hover:bg-muted/50"
               >
-                <td className="w-6 ps-1.75 align-stretch relative">
+                <td className="align-stretch relative w-6 ps-1.75">
                   <div
-                    className={`w-0.75 min-h-full ${LEVEL_BAR[line.level]} absolute left-0 top-0 bottom-0`}
+                    className={`min-h-full w-0.75 ${LEVEL_BAR[line.level]} absolute top-0 bottom-0 left-0`}
                   />
                   <PinOff className="size-2.5 text-muted-foreground" />
                 </td>
                 <td
-                  className="pe-2 py-px text-muted-foreground whitespace-nowrap align-top"
+                  className="py-px pe-2 align-top whitespace-nowrap text-muted-foreground"
                   title={line.timestamp}
                 >
                   {formatTime(line.timestamp)}
                 </td>
                 {showAttrs && (
-                  <td className="pe-2 py-px whitespace-nowrap align-top font-mono">
+                  <td className="py-px pe-2 align-top font-mono whitespace-nowrap">
                     <span className="text-muted-foreground/60">
                       {line.attrs?.taskId?.slice(0, 8)}
                     </span>
                   </td>
                 )}
-                <td className="pe-2 py-px text-foreground whitespace-pre overflow-hidden text-ellipsis">
+                <td className="overflow-hidden py-px pe-2 text-ellipsis whitespace-pre text-foreground">
                   {line.message}
                 </td>
               </tr>
@@ -310,7 +313,10 @@ function VirtualLogBody({
     <tbody>
       {virtualItems.length > 0 && (
         <tr>
-          <td style={{ height: virtualItems[0].start, padding: 0 }} colSpan={colCount} />
+          <td
+            style={{ height: virtualItems[0].start, padding: 0 }}
+            colSpan={colCount}
+          />
         </tr>
       )}
 

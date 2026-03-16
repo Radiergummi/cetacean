@@ -1,7 +1,7 @@
-import { useState, useCallback, useRef } from "react";
+import { useMetricsPanelContext } from "./MetricsPanelContext";
 import TimeSeriesChart from "./TimeSeriesChart";
 import type { Threshold } from "./TimeSeriesChart";
-import { useMetricsPanelContext } from "./MetricsPanelContext";
+import { useState, useCallback, useRef } from "react";
 
 interface Props {
   title: string;
@@ -96,7 +96,7 @@ export default function StackDrillDownChart({
           {showLegend ? "Hide legend" : "Show legend"}
         </button>
         {showLegend && seriesInfo.length > 0 && (
-          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
             {seriesInfo.map((s, i) => {
               const dimmed = isolatedLabel != null && isolatedLabel !== s.label;
               const faded = i >= 10 && !showAll;
@@ -107,7 +107,10 @@ export default function StackDrillDownChart({
                   className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground"
                   style={{ opacity: dimmed || faded ? 0.3 : 1 }}
                 >
-                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: s.color }} />
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ background: s.color }}
+                  />
                   {s.label}
                 </button>
               );

@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
 import { api } from "../api/client";
 import type { MonitoringStatus } from "../api/types";
+import { useState, useEffect } from "react";
 
 const TTL_MS = 60_000;
 
@@ -21,7 +21,7 @@ export function useMonitoringStatus(): MonitoringStatus | null {
     let cancelled = false;
 
     if (cached != null && cachedAt != null && Date.now() - cachedAt < TTL_MS) {
-      if (status !== cached) setStatus(cached);
+      setStatus(cached);
       return;
     }
 

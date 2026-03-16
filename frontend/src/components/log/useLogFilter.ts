@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
 import type { Level, LogLine } from "./log-utils";
+import { useEffect, useMemo, useState } from "react";
 
 export function useLogFilter(lines: LogLine[]) {
   const [search, setSearch] = useState("");

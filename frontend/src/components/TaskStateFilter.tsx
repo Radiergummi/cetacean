@@ -1,7 +1,7 @@
-import { useEffect, useMemo } from "react";
 import type { Task } from "../api/types";
 import type { Segment } from "./SegmentedControl";
 import SegmentedControl from "./SegmentedControl";
+import { useEffect, useMemo } from "react";
 
 const ALL = "__all__";
 

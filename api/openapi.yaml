@@ -20,9 +20,16 @@ info:
 servers:
   - url: /
 
+security:
+  - cookieAuth: []
+  - bearerAuth: []
+  - {} # Allow unauthenticated (none mode)
+
 tags:
   - name: Meta
     description: Health checks and operational endpoints (no content negotiation, no discovery links)
+  - name: Authentication
+    description: Authentication endpoints (OIDC login flow, identity)
   - name: Cluster
     description: Cluster-wide information, swarm config, disk usage, and plugins
   - name: Nodes
@@ -153,6 +160,72 @@ paths:
                 description: Prometheus query result (proxied as-is)
         "404":
           $ref: "#/components/responses/NotFound"
+
+  # ── Authentication ──────────────────────────────────────────────────
+
+  /auth/whoami:
+    get:
+      summary: Get current identity
+      operationId: whoami
+      tags: [Authentication]
+      responses:
+        "200":
+          description: Current user identity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Identity"
+        "401":
+          description: Not authenticated
+
+  /auth/login:
+    get:
+      summary: Initiate OIDC login
+      operationId: authLogin
+      tags: [Authentication]
+      description: Redirects to OIDC provider for authentication. Only available in OIDC mode.
+      parameters:
+        - name: redirect
+          in: query
+          schema:
+            type: string
+          description: URL to redirect to after login
+      responses:
+        "302":
+          description: Redirect to OIDC provider
+
+  /auth/callback:
+    get:
+      summary: OIDC callback
+      operationId: authCallback
+      tags: [Authentication]
+      description: Handles the OIDC authorization code callback. Only available in OIDC mode.
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to original URL after successful authentication
+        "400":
+          description: Invalid state parameter
+
+  /auth/logout:
+    get:
+      summary: Logout
+      operationId: authLogout
+      tags: [Authentication]
+      description: Clears the session cookie and redirects to home.
+      responses:
+        "302":
+          description: Redirect to home
 
   # ── Documentation ────────────────────────────────────────────────────
 
@@ -1155,6 +1228,19 @@ paths:
 
 components:
 
+  # ── Security Schemes ────────────────────────────────────────────────
+
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: __Host-cetacean_session
+      description: Session cookie set after OIDC authentication
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Bearer token for machine-to-machine OIDC authentication
+
   # ── Parameters ───────────────────────────────────────────────────────
 
   parameters:
@@ -2018,3 +2104,33 @@ components:
           type: integer
         image:
           type: string
+
+    Identity:
+      type: object
+      required:
+        - subject
+        - displayName
+        - provider
+      properties:
+        subject:
+          type: string
+          description: Unique identifier for the user/machine
+        displayName:
+          type: string
+          description: Human-friendly display name
+        email:
+          type: string
+          description: Email address (if available)
+        groups:
+          type: array
+          items:
+            type: string
+          description: Group memberships (if available)
+        provider:
+          type: string
+          enum: [none, oidc, tailscale, cert, headers]
+          description: Authentication provider that produced this identity
+        raw:
+          type: object
+          additionalProperties: true
+          description: All raw claims from the authentication provider

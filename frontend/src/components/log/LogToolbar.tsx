@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from "react";
-import { X, Clock, ChevronDown } from "lucide-react";
 import type { TimeRange, Level } from "./log-utils";
 import { PRESETS, toLocalInput, formatShortDate } from "./log-utils";
+import { X, Clock, ChevronDown } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 
 export function TimeRangeSelector({
   value,
@@ -31,7 +31,7 @@ export function TimeRangeSelector({
       setCustomSince(value.since ? toLocalInput(value.since) : "");
       setCustomUntil(value.until ? toLocalInput(value.until) : "");
     }
-  }, [open]);
+  }, [open, value.since, value.until]);
 
   const applyCustom = () => {
     const since = customSince ? new Date(customSince).toISOString() : undefined;
@@ -51,11 +51,14 @@ export function TimeRangeSelector({
   };
 
   return (
-    <div className="relative" ref={ref}>
+    <div
+      className="relative"
+      ref={ref}
+    >
       <button
         onClick={() => setOpen(!open)}
         data-active={value.since || value.until || undefined}
-        className="h-8 inline-flex items-center gap-1.5 px-2.5 text-xs border rounded-md bg-background hover:bg-muted data-active:bg-primary/10 data-active:border-primary/30 data-active:text-primary"
+        className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-2.5 text-xs hover:bg-muted data-active:border-primary/30 data-active:bg-primary/10 data-active:text-primary"
         title="Time range"
       >
         <Clock className="size-3.5" />
@@ -64,10 +67,10 @@ export function TimeRangeSelector({
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 w-72 rounded-lg border bg-popover shadow-lg">
+        <div className="absolute top-full left-0 z-50 mt-1 w-72 rounded-lg border bg-popover shadow-lg">
           {/* Presets */}
-          <div className="p-2 border-b">
-            <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1.5 px-1">
+          <div className="border-b p-2">
+            <div className="mb-1.5 px-1 text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
               Presets
             </div>
             <div className="flex flex-wrap gap-1">
@@ -79,7 +82,7 @@ export function TimeRangeSelector({
                     setOpen(false);
                   }}
                   aria-selected={value.label === p.label || undefined}
-                  className="px-2 py-1 text-xs rounded-md bg-muted hover:bg-muted/80 text-foreground aria-selected:bg-primary aria-selected:text-primary-foreground"
+                  className="rounded-md bg-muted px-2 py-1 text-xs text-foreground hover:bg-muted/80 aria-selected:bg-primary aria-selected:text-primary-foreground"
                 >
                   {p.label}
                 </button>
@@ -89,7 +92,7 @@ export function TimeRangeSelector({
 
           {/* Custom range */}
           <div className="p-2">
-            <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1.5 px-1">
+            <div className="mb-1.5 px-1 text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
               Custom Range
             </div>
             <div className="space-y-2">
@@ -99,7 +102,7 @@ export function TimeRangeSelector({
                   type="datetime-local"
                   value={customSince}
                   onChange={(e) => setCustomSince(e.target.value)}
-                  className="flex-1 h-7 px-2 text-xs border rounded-md bg-background"
+                  className="h-7 flex-1 rounded-md border bg-background px-2 text-xs"
                 />
                 {customSince && (
                   <button
@@ -116,7 +119,7 @@ export function TimeRangeSelector({
                   type="datetime-local"
                   value={customUntil}
                   onChange={(e) => setCustomUntil(e.target.value)}
-                  className="flex-1 h-7 px-2 text-xs border rounded-md bg-background"
+                  className="h-7 flex-1 rounded-md border bg-background px-2 text-xs"
                 />
                 {customUntil && (
                   <button
@@ -130,7 +133,7 @@ export function TimeRangeSelector({
               <button
                 onClick={applyCustom}
                 disabled={!customSince && !customUntil}
-                className="w-full h-7 text-xs font-medium rounded-md bg-primary text-primary-foreground disabled:opacity-40"
+                className="h-7 w-full rounded-md bg-primary text-xs font-medium text-primary-foreground disabled:opacity-40"
               >
                 Apply
               </button>
@@ -154,7 +157,7 @@ export function LevelFilter({
       value={value}
       onChange={(e) => onChange(e.target.value as Level | "all")}
       title="Filter by level"
-      className="h-8 px-2 text-xs border rounded-md bg-background"
+      className="h-8 rounded-md border bg-background px-2 text-xs"
     >
       <option value="all">All levels</option>
       <option value="error">Error</option>
@@ -175,13 +178,13 @@ export function StreamFilterToggle({
   onChange: (v: "all" | "stdout" | "stderr") => void;
 }) {
   return (
-    <div className="flex items-center h-8 rounded-md border bg-background overflow-hidden">
+    <div className="flex h-8 items-center overflow-hidden rounded-md border bg-background">
       {STREAM_OPTIONS.map((opt) => (
         <button
           key={opt}
           onClick={() => onChange(opt)}
           aria-pressed={value === opt}
-          className="px-2 h-full text-xs text-muted-foreground hover:text-foreground hover:bg-muted aria-pressed:bg-primary aria-pressed:text-primary-foreground"
+          className="h-full px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground"
           title={opt === "all" ? "All streams" : opt}
         >
           {opt === "all" ? "All" : opt}

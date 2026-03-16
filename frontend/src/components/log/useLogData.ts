@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
 import type { LogLine as ApiLogLine } from "../../api/client";
 import { api } from "../../api/client";
 import type { LogLine, TimeRange } from "./log-utils";
 import { MAX_LIVE_LINES, toLogLine } from "./log-utils";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface UseLogDataOptions {
   logId: string;

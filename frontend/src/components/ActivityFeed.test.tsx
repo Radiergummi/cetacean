@@ -1,12 +1,17 @@
-import { describe, it, expect } from "vitest";
+import type { HistoryEntry } from "../api/types";
+import ActivityFeed from "./ActivityFeed";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import ActivityFeed from "./ActivityFeed";
-import type { HistoryEntry } from "../api/types";
+import { describe, it, expect } from "vitest";
 
 describe("ActivityFeed", () => {
   it("shows loading skeleton", () => {
-    const { container } = render(<ActivityFeed entries={[]} loading />);
+    const { container } = render(
+      <ActivityFeed
+        entries={[]}
+        loading
+      />,
+    );
     expect(container.querySelectorAll(".bg-muted").length).toBeGreaterThan(0);
   });
 

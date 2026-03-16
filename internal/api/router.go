@@ -3,10 +3,14 @@ package api
 import (
 	"net/http"
 	"net/http/pprof"
+
+	"github.com/radiergummi/cetacean/internal/auth"
 )
 
-func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Handler, openapiSpec []byte, scalarJS []byte, enablePprof bool) http.Handler {
+func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Handler, openapiSpec []byte, scalarJS []byte, enablePprof bool, authProvider auth.Provider) http.Handler {
 	mux := http.NewServeMux()
+
+	authProvider.RegisterRoutes(mux)
 
 	// Meta endpoints (no content negotiation, no discovery links)
 	mux.HandleFunc("GET /-/health", h.HandleHealth)
@@ -79,6 +83,9 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 	// Search
 	mux.HandleFunc("GET /search", contentNegotiated(h.HandleSearch, spa))
 
+	// Profile
+	mux.HandleFunc("GET /profile", contentNegotiated(HandleProfile, spa))
+
 	// Topology
 	mux.HandleFunc("GET /topology/networks", contentNegotiated(h.HandleNetworkTopology, spa))
 	mux.HandleFunc("GET /topology/placement", contentNegotiated(h.HandlePlacementTopology, spa))
@@ -99,6 +106,7 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 	handler = requestLogger(handler)
 	handler = discoveryLinks(handler)
 	handler = negotiate(handler)
+	handler = auth.Middleware(authProvider)(handler)
 	handler = securityHeaders(handler)
 	handler = recovery(handler)
 	handler = requestID(handler)
@@ -109,6 +117,7 @@ func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:")
 		next.ServeHTTP(w, r)
 	})

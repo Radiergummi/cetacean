@@ -17,7 +17,10 @@ export function timeAgo(date: string): string {
 export default function TimeAgo({ date }: { date: string }) {
   const full = new Date(date).toLocaleString();
   return (
-    <time dateTime={date} title={full}>
+    <time
+      dateTime={date}
+      title={full}
+    >
       {timeAgo(date)}
     </time>
   );

@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -20,6 +21,32 @@ func resolve(flag *string, envKey string, file *string, def string) string {
 		return *file
 	}
 	return def
+}
+
+// resolveSecret works like resolve but also checks for a _FILE variant
+// of the env var. If envKey+"_FILE" is set, the file is read and its
+// contents (trimmed) are used as the value. The _FILE variant has lower
+// precedence than the direct env var but higher than the config file.
+//
+// Precedence: flag > env > env_FILE > config file > default.
+func resolveSecret(flag *string, envKey string, file *string, def string) (string, error) {
+	if flag != nil {
+		return *flag, nil
+	}
+	if v := os.Getenv(envKey); v != "" {
+		return v, nil
+	}
+	if path := os.Getenv(envKey + "_FILE"); path != "" {
+		data, err := os.ReadFile(filepath.Clean(path))
+		if err != nil {
+			return "", fmt.Errorf("reading %s_FILE (%s): %w", envKey, path, err)
+		}
+		return strings.TrimSpace(string(data)), nil
+	}
+	if file != nil {
+		return *file, nil
+	}
+	return def, nil
 }
 
 // resolveBool returns the first set value in precedence order:

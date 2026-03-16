@@ -1,5 +1,11 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import { RefreshCw, BarChart3, LineChart, AreaChart } from "lucide-react";
+import { api } from "../../api/client";
+import type { PrometheusResponse } from "../../api/types";
+import { getChartColor } from "../../lib/chartColors";
+import { CHART_TOOLTIP_CLASS } from "../../lib/chartTooltip";
+import { formatMetricValue } from "../../lib/formatMetricValue";
+import { generateMockSeries } from "../../lib/mockChartData";
+import { useChartSync } from "./ChartSyncProvider";
+import { useMetricsPanelContext } from "./MetricsPanelContext";
 import {
   Chart as ChartJS,
   LineElement,
@@ -13,15 +19,9 @@ import {
   type Plugin,
 } from "chart.js";
 import zoomPlugin from "chartjs-plugin-zoom";
+import { RefreshCw, BarChart3, LineChart, AreaChart } from "lucide-react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { Line } from "react-chartjs-2";
-import { api } from "../../api/client";
-import type { PrometheusResponse } from "../../api/types";
-import { getChartColor } from "../../lib/chartColors";
-import { CHART_TOOLTIP_CLASS } from "../../lib/chartTooltip";
-import { formatMetricValue } from "../../lib/formatMetricValue";
-import { generateMockSeries } from "../../lib/mockChartData";
-import { useChartSync } from "./ChartSyncProvider";
-import { useMetricsPanelContext } from "./MetricsPanelContext";
 
 ChartJS.register(
   LineElement,
@@ -182,6 +182,8 @@ export default function TimeSeriesChart({
   onSeriesDoubleClickRef.current = onSeriesDoubleClick;
   const onRangeSelectRef = useRef(onRangeSelect);
   onRangeSelectRef.current = onRangeSelect;
+  const onSeriesInfoRef = useRef(onSeriesInfo);
+  onSeriesInfoRef.current = onSeriesInfo;
 
   const panel = useMetricsPanelContext();
   const [localStacked, setLocalStacked] = useState(false);
@@ -228,7 +230,7 @@ export default function TimeSeriesChart({
       const idx = data.series.findIndex((s) => s.label === seriesLabel);
       setIsolatedIndex(idx >= 0 ? idx : null);
     });
-  }, [chartId, sync]);
+  }, [chartId, sync, setIsolatedIndex]);
 
   useEffect(() => {
     return sync.subscribe(chartId, (timestamp) => {
@@ -262,9 +264,16 @@ export default function TimeSeriesChart({
         const parsed = parseRangeResult(resp, title, colorOverride);
         if (!parsed) {
           if (import.meta.env.DEV) {
-            const mock = generateMockSeries(title, unit, start, end, step, colorOverride);
+            const mock = generateMockSeries(
+              title,
+              unitRef.current,
+              start,
+              end,
+              step,
+              colorOverride,
+            );
             setFetchedData(mock);
-            onSeriesInfo?.(mock.series.map((s) => ({ label: s.label, color: s.color })));
+            onSeriesInfoRef.current?.(mock.series.map((s) => ({ label: s.label, color: s.color })));
             if (seriesChanged(fetchedDataRef.current, mock)) setIsolatedIndex(null);
             setState("data");
             return;
@@ -273,7 +282,7 @@ export default function TimeSeriesChart({
           return;
         }
         setFetchedData(parsed);
-        onSeriesInfo?.(parsed.series.map((s) => ({ label: s.label, color: s.color })));
+        onSeriesInfoRef.current?.(parsed.series.map((s) => ({ label: s.label, color: s.color })));
         if (seriesChanged(fetchedDataRef.current, parsed)) setIsolatedIndex(null);
         setState("data");
       })
@@ -287,7 +296,7 @@ export default function TimeSeriesChart({
     return () => {
       cancelled = true;
     };
-  }, [query, range, from, to, title, colorOverride]);
+  }, [query, range, from, to, title, colorOverride, setIsolatedIndex]);
 
   useEffect(() => {
     const cancel = fetchData();
@@ -327,7 +336,7 @@ export default function TimeSeriesChart({
         const parsed = parseRangeResult(resp, title, colorOverride);
         if (!parsed) return;
         setFetchedData(parsed);
-        onSeriesInfo?.(parsed.series.map((s) => ({ label: s.label, color: s.color })));
+        onSeriesInfoRef.current?.(parsed.series.map((s) => ({ label: s.label, color: s.color })));
         setState("data");
       } catch {
         /* ignore parse errors */
@@ -357,7 +366,7 @@ export default function TimeSeriesChart({
     });
 
     es.addEventListener("query_error", (e: MessageEvent) => {
-      console.warn("[metrics stream] Prometheus error:", e.data);
+      console.warn("[metrics stream] Prometheus error:", e.data); // eslint-disable-line no-console
     });
 
     es.onerror = () => {
@@ -635,7 +644,7 @@ export default function TimeSeriesChart({
         }
       },
     }),
-    [chartId, sync],
+    [chartId, sync, setIsolatedIndex],
   );
 
   const options = useMemo<ChartOptions<"line">>(
@@ -708,39 +717,39 @@ export default function TimeSeriesChart({
   );
 
   return (
-    <div className="rounded-lg border bg-card overflow-visible">
+    <div className="overflow-visible rounded-lg border bg-card">
       <div className="flex items-center gap-2 px-4 pt-4 pb-2">
         <span className="text-sm font-medium">{title}</span>
         {stackable && panel?.stacked == null && (
-          <div className="flex items-center gap-0.5 ml-1">
+          <div className="ml-1 flex items-center gap-0.5">
             <button
               onClick={() => setLocalStacked(false)}
-              className={`p-0.5 rounded ${!stacked ? "bg-muted" : "hover:bg-muted/50"}`}
+              className={`rounded p-0.5 ${!stacked ? "bg-muted" : "hover:bg-muted/50"}`}
               title="Line chart"
             >
               <LineChart className="size-3.5" />
             </button>
             <button
               onClick={() => setLocalStacked(true)}
-              className={`p-0.5 rounded ${stacked ? "bg-muted" : "hover:bg-muted/50"}`}
+              className={`rounded p-0.5 ${stacked ? "bg-muted" : "hover:bg-muted/50"}`}
               title="Stacked area"
             >
               <AreaChart className="size-3.5" />
             </button>
           </div>
         )}
-        {unit && <span className="text-xs text-muted-foreground ml-auto">{unit}</span>}
+        {unit && <span className="ml-auto text-xs text-muted-foreground">{unit}</span>}
       </div>
 
       {state === "loading" && !fetchedData && <div className="h-[200px] rounded bg-muted/50" />}
 
       {state === "error" && (
-        <div className="h-[200px] rounded bg-destructive/5 border border-destructive/20 flex items-center justify-center">
+        <div className="flex h-[200px] items-center justify-center rounded border border-destructive/20 bg-destructive/5">
           <div className="text-center">
-            <p className="text-sm text-destructive mb-2">{errorMsg}</p>
+            <p className="mb-2 text-sm text-destructive">{errorMsg}</p>
             <button
               onClick={fetchData}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-destructive/30 text-destructive hover:bg-destructive/10"
+              className="inline-flex items-center gap-1.5 rounded-md border border-destructive/30 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10"
             >
               <RefreshCw className="size-3" />
               Retry
@@ -750,9 +759,9 @@ export default function TimeSeriesChart({
       )}
 
       {state === "empty" && (
-        <div className="h-[200px] rounded bg-muted/30 flex items-center justify-center">
+        <div className="flex h-[200px] items-center justify-center rounded bg-muted/30">
           <div className="text-center text-muted-foreground">
-            <BarChart3 className="size-8 mx-auto mb-2 opacity-30" />
+            <BarChart3 className="mx-auto mb-2 size-8 opacity-30" />
             <p className="text-sm">No data for this time range</p>
           </div>
         </div>
@@ -764,10 +773,18 @@ export default function TimeSeriesChart({
             <RefreshCw className="size-3.5 animate-spin text-muted-foreground" />
           </div>
         )}
-        <div className="overflow-hidden rounded-b-lg" hidden={state !== "data"}>
+        <div
+          className="overflow-hidden rounded-b-lg"
+          hidden={state !== "data"}
+        >
           {chartData && (
             <div className="h-[200px]">
-              <Line ref={chartRef} data={chartData} options={options} plugins={plugins} />
+              <Line
+                ref={chartRef}
+                data={chartData}
+                options={options}
+                plugins={plugins}
+              />
             </div>
           )}
         </div>
@@ -783,19 +800,25 @@ export default function TimeSeriesChart({
         >
           {tooltip && (
             <>
-              <div className="font-semibold mb-1.5 text-foreground">{tooltip.time}</div>
+              <div className="mb-1.5 font-semibold text-foreground">{tooltip.time}</div>
               {tooltip.series.map((s) => (
-                <div key={s.label} className="flex items-center gap-2 whitespace-nowrap">
+                <div
+                  key={s.label}
+                  className="flex items-center gap-2 whitespace-nowrap"
+                >
                   {s.dashed ? (
                     <span
                       className="w-3 shrink-0 border-t-2 border-dashed"
                       style={{ borderColor: s.color }}
                     />
                   ) : (
-                    <span className="w-1 shrink-0 h-3 rounded-sm" style={{ background: s.color }} />
+                    <span
+                      className="h-3 w-1 shrink-0 rounded-sm"
+                      style={{ background: s.color }}
+                    />
                   )}
                   <span className="text-muted-foreground">{s.label}</span>
-                  <span className="font-semibold ms-auto ps-4 text-foreground">{s.value}</span>
+                  <span className="ms-auto ps-4 font-semibold text-foreground">{s.value}</span>
                 </div>
               ))}
             </>

@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
+import PageHeader from "./PageHeader";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import PageHeader from "./PageHeader";
+import { describe, it, expect } from "vitest";
 
 function renderWithRouter(ui: React.ReactElement) {
   return render(<MemoryRouter>{ui}</MemoryRouter>);
@@ -32,7 +32,12 @@ describe("PageHeader", () => {
   });
 
   it("renders breadcrumb without link as plain text", () => {
-    renderWithRouter(<PageHeader title="Detail" breadcrumbs={[{ label: "Current" }]} />);
+    renderWithRouter(
+      <PageHeader
+        title="Detail"
+        breadcrumbs={[{ label: "Current" }]}
+      />,
+    );
     const el = screen.getByText("Current");
     expect(el.tagName).toBe("SPAN");
     expect(el.closest("a")).toBeNull();

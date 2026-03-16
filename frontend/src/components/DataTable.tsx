@@ -83,7 +83,10 @@ function VirtualBody<T>({
     <tbody>
       {virtualItems.length > 0 && (
         <tr>
-          <td style={{ height: virtualItems[0].start, padding: 0 }} colSpan={columns.length} />
+          <td
+            style={{ height: virtualItems[0].start, padding: 0 }}
+            colSpan={columns.length}
+          />
         </tr>
       )}
       {virtualItems.map((virtualRow) => {
@@ -96,7 +99,7 @@ function VirtualBody<T>({
             data-clickable={onRowClick ? "" : undefined}
             data-selected={virtualRow.index === selectedIndex || undefined}
             data-last={virtualRow.index === data.length - 1 || undefined}
-            className={`border-b data-last:border-b-0 data-clickable:cursor-pointer data-clickable:hover:bg-muted/50 data-selected:bg-accent data-selected:text-accent-foreground ${rowClassName?.(item) ?? ""}`}
+            className={`border-b data-clickable:cursor-pointer data-clickable:hover:bg-muted/50 data-last:border-b-0 data-selected:bg-accent data-selected:text-accent-foreground ${rowClassName?.(item) ?? ""}`}
             onClick={onRowClick ? () => onRowClick(item) : undefined}
           >
             {columns.map((column, colIndex) => (
@@ -173,7 +176,7 @@ export default function DataTable<T>({ columns, data, keyFn, rowClassName, onRow
       ref={scrollRef}
       tabIndex={0}
       data-virtual={useVirtual || undefined}
-      className="overflow-x-auto rounded-lg border data-virtual:max-h-[calc(100vh-16rem)] data-virtual:overflow-y-auto outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+      className="overflow-x-auto rounded-lg border outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 data-virtual:max-h-[calc(100vh-16rem)] data-virtual:overflow-y-auto"
       onKeyDown={onKeyDown}
     >
       <table className="w-full min-w-max">
@@ -183,7 +186,7 @@ export default function DataTable<T>({ columns, data, keyFn, rowClassName, onRow
               <th
                 key={index}
                 data-clickable={column.onHeaderClick ? "" : undefined}
-                className={`text-left p-3 text-sm font-medium ${
+                className={`p-3 text-left text-sm font-medium ${
                   column.className ?? ""
                 } data-clickable:cursor-pointer data-clickable:select-none data-clickable:hover:bg-muted/80`}
                 onClick={column.onHeaderClick}

@@ -11,8 +11,11 @@ export default function KVTable({ rows }: { rows: Row[] }) {
       <table className="w-full">
         <tbody>
           {valid.map(([key, value]) => (
-            <tr key={key} className="border-b last:border-b-0">
-              <td className="p-3 text-sm font-medium text-muted-foreground min-w-1/3">{key}</td>
+            <tr
+              key={key}
+              className="border-b last:border-b-0"
+            >
+              <td className="min-w-1/3 p-3 text-sm font-medium text-muted-foreground">{key}</td>
               <td className="p-3 font-mono text-xs break-all">{value}</td>
             </tr>
           ))}

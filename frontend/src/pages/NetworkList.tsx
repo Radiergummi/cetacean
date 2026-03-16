@@ -1,20 +1,20 @@
-import { useCallback } from "react";
-import { useNavigate } from "react-router-dom";
-import { useSwarmResource } from "../hooks/useSwarmResource";
-import { useSortParams } from "../hooks/useSort";
-import { useViewMode } from "../hooks/useViewMode";
-import { useSearchParam } from "../hooks/useSearchParam";
 import { api } from "../api/client";
 import type { Network } from "../api/types";
-import ListToolbar from "../components/ListToolbar";
-import PageHeader from "../components/PageHeader";
-import SortIndicator from "../components/SortIndicator";
-import ResourceCard from "../components/ResourceCard";
+import DataTable, { type Column } from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
+import ListToolbar from "../components/ListToolbar";
 import { SkeletonTable } from "../components/LoadingSkeleton";
+import PageHeader from "../components/PageHeader";
+import ResourceCard from "../components/ResourceCard";
 import ResourceName from "../components/ResourceName";
-import DataTable, { type Column } from "../components/DataTable";
+import SortIndicator from "../components/SortIndicator";
+import { useSearchParam } from "../hooks/useSearchParam";
+import { useSortParams } from "../hooks/useSort";
+import { useSwarmResource } from "../hooks/useSwarmResource";
+import { useViewMode } from "../hooks/useViewMode";
+import { useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function NetworkList() {
   const navigate = useNavigate();
@@ -36,17 +36,35 @@ export default function NetworkList() {
 
   const columns: Column<Network>[] = [
     {
-      header: <SortIndicator label="Name" active={sortKey === "name"} dir={sortDir} />,
+      header: (
+        <SortIndicator
+          label="Name"
+          active={sortKey === "name"}
+          dir={sortDir}
+        />
+      ),
       cell: (n) => <ResourceName name={n.Name} />,
       onHeaderClick: () => toggle("name"),
     },
     {
-      header: <SortIndicator label="Driver" active={sortKey === "driver"} dir={sortDir} />,
+      header: (
+        <SortIndicator
+          label="Driver"
+          active={sortKey === "driver"}
+          dir={sortDir}
+        />
+      ),
       cell: (n) => n.Driver,
       onHeaderClick: () => toggle("driver"),
     },
     {
-      header: <SortIndicator label="Scope" active={sortKey === "scope"} dir={sortDir} />,
+      header: (
+        <SortIndicator
+          label="Scope"
+          active={sortKey === "scope"}
+          dir={sortDir}
+        />
+      ),
       cell: (n) => n.Scope,
       onHeaderClick: () => toggle("scope"),
     },
@@ -60,7 +78,13 @@ export default function NetworkList() {
         <SkeletonTable columns={3} />
       </div>
     );
-  if (error) return <FetchError message={error.message} onRetry={retry} />;
+  if (error)
+    return (
+      <FetchError
+        message={error.message}
+        onRetry={retry}
+      />
+    );
 
   return (
     <div>
@@ -82,7 +106,7 @@ export default function NetworkList() {
           onRowClick={(n) => navigate(`/networks/${n.Id}`)}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {networks.map((net) => (
             <ResourceCard
               key={net.Id}

@@ -1,14 +1,14 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import type { Task } from "../api/types";
 import type { TaskMetricsData } from "../hooks/useTaskMetrics";
 import { statusColor } from "../lib/statusColor";
 import CollapsibleSection from "./CollapsibleSection";
+import { TaskSparkline } from "./metrics";
 import ResourceName from "./ResourceName";
 import TaskStateFilter from "./TaskStateFilter";
 import TaskStatusBadge from "./TaskStatusBadge";
-import { TaskSparkline } from "./metrics";
 import TimeAgo from "./TimeAgo";
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 type Variant = "node" | "service";
 
@@ -47,21 +47,27 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
   return (
     <CollapsibleSection
       title="Tasks"
-      controls={<TaskStateFilter tasks={tasks} active={stateFilter} onChange={setStateFilter} />}
+      controls={
+        <TaskStateFilter
+          tasks={tasks}
+          active={stateFilter}
+          onChange={setStateFilter}
+        />
+      }
     >
-      <div className="overflow-auto rounded-lg border max-h-96">
+      <div className="max-h-96 overflow-auto rounded-lg border">
         <table className="w-full min-w-max whitespace-nowrap">
           <thead className="sticky top-0 z-10 bg-background">
             <tr className="border-b bg-muted/50">
-              {variant === "node" && <th className="text-left p-3 text-sm font-medium">Service</th>}
-              <th className="text-left p-3 text-sm font-medium">Task</th>
-              <th className="text-left p-3 text-sm font-medium">State</th>
-              {metrics && <th className="text-left p-3 text-sm font-medium">CPU</th>}
-              {metrics && <th className="text-left p-3 text-sm font-medium">Memory</th>}
-              {variant === "service" && <th className="text-left p-3 text-sm font-medium">Node</th>}
-              <th className="text-left p-3 text-sm font-medium">Desired</th>
-              <th className="text-left p-3 text-sm font-medium">Error</th>
-              <th className="text-left p-3 text-sm font-medium">Timestamp</th>
+              {variant === "node" && <th className="p-3 text-left text-sm font-medium">Service</th>}
+              <th className="p-3 text-left text-sm font-medium">Task</th>
+              <th className="p-3 text-left text-sm font-medium">State</th>
+              {metrics && <th className="p-3 text-left text-sm font-medium">CPU</th>}
+              {metrics && <th className="p-3 text-left text-sm font-medium">Memory</th>}
+              {variant === "service" && <th className="p-3 text-left text-sm font-medium">Node</th>}
+              <th className="p-3 text-left text-sm font-medium">Desired</th>
+              <th className="p-3 text-left text-sm font-medium">Error</th>
+              <th className="p-3 text-left text-sm font-medium">Timestamp</th>
             </tr>
           </thead>
           <tbody>
@@ -80,10 +86,16 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
               const errorMessage = Err || (exitCode && exitCode !== 0 ? `exit ${exitCode}` : "");
 
               return (
-                <tr key={ID} className="border-b last:border-b-0">
+                <tr
+                  key={ID}
+                  className="border-b last:border-b-0"
+                >
                   {variant === "node" && (
                     <td className="p-3 text-sm whitespace-nowrap">
-                      <Link to={`/services/${ServiceID}`} className="text-link hover:underline">
+                      <Link
+                        to={`/services/${ServiceID}`}
+                        className="text-link hover:underline"
+                      >
                         <ResourceName name={ServiceName || ServiceID.slice(0, 12)} />
                       </Link>
                     </td>
@@ -91,8 +103,11 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
 
                   <td className="p-3 text-sm">
                     <span className="inline-flex items-center gap-2">
-                      <span className={`shrink-0 size-2 rounded-full ${statusColor(State)}`} />
-                      <Link to={`/tasks/${ID}`} className="text-link hover:underline">
+                      <span className={`size-2 shrink-0 rounded-full ${statusColor(State)}`} />
+                      <Link
+                        to={`/tasks/${ID}`}
+                        className="text-link hover:underline"
+                      >
                         {variant === "node" && Slot ? `Replica #${Slot}` : ID.slice(0, 12)}
                       </Link>
                     </span>
@@ -131,7 +146,10 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
 
                   {variant === "service" && (
                     <td className="p-3 text-sm">
-                      <Link to={`/nodes/${NodeID}`} className="text-link hover:underline">
+                      <Link
+                        to={`/nodes/${NodeID}`}
+                        className="text-link hover:underline"
+                      >
                         {NodeHostname || NodeID.slice(0, 12)}
                       </Link>
                     </td>

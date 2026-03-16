@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
 import TimeAgo, { timeAgo } from "./TimeAgo";
+import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach } from "vitest";
 
 describe("timeAgo", () => {
   afterEach(() => {

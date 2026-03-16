@@ -31,6 +31,27 @@ func TestParseFlags_AllFlags(t *testing.T) {
 		"-auth-mode", "oidc",
 		"-pprof",
 		"-version",
+		"-auth-oidc-issuer", "https://idp.example.com",
+		"-auth-oidc-client-id", "my-client",
+		"-auth-oidc-client-secret", "my-secret",
+		"-auth-oidc-redirect-url", "https://app.example.com/auth/callback",
+		"-auth-oidc-scopes", "openid,profile",
+		"-auth-oidc-session-key", "abcdef",
+		"-auth-tailscale-mode", "tsnet",
+		"-auth-tailscale-authkey", "tskey-123",
+		"-auth-tailscale-hostname", "myhost",
+		"-auth-tailscale-state-dir", "/var/lib/ts",
+		"-auth-tailscale-capability", "example.com/cap/cetacean",
+		"-auth-cert-ca", "/etc/ca.pem",
+		"-auth-headers-subject", "X-User",
+		"-auth-headers-name", "X-Name",
+		"-auth-headers-email", "X-Email",
+		"-auth-headers-groups", "X-Groups",
+		"-auth-headers-secret-header", "X-Secret",
+		"-auth-headers-secret-value", "s3cret",
+		"-auth-headers-trusted-proxies", "10.0.0.0/8",
+		"-tls-cert", "/etc/cert.pem",
+		"-tls-key", "/etc/key.pem",
 	}
 
 	flags, err := ParseFlags(args)
@@ -63,6 +84,56 @@ func TestParseFlags_AllFlags(t *testing.T) {
 	}
 	if !flags.Version {
 		t.Error("Version should be true")
+	}
+	// OIDC flags
+	if flags.OIDCIssuer == nil || *flags.OIDCIssuer != "https://idp.example.com" {
+		t.Error("OIDCIssuer not set correctly")
+	}
+	if flags.OIDCClientID == nil || *flags.OIDCClientID != "my-client" {
+		t.Error("OIDCClientID not set correctly")
+	}
+	if flags.OIDCClientSecret == nil || *flags.OIDCClientSecret != "my-secret" {
+		t.Error("OIDCClientSecret not set correctly")
+	}
+	if flags.OIDCRedirectURL == nil || *flags.OIDCRedirectURL != "https://app.example.com/auth/callback" {
+		t.Error("OIDCRedirectURL not set correctly")
+	}
+	if flags.OIDCScopes == nil || *flags.OIDCScopes != "openid,profile" {
+		t.Error("OIDCScopes not set correctly")
+	}
+	if flags.OIDCSessionKey == nil || *flags.OIDCSessionKey != "abcdef" {
+		t.Error("OIDCSessionKey not set correctly")
+	}
+	// Tailscale flags
+	if flags.TailscaleMode == nil || *flags.TailscaleMode != "tsnet" {
+		t.Error("TailscaleMode not set correctly")
+	}
+	if flags.TailscaleAuthKey == nil || *flags.TailscaleAuthKey != "tskey-123" {
+		t.Error("TailscaleAuthKey not set correctly")
+	}
+	if flags.TailscaleHostname == nil || *flags.TailscaleHostname != "myhost" {
+		t.Error("TailscaleHostname not set correctly")
+	}
+	// Cert flags
+	if flags.CertCA == nil || *flags.CertCA != "/etc/ca.pem" {
+		t.Error("CertCA not set correctly")
+	}
+	// Headers flags
+	if flags.HeadersSubject == nil || *flags.HeadersSubject != "X-User" {
+		t.Error("HeadersSubject not set correctly")
+	}
+	if flags.HeadersSecretValue == nil || *flags.HeadersSecretValue != "s3cret" {
+		t.Error("HeadersSecretValue not set correctly")
+	}
+	if flags.HeadersTrustedProxies == nil || *flags.HeadersTrustedProxies != "10.0.0.0/8" {
+		t.Error("HeadersTrustedProxies not set correctly")
+	}
+	// TLS flags
+	if flags.TLSCert == nil || *flags.TLSCert != "/etc/cert.pem" {
+		t.Error("TLSCert not set correctly")
+	}
+	if flags.TLSKey == nil || *flags.TLSKey != "/etc/key.pem" {
+		t.Error("TLSKey not set correctly")
 	}
 }
 

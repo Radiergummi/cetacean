@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
 import { api } from "../api/client";
 import type { PrometheusResponse } from "../api/types";
-import { useMonitoringStatus } from "./useMonitoringStatus";
 import { useInstanceResolver } from "./useInstanceResolver";
+import { useMonitoringStatus } from "./useMonitoringStatus";
+import { useState, useEffect, useCallback } from "react";
 
 export interface NodeMetrics {
   cpu: number | null;

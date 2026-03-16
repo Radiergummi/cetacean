@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { StackDetail as StackDetailType, Task } from "../api/types";
+import CollapsibleSection from "../components/CollapsibleSection";
 import FetchError from "../components/FetchError";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
-import CollapsibleSection from "../components/CollapsibleSection";
 import SimpleTable from "../components/SimpleTable";
 import { useResourceStream } from "../hooks/useResourceStream";
+import { useCallback, useEffect, useState } from "react";
+import { Link, useParams } from "react-router-dom";
 
 export default function StackDetail() {
   const { name } = useParams<{ name: string }>();
@@ -113,7 +113,10 @@ export default function StackDetail() {
             renderRow={({ ID, Spec: { Mode, Name, TaskTemplate } }) => (
               <>
                 <td className="p-3 text-sm">
-                  <Link to={`/services/${ID}`} className="text-link hover:underline font-medium">
+                  <Link
+                    to={`/services/${ID}`}
+                    className="font-medium text-link hover:underline"
+                  >
                     <ResourceName name={Name || ID} />
                   </Link>
                 </td>
@@ -150,7 +153,10 @@ export default function StackDetail() {
             keyFn={({ ID }) => ID}
             renderRow={({ ID, Spec: { Name } }) => (
               <td className="p-3 text-sm">
-                <Link to={`/configs/${ID}`} className="text-link hover:underline font-medium">
+                <Link
+                  to={`/configs/${ID}`}
+                  className="font-medium text-link hover:underline"
+                >
                   <ResourceName name={Name || ID} />
                 </Link>
               </td>
@@ -167,7 +173,10 @@ export default function StackDetail() {
             keyFn={({ ID }) => ID}
             renderRow={({ ID, Spec: { Name } }) => (
               <td className="p-3 text-sm">
-                <Link to={`/secrets/${ID}`} className="text-link hover:underline font-medium">
+                <Link
+                  to={`/secrets/${ID}`}
+                  className="font-medium text-link hover:underline"
+                >
                   <ResourceName name={Name || ID} />
                 </Link>
               </td>
@@ -186,7 +195,10 @@ export default function StackDetail() {
             renderRow={({ Driver, Id, Name }) => (
               <>
                 <td className="p-3 text-sm">
-                  <Link to={`/networks/${Id}`} className="text-link hover:underline font-medium">
+                  <Link
+                    to={`/networks/${Id}`}
+                    className="font-medium text-link hover:underline"
+                  >
                     <ResourceName name={Name} />
                   </Link>
                 </td>
@@ -205,7 +217,10 @@ export default function StackDetail() {
             keyFn={({ Name }) => Name}
             renderRow={({ Name }) => (
               <td className="p-3 text-sm">
-                <Link to={`/volumes/${Name}`} className="text-link hover:underline font-medium">
+                <Link
+                  to={`/volumes/${Name}`}
+                  className="font-medium text-link hover:underline"
+                >
                   <ResourceName name={Name} />
                 </Link>
               </td>

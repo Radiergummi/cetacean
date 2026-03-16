@@ -448,6 +448,15 @@ export interface MonitoringStatus {
   cadvisor: TargetStatus | null;
 }
 
+export interface Identity {
+  subject: string;
+  displayName: string;
+  email?: string;
+  groups?: string[];
+  provider: string;
+  raw?: Record<string, unknown>;
+}
+
 export interface PrometheusResponse {
   data: {
     result: Array<{

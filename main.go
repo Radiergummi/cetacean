@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"embed"
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,10 +17,12 @@ import (
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/api"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/version"
+	"tailscale.com/tsnet"
 )
 
 //go:embed frontend/dist/*
@@ -66,6 +71,67 @@ func main() {
 		logHandler = slog.NewJSONHandler(os.Stdout, opts)
 	}
 	slog.SetDefault(slog.New(logHandler))
+
+	authCfg, err := config.LoadAuth(flags, fc)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "auth configuration error: %v\n", err)
+		os.Exit(1)
+	}
+
+	tlsCfg := config.LoadTLS(flags, fc)
+	if err := config.ValidateTLS(tlsCfg); err != nil {
+		fmt.Fprintf(os.Stderr, "TLS configuration error: %v\n", err)
+		os.Exit(1)
+	}
+	if authCfg.Mode == "cert" && !tlsCfg.Enabled() {
+		fmt.Fprintf(os.Stderr, "cert auth mode requires CETACEAN_TLS_CERT and CETACEAN_TLS_KEY\n")
+		os.Exit(1)
+	}
+
+	var authProvider auth.Provider
+	var tsnetServer *tsnet.Server
+	var tsnetLn net.Listener
+	switch authCfg.Mode {
+	case "none":
+		authProvider = &auth.NoneProvider{}
+	case "oidc":
+		authProvider, err = auth.NewOIDCProvider(context.Background(), auth.OIDCProviderConfig{
+			Issuer:       authCfg.OIDC.Issuer,
+			ClientID:     authCfg.OIDC.ClientID,
+			ClientSecret: authCfg.OIDC.ClientSecret,
+			RedirectURL:  authCfg.OIDC.RedirectURL,
+			Scopes:       authCfg.OIDC.Scopes,
+			SessionKey:   authCfg.OIDC.SessionKey,
+		})
+		if err != nil {
+			slog.Error("OIDC provider setup failed", "error", err)
+			os.Exit(1)
+		}
+	case "tailscale":
+		if authCfg.Tailscale.Mode == "tsnet" {
+			authProvider, tsnetServer, tsnetLn, err = auth.NewTailscaleTsnetProvider(
+				authCfg.Tailscale.Hostname,
+				authCfg.Tailscale.AuthKey,
+				authCfg.Tailscale.StateDir,
+				authCfg.Tailscale.Capability,
+			)
+			if err != nil {
+				slog.Error("tsnet setup failed", "error", err)
+				os.Exit(1)
+			}
+			defer tsnetServer.Close()
+			defer tsnetLn.Close()
+		} else {
+			authProvider = auth.NewTailscaleLocalProvider(authCfg.Tailscale.Capability)
+		}
+	case "cert":
+		authProvider = &auth.CertProvider{}
+	case "headers":
+		authProvider = auth.NewHeadersProvider(authCfg.Headers)
+	default:
+		fmt.Fprintf(os.Stderr, "unknown auth mode %q\n", authCfg.Mode)
+		os.Exit(1) //nolint:gocritic // exitAfterDefer: tsnet defers only run in the tailscale case, not here
+	}
 
 	// SSE broadcaster
 	broadcaster := api.NewBroadcaster(cfg.SSEBatchInterval)
@@ -130,14 +196,39 @@ func main() {
 		slog.Warn("pprof endpoints enabled", "path", "/debug/pprof/")
 	}
 
-	router := api.NewRouter(handlers, broadcaster, promProxy, spa, openapiSpec, scalarJS, cfg.Pprof)
+	router := api.NewRouter(handlers, broadcaster, promProxy, spa, openapiSpec, scalarJS, cfg.Pprof, authProvider)
+
+	var serverTLSConfig *tls.Config
+	if authCfg.Mode == "cert" {
+		caCert, err := os.ReadFile(filepath.Clean(authCfg.Cert.CA))
+		if err != nil {
+			slog.Error("failed to read CA cert", "error", err)
+			os.Exit(1)
+		}
+		caPool := x509.NewCertPool()
+		if !caPool.AppendCertsFromPEM(caCert) {
+			slog.Error("failed to parse CA cert")
+			os.Exit(1)
+		}
+		serverTLSConfig = &tls.Config{
+			ClientCAs:  caPool,
+			ClientAuth: tls.RequireAndVerifyClientCert,
+		}
+	}
+
+	// tsnet mode: dual listeners (tailnet for app, regular for meta only)
+	if tsnetLn != nil {
+		serveDualListeners(ctx, cfg, tlsCfg, router, handlers, promProxy, tsnetLn)
+		return
+	}
 
 	server := &http.Server{
 		Addr:         cfg.ListenAddr,
 		Handler:      router,
 		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 0, // SSE requires no server-level write timeout; JSON handlers set per-request deadlines
+		WriteTimeout: 0, // SSE requires no write timeout; per-request timeouts used instead
 		IdleTimeout:  120 * time.Second,
+		TLSConfig:    serverTLSConfig,
 	}
 
 	// Graceful shutdown
@@ -151,10 +242,18 @@ func main() {
 		}
 	}()
 
-	slog.Info("server started", "addr", cfg.ListenAddr, "version", version.Version, "commit", version.Commit)
-	if err := server.ListenAndServe(); err != http.ErrServerClosed {
-		slog.Error("server error", "error", err)
-		os.Exit(1)
+	slog.Info("server started", "addr", cfg.ListenAddr, "version", version.Version, "commit", version.Commit, "auth", authCfg.Mode)
+	if tlsCfg.Enabled() {
+		slog.Info("TLS enabled", "cert", tlsCfg.Cert, "key", tlsCfg.Key)
+		if err := server.ListenAndServeTLS(tlsCfg.Cert, tlsCfg.Key); err != http.ErrServerClosed {
+			slog.Error("server error", "error", err)
+			os.Exit(1)
+		}
+	} else {
+		if err := server.ListenAndServe(); err != http.ErrServerClosed {
+			slog.Error("server error", "error", err)
+			os.Exit(1)
+		}
 	}
 }
 
@@ -185,4 +284,64 @@ func runHealthcheck() int {
 		return 1
 	}
 	return 0
+}
+
+// serveDualListeners runs two HTTP servers for tsnet mode:
+// - the full router on the tsnet listener (tailnet traffic)
+// - meta endpoints only on the regular listener (health checks from Docker)
+func serveDualListeners(ctx context.Context, cfg *config.Config, tlsCfg config.TLSConfig, router http.Handler, h *api.Handlers, promProxy http.Handler, tsnetLn net.Listener) {
+	metaMux := http.NewServeMux()
+	metaMux.HandleFunc("GET /-/health", h.HandleHealth)
+	metaMux.HandleFunc("GET /-/ready", h.HandleReady)
+	metaMux.HandleFunc("GET /-/metrics/status", h.HandleMonitoringStatus)
+	metaMux.Handle("GET /-/metrics/", promProxy)
+
+	metaServer := &http.Server{
+		Addr:        cfg.ListenAddr,
+		Handler:     metaMux,
+		ReadTimeout: 5 * time.Second,
+		IdleTimeout: 120 * time.Second,
+	}
+
+	appServer := &http.Server{
+		Handler:      router,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 0,
+		IdleTimeout:  120 * time.Second,
+	}
+
+	// Graceful shutdown of both servers
+	go func() { //nolint:gosec // G118: context.Background is correct here — ctx is done, we need a fresh timeout
+		<-ctx.Done()
+		slog.Info("shutting down", "cause", context.Cause(ctx))
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+		if err := appServer.Shutdown(shutdownCtx); err != nil {
+			slog.Error("tsnet server shutdown error", "error", err)
+		}
+		if err := metaServer.Shutdown(shutdownCtx); err != nil {
+			slog.Error("meta server shutdown error", "error", err)
+		}
+	}()
+
+	// Start meta server in background
+	go func() {
+		slog.Info("meta server started", "addr", cfg.ListenAddr)
+		if tlsCfg.Enabled() {
+			if err := metaServer.ListenAndServeTLS(tlsCfg.Cert, tlsCfg.Key); err != http.ErrServerClosed {
+				slog.Error("meta server error", "error", err)
+			}
+		} else {
+			if err := metaServer.ListenAndServe(); err != http.ErrServerClosed {
+				slog.Error("meta server error", "error", err)
+			}
+		}
+	}()
+
+	// Serve full router on tsnet listener (blocking)
+	slog.Info("tsnet server started", "auth", "tailscale")
+	if err := appServer.Serve(tsnetLn); err != http.ErrServerClosed {
+		slog.Error("tsnet server error", "error", err)
+		os.Exit(1)
+	}
 }

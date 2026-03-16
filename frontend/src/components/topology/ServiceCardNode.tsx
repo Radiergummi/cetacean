@@ -1,7 +1,7 @@
-import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { useNavigate } from "react-router-dom";
 import ResourceName from "../ResourceName";
 import { useHighlight } from "./HighlightContext";
+import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { useNavigate } from "react-router-dom";
 
 type ServiceCardData = {
   id: string;
@@ -30,7 +30,7 @@ export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCar
   return (
     <div
       data-dimmed={dimmed || undefined}
-      className="w-56 rounded-lg bg-card shadow-sm p-3 cursor-pointer transition-all duration-200 data-dimmed:opacity-25 data-dimmed:grayscale-50"
+      className="w-56 cursor-pointer rounded-lg bg-card p-3 shadow-sm transition-all duration-200 data-dimmed:opacity-25 data-dimmed:grayscale-50"
       style={{
         borderWidth: 2,
         borderStyle: "solid",
@@ -40,20 +40,26 @@ export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCar
       onMouseEnter={() => setHovered(data.id)}
       onMouseLeave={() => setHovered(null)}
     >
-      <div className="flex items-center justify-between gap-1 mb-1">
-        <span className="font-medium text-sm truncate" title={data.name}>
+      <div className="mb-1 flex items-center justify-between gap-1">
+        <span
+          className="truncate text-sm font-medium"
+          title={data.name}
+        >
           <ResourceName name={data.name} />
         </span>
-        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
+        <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
           {data.mode === "global" ? "Global" : "Replicated"}
         </span>
       </div>
 
-      <div className="text-xs text-muted-foreground truncate mb-1" title={data.image}>
+      <div
+        className="mb-1 truncate text-xs text-muted-foreground"
+        title={data.image}
+      >
         {data.image}
       </div>
 
-      <div className="flex items-center gap-1.5 text-xs mb-1">
+      <div className="mb-1 flex items-center gap-1.5 text-xs">
         <span className={`inline-block size-2 rounded-full ${statusColor}`} />
         <span>
           {running}/{data.replicas}
@@ -61,27 +67,27 @@ export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCar
       </div>
 
       {data.ports && data.ports.length > 0 && (
-        <div className="text-xs text-muted-foreground space-y-0.5">
+        <div className="space-y-0.5 text-xs text-muted-foreground">
           {data.ports.map((p) => (
             <div key={p}>{p}</div>
           ))}
         </div>
       )}
 
-      {data.updateStatus && <div className="text-xs text-yellow-500 mt-1">Updating...</div>}
+      {data.updateStatus && <div className="mt-1 text-xs text-yellow-500">Updating...</div>}
 
       {data.hasTargetEdge && (
         <Handle
           type="target"
           position={Position.Left}
-          className="!w-0 !h-0 !border-0 !bg-transparent"
+          className="!h-0 !w-0 !border-0 !bg-transparent"
         />
       )}
       {data.hasSourceEdge && (
         <Handle
           type="source"
           position={Position.Right}
-          className="!w-0 !h-0 !border-0 !bg-transparent"
+          className="!h-0 !w-0 !border-0 !bg-transparent"
         />
       )}
     </div>

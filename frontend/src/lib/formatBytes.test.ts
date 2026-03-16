@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
 import { formatBytes } from "./formatBytes";
+import { describe, it, expect } from "vitest";
 
 describe("formatBytes", () => {
   it("formats bytes", () => {

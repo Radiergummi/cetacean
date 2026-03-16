@@ -52,27 +52,39 @@ function highlightJSON(code: string): React.ReactNode[] {
     if (match[1]) {
       if (match[2]) {
         parts.push(
-          <span key={key++} className="text-sky-700 dark:text-sky-300">
+          <span
+            key={key++}
+            className="text-sky-700 dark:text-sky-300"
+          >
             {match[1]}
           </span>,
         );
         parts.push(<span key={key++}>{match[2]}</span>);
       } else {
         parts.push(
-          <span key={key++} className="text-green-700 dark:text-green-400">
+          <span
+            key={key++}
+            className="text-green-700 dark:text-green-400"
+          >
             {match[1]}
           </span>,
         );
       }
     } else if (match[3]) {
       parts.push(
-        <span key={key++} className="text-purple-700 dark:text-purple-400">
+        <span
+          key={key++}
+          className="text-purple-700 dark:text-purple-400"
+        >
           {match[3]}
         </span>,
       );
     } else if (match[4]) {
       parts.push(
-        <span key={key++} className="text-amber-700 dark:text-amber-400">
+        <span
+          key={key++}
+          className="text-amber-700 dark:text-amber-400"
+        >
           {match[4]}
         </span>,
       );
@@ -138,14 +150,14 @@ export default function CodeBlock({ code }: Props) {
   }
 
   return (
-    <div className="rounded-lg border overflow-hidden">
+    <div className="overflow-hidden rounded-lg border">
       <div className="ps-3 pt-1.5">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        <span className="text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
           {format}
         </span>
       </div>
 
-      <pre className="p-4 text-sm font-mono overflow-x-auto whitespace-pre-wrap break-all">
+      <pre className="overflow-x-auto p-4 font-mono text-sm break-all whitespace-pre-wrap">
         <code>{highlighted}</code>
       </pre>
     </div>

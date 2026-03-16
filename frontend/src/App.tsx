@@ -1,15 +1,16 @@
-import { Menu, X } from "lucide-react";
-import type React from "react";
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { BrowserRouter, Link, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import ConnectionStatus from "./components/ConnectionStatus";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { GlobalSearch, type GlobalSearchHandle } from "./components/search";
 import ShortcutsHelp from "./components/ShortcutsHelp";
 import ShortcutTooltip from "./components/ShortcutTooltip";
 import ThemeToggle from "./components/ThemeToggle";
+import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { ConnectionProvider, SSE_EVENT_TYPES } from "./hooks/useResourceStream";
+import { Menu, X } from "lucide-react";
+import type React from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { BrowserRouter, Link, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 const ClusterOverview = lazy(() => import("./pages/ClusterOverview"));
 const ConfigDetail = lazy(() => import("./pages/ConfigDetail"));
@@ -32,6 +33,7 @@ const TaskList = lazy(() => import("./pages/TaskList"));
 const Topology = lazy(() => import("./pages/Topology"));
 const VolumeDetail = lazy(() => import("./pages/VolumeDetail"));
 const VolumeList = lazy(() => import("./pages/VolumeList"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 
 function Layout({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -63,37 +65,44 @@ function Layout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-background">
       <nav className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-14 items-center justify-between">
+          <div className="relative flex h-12 items-center justify-between">
             <div className="flex items-center gap-3">
-              <Link to="/" className="font-semibold text-base tracking-tight">
+              <Link
+                to="/"
+                className="text-base font-semibold tracking-tight"
+              >
                 Cetacean
               </Link>
 
-              <span className="hidden sm:block text-border">|</span>
+              <span className="hidden text-border sm:block">|</span>
 
               <ConnectionStatus />
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="hidden lg:flex items-center gap-1">
-                <NavLinks />
+              <div className="lg:absolute lg:left-1/2 lg:-translate-x-1/2">
+                <GlobalSearch ref={searchRef} />
               </div>
-
               <ThemeToggle />
-              <GlobalSearch ref={searchRef} />
+              <UserBadge />
 
               <button
-                className="lg:hidden p-2 rounded-md hover:bg-muted"
+                className="rounded-md p-2 hover:bg-muted lg:hidden"
                 onClick={() => setMenuOpen(!menuOpen)}
                 aria-label="Toggle menu"
               >
-                {menuOpen ? <X className="text-sm size-5" /> : <Menu className="text-sm size-5" />}
+                {menuOpen ? <X className="size-5 text-sm" /> : <Menu className="size-5 text-sm" />}
               </button>
             </div>
           </div>
+
+          <div className="-mb-px hidden h-10 items-center justify-center gap-1 lg:flex">
+            <NavLinks />
+          </div>
+
           {menuOpen && (
             <div
-              className="lg:hidden w-full flex flex-col gap-1 py-3"
+              className="flex w-full flex-col gap-1 py-3 lg:hidden"
               onClick={() => setMenuOpen(false)}
             >
               <NavLinks />
@@ -101,7 +110,7 @@ function Layout({ children }: { children: React.ReactNode }) {
           )}
         </div>
       </nav>
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 pb-48">
+      <main className="mx-auto max-w-7xl px-4 py-6 pb-48 sm:px-6 lg:px-8">
         <ErrorBoundary>{children}</ErrorBoundary>
       </main>
       {shortcutsOpen && <ShortcutsHelp onClose={() => setShortcutsOpen(false)} />}
@@ -128,11 +137,14 @@ function NavLinks() {
       {links.map(({ label, to, keys }) => {
         const active = location.pathname === to || location.pathname.startsWith(to + "/");
         return (
-          <ShortcutTooltip key={to} keys={keys}>
+          <ShortcutTooltip
+            key={to}
+            keys={keys}
+          >
             <Link
               to={to}
               aria-current={active ? "page" : undefined}
-              className="text-sm px-3 py-1.5 rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted/50 aria-[current=page]:bg-muted aria-[current=page]:text-foreground aria-[current=page]:font-medium"
+              className="border-b-2 border-transparent px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground aria-[current=page]:border-foreground aria-[current=page]:font-medium aria-[current=page]:text-foreground"
             >
               {label}
             </Link>
@@ -140,6 +152,19 @@ function NavLinks() {
         );
       })}
     </>
+  );
+}
+
+function UserBadge() {
+  const { identity, loading } = useAuth();
+  if (loading || !identity || identity.provider === "none") return null;
+  return (
+    <Link
+      to="/profile"
+      className="hidden max-w-32 truncate text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
+    >
+      {identity.displayName || identity.email || identity.subject}
+    </Link>
   );
 }
 
@@ -172,35 +197,104 @@ function ConnectionTracker({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <BrowserRouter>
-      <ConnectionTracker>
-        <Layout>
-          <Suspense>
-          <Routes>
-            <Route path="/" element={<ClusterOverview />} />
-            <Route path="/nodes" element={<NodeList />} />
-            <Route path="/nodes/:id" element={<NodeDetail />} />
-            <Route path="/stacks" element={<StackList />} />
-            <Route path="/stacks/:name" element={<StackDetail />} />
-            <Route path="/services" element={<ServiceList />} />
-            <Route path="/services/:id" element={<ServiceDetail />} />
-            <Route path="/tasks" element={<TaskList />} />
-            <Route path="/tasks/:id" element={<TaskDetail />} />
-            <Route path="/configs" element={<ConfigList />} />
-            <Route path="/configs/:id" element={<ConfigDetail />} />
-            <Route path="/secrets" element={<SecretList />} />
-            <Route path="/secrets/:id" element={<SecretDetail />} />
-            <Route path="/networks" element={<NetworkList />} />
-            <Route path="/networks/:id" element={<NetworkDetail />} />
-            <Route path="/volumes" element={<VolumeList />} />
-            <Route path="/volumes/:name" element={<VolumeDetail />} />
-            <Route path="/swarm" element={<SwarmPage />} />
-            <Route path="/topology" element={<Topology />} />
-            <Route path="/search" element={<SearchPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-          </Suspense>
-        </Layout>
-      </ConnectionTracker>
+      <AuthProvider>
+        <ConnectionTracker>
+          <Layout>
+            <Suspense>
+              <Routes>
+                <Route
+                  path="/"
+                  element={<ClusterOverview />}
+                />
+                <Route
+                  path="/nodes"
+                  element={<NodeList />}
+                />
+                <Route
+                  path="/nodes/:id"
+                  element={<NodeDetail />}
+                />
+                <Route
+                  path="/stacks"
+                  element={<StackList />}
+                />
+                <Route
+                  path="/stacks/:name"
+                  element={<StackDetail />}
+                />
+                <Route
+                  path="/services"
+                  element={<ServiceList />}
+                />
+                <Route
+                  path="/services/:id"
+                  element={<ServiceDetail />}
+                />
+                <Route
+                  path="/tasks"
+                  element={<TaskList />}
+                />
+                <Route
+                  path="/tasks/:id"
+                  element={<TaskDetail />}
+                />
+                <Route
+                  path="/configs"
+                  element={<ConfigList />}
+                />
+                <Route
+                  path="/configs/:id"
+                  element={<ConfigDetail />}
+                />
+                <Route
+                  path="/secrets"
+                  element={<SecretList />}
+                />
+                <Route
+                  path="/secrets/:id"
+                  element={<SecretDetail />}
+                />
+                <Route
+                  path="/networks"
+                  element={<NetworkList />}
+                />
+                <Route
+                  path="/networks/:id"
+                  element={<NetworkDetail />}
+                />
+                <Route
+                  path="/volumes"
+                  element={<VolumeList />}
+                />
+                <Route
+                  path="/volumes/:name"
+                  element={<VolumeDetail />}
+                />
+                <Route
+                  path="/swarm"
+                  element={<SwarmPage />}
+                />
+                <Route
+                  path="/topology"
+                  element={<Topology />}
+                />
+                <Route
+                  path="/search"
+                  element={<SearchPage />}
+                />
+                <Route
+                  path="/profile"
+                  element={<ProfilePage />}
+                />
+                <Route
+                  path="*"
+                  element={<NotFound />}
+                />
+              </Routes>
+            </Suspense>
+          </Layout>
+        </ConnectionTracker>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

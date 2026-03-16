@@ -16,7 +16,7 @@ export default function TaskStatusBadge({ state }: { state?: string }) {
     (state && STATE_COLORS[state]) ||
     "bg-gray-100 text-gray-800 dark:bg-gray-800/40 dark:text-gray-300";
   return (
-    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${color}`}>
+    <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${color}`}>
       {state || "unknown"}
     </span>
   );

@@ -1,5 +1,3 @@
-import { useCallback, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { Service, Task } from "../api/types";
 import { ContainerImage, ResourceId, ResourceLink, Timestamp } from "../components/data";
@@ -16,6 +14,8 @@ import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { formatBytes } from "../lib/formatBytes";
 import { escapePromQL } from "../lib/utils";
+import { useCallback, useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 
 export default function TaskDetail() {
   const { id } = useParams<{ id: string }>();
@@ -78,28 +78,52 @@ export default function TaskDetail() {
         ]}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         <div className="rounded-lg border bg-card p-4">
-          <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">
+          <div className="mb-1 text-xs font-medium tracking-wider text-muted-foreground uppercase">
             State
           </div>
           <TaskStatusBadge state={task.Status.State} />
         </div>
-        <InfoCard label="Desired State" value={task.DesiredState} />
-        <ResourceLink label="Service" name={serviceName} to={`/services/${task.ServiceID}`} />
-        <ResourceLink label="Node" name={nodeLabel} to={`/nodes/${task.NodeID}`} />
-        <InfoCard label="Slot" value={task.Slot ? String(task.Slot) : "\u2014"} />
+        <InfoCard
+          label="Desired State"
+          value={task.DesiredState}
+        />
+        <ResourceLink
+          label="Service"
+          name={serviceName}
+          to={`/services/${task.ServiceID}`}
+        />
+        <ResourceLink
+          label="Node"
+          name={nodeLabel}
+          to={`/nodes/${task.NodeID}`}
+        />
+        <InfoCard
+          label="Slot"
+          value={task.Slot ? String(task.Slot) : "\u2014"}
+        />
         <ContainerImage image={task.Spec.ContainerSpec.Image} />
-        <Timestamp label="Timestamp" date={task.Status.Timestamp} />
-        <ResourceId label="Container" id={containerId} truncate={12} />
+        <Timestamp
+          label="Timestamp"
+          date={task.Status.Timestamp}
+        />
+        <ResourceId
+          label="Container"
+          id={containerId}
+          truncate={12}
+        />
         {exitCode != null && exitCode !== 0 && (
-          <InfoCard label="Exit Code" value={String(exitCode)} />
+          <InfoCard
+            label="Exit Code"
+            value={String(exitCode)}
+          />
         )}
       </div>
 
       {task.Status.Err && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30 p-4">
-          <div className="text-xs font-medium uppercase tracking-wider text-red-600 dark:text-red-400 mb-1">
+        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/30">
+          <div className="mb-1 text-xs font-medium tracking-wider text-red-600 uppercase dark:text-red-400">
             Error
           </div>
           <div className="text-sm text-red-700 dark:text-red-300">{task.Status.Err}</div>
@@ -108,7 +132,7 @@ export default function TaskDetail() {
 
       {task.Status.Message && (
         <div className="mb-6 rounded-lg border bg-card p-4">
-          <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">
+          <div className="mb-1 text-xs font-medium tracking-wider text-muted-foreground uppercase">
             Status Message
           </div>
           <div className="text-sm">{task.Status.Message}</div>
@@ -159,7 +183,10 @@ export default function TaskDetail() {
 
       <div className="mb-6">
         <ErrorBoundary inline>
-          <LogViewer taskId={id!} header="Logs" />
+          <LogViewer
+            taskId={id!}
+            header="Logs"
+          />
         </ErrorBoundary>
       </div>
     </div>
