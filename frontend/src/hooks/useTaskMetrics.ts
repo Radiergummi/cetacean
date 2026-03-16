@@ -24,6 +24,8 @@ export function useTaskMetrics(
       return;
     }
 
+    let cancelled = false;
+
     const fetchMetrics = async () => {
       const now = Math.floor(Date.now() / 1000);
       const start = String(now - 3600);
@@ -38,6 +40,8 @@ export function useTaskMetrics(
           api.metricsQueryRange(cpuQuery, start, end, step),
           api.metricsQueryRange(memQuery, start, end, step),
         ]);
+
+        if (cancelled) return;
 
         const map = new Map<string, TaskMetricsData>();
 
@@ -79,7 +83,10 @@ export function useTaskMetrics(
 
     fetchMetrics();
     const timer = setInterval(fetchMetrics, refreshInterval);
-    return () => clearInterval(timer);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
   }, [filter, enabled, refreshInterval]);
 
   return metrics;

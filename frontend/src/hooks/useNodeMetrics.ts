@@ -21,54 +21,57 @@ export function useNodeMetrics() {
   const { resolve } = useInstanceResolver();
   const [byInstance, setByInstance] = useState<Record<string, NodeMetrics>>({});
 
-  const fetchAll = useCallback(() => {
-    // Instant queries — per instance
-    const cpuQ = `100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)`;
-    const memQ = `(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100`;
-    const diskQ = `max by (instance) ((1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs"}) * 100)`;
-
-    // Range query for CPU sparklines — 1h, ~2min steps = 30 points
-    const now = Math.floor(Date.now() / 1000);
-    const start = now - 3600;
-    const step = 120;
-    const cpuRangeQ = `100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)`;
-
-    Promise.all([
-      api.metricsQuery(cpuQ).catch(() => null),
-      api.metricsQuery(memQ).catch(() => null),
-      api.metricsQuery(diskQ).catch(() => null),
-      api.metricsQueryRange(cpuRangeQ, String(start), String(now), String(step)).catch(() => null),
-    ]).then(([cpuResp, memResp, diskResp, cpuRangeResp]) => {
-      const map: Record<string, NodeMetrics> = {};
-
-      const ensure = (instance: string) => {
-        if (!map[instance]) map[instance] = { ...EMPTY, cpuHistory: [] };
-        return map[instance];
-      };
-
-      parseInstant(cpuResp)?.forEach(([instance, val]) => {
-        ensure(instance).cpu = val;
-      });
-      parseInstant(memResp)?.forEach(([instance, val]) => {
-        ensure(instance).memory = val;
-      });
-      parseInstant(diskResp)?.forEach(([instance, val]) => {
-        ensure(instance).disk = val;
-      });
-      parseRange(cpuRangeResp)?.forEach(([instance, values]) => {
-        ensure(instance).cpuHistory = values;
-      });
-
-      setByInstance(map);
-    });
-  }, []);
-
   useEffect(() => {
     if (!hasPrometheus) return;
-    fetchAll();
-    const interval = setInterval(fetchAll, 30000);
-    return () => clearInterval(interval);
-  }, [fetchAll, hasPrometheus]);
+    let cancelled = false;
+
+    const doFetch = () => {
+      const cpuQ = `100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)`;
+      const memQ = `(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100`;
+      const diskQ = `max by (instance) ((1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs"}) * 100)`;
+      const now = Math.floor(Date.now() / 1000);
+      const start = now - 3600;
+      const step = 120;
+      const cpuRangeQ = cpuQ;
+
+      Promise.all([
+        api.metricsQuery(cpuQ).catch(() => null),
+        api.metricsQuery(memQ).catch(() => null),
+        api.metricsQuery(diskQ).catch(() => null),
+        api.metricsQueryRange(cpuRangeQ, String(start), String(now), String(step)).catch(() => null),
+      ]).then(([cpuResp, memResp, diskResp, cpuRangeResp]) => {
+        if (cancelled) return;
+        const map: Record<string, NodeMetrics> = {};
+
+        const ensure = (instance: string) => {
+          if (!map[instance]) map[instance] = { ...EMPTY, cpuHistory: [] };
+          return map[instance];
+        };
+
+        parseInstant(cpuResp)?.forEach(([instance, val]) => {
+          ensure(instance).cpu = val;
+        });
+        parseInstant(memResp)?.forEach(([instance, val]) => {
+          ensure(instance).memory = val;
+        });
+        parseInstant(diskResp)?.forEach(([instance, val]) => {
+          ensure(instance).disk = val;
+        });
+        parseRange(cpuRangeResp)?.forEach(([instance, values]) => {
+          ensure(instance).cpuHistory = values;
+        });
+
+        setByInstance(map);
+      });
+    };
+
+    doFetch();
+    const interval = setInterval(doFetch, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [hasPrometheus]);
 
   const getForNode = useCallback(
     (hostname: string, addr: string): NodeMetrics => {

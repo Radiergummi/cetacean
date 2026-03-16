@@ -26,22 +26,33 @@ export function useSwarmResource<T>(
   getIdRef.current = getId;
   const hasLoadedRef = useRef(false);
 
+  const abortRef = useRef<AbortController | null>(null);
+
   const load = useCallback(() => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     // Only show loading skeleton on initial load, not on search/sort refetches
     if (!hasLoadedRef.current) setLoading(true);
     setError(null);
     fetchFn()
       .then((resp) => {
+        if (controller.signal.aborted) return;
         setData(resp.items);
         setTotal(resp.total);
         hasLoadedRef.current = true;
       })
-      .catch(setError)
-      .finally(() => setLoading(false));
+      .catch((e) => {
+        if (!controller.signal.aborted) setError(e);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
   }, [fetchFn]);
 
   useEffect(() => {
     load();
+    return () => abortRef.current?.abort();
   }, [load]);
 
   const loadRef = useRef(load);
@@ -67,7 +78,7 @@ export function useSwarmResource<T>(
           const idx = prev.findIndex((item) => getIdRef.current(item) === event.id);
           if (idx >= 0) {
             const next = [...prev];
-            next[idx] = { ...prev[idx], ...resource };
+            next[idx] = resource;
             return next;
           }
           return [...prev, resource];
