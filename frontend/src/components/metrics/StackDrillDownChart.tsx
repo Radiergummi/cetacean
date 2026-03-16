@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import TimeSeriesChart from "./TimeSeriesChart";
 import type { Threshold } from "./TimeSeriesChart";
 import { useMetricsPanelContext } from "./MetricsPanelContext";
@@ -45,6 +45,7 @@ export default function StackDrillDownChart({
   const [showLegend, setShowLegend] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [seriesInfo, setSeriesInfo] = useState<{ label: string; color: string }[]>([]);
+  const [isolatedLabel, setIsolatedLabel] = useState<string | null>(null);
 
   const handleSeriesDoubleClick = useCallback(
     (seriesLabel: string) => {
@@ -58,6 +59,13 @@ export default function StackDrillDownChart({
   const query = drillStack
     ? serviceQueryTemplate.replace("<STACK>", drillStack)
     : effectiveStackQuery;
+
+  // Reset isolation when query changes (drill-down or show-all toggle)
+  const prevQueryRef = useRef(query);
+  if (prevQueryRef.current !== query) {
+    prevQueryRef.current = query;
+    if (isolatedLabel != null) setIsolatedLabel(null);
+  }
 
   const chartTitle = drillStack ? `${title} (${drillStack})` : title;
 
@@ -77,6 +85,8 @@ export default function StackDrillDownChart({
         onSeriesDoubleClick={handleSeriesDoubleClick}
         stackable={stackable}
         onSeriesInfo={setSeriesInfo}
+        isolatedLabel={isolatedLabel}
+        onIsolationChange={setIsolatedLabel}
       />
       <div className="mt-1">
         <button
@@ -87,16 +97,21 @@ export default function StackDrillDownChart({
         </button>
         {showLegend && seriesInfo.length > 0 && (
           <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
-            {seriesInfo.map((s, i) => (
-              <span
-                key={s.label}
-                className="flex items-center gap-1.5 text-[11px] text-muted-foreground"
-                style={{ opacity: i >= 10 && !showAll ? 0.3 : 1 }}
-              >
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: s.color }} />
-                {s.label}
-              </span>
-            ))}
+            {seriesInfo.map((s, i) => {
+              const dimmed = isolatedLabel != null && isolatedLabel !== s.label;
+              const faded = i >= 10 && !showAll;
+              return (
+                <button
+                  key={s.label}
+                  onClick={() => setIsolatedLabel(isolatedLabel === s.label ? null : s.label)}
+                  className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                  style={{ opacity: dimmed || faded ? 0.3 : 1 }}
+                >
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: s.color }} />
+                  {s.label}
+                </button>
+              );
+            })}
             {!drillStack && (
               <button
                 onClick={() => setShowAll((v) => !v)}

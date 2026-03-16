@@ -352,14 +352,6 @@ export interface StackSummary {
   cpuUsagePercent: number;
 }
 
-export interface NotificationRuleStatus {
-  id: string;
-  name: string;
-  enabled: boolean;
-  lastFired?: string;
-  fireCount: number;
-}
-
 // Global search
 export type SearchResourceType =
   | "services"

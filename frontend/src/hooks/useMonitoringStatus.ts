@@ -26,10 +26,16 @@ export function useMonitoringStatus(): MonitoringStatus | null {
     }
 
     if (!inflight) {
-      inflight = api.monitoringStatus().catch(() => {
-        inflight = null;
-        return null as unknown as MonitoringStatus;
-      });
+      inflight = api
+        .monitoringStatus()
+        .then((s) => {
+          inflight = null;
+          return s;
+        })
+        .catch(() => {
+          inflight = null;
+          return null as unknown as MonitoringStatus;
+        });
     }
 
     inflight.then((s) => {

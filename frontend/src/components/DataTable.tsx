@@ -113,7 +113,7 @@ function VirtualBody<T>({
       {virtualItems.length > 0 && (
         <tr>
           <td
-            style={{ height: totalSize - virtualItems[virtualItems.length - 1].end, padding: 0 }}
+            style={{ height: Math.max(0, totalSize - virtualItems[virtualItems.length - 1].end), padding: 0 }}
             colSpan={columns.length}
           />
         </tr>

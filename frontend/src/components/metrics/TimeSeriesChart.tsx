@@ -57,6 +57,10 @@ interface Props {
   onSeriesDoubleClick?: (seriesLabel: string) => void;
   onSeriesInfo?: (series: { label: string; color: string }[]) => void;
   stackable?: boolean;
+  /** Controlled isolation: label of the isolated series, or null for none. */
+  isolatedLabel?: string | null;
+  /** Fires when isolation changes (from chart clicks or sync). */
+  onIsolationChange?: (label: string | null) => void;
 }
 
 type State = "loading" | "data" | "empty" | "error";
@@ -151,6 +155,8 @@ export default function TimeSeriesChart({
   onSeriesDoubleClick,
   onSeriesInfo,
   stackable,
+  isolatedLabel,
+  onIsolationChange,
 }: Props) {
   const chartRef = useRef<ChartJS<"line"> | null>(null);
   const tooltipElRef = useRef<HTMLDivElement>(null);
@@ -177,7 +183,25 @@ export default function TimeSeriesChart({
   const stackedRef = useRef(false);
   stackedRef.current = stacked;
 
-  const [isolatedIndex, setIsolatedIndex] = useState<number | null>(null);
+  const controlled = isolatedLabel !== undefined;
+  const [localIsolatedIndex, setLocalIsolatedIndex] = useState<number | null>(null);
+  const controlledIndex = useMemo(() => {
+    if (!controlled || isolatedLabel == null || !fetchedData) return null;
+    const idx = fetchedData.series.findIndex((s) => s.label === isolatedLabel);
+    return idx >= 0 ? idx : null;
+  }, [controlled, isolatedLabel, fetchedData]);
+  const isolatedIndex = controlled ? controlledIndex : localIsolatedIndex;
+  const setIsolatedIndex = useCallback(
+    (idx: number | null) => {
+      if (controlled) {
+        const label = idx != null ? (fetchedDataRef.current?.series[idx]?.label ?? null) : null;
+        onIsolationChange?.(label);
+      } else {
+        setLocalIsolatedIndex(idx);
+      }
+    },
+    [controlled, onIsolationChange],
+  );
   const isolatedIndexRef = useRef<number | null>(null);
   isolatedIndexRef.current = isolatedIndex;
   const justZoomedRef = useRef(false);
@@ -266,19 +290,24 @@ export default function TimeSeriesChart({
     };
   }, [fetchData, refreshKey]);
 
-  // SSE streaming for live ranges. Uses a ref to gate on "has data" without
-  // causing a reconnect every time fetchedData changes.
+  // SSE streaming for live ranges. Opens after the initial fetch completes.
   const streaming = panel?.streaming ?? true;
-  const hasDataRef = useRef(false);
-  if (fetchedData) hasDataRef.current = true;
+  const hasOpenedRef = useRef(false);
+  const fetchDataRef = useRef(fetchData);
+  fetchDataRef.current = fetchData;
 
+  // Reset the gate when query/range changes so SSE re-opens after next fetch
   useEffect(() => {
-    // Reset when query/range changes so the initial fetch runs first
-    hasDataRef.current = !!fetchedData;
+    hasOpenedRef.current = false;
   }, [query, range, from, to]);
 
+  // Mark ready once we have data
   useEffect(() => {
-    if (!hasDataRef.current || from != null || to != null || !streaming) return;
+    if (fetchedData != null) hasOpenedRef.current = true;
+  }, [fetchedData]);
+
+  useEffect(() => {
+    if (!hasOpenedRef.current || from != null || to != null || !streaming) return;
 
     const rangeSec = RANGE_SECONDS[range] || 3600;
     const step = Math.max(Math.floor(rangeSec / 300), 15);
@@ -333,7 +362,8 @@ export default function TimeSeriesChart({
       if (document.visibilityState === "hidden") {
         es.close();
       } else {
-        fetchData();
+        hasOpenedRef.current = false;
+        fetchDataRef.current();
       }
     };
     document.addEventListener("visibilitychange", visHandler);
@@ -342,7 +372,7 @@ export default function TimeSeriesChart({
       es.close();
       document.removeEventListener("visibilitychange", visHandler);
     };
-  }, [query, range, from, to, streaming]);
+  }, [query, range, from, to, streaming, title, colorOverride]);
 
   const chartData = useMemo<ChartData<"line"> | null>(() => {
     if (!fetchedData) return null;

@@ -28,15 +28,23 @@ func (d DetailResponse) MarshalJSON() ([]byte, error) {
 	}
 	slices.Sort(keys)
 
+	idJSON, err := json.Marshal(d.id)
+	if err != nil {
+		return nil, err
+	}
+	typJSON, err := json.Marshal(d.typ)
+	if err != nil {
+		return nil, err
+	}
+
 	// Estimate capacity: fixed fields ~80 bytes + extras.
 	buf := make([]byte, 0, 256)
 	buf = append(buf, `{"@context":"`...)
 	buf = append(buf, d.context...)
-	buf = append(buf, `","@id":"`...)
-	buf = append(buf, d.id...)
-	buf = append(buf, `","@type":"`...)
-	buf = append(buf, d.typ...)
-	buf = append(buf, '"')
+	buf = append(buf, `","@id":`...)
+	buf = append(buf, idJSON...)
+	buf = append(buf, `,"@type":`...)
+	buf = append(buf, typJSON...)
 
 	for _, k := range keys {
 		buf = append(buf, ',')

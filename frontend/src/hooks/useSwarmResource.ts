@@ -46,6 +46,8 @@ export function useSwarmResource<T>(
 
   const loadRef = useRef(load);
   loadRef.current = load;
+  const dataRef = useRef(data);
+  dataRef.current = data;
 
   useResourceStream(
     ssePathMap[sseType] ?? `/events?types=${sseType}`,
@@ -56,17 +58,21 @@ export function useSwarmResource<T>(
       }
       if (event.action === "remove") {
         setData((prev) => prev.filter((item) => getIdRef.current(item) !== event.id));
+        setTotal((prev) => Math.max(0, prev - 1));
       } else if (event.resource) {
+        const resource = event.resource as T;
+        const isNew =
+          dataRef.current.findIndex((item) => getIdRef.current(item) === event.id) < 0;
         setData((prev) => {
-          const resource = event.resource as T;
           const idx = prev.findIndex((item) => getIdRef.current(item) === event.id);
           if (idx >= 0) {
             const next = [...prev];
-            next[idx] = resource;
+            next[idx] = { ...prev[idx], ...resource };
             return next;
           }
           return [...prev, resource];
         });
+        if (isNew) setTotal((t) => t + 1);
       }
     }, []),
   );

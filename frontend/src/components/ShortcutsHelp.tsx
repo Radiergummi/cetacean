@@ -22,6 +22,7 @@ const groups: ShortcutGroup[] = [
       { keys: ["g", "h"], description: "Go to cluster overview" },
       { keys: ["g", "n"], description: "Go to nodes" },
       { keys: ["g", "s"], description: "Go to services" },
+      { keys: ["g", "a"], description: "Go to tasks" },
       { keys: ["g", "k"], description: "Go to stacks" },
       { keys: ["g", "c"], description: "Go to configs" },
       { keys: ["g", "x"], description: "Go to secrets" },

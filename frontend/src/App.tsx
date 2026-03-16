@@ -6,6 +6,7 @@ import ConnectionStatus from "./components/ConnectionStatus";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { GlobalSearch, type GlobalSearchHandle } from "./components/search";
 import ShortcutsHelp from "./components/ShortcutsHelp";
+import ShortcutTooltip from "./components/ShortcutTooltip";
 import ThemeToggle from "./components/ThemeToggle";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { ConnectionProvider, SSE_EVENT_TYPES } from "./hooks/useResourceStream";
@@ -26,6 +27,7 @@ import StackDetail from "./pages/StackDetail";
 import StackList from "./pages/StackList";
 import SwarmPage from "./pages/SwarmPage";
 import TaskDetail from "./pages/TaskDetail";
+import TaskList from "./pages/TaskList";
 import Topology from "./pages/Topology";
 import VolumeDetail from "./pages/VolumeDetail";
 import VolumeList from "./pages/VolumeList";
@@ -51,6 +53,7 @@ function Layout({ children }: { children: React.ReactNode }) {
     "g x": useCallback(() => navigate("/secrets"), [navigate]),
     "g w": useCallback(() => navigate("/networks"), [navigate]),
     "g v": useCallback(() => navigate("/volumes"), [navigate]),
+    "g a": useCallback(() => navigate("/tasks"), [navigate]),
     "g i": useCallback(() => navigate("/swarm"), [navigate]),
     "g t": useCallback(() => navigate("/topology"), [navigate]),
   });
@@ -108,29 +111,31 @@ function Layout({ children }: { children: React.ReactNode }) {
 function NavLinks() {
   const location = useLocation();
   const links = [
-    { to: "/nodes", label: "Nodes" },
-    { to: "/stacks", label: "Stacks" },
-    { to: "/services", label: "Services" },
-    { to: "/configs", label: "Configs" },
-    { to: "/secrets", label: "Secrets" },
-    { to: "/networks", label: "Networks" },
-    { to: "/volumes", label: "Volumes" },
-    { to: "/swarm", label: "Swarm" },
-    { to: "/topology", label: "Topology" },
+    { to: "/nodes", label: "Nodes", keys: ["g", "n"] },
+    { to: "/stacks", label: "Stacks", keys: ["g", "k"] },
+    { to: "/services", label: "Services", keys: ["g", "s"] },
+    { to: "/tasks", label: "Tasks", keys: ["g", "a"] },
+    { to: "/configs", label: "Configs", keys: ["g", "c"] },
+    { to: "/secrets", label: "Secrets", keys: ["g", "x"] },
+    { to: "/networks", label: "Networks", keys: ["g", "w"] },
+    { to: "/volumes", label: "Volumes", keys: ["g", "v"] },
+    { to: "/swarm", label: "Swarm", keys: ["g", "i"] },
+    { to: "/topology", label: "Topology", keys: ["g", "t"] },
   ];
   return (
     <>
-      {links.map(({ label, to }) => {
+      {links.map(({ label, to, keys }) => {
         const active = location.pathname === to || location.pathname.startsWith(to + "/");
         return (
-          <Link
-            key={to}
-            to={to}
-            aria-current={active ? "page" : undefined}
-            className="text-sm px-3 py-1.5 rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted/50 aria-[current=page]:bg-muted aria-[current=page]:text-foreground aria-[current=page]:font-medium"
-          >
-            {label}
-          </Link>
+          <ShortcutTooltip key={to} keys={keys}>
+            <Link
+              to={to}
+              aria-current={active ? "page" : undefined}
+              className="text-sm px-3 py-1.5 rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted/50 aria-[current=page]:bg-muted aria-[current=page]:text-foreground aria-[current=page]:font-medium"
+            >
+              {label}
+            </Link>
+          </ShortcutTooltip>
         );
       })}
     </>
@@ -176,6 +181,7 @@ export default function App() {
             <Route path="/stacks/:name" element={<StackDetail />} />
             <Route path="/services" element={<ServiceList />} />
             <Route path="/services/:id" element={<ServiceDetail />} />
+            <Route path="/tasks" element={<TaskList />} />
             <Route path="/tasks/:id" element={<TaskDetail />} />
             <Route path="/configs" element={<ConfigList />} />
             <Route path="/configs/:id" element={<ConfigDetail />} />

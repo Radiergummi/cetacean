@@ -108,10 +108,12 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   // Poll every 2s to refresh state/detail on existing results (no reorder/add/remove)
   useEffect(() => {
     if (!hasResponse || !query.trim()) return;
+    const controller = new AbortController();
     const interval = setInterval(() => {
       api
         .search(query)
         .then((fresh) => {
+          if (controller.signal.aborted) return;
           setResponse((prev) => {
             if (!prev) return prev;
             const updated = { ...prev, total: fresh.total, counts: fresh.counts };
@@ -144,7 +146,10 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
           /* ignore */
         });
     }, 2000);
-    return () => clearInterval(interval);
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
   }, [query, hasResponse]);
 
   const goTo = useCallback(

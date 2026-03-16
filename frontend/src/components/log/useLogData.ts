@@ -27,13 +27,14 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
   const oldestRef = useRef<string | undefined>(undefined);
   const newestRef = useRef<string | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
-  const abortRef = useRef<{ abort(): void } | null>(null);
+  const fetchAbortRef = useRef<AbortController | null>(null);
+  const sseRef = useRef<EventSource | null>(null);
   const scrollRafRef = useRef(0);
 
   const streamParam = streamFilter === "all" ? undefined : streamFilter;
 
   const fetchLogs = useCallback(() => {
-    abortRef.current?.abort();
+    fetchAbortRef.current?.abort();
     setLoading(true);
     setError(null);
     setHasOlderLogs(true);
@@ -42,7 +43,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
     newestRef.current = undefined;
 
     const controller = new AbortController();
-    abortRef.current = controller;
+    fetchAbortRef.current = controller;
     let timedOut = false;
     const timeout = setTimeout(() => {
       timedOut = true;
@@ -86,7 +87,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
   useEffect(() => {
     fetchLogs();
     return () => {
-      abortRef.current?.abort();
+      fetchAbortRef.current?.abort();
     };
   }, [fetchLogs]);
 
@@ -101,7 +102,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
       : api.serviceLogsStreamURL(logId, streamOptions);
 
     const eventSource = new EventSource(url);
-    abortRef.current = { abort: () => eventSource.close() };
+    sseRef.current = eventSource;
     const buffer: ApiLogLine[] = [];
     let animationFrameId = 0;
 
@@ -131,7 +132,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
     return () => {
       eventSource.close();
       cancelAnimationFrame(animationFrameId);
-      abortRef.current = null;
+      sseRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live, logId, isTask, streamParam]);
@@ -203,14 +204,23 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
   }, [loadingNewer, hasNewerLogs, limit, streamParam, isTask, logId]);
 
   // When not live, check once for newer log availability after initial load.
+  // Uses a generation counter to avoid racing with fetchLogs when streamParam changes.
+  const newerCheckGenRef = useRef(0);
   useEffect(() => {
-    if (live || !newestRef.current || loading) return;
+    newerCheckGenRef.current++;
+  }, [streamParam]);
+
+  useEffect(() => {
+    if (live || loading) return;
     const cursor = newestRef.current;
     if (!cursor) return;
+    const gen = newerCheckGenRef.current;
     const options = { limit: 1, after: cursor, stream: streamParam };
     const request = isTask ? api.taskLogs(logId, options) : api.serviceLogs(logId, options);
     request
       .then((response) => {
+        // Only apply if streamParam hasn't changed since we started
+        if (newerCheckGenRef.current !== gen) return;
         setHasNewerLogs((response.lines?.length ?? 0) > 0);
       })
       .catch(() => {});
@@ -226,7 +236,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
 
   const toggleLive = useCallback(() => {
     if (live) {
-      abortRef.current?.abort();
+      sseRef.current?.close();
       setLive(false);
     } else {
       setFollowing(true);
@@ -235,7 +245,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
   }, [live]);
 
   const stopLive = useCallback(() => {
-    abortRef.current?.abort();
+    sseRef.current?.close();
     setLive(false);
   }, []);
 

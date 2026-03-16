@@ -18,7 +18,6 @@ import type {
   HistoryEntry,
   NetworkTopology,
   PlacementTopology,
-  NotificationRuleStatus,
   StackSummary,
   SearchResponse,
   SwarmInfo,
@@ -168,15 +167,19 @@ export const api = {
     buildLogStreamURL(`/services/${id}/logs`, opts),
   taskLogsStreamURL: (id: string, opts?: { after?: string; stream?: string }) =>
     buildLogStreamURL(`/tasks/${id}/logs`, opts),
-  history: (params?: { type?: string; resourceId?: string; limit?: number }) => {
+  history: (
+    params?: { type?: string; resourceId?: string; limit?: number },
+    signal?: AbortSignal,
+  ) => {
     const qs = new URLSearchParams();
     if (params?.type) qs.set("type", params.type);
     if (params?.resourceId) qs.set("resourceId", params.resourceId);
     if (params?.limit) qs.set("limit", String(params.limit));
     const query = qs.toString();
-    return fetchJSON<CollectionResponse<HistoryEntry>>(`/history${query ? `?${query}` : ""}`).then(
-      (r) => r.items,
-    );
+    return fetchJSON<CollectionResponse<HistoryEntry>>(
+      `/history${query ? `?${query}` : ""}`,
+      signal,
+    ).then((r) => r.items);
   },
   topologyNetworks: () => fetchJSON<NetworkTopology>("/topology/networks"),
   topologyPlacement: () => fetchJSON<PlacementTopology>("/topology/placement"),
@@ -195,10 +198,6 @@ export const api = {
     const params = new URLSearchParams({ query, step: String(step), range: String(range) });
     return `/-/metrics/query_range?${params}`;
   },
-  notificationRules: () =>
-    fetchJSON<CollectionResponse<NotificationRuleStatus>>("/notifications/rules").then(
-      (r) => r.items,
-    ),
   diskUsage: () =>
     fetchJSON<CollectionResponse<DiskUsageSummary>>("/disk-usage").then((r) => r.items),
   search: (q: string, limit?: number) =>

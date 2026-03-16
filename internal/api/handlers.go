@@ -114,36 +114,9 @@ func searchFilter[T any](items []T, query string, name func(T) string) []T {
 }
 
 // containsFold reports whether s contains substr using case-insensitive
-// comparison. substr must already be lowercased. Zero allocations.
+// comparison. substr must already be lowercased.
 func containsFold(s, substrLower string) bool {
-	if len(substrLower) == 0 {
-		return true
-	}
-	if len(substrLower) > len(s) {
-		return false
-	}
-	for i := 0; i <= len(s)-len(substrLower); i++ {
-		if asciiToLower(s[i]) == substrLower[0] {
-			match := true
-			for j := 1; j < len(substrLower); j++ {
-				if asciiToLower(s[i+j]) != substrLower[j] {
-					match = false
-					break
-				}
-			}
-			if match {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func asciiToLower(c byte) byte {
-	if c >= 'A' && c <= 'Z' {
-		return c + 32
-	}
-	return c
+	return strings.Contains(strings.ToLower(s), substrLower)
 }
 
 const maxFilterLen = 512
@@ -496,8 +469,8 @@ func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
 
 	du, err := h.systemClient.DiskUsage(ctx)
 	if err != nil {
-		slog.Error("disk usage failed", "error", err, "detail", err.Error())
-		writeProblem(w, r, http.StatusInternalServerError, fmt.Sprintf("disk usage failed: %v", err))
+		slog.Error("disk usage failed", "error", err)
+		writeProblem(w, r, http.StatusInternalServerError, "disk usage failed")
 		return
 	}
 
@@ -900,13 +873,7 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 		lines = filtered
 	}
 
-	// Docker's tail=N applies per task for service logs, so the total may
-	// exceed the requested limit. Truncate to the last `limit` lines.
-	hasMore := len(lines) > limit
-	if hasMore {
-		lines = lines[len(lines)-limit:]
-	}
-
+	// Apply stream filter before truncation so hasMore is accurate.
 	if streamFilter != "" {
 		filtered := lines[:0]
 		for _, l := range lines {
@@ -915,6 +882,13 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 			}
 		}
 		lines = filtered
+	}
+
+	// Docker's tail=N applies per task for service logs, so the total may
+	// exceed the requested limit. Truncate to the last `limit` lines.
+	hasMore := len(lines) > limit
+	if hasMore {
+		lines = lines[len(lines)-limit:]
 	}
 
 	resp := LogResponse{Lines: lines, HasMore: hasMore}

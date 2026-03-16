@@ -93,7 +93,7 @@ func (pc *PromClient) RangeQueryRaw(ctx context.Context, query, start, end, step
 		return nil, err
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func (pc *PromClient) InstantQueryRaw(ctx context.Context, query string) ([]byte
 		return nil, err
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
 	if err != nil {
 		return nil, err
 	}

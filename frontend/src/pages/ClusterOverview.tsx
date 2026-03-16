@@ -50,6 +50,9 @@ export default function ClusterOverview() {
   useEffect(() => {
     fetchSnapshot();
     fetchHistory();
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, [fetchSnapshot, fetchHistory]);
 
   useResourceStream(

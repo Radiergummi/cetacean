@@ -951,6 +951,7 @@ func (c *Cache) replaceConfigs(configs []swarm.Config) {
 func (c *Cache) replaceSecrets(secrets []swarm.Secret) {
 	m := make(map[string]swarm.Secret, len(secrets))
 	for _, s := range secrets {
+		s.Spec.Data = nil
 		m[s.ID] = s
 	}
 	c.mu.Lock()
@@ -1058,6 +1059,7 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 	if data.HasSecrets {
 		secrets = make(map[string]swarm.Secret, len(data.Secrets))
 		for _, s := range data.Secrets {
+			s.Spec.Data = nil
 			secrets[s.ID] = s
 		}
 	}

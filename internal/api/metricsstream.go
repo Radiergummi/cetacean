@@ -46,20 +46,24 @@ func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if int(metricsStreamCount.Load()) >= maxMetricsStreamClients {
-		w.Header().Set("Retry-After", "5")
-		writeProblem(w, r, http.StatusTooManyRequests, "too many metrics stream connections")
-		return
+	for {
+		cur := metricsStreamCount.Load()
+		if int(cur) >= maxMetricsStreamClients {
+			w.Header().Set("Retry-After", "5")
+			writeProblem(w, r, http.StatusTooManyRequests, "too many metrics stream connections")
+			return
+		}
+		if metricsStreamCount.CompareAndSwap(cur, cur+1) {
+			break
+		}
 	}
+	defer metricsStreamCount.Add(-1)
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		writeProblem(w, r, http.StatusInternalServerError, "streaming not supported")
 		return
 	}
-
-	metricsStreamCount.Add(1)
-	defer metricsStreamCount.Add(-1)
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "../api/client";
 import type { HistoryEntry } from "../api/types";
 import { useResourceStream } from "./useResourceStream";
@@ -11,19 +11,35 @@ export function useDetailResource<T>(
   const [data, setData] = useState<T | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [error, setError] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   const fetchData = useCallback(() => {
     if (!key) return;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setError(false);
     fetchFn(key)
-      .then(setData)
-      .catch(() => setError(true));
+      .then((d) => {
+        if (!controller.signal.aborted) setData(d);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setError(true);
+      });
     api
-      .history({ resourceId: key, limit: 10 })
-      .then(setHistory)
+      .history({ resourceId: key, limit: 10 }, controller.signal)
+      .then((h) => {
+        if (!controller.signal.aborted) setHistory(h);
+      })
       .catch(() => {});
   }, [key, fetchFn]);
 
-  useEffect(fetchData, [fetchData]);
+  useEffect(() => {
+    fetchData();
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, [fetchData]);
 
   useResourceStream(ssePath, fetchData);
 
