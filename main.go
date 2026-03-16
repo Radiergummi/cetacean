@@ -200,7 +200,7 @@ func main() {
 
 	var serverTLSConfig *tls.Config
 	if authCfg.Mode == "cert" {
-		caCert, err := os.ReadFile(authCfg.Cert.CA)
+		caCert, err := os.ReadFile(filepath.Clean(authCfg.Cert.CA))
 		if err != nil {
 			slog.Error("failed to read CA cert", "error", err)
 			os.Exit(1)

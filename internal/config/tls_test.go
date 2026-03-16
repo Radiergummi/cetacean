@@ -40,8 +40,8 @@ func TestTLSConfig_ValidConfig(t *testing.T) {
 func TestTLSConfig_FromFile(t *testing.T) {
 	fc := &fileConfig{
 		TLS: &fileTLS{
-			Cert: ptr("/file/cert.pem"),
-			Key:  ptr("/file/key.pem"),
+			Cert: new("/file/cert.pem"),
+			Key:  new("/file/key.pem"),
 		},
 	}
 	cfg := LoadTLS(nil, fc)
@@ -58,8 +58,8 @@ func TestTLSConfig_EnvOverridesFile(t *testing.T) {
 	t.Setenv("CETACEAN_TLS_KEY", "/env/key.pem")
 	fc := &fileConfig{
 		TLS: &fileTLS{
-			Cert: ptr("/file/cert.pem"),
-			Key:  ptr("/file/key.pem"),
+			Cert: new("/file/cert.pem"),
+			Key:  new("/file/key.pem"),
 		},
 	}
 	cfg := LoadTLS(nil, fc)
@@ -70,8 +70,8 @@ func TestTLSConfig_EnvOverridesFile(t *testing.T) {
 
 func TestTLSConfig_FromFlags(t *testing.T) {
 	flags := &Flags{
-		TLSCert: ptr("/flag/cert.pem"),
-		TLSKey:  ptr("/flag/key.pem"),
+		TLSCert: new("/flag/cert.pem"),
+		TLSKey:  new("/flag/key.pem"),
 	}
 	cfg := LoadTLS(flags, nil)
 	if cfg.Cert != "/flag/cert.pem" {
@@ -86,13 +86,13 @@ func TestTLSConfig_FlagOverridesEnvAndFile(t *testing.T) {
 	t.Setenv("CETACEAN_TLS_CERT", "/env/cert.pem")
 	t.Setenv("CETACEAN_TLS_KEY", "/env/key.pem")
 	flags := &Flags{
-		TLSCert: ptr("/flag/cert.pem"),
-		TLSKey:  ptr("/flag/key.pem"),
+		TLSCert: new("/flag/cert.pem"),
+		TLSKey:  new("/flag/key.pem"),
 	}
 	fc := &fileConfig{
 		TLS: &fileTLS{
-			Cert: ptr("/file/cert.pem"),
-			Key:  ptr("/file/key.pem"),
+			Cert: new("/file/cert.pem"),
+			Key:  new("/file/key.pem"),
 		},
 	}
 	cfg := LoadTLS(flags, fc)

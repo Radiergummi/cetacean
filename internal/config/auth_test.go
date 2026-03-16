@@ -329,13 +329,13 @@ func TestLoadAuth_HeadersBothSecretAndTrustedProxies(t *testing.T) {
 func TestLoadAuth_FromConfigFile(t *testing.T) {
 	fc := &fileConfig{
 		Auth: &fileAuth{
-			Mode: ptr("oidc"),
+			Mode: new("oidc"),
 			OIDC: &fileAuthOIDC{
-				Issuer:       ptr("https://file-issuer.example.com"),
-				ClientID:     ptr("file-client"),
-				ClientSecret: ptr("file-secret"),
-				RedirectURL:  ptr("https://file-app.example.com/auth/callback"),
-				Scopes:       ptr("openid,custom"),
+				Issuer:       new("https://file-issuer.example.com"),
+				ClientID:     new("file-client"),
+				ClientSecret: new("file-secret"),
+				RedirectURL:  new("https://file-app.example.com/auth/callback"),
+				Scopes:       new("openid,custom"),
 			},
 		},
 	}
@@ -363,12 +363,12 @@ func TestLoadAuth_EnvOverridesFile(t *testing.T) {
 
 	fc := &fileConfig{
 		Auth: &fileAuth{
-			Mode: ptr("oidc"),
+			Mode: new("oidc"),
 			OIDC: &fileAuthOIDC{
-				Issuer:       ptr("https://file-issuer.example.com"),
-				ClientID:     ptr("file-client"),
-				ClientSecret: ptr("file-secret"),
-				RedirectURL:  ptr("https://app.example.com/auth/callback"),
+				Issuer:       new("https://file-issuer.example.com"),
+				ClientID:     new("file-client"),
+				ClientSecret: new("file-secret"),
+				RedirectURL:  new("https://app.example.com/auth/callback"),
 			},
 		},
 	}
@@ -389,9 +389,9 @@ func TestLoadAuth_FlagOverridesEnvAndFile(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "headers")
 
 	fc := &fileConfig{
-		Auth: &fileAuth{Mode: ptr("cert")},
+		Auth: &fileAuth{Mode: new("cert")},
 	}
-	flags := &Flags{AuthMode: ptr("none")}
+	flags := &Flags{AuthMode: new("none")}
 
 	cfg, err := LoadAuth(flags, fc)
 	if err != nil {
@@ -405,12 +405,12 @@ func TestLoadAuth_FlagOverridesEnvAndFile(t *testing.T) {
 func TestLoadAuth_HeadersFromFile(t *testing.T) {
 	fc := &fileConfig{
 		Auth: &fileAuth{
-			Mode: ptr("headers"),
+			Mode: new("headers"),
 			Headers: &fileAuthHeaders{
-				Subject:        ptr("X-User"),
-				SecretHeader:   ptr("X-Secret"),
-				SecretValue:    ptr("s3cret"),
-				TrustedProxies: ptr("10.0.0.0/8"),
+				Subject:        new("X-User"),
+				SecretHeader:   new("X-Secret"),
+				SecretValue:    new("s3cret"),
+				TrustedProxies: new("10.0.0.0/8"),
 			},
 		},
 	}
@@ -433,10 +433,10 @@ func TestLoadAuth_HeadersFromFile(t *testing.T) {
 func TestLoadAuth_TailscaleFromFile(t *testing.T) {
 	fc := &fileConfig{
 		Auth: &fileAuth{
-			Mode: ptr("tailscale"),
+			Mode: new("tailscale"),
 			Tailscale: &fileAuthTS{
-				Mode:    ptr("tsnet"),
-				AuthKey: ptr("tskey-abc"),
+				Mode:    new("tsnet"),
+				AuthKey: new("tskey-abc"),
 			},
 		},
 	}

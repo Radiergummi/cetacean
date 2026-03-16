@@ -62,7 +62,9 @@ func TestResolveSecret(t *testing.T) {
 	t.Run("env wins over _FILE", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "secret")
-		os.WriteFile(path, []byte("from-file"), 0600)
+		if err := os.WriteFile(path, []byte("from-file"), 0600); err != nil {
+			t.Fatal(err)
+		}
 		t.Setenv("TEST_SEC", "env")
 		t.Setenv("TEST_SEC_FILE", path)
 		got, err := resolveSecret(nil, "TEST_SEC", nil, "default")
@@ -77,7 +79,9 @@ func TestResolveSecret(t *testing.T) {
 	t.Run("_FILE reads file contents", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "secret")
-		os.WriteFile(path, []byte("s3cret\n"), 0600)
+		if err := os.WriteFile(path, []byte("s3cret\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
 		t.Setenv("TEST_SEC", "")
 		t.Setenv("TEST_SEC_FILE", path)
 		got, err := resolveSecret(nil, "TEST_SEC", nil, "default")

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Pluggable authentication with five providers: anonymous, OIDC, Tailscale, mTLS client certificates, and trusted proxy headers
+- Identity display in the navigation bar when authentication is enabled
+- `_FILE` suffix support for secret environment variables (for Docker Swarm secrets)
+
+### Security
+- Session cookies use `__Host-` prefix for browser-enforced security constraints
+
 ## [0.5.0] - 2026-03-16
 
 ### Added

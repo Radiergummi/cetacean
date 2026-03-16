@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -36,7 +37,7 @@ func resolveSecret(flag *string, envKey string, file *string, def string) (strin
 		return v, nil
 	}
 	if path := os.Getenv(envKey + "_FILE"); path != "" {
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(filepath.Clean(path))
 		if err != nil {
 			return "", fmt.Errorf("reading %s_FILE (%s): %w", envKey, path, err)
 		}
