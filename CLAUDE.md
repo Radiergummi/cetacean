@@ -48,8 +48,8 @@ go build -o cetacean .
 ### Docker
 ```bash
 docker build -t cetacean:latest .                           # Multi-stage build
-docker stack deploy -c docker-compose.yml cetacean          # Deploy full stack (requires swarm)
-docker stack deploy -c docker-compose.monitoring.yml monitoring  # Deploy standalone monitoring stack (Prometheus + cAdvisor + node-exporter)
+docker stack deploy -c compose.yaml cetacean          # Deploy full stack (requires swarm)
+docker stack deploy -c compose.monitoring.yaml monitoring  # Deploy standalone monitoring stack (Prometheus + cAdvisor + node-exporter)
 ```
 
 ### Environment variables
@@ -118,6 +118,11 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 
 ### Embedding
 `main.go` uses `//go:embed frontend/dist/*` to embed the built frontend into the Go binary. The frontend must be built before `go build`.
+
+## Releases
+- **Always sign release tags** with `git tag -s` (never `git tag -a`). Unsigned tags show as "unverified" on GitHub and immutable releases prevent fixing this after the fact.
+- **Always update `CHANGELOG.md`** when committing user-facing changes (features, fixes, security). Add entries under `[Unreleased]`. When cutting a release, move unreleased entries to a new version heading with the release date.
+- **Changelog entries must be user-facing and concise.** No implementation details, internal refactoring, pixel values, or code-level specifics. Write from the perspective of someone using the dashboard, not developing it. Consolidate related changes into a single entry (e.g. three doughnut chart tweaks → "Simplify disk usage chart"). If a user wouldn't notice or care about a change, don't list it.
 
 ## Key Conventions
 - All API endpoints are GET-only (read-only system)
