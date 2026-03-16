@@ -83,6 +83,9 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 	// Search
 	mux.HandleFunc("GET /search", contentNegotiated(h.HandleSearch, spa))
 
+	// Profile
+	mux.HandleFunc("GET /profile", contentNegotiated(HandleProfile, spa))
+
 	// Topology
 	mux.HandleFunc("GET /topology/networks", contentNegotiated(h.HandleNetworkTopology, spa))
 	mux.HandleFunc("GET /topology/placement", contentNegotiated(h.HandlePlacementTopology, spa))

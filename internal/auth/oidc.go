@@ -155,7 +155,6 @@ func (p *OIDCProvider) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /auth/login", p.handleLogin)
 	mux.HandleFunc("GET /auth/callback", p.handleCallback)
 	mux.Handle("POST /auth/logout", http.NewCrossOriginProtection().Handler(http.HandlerFunc(p.handleLogout)))
-	mux.HandleFunc("GET /auth/whoami", p.handleWhoami)
 }
 
 func (p *OIDCProvider) handleLogin(w http.ResponseWriter, r *http.Request) {

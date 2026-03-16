@@ -359,13 +359,12 @@ func TestTailscaleProvider_Whoami_Success(t *testing.T) {
 		},
 	}
 
-	mux := http.NewServeMux()
-	p.RegisterRoutes(mux)
+	handler := WhoamiHandler(p)
 
-	r := httptest.NewRequest(http.MethodGet, "/auth/whoami", nil)
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.RemoteAddr = "100.64.0.1:12345"
 	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, r)
+	handler.ServeHTTP(w, r)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
@@ -385,13 +384,12 @@ func TestTailscaleProvider_Whoami_Unauthenticated(t *testing.T) {
 		},
 	}
 
-	mux := http.NewServeMux()
-	p.RegisterRoutes(mux)
+	handler := WhoamiHandler(p)
 
-	r := httptest.NewRequest(http.MethodGet, "/auth/whoami", nil)
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.RemoteAddr = "192.168.1.1:12345"
 	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, r)
+	handler.ServeHTTP(w, r)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusUnauthorized)

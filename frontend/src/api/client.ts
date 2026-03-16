@@ -136,7 +136,7 @@ function buildListURL(path: string, params?: ListParams): string {
 }
 
 export const api = {
-  whoami: () => fetchJSON<Identity>("/auth/whoami"),
+  whoami: () => fetchJSON<Identity>("/profile"),
   cluster: () => fetchJSON<ClusterSnapshot>("/cluster"),
   swarm: () => fetchJSON<SwarmInfo>("/swarm"),
   plugins: () => fetchJSON<CollectionResponse<Plugin>>("/plugins").then((r) => r.items),

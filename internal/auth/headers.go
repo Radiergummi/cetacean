@@ -89,9 +89,7 @@ func (p *HeadersProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (
 	}, nil
 }
 
-func (p *HeadersProvider) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /auth/whoami", WhoamiHandler(p))
-}
+func (p *HeadersProvider) RegisterRoutes(_ *http.ServeMux) {}
 
 // validateSourceIP checks that the request originates from a trusted proxy.
 func (p *HeadersProvider) validateSourceIP(remoteAddr string) error {

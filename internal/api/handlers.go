@@ -19,6 +19,7 @@ import (
 	"github.com/docker/docker/api/types/volume"
 	json "github.com/goccy/go-json"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/filter"
@@ -99,6 +100,19 @@ func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// HandleProfile returns the authenticated user's identity as JSON.
+// Registered with content negotiation so /profile serves the SPA for
+// browsers and JSON for API clients (/profile.json or Accept: application/json).
+func HandleProfile(w http.ResponseWriter, r *http.Request) {
+	id := auth.IdentityFromContext(r.Context())
+	if id == nil {
+		writeProblem(w, r, http.StatusUnauthorized, "not authenticated")
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSONWithETag(w, r, id)
 }
 
 func searchFilter[T any](items []T, query string, name func(T) string) []T {

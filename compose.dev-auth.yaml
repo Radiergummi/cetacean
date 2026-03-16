@@ -1,0 +1,232 @@
+# Dev Auth Compose — test all auth modes simultaneously
+#
+# Build first:   docker build -t cetacean:latest .
+# Start:         docker compose -f compose.dev-auth.yaml up
+#
+# Ports:
+#   9001  no auth        (direct)
+#   9002  oidc           (Caddy TLS → cetacean → Dex)
+#   9003  headers        (Caddy injects headers → cetacean)
+#   9004  cert           (Caddy plain HTTP → mTLS → cetacean)
+#   9010  Dex            (OIDC login: dev@localhost / password)
+
+configs:
+  dex-config:
+    content: |
+      issuer: http://localhost:9010/dex
+
+      storage:
+        type: sqlite3
+        config:
+          file: ":memory:"
+
+      web:
+        http: 0.0.0.0:5556
+
+      staticClients:
+        - id: cetacean
+          secret: cetacean-dev-secret
+          name: Cetacean Dev
+          redirectURIs:
+            - https://localhost:9002/auth/callback
+
+      enablePasswordDB: true
+
+      staticPasswords:
+        - email: dev@localhost
+          hash: "$$2a$$10$$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYiFPm1leZck7Mc8T4W"
+          username: Dev User
+          userID: "00000000-0000-0000-0000-000000000001"
+
+  caddyfile-oidc:
+    content: |
+      {
+        local_certs
+      }
+
+      :9002 {
+        tls internal
+        reverse_proxy cetacean-oidc:9000
+      }
+
+  caddyfile-headers:
+    content: |
+      :9003
+
+      reverse_proxy cetacean-headers:9000 {
+        header_up X-Auth-User "dev@localhost"
+        header_up X-Auth-Name "Dev User"
+        header_up X-Auth-Email "dev@localhost"
+        header_up X-Auth-Groups "admins,developers"
+        header_up X-Proxy-Secret "dev-secret"
+      }
+
+  caddyfile-cert:
+    content: |
+      :9004
+
+      reverse_proxy https://cetacean-cert:9000 {
+        transport http {
+          tls_client_auth /certs/client.pem /certs/client-key.pem
+          tls_trusted_ca_certs /certs/ca.pem
+        }
+      }
+
+services:
+  # --- Certificate generation (one-shot) ---
+  cert-init:
+    image: alpine
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        apk add --no-cache openssl >/dev/null 2>&1
+        cd /certs
+
+        # CA
+        openssl ecparam -genkey -name prime256v1 -out ca-key.pem
+        openssl req -x509 -new -key ca-key.pem -out ca.pem -days 365 \
+          -subj "/CN=Cetacean Dev CA"
+
+        # Server cert (for cetacean-cert)
+        openssl ecparam -genkey -name prime256v1 -out server-key.pem
+        openssl req -new -key server-key.pem -out server.csr \
+          -subj "/CN=cetacean-cert"
+        openssl x509 -req -in server.csr -CA ca.pem -CAkey ca-key.pem \
+          -CAcreateserial -out server.pem -days 365 \
+          -extfile <(echo "subjectAltName=DNS:cetacean-cert")
+
+        # Client cert (for caddy-cert to present)
+        openssl ecparam -genkey -name prime256v1 -out client-key.pem
+        openssl req -new -key client-key.pem -out client.csr \
+          -subj "/CN=caddy-proxy"
+        openssl x509 -req -in client.csr -CA ca.pem -CAkey ca-key.pem \
+          -CAcreateserial -out client.pem -days 365
+
+        rm -f *.csr *.srl
+        echo "Certificates generated successfully"
+    volumes:
+      - certs:/certs
+
+  # --- OIDC provider ---
+  dex:
+    image: dexidp/dex
+    command: ["dex", "serve", "/etc/dex/dex.yaml"]
+    ports:
+      - "9010:5556"
+    configs:
+      - source: dex-config
+        target: /etc/dex/dex.yaml
+    networks:
+      - auth-dev
+
+  # --- Auth mode: none (port 9001) ---
+  cetacean-none:
+    build: .
+    ports:
+      - "9001:9000"
+    environment:
+      CETACEAN_AUTH_MODE: none
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - auth-dev
+
+  # --- Auth mode: oidc (port 9002 via caddy-oidc) ---
+  cetacean-oidc:
+    build: .
+    environment:
+      CETACEAN_AUTH_MODE: oidc
+      CETACEAN_AUTH_OIDC_ISSUER: http://localhost:9010/dex
+      CETACEAN_AUTH_OIDC_CLIENT_ID: cetacean
+      CETACEAN_AUTH_OIDC_CLIENT_SECRET: cetacean-dev-secret
+      CETACEAN_AUTH_OIDC_REDIRECT_URL: https://localhost:9002/auth/callback
+    extra_hosts:
+      - "localhost:host-gateway"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - dex
+    networks:
+      - auth-dev
+
+  caddy-oidc:
+    image: caddy:2
+    ports:
+      - "9002:9002"
+    configs:
+      - source: caddyfile-oidc
+        target: /etc/caddy/Caddyfile
+    depends_on:
+      - cetacean-oidc
+    networks:
+      - auth-dev
+
+  # --- Auth mode: headers (port 9003 via caddy-headers) ---
+  cetacean-headers:
+    build: .
+    environment:
+      CETACEAN_AUTH_MODE: headers
+      CETACEAN_AUTH_HEADERS_SUBJECT: X-Auth-User
+      CETACEAN_AUTH_HEADERS_NAME: X-Auth-Name
+      CETACEAN_AUTH_HEADERS_EMAIL: X-Auth-Email
+      CETACEAN_AUTH_HEADERS_GROUPS: X-Auth-Groups
+      CETACEAN_AUTH_HEADERS_SECRET_HEADER: X-Proxy-Secret
+      CETACEAN_AUTH_HEADERS_SECRET_VALUE: dev-secret
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - auth-dev
+
+  caddy-headers:
+    image: caddy:2
+    ports:
+      - "9003:9003"
+    configs:
+      - source: caddyfile-headers
+        target: /etc/caddy/Caddyfile
+    depends_on:
+      - cetacean-headers
+    networks:
+      - auth-dev
+
+  # --- Auth mode: cert (port 9004 via caddy-cert) ---
+  cetacean-cert:
+    build: .
+    environment:
+      CETACEAN_AUTH_MODE: cert
+      CETACEAN_AUTH_CERT_CA: /certs/ca.pem
+      CETACEAN_TLS_CERT: /certs/server.pem
+      CETACEAN_TLS_KEY: /certs/server-key.pem
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - certs:/certs:ro
+    depends_on:
+      cert-init:
+        condition: service_completed_successfully
+    networks:
+      - auth-dev
+
+  caddy-cert:
+    image: caddy:2
+    ports:
+      - "9004:9004"
+    configs:
+      - source: caddyfile-cert
+        target: /etc/caddy/Caddyfile
+    volumes:
+      - certs:/certs:ro
+    depends_on:
+      cert-init:
+        condition: service_completed_successfully
+      cetacean-cert:
+        condition: service_started
+    networks:
+      - auth-dev
+
+networks:
+  auth-dev:
+
+volumes:
+  certs:

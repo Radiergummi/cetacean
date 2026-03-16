@@ -110,9 +110,7 @@ func (p *TailscaleProvider) Authenticate(_ http.ResponseWriter, r *http.Request)
 	return id, nil
 }
 
-func (p *TailscaleProvider) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /auth/whoami", WhoamiHandler(p))
-}
+func (p *TailscaleProvider) RegisterRoutes(_ *http.ServeMux) {}
 
 // capGrantGroups is the JSON structure expected inside each capability grant
 // value. Grants may contain a "groups" array of strings that map to the

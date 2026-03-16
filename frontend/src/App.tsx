@@ -33,6 +33,7 @@ const TaskList = lazy(() => import("./pages/TaskList"));
 const Topology = lazy(() => import("./pages/Topology"));
 const VolumeDetail = lazy(() => import("./pages/VolumeDetail"));
 const VolumeList = lazy(() => import("./pages/VolumeList"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 
 function Layout({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -64,7 +65,7 @@ function Layout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-background">
       <nav className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-14 items-center justify-between">
+          <div className="relative flex h-12 items-center justify-between">
             <div className="flex items-center gap-3">
               <Link to="/" className="font-semibold text-base tracking-tight">
                 Cetacean
@@ -76,12 +77,10 @@ function Layout({ children }: { children: React.ReactNode }) {
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="hidden lg:flex items-center gap-1">
-                <NavLinks />
+              <div className="lg:absolute lg:left-1/2 lg:-translate-x-1/2">
+                <GlobalSearch ref={searchRef} />
               </div>
-
               <ThemeToggle />
-              <GlobalSearch ref={searchRef} />
               <UserBadge />
 
               <button
@@ -93,6 +92,11 @@ function Layout({ children }: { children: React.ReactNode }) {
               </button>
             </div>
           </div>
+
+          <div className="hidden lg:flex justify-center items-center gap-1 h-10 -mb-px">
+            <NavLinks />
+          </div>
+
           {menuOpen && (
             <div
               className="lg:hidden w-full flex flex-col gap-1 py-3"
@@ -134,7 +138,7 @@ function NavLinks() {
             <Link
               to={to}
               aria-current={active ? "page" : undefined}
-              className="text-sm px-3 py-1.5 rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted/50 aria-[current=page]:bg-muted aria-[current=page]:text-foreground aria-[current=page]:font-medium"
+              className="text-sm px-3 py-2 transition-colors text-muted-foreground hover:text-foreground border-b-2 border-transparent aria-[current=page]:text-foreground aria-[current=page]:font-medium aria-[current=page]:border-foreground"
             >
               {label}
             </Link>
@@ -149,9 +153,12 @@ function UserBadge() {
   const { identity, loading } = useAuth();
   if (loading || !identity || identity.provider === "none") return null;
   return (
-    <span className="hidden sm:block text-sm text-muted-foreground truncate max-w-32">
+    <Link
+      to="/profile"
+      className="hidden sm:block text-sm text-muted-foreground truncate max-w-32 hover:text-foreground transition-colors"
+    >
       {identity.displayName || identity.email || identity.subject}
-    </span>
+    </Link>
   );
 }
 
@@ -209,6 +216,7 @@ export default function App() {
                 <Route path="/swarm" element={<SwarmPage />} />
                 <Route path="/topology" element={<Topology />} />
                 <Route path="/search" element={<SearchPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>

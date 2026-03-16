@@ -13,6 +13,4 @@ func (p *NoneProvider) Authenticate(_ http.ResponseWriter, _ *http.Request) (*Id
 	}, nil
 }
 
-func (p *NoneProvider) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /auth/whoami", WhoamiHandler(p))
-}
+func (p *NoneProvider) RegisterRoutes(_ *http.ServeMux) {}

@@ -98,41 +98,41 @@ OpenID Connect with authorization code flow for browsers and Bearer token valida
 
 #### Configuration
 
-| Flag | Env var | Config file key | Required | Default | Description |
-|---|---|---|---|---|---|
-| `-auth-oidc-issuer` | `CETACEAN_AUTH_OIDC_ISSUER` | `auth.oidc.issuer` | Yes | -- | OIDC issuer URL (must support OIDC Discovery) |
-| `-auth-oidc-client-id` | `CETACEAN_AUTH_OIDC_CLIENT_ID` | `auth.oidc.client_id` | Yes | -- | OAuth 2.0 client ID |
-| `-auth-oidc-client-secret` | `CETACEAN_AUTH_OIDC_CLIENT_SECRET` | `auth.oidc.client_secret` | Yes | -- | OAuth 2.0 client secret |
-| `-auth-oidc-redirect-url` | `CETACEAN_AUTH_OIDC_REDIRECT_URL` | `auth.oidc.redirect_url` | Yes | -- | Callback URL (must be HTTPS, or `http://localhost`/`http://127.0.0.1` for dev) |
-| `-auth-oidc-scopes` | `CETACEAN_AUTH_OIDC_SCOPES` | `auth.oidc.scopes` | No | `openid,profile,email` | Comma-separated OIDC scopes |
-| `-auth-oidc-session-key` | `CETACEAN_AUTH_OIDC_SESSION_KEY` | `auth.oidc.session_key` | No | random | Hex-encoded 32-byte HMAC key for session cookies. Random per-process if unset. |
+| Flag                       | Env var                            | Config file key           | Required | Default                | Description                                                                    |
+|----------------------------|------------------------------------|---------------------------|----------|------------------------|--------------------------------------------------------------------------------|
+| `-auth-oidc-issuer`        | `CETACEAN_AUTH_OIDC_ISSUER`        | `auth.oidc.issuer`        | Yes      | --                     | OIDC issuer URL (must support OIDC Discovery)                                  |
+| `-auth-oidc-client-id`     | `CETACEAN_AUTH_OIDC_CLIENT_ID`     | `auth.oidc.client_id`     | Yes      | --                     | OAuth 2.0 client ID                                                            |
+| `-auth-oidc-client-secret` | `CETACEAN_AUTH_OIDC_CLIENT_SECRET` | `auth.oidc.client_secret` | Yes      | --                     | OAuth 2.0 client secret                                                        |
+| `-auth-oidc-redirect-url`  | `CETACEAN_AUTH_OIDC_REDIRECT_URL`  | `auth.oidc.redirect_url`  | Yes      | --                     | Callback URL (must be HTTPS, or `http://localhost`/`http://127.0.0.1` for dev) |
+| `-auth-oidc-scopes`        | `CETACEAN_AUTH_OIDC_SCOPES`        | `auth.oidc.scopes`        | No       | `openid,profile,email` | Comma-separated OIDC scopes                                                    |
+| `-auth-oidc-session-key`   | `CETACEAN_AUTH_OIDC_SESSION_KEY`   | `auth.oidc.session_key`   | No       | random                 | Hex-encoded 32-byte HMAC key for session cookies. Random per-process if unset. |
 
 #### Browser Flow (Authorization Code)
 
 ```
-Browser                        Cetacean                       IdP
-  │                               │                             │
-  ├──GET /services───────────────►│                             │
-  │                               ├─ 302 /auth/login ──────────►│
-  │◄──────────────────────────────┤                             │
-  ├──GET /auth/login─────────────►│                             │
-  │                               ├─ Set cookies (state,        │
-  │                               │   nonce, PKCE verifier,     │
-  │                               │   redirect URL)             │
-  │◄──302 to IdP authorize────────┤                             │
-  ├──GET authorize───────────────────────────────────────────────►
-  │                                                              │
-  │◄──302 /auth/callback?code=...&state=...──────────────────────┤
-  ├──GET /auth/callback──────────►│                             │
-  │                               ├─ Validate state, nonce      │
-  │                               ├─ Exchange code for tokens───►│
-  │                               │◄─ ID token + access token───┤
-  │                               ├─ Validate ID token          │
-  │                               ├─ Set session cookie         │
-  │◄──302 to original URL────────┤                             │
-  ├──GET /services───────────────►│                             │
-  │                               ├─ Validate session cookie    │
-  │◄──200 JSON──────────────────┤                             │
+Browser                        Cetacean                          IdP
+  │                               │                               │
+  ├── GET /services ─────────────►│                               │
+  │                               ├── 302 /auth/login ───────────►│
+  │◄──────────────────────────────┤                               │
+  ├── GET /auth/login ───────────►│                               │
+  │                               ├── Set cookies (state,         │
+  │                               │  nonce, PKCE verifier,        │
+  │                               │  redirect URL)                │
+  │◄── 302 to IdP authorize ──────┤                               │
+  ├── GET authorize ─────────────────────────────────────────────►│
+  │                                                               │
+  │◄── 302 /auth/callback?code=...&state=... ─────────────────────┤
+  ├── GET /auth/callback ────────►│                               │
+  │                               ├── Validate state, nonce       │
+  │                               ├── Exchange code for tokens ──►│
+  │                               │◄── ID token + access token ───┤
+  │                               ├── Validate ID token           │
+  │                               ├── Set session cookie          │
+  │◄── 302 to original URL ───────┤                               │
+  ├── GET /services ─────────────►│                               │
+  │                               ├── Validate session cookie     │
+  │◄── 200 JSON ──────────────────┤                               │
 ```
 
 1. Unauthenticated browser request → 302 redirect to `/auth/login`
@@ -273,13 +273,13 @@ In tsnet mode, authenticated routes are served on the tailnet listener. Meta end
 
 #### Configuration
 
-| Flag | Env var | Config file key | Required | Default | Description |
-|---|---|---|---|---|---|
-| `-auth-tailscale-mode` | `CETACEAN_AUTH_TAILSCALE_MODE` | `auth.tailscale.mode` | No | `local` | `local` or `tsnet` |
-| `-auth-tailscale-authkey` | `CETACEAN_AUTH_TAILSCALE_AUTHKEY` | `auth.tailscale.authkey` | tsnet only | -- | Tailscale auth key for node enrollment |
-| `-auth-tailscale-hostname` | `CETACEAN_AUTH_TAILSCALE_HOSTNAME` | `auth.tailscale.hostname` | No | `cetacean` | Tailscale node hostname (tsnet mode) |
-| `-auth-tailscale-state-dir` | `CETACEAN_AUTH_TAILSCALE_STATE_DIR` | `auth.tailscale.state_dir` | No | -- | State directory for tsnet |
-| `-auth-tailscale-capability` | `CETACEAN_AUTH_TAILSCALE_CAPABILITY` | `auth.tailscale.capability` | No | -- | App capability key for group extraction |
+| Flag                         | Env var                              | Config file key             | Required   | Default    | Description                             |
+|------------------------------|--------------------------------------|-----------------------------|------------|------------|-----------------------------------------|
+| `-auth-tailscale-mode`       | `CETACEAN_AUTH_TAILSCALE_MODE`       | `auth.tailscale.mode`       | No         | `local`    | `local` or `tsnet`                      |
+| `-auth-tailscale-authkey`    | `CETACEAN_AUTH_TAILSCALE_AUTHKEY`    | `auth.tailscale.authkey`    | tsnet only | --         | Tailscale auth key for node enrollment  |
+| `-auth-tailscale-hostname`   | `CETACEAN_AUTH_TAILSCALE_HOSTNAME`   | `auth.tailscale.hostname`   | No         | `cetacean` | Tailscale node hostname (tsnet mode)    |
+| `-auth-tailscale-state-dir`  | `CETACEAN_AUTH_TAILSCALE_STATE_DIR`  | `auth.tailscale.state_dir`  | No         | --         | State directory for tsnet               |
+| `-auth-tailscale-capability` | `CETACEAN_AUTH_TAILSCALE_CAPABILITY` | `auth.tailscale.capability` | No         | --         | App capability key for group extraction |
 
 #### Identity Extraction
 
@@ -342,11 +342,11 @@ identity.
 
 #### Configuration
 
-| Flag | Env var | Config file key | Required | Default | Description |
-|---|---|---|---|---|---|
-| `-auth-cert-ca` | `CETACEAN_AUTH_CERT_CA` | `auth.cert.ca` | Yes | -- | Path to CA bundle (PEM) for client cert validation |
-| `-tls-cert` | `CETACEAN_TLS_CERT` | `tls.cert` | Yes | -- | Server certificate (PEM) |
-| `-tls-key` | `CETACEAN_TLS_KEY` | `tls.key` | Yes | -- | Server private key (PEM) |
+| Flag            | Env var                 | Config file key | Required | Default | Description                                        |
+|-----------------|-------------------------|-----------------|----------|---------|----------------------------------------------------|
+| `-auth-cert-ca` | `CETACEAN_AUTH_CERT_CA` | `auth.cert.ca`  | Yes      | --      | Path to CA bundle (PEM) for client cert validation |
+| `-tls-cert`     | `CETACEAN_TLS_CERT`     | `tls.cert`      | Yes      | --      | Server certificate (PEM)                           |
+| `-tls-key`      | `CETACEAN_TLS_KEY`      | `tls.key`       | Yes      | --      | Server private key (PEM)                           |
 
 ```bash
 ./cetacean \
@@ -416,15 +416,15 @@ mechanism to prevent clients from spoofing headers by bypassing the proxy.
 
 #### Configuration
 
-| Flag | Env var | Config file key | Required | Default | Description |
-|---|---|---|---|---|---|
-| `-auth-headers-subject` | `CETACEAN_AUTH_HEADERS_SUBJECT` | `auth.headers.subject` | Yes | -- | Header name for subject (e.g., `X-Remote-User`) |
-| `-auth-headers-name` | `CETACEAN_AUTH_HEADERS_NAME` | `auth.headers.name` | No | -- | Header name for display name |
-| `-auth-headers-email` | `CETACEAN_AUTH_HEADERS_EMAIL` | `auth.headers.email` | No | -- | Header name for email |
-| `-auth-headers-groups` | `CETACEAN_AUTH_HEADERS_GROUPS` | `auth.headers.groups` | No | -- | Header name for groups (comma-separated) |
-| `-auth-headers-secret-header` | `CETACEAN_AUTH_HEADERS_SECRET_HEADER` | `auth.headers.secret_header` | No | -- | Header name for shared secret |
-| `-auth-headers-secret-value` | `CETACEAN_AUTH_HEADERS_SECRET_VALUE` | `auth.headers.secret_value` | Conditional | -- | Shared secret value (required if secret header set) |
-| `-auth-headers-trusted-proxies` | `CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES` | `auth.headers.trusted_proxies` | No | -- | Comma-separated CIDR/IP allowlist |
+| Flag                            | Env var                                 | Config file key                | Required    | Default | Description                                         |
+|---------------------------------|-----------------------------------------|--------------------------------|-------------|---------|-----------------------------------------------------|
+| `-auth-headers-subject`         | `CETACEAN_AUTH_HEADERS_SUBJECT`         | `auth.headers.subject`         | Yes         | --      | Header name for subject (e.g., `X-Remote-User`)     |
+| `-auth-headers-name`            | `CETACEAN_AUTH_HEADERS_NAME`            | `auth.headers.name`            | No          | --      | Header name for display name                        |
+| `-auth-headers-email`           | `CETACEAN_AUTH_HEADERS_EMAIL`           | `auth.headers.email`           | No          | --      | Header name for email                               |
+| `-auth-headers-groups`          | `CETACEAN_AUTH_HEADERS_GROUPS`          | `auth.headers.groups`          | No          | --      | Header name for groups (comma-separated)            |
+| `-auth-headers-secret-header`   | `CETACEAN_AUTH_HEADERS_SECRET_HEADER`   | `auth.headers.secret_header`   | No          | --      | Header name for shared secret                       |
+| `-auth-headers-secret-value`    | `CETACEAN_AUTH_HEADERS_SECRET_VALUE`    | `auth.headers.secret_value`    | Conditional | --      | Shared secret value (required if secret header set) |
+| `-auth-headers-trusted-proxies` | `CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES` | `auth.headers.trusted_proxies` | No          | --      | Comma-separated CIDR/IP allowlist                   |
 
 At least one of `trusted_proxies` or `secret_header`+`secret_value` must be configured.
 
@@ -527,10 +527,10 @@ Missing or invalid subject → 401 Unauthorized.
 
 TLS termination is available in any auth mode. It is **required** for cert mode (mTLS).
 
-| Flag | Env var | Config file key | Required | Default | Description |
-|---|---|---|---|---|---|
-| `-tls-cert` | `CETACEAN_TLS_CERT` | `tls.cert` | No (Yes for cert mode) | -- | Server certificate path (PEM) |
-| `-tls-key` | `CETACEAN_TLS_KEY` | `tls.key` | No (Yes for cert mode) | -- | Server private key path (PEM) |
+| Flag        | Env var             | Config file key | Required               | Default | Description                   |
+|-------------|---------------------|-----------------|------------------------|---------|-------------------------------|
+| `-tls-cert` | `CETACEAN_TLS_CERT` | `tls.cert`      | No (Yes for cert mode) | --      | Server certificate path (PEM) |
+| `-tls-key`  | `CETACEAN_TLS_KEY`  | `tls.key`       | No (Yes for cert mode) | --      | Server private key path (PEM) |
 
 ```bash
 # TLS with any auth mode

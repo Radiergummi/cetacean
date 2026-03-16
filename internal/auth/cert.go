@@ -72,9 +72,7 @@ func (p *CertProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (*Id
 	return id, nil
 }
 
-func (p *CertProvider) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /auth/whoami", WhoamiHandler(p))
-}
+func (p *CertProvider) RegisterRoutes(_ *http.ServeMux) {}
 
 // extractSPIFFEID returns the SPIFFE ID from the URI SANs, or "" if none
 // present. Returns an error if the cert contains multiple SPIFFE URIs

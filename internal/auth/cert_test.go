@@ -436,13 +436,12 @@ func TestCertProvider_WhoamiCacheControl(t *testing.T) {
 		NotAfter:     time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
 
-	mux := http.NewServeMux()
-	p.RegisterRoutes(mux)
+	handler := WhoamiHandler(p)
 
-	r := httptest.NewRequest("GET", "/auth/whoami", nil)
+	r := httptest.NewRequest("GET", "/", nil)
 	r.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{cert}}
 	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, r)
+	handler.ServeHTTP(w, r)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
