@@ -87,6 +87,24 @@ function seriesLabel(metric: Record<string, string> | undefined, fallback?: stri
   return fallback ?? "value";
 }
 
+/** Parse a Prometheus range query response into chart-ready data. */
+function parseRangeResult(
+  resp: PrometheusResponse,
+  title: string,
+  colorOverride?: string,
+): FetchedData | null {
+  if (!resp.data?.result?.length) return null;
+  const result = resp.data.result;
+  const timestamps = result[0].values!.map((v) => Number(v[0]));
+  const labels = timestamps.map((ts) => new Date(ts * 1000).toLocaleTimeString());
+  const series = result.map((s, i) => ({
+    label: seriesLabel(s.metric, result.length === 1 ? title : undefined),
+    color: colorOverride ?? getChartColor(i),
+    data: s.values!.map((v) => Number(v[1])),
+  }));
+  return { labels, timestamps, series };
+}
+
 /** Create a vertical gradient fill for a series color. */
 function makeGradient(
   ctx: CanvasRenderingContext2D,
@@ -210,9 +228,9 @@ export default function TimeSeriesChart({
       .then((resp) => {
         if (cancelled) return;
 
-        if (!resp.data?.result?.length) {
+        const parsed = parseRangeResult(resp, title, colorOverride);
+        if (!parsed) {
           if (import.meta.env.DEV) {
-            // In dev mode, show mock data so charts can be debugged without Prometheus data
             const mock = generateMockSeries(title, unit, start, end, step, colorOverride);
             setFetchedData(mock);
             onSeriesInfo?.(mock.series.map((s) => ({ label: s.label, color: s.color })));
@@ -223,19 +241,8 @@ export default function TimeSeriesChart({
           setState("empty");
           return;
         }
-
-        const result = resp.data.result;
-        const timestamps = result[0].values!.map((v) => Number(v[0]));
-        const labels = timestamps.map((ts) => new Date(ts * 1000).toLocaleTimeString());
-
-        const series = result.map((s, i) => ({
-          label: seriesLabel(s.metric, result.length === 1 ? title : undefined),
-          color: colorOverride ?? getChartColor(i),
-          data: s.values!.map((v) => Number(v[1])),
-        }));
-
-        setFetchedData({ labels, timestamps, series });
-        onSeriesInfo?.(series.map((s) => ({ label: s.label, color: s.color })));
+        setFetchedData(parsed);
+        onSeriesInfo?.(parsed.series.map((s) => ({ label: s.label, color: s.color })));
         setIsolatedIndex(null);
         setState("data");
       })
@@ -258,10 +265,19 @@ export default function TimeSeriesChart({
     };
   }, [fetchData, refreshKey]);
 
-  // SSE streaming for live ranges
+  // SSE streaming for live ranges. Uses a ref to gate on "has data" without
+  // causing a reconnect every time fetchedData changes.
   const streaming = panel?.streaming ?? true;
+  const hasDataRef = useRef(false);
+  if (fetchedData) hasDataRef.current = true;
+
   useEffect(() => {
-    if (!fetchedData || from != null || to != null || !streaming) return;
+    // Reset when query/range changes so the initial fetch runs first
+    hasDataRef.current = !!fetchedData;
+  }, [query, range, from, to]);
+
+  useEffect(() => {
+    if (!hasDataRef.current || from != null || to != null || !streaming) return;
 
     const rangeSec = RANGE_SECONDS[range] || 3600;
     const step = Math.max(Math.floor(rangeSec / 300), 15);
@@ -271,17 +287,10 @@ export default function TimeSeriesChart({
     es.addEventListener("initial", (e: MessageEvent) => {
       try {
         const resp = JSON.parse(e.data) as PrometheusResponse;
-        if (!resp.data?.result?.length) return;
-        const result = resp.data.result;
-        const timestamps = result[0].values!.map((v) => Number(v[0]));
-        const labels = timestamps.map((ts) => new Date(ts * 1000).toLocaleTimeString());
-        const series = result.map((s, i) => ({
-          label: seriesLabel(s.metric, result.length === 1 ? title : undefined),
-          color: colorOverride ?? getChartColor(i),
-          data: s.values!.map((v) => Number(v[1])),
-        }));
-        setFetchedData({ labels, timestamps, series });
-        onSeriesInfo?.(series.map((s) => ({ label: s.label, color: s.color })));
+        const parsed = parseRangeResult(resp, title, colorOverride);
+        if (!parsed) return;
+        setFetchedData(parsed);
+        onSeriesInfo?.(parsed.series.map((s) => ({ label: s.label, color: s.color })));
         setState("data");
       } catch { /* ignore parse errors */ }
     });
@@ -316,9 +325,12 @@ export default function TimeSeriesChart({
       es.close();
     };
 
+    // Close SSE on tab hide, refetch + reconnect on tab show
     const visHandler = () => {
       if (document.visibilityState === "hidden") {
         es.close();
+      } else {
+        fetchData();
       }
     };
     document.addEventListener("visibilitychange", visHandler);
@@ -327,18 +339,7 @@ export default function TimeSeriesChart({
       es.close();
       document.removeEventListener("visibilitychange", visHandler);
     };
-  }, [fetchedData ? query : null, range, from, to, streaming]);
-
-  // Refetch + reconnect SSE when tab becomes visible after being hidden
-  useEffect(() => {
-    const handler = () => {
-      if (document.visibilityState === "visible") {
-        fetchData();
-      }
-    };
-    document.addEventListener("visibilitychange", handler);
-    return () => document.removeEventListener("visibilitychange", handler);
-  }, [fetchData]);
+  }, [query, range, from, to, streaming]);
 
   const chartData = useMemo<ChartData<"line"> | null>(() => {
     if (!fetchedData) return null;

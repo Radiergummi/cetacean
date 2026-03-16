@@ -107,11 +107,11 @@ func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
 			inflight.Store(true)
 			go func() {
 				raw, qErr := h.promClient.InstantQueryRaw(ctx, query)
-				inflight.Store(false)
 				select {
 				case results <- queryResult{raw, qErr}:
 				case <-ctx.Done():
 				}
+				inflight.Store(false)
 			}()
 		case res := <-results:
 			if ctx.Err() != nil {
