@@ -1,4 +1,4 @@
-import {AreaChart, Calendar, LineChart, RefreshCw, X} from "lucide-react";
+import {AreaChart, Calendar, LineChart, Pause, Play, RefreshCw, X} from "lucide-react";
 import type React from "react";
 import {useCallback, useMemo, useState} from "react";
 import {useSearchParams} from "react-router-dom";
@@ -119,6 +119,7 @@ export default function MetricsPanel({charts, children, header, stackable}: Prop
     }, [setParams]);
     const [refreshKey, setRefreshKey] = useState(0);
     const [stacked, setStacked] = useState(false);
+    const [streaming, setStreaming] = useState(true);
     const [startInput, setStartInput] = useState("");
     const [endInput, setEndInput] = useState("");
 
@@ -131,9 +132,10 @@ export default function MetricsPanel({charts, children, header, stackable}: Prop
                 refreshKey,
                 onRangeSelect: setCustomRange,
                 stacked,
+                streaming,
             }
         ),
-        [range, customFrom, customTo, refreshKey, setCustomRange, stacked],
+        [range, customFrom, customTo, refreshKey, setCustomRange, stacked, streaming],
     );
 
     const handleCustomApply = (close: () => void) => {
@@ -232,6 +234,12 @@ export default function MetricsPanel({charts, children, header, stackable}: Prop
                 onClick={() => setRefreshKey((k) => k + 1)}
                 title="Refresh"
                 icon={<RefreshCw className="size-3.5"/>}
+            />
+            <IconButton
+                onClick={() => setStreaming((v) => !v)}
+                title={streaming ? "Pause live streaming" : "Resume live streaming"}
+                icon={streaming ? <Pause className="size-3.5"/> : <Play className="size-3.5"/>}
+                active={streaming}
             />
         </div>
     );

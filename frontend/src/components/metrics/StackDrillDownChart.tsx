@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { ChevronLeft } from "lucide-react";
 import TimeSeriesChart from "./TimeSeriesChart";
 import type { Threshold } from "./TimeSeriesChart";
-import { useMetricsPanelContext } from "./MetricsPanel";
+import { useMetricsPanelContext } from "./MetricsPanelContext";
 
 interface Props {
   title: string;

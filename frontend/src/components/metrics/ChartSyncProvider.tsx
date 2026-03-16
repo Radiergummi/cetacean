@@ -1,10 +1,13 @@
 import { createContext, useContext, useRef, useCallback, useMemo, type ReactNode } from "react";
 
 type Listener = (timestamp: number) => void;
+type IsolationListener = (seriesLabel: string | null) => void;
 
 interface ChartSyncApi {
   subscribe: (chartId: string, listener: Listener) => () => void;
   publish: (chartId: string, timestamp: number) => void;
+  subscribeIsolation: (chartId: string, listener: IsolationListener) => () => void;
+  publishIsolation: (chartId: string, seriesLabel: string | null) => void;
   clear: () => void;
 }
 
@@ -12,6 +15,7 @@ const ChartSyncContext = createContext<ChartSyncApi | null>(null);
 
 export function ChartSyncProvider({ children }: { children: ReactNode }) {
   const listenersRef = useRef<Map<string, Listener>>(new Map());
+  const isolationListenersRef = useRef<Map<string, IsolationListener>>(new Map());
 
   const subscribe = useCallback((chartId: string, listener: Listener) => {
     listenersRef.current.set(chartId, listener);
@@ -26,11 +30,25 @@ export function ChartSyncProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const clear = useCallback(() => {
-    listenersRef.current.clear();
+  const subscribeIsolation = useCallback((chartId: string, listener: IsolationListener) => {
+    isolationListenersRef.current.set(chartId, listener);
+    return () => {
+      isolationListenersRef.current.delete(chartId);
+    };
   }, []);
 
-  const value = useMemo(() => ({ subscribe, publish, clear }), [subscribe, publish, clear]);
+  const publishIsolation = useCallback((chartId: string, seriesLabel: string | null) => {
+    for (const [id, listener] of isolationListenersRef.current) {
+      if (id !== chartId) listener(seriesLabel);
+    }
+  }, []);
+
+  const clear = useCallback(() => {
+    listenersRef.current.clear();
+    isolationListenersRef.current.clear();
+  }, []);
+
+  const value = useMemo(() => ({ subscribe, publish, subscribeIsolation, publishIsolation, clear }), [subscribe, publish, subscribeIsolation, publishIsolation, clear]);
 
   return <ChartSyncContext.Provider value={value}>{children}</ChartSyncContext.Provider>;
 }
@@ -38,7 +56,7 @@ export function ChartSyncProvider({ children }: { children: ReactNode }) {
 export function useChartSync(): ChartSyncApi {
   const ctx = useContext(ChartSyncContext);
   if (!ctx) {
-    return { subscribe: () => () => {}, publish: () => {}, clear: () => {} };
+    return { subscribe: () => () => {}, publish: () => {}, subscribeIsolation: () => () => {}, publishIsolation: () => {}, clear: () => {} };
   }
   return ctx;
 }
