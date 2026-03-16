@@ -39,7 +39,7 @@ export default function MonitoringStatus({ status, source }: Props) {
           memory, and disk metrics across your cluster.
         </p>
         <pre className="mt-2 text-xs bg-blue-100 dark:bg-blue-500/10 rounded px-2 py-1 overflow-x-auto max-w-fit">
-          docker stack deploy -c docker-compose.monitoring.yml cetacean-monitoring
+          docker stack deploy -c compose.monitoring.yaml cetacean-monitoring
         </pre>
         <p className="mt-3 text-xs">
           Then set{" "}

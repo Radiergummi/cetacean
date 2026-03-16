@@ -25,7 +25,7 @@ Cetacean does one thing well: **let you see what's happening in your swarm.**
 
 ```bash
 docker build -t cetacean:latest .
-docker stack deploy -c docker-compose.yml cetacean
+docker stack deploy -c compose.yaml cetacean
 # Open http://<manager>:9000 — done.
 ```
 
@@ -105,7 +105,7 @@ Deploy the full observability stack — Cetacean + Prometheus + cAdvisor + Node 
 
 ```bash
 docker build -t cetacean:latest .
-docker stack deploy -c docker-compose.yml cetacean
+docker stack deploy -c compose.yaml cetacean
 ```
 
 Open `http://<manager-node>:9000`. Metrics will populate automatically as cAdvisor and Node Exporter start reporting.

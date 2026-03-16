@@ -94,7 +94,7 @@ sum(container_memory_usage_bytes{
 })
 ```
 
-These use `api.metricsQuery()` (instant query), not `metricsQueryRange`. The queries depend on cAdvisor being configured with Docker label passthrough (the default in the monitoring stack from `docker-compose.monitoring.yml`).
+These use `api.metricsQuery()` (instant query), not `metricsQueryRange`. The queries depend on cAdvisor being configured with Docker label passthrough (the default in the monitoring stack from `compose.monitoring.yaml`).
 
 ### Component
 
