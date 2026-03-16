@@ -6,7 +6,7 @@ title: API Reference
 
 Read-only observability API for Docker Swarm Mode clusters.
 
-Cetacean runs as a single binary that connects to the Docker socket, caches swarm state in memory, and serves it over HTTP. There is no authentication -- deploy behind a reverse proxy if you need it. All endpoints are GET-only.
+Cetacean runs as a single binary that connects to the Docker socket, caches swarm state in memory, and serves it over HTTP. All endpoints are GET-only. Authentication is [pluggable](authentication.md) via `CETACEAN_AUTH_MODE` (default: anonymous access).
 
 The machine-readable OpenAPI spec is available at [`/api`](#api-documentation).
 
@@ -83,6 +83,37 @@ curl "http://localhost:9000/services?filter=name+contains+'web'"
 | Secrets | `name`, `created`, `updated` |
 | Networks | `name`, `driver`, `scope` |
 | Volumes | `name`, `driver`, `scope` |
+
+### Filter fields by resource
+
+Filter expressions use [expr-lang](https://expr-lang.org/) syntax. The result must be boolean. Operators: `==`, `!=`, `<`, `>`, `<=`, `>=`, `contains`, `startsWith`, `endsWith`, `in`, `not in`, `&&`, `||`, `!`.
+
+**Nodes**: `id`, `name` (hostname), `state` (`ready`/`down`/`unknown`), `role` (`manager`/`worker`), `availability` (`active`/`pause`/`drain`)
+
+**Services**: `id`, `name`, `image`, `mode` (`replicated`/`global`), `stack`
+
+**Tasks**: `id`, `state` (`new`/`allocated`/`pending`/`activating`/`running`/`deactivating`/`stopping`/`completed`/`failed`/`rejected`), `desired_state`, `image`, `exit_code`, `error`, `service` (ID), `node` (ID), `slot` (int)
+
+**Configs**: `id`, `name`
+
+**Secrets**: `id`, `name`
+
+**Networks**: `id`, `name`, `driver`, `scope` (`swarm`/`local`)
+
+**Volumes**: `name`, `driver`, `scope`
+
+**Stacks**: `name`, `services` (count), `configs` (count), `secrets` (count), `networks` (count), `volumes` (count)
+
+```bash
+# Manager nodes that are ready
+curl "http://localhost:9000/nodes?filter=role+%3D%3D+%22manager%22+%26%26+state+%3D%3D+%22ready%22"
+
+# Failed tasks with errors
+curl "http://localhost:9000/tasks?filter=state+%3D%3D+%22failed%22+%7C%7C+error+!%3D+%22%22"
+
+# Stacks with more than 5 services
+curl "http://localhost:9000/stacks?filter=services+>+5"
+```
 
 ## Response Format
 
@@ -195,7 +226,28 @@ SSE and streaming endpoints do not set caching headers.
 
 ## Real-Time Events (SSE)
 
-Connect to `/events` to receive real-time updates as Server-Sent Events.
+Every resource endpoint supports SSE in addition to JSON. Send `Accept: text/event-stream` to any list or detail URL to open a per-resource event stream.
+
+### Per-resource streams
+
+List endpoints stream events filtered by resource type. Detail endpoints stream events for that specific resource.
+
+```bash
+# Stream all node events
+curl -H "Accept: text/event-stream" http://localhost:9000/nodes
+
+# Stream events for a specific service
+curl -H "Accept: text/event-stream" http://localhost:9000/services/abc123
+
+# Stream all task events
+curl -H "Accept: text/event-stream" http://localhost:9000/tasks
+```
+
+This is the primary SSE mechanism -- the frontend uses per-resource streams for real-time updates on every page.
+
+### Global event stream
+
+`/events` provides a single stream of all resource changes:
 
 ```bash
 curl -H "Accept: text/event-stream" http://localhost:9000/events
@@ -517,16 +569,33 @@ curl -H "Accept: text/event-stream" http://localhost:9000/events
 curl -H "Accept: text/event-stream" "http://localhost:9000/events?types=service,task"
 ```
 
+### Authentication
+
+See [Authentication](authentication.md) for full details on each auth mode.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/auth/whoami` | Current identity. Returns `Cache-Control: no-store`. |
+| GET | `/auth/login` | Initiate OIDC login flow (OIDC mode only). |
+| GET | `/auth/callback` | OIDC callback (OIDC mode only; redirected by IdP). |
+| POST | `/auth/logout` | Clear session, optionally redirect to IdP logout (OIDC mode only). |
+
+```bash
+curl http://localhost:9000/auth/whoami
+# {"subject":"anonymous","displayName":"Anonymous","provider":"none"}
+```
+
 ### API Documentation
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api` | OpenAPI spec (YAML) or interactive playground (HTML via browser). |
+| GET | `/api` | OpenAPI spec (JSON) or interactive Scalar playground (HTML via browser). |
 | GET | `/api/context.jsonld` | JSON-LD context document. |
+| GET | `/api/scalar.js` | Embedded Scalar standalone JS bundle. |
 
 ```bash
-# Download OpenAPI spec
-curl http://localhost:9000/api > openapi.yaml
+# Download OpenAPI spec (JSON)
+curl http://localhost:9000/api > openapi.json
 
 # Open playground in browser
 open http://localhost:9000/api

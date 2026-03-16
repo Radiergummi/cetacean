@@ -189,5 +189,10 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 ## Known Pre-existing Issues
 None — all previously known test failures have been fixed.
 
-## Design Documents
-Design specs and implementation plans are in `docs/plans/` and `docs/superpowers/` (gitignored, local-only).
+## End-User Documentation
+- `docs/getting-started.md` — Installation, quick start, first run
+- `docs/configuration.md` — Environment variables, CLI flags, health checks, timeouts
+- `docs/monitoring.md` — Prometheus, node-exporter, cAdvisor setup
+- `docs/authentication.md` — Authentication providers (none, OIDC, Tailscale, cert, headers)
+- `docs/dashboard.md` — UI guide: navigation, keyboard shortcuts, search, charts, logs
+- `docs/api.md` — API reference: endpoints, query parameters, filters, response formats, SSE
