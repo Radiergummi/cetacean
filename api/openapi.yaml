@@ -1234,7 +1234,7 @@ components:
     cookieAuth:
       type: apiKey
       in: cookie
-      name: cetacean_session
+      name: __Host-cetacean_session
       description: Session cookie set after OIDC authentication
     bearerAuth:
       type: http

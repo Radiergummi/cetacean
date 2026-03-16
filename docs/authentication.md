@@ -1,40 +1,45 @@
 # Authentication
 
-Cetacean supports pluggable authentication with five providers. Authentication is optional: The default mode (`none`)
-allows anonymous access. One provider is active at a time, selected via the `CETACEAN_AUTH_MODE` environment variable.
+Cetacean supports pluggable authentication with five modes. Authentication is optional: The default mode (`none`)
+allows anonymous access. One mode is active at a time, selected via the `-auth-mode` flag, `CETACEAN_AUTH_MODE`
+environment variable, or `auth.mode` in a [config file](configuration.md#config-file).
 
 All authentication is identity-only (who you are). There is no authorization layer—every authenticated user has the
 same read-only access to all swarm resources.
 
 ## Quick Start
 
+All auth settings can be passed as CLI flags, environment variables, or config file keys. See
+[Configuration](configuration.md) for the full precedence rules. The examples below use CLI flags; equivalent env vars
+and config file keys are listed in each provider's configuration table.
+
 ```bash
 # No auth (default)
-CETACEAN_AUTH_MODE=none ./cetacean
+./cetacean
 
 # OIDC (e.g., Keycloak, Auth0, Okta, Dex)
-CETACEAN_AUTH_MODE=oidc \
-  CETACEAN_AUTH_OIDC_ISSUER=https://idp.example.com \
-  CETACEAN_AUTH_OIDC_CLIENT_ID=cetacean \
-  CETACEAN_AUTH_OIDC_CLIENT_SECRET=secret \
-  CETACEAN_AUTH_OIDC_REDIRECT_URL=https://cetacean.example.com/auth/callback \
-  ./cetacean
+./cetacean \
+  -auth-mode oidc \
+  -auth-oidc-issuer https://idp.example.com \
+  -auth-oidc-client-id cetacean \
+  -auth-oidc-client-secret secret \
+  -auth-oidc-redirect-url https://cetacean.example.com/auth/callback
 
 # Tailscale (local daemon)
-CETACEAN_AUTH_MODE=tailscale ./cetacean
+./cetacean -auth-mode tailscale
 
 # mTLS client certificates
-CETACEAN_AUTH_MODE=cert \
-  CETACEAN_AUTH_CERT_CA=/path/to/ca.pem \
-  CETACEAN_TLS_CERT=/path/to/server.pem \
-  CETACEAN_TLS_KEY=/path/to/server-key.pem \
-  ./cetacean
+./cetacean \
+  -auth-mode cert \
+  -auth-cert-ca /path/to/ca.pem \
+  -tls-cert /path/to/server.pem \
+  -tls-key /path/to/server-key.pem
 
 # Trusted proxy headers
-CETACEAN_AUTH_MODE=headers \
-  CETACEAN_AUTH_HEADERS_SUBJECT=X-Remote-User \
-  CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES=10.0.0.0/8 \
-  ./cetacean
+./cetacean \
+  -auth-mode headers \
+  -auth-headers-subject X-Remote-User \
+  -auth-headers-trusted-proxies 10.0.0.0/8
 ```
 
 ## Identity Model
@@ -82,12 +87,8 @@ All other routes require authentication when a non-`none` provider is active.
 
 Anonymous access. All requests receive a static identity with `subject: "anonymous"`.
 
-```bash
-CETACEAN_AUTH_MODE=none  # or simply omit CETACEAN_AUTH_MODE
-```
-
-No configuration required. Use this when Cetacean is behind a VPN, firewall, or reverse proxy that handles
-authentication externally.
+No configuration required — this is the default when `auth.mode` is unset. Use this when Cetacean is behind a VPN,
+firewall, or reverse proxy that handles authentication externally.
 
 ---
 
@@ -97,14 +98,14 @@ OpenID Connect with authorization code flow for browsers and Bearer token valida
 
 #### Configuration
 
-| Variable                           | Config file key           | Required | Default                | Description                                                                    |
-|------------------------------------|---------------------------|----------|------------------------|--------------------------------------------------------------------------------|
-| `CETACEAN_AUTH_OIDC_ISSUER`        | `auth.oidc.issuer`        | Yes      | --                     | OIDC issuer URL (must support OIDC Discovery)                                  |
-| `CETACEAN_AUTH_OIDC_CLIENT_ID`     | `auth.oidc.client_id`     | Yes      | --                     | OAuth 2.0 client ID                                                            |
-| `CETACEAN_AUTH_OIDC_CLIENT_SECRET` | `auth.oidc.client_secret` | Yes      | --                     | OAuth 2.0 client secret                                                        |
-| `CETACEAN_AUTH_OIDC_REDIRECT_URL`  | `auth.oidc.redirect_url`  | Yes      | --                     | Callback URL (must be HTTPS, or `http://localhost`/`http://127.0.0.1` for dev) |
-| `CETACEAN_AUTH_OIDC_SCOPES`        | `auth.oidc.scopes`        | No       | `openid,profile,email` | Comma-separated OIDC scopes                                                    |
-| `CETACEAN_AUTH_OIDC_SESSION_KEY`   | `auth.oidc.session_key`   | No       | random                 | Hex-encoded 32-byte HMAC key for session cookies. Random per-process if unset. |
+| Flag | Env var | Config file key | Required | Default | Description |
+|---|---|---|---|---|---|
+| `-auth-oidc-issuer` | `CETACEAN_AUTH_OIDC_ISSUER` | `auth.oidc.issuer` | Yes | -- | OIDC issuer URL (must support OIDC Discovery) |
+| `-auth-oidc-client-id` | `CETACEAN_AUTH_OIDC_CLIENT_ID` | `auth.oidc.client_id` | Yes | -- | OAuth 2.0 client ID |
+| `-auth-oidc-client-secret` | `CETACEAN_AUTH_OIDC_CLIENT_SECRET` | `auth.oidc.client_secret` | Yes | -- | OAuth 2.0 client secret |
+| `-auth-oidc-redirect-url` | `CETACEAN_AUTH_OIDC_REDIRECT_URL` | `auth.oidc.redirect_url` | Yes | -- | Callback URL (must be HTTPS, or `http://localhost`/`http://127.0.0.1` for dev) |
+| `-auth-oidc-scopes` | `CETACEAN_AUTH_OIDC_SCOPES` | `auth.oidc.scopes` | No | `openid,profile,email` | Comma-separated OIDC scopes |
+| `-auth-oidc-session-key` | `CETACEAN_AUTH_OIDC_SESSION_KEY` | `auth.oidc.session_key` | No | random | Hex-encoded 32-byte HMAC key for session cookies. Random per-process if unset. |
 
 #### Browser Flow (Authorization Code)
 
@@ -165,7 +166,7 @@ Browser sessions use signed ephemeral cookies:
 
 | Property | Value                                                          |
 |----------|----------------------------------------------------------------|
-| Name     | `cetacean_session`                                             |
+| Name     | `__Host-cetacean_session`                                      |
 | Signing  | HMAC-SHA256 with 32-byte key                                   |
 | HttpOnly | Yes (no JavaScript access)                                     |
 | Secure   | Yes (HTTPS only)                                               |
@@ -173,17 +174,18 @@ Browser sessions use signed ephemeral cookies:
 | MaxAge   | min(ID token expiry, 8 hours)                                  |
 | Content  | Subject, display name, email, groups, provider (no raw claims) |
 
-If `CETACEAN_AUTH_OIDC_SESSION_KEY` is not set, the signing key is generated randomly at startup. Restarting the server
-invalidates all sessions (users must re-authenticate).
+If the session key is not set, the signing key is generated randomly at startup. Restarting the server invalidates all
+sessions (users must re-authenticate).
 
-Set `CETACEAN_AUTH_OIDC_SESSION_KEY` to a fixed 32-byte hex-encoded value for session persistence across restarts:
+Set `auth.oidc.session_key` (or `-auth-oidc-session-key` / `CETACEAN_AUTH_OIDC_SESSION_KEY`) to a fixed 32-byte
+hex-encoded value for session persistence across restarts:
 
 ```bash
 # Generate a key
 openssl rand -hex 32
 
-# Use it
-CETACEAN_AUTH_OIDC_SESSION_KEY=a1b2c3...  # 64 hex characters
+# Use it (flag, env var, or config file)
+./cetacean -auth-oidc-session-key a1b2c3...  # 64 hex characters
 ```
 
 #### Logout
@@ -248,8 +250,7 @@ login flow needed.
 Uses the local Tailscale daemon to identify peers. Cetacean must run on a node inside the tailnet.
 
 ```bash
-CETACEAN_AUTH_MODE=tailscale
-# CETACEAN_AUTH_TAILSCALE_MODE=local  # default
+./cetacean -auth-mode tailscale
 ```
 
 Requires the Tailscale daemon running locally (access to `/run/tailscale/tailscaled.sock`).
@@ -259,11 +260,12 @@ Requires the Tailscale daemon running locally (access to `/run/tailscale/tailsca
 Embeds a Tailscale node directly into Cetacean. No local Tailscale installation needed.
 
 ```bash
-CETACEAN_AUTH_MODE=tailscale
-CETACEAN_AUTH_TAILSCALE_MODE=tsnet
-CETACEAN_AUTH_TAILSCALE_AUTHKEY=tskey-auth-...
-CETACEAN_AUTH_TAILSCALE_HOSTNAME=cetacean       # optional, default: "cetacean"
-CETACEAN_AUTH_TAILSCALE_STATE_DIR=/var/lib/cetacean/tsnet  # optional
+./cetacean \
+  -auth-mode tailscale \
+  -auth-tailscale-mode tsnet \
+  -auth-tailscale-authkey tskey-auth-... \
+  -auth-tailscale-hostname cetacean \
+  -auth-tailscale-state-dir /var/lib/cetacean/tsnet
 ```
 
 In tsnet mode, authenticated routes are served on the tailnet listener. Meta endpoints (`/-/health`, `/-/ready`,
@@ -271,13 +273,13 @@ In tsnet mode, authenticated routes are served on the tailnet listener. Meta end
 
 #### Configuration
 
-| Variable                             | Config file key             | Required   | Default    | Description                             |
-|--------------------------------------|-----------------------------|------------|------------|-----------------------------------------|
-| `CETACEAN_AUTH_TAILSCALE_MODE`       | `auth.tailscale.mode`       | No         | `local`    | `local` or `tsnet`                      |
-| `CETACEAN_AUTH_TAILSCALE_AUTHKEY`    | `auth.tailscale.authkey`    | tsnet only | --         | Tailscale auth key for node enrollment  |
-| `CETACEAN_AUTH_TAILSCALE_HOSTNAME`   | `auth.tailscale.hostname`   | No         | `cetacean` | Tailscale node hostname (tsnet mode)    |
-| `CETACEAN_AUTH_TAILSCALE_STATE_DIR`  | `auth.tailscale.state_dir`  | No         | --         | State directory for tsnet               |
-| `CETACEAN_AUTH_TAILSCALE_CAPABILITY` | `auth.tailscale.capability` | No         | --         | App capability key for group extraction |
+| Flag | Env var | Config file key | Required | Default | Description |
+|---|---|---|---|---|---|
+| `-auth-tailscale-mode` | `CETACEAN_AUTH_TAILSCALE_MODE` | `auth.tailscale.mode` | No | `local` | `local` or `tsnet` |
+| `-auth-tailscale-authkey` | `CETACEAN_AUTH_TAILSCALE_AUTHKEY` | `auth.tailscale.authkey` | tsnet only | -- | Tailscale auth key for node enrollment |
+| `-auth-tailscale-hostname` | `CETACEAN_AUTH_TAILSCALE_HOSTNAME` | `auth.tailscale.hostname` | No | `cetacean` | Tailscale node hostname (tsnet mode) |
+| `-auth-tailscale-state-dir` | `CETACEAN_AUTH_TAILSCALE_STATE_DIR` | `auth.tailscale.state_dir` | No | -- | State directory for tsnet |
+| `-auth-tailscale-capability` | `CETACEAN_AUTH_TAILSCALE_CAPABILITY` | `auth.tailscale.capability` | No | -- | App capability key for group extraction |
 
 #### Identity Extraction
 
@@ -290,11 +292,11 @@ In tsnet mode, authenticated routes are served on the tailnet listener. Meta end
 
 #### Capability-Based Groups
 
-Tailscale ACL capabilities can map users to application groups. Set `CETACEAN_AUTH_TAILSCALE_CAPABILITY` to the
-capability key:
+Tailscale ACL capabilities can map users to application groups. Set the capability key via
+`-auth-tailscale-capability`, `CETACEAN_AUTH_TAILSCALE_CAPABILITY`, or `auth.tailscale.capability`:
 
 ```bash
-CETACEAN_AUTH_TAILSCALE_CAPABILITY=example.com/cap/cetacean
+./cetacean -auth-mode tailscale -auth-tailscale-capability example.com/cap/cetacean
 ```
 
 Then in your Tailscale ACL policy, grant capabilities to users or groups:
@@ -340,18 +342,18 @@ identity.
 
 #### Configuration
 
-| Variable                | Config file key | Required | Default | Description                                        |
-|-------------------------|-----------------|----------|---------|----------------------------------------------------|
-| `CETACEAN_AUTH_CERT_CA` | `auth.cert.ca`  | Yes      | --      | Path to CA bundle (PEM) for client cert validation |
-| `CETACEAN_TLS_CERT`     | `tls.cert`      | Yes      | --      | Server certificate (PEM)                           |
-| `CETACEAN_TLS_KEY`      | `tls.key`       | Yes      | --      | Server private key (PEM)                           |
+| Flag | Env var | Config file key | Required | Default | Description |
+|---|---|---|---|---|---|
+| `-auth-cert-ca` | `CETACEAN_AUTH_CERT_CA` | `auth.cert.ca` | Yes | -- | Path to CA bundle (PEM) for client cert validation |
+| `-tls-cert` | `CETACEAN_TLS_CERT` | `tls.cert` | Yes | -- | Server certificate (PEM) |
+| `-tls-key` | `CETACEAN_TLS_KEY` | `tls.key` | Yes | -- | Server private key (PEM) |
 
 ```bash
-CETACEAN_AUTH_MODE=cert \
-  CETACEAN_AUTH_CERT_CA=/etc/cetacean/ca.pem \
-  CETACEAN_TLS_CERT=/etc/cetacean/server.pem \
-  CETACEAN_TLS_KEY=/etc/cetacean/server-key.pem \
-  ./cetacean
+./cetacean \
+  -auth-mode cert \
+  -auth-cert-ca /etc/cetacean/ca.pem \
+  -tls-cert /etc/cetacean/server.pem \
+  -tls-key /etc/cetacean/server-key.pem
 ```
 
 The server is configured with `tls.RequireAndVerifyClientCert` -- clients without a valid certificate cannot connect.
@@ -414,26 +416,27 @@ mechanism to prevent clients from spoofing headers by bypassing the proxy.
 
 #### Configuration
 
-| Variable                                | Config file key                | Required    | Default | Description                                            |
-|-----------------------------------------|--------------------------------|-------------|---------|--------------------------------------------------------|
-| `CETACEAN_AUTH_HEADERS_SUBJECT`         | `auth.headers.subject`         | Yes         | --      | Header name for subject (e.g., `X-Remote-User`)        |
-| `CETACEAN_AUTH_HEADERS_NAME`            | `auth.headers.name`            | No          | --      | Header name for display name                           |
-| `CETACEAN_AUTH_HEADERS_EMAIL`           | `auth.headers.email`           | No          | --      | Header name for email                                  |
-| `CETACEAN_AUTH_HEADERS_GROUPS`          | `auth.headers.groups`          | No          | --      | Header name for groups (comma-separated)               |
-| `CETACEAN_AUTH_HEADERS_SECRET_HEADER`   | `auth.headers.secret_header`   | No          | --      | Header name for shared secret                          |
-| `CETACEAN_AUTH_HEADERS_SECRET_VALUE`    | `auth.headers.secret_value`    | Conditional | --      | Shared secret value (required if secret header is set) |
-| `CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES` | `auth.headers.trusted_proxies` | No          | --      | Comma-separated CIDR/IP allowlist                      |
+| Flag | Env var | Config file key | Required | Default | Description |
+|---|---|---|---|---|---|
+| `-auth-headers-subject` | `CETACEAN_AUTH_HEADERS_SUBJECT` | `auth.headers.subject` | Yes | -- | Header name for subject (e.g., `X-Remote-User`) |
+| `-auth-headers-name` | `CETACEAN_AUTH_HEADERS_NAME` | `auth.headers.name` | No | -- | Header name for display name |
+| `-auth-headers-email` | `CETACEAN_AUTH_HEADERS_EMAIL` | `auth.headers.email` | No | -- | Header name for email |
+| `-auth-headers-groups` | `CETACEAN_AUTH_HEADERS_GROUPS` | `auth.headers.groups` | No | -- | Header name for groups (comma-separated) |
+| `-auth-headers-secret-header` | `CETACEAN_AUTH_HEADERS_SECRET_HEADER` | `auth.headers.secret_header` | No | -- | Header name for shared secret |
+| `-auth-headers-secret-value` | `CETACEAN_AUTH_HEADERS_SECRET_VALUE` | `auth.headers.secret_value` | Conditional | -- | Shared secret value (required if secret header set) |
+| `-auth-headers-trusted-proxies` | `CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES` | `auth.headers.trusted_proxies` | No | -- | Comma-separated CIDR/IP allowlist |
 
-At least one of `TRUSTED_PROXIES` or `SECRET_HEADER`+`SECRET_VALUE` must be configured.
+At least one of `trusted_proxies` or `secret_header`+`secret_value` must be configured.
 
 #### Security Mechanisms
 
 **IP Allowlist** -- only accept headers from known proxy IPs:
 
 ```bash
-CETACEAN_AUTH_MODE=headers \
-  CETACEAN_AUTH_HEADERS_SUBJECT=X-Remote-User \
-  CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES=10.0.0.1,10.0.0.2,127.0.0.1
+./cetacean \
+  -auth-mode headers \
+  -auth-headers-subject X-Remote-User \
+  -auth-headers-trusted-proxies 10.0.0.1,10.0.0.2,127.0.0.1
 ```
 
 Supports individual IPs and CIDR notation (`10.0.0.0/8`). Bare IPs are treated as `/32` (IPv4) or `/128` (IPv6).
@@ -441,10 +444,11 @@ Supports individual IPs and CIDR notation (`10.0.0.0/8`). Bare IPs are treated a
 **Shared Secret** -- proxy proves its identity with a secret header:
 
 ```bash
-CETACEAN_AUTH_MODE=headers \
-  CETACEAN_AUTH_HEADERS_SUBJECT=X-Remote-User \
-  CETACEAN_AUTH_HEADERS_SECRET_HEADER=X-Proxy-Secret \
-  CETACEAN_AUTH_HEADERS_SECRET_VALUE=my-secret-value
+./cetacean \
+  -auth-mode headers \
+  -auth-headers-subject X-Remote-User \
+  -auth-headers-secret-header X-Proxy-Secret \
+  -auth-headers-secret-value my-secret-value
 ```
 
 The secret is validated using constant-time comparison (HMAC-based) to prevent timing attacks.
@@ -452,14 +456,15 @@ The secret is validated using constant-time comparison (HMAC-based) to prevent t
 **Both** -- for maximum security, combine both mechanisms:
 
 ```bash
-CETACEAN_AUTH_MODE=headers \
-  CETACEAN_AUTH_HEADERS_SUBJECT=X-Remote-User \
-  CETACEAN_AUTH_HEADERS_NAME=X-Remote-Name \
-  CETACEAN_AUTH_HEADERS_EMAIL=X-Remote-Email \
-  CETACEAN_AUTH_HEADERS_GROUPS=X-Remote-Groups \
-  CETACEAN_AUTH_HEADERS_SECRET_HEADER=X-Proxy-Secret \
-  CETACEAN_AUTH_HEADERS_SECRET_VALUE=my-secret-value \
-  CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES=10.0.0.0/8
+./cetacean \
+  -auth-mode headers \
+  -auth-headers-subject X-Remote-User \
+  -auth-headers-name X-Remote-Name \
+  -auth-headers-email X-Remote-Email \
+  -auth-headers-groups X-Remote-Groups \
+  -auth-headers-secret-header X-Proxy-Secret \
+  -auth-headers-secret-value my-secret-value \
+  -auth-headers-trusted-proxies 10.0.0.0/8
 ```
 
 #### Proxy Configuration Examples
@@ -522,16 +527,14 @@ Missing or invalid subject → 401 Unauthorized.
 
 TLS termination is available in any auth mode. It is **required** for cert mode (mTLS).
 
-| Variable            | Config file key | Required               | Default | Description                   |
-|---------------------|-----------------|------------------------|---------|-------------------------------|
-| `CETACEAN_TLS_CERT` | `tls.cert`      | No (Yes for cert mode) | --      | Server certificate path (PEM) |
-| `CETACEAN_TLS_KEY`  | `tls.key`       | No (Yes for cert mode) | --      | Server private key path (PEM) |
+| Flag | Env var | Config file key | Required | Default | Description |
+|---|---|---|---|---|---|
+| `-tls-cert` | `CETACEAN_TLS_CERT` | `tls.cert` | No (Yes for cert mode) | -- | Server certificate path (PEM) |
+| `-tls-key` | `CETACEAN_TLS_KEY` | `tls.key` | No (Yes for cert mode) | -- | Server private key path (PEM) |
 
 ```bash
 # TLS with any auth mode
-CETACEAN_TLS_CERT=/path/to/cert.pem \
-CETACEAN_TLS_KEY=/path/to/key.pem \
-./cetacean
+./cetacean -tls-cert /path/to/cert.pem -tls-key /path/to/key.pem
 ```
 
 When TLS is enabled, Cetacean listens on HTTPS. This is useful when:
@@ -674,7 +677,7 @@ The Cetacean SPA automatically:
 - Session TTL capped at 8 hours (or ID token expiry, whichever is shorter)
 - Cookie flags: `HttpOnly`, `Secure`, `SameSite=Lax`
 - By default, sessions are ephemeral -- server restart invalidates all sessions
-- Set `CETACEAN_AUTH_OIDC_SESSION_KEY` for persistence across restarts
+- Set `auth.oidc.session_key` for persistence across restarts
 
 ### CSRF Protection
 
