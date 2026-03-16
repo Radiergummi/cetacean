@@ -29,7 +29,7 @@ If `PromClient` is nil (Prometheus not configured), the handler returns 503 imme
 3. Set SSE headers (`Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`).
 4. Run an initial range query covering the `range` window (i.e., `start = now - range`, `end = now`, `step = step`). Send the result as an `initial` event. This provides the full chart history on connect and reconnect.
 5. Start a ticker at the `step` interval.
-6. On each tick: if the previous query is still in-flight, skip this tick (prevents query pile-up when Prometheus is slow or `step` is short). Otherwise, run an instant query. Send the result as a `point` event. If Prometheus returns an error or is unreachable, send an `error` event and continue (do not close the connection — Prometheus may recover on the next tick).
+6. On each tick: if the previous query is still in-flight, skip this tick (prevents query pile-up when Prometheus is slow or `step` is short). Otherwise, run an instant query. Send the result as a `point` event. If Prometheus returns an error or is unreachable, send a `query_error` event and continue (do not close the connection — Prometheus may recover on the next tick).
 7. Send an SSE comment (`: keepalive\n\n`) if no event of any kind (data or comment) was sent in the last 15 seconds. This is a separate ticker that resets whenever any write occurs. Prevents reverse proxies from closing idle connections (important when `step` is large, e.g., 300s).
 8. On `r.Context().Done()` (client disconnect), stop all tickers and decrement the connection count.
 
@@ -47,13 +47,13 @@ event: point
 data: {"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"up","instance":"..."},"value":[1710000030,"1"]}]}}
 ```
 
-**`error` event** — Prometheus query failure:
+**`query_error` event** — Prometheus query failure (named `query_error` to avoid collision with EventSource's built-in `error` event):
 ```
-event: error
+event: query_error
 data: {"error":"connection refused","errorType":"server_error"}
 ```
 
-All data events use the standard Prometheus response format so the frontend can reuse existing parsing logic. The `error` event signals a transient failure; the stream continues and may recover on the next tick.
+All data events use the standard Prometheus response format so the frontend can reuse existing parsing logic. The `query_error` event signals a transient failure; the stream continues and may recover on the next tick.
 
 ### Connection Limits
 
@@ -78,7 +78,7 @@ The initial JSON fetch provides fast time-to-first-paint. After it completes suc
    - `R` is the range in seconds matching the selected preset (3600, 21600, 86400, 604800)
 2. On `initial` event: parse and replace chart data. This handles reconnects — the full range is included so the chart doesn't show gaps after a disconnect.
 3. On `point` event: parse the vector result. For each series, append the new `[timestamp, value]` pair. Drop the oldest point to keep the window size fixed (maintaining the same number of data points).
-4. On `error` event: log to console. Do not close the connection — the server will retry on the next tick. Optionally show a transient indicator in the chart header.
+4. On `query_error` event: log to console. Do not close the connection — the server will retry on the next tick. Optionally show a transient indicator in the chart header.
 5. On EventSource error (HTTP-level): close the connection. Fall back to a 30s `setInterval` poll as degraded mode. Retry SSE connection after 10s.
 
 The existing `fetchData` function remains for the initial load and for manual refresh. SSE handles ongoing updates.
