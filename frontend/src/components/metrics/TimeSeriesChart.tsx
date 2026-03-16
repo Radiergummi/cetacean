@@ -15,11 +15,13 @@ import {
 import zoomPlugin from "chartjs-plugin-zoom";
 import { Line } from "react-chartjs-2";
 import { api } from "../../api/client";
+import type { PrometheusResponse } from "../../api/types";
 import { getChartColor } from "../../lib/chartColors";
 import { CHART_TOOLTIP_CLASS } from "../../lib/chartTooltip";
 import { formatMetricValue } from "../../lib/formatMetricValue";
 import { generateMockSeries } from "../../lib/mockChartData";
 import { useChartSync } from "./ChartSyncProvider";
+import { useMetricsPanelContext } from "./MetricsPanelContext";
 
 ChartJS.register(
   LineElement,
@@ -151,17 +153,33 @@ export default function TimeSeriesChart({
   const onRangeSelectRef = useRef(onRangeSelect);
   onRangeSelectRef.current = onRangeSelect;
 
-  const [stacked, setStacked] = useState(false);
+  const panel = useMetricsPanelContext();
+  const [localStacked, setLocalStacked] = useState(false);
+  const stacked = panel?.stacked ?? localStacked;
   const stackedRef = useRef(false);
   stackedRef.current = stacked;
 
   const [isolatedIndex, setIsolatedIndex] = useState<number | null>(null);
+  const isolatedIndexRef = useRef<number | null>(null);
+  isolatedIndexRef.current = isolatedIndex;
   const justZoomedRef = useRef(false);
 
   const chartId = useMemo(() => `tsc-${Math.random().toString(36).slice(2, 8)}`, []);
   const sync = useChartSync();
   const syncTimestampRef = useRef<number | null>(null);
   const syncIndexRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return sync.subscribeIsolation(chartId, (seriesLabel) => {
+      const data = fetchedDataRef.current;
+      if (!data || seriesLabel == null) {
+        setIsolatedIndex(null);
+        return;
+      }
+      const idx = data.series.findIndex((s) => s.label === seriesLabel);
+      setIsolatedIndex(idx >= 0 ? idx : null);
+    });
+  }, [chartId, sync]);
 
   useEffect(() => {
     return sync.subscribe(chartId, (timestamp) => {
@@ -239,6 +257,87 @@ export default function TimeSeriesChart({
       cancel?.();
     };
   }, [fetchData, refreshKey]);
+
+  // SSE streaming for live ranges
+  useEffect(() => {
+    if (!fetchedData || from != null || to != null) return;
+
+    const rangeSec = RANGE_SECONDS[range] || 3600;
+    const step = Math.max(Math.floor(rangeSec / 300), 15);
+    const url = api.metricsStreamURL(query, step, rangeSec);
+    const es = new EventSource(url);
+
+    es.addEventListener("initial", (e: MessageEvent) => {
+      try {
+        const resp = JSON.parse(e.data) as PrometheusResponse;
+        if (!resp.data?.result?.length) return;
+        const result = resp.data.result;
+        const timestamps = result[0].values!.map((v) => Number(v[0]));
+        const labels = timestamps.map((ts) => new Date(ts * 1000).toLocaleTimeString());
+        const series = result.map((s, i) => ({
+          label: seriesLabel(s.metric, result.length === 1 ? title : undefined),
+          color: colorOverride ?? getChartColor(i),
+          data: s.values!.map((v) => Number(v[1])),
+        }));
+        setFetchedData({ labels, timestamps, series });
+        onSeriesInfo?.(series.map((s) => ({ label: s.label, color: s.color })));
+        setState("data");
+      } catch { /* ignore parse errors */ }
+    });
+
+    es.addEventListener("point", (e: MessageEvent) => {
+      try {
+        const resp = JSON.parse(e.data) as PrometheusResponse;
+        if (!resp.data?.result?.length) return;
+        setFetchedData((prev) => {
+          if (!prev) return prev;
+          const ts = Number(resp.data.result[0].value![0]);
+          const timeLabel = new Date(ts * 1000).toLocaleTimeString();
+          const newTimestamps = [...prev.timestamps.slice(1), ts];
+          const newLabels = [...prev.labels.slice(1), timeLabel];
+          const newSeries = prev.series.map((s) => {
+            const match = resp.data.result.find(
+              (r) => seriesLabel(r.metric) === s.label
+            );
+            const val = match ? Number(match.value![1]) : 0;
+            return { ...s, data: [...s.data.slice(1), val] };
+          });
+          return { labels: newLabels, timestamps: newTimestamps, series: newSeries };
+        });
+      } catch { /* ignore parse errors */ }
+    });
+
+    es.addEventListener("query_error", (e: MessageEvent) => {
+      console.warn("[metrics stream] Prometheus error:", e.data);
+    });
+
+    es.onerror = () => {
+      es.close();
+    };
+
+    const visHandler = () => {
+      if (document.visibilityState === "hidden") {
+        es.close();
+      }
+    };
+    document.addEventListener("visibilitychange", visHandler);
+
+    return () => {
+      es.close();
+      document.removeEventListener("visibilitychange", visHandler);
+    };
+  }, [fetchedData ? query : null, range, from, to]);
+
+  // Refetch + reconnect SSE when tab becomes visible after being hidden
+  useEffect(() => {
+    const handler = () => {
+      if (document.visibilityState === "visible") {
+        fetchData();
+      }
+    };
+    document.addEventListener("visibilitychange", handler);
+    return () => document.removeEventListener("visibilitychange", handler);
+  }, [fetchData]);
 
   const chartData = useMemo<ChartData<"line"> | null>(() => {
     if (!fetchedData) return null;
@@ -333,7 +432,7 @@ export default function TimeSeriesChart({
           const elements = chart.getElementsAtEventForMode(
             args.event.native as Event,
             "nearest",
-            { intersect: false, axis: "x" },
+            { intersect: false },
             false,
           );
           if (elements.length > 0 && onSeriesDoubleClickRef.current) {
@@ -352,14 +451,19 @@ export default function TimeSeriesChart({
           const elements = chart.getElementsAtEventForMode(
             args.event.native as Event,
             "nearest",
-            { intersect: false, axis: "x" },
+            { intersect: false },
             false,
           );
           if (elements.length > 0) {
             const clickedIdx = elements[0].datasetIndex;
-            setIsolatedIndex((prev) => (prev === clickedIdx ? null : clickedIdx));
+            const wasIsolated = isolatedIndexRef.current === clickedIdx;
+            const newIdx = wasIsolated ? null : clickedIdx;
+            setIsolatedIndex(newIdx);
+            const label = newIdx != null ? (chart.data.datasets[newIdx]?.label ?? null) : null;
+            sync.publishIsolation(chartId, label);
           } else {
             setIsolatedIndex(null);
+            sync.publishIsolation(chartId, null);
           }
           return;
         }
@@ -555,17 +659,17 @@ export default function TimeSeriesChart({
     <div className="rounded-lg border bg-card overflow-visible">
       <div className="flex items-center gap-2 px-4 pt-4 pb-2">
         <span className="text-sm font-medium">{title}</span>
-        {stackable && (
+        {stackable && panel?.stacked == null && (
           <div className="flex items-center gap-0.5 ml-1">
             <button
-              onClick={() => setStacked(false)}
+              onClick={() => setLocalStacked(false)}
               className={`p-0.5 rounded ${!stacked ? "bg-muted" : "hover:bg-muted/50"}`}
               title="Line chart"
             >
               <LineChart className="size-3.5" />
             </button>
             <button
-              onClick={() => setStacked(true)}
+              onClick={() => setLocalStacked(true)}
               className={`p-0.5 rounded ${stacked ? "bg-muted" : "hover:bg-muted/50"}`}
               title="Stacked area"
             >
