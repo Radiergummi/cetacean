@@ -15,7 +15,7 @@ import (
 	json "github.com/goccy/go-json"
 )
 
-const cookieName = "cetacean_session"
+const cookieName = "__Host-cetacean_session"
 
 // sessionEnvelope is the signed payload stored in the cookie. It wraps the
 // identity with a server-side expiry timestamp that cannot be tampered with.
