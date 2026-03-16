@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Click-to-isolate on chart legend items in stack drill-down charts
 - Keyboard shortcut tooltips on navigation links (hover to discover shortcuts)
 
+### Changed
+- Lazy-load all pages and split heavy vendor libraries (Chart.js, topology) into separate chunks — initial load reduced from 2.3 MB to ~360 KB
+
 ### Fixed
 - Log viewer "has more" indicator inaccurate when filtering by stream (stdout/stderr)
 - List page item counts not updating on real-time add/remove events

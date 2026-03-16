@@ -152,10 +152,12 @@ export const api = {
   secret: (id: string, signal?: AbortSignal) => fetchJSON<SecretDetail>(`/secrets/${id}`, signal),
   networks: (params?: ListParams) =>
     fetchJSON<PagedResponse<Network>>(buildListURL("/networks", params)),
-  network: (id: string, signal?: AbortSignal) => fetchJSON<NetworkDetail>(`/networks/${id}`, signal),
+  network: (id: string, signal?: AbortSignal) =>
+    fetchJSON<NetworkDetail>(`/networks/${id}`, signal),
   volumes: (params?: ListParams) =>
     fetchJSON<PagedResponse<Volume>>(buildListURL("/volumes", params)),
-  volume: (name: string, signal?: AbortSignal) => fetchJSON<VolumeDetail>(`/volumes/${name}`, signal),
+  volume: (name: string, signal?: AbortSignal) =>
+    fetchJSON<VolumeDetail>(`/volumes/${name}`, signal),
   task: (id: string) => fetchJSON<{ task: Task }>(`/tasks/${id}`).then((r) => r.task),
   taskLogs: (id: string, opts?: LogOpts) =>
     fetchJSON<LogResponse>(`/tasks/${id}/logs?${buildLogParams(opts)}`, opts?.signal),

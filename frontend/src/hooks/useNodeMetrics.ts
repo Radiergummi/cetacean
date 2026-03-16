@@ -38,7 +38,9 @@ export function useNodeMetrics() {
         api.metricsQuery(cpuQ).catch(() => null),
         api.metricsQuery(memQ).catch(() => null),
         api.metricsQuery(diskQ).catch(() => null),
-        api.metricsQueryRange(cpuRangeQ, String(start), String(now), String(step)).catch(() => null),
+        api
+          .metricsQueryRange(cpuRangeQ, String(start), String(now), String(step))
+          .catch(() => null),
       ]).then(([cpuResp, memResp, diskResp, cpuRangeResp]) => {
         if (cancelled) return;
         const map: Record<string, NodeMetrics> = {};

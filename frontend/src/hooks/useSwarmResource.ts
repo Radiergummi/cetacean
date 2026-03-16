@@ -72,8 +72,7 @@ export function useSwarmResource<T>(
         setTotal((prev) => Math.max(0, prev - 1));
       } else if (event.resource) {
         const resource = event.resource as T;
-        const isNew =
-          dataRef.current.findIndex((item) => getIdRef.current(item) === event.id) < 0;
+        const isNew = dataRef.current.findIndex((item) => getIdRef.current(item) === event.id) < 0;
         setData((prev) => {
           const idx = prev.findIndex((item) => getIdRef.current(item) === event.id);
           if (idx >= 0) {

@@ -1,6 +1,6 @@
 import { Menu, X } from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { BrowserRouter, Link, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import ConnectionStatus from "./components/ConnectionStatus";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -10,27 +10,28 @@ import ShortcutTooltip from "./components/ShortcutTooltip";
 import ThemeToggle from "./components/ThemeToggle";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { ConnectionProvider, SSE_EVENT_TYPES } from "./hooks/useResourceStream";
-import ClusterOverview from "./pages/ClusterOverview";
-import ConfigDetail from "./pages/ConfigDetail";
-import ConfigList from "./pages/ConfigList";
-import NetworkDetail from "./pages/NetworkDetail";
-import NetworkList from "./pages/NetworkList";
-import NodeDetail from "./pages/NodeDetail";
-import NodeList from "./pages/NodeList";
-import NotFound from "./pages/NotFound";
-import SearchPage from "./pages/SearchPage";
-import SecretDetail from "./pages/SecretDetail";
-import SecretList from "./pages/SecretList";
-import ServiceDetail from "./pages/ServiceDetail";
-import ServiceList from "./pages/ServiceList";
-import StackDetail from "./pages/StackDetail";
-import StackList from "./pages/StackList";
-import SwarmPage from "./pages/SwarmPage";
-import TaskDetail from "./pages/TaskDetail";
-import TaskList from "./pages/TaskList";
-import Topology from "./pages/Topology";
-import VolumeDetail from "./pages/VolumeDetail";
-import VolumeList from "./pages/VolumeList";
+
+const ClusterOverview = lazy(() => import("./pages/ClusterOverview"));
+const ConfigDetail = lazy(() => import("./pages/ConfigDetail"));
+const ConfigList = lazy(() => import("./pages/ConfigList"));
+const NetworkDetail = lazy(() => import("./pages/NetworkDetail"));
+const NetworkList = lazy(() => import("./pages/NetworkList"));
+const NodeDetail = lazy(() => import("./pages/NodeDetail"));
+const NodeList = lazy(() => import("./pages/NodeList"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const SearchPage = lazy(() => import("./pages/SearchPage"));
+const SecretDetail = lazy(() => import("./pages/SecretDetail"));
+const SecretList = lazy(() => import("./pages/SecretList"));
+const ServiceDetail = lazy(() => import("./pages/ServiceDetail"));
+const ServiceList = lazy(() => import("./pages/ServiceList"));
+const StackDetail = lazy(() => import("./pages/StackDetail"));
+const StackList = lazy(() => import("./pages/StackList"));
+const SwarmPage = lazy(() => import("./pages/SwarmPage"));
+const TaskDetail = lazy(() => import("./pages/TaskDetail"));
+const TaskList = lazy(() => import("./pages/TaskList"));
+const Topology = lazy(() => import("./pages/Topology"));
+const VolumeDetail = lazy(() => import("./pages/VolumeDetail"));
+const VolumeList = lazy(() => import("./pages/VolumeList"));
 
 function Layout({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -173,6 +174,7 @@ export default function App() {
     <BrowserRouter>
       <ConnectionTracker>
         <Layout>
+          <Suspense>
           <Routes>
             <Route path="/" element={<ClusterOverview />} />
             <Route path="/nodes" element={<NodeList />} />
@@ -196,6 +198,7 @@ export default function App() {
             <Route path="/search" element={<SearchPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
         </Layout>
       </ConnectionTracker>
     </BrowserRouter>
