@@ -483,14 +483,15 @@ func TestWatchEvents_ProcessesMessages(t *testing.T) {
 	go func() {
 		// Wait until the node appears in cache before terminating
 		deadline := time.After(2 * time.Second)
-		for {
+		for found := false; !found; {
 			if _, ok := c.GetNode("n1"); ok {
-				break
-			}
-			select {
-			case <-deadline:
-				break
-			case <-time.After(5 * time.Millisecond):
+				found = true
+			} else {
+				select {
+				case <-deadline:
+					found = true
+				case <-time.After(5 * time.Millisecond):
+				}
 			}
 		}
 		mc.errCh <- fmt.Errorf("stream ended")
@@ -577,10 +578,7 @@ func TestRun_ReconnectsAfterEventStreamError(t *testing.T) {
 
 		// Poll until reconnect sync picks up the new node
 		deadline := time.After(5 * time.Second)
-		for {
-			if len(c.ListNodes()) == 2 {
-				break
-			}
+		for len(c.ListNodes()) != 2 {
 			select {
 			case <-deadline:
 				cancel()
@@ -595,10 +593,7 @@ func TestRun_ReconnectsAfterEventStreamError(t *testing.T) {
 
 		// Poll until second reconnect sync picks up the third node
 		deadline = time.After(5 * time.Second)
-		for {
-			if len(c.ListNodes()) == 3 {
-				break
-			}
+		for len(c.ListNodes()) != 3 {
 			select {
 			case <-deadline:
 				cancel()
