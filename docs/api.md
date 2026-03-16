@@ -538,8 +538,9 @@ There is no general rate limiting. The only limits are on concurrent streaming c
 
 | Resource | Limit | Exceeded response |
 |---|---|---|
-| SSE event clients (`/events`) | 256 | `429` + `Retry-After: 5` |
+| SSE event clients (`/events` and per-resource streams) | 256 | `429` + `Retry-After: 5` |
 | Log stream connections | 128 | `429` + `Retry-After: 5` |
+| Metrics stream connections (`/-/metrics/query_range`) | 64 | `429` + `Retry-After: 5` |
 
 ## Self-Discovery
 

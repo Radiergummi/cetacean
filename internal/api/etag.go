@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"net/http"
 	"strings"
+	"time"
 
 	json "github.com/goccy/go-json"
 )
@@ -47,6 +48,9 @@ func etagMatch(header, etag string) bool {
 // writeJSONWithETag marshals v to JSON, computes an ETag, and returns
 // 304 Not Modified if the client's If-None-Match header matches.
 func writeJSONWithETag(w http.ResponseWriter, r *http.Request, v any) {
+	rc := http.NewResponseController(w)
+	_ = rc.SetWriteDeadline(time.Now().Add(30 * time.Second))
+
 	body, err := json.Marshal(v)
 	if err != nil {
 		w.Header().Set("Cache-Control", "no-store")

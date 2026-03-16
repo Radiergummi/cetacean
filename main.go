@@ -136,7 +136,7 @@ func main() {
 		Addr:         cfg.ListenAddr,
 		Handler:      router,
 		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 0, // SSE requires no write timeout; per-request timeouts used instead
+		WriteTimeout: 0, // SSE requires no server-level write timeout; JSON handlers set per-request deadlines
 		IdleTimeout:  120 * time.Second,
 	}
 

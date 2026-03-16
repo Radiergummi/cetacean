@@ -140,6 +140,12 @@ interface FetchedData {
   }[];
 }
 
+/** Returns true if the series labels changed between two datasets. */
+function seriesChanged(prev: FetchedData | null, next: FetchedData): boolean {
+  if (!prev || prev.series.length !== next.series.length) return true;
+  return prev.series.some((s, i) => s.label !== next.series[i].label);
+}
+
 export default function TimeSeriesChart({
   title,
   query,
@@ -259,7 +265,7 @@ export default function TimeSeriesChart({
             const mock = generateMockSeries(title, unit, start, end, step, colorOverride);
             setFetchedData(mock);
             onSeriesInfo?.(mock.series.map((s) => ({ label: s.label, color: s.color })));
-            setIsolatedIndex(null);
+            if (seriesChanged(fetchedDataRef.current, mock)) setIsolatedIndex(null);
             setState("data");
             return;
           }
@@ -268,7 +274,7 @@ export default function TimeSeriesChart({
         }
         setFetchedData(parsed);
         onSeriesInfo?.(parsed.series.map((s) => ({ label: s.label, color: s.color })));
-        setIsolatedIndex(null);
+        if (seriesChanged(fetchedDataRef.current, parsed)) setIsolatedIndex(null);
         setState("data");
       })
       .catch((err) => {
@@ -293,6 +299,7 @@ export default function TimeSeriesChart({
   // SSE streaming for live ranges. Opens after the initial fetch completes.
   const streaming = panel?.streaming ?? true;
   const hasOpenedRef = useRef(false);
+  const [sseKey, setSSEKey] = useState(0);
   const fetchDataRef = useRef(fetchData);
   fetchDataRef.current = fetchData;
 
@@ -357,13 +364,14 @@ export default function TimeSeriesChart({
       es.close();
     };
 
-    // Close SSE on tab hide, refetch + reconnect on tab show
+    // Close SSE on tab hide; tab show triggers a re-run via sseKey
     const visHandler = () => {
       if (document.visibilityState === "hidden") {
         es.close();
       } else {
         hasOpenedRef.current = false;
         fetchDataRef.current();
+        setSSEKey((k) => k + 1);
       }
     };
     document.addEventListener("visibilitychange", visHandler);
@@ -372,7 +380,7 @@ export default function TimeSeriesChart({
       es.close();
       document.removeEventListener("visibilitychange", visHandler);
     };
-  }, [query, range, from, to, streaming, title, colorOverride]);
+  }, [query, range, from, to, streaming, title, colorOverride, sseKey]);
 
   const chartData = useMemo<ChartData<"line"> | null>(() => {
     if (!fetchedData) return null;

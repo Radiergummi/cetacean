@@ -64,7 +64,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
     abortRef.current = controller;
 
     api
-      .search(query)
+      .search(query, undefined, controller.signal)
       .then((response) => {
         if (!controller.signal.aborted) {
           setResponse(response);
@@ -111,7 +111,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
     const controller = new AbortController();
     const interval = setInterval(() => {
       api
-        .search(query)
+        .search(query, undefined, controller.signal)
         .then((fresh) => {
           if (controller.signal.aborted) return;
           setResponse((prev) => {

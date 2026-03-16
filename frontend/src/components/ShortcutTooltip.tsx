@@ -1,12 +1,11 @@
-import { useState, useRef, useCallback, type ReactNode } from "react";
+import { useState, useRef, useCallback, useEffect, type ReactNode } from "react";
 
 interface Props {
   keys: string[];
-  label?: string;
   children: ReactNode;
 }
 
-export default function ShortcutTooltip({ keys, label, children }: Props) {
+export default function ShortcutTooltip({ keys, children }: Props) {
   const [visible, setVisible] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -20,13 +19,18 @@ export default function ShortcutTooltip({ keys, label, children }: Props) {
     setVisible(false);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
   return (
     <div className="relative" onMouseEnter={show} onMouseLeave={hide}>
       {children}
       {visible && (
         <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-50 pointer-events-none">
           <div className="flex items-center gap-1.5 whitespace-nowrap rounded-md border bg-popover px-2 py-1 text-[11px] text-popover-foreground shadow-md">
-            {label && <span>{label}</span>}
             {keys.map((key, i) => (
               <span key={i} className="flex items-center gap-1">
                 {i > 0 && <span className="text-muted-foreground">then</span>}

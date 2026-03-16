@@ -5,7 +5,7 @@ import { useResourceStream } from "./useResourceStream";
 
 export function useDetailResource<T>(
   key: string | undefined,
-  fetchFn: (key: string) => Promise<T>,
+  fetchFn: (key: string, signal?: AbortSignal) => Promise<T>,
   ssePath: string,
 ) {
   const [data, setData] = useState<T | null>(null);
@@ -19,7 +19,7 @@ export function useDetailResource<T>(
     const controller = new AbortController();
     abortRef.current = controller;
     setError(false);
-    fetchFn(key)
+    fetchFn(key, controller.signal)
       .then((d) => {
         if (!controller.signal.aborted) setData(d);
       })

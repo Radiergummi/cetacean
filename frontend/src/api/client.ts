@@ -146,16 +146,16 @@ export const api = {
     fetchJSON<{ stack: StackDetail }>(`/stacks/${name}`).then((r) => r.stack),
   configs: (params?: ListParams) =>
     fetchJSON<PagedResponse<Config>>(buildListURL("/configs", params)),
-  config: (id: string) => fetchJSON<ConfigDetail>(`/configs/${id}`),
+  config: (id: string, signal?: AbortSignal) => fetchJSON<ConfigDetail>(`/configs/${id}`, signal),
   secrets: (params?: ListParams) =>
     fetchJSON<PagedResponse<Secret>>(buildListURL("/secrets", params)),
-  secret: (id: string) => fetchJSON<SecretDetail>(`/secrets/${id}`),
+  secret: (id: string, signal?: AbortSignal) => fetchJSON<SecretDetail>(`/secrets/${id}`, signal),
   networks: (params?: ListParams) =>
     fetchJSON<PagedResponse<Network>>(buildListURL("/networks", params)),
-  network: (id: string) => fetchJSON<NetworkDetail>(`/networks/${id}`),
+  network: (id: string, signal?: AbortSignal) => fetchJSON<NetworkDetail>(`/networks/${id}`, signal),
   volumes: (params?: ListParams) =>
     fetchJSON<PagedResponse<Volume>>(buildListURL("/volumes", params)),
-  volume: (name: string) => fetchJSON<VolumeDetail>(`/volumes/${name}`),
+  volume: (name: string, signal?: AbortSignal) => fetchJSON<VolumeDetail>(`/volumes/${name}`, signal),
   task: (id: string) => fetchJSON<{ task: Task }>(`/tasks/${id}`).then((r) => r.task),
   taskLogs: (id: string, opts?: LogOpts) =>
     fetchJSON<LogResponse>(`/tasks/${id}/logs?${buildLogParams(opts)}`, opts?.signal),
@@ -200,8 +200,9 @@ export const api = {
   },
   diskUsage: () =>
     fetchJSON<CollectionResponse<DiskUsageSummary>>("/disk-usage").then((r) => r.items),
-  search: (q: string, limit?: number) =>
+  search: (q: string, limit?: number, signal?: AbortSignal) =>
     fetchJSON<SearchResponse>(
       `/search?q=${encodeURIComponent(q)}${limit !== undefined ? `&limit=${limit}` : ""}`,
+      signal,
     ),
 };

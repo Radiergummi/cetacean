@@ -11,6 +11,8 @@ import (
 )
 
 func populateCache(c *Cache, n int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	for i := range n {
 		stack := fmt.Sprintf("stack-%d", i%5)
 		id := fmt.Sprintf("id-%d", i)

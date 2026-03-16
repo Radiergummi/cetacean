@@ -5,7 +5,8 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-"strings"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -239,65 +240,38 @@ func resourceMatcher(typ, id string) func(cache.Event) bool {
 }
 
 // stackMatcher returns a match function for stack SSE streams.
-// Snapshots the stack's member IDs at subscription time to avoid acquiring the
-// cache read lock on every event. On "stack" events for this stack, the snapshot
-// is refreshed so subsequent events use up-to-date membership.
+// Looks up the current stack membership from the cache on every event so that
+// newly added or removed services are immediately reflected in the stream.
 // Sync events always pass through so clients can trigger a full refetch.
 func stackMatcher(c *cache.Cache, name string) func(cache.Event) bool {
-	stack, ok := c.GetStack(name)
-	if !ok {
-		return func(e cache.Event) bool { return e.Type == "sync" }
-	}
-
-	services := toSet(stack.Services)
-	configs := toSet(stack.Configs)
-	secrets := toSet(stack.Secrets)
-	networks := toSet(stack.Networks)
-	volumes := toSet(stack.Volumes)
-
 	return func(e cache.Event) bool {
 		if e.Type == "sync" {
 			return true
 		}
-		// Refresh snapshot when the stack itself changes
-		if e.Type == "stack" && e.ID == name {
-			if updated, found := c.GetStack(name); found {
-				services = toSet(updated.Services)
-				configs = toSet(updated.Configs)
-				secrets = toSet(updated.Secrets)
-				networks = toSet(updated.Networks)
-				volumes = toSet(updated.Volumes)
-			}
-			return true
+		stack, ok := c.GetStack(name)
+		if !ok {
+			return false
 		}
 		switch e.Type {
 		case "service":
-			return services[e.ID]
+			return slices.Contains(stack.Services, e.ID)
 		case "config":
-			return configs[e.ID]
+			return slices.Contains(stack.Configs, e.ID)
 		case "secret":
-			return secrets[e.ID]
+			return slices.Contains(stack.Secrets, e.ID)
 		case "network":
-			return networks[e.ID]
+			return slices.Contains(stack.Networks, e.ID)
 		case "volume":
-			return volumes[e.ID]
+			return slices.Contains(stack.Volumes, e.ID)
 		case "task":
 			if t, ok := e.Resource.(swarm.Task); ok {
-				return services[t.ServiceID]
+				return slices.Contains(stack.Services, t.ServiceID)
 			}
 			return false
 		default:
 			return false
 		}
 	}
-}
-
-func toSet(ids []string) map[string]bool {
-	m := make(map[string]bool, len(ids))
-	for _, id := range ids {
-		m[id] = true
-	}
-	return m
 }
 
 // sseEvent is the JSON-LD enriched wire format for SSE event payloads.

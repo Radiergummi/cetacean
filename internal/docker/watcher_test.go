@@ -39,7 +39,7 @@ type mockClient struct {
 func newMockClient() *mockClient {
 	return &mockClient{
 		eventsCh:   make(chan events.Message, 10),
-		errCh:      make(chan error, 1),
+		errCh:      make(chan error, 2),
 		listErrors: make(map[string]error),
 	}
 }
@@ -481,8 +481,18 @@ func TestWatchEvents_ProcessesMessages(t *testing.T) {
 	}
 
 	go func() {
-		// Give watchEvents time to process the message, then terminate
-		time.Sleep(50 * time.Millisecond)
+		// Wait until the node appears in cache before terminating
+		deadline := time.After(2 * time.Second)
+		for {
+			if _, ok := c.GetNode("n1"); ok {
+				break
+			}
+			select {
+			case <-deadline:
+				break
+			case <-time.After(5 * time.Millisecond):
+			}
+		}
 		mc.errCh <- fmt.Errorf("stream ended")
 	}()
 
@@ -565,21 +575,44 @@ func TestRun_ReconnectsAfterEventStreamError(t *testing.T) {
 		mc.setNodes([]swarm.Node{{ID: "n1"}, {ID: "n2"}})
 		mc.errCh <- fmt.Errorf("stream ended")
 
-		// Wait for reconnect (1s sleep + re-sync)
-		time.Sleep(2 * time.Second)
+		// Poll until reconnect sync picks up the new node
+		deadline := time.After(5 * time.Second)
+		for {
+			if len(c.ListNodes()) == 2 {
+				break
+			}
+			select {
+			case <-deadline:
+				cancel()
+				return
+			case <-time.After(10 * time.Millisecond):
+			}
+		}
 
 		// Trigger another disconnect to verify repeated reconnect
+		mc.setNodes([]swarm.Node{{ID: "n1"}, {ID: "n2"}, {ID: "n3"}})
 		mc.errCh <- fmt.Errorf("stream ended again")
 
-		time.Sleep(2 * time.Second)
+		// Poll until second reconnect sync picks up the third node
+		deadline = time.After(5 * time.Second)
+		for {
+			if len(c.ListNodes()) == 3 {
+				break
+			}
+			select {
+			case <-deadline:
+				cancel()
+				return
+			case <-time.After(10 * time.Millisecond):
+			}
+		}
 		cancel()
 	}()
 
 	w.Run(ctx)
 
-	// After reconnect syncs, the cache should reflect the updated node list
 	nodes := c.ListNodes()
-	if len(nodes) != 2 {
-		t.Errorf("expected 2 nodes after reconnect syncs, got %d", len(nodes))
+	if len(nodes) != 3 {
+		t.Errorf("expected 3 nodes after two reconnect syncs, got %d", len(nodes))
 	}
 }

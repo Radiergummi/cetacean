@@ -339,6 +339,32 @@ func TestCache_Stack_PartialRemoval(t *testing.T) {
 	}
 }
 
+func TestCache_Stack_NoGhostAfterServiceDeletion(t *testing.T) {
+	c := New(nil)
+	labels := map[string]string{stackLabel: "mystack"}
+
+	svc := swarm.Service{ID: "svc1"}
+	svc.Spec.Labels = labels
+	c.SetService(svc)
+
+	cfg := swarm.Config{ID: "cfg1"}
+	cfg.Spec.Labels = labels
+	c.SetConfig(cfg)
+
+	// Delete the only service — stack should be removed
+	c.DeleteService("svc1")
+
+	// Re-setting the config (e.g. from a Docker event) must NOT recreate the stack
+	c.SetConfig(cfg)
+
+	if _, ok := c.GetStack("mystack"); ok {
+		t.Fatal("expected no ghost stack after service deletion and config re-set")
+	}
+	if stacks := c.ListStacks(); len(stacks) != 0 {
+		t.Errorf("expected 0 stacks, got %d", len(stacks))
+	}
+}
+
 func TestCache_Stack_NoLabelNoStack(t *testing.T) {
 	c := New(nil)
 	// Service without stack label should not create a stack

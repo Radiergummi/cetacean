@@ -34,19 +34,19 @@ export default function SearchPage() {
       return;
     }
 
-    let cancelled = false;
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
 
-    api.search(query, 0).then(
+    api.search(query, 0, controller.signal).then(
       (response) => {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setData(response);
           setLoading(false);
         }
       },
       (error) => {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setError(error instanceof Error ? error.message : String(error));
           setLoading(false);
         }
@@ -54,7 +54,7 @@ export default function SearchPage() {
     );
 
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [query]);
 

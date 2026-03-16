@@ -12,6 +12,9 @@ func (c *Cache) addToStack(resource, id string, labels map[string]string) {
 	}
 	s, exists := c.stacks[ns]
 	if !exists {
+		if resource != "service" {
+			return // never create a stack entry without at least one service
+		}
 		s = Stack{Name: ns}
 	}
 	switch resource {
