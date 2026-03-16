@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Tasks list page (the "Failed Tasks" card on the homepage no longer 404s)
+- Click-to-isolate on chart legend items in stack drill-down charts
+- Keyboard shortcut tooltips on navigation links (hover to discover shortcuts)
+
+### Fixed
+- Log viewer "has more" indicator inaccurate when filtering by stream (stdout/stderr)
+- List page item counts not updating on real-time add/remove events
+- Race condition when multiple metrics streams connect simultaneously
+
 ## [0.4.0] - 2026-03-16
 
 ### Added
