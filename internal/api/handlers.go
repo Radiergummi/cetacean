@@ -116,9 +116,36 @@ func searchFilter[T any](items []T, query string, name func(T) string) []T {
 }
 
 // containsFold reports whether s contains substr using case-insensitive
-// comparison. substr must already be lowercased.
+// comparison. substr must already be lowercased. Zero allocations.
 func containsFold(s, substrLower string) bool {
-	return strings.Contains(strings.ToLower(s), substrLower)
+	if len(substrLower) == 0 {
+		return true
+	}
+	if len(substrLower) > len(s) {
+		return false
+	}
+	for i := 0; i <= len(s)-len(substrLower); i++ {
+		if toLower(s[i]) == substrLower[0] {
+			match := true
+			for j := 1; j < len(substrLower); j++ {
+				if toLower(s[i+j]) != substrLower[j] {
+					match = false
+					break
+				}
+			}
+			if match {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func toLower(c byte) byte {
+	if c >= 'A' && c <= 'Z' {
+		return c + 32
+	}
+	return c
 }
 
 const maxFilterLen = 512
