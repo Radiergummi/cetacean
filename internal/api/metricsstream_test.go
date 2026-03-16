@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -85,6 +86,53 @@ func TestMetricsStream_StreamsEvents(t *testing.T) {
 	}
 	if queryCount.Load() < 2 {
 		t.Errorf("expected at least 2 Prometheus calls (range + instant), got %d", queryCount.Load())
+	}
+}
+
+func TestMetricsStream_FullLifecycle(t *testing.T) {
+	testTickerInterval = 20 * time.Millisecond
+	defer func() { testTickerInterval = 0 }()
+
+	queryCount := atomic.Int32{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		queryCount.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		ts := time.Now().Unix()
+		if r.URL.Path == "/api/v1/query_range" {
+			fmt.Fprintf(w, `{"status":"success","data":{"resultType":"matrix","result":[{"metric":{"__name__":"cpu"},"values":[[%d,"42"]]}]}}`, ts)
+		} else {
+			fmt.Fprintf(w, `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"cpu"},"value":[%d,"43"]}]}}`, ts)
+		}
+	}))
+	defer srv.Close()
+
+	h := &Handlers{promClient: NewPromClient(srv.URL)}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	req := httptest.NewRequest("GET", "/-/metrics/query_range?query=cpu&step=15&range=300", nil)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	h.HandleMetricsStream(w, req)
+
+	body := w.Body.String()
+
+	if !strings.Contains(body, "event: initial") {
+		t.Error("missing initial event")
+	}
+	if !strings.Contains(body, `"cpu"`) {
+		t.Error("initial event should contain metric name")
+	}
+	if !strings.Contains(body, "event: point") {
+		t.Error("missing point event")
+	}
+	if queryCount.Load() < 2 {
+		t.Errorf("expected at least 2 Prometheus calls, got %d", queryCount.Load())
+	}
+	if metricsStreamCount.Load() != 0 {
+		t.Error("connection counter should be 0 after handler returns")
 	}
 }
 
