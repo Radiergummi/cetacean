@@ -293,7 +293,9 @@ export default function TimeSeriesChart({
         setFetchedData(parsed);
         onSeriesInfo?.(parsed.series.map((s) => ({ label: s.label, color: s.color })));
         setState("data");
-      } catch { /* ignore parse errors */ }
+      } catch {
+        /* ignore parse errors */
+      }
     });
 
     es.addEventListener("point", (e: MessageEvent) => {
@@ -307,15 +309,15 @@ export default function TimeSeriesChart({
           const newTimestamps = [...prev.timestamps.slice(1), ts];
           const newLabels = [...prev.labels.slice(1), timeLabel];
           const newSeries = prev.series.map((s) => {
-            const match = resp.data.result.find(
-              (r) => seriesLabel(r.metric) === s.label
-            );
+            const match = resp.data.result.find((r) => seriesLabel(r.metric) === s.label);
             const val = match ? Number(match.value![1]) : 0;
             return { ...s, data: [...s.data.slice(1), val] };
           });
           return { labels: newLabels, timestamps: newTimestamps, series: newSeries };
         });
-      } catch { /* ignore parse errors */ }
+      } catch {
+        /* ignore parse errors */
+      }
     });
 
     es.addEventListener("query_error", (e: MessageEvent) => {

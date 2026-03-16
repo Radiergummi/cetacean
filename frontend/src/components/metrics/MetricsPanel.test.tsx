@@ -31,15 +31,15 @@ describe("MetricsPanel", () => {
 
   it("renders range buttons", () => {
     render(<MetricsPanel charts={charts} />, { wrapper });
-    expect(screen.getByText("1h")).toBeInTheDocument();
-    expect(screen.getByText("6h")).toBeInTheDocument();
-    expect(screen.getByText("24h")).toBeInTheDocument();
-    expect(screen.getByText("7d")).toBeInTheDocument();
+    expect(screen.getByText("1H")).toBeInTheDocument();
+    expect(screen.getByText("6H")).toBeInTheDocument();
+    expect(screen.getByText("24H")).toBeInTheDocument();
+    expect(screen.getByText("7D")).toBeInTheDocument();
   });
 
   it("changes range on button click", () => {
     render(<MetricsPanel charts={charts} />, { wrapper });
-    fireEvent.click(screen.getByText("6h"));
+    fireEvent.click(screen.getByText("6H"));
     expect(screen.getByText("CPU (6h)")).toBeInTheDocument();
   });
 
@@ -48,8 +48,8 @@ describe("MetricsPanel", () => {
     expect(screen.getByTitle("Refresh")).toBeInTheDocument();
   });
 
-  it("renders auto-refresh button", () => {
+  it("renders streaming toggle", () => {
     render(<MetricsPanel charts={charts} />, { wrapper });
-    expect(screen.getByTitle("Auto-refresh (30s)")).toBeInTheDocument();
+    expect(screen.getByTitle("Pause live streaming")).toBeInTheDocument();
   });
 });

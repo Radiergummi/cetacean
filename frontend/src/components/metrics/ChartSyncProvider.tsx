@@ -48,7 +48,10 @@ export function ChartSyncProvider({ children }: { children: ReactNode }) {
     isolationListenersRef.current.clear();
   }, []);
 
-  const value = useMemo(() => ({ subscribe, publish, subscribeIsolation, publishIsolation, clear }), [subscribe, publish, subscribeIsolation, publishIsolation, clear]);
+  const value = useMemo(
+    () => ({ subscribe, publish, subscribeIsolation, publishIsolation, clear }),
+    [subscribe, publish, subscribeIsolation, publishIsolation, clear],
+  );
 
   return <ChartSyncContext.Provider value={value}>{children}</ChartSyncContext.Provider>;
 }
@@ -56,7 +59,13 @@ export function ChartSyncProvider({ children }: { children: ReactNode }) {
 export function useChartSync(): ChartSyncApi {
   const ctx = useContext(ChartSyncContext);
   if (!ctx) {
-    return { subscribe: () => () => {}, publish: () => {}, subscribeIsolation: () => () => {}, publishIsolation: () => {}, clear: () => {} };
+    return {
+      subscribe: () => () => {},
+      publish: () => {},
+      subscribeIsolation: () => () => {},
+      publishIsolation: () => {},
+      clear: () => {},
+    };
   }
   return ctx;
 }

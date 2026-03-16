@@ -46,9 +46,12 @@ export default function StackDrillDownChart({
   const [showAll, setShowAll] = useState(false);
   const [seriesInfo, setSeriesInfo] = useState<{ label: string; color: string }[]>([]);
 
-  const handleSeriesDoubleClick = useCallback((seriesLabel: string) => {
-    setDrillStack?.(drillStack === seriesLabel ? null : seriesLabel);
-  }, [drillStack, setDrillStack]);
+  const handleSeriesDoubleClick = useCallback(
+    (seriesLabel: string) => {
+      setDrillStack?.(drillStack === seriesLabel ? null : seriesLabel);
+    },
+    [drillStack, setDrillStack],
+  );
 
   const effectiveStackQuery = showAll ? stackQuery.replace("topk(10,", "topk(30,") : stackQuery;
 

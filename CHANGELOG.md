@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-03-16
+
+### Added
+- Live-updating charts via SSE streaming (no more manual refresh for recent time ranges)
+- Range picker with quick presets and custom date-time selection
+
+### Changed
+- Replace auto-refresh toggle with streaming play/pause control
+
+### Fixed
+- Click-to-isolate and double-click drill-down racing on chart interactions
+- Doughnut chart sizing on homepage
+
 ## [0.3.0] - 2026-03-16
 
 ### Added
