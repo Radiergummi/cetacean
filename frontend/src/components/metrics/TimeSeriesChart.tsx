@@ -181,6 +181,7 @@ export default function TimeSeriesChart({
   const isolatedIndexRef = useRef<number | null>(null);
   isolatedIndexRef.current = isolatedIndex;
   const justZoomedRef = useRef(false);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const chartId = useMemo(() => `tsc-${Math.random().toString(36).slice(2, 8)}`, []);
   const sync = useChartSync();
@@ -431,6 +432,10 @@ export default function TimeSeriesChart({
           return;
         }
         if (args.event.type === "dblclick") {
+          if (clickTimerRef.current) {
+            clearTimeout(clickTimerRef.current);
+            clickTimerRef.current = null;
+          }
           const elements = chart.getElementsAtEventForMode(
             args.event.native as Event,
             "nearest",
@@ -456,17 +461,22 @@ export default function TimeSeriesChart({
             { intersect: false },
             false,
           );
-          if (elements.length > 0) {
-            const clickedIdx = elements[0].datasetIndex;
-            const wasIsolated = isolatedIndexRef.current === clickedIdx;
-            const newIdx = wasIsolated ? null : clickedIdx;
-            setIsolatedIndex(newIdx);
-            const label = newIdx != null ? (chart.data.datasets[newIdx]?.label ?? null) : null;
-            sync.publishIsolation(chartId, label);
-          } else {
-            setIsolatedIndex(null);
-            sync.publishIsolation(chartId, null);
-          }
+          const datasets = chart.data.datasets;
+          if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+          clickTimerRef.current = setTimeout(() => {
+            clickTimerRef.current = null;
+            if (elements.length > 0) {
+              const clickedIdx = elements[0].datasetIndex;
+              const wasIsolated = isolatedIndexRef.current === clickedIdx;
+              const newIdx = wasIsolated ? null : clickedIdx;
+              setIsolatedIndex(newIdx);
+              const label = newIdx != null ? (datasets[newIdx]?.label ?? null) : null;
+              sync.publishIsolation(chartId, label);
+            } else {
+              setIsolatedIndex(null);
+              sync.publishIsolation(chartId, null);
+            }
+          }, 250);
           return;
         }
         if (args.event.type !== "mousemove") return;

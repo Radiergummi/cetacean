@@ -1,6 +1,6 @@
 import {AreaChart, Calendar, LineChart, Pause, Play, RefreshCw, X} from "lucide-react";
 import type React from "react";
-import {useCallback, useMemo, useState} from "react";
+import {useCallback, useEffect, useMemo, useState} from "react";
 import {useSearchParams} from "react-router-dom";
 import CollapsibleSection from "../CollapsibleSection";
 import {IconButton} from "../IconButton";
@@ -122,6 +122,16 @@ export default function MetricsPanel({charts, children, header, stackable}: Prop
     const [streaming, setStreaming] = useState(true);
     const [startInput, setStartInput] = useState("");
     const [endInput, setEndInput] = useState("");
+    const [drillStack, setDrillStack] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!drillStack) return;
+        const handler = (e: KeyboardEvent) => {
+            if (e.key === "Escape") setDrillStack(null);
+        };
+        document.addEventListener("keydown", handler);
+        return () => document.removeEventListener("keydown", handler);
+    }, [drillStack]);
 
     const panelCtx = useMemo<MetricsPanelContextValue>(
         () => (
@@ -133,9 +143,11 @@ export default function MetricsPanel({charts, children, header, stackable}: Prop
                 onRangeSelect: setCustomRange,
                 stacked,
                 streaming,
+                drillStack,
+                setDrillStack,
             }
         ),
-        [range, customFrom, customTo, refreshKey, setCustomRange, stacked, streaming],
+        [range, customFrom, customTo, refreshKey, setCustomRange, stacked, streaming, drillStack],
     );
 
     const handleCustomApply = (close: () => void) => {
@@ -159,6 +171,16 @@ export default function MetricsPanel({charts, children, header, stackable}: Prop
 
     const controls = (
         <div className="flex flex-wrap items-center gap-2">
+            {drillStack && (
+                <button
+                    onClick={() => setDrillStack(null)}
+                    className="flex items-center gap-1 px-2 py-1.5 text-xs rounded-md bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20"
+                    title="Clear stack filter (Esc)"
+                >
+                    <span className="font-medium">{drillStack}</span>
+                    <X className="size-3"/>
+                </button>
+            )}
             {stackable && (
                 <IconButton
                     onClick={() => setStacked((v) => !v)}

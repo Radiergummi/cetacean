@@ -1,5 +1,4 @@
 import { useState, useCallback } from "react";
-import { ChevronLeft } from "lucide-react";
 import TimeSeriesChart from "./TimeSeriesChart";
 import type { Threshold } from "./TimeSeriesChart";
 import { useMetricsPanelContext } from "./MetricsPanelContext";
@@ -40,18 +39,16 @@ export default function StackDrillDownChart({
   const effectiveRefreshKey = refreshKey ?? panel?.refreshKey;
   const effectiveOnRangeSelect = onRangeSelect ?? panel?.onRangeSelect;
 
-  const [drillStack, setDrillStack] = useState<string | null>(null);
+  const drillStack = panel?.drillStack ?? null;
+  const setDrillStack = panel?.setDrillStack;
+
   const [showLegend, setShowLegend] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [seriesInfo, setSeriesInfo] = useState<{ label: string; color: string }[]>([]);
 
   const handleSeriesDoubleClick = useCallback((seriesLabel: string) => {
-    setDrillStack(seriesLabel);
-  }, []);
-
-  const handleBack = useCallback(() => {
-    setDrillStack(null);
-  }, []);
+    setDrillStack?.(drillStack === seriesLabel ? null : seriesLabel);
+  }, [drillStack, setDrillStack]);
 
   const effectiveStackQuery = showAll ? stackQuery.replace("topk(10,", "topk(30,") : stackQuery;
 
@@ -63,15 +60,6 @@ export default function StackDrillDownChart({
 
   return (
     <div>
-      {drillStack && (
-        <button
-          onClick={handleBack}
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-1"
-        >
-          <ChevronLeft className="size-3" />
-          All Stacks
-        </button>
-      )}
       <TimeSeriesChart
         title={chartTitle}
         query={query}
@@ -83,7 +71,7 @@ export default function StackDrillDownChart({
         refreshKey={effectiveRefreshKey}
         onRangeSelect={effectiveOnRangeSelect}
         thresholds={thresholds}
-        onSeriesDoubleClick={drillStack ? undefined : handleSeriesDoubleClick}
+        onSeriesDoubleClick={handleSeriesDoubleClick}
         stackable={stackable}
         onSeriesInfo={setSeriesInfo}
       />

@@ -8,6 +8,8 @@ export interface MetricsPanelContextValue {
   onRangeSelect: (from: number, to: number) => void;
   stacked?: boolean;
   streaming?: boolean;
+  drillStack?: string | null;
+  setDrillStack?: (stack: string | null) => void;
 }
 
 export const MetricsPanelContext = createContext<MetricsPanelContextValue | null>(null);
