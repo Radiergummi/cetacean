@@ -1,12 +1,14 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestLoadAuth_DefaultsToNone(t *testing.T) {
-	cfg, err := LoadAuth()
+	cfg, err := LoadAuth(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -16,7 +18,13 @@ func TestLoadAuth_DefaultsToNone(t *testing.T) {
 }
 
 func TestLoadAuth_DefaultScopes(t *testing.T) {
-	cfg, err := LoadAuth()
+	t.Setenv("CETACEAN_AUTH_MODE", "oidc")
+	t.Setenv("CETACEAN_AUTH_OIDC_ISSUER", "https://issuer.example.com")
+	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_ID", "client-id")
+	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET", "secret")
+	t.Setenv("CETACEAN_AUTH_OIDC_REDIRECT_URL", "https://app.example.com/auth/callback")
+
+	cfg, err := LoadAuth(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -33,7 +41,7 @@ func TestLoadAuth_DefaultScopes(t *testing.T) {
 
 func TestLoadAuth_InvalidMode(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "bogus")
-	_, err := LoadAuth()
+	_, err := LoadAuth(nil, nil)
 	if err == nil {
 		t.Fatal("expected error for invalid mode")
 	}
@@ -41,7 +49,7 @@ func TestLoadAuth_InvalidMode(t *testing.T) {
 
 func TestLoadAuth_OIDCRequiresFields(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "oidc")
-	_, err := LoadAuth()
+	_, err := LoadAuth(nil, nil)
 	if err == nil {
 		t.Fatal("expected error for missing OIDC fields")
 	}
@@ -55,7 +63,7 @@ func TestLoadAuth_OIDCHappyPath(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_OIDC_REDIRECT_URL", "https://app.example.com/auth/callback")
 	t.Setenv("CETACEAN_AUTH_OIDC_SCOPES", "openid, custom")
 
-	cfg, err := LoadAuth()
+	cfg, err := LoadAuth(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -74,7 +82,7 @@ func TestLoadAuth_OIDCRejectsHTTPRedirectURL(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET", "secret")
 	t.Setenv("CETACEAN_AUTH_OIDC_REDIRECT_URL", "http://app.example.com/auth/callback")
 
-	_, err := LoadAuth()
+	_, err := LoadAuth(nil, nil)
 	if err == nil {
 		t.Fatal("expected error for HTTP redirect URL")
 	}
@@ -87,7 +95,7 @@ func TestLoadAuth_OIDCAllowsLocalhostHTTP(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET", "secret")
 	t.Setenv("CETACEAN_AUTH_OIDC_REDIRECT_URL", "http://localhost/auth/callback")
 
-	cfg, err := LoadAuth()
+	cfg, err := LoadAuth(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -103,7 +111,7 @@ func TestLoadAuth_OIDCAllows127001HTTP(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET", "secret")
 	t.Setenv("CETACEAN_AUTH_OIDC_REDIRECT_URL", "http://127.0.0.1:8080/auth/callback")
 
-	_, err := LoadAuth()
+	_, err := LoadAuth(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error for loopback HTTP: %v", err)
 	}
@@ -117,7 +125,7 @@ func TestLoadAuth_OIDCSessionKey(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_OIDC_REDIRECT_URL", "https://app.example.com/auth/callback")
 	t.Setenv("CETACEAN_AUTH_OIDC_SESSION_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 
-	cfg, err := LoadAuth()
+	cfg, err := LoadAuth(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -129,7 +137,7 @@ func TestLoadAuth_OIDCSessionKey(t *testing.T) {
 func TestLoadAuth_TailscaleLocalDefault(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "tailscale")
 
-	cfg, err := LoadAuth()
+	cfg, err := LoadAuth(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -145,7 +153,7 @@ func TestLoadAuth_TailscaleInvalidMode(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "tailscale")
 	t.Setenv("CETACEAN_AUTH_TAILSCALE_MODE", "invalid")
 
-	_, err := LoadAuth()
+	_, err := LoadAuth(nil, nil)
 	if err == nil {
 		t.Fatal("expected error for invalid tailscale mode")
 	}
@@ -155,7 +163,7 @@ func TestLoadAuth_TailscaleTsnetRequiresAuthKey(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "tailscale")
 	t.Setenv("CETACEAN_AUTH_TAILSCALE_MODE", "tsnet")
 
-	_, err := LoadAuth()
+	_, err := LoadAuth(nil, nil)
 	if err == nil {
 		t.Fatal("expected error for tsnet without auth key")
 	}
@@ -166,7 +174,7 @@ func TestLoadAuth_TailscaleTsnetHappyPath(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_TAILSCALE_MODE", "tsnet")
 	t.Setenv("CETACEAN_AUTH_TAILSCALE_AUTHKEY", "tskey-abc123")
 
-	cfg, err := LoadAuth()
+	cfg, err := LoadAuth(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -177,7 +185,7 @@ func TestLoadAuth_TailscaleTsnetHappyPath(t *testing.T) {
 
 func TestLoadAuth_CertRequiresCA(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "cert")
-	_, err := LoadAuth()
+	_, err := LoadAuth(nil, nil)
 	if err == nil {
 		t.Fatal("expected error for missing CA")
 	}
@@ -187,7 +195,7 @@ func TestLoadAuth_CertHappyPath(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "cert")
 	t.Setenv("CETACEAN_AUTH_CERT_CA", "/path/to/ca.pem")
 
-	cfg, err := LoadAuth()
+	cfg, err := LoadAuth(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -198,7 +206,7 @@ func TestLoadAuth_CertHappyPath(t *testing.T) {
 
 func TestLoadAuth_HeadersRequiresSubject(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "headers")
-	_, err := LoadAuth()
+	_, err := LoadAuth(nil, nil)
 	if err == nil {
 		t.Fatal("expected error for missing subject header")
 	}
@@ -209,7 +217,7 @@ func TestLoadAuth_HeadersSecretRequiresValue(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_HEADER", "X-Secret")
 
-	_, err := LoadAuth()
+	_, err := LoadAuth(nil, nil)
 	if err == nil {
 		t.Fatal("expected error for secret header without value")
 	}
@@ -224,7 +232,7 @@ func TestLoadAuth_HeadersHappyPath(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_HEADER", "X-Secret")
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_VALUE", "s3cret")
 
-	cfg, err := LoadAuth()
+	cfg, err := LoadAuth(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -241,7 +249,7 @@ func TestLoadAuth_HeadersRequiresSecretOrTrustedProxies(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
 	// Neither secret nor trusted proxies set.
 
-	_, err := LoadAuth()
+	_, err := LoadAuth(nil, nil)
 	if err == nil {
 		t.Fatal("expected error when neither secret nor trusted proxies are set")
 	}
@@ -255,7 +263,7 @@ func TestLoadAuth_HeadersTrustedProxiesOnly(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
 	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "10.0.0.0/8, 192.168.1.1")
 
-	cfg, err := LoadAuth()
+	cfg, err := LoadAuth(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -276,7 +284,7 @@ func TestLoadAuth_HeadersTrustedProxiesIPv6(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
 	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "fd00::/8, ::1")
 
-	cfg, err := LoadAuth()
+	cfg, err := LoadAuth(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -290,7 +298,7 @@ func TestLoadAuth_HeadersTrustedProxiesInvalid(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
 	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "not-an-ip")
 
-	_, err := LoadAuth()
+	_, err := LoadAuth(nil, nil)
 	if err == nil {
 		t.Fatal("expected error for invalid trusted proxy")
 	}
@@ -306,7 +314,7 @@ func TestLoadAuth_HeadersBothSecretAndTrustedProxies(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_VALUE", "s3cret")
 	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "10.0.0.0/8")
 
-	cfg, err := LoadAuth()
+	cfg, err := LoadAuth(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -315,6 +323,196 @@ func TestLoadAuth_HeadersBothSecretAndTrustedProxies(t *testing.T) {
 	}
 	if len(cfg.Headers.TrustedProxies) != 1 {
 		t.Errorf("expected 1 trusted proxy, got %d", len(cfg.Headers.TrustedProxies))
+	}
+}
+
+func TestLoadAuth_FromConfigFile(t *testing.T) {
+	fc := &fileConfig{
+		Auth: &fileAuth{
+			Mode: ptr("oidc"),
+			OIDC: &fileAuthOIDC{
+				Issuer:       ptr("https://file-issuer.example.com"),
+				ClientID:     ptr("file-client"),
+				ClientSecret: ptr("file-secret"),
+				RedirectURL:  ptr("https://file-app.example.com/auth/callback"),
+				Scopes:       ptr("openid,custom"),
+			},
+		},
+	}
+
+	cfg, err := LoadAuth(nil, fc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Mode != "oidc" {
+		t.Errorf("mode = %q, want oidc", cfg.Mode)
+	}
+	if cfg.OIDC.Issuer != "https://file-issuer.example.com" {
+		t.Errorf("issuer = %q, want file-issuer", cfg.OIDC.Issuer)
+	}
+	if cfg.OIDC.ClientID != "file-client" {
+		t.Errorf("client_id = %q, want file-client", cfg.OIDC.ClientID)
+	}
+	if len(cfg.OIDC.Scopes) != 2 || cfg.OIDC.Scopes[1] != "custom" {
+		t.Errorf("scopes = %v, want [openid custom]", cfg.OIDC.Scopes)
+	}
+}
+
+func TestLoadAuth_EnvOverridesFile(t *testing.T) {
+	t.Setenv("CETACEAN_AUTH_OIDC_ISSUER", "https://env-issuer.example.com")
+
+	fc := &fileConfig{
+		Auth: &fileAuth{
+			Mode: ptr("oidc"),
+			OIDC: &fileAuthOIDC{
+				Issuer:       ptr("https://file-issuer.example.com"),
+				ClientID:     ptr("file-client"),
+				ClientSecret: ptr("file-secret"),
+				RedirectURL:  ptr("https://app.example.com/auth/callback"),
+			},
+		},
+	}
+
+	cfg, err := LoadAuth(nil, fc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.OIDC.Issuer != "https://env-issuer.example.com" {
+		t.Errorf("issuer = %q, want env-issuer (env should override file)", cfg.OIDC.Issuer)
+	}
+	if cfg.OIDC.ClientID != "file-client" {
+		t.Errorf("client_id = %q, want file-client (should fall through to file)", cfg.OIDC.ClientID)
+	}
+}
+
+func TestLoadAuth_FlagOverridesEnvAndFile(t *testing.T) {
+	t.Setenv("CETACEAN_AUTH_MODE", "headers")
+
+	fc := &fileConfig{
+		Auth: &fileAuth{Mode: ptr("cert")},
+	}
+	flags := &Flags{AuthMode: ptr("none")}
+
+	cfg, err := LoadAuth(flags, fc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Mode != "none" {
+		t.Errorf("mode = %q, want none (flag should win)", cfg.Mode)
+	}
+}
+
+func TestLoadAuth_HeadersFromFile(t *testing.T) {
+	fc := &fileConfig{
+		Auth: &fileAuth{
+			Mode: ptr("headers"),
+			Headers: &fileAuthHeaders{
+				Subject:        ptr("X-User"),
+				SecretHeader:   ptr("X-Secret"),
+				SecretValue:    ptr("s3cret"),
+				TrustedProxies: ptr("10.0.0.0/8"),
+			},
+		},
+	}
+
+	cfg, err := LoadAuth(nil, fc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Headers.Subject != "X-User" {
+		t.Errorf("subject = %q, want X-User", cfg.Headers.Subject)
+	}
+	if cfg.Headers.SecretValue != "s3cret" {
+		t.Errorf("secret_value = %q, want s3cret", cfg.Headers.SecretValue)
+	}
+	if len(cfg.Headers.TrustedProxies) != 1 {
+		t.Fatalf("expected 1 trusted proxy, got %d", len(cfg.Headers.TrustedProxies))
+	}
+}
+
+func TestLoadAuth_TailscaleFromFile(t *testing.T) {
+	fc := &fileConfig{
+		Auth: &fileAuth{
+			Mode: ptr("tailscale"),
+			Tailscale: &fileAuthTS{
+				Mode:    ptr("tsnet"),
+				AuthKey: ptr("tskey-abc"),
+			},
+		},
+	}
+
+	cfg, err := LoadAuth(nil, fc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Tailscale.Mode != "tsnet" {
+		t.Errorf("tailscale mode = %q, want tsnet", cfg.Tailscale.Mode)
+	}
+	if cfg.Tailscale.AuthKey != "tskey-abc" {
+		t.Errorf("tailscale authkey = %q, want tskey-abc", cfg.Tailscale.AuthKey)
+	}
+}
+
+func TestLoadAuth_OIDCSecretFromFile(t *testing.T) {
+	dir := t.TempDir()
+	secretPath := filepath.Join(dir, "client_secret")
+	if err := os.WriteFile(secretPath, []byte("file-secret\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("CETACEAN_AUTH_MODE", "oidc")
+	t.Setenv("CETACEAN_AUTH_OIDC_ISSUER", "https://issuer.example.com")
+	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_ID", "client-id")
+	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET_FILE", secretPath)
+	t.Setenv("CETACEAN_AUTH_OIDC_REDIRECT_URL", "https://app.example.com/auth/callback")
+
+	cfg, err := LoadAuth(nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.OIDC.ClientSecret != "file-secret" {
+		t.Errorf("client secret = %q, want file-secret", cfg.OIDC.ClientSecret)
+	}
+}
+
+func TestLoadAuth_TailscaleAuthKeyFromFile(t *testing.T) {
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "ts_authkey")
+	if err := os.WriteFile(keyPath, []byte("tskey-from-file\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("CETACEAN_AUTH_MODE", "tailscale")
+	t.Setenv("CETACEAN_AUTH_TAILSCALE_MODE", "tsnet")
+	t.Setenv("CETACEAN_AUTH_TAILSCALE_AUTHKEY_FILE", keyPath)
+
+	cfg, err := LoadAuth(nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Tailscale.AuthKey != "tskey-from-file" {
+		t.Errorf("auth key = %q, want tskey-from-file", cfg.Tailscale.AuthKey)
+	}
+}
+
+func TestLoadAuth_HeadersSecretFromFile(t *testing.T) {
+	dir := t.TempDir()
+	secretPath := filepath.Join(dir, "proxy_secret")
+	if err := os.WriteFile(secretPath, []byte("proxy-s3cret"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("CETACEAN_AUTH_MODE", "headers")
+	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
+	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_HEADER", "X-Secret")
+	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_VALUE_FILE", secretPath)
+
+	cfg, err := LoadAuth(nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Headers.SecretValue != "proxy-s3cret" {
+		t.Errorf("secret value = %q, want proxy-s3cret", cfg.Headers.SecretValue)
 	}
 }
 

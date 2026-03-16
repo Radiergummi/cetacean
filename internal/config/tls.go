@@ -1,9 +1,6 @@
 package config
 
-import (
-	"fmt"
-	"os"
-)
+import "fmt"
 
 type TLSConfig struct {
 	Cert string // path to TLS certificate file
@@ -14,10 +11,17 @@ func (c TLSConfig) Enabled() bool {
 	return c.Cert != "" || c.Key != ""
 }
 
-func LoadTLS() TLSConfig {
+func LoadTLS(flags *Flags, fc *fileConfig) TLSConfig {
+	if flags == nil {
+		flags = &Flags{}
+	}
+	var ft *fileTLS
+	if fc != nil {
+		ft = fc.TLS
+	}
 	return TLSConfig{
-		Cert: os.Getenv("CETACEAN_TLS_CERT"),
-		Key:  os.Getenv("CETACEAN_TLS_KEY"),
+		Cert: resolve(flags.TLSCert, "CETACEAN_TLS_CERT", fileField(ft, func(t *fileTLS) *string { return t.Cert }), ""),
+		Key:  resolve(flags.TLSKey, "CETACEAN_TLS_KEY", fileField(ft, func(t *fileTLS) *string { return t.Key }), ""),
 	}
 }
 

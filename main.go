@@ -72,13 +72,13 @@ func main() {
 	}
 	slog.SetDefault(slog.New(logHandler))
 
-	authCfg, err := config.LoadAuth()
+	authCfg, err := config.LoadAuth(flags, fc)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "auth configuration error: %v\n", err)
 		os.Exit(1)
 	}
 
-	tlsCfg := config.LoadTLS()
+	tlsCfg := config.LoadTLS(flags, fc)
 	if err := config.ValidateTLS(tlsCfg); err != nil {
 		fmt.Fprintf(os.Stderr, "TLS configuration error: %v\n", err)
 		os.Exit(1)

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/netip"
 	"net/url"
-	"os"
 	"strings"
 )
 
@@ -55,70 +54,102 @@ var validModes = map[string]bool{
 	"headers":   true,
 }
 
-func LoadAuth() (*AuthConfig, error) {
-	cfg := &AuthConfig{
-		Mode: resolve(nil, "CETACEAN_AUTH_MODE", nil, "none"),
-		OIDC: OIDCConfig{
-			Issuer:       os.Getenv("CETACEAN_AUTH_OIDC_ISSUER"),
-			ClientID:     os.Getenv("CETACEAN_AUTH_OIDC_CLIENT_ID"),
-			ClientSecret: os.Getenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET"),
-			RedirectURL:  os.Getenv("CETACEAN_AUTH_OIDC_REDIRECT_URL"),
-			Scopes:       parseScopes(resolve(nil, "CETACEAN_AUTH_OIDC_SCOPES", nil, "openid,profile,email")),
-			SessionKey:   os.Getenv("CETACEAN_AUTH_OIDC_SESSION_KEY"),
-		},
-		Tailscale: TailscaleConfig{
-			Mode:       resolve(nil, "CETACEAN_AUTH_TAILSCALE_MODE", nil, "local"),
-			AuthKey:    os.Getenv("CETACEAN_AUTH_TAILSCALE_AUTHKEY"),
-			Hostname:   resolve(nil, "CETACEAN_AUTH_TAILSCALE_HOSTNAME", nil, "cetacean"),
-			StateDir:   os.Getenv("CETACEAN_AUTH_TAILSCALE_STATE_DIR"),
-			Capability: os.Getenv("CETACEAN_AUTH_TAILSCALE_CAPABILITY"),
-		},
-		Cert: CertConfig{
-			CA: os.Getenv("CETACEAN_AUTH_CERT_CA"),
-		},
-		Headers: HeadersConfig{
-			Subject:      os.Getenv("CETACEAN_AUTH_HEADERS_SUBJECT"),
-			Name:         os.Getenv("CETACEAN_AUTH_HEADERS_NAME"),
-			Email:        os.Getenv("CETACEAN_AUTH_HEADERS_EMAIL"),
-			Groups:       os.Getenv("CETACEAN_AUTH_HEADERS_GROUPS"),
-			SecretHeader: os.Getenv("CETACEAN_AUTH_HEADERS_SECRET_HEADER"),
-			SecretValue:  os.Getenv("CETACEAN_AUTH_HEADERS_SECRET_VALUE"),
-		},
+func LoadAuth(flags *Flags, fc *fileConfig) (*AuthConfig, error) {
+	if flags == nil {
+		flags = &Flags{}
 	}
 
-	if !validModes[cfg.Mode] {
-		return nil, fmt.Errorf("unknown auth mode %q", cfg.Mode)
+	// Extract file-level pointers (safely handle nil sub-structs).
+	var fa *fileAuth
+	if fc != nil {
+		fa = fc.Auth
 	}
 
-	switch cfg.Mode {
+	mode := resolve(flags.AuthMode, "CETACEAN_AUTH_MODE", fileField(fa, func(a *fileAuth) *string { return a.Mode }), "none")
+	if !validModes[mode] {
+		return nil, fmt.Errorf("unknown auth mode %q", mode)
+	}
+
+	cfg := &AuthConfig{Mode: mode}
+
+	// Resolve only the active mode's settings. Secrets use resolveSecret
+	// to support _FILE env var variants (e.g. Docker Swarm secrets).
+	switch mode {
 	case "oidc":
+		fo := fileOIDC(fa)
+		clientSecret, err := resolveSecret(flags.OIDCClientSecret, "CETACEAN_AUTH_OIDC_CLIENT_SECRET", fileField(fo, func(o *fileAuthOIDC) *string { return o.ClientSecret }), "")
+		if err != nil {
+			return nil, err
+		}
+		sessionKey, err := resolveSecret(flags.OIDCSessionKey, "CETACEAN_AUTH_OIDC_SESSION_KEY", fileField(fo, func(o *fileAuthOIDC) *string { return o.SessionKey }), "")
+		if err != nil {
+			return nil, err
+		}
+		cfg.OIDC = OIDCConfig{
+			Issuer:       resolve(flags.OIDCIssuer, "CETACEAN_AUTH_OIDC_ISSUER", fileField(fo, func(o *fileAuthOIDC) *string { return o.Issuer }), ""),
+			ClientID:     resolve(flags.OIDCClientID, "CETACEAN_AUTH_OIDC_CLIENT_ID", fileField(fo, func(o *fileAuthOIDC) *string { return o.ClientID }), ""),
+			ClientSecret: clientSecret,
+			RedirectURL:  resolve(flags.OIDCRedirectURL, "CETACEAN_AUTH_OIDC_REDIRECT_URL", fileField(fo, func(o *fileAuthOIDC) *string { return o.RedirectURL }), ""),
+			Scopes:       parseScopes(resolve(flags.OIDCScopes, "CETACEAN_AUTH_OIDC_SCOPES", fileField(fo, func(o *fileAuthOIDC) *string { return o.Scopes }), "openid,profile,email")),
+			SessionKey:   sessionKey,
+		}
 		if cfg.OIDC.Issuer == "" || cfg.OIDC.ClientID == "" || cfg.OIDC.ClientSecret == "" || cfg.OIDC.RedirectURL == "" {
 			return nil, fmt.Errorf("oidc mode requires CETACEAN_AUTH_OIDC_ISSUER, CETACEAN_AUTH_OIDC_CLIENT_ID, CETACEAN_AUTH_OIDC_CLIENT_SECRET, and CETACEAN_AUTH_OIDC_REDIRECT_URL")
 		}
 		if err := validateRedirectURL(cfg.OIDC.RedirectURL); err != nil {
 			return nil, err
 		}
+
 	case "tailscale":
+		ft := fileTailscale(fa)
+		authKey, err := resolveSecret(flags.TailscaleAuthKey, "CETACEAN_AUTH_TAILSCALE_AUTHKEY", fileField(ft, func(t *fileAuthTS) *string { return t.AuthKey }), "")
+		if err != nil {
+			return nil, err
+		}
+		cfg.Tailscale = TailscaleConfig{
+			Mode:       resolve(flags.TailscaleMode, "CETACEAN_AUTH_TAILSCALE_MODE", fileField(ft, func(t *fileAuthTS) *string { return t.Mode }), "local"),
+			AuthKey:    authKey,
+			Hostname:   resolve(flags.TailscaleHostname, "CETACEAN_AUTH_TAILSCALE_HOSTNAME", fileField(ft, func(t *fileAuthTS) *string { return t.Hostname }), "cetacean"),
+			StateDir:   resolve(flags.TailscaleStateDir, "CETACEAN_AUTH_TAILSCALE_STATE_DIR", fileField(ft, func(t *fileAuthTS) *string { return t.StateDir }), ""),
+			Capability: resolve(flags.TailscaleCapability, "CETACEAN_AUTH_TAILSCALE_CAPABILITY", fileField(ft, func(t *fileAuthTS) *string { return t.Capability }), ""),
+		}
 		if cfg.Tailscale.Mode != "local" && cfg.Tailscale.Mode != "tsnet" {
 			return nil, fmt.Errorf("tailscale mode must be \"local\" or \"tsnet\", got %q", cfg.Tailscale.Mode)
 		}
 		if cfg.Tailscale.Mode == "tsnet" && cfg.Tailscale.AuthKey == "" {
 			return nil, fmt.Errorf("tailscale tsnet mode requires CETACEAN_AUTH_TAILSCALE_AUTHKEY")
 		}
+
 	case "cert":
+		fc := fileCert(fa)
+		cfg.Cert = CertConfig{
+			CA: resolve(flags.CertCA, "CETACEAN_AUTH_CERT_CA", fileField(fc, func(c *fileAuthCert) *string { return c.CA }), ""),
+		}
 		if cfg.Cert.CA == "" {
 			return nil, fmt.Errorf("cert mode requires CETACEAN_AUTH_CERT_CA")
 		}
+
 	case "headers":
+		fh := fileHeaders(fa)
+		secretValue, err := resolveSecret(flags.HeadersSecretValue, "CETACEAN_AUTH_HEADERS_SECRET_VALUE", fileField(fh, func(h *fileAuthHeaders) *string { return h.SecretValue }), "")
+		if err != nil {
+			return nil, err
+		}
+		trustedProxies, err := parseTrustedProxies(resolve(flags.HeadersTrustedProxies, "CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", fileField(fh, func(h *fileAuthHeaders) *string { return h.TrustedProxies }), ""))
+		if err != nil {
+			return nil, err
+		}
+		cfg.Headers = HeadersConfig{
+			Subject:        resolve(flags.HeadersSubject, "CETACEAN_AUTH_HEADERS_SUBJECT", fileField(fh, func(h *fileAuthHeaders) *string { return h.Subject }), ""),
+			Name:           resolve(flags.HeadersName, "CETACEAN_AUTH_HEADERS_NAME", fileField(fh, func(h *fileAuthHeaders) *string { return h.Name }), ""),
+			Email:          resolve(flags.HeadersEmail, "CETACEAN_AUTH_HEADERS_EMAIL", fileField(fh, func(h *fileAuthHeaders) *string { return h.Email }), ""),
+			Groups:         resolve(flags.HeadersGroups, "CETACEAN_AUTH_HEADERS_GROUPS", fileField(fh, func(h *fileAuthHeaders) *string { return h.Groups }), ""),
+			SecretHeader:   resolve(flags.HeadersSecretHeader, "CETACEAN_AUTH_HEADERS_SECRET_HEADER", fileField(fh, func(h *fileAuthHeaders) *string { return h.SecretHeader }), ""),
+			SecretValue:    secretValue,
+			TrustedProxies: trustedProxies,
+		}
 		if cfg.Headers.Subject == "" {
 			return nil, fmt.Errorf("headers mode requires CETACEAN_AUTH_HEADERS_SUBJECT")
-		}
-		if raw := os.Getenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES"); raw != "" {
-			prefixes, err := parseTrustedProxies(raw)
-			if err != nil {
-				return nil, err
-			}
-			cfg.Headers.TrustedProxies = prefixes
 		}
 		if cfg.Headers.SecretHeader != "" && cfg.Headers.SecretValue == "" {
 			return nil, fmt.Errorf("CETACEAN_AUTH_HEADERS_SECRET_HEADER requires CETACEAN_AUTH_HEADERS_SECRET_VALUE")
@@ -129,6 +160,42 @@ func LoadAuth() (*AuthConfig, error) {
 	}
 
 	return cfg, nil
+}
+
+// fileField safely extracts a pointer field from a nil-able file config sub-struct.
+func fileField[T any](s *T, f func(*T) *string) *string {
+	if s == nil {
+		return nil
+	}
+	return f(s)
+}
+
+func fileOIDC(fa *fileAuth) *fileAuthOIDC {
+	if fa == nil {
+		return nil
+	}
+	return fa.OIDC
+}
+
+func fileTailscale(fa *fileAuth) *fileAuthTS {
+	if fa == nil {
+		return nil
+	}
+	return fa.Tailscale
+}
+
+func fileCert(fa *fileAuth) *fileAuthCert {
+	if fa == nil {
+		return nil
+	}
+	return fa.Cert
+}
+
+func fileHeaders(fa *fileAuth) *fileAuthHeaders {
+	if fa == nil {
+		return nil
+	}
+	return fa.Headers
 }
 
 // validateRedirectURL ensures the redirect URI uses HTTPS per OAuth 2.1 Section 2.3.1.

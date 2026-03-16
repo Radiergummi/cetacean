@@ -97,6 +97,93 @@ snapshot = false
 	}
 }
 
+func TestLoadFile_TLSConfig(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tls.toml")
+	if err := os.WriteFile(path, []byte(`
+[tls]
+cert = "/etc/cetacean/cert.pem"
+key = "/etc/cetacean/key.pem"
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	fc, err := LoadFile(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if fc.TLS == nil || *fc.TLS.Cert != "/etc/cetacean/cert.pem" {
+		t.Error("TLS Cert not parsed")
+	}
+	if *fc.TLS.Key != "/etc/cetacean/key.pem" {
+		t.Error("TLS Key not parsed")
+	}
+}
+
+func TestLoadFile_AuthConfig(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "auth.toml")
+	if err := os.WriteFile(path, []byte(`
+[auth]
+mode = "oidc"
+
+[auth.oidc]
+issuer = "https://idp.example.com"
+client_id = "cetacean"
+client_secret = "secret"
+redirect_url = "https://app.example.com/auth/callback"
+scopes = "openid,profile,email,groups"
+session_key = "abcdef"
+
+[auth.tailscale]
+mode = "tsnet"
+authkey = "tskey-123"
+hostname = "myhost"
+state_dir = "/var/lib/ts"
+capability = "example.com/cap/cetacean"
+
+[auth.cert]
+ca = "/etc/ca.pem"
+
+[auth.headers]
+subject = "X-User"
+name = "X-Name"
+email = "X-Email"
+groups = "X-Groups"
+secret_header = "X-Secret"
+secret_value = "s3cret"
+trusted_proxies = "10.0.0.0/8"
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	fc, err := LoadFile(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if fc.Auth == nil || *fc.Auth.Mode != "oidc" {
+		t.Error("Auth Mode not parsed")
+	}
+	if fc.Auth.OIDC == nil || *fc.Auth.OIDC.Issuer != "https://idp.example.com" {
+		t.Error("OIDC Issuer not parsed")
+	}
+	if *fc.Auth.OIDC.ClientID != "cetacean" {
+		t.Error("OIDC ClientID not parsed")
+	}
+	if fc.Auth.Tailscale == nil || *fc.Auth.Tailscale.AuthKey != "tskey-123" {
+		t.Error("Tailscale AuthKey not parsed")
+	}
+	if fc.Auth.Cert == nil || *fc.Auth.Cert.CA != "/etc/ca.pem" {
+		t.Error("Cert CA not parsed")
+	}
+	if fc.Auth.Headers == nil || *fc.Auth.Headers.Subject != "X-User" {
+		t.Error("Headers Subject not parsed")
+	}
+	if *fc.Auth.Headers.TrustedProxies != "10.0.0.0/8" {
+		t.Error("Headers TrustedProxies not parsed")
+	}
+}
+
 func TestLoadFile_PartialConfig(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "partial.toml")

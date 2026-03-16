@@ -3,7 +3,7 @@ package config
 import "testing"
 
 func TestTLSConfig_NotEnabled(t *testing.T) {
-	cfg := LoadTLS()
+	cfg := LoadTLS(nil, nil)
 	if cfg.Enabled() {
 		t.Error("expected TLS not enabled with empty config")
 	}
@@ -11,7 +11,7 @@ func TestTLSConfig_NotEnabled(t *testing.T) {
 
 func TestTLSConfig_RequiresBoth(t *testing.T) {
 	t.Setenv("CETACEAN_TLS_CERT", "/path/to/cert.pem")
-	cfg := LoadTLS()
+	cfg := LoadTLS(nil, nil)
 	if err := ValidateTLS(cfg); err == nil {
 		t.Error("expected error when only cert is set")
 	}
@@ -19,7 +19,7 @@ func TestTLSConfig_RequiresBoth(t *testing.T) {
 
 func TestTLSConfig_RequiresBothKeyOnly(t *testing.T) {
 	t.Setenv("CETACEAN_TLS_KEY", "/path/to/key.pem")
-	cfg := LoadTLS()
+	cfg := LoadTLS(nil, nil)
 	if err := ValidateTLS(cfg); err == nil {
 		t.Error("expected error when only key is set")
 	}
@@ -28,12 +28,76 @@ func TestTLSConfig_RequiresBothKeyOnly(t *testing.T) {
 func TestTLSConfig_ValidConfig(t *testing.T) {
 	t.Setenv("CETACEAN_TLS_CERT", "/path/to/cert.pem")
 	t.Setenv("CETACEAN_TLS_KEY", "/path/to/key.pem")
-	cfg := LoadTLS()
+	cfg := LoadTLS(nil, nil)
 	if !cfg.Enabled() {
 		t.Error("expected TLS enabled")
 	}
 	if err := ValidateTLS(cfg); err != nil {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestTLSConfig_FromFile(t *testing.T) {
+	fc := &fileConfig{
+		TLS: &fileTLS{
+			Cert: ptr("/file/cert.pem"),
+			Key:  ptr("/file/key.pem"),
+		},
+	}
+	cfg := LoadTLS(nil, fc)
+	if cfg.Cert != "/file/cert.pem" {
+		t.Errorf("cert = %q, want /file/cert.pem", cfg.Cert)
+	}
+	if cfg.Key != "/file/key.pem" {
+		t.Errorf("key = %q, want /file/key.pem", cfg.Key)
+	}
+}
+
+func TestTLSConfig_EnvOverridesFile(t *testing.T) {
+	t.Setenv("CETACEAN_TLS_CERT", "/env/cert.pem")
+	t.Setenv("CETACEAN_TLS_KEY", "/env/key.pem")
+	fc := &fileConfig{
+		TLS: &fileTLS{
+			Cert: ptr("/file/cert.pem"),
+			Key:  ptr("/file/key.pem"),
+		},
+	}
+	cfg := LoadTLS(nil, fc)
+	if cfg.Cert != "/env/cert.pem" {
+		t.Errorf("cert = %q, want /env/cert.pem (env should override file)", cfg.Cert)
+	}
+}
+
+func TestTLSConfig_FromFlags(t *testing.T) {
+	flags := &Flags{
+		TLSCert: ptr("/flag/cert.pem"),
+		TLSKey:  ptr("/flag/key.pem"),
+	}
+	cfg := LoadTLS(flags, nil)
+	if cfg.Cert != "/flag/cert.pem" {
+		t.Errorf("cert = %q, want /flag/cert.pem", cfg.Cert)
+	}
+	if cfg.Key != "/flag/key.pem" {
+		t.Errorf("key = %q, want /flag/key.pem", cfg.Key)
+	}
+}
+
+func TestTLSConfig_FlagOverridesEnvAndFile(t *testing.T) {
+	t.Setenv("CETACEAN_TLS_CERT", "/env/cert.pem")
+	t.Setenv("CETACEAN_TLS_KEY", "/env/key.pem")
+	flags := &Flags{
+		TLSCert: ptr("/flag/cert.pem"),
+		TLSKey:  ptr("/flag/key.pem"),
+	}
+	fc := &fileConfig{
+		TLS: &fileTLS{
+			Cert: ptr("/file/cert.pem"),
+			Key:  ptr("/file/key.pem"),
+		},
+	}
+	cfg := LoadTLS(flags, fc)
+	if cfg.Cert != "/flag/cert.pem" {
+		t.Errorf("cert = %q, want /flag/cert.pem (flag should win)", cfg.Cert)
 	}
 }
 
