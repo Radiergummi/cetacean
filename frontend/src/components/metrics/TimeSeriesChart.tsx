@@ -259,8 +259,9 @@ export default function TimeSeriesChart({
   }, [fetchData, refreshKey]);
 
   // SSE streaming for live ranges
+  const streaming = panel?.streaming ?? true;
   useEffect(() => {
-    if (!fetchedData || from != null || to != null) return;
+    if (!fetchedData || from != null || to != null || !streaming) return;
 
     const rangeSec = RANGE_SECONDS[range] || 3600;
     const step = Math.max(Math.floor(rangeSec / 300), 15);
@@ -326,7 +327,7 @@ export default function TimeSeriesChart({
       es.close();
       document.removeEventListener("visibilitychange", visHandler);
     };
-  }, [fetchedData ? query : null, range, from, to]);
+  }, [fetchedData ? query : null, range, from, to, streaming]);
 
   // Refetch + reconnect SSE when tab becomes visible after being hidden
   useEffect(() => {
@@ -726,7 +727,7 @@ export default function TimeSeriesChart({
             left: tooltip ? tooltipLeft(tooltip, tooltipElRef.current) : 0,
             top: tooltip?.top ?? 0,
             opacity: tooltip && state === "data" ? 1 : 0,
-            transition: tooltip ? "opacity 50ms ease" : "opacity 100ms ease",
+            transition: "opacity 100ms ease",
           }}
         >
           {tooltip && (

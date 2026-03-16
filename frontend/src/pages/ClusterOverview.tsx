@@ -64,10 +64,7 @@ export default function ClusterOverview() {
   );
 
   const monitoring = useMonitoringStatus();
-  const hasCadvisor =
-    monitoring?.prometheusConfigured &&
-    monitoring?.prometheusReachable &&
-    !!monitoring?.cadvisor?.targets;
+  const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
 
   if (!snapshot) {
     return (
@@ -150,9 +147,9 @@ export default function ClusterOverview() {
         </CollapsibleSection>
       </div>
 
-      {hasCadvisor && (
+      {hasPrometheus && (
         <div className="mb-6">
-          <MetricsPanel header="Resource Usage by Stack">
+          <MetricsPanel header="Resource Usage by Stack" stackable>
             <StackDrillDownChart
               title="CPU Usage (by Stack)"
               stackQuery={`topk(10, sum by (container_label_com_docker_stack_namespace)(rate(container_cpu_usage_seconds_total{container_label_com_docker_stack_namespace!=""}[5m])) * 100)`}

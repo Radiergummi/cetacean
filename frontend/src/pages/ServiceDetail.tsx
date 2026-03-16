@@ -108,6 +108,32 @@ export default function ServiceDetail() {
     };
   }, [serviceName, hasCadvisor]);
 
+  const name = service?.Spec.Name || service?.ID || "";
+
+  const metricsCharts = useMemo(
+    () =>
+      service
+        ? [
+            {
+              title: "CPU Usage",
+              query: `sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name="${escapePromQL(name)}"}[5m])) * 100`,
+              unit: "%",
+              thresholds: cpuThresholds(service),
+              yMin: 0,
+            },
+            {
+              title: "Memory Usage",
+              query: `sum(container_memory_usage_bytes{container_label_com_docker_swarm_service_name="${escapePromQL(name)}"})`,
+              unit: "bytes",
+              thresholds: memoryThresholds(service),
+              yMin: 0,
+              color: "#34d399",
+            },
+          ]
+        : [],
+    [name, service],
+  );
+
   if (error) {
     return <FetchError message="Failed to load service" />;
   }
@@ -116,7 +142,6 @@ export default function ServiceDetail() {
     return <LoadingDetail />;
   }
 
-  const name = service.Spec.Name || service.ID;
   const containerSpec = service.Spec.TaskTemplate.ContainerSpec;
   const taskTemplate = service.Spec.TaskTemplate;
   const labels = service.Spec.Labels;
@@ -149,27 +174,6 @@ export default function ServiceDetail() {
   const memLimit = resources?.Limits?.MemoryBytes
     ? resources.Limits.MemoryBytes * runningTasks
     : undefined;
-
-  const metricsCharts = useMemo(
-    () => [
-      {
-        title: "CPU Usage",
-        query: `sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name="${escapePromQL(name)}"}[5m])) * 100`,
-        unit: "%",
-        thresholds: cpuThresholds(service),
-        yMin: 0,
-      },
-      {
-        title: "Memory Usage",
-        query: `sum(container_memory_usage_bytes{container_label_com_docker_swarm_service_name="${escapePromQL(name)}"})`,
-        unit: "bytes",
-        thresholds: memoryThresholds(service),
-        yMin: 0,
-        color: "#34d399",
-      },
-    ],
-    [name, service],
-  );
 
   return (
     <div className="flex flex-col gap-6">
