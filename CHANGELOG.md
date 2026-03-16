@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-03-16
+
 ### Added
 - Tasks list page (the "Failed Tasks" card on the homepage no longer 404s)
 - Click-to-isolate on chart legend items in stack drill-down charts
