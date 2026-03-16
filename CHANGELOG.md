@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Log viewer "has more" indicator inaccurate when filtering by stream (stdout/stderr)
 - List page item counts not updating on real-time add/remove events
 - Race condition when multiple metrics streams connect simultaneously
+- Stale fetch requests not cancelled when navigating away from detail/search pages
+- Ghost stacks appearing after all services removed but configs/secrets remain
+- Metrics charts not reconnecting SSE stream after tab becomes visible again
 
 ## [0.4.0] - 2026-03-16
 
