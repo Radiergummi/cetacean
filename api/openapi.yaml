@@ -3,7 +3,7 @@ info:
   title: Cetacean API
   version: "1.0"
   description: |
-    Read-only observability API for Docker Swarm Mode clusters.
+    Observability and management API for Docker Swarm Mode clusters.
 
     Uses content negotiation — same URLs serve JSON, HTML (SPA), or SSE based on
     the Accept header. Append `.json` or `.html` to any path to force a content type.
@@ -488,6 +488,91 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /nodes/{id}/availability:
+    put:
+      operationId: updateNodeAvailability
+      tags: [Nodes]
+      summary: Update node availability
+      description: Sets the availability of a node (active, drain, or pause).
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [availability]
+              properties:
+                availability:
+                  type: string
+                  enum: [active, drain, pause]
+      responses:
+        "200":
+          description: Updated node
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /nodes/{id}/labels:
+    get:
+      operationId: getNodeLabels
+      tags: [Nodes]
+      summary: Get node labels
+      description: Returns the current labels of the node as a key/value map.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Node labels
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: patchNodeLabels
+      tags: [Nodes]
+      summary: Patch node labels
+      description: |
+        Applies a JSON Patch (RFC 6902) to the node labels.
+        Requires `Content-Type: application/json-patch+json`.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: "#/components/schemas/JSONPatch"
+      responses:
+        "200":
+          description: Updated node labels
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+
   # ── Services ─────────────────────────────────────────────────────────
 
   /services:
@@ -606,6 +691,213 @@ paths:
         "429":
           $ref: "#/components/responses/TooManyRequests"
 
+  /services/{id}/scale:
+    put:
+      operationId: scaleService
+      tags: [Services]
+      summary: Scale a service
+      description: Sets the replica count for a replicated service.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [replicas]
+              properties:
+                replicas:
+                  type: integer
+                  minimum: 0
+      responses:
+        "200":
+          description: Updated service
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /services/{id}/image:
+    put:
+      operationId: updateServiceImage
+      tags: [Services]
+      summary: Update service image
+      description: Updates the container image for a service.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image:
+                  type: string
+                  example: nginx:latest
+      responses:
+        "200":
+          description: Updated service
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /services/{id}/rollback:
+    post:
+      operationId: rollbackService
+      tags: [Services]
+      summary: Rollback a service
+      description: Rolls back the service to its previous specification.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Service rollback initiated
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /services/{id}/restart:
+    post:
+      operationId: restartService
+      tags: [Services]
+      summary: Restart a service
+      description: Forces a re-deploy of the service by incrementing its ForceUpdate counter.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Service restart initiated
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /services/{id}/env:
+    get:
+      operationId: getServiceEnv
+      tags: [Services]
+      summary: Get service environment variables
+      description: Returns the current environment variables of the service as a key/value map.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Environment variables
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: patchServiceEnv
+      tags: [Services]
+      summary: Patch service environment variables
+      description: |
+        Applies a JSON Patch (RFC 6902) to the service environment variables.
+        Requires `Content-Type: application/json-patch+json`.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: "#/components/schemas/JSONPatch"
+      responses:
+        "200":
+          description: Updated environment variables
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+
+  /services/{id}/resources:
+    get:
+      operationId: getServiceResources
+      tags: [Services]
+      summary: Get service resource requirements
+      description: Returns the CPU and memory reservations and limits for the service.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Resource requirements
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceResources"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: patchServiceResources
+      tags: [Services]
+      summary: Patch service resource requirements
+      description: |
+        Applies a JSON Merge Patch (RFC 7396) to the service resource requirements.
+        Requires `Content-Type: application/merge-patch+json`.
+        Fields: `cpuLimit`, `cpuReservation`, `memoryLimit`, `memoryReservation` (all in nanoCPUs/bytes, or null to unset).
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/ServiceResources"
+      responses:
+        "200":
+          description: Updated resource requirements
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceResources"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+
   # ── Tasks ────────────────────────────────────────────────────────────
 
   /tasks:
@@ -720,6 +1012,22 @@ paths:
           $ref: "#/components/responses/NotFound"
         "429":
           $ref: "#/components/responses/TooManyRequests"
+
+  /tasks/{id}/remove:
+    delete:
+      operationId: removeTask
+      tags: [Tasks]
+      summary: Force-remove a task
+      description: |
+        Forces removal of a task (equivalent to `docker rm -f` on the underlying container).
+        Only works on tasks whose containers are still accessible on the node.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "204":
+          description: Task removed
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   # ── History ──────────────────────────────────────────────────────────
 
@@ -1376,6 +1684,20 @@ components:
 
     NotAcceptable:
       description: Requested content type not supported for this endpoint
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+
+    Conflict:
+      description: Version conflict — the resource was modified concurrently; retry the operation
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+
+    UnsupportedMediaType:
+      description: Unsupported Content-Type for this endpoint
       content:
         application/problem+json:
           schema:
@@ -2134,3 +2456,48 @@ components:
           type: object
           additionalProperties: true
           description: All raw claims from the authentication provider
+
+    # ── Write operation schemas ───────────────────────────────────────
+
+    JSONPatch:
+      type: array
+      description: JSON Patch document (RFC 6902)
+      items:
+        type: object
+        required: [op, path]
+        properties:
+          op:
+            type: string
+            enum: [add, remove, replace, test]
+            description: Patch operation
+          path:
+            type: string
+            description: Key name (with or without leading /)
+          value:
+            type: string
+            description: New value (required for add/replace/test)
+
+    ServiceResources:
+      type: object
+      description: CPU and memory resource requirements for a service
+      properties:
+        cpuLimit:
+          type: integer
+          format: int64
+          description: CPU limit in nanoCPUs (null to unset)
+          nullable: true
+        cpuReservation:
+          type: integer
+          format: int64
+          description: CPU reservation in nanoCPUs (null to unset)
+          nullable: true
+        memoryLimit:
+          type: integer
+          format: int64
+          description: Memory limit in bytes (null to unset)
+          nullable: true
+        memoryReservation:
+          type: integer
+          format: int64
+          description: Memory reservation in bytes (null to unset)
+          nullable: true

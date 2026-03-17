@@ -128,6 +128,7 @@ export interface Service {
       Addr: string;
     }>;
   };
+  PreviousSpec?: Service["Spec"];
   UpdateStatus?: {
     State: string;
     StartedAt: string;

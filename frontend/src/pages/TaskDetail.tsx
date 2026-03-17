@@ -14,14 +14,36 @@ import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { formatBytes } from "../lib/formatBytes";
 import { escapePromQL } from "../lib/utils";
+import { Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
+
+function Spinner() {
+  return (
+    <svg
+      className="h-3 w-3 animate-spin"
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+      />
+    </svg>
+  );
+}
 
 export default function TaskDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [task, setTask] = useState<Task | null>(null);
   const [service, setService] = useState<Service | null>(null);
   const [error, setError] = useState(false);
+  const [removeLoading, setRemoveLoading] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
 
   const fetchData = useCallback(() => {
     if (!id) {
@@ -42,6 +64,20 @@ export default function TaskDetail() {
   useEffect(fetchData, [fetchData]);
 
   useResourceStream(`/tasks/${id}`, fetchData);
+
+  async function handleRemove() {
+    if (!id) return;
+    if (!window.confirm("Are you sure you want to force-remove this task? This will kill the backing container.")) return;
+    setRemoveLoading(true);
+    setRemoveError(null);
+    try {
+      await api.removeTask(id);
+      navigate(task?.ServiceID ? `/services/${task.ServiceID}` : "/tasks");
+    } catch (err) {
+      setRemoveError(err instanceof Error ? err.message : "Failed to remove task");
+      setRemoveLoading(false);
+    }
+  }
 
   const monitoring = useMonitoringStatus();
   const hasCadvisor = !!monitoring?.cadvisor?.targets;
@@ -77,6 +113,19 @@ export default function TaskDetail() {
           { label: task.Slot ? `Replica #${task.Slot}` : task.ID.slice(0, 12) },
         ]}
       />
+
+      <div className="mb-6 flex flex-col items-start gap-1">
+        <button
+          type="button"
+          onClick={() => void handleRemove()}
+          disabled={removeLoading}
+          className="inline-flex items-center gap-1.5 rounded border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
+        >
+          {removeLoading ? <Spinner /> : <Trash2 className="h-3.5 w-3.5" />}
+          Force Remove
+        </button>
+        {removeError && <p className="text-xs text-red-600 dark:text-red-400">{removeError}</p>}
+      </div>
 
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         <div className="rounded-lg border bg-card p-4">

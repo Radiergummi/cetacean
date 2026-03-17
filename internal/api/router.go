@@ -49,10 +49,26 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 	mux.HandleFunc("GET /services/{id}/tasks", contentNegotiated(h.HandleServiceTasks, spa))
 	mux.HandleFunc("GET /services/{id}/logs", contentNegotiatedWithSSE(h.HandleServiceLogs, h.HandleServiceLogs, spa))
 
+	// Node write operations
+	mux.Handle("PUT /nodes/{id}/availability", requireWrite(h.HandleUpdateNodeAvailability))
+	mux.HandleFunc("GET /nodes/{id}/labels", contentNegotiated(h.HandleGetNodeLabels, spa))
+	mux.Handle("PATCH /nodes/{id}/labels", requireWrite(h.HandlePatchNodeLabels))
+
+	// Service write operations
+	mux.Handle("PUT /services/{id}/scale", requireWrite(h.HandleScaleService))
+	mux.Handle("PUT /services/{id}/image", requireWrite(h.HandleUpdateServiceImage))
+	mux.Handle("POST /services/{id}/rollback", requireWrite(h.HandleRollbackService))
+	mux.Handle("POST /services/{id}/restart", requireWrite(h.HandleRestartService))
+	mux.HandleFunc("GET /services/{id}/env", contentNegotiated(h.HandleGetServiceEnv, spa))
+	mux.Handle("PATCH /services/{id}/env", requireWrite(h.HandlePatchServiceEnv))
+	mux.HandleFunc("GET /services/{id}/resources", contentNegotiated(h.HandleGetServiceResources, spa))
+	mux.Handle("PATCH /services/{id}/resources", requireWrite(h.HandlePatchServiceResources))
+
 	// Tasks
 	mux.HandleFunc("GET /tasks", contentNegotiatedWithSSE(h.HandleListTasks, func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, "task") }, spa))
 	mux.HandleFunc("GET /tasks/{id}", contentNegotiatedWithSSE(h.HandleGetTask, func(w http.ResponseWriter, r *http.Request) { h.streamResource(w, r, "task", r.PathValue("id")) }, spa))
 	mux.HandleFunc("GET /tasks/{id}/logs", contentNegotiatedWithSSE(h.HandleTaskLogs, h.HandleTaskLogs, spa))
+	mux.Handle("DELETE /tasks/{id}", requireWrite(h.HandleRemoveTask))
 
 	// History
 	mux.HandleFunc("GET /history", contentNegotiated(h.HandleHistory, spa))

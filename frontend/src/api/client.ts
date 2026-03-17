@@ -53,6 +53,59 @@ async function fetchJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
   return res.json();
 }
 
+async function mutationFetch<T>(
+  path: string,
+  method: string,
+  body?: unknown,
+  contentType?: string,
+): Promise<T> {
+  const h: Record<string, string> = { Accept: "application/json" };
+  if (contentType) h["Content-Type"] = contentType;
+  const res = await fetch(path, {
+    method,
+    headers: h,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    if (
+      res.status === 401 &&
+      res.headers.get("WWW-Authenticate")?.startsWith("Bearer")
+    ) {
+      const redirect = encodeURIComponent(
+        window.location.pathname + window.location.search,
+      );
+      window.location.href = `/auth/login?redirect=${redirect}`;
+      return new Promise<T>(() => {});
+    }
+    let message = `${res.status} ${res.statusText}`;
+    try {
+      const body = await res.json();
+      if (body?.detail) message = body.detail;
+    } catch {
+      // response wasn't JSON
+    }
+    throw new Error(message);
+  }
+  if (res.status === 204) return undefined as T;
+  return res.json();
+}
+
+export function put<T>(path: string, body: unknown): Promise<T> {
+  return mutationFetch(path, "PUT", body, "application/json");
+}
+
+export function post<T>(path: string): Promise<T> {
+  return mutationFetch(path, "POST");
+}
+
+export function patch<T>(path: string, body: unknown, contentType: string): Promise<T> {
+  return mutationFetch(path, "PATCH", body, contentType);
+}
+
+export function del(path: string): Promise<void> {
+  return mutationFetch(path, "DELETE");
+}
+
 export interface LogLine {
   timestamp: string;
   message: string;
@@ -216,4 +269,31 @@ export const api = {
       `/search?q=${encodeURIComponent(q)}${limit !== undefined ? `&limit=${limit}` : ""}`,
       signal,
     ),
+  scaleService: (id: string, replicas: number) =>
+    put<ServiceDetail>(`/services/${id}/scale`, { replicas }),
+  updateServiceImage: (id: string, image: string) =>
+    put<ServiceDetail>(`/services/${id}/image`, { image }),
+  rollbackService: (id: string) =>
+    post<ServiceDetail>(`/services/${id}/rollback`),
+  restartService: (id: string) =>
+    post<ServiceDetail>(`/services/${id}/restart`),
+  updateNodeAvailability: (id: string, availability: "active" | "drain" | "pause") =>
+    put<{ node: Node }>(`/nodes/${id}/availability`, { availability }),
+  removeTask: (id: string) => del(`/tasks/${id}`),
+
+  // Tier 2: sub-resource GETs
+  serviceEnv: (id: string, signal?: AbortSignal) =>
+    fetchJSON<Record<string, string>>(`/services/${id}/env`, signal),
+  nodeLabels: (id: string, signal?: AbortSignal) =>
+    fetchJSON<Record<string, string>>(`/nodes/${id}/labels`, signal),
+  serviceResources: (id: string, signal?: AbortSignal) =>
+    fetchJSON<Record<string, unknown>>(`/services/${id}/resources`, signal),
+
+  // Tier 2: sub-resource PATCHes
+  patchServiceEnv: (id: string, ops: Array<{ op: string; path: string; value?: string }>) =>
+    patch<Record<string, string>>(`/services/${id}/env`, ops, "application/json-patch+json"),
+  patchNodeLabels: (id: string, ops: Array<{ op: string; path: string; value?: string }>) =>
+    patch<Record<string, string>>(`/nodes/${id}/labels`, ops, "application/json-patch+json"),
+  patchServiceResources: (id: string, partial: unknown) =>
+    patch<Record<string, unknown>>(`/services/${id}/resources`, partial, "application/merge-patch+json"),
 };

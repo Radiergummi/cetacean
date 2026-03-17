@@ -182,7 +182,7 @@ func main() {
 		promProxy = api.PrometheusNotConfiguredHandler()
 		slog.Warn("prometheus not configured, metrics disabled")
 	}
-	handlers := api.NewHandlers(stateCache, broadcaster, dockerClient, dockerClient, watcher.Ready(), promClient)
+	handlers := api.NewHandlers(stateCache, broadcaster, dockerClient, dockerClient, dockerClient, watcher.Ready(), promClient)
 
 	// SPA
 	distFS, err := fs.Sub(frontendDist, "frontend/dist")
