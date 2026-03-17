@@ -283,11 +283,13 @@ export const api = {
 
   // Tier 2: sub-resource GETs
   serviceEnv: (id: string, signal?: AbortSignal) =>
-    fetchJSON<Record<string, string>>(`/services/${id}/env`, signal),
+    fetchJSON<{ env: Record<string, string> }>(`/services/${id}/env`, signal).then((r) => r.env),
   nodeLabels: (id: string, signal?: AbortSignal) =>
-    fetchJSON<Record<string, string>>(`/nodes/${id}/labels`, signal),
+    fetchJSON<{ labels: Record<string, string> }>(`/nodes/${id}/labels`, signal).then((r) => r.labels),
   serviceResources: (id: string, signal?: AbortSignal) =>
-    fetchJSON<Record<string, unknown>>(`/services/${id}/resources`, signal),
+    fetchJSON<{ resources: Record<string, unknown> }>(`/services/${id}/resources`, signal).then(
+      (r) => r.resources,
+    ),
 
   // Tier 2: sub-resource PATCHes
   patchServiceEnv: (id: string, ops: Array<{ op: string; path: string; value?: string }>) =>
