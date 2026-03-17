@@ -12,7 +12,6 @@ import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
-import ResourceName from "../components/ResourceName";
 import ServiceRefList from "../components/ServiceRefList";
 import { useDetailResource } from "../hooks/useDetailResource";
 import { parseStackLabels } from "../lib/parseStackLabels";
@@ -22,13 +21,8 @@ export default function VolumeDetail() {
   const { name } = useParams<{ name: string }>();
   const { data, history, error } = useDetailResource(name, api.volume, `/volumes/${name}`);
 
-  if (error) {
-    return <FetchError message="Failed to load volume" />;
-  }
-
-  if (!data) {
-    return <LoadingDetail />;
-  }
+  if (error) return <FetchError message="Failed to load volume" />;
+  if (!data) return <LoadingDetail />;
 
   const volume = data.volume;
   const services = data.services ?? [];
@@ -38,16 +32,8 @@ export default function VolumeDetail() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={
-          <ResourceName
-            name={volume.Name}
-            direction="column"
-          />
-        }
-        breadcrumbs={[
-          { label: "Volumes", to: "/volumes" },
-          { label: <ResourceName name={volume.Name} /> },
-        ]}
+        title={volume.Name}
+        breadcrumbs={[{ label: "Volumes", to: "/volumes" }, { label: volume.Name }]}
       />
 
       <MetadataGrid>
@@ -71,7 +57,7 @@ export default function VolumeDetail() {
         <InfoCard
           className="col-span-2"
           label="Mountpoint"
-          value={<span className="truncate">{volume.Mountpoint}</span>}
+          value={volume.Mountpoint}
         />
       </MetadataGrid>
 

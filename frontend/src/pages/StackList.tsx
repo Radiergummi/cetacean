@@ -95,6 +95,18 @@ function stackHealth(s: StackSummary): "healthy" | "warning" | "critical" {
   return "healthy";
 }
 
+const HEALTH_COLORS = {
+  healthy: "bg-green-500",
+  warning: "bg-yellow-500",
+  critical: "bg-red-500",
+} as const;
+
+const HEALTH_BORDER = {
+  healthy: "",
+  warning: "",
+  critical: "border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/20",
+} as const;
+
 function StackCard({ stack }: { stack: StackSummary }) {
   const health = stackHealth(stack);
   const running = stack.tasksByState["running"] ?? 0;
@@ -104,12 +116,11 @@ function StackCard({ stack }: { stack: StackSummary }) {
   return (
     <Link
       to={`/stacks/${stack.name}`}
-      data-health={health}
-      className="group block rounded-lg border p-4 transition-all hover:border-foreground/20 hover:shadow-sm data-[health=critical]:border-red-200 data-[health=critical]:bg-red-50/50 dark:data-[health=critical]:border-red-900 dark:data-[health=critical]:bg-red-950/20"
+      className={`block rounded-lg border p-4 transition-all hover:border-foreground/20 hover:shadow-sm ${HEALTH_BORDER[health]}`}
     >
       {/* Header */}
       <div className="mb-3 flex items-center gap-2">
-        <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-yellow-500 group-data-[health=critical]:bg-red-500 group-data-[health=healthy]:bg-green-500" />
+        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${HEALTH_COLORS[health]}`} />
         <span className="truncate font-medium">{stack.name}</span>
         {stack.updatingServices > 0 && (
           <span className="ml-auto rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
@@ -129,8 +140,7 @@ function StackCard({ stack }: { stack: StackSummary }) {
         {desired > 0 ? (
           <div className="flex h-2 overflow-hidden rounded-full bg-muted">
             <div
-              data-complete={pct >= 100 || undefined}
-              className="bg-yellow-500 transition-all data-complete:bg-green-500"
+              className={`${pct >= 100 ? "bg-green-500" : "bg-yellow-500"} transition-all`}
               style={{ width: `${pct}%` }}
             />
           </div>

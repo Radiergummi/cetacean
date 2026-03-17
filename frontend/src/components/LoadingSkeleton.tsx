@@ -43,10 +43,7 @@ export function SkeletonTable({ columns, rows = 5 }: { columns: number; rows?: n
                   key={j}
                   className="p-3"
                 >
-                  <div
-                    data-first={j === 0 || undefined}
-                    className="h-4 w-20 rounded bg-muted/60 data-first:w-32"
-                  />
+                  <div className={`h-4 rounded bg-muted/60 ${j === 0 ? "w-32" : "w-20"}`} />
                 </td>
               ))}
             </tr>

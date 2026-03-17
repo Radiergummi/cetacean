@@ -10,7 +10,6 @@ import {
 import FetchError from "../components/FetchError";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
-import ResourceName from "../components/ResourceName";
 import ServiceRefList from "../components/ServiceRefList";
 import { useDetailResource } from "../hooks/useDetailResource";
 import { parseStackLabels } from "../lib/parseStackLabels";
@@ -31,16 +30,8 @@ export default function SecretDetail() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={
-          <ResourceName
-            name={name}
-            direction="column"
-          />
-        }
-        breadcrumbs={[
-          { label: "Secrets", to: "/secrets" },
-          { label: <ResourceName name={name} /> },
-        ]}
+        title={name}
+        breadcrumbs={[{ label: "Secrets", to: "/secrets" }, { label: name }]}
       />
 
       <MetadataGrid>

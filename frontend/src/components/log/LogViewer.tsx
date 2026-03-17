@@ -119,7 +119,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
       title={header}
       open={open}
       onToggle={toggleCollapse}
-      className="flex w-full cursor-pointer items-center gap-1.5 text-sm font-medium tracking-wider text-muted-foreground uppercase transition-colors hover:text-foreground sm:mr-auto sm:w-auto"
+      className="w-full flex cursor-pointer items-center gap-1.5 text-sm font-medium tracking-wider text-muted-foreground uppercase transition-colors hover:text-foreground sm:mr-auto sm:w-auto"
     />
   ) : null;
 
@@ -283,14 +283,14 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
 
       {/* Log area */}
       {data.loading ? (
-        <div className="flex h-100 items-center justify-center rounded-lg border bg-muted/30 dark:border-gray-800 dark:bg-gray-950">
+        <div className="log-panel flex items-center justify-center">
           <div className="flex flex-col items-center gap-3 text-muted-foreground">
             <Spinner className="size-6" />
             <p className="text-sm">Loading logs…</p>
           </div>
         </div>
       ) : data.error ? (
-        <div className="flex h-100 items-center justify-center rounded-lg border bg-muted/30 dark:border-gray-800 dark:bg-gray-950">
+        <div className="log-panel flex items-center justify-center">
           <div className="flex flex-col items-center gap-3 text-center">
             <AlertTriangle className="size-6 text-red-500 dark:text-red-400" />
             <div>
@@ -308,14 +308,14 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
           </div>
         </div>
       ) : data.lines.length === 0 ? (
-        <div className="flex h-100 items-center justify-center rounded-lg border bg-muted/30 dark:border-gray-800 dark:bg-gray-950">
+        <div className="log-panel flex items-center justify-center">
           <div className="flex flex-col items-center gap-3 text-muted-foreground">
             <FileText className="size-6" />
             <p className="text-sm">No logs yet — the container hasn't produced any output</p>
           </div>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex h-100 items-center justify-center rounded-lg border bg-muted/30 dark:border-gray-800 dark:bg-gray-950">
+        <div className="log-panel flex items-center justify-center">
           <p className="text-sm text-muted-foreground">No matching log lines</p>
         </div>
       ) : (

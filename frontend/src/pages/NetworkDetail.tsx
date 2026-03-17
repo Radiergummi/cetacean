@@ -14,7 +14,6 @@ import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
-import ResourceName from "../components/ResourceName";
 import ServiceRefList from "../components/ServiceRefList";
 import { useDetailResource } from "../hooks/useDetailResource";
 import { parseStackLabels } from "../lib/parseStackLabels";
@@ -22,35 +21,19 @@ import { useParams } from "react-router-dom";
 
 function NetworkFlags({ network }: { network: Network }) {
   const flags = [];
-
-  if (network.Internal) {
-    flags.push("Internal");
-  }
-
-  if (network.Attachable) {
-    flags.push("Attachable");
-  }
-
-  if (network.Ingress) {
-    flags.push("Ingress");
-  }
-
-  if (network.EnableIPv6) {
-    flags.push("IPv6");
-  }
-
-  if (flags.length === 0) {
-    return null;
-  }
-
+  if (network.Internal) flags.push("Internal");
+  if (network.Attachable) flags.push("Attachable");
+  if (network.Ingress) flags.push("Ingress");
+  if (network.EnableIPv6) flags.push("IPv6");
+  if (flags.length === 0) return null;
   return (
     <div className="flex flex-wrap gap-2">
-      {flags.map((flag) => (
+      {flags.map((f) => (
         <span
-          key={flag}
+          key={f}
           className="inline-flex items-center rounded-md bg-muted px-2.5 py-0.5 text-xs font-medium"
         >
-          {flag}
+          {f}
         </span>
       ))}
     </div>
@@ -59,49 +42,45 @@ function NetworkFlags({ network }: { network: Network }) {
 
 function IPAMPanel({ network }: { network: Network }) {
   const ipam = network.IPAM;
-
-  if (!ipam?.Config?.length) {
-    return null;
-  }
+  if (!ipam?.Config?.length) return null;
 
   return (
     <CollapsibleSection title="IPAM Configuration">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {ipam.Config.map(({ Gateway, IPRange, Subnet }, index) => (
+        {ipam.Config.map((cfg, i) => (
           <div
-            key={index}
+            key={i}
             className="rounded-lg border bg-card p-4"
           >
             <div className="space-y-2">
-              {Subnet && (
+              {cfg.Subnet && (
                 <div>
                   <div className="mb-0.5 text-xs font-medium tracking-wider text-muted-foreground uppercase">
                     Subnet
                   </div>
-                  <div className="font-mono text-sm">{Subnet}</div>
+                  <div className="font-mono text-sm">{cfg.Subnet}</div>
                 </div>
               )}
-              {Gateway && (
+              {cfg.Gateway && (
                 <div>
                   <div className="mb-0.5 text-xs font-medium tracking-wider text-muted-foreground uppercase">
                     Gateway
                   </div>
-                  <div className="font-mono text-sm">{Gateway}</div>
+                  <div className="font-mono text-sm">{cfg.Gateway}</div>
                 </div>
               )}
-              {IPRange && (
+              {cfg.IPRange && (
                 <div>
                   <div className="mb-0.5 text-xs font-medium tracking-wider text-muted-foreground uppercase">
                     IP Range
                   </div>
-                  <div className="font-mono text-sm">{IPRange}</div>
+                  <div className="font-mono text-sm">{cfg.IPRange}</div>
                 </div>
               )}
             </div>
           </div>
         ))}
       </div>
-
       {ipam.Driver && ipam.Driver !== "default" && (
         <div className="mt-2 text-xs text-muted-foreground">
           IPAM Driver: <span className="font-mono">{ipam.Driver}</span>
@@ -115,12 +94,8 @@ export default function NetworkDetail() {
   const { id } = useParams<{ id: string }>();
   const { data, history, error } = useDetailResource(id, api.network, `/networks/${id}`);
 
-  if (error) {
-    return <FetchError message="Failed to load network" />;
-  }
-  if (!data) {
-    return <LoadingDetail />;
-  }
+  if (error) return <FetchError message="Failed to load network" />;
+  if (!data) return <LoadingDetail />;
 
   const network = data.network;
   const services = data.services ?? [];
@@ -130,16 +105,8 @@ export default function NetworkDetail() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={
-          <ResourceName
-            name={network.Name}
-            direction="column"
-          />
-        }
-        breadcrumbs={[
-          { label: "Networks", to: "/networks" },
-          { label: <ResourceName name={network.Name} /> },
-        ]}
+        title={network.Name}
+        breadcrumbs={[{ label: "Networks", to: "/networks" }, { label: network.Name }]}
       />
 
       <MetadataGrid>

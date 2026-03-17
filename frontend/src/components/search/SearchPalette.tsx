@@ -54,14 +54,8 @@ function flattenResults(
 }
 
 /** Map singular resource type from action steps to plural SearchResourceType */
-const searchTypeMap: Record<string, SearchResourceType> = {
-  service: "services",
-  node: "nodes",
-  task: "tasks",
-};
-
 function toSearchType(resourceType: string): SearchResourceType {
-  return searchTypeMap[resourceType] ?? (resourceType + "s") as SearchResourceType;
+  return (resourceType + "s") as SearchResourceType;
 }
 
 function ActionBreadcrumbs({

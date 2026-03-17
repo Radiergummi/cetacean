@@ -45,11 +45,8 @@ function Layout({ children }: { children: React.ReactNode }) {
     "?": useCallback(() => setShortcutsOpen((o) => !o), []),
     "/": useCallback(() => searchRef.current?.open(), []),
     Escape: useCallback(() => {
-      if (shortcutsOpen) {
-        setShortcutsOpen(false);
-      } else {
-        navigate(-1);
-      }
+      if (shortcutsOpen) setShortcutsOpen(false);
+      else navigate(-1);
     }, [shortcutsOpen, navigate]),
     "g h": useCallback(() => navigate("/"), [navigate]),
     "g n": useCallback(() => navigate("/nodes"), [navigate]),
@@ -92,7 +89,7 @@ function Layout({ children }: { children: React.ReactNode }) {
               <UserBadge />
 
               <button
-                className="inline-flex size-8 items-center justify-center rounded-md transition hover:bg-muted lg:hidden"
+                className="rounded-md p-2.5 hover:bg-muted lg:hidden"
                 onClick={() => setMenuOpen(!menuOpen)}
                 aria-label="Toggle menu"
               >
@@ -162,9 +159,7 @@ function NavLinks() {
 
 function UserBadge() {
   const { identity, loading } = useAuth();
-  if (loading || !identity || identity.provider === "none") {
-    return null;
-  }
+  if (loading || !identity || identity.provider === "none") return null;
   return (
     <Link
       to="/profile"

@@ -2,7 +2,6 @@ import { api } from "../api/client";
 import type { HistoryEntry, Service, SpecChange, Task } from "../api/types";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
-import KeyValueEditor from "../components/KeyValueEditor";
 import { ContainerImage, KVTable, MetadataGrid, ResourceLink, Timestamp } from "../components/data";
 import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
@@ -13,7 +12,6 @@ import { MetricsPanel, ResourceAllocationChart, type Threshold } from "../compon
 import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
 import SimpleTable from "../components/SimpleTable";
-import { Spinner } from "../components/Spinner";
 import TasksTable from "../components/TasksTable";
 import { timeAgo } from "../components/TimeAgo";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
@@ -22,7 +20,7 @@ import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { formatBytes } from "../lib/formatBytes";
 import { formatNs } from "../lib/formatNs";
 import { escapePromQL } from "../lib/utils";
-import { ArrowRight, Globe, ImageIcon, Pencil, RefreshCw, RotateCcw, Shuffle, X } from "lucide-react";
+import { ArrowRight, Globe, ImageIcon, Pencil, Plus, RefreshCw, RotateCcw, Shuffle, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -194,12 +192,7 @@ export default function ServiceDetail() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={
-          <ResourceName
-            name={name}
-            direction="column"
-          />
-        }
+        title={<ResourceName name={name} />}
         breadcrumbs={[
           { label: "Services", to: "/services" },
           { label: <ResourceName name={name} /> },
@@ -311,14 +304,13 @@ export default function ServiceDetail() {
       )}
 
       {/* Environment variables */}
-      <KeyValueEditor
-        title="Environment Variables"
-        keyLabel="Variable"
-        valueLabel="Value"
-        data={envVars}
-        loading={false}
-        onSave={(ops) => api.patchServiceEnv(id!, ops).then(setEnvVars)}
-      />
+      {envVars !== null && (
+        <EnvEditor
+          serviceId={id!}
+          envVars={envVars}
+          onSaved={setEnvVars}
+        />
+      )}
 
       {/* Healthcheck */}
       {containerSpec.Healthcheck && (
@@ -644,6 +636,15 @@ export default function ServiceDetail() {
   );
 }
 
+const statusStyles: Record<string, string> = {
+  stable: "text-green-600 dark:text-green-400",
+  updating: "text-blue-600 dark:text-blue-400",
+  rollback_started: "text-amber-600 dark:text-amber-400",
+  paused: "text-amber-600 dark:text-amber-400",
+  rollback_paused: "text-amber-600 dark:text-amber-400",
+  rollback_completed: "text-amber-600 dark:text-amber-400",
+};
+
 const statusLabels: Record<string, string> = {
   stable: "Stable",
   updating: "Updating",
@@ -654,16 +655,19 @@ const statusLabels: Record<string, string> = {
   rollback_completed: "Rolled back",
 };
 
-function serviceStatus(service: Service): { label: string; state: string } {
+function serviceStatusLabel(service: Service): { label: string; color: string } {
   const state = service.UpdateStatus?.State;
   if (!state || state === "completed") {
-    return { label: "Stable", state: "stable" };
+    return { label: "Stable", color: statusStyles.stable };
   }
-  return { label: statusLabels[state] || state, state };
+  return {
+    label: statusLabels[state] || state,
+    color: statusStyles[state] || statusStyles.stable,
+  };
 }
 
 function ServiceStatusCard({ service }: { service: Service }) {
-  const { label, state } = serviceStatus(service);
+  const { label, color } = serviceStatusLabel(service);
   const ts = service.UpdateStatus?.CompletedAt || service.UpdateStatus?.StartedAt;
   const msg = service.UpdateStatus?.Message;
 
@@ -672,12 +676,7 @@ function ServiceStatusCard({ service }: { service: Service }) {
       label="Status"
       value={
         <div className="flex flex-col">
-          <span
-            data-state={state}
-            className="text-base font-medium text-green-600 data-[state=paused]:text-amber-600 data-[state=rollback_completed]:text-amber-600 data-[state=rollback_paused]:text-amber-600 data-[state=rollback_started]:text-amber-600 data-[state=updating]:text-blue-600 dark:text-green-400 dark:data-[state=paused]:text-amber-400 dark:data-[state=rollback_completed]:text-amber-400 dark:data-[state=rollback_paused]:text-amber-400 dark:data-[state=rollback_started]:text-amber-400 dark:data-[state=updating]:text-blue-400"
-          >
-            {label}
-          </span>
+          <span className={`text-base font-medium ${color}`}>{label}</span>
           {ts && <span className="text-xs text-muted-foreground">{timeAgo(ts)}</span>}
           {msg && label !== "Stable" && (
             <span
@@ -707,6 +706,30 @@ function updateConfigRows(cfg: UpdateConfigShape) {
   ];
 }
 
+function Spinner() {
+  return (
+    <svg
+      className="h-3 w-3 animate-spin"
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="4"
+      />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+      />
+    </svg>
+  );
+}
 
 function ServiceActions({ service, serviceId }: { service: Service; serviceId: string }) {
   const currentImage = service.Spec.TaskTemplate.ContainerSpec.Image;
@@ -821,7 +844,7 @@ function ServiceActions({ service, serviceId }: { service: Service; serviceId: s
                 disabled={imageLoading}
                 className="flex flex-1 items-center justify-center gap-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
               >
-                {imageLoading && <Spinner className="size-3" />}
+                {imageLoading && <Spinner />}
                 Update
               </button>
               <button
@@ -846,7 +869,7 @@ function ServiceActions({ service, serviceId }: { service: Service; serviceId: s
           title={canRollback ? "Rollback to previous spec" : "No previous spec available"}
           className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-sm font-medium hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {rollbackLoading ? <Spinner className="size-3.5" /> : <RotateCcw className="h-3.5 w-3.5" />}
+          {rollbackLoading ? <Spinner /> : <RotateCcw className="h-3.5 w-3.5" />}
           Rollback
         </button>
         {rollbackError && (
@@ -862,7 +885,7 @@ function ServiceActions({ service, serviceId }: { service: Service; serviceId: s
           disabled={restartLoading}
           className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-sm font-medium hover:bg-accent disabled:opacity-50"
         >
-          {restartLoading ? <Spinner className="size-3.5" /> : <RefreshCw className="h-3.5 w-3.5" />}
+          {restartLoading ? <Spinner /> : <RefreshCw className="h-3.5 w-3.5" />}
           Restart
         </button>
         {restartError && (
@@ -982,7 +1005,20 @@ function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[] }) {
         className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
         title="Scale service"
       >
-        <Pencil className="h-3.5 w-3.5" />
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+        </svg>
       </button>
 
       {scaleOpen && (
@@ -1010,7 +1046,28 @@ function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[] }) {
               disabled={scaleLoading}
               className="flex flex-1 items-center justify-center gap-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
             >
-              {scaleLoading && <Spinner className="size-3" />}
+              {scaleLoading && (
+                <svg
+                  className="h-3 w-3 animate-spin"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  />
+                </svg>
+              )}
               Scale
             </button>
             <button
@@ -1036,11 +1093,17 @@ function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[] }) {
   );
 }
 
+const mountTypeColors: Record<string, string> = {
+  volume: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  bind: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  tmpfs: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
+};
+
 function MountTypeBadge({ type }: { type: string }) {
+  const color = mountTypeColors[type] || "bg-muted text-muted-foreground";
   return (
     <span
-      data-type={type}
-      className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground data-[type=bind]:bg-amber-100 data-[type=bind]:text-amber-800 data-[type=tmpfs]:bg-purple-100 data-[type=tmpfs]:text-purple-800 data-[type=volume]:bg-blue-100 data-[type=volume]:text-blue-800 dark:data-[type=bind]:bg-amber-900/30 dark:data-[type=bind]:text-amber-300 dark:data-[type=tmpfs]:bg-purple-900/30 dark:data-[type=tmpfs]:text-purple-300 dark:data-[type=volume]:bg-blue-900/30 dark:data-[type=volume]:text-blue-300"
+      className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${color}`}
     >
       {type}
     </span>
@@ -1285,9 +1348,224 @@ function DeploymentChanges({
   );
 }
 
+function EnvEditor({
+  serviceId,
+  envVars,
+  onSaved,
+}: {
+  serviceId: string;
+  envVars: Record<string, string>;
+  onSaved: (updated: Record<string, string>) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [newKey, setNewKey] = useState("");
+  const [newVal, setNewVal] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  function openEdit() {
+    setDraft({ ...envVars });
+    setNewKey("");
+    setNewVal("");
+    setSaveError(null);
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+    setSaveError(null);
+  }
+
+  function addRow() {
+    const k = newKey.trim();
+    if (!k) return;
+    setDraft((prev) => ({ ...prev, [k]: newVal }));
+    setNewKey("");
+    setNewVal("");
+  }
+
+  function removeRow(key: string) {
+    if (!window.confirm(`Remove env var "${key}"?`)) return;
+    setDraft((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }
+
+  async function save() {
+    // Build JSON Patch ops
+    const ops: Array<{ op: string; path: string; value?: string }> = [];
+    const original = envVars;
+
+    // Removed keys
+    for (const k of Object.keys(original)) {
+      if (!(k in draft)) {
+        ops.push({ op: "remove", path: `/${k}` });
+      }
+    }
+    // Added / replaced keys
+    for (const [k, v] of Object.entries(draft)) {
+      if (!(k in original)) {
+        ops.push({ op: "add", path: `/${k}`, value: v });
+      } else if (original[k] !== v) {
+        ops.push({ op: "replace", path: `/${k}`, value: v });
+      }
+    }
+    if (ops.length === 0) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const updated = await api.patchServiceEnv(serviceId, ops);
+      onSaved(updated);
+      setEditing(false);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const entries = Object.entries(envVars).sort(([a], [b]) => a.localeCompare(b));
+  const draftEntries = Object.entries(draft).sort(([a], [b]) => a.localeCompare(b));
+
+  const controls = !editing ? (
+    <button
+      type="button"
+      onClick={openEdit}
+      className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs font-medium hover:bg-accent"
+    >
+      <Pencil className="h-3 w-3" />
+      Edit
+    </button>
+  ) : null;
+
+  return (
+    <CollapsibleSection
+      title="Environment Variables"
+      defaultOpen={false}
+      controls={controls}
+    >
+      {!editing ? (
+        entries.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No environment variables.</p>
+        ) : (
+          <SimpleTable
+            columns={["Variable", "Value"]}
+            items={entries}
+            keyFn={([k]) => k}
+            renderRow={([k, v]) => (
+              <>
+                <td className="p-3 font-mono text-xs">{k}</td>
+                <td className="p-3 font-mono text-xs break-all">{v}</td>
+              </>
+            )}
+          />
+        )
+      ) : (
+        <div className="space-y-3">
+          <div className="overflow-x-auto rounded-lg border">
+            <table className="w-full min-w-max whitespace-nowrap">
+              <thead className="sticky top-0 z-10 bg-background">
+                <tr className="border-b bg-muted/50">
+                  <th className="p-3 text-left text-sm font-medium">Variable</th>
+                  <th className="p-3 text-left text-sm font-medium">Value</th>
+                  <th className="p-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {draftEntries.map(([k, v]) => (
+                  <tr key={k} className="border-b last:border-b-0">
+                    <td className="p-3 font-mono text-xs">{k}</td>
+                    <td className="p-2">
+                      <input
+                        type="text"
+                        value={v}
+                        onChange={(e) => setDraft((prev) => ({ ...prev, [k]: e.target.value }))}
+                        className="w-full rounded border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                      />
+                    </td>
+                    <td className="p-2">
+                      <button
+                        type="button"
+                        onClick={() => removeRow(k)}
+                        className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-red-600"
+                        title="Remove"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                <tr>
+                  <td className="p-2">
+                    <input
+                      type="text"
+                      value={newKey}
+                      onChange={(e) => setNewKey(e.target.value)}
+                      placeholder="NEW_VAR"
+                      className="w-full rounded border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  </td>
+                  <td className="p-2">
+                    <input
+                      type="text"
+                      value={newVal}
+                      onChange={(e) => setNewVal(e.target.value)}
+                      placeholder="value"
+                      onKeyDown={(e) => { if (e.key === "Enter") addRow(); }}
+                      className="w-full rounded border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  </td>
+                  <td className="p-2">
+                    <button
+                      type="button"
+                      onClick={addRow}
+                      disabled={!newKey.trim()}
+                      className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
+                      title="Add"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={saving}
+              className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+            >
+              {saving && <Spinner />}
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={cancelEdit}
+              disabled={saving}
+              className="inline-flex items-center gap-1 rounded border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+            >
+              <X className="h-3 w-3" />
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </CollapsibleSection>
+  );
+}
+
 interface ServiceResourceShape {
-  Limits?: { NanoCPUs?: number; MemoryBytes?: number; Pids?: number };
-  Reservations?: { NanoCPUs?: number; MemoryBytes?: number };
+  limits?: { nanoCPUs?: number; memoryBytes?: number; pids?: number };
+  reservations?: { nanoCPUs?: number; memoryBytes?: number };
 }
 
 function ResourcesEditor({
@@ -1311,10 +1589,10 @@ function ResourcesEditor({
   const [resMem, setResMem] = useState("");
 
   function openEdit() {
-    setLimitCpu(typed.Limits?.NanoCPUs != null ? String(typed.Limits.NanoCPUs / 1e9) : "");
-    setLimitMem(typed.Limits?.MemoryBytes != null ? String(Math.round(typed.Limits.MemoryBytes / (1024 * 1024))) : "");
-    setResCpu(typed.Reservations?.NanoCPUs != null ? String(typed.Reservations.NanoCPUs / 1e9) : "");
-    setResMem(typed.Reservations?.MemoryBytes != null ? String(Math.round(typed.Reservations.MemoryBytes / (1024 * 1024))) : "");
+    setLimitCpu(typed.limits?.nanoCPUs != null ? String(typed.limits.nanoCPUs / 1e9) : "");
+    setLimitMem(typed.limits?.memoryBytes != null ? String(typed.limits.memoryBytes) : "");
+    setResCpu(typed.reservations?.nanoCPUs != null ? String(typed.reservations.nanoCPUs / 1e9) : "");
+    setResMem(typed.reservations?.memoryBytes != null ? String(typed.reservations.memoryBytes) : "");
     setSaveError(null);
     setEditing(true);
   }
@@ -1327,14 +1605,14 @@ function ResourcesEditor({
   async function save() {
     const patch: ServiceResourceShape = {};
     if (limitCpu || limitMem) {
-      patch.Limits = {};
-      if (limitCpu) patch.Limits.NanoCPUs = Math.round(parseFloat(limitCpu) * 1e9);
-      if (limitMem) patch.Limits.MemoryBytes = parseInt(limitMem, 10) * 1024 * 1024;
+      patch.limits = {};
+      if (limitCpu) patch.limits.nanoCPUs = Math.round(parseFloat(limitCpu) * 1e9);
+      if (limitMem) patch.limits.memoryBytes = parseInt(limitMem, 10);
     }
     if (resCpu || resMem) {
-      patch.Reservations = {};
-      if (resCpu) patch.Reservations.NanoCPUs = Math.round(parseFloat(resCpu) * 1e9);
-      if (resMem) patch.Reservations.MemoryBytes = parseInt(resMem, 10) * 1024 * 1024;
+      patch.reservations = {};
+      if (resCpu) patch.reservations.nanoCPUs = Math.round(parseFloat(resCpu) * 1e9);
+      if (resMem) patch.reservations.memoryBytes = parseInt(resMem, 10);
     }
     setSaving(true);
     setSaveError(null);
@@ -1350,10 +1628,10 @@ function ResourcesEditor({
   }
 
   const hasResources =
-    typed.Limits?.NanoCPUs ||
-    typed.Limits?.MemoryBytes ||
-    typed.Reservations?.NanoCPUs ||
-    typed.Reservations?.MemoryBytes;
+    typed.limits?.nanoCPUs ||
+    typed.limits?.memoryBytes ||
+    typed.reservations?.nanoCPUs ||
+    typed.reservations?.memoryBytes;
 
   const controls = !editing ? (
     <button
@@ -1377,28 +1655,28 @@ function ResourcesEditor({
           <p className="text-sm text-muted-foreground">No resource limits configured.</p>
         ) : (
           <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-            {typed.Limits?.NanoCPUs != null && (
+            {typed.limits?.nanoCPUs != null && (
               <div>
                 <div className="text-xs text-muted-foreground">CPU Limit</div>
-                <div className="font-mono">{(typed.Limits.NanoCPUs / 1e9).toFixed(2)} cores</div>
+                <div className="font-mono">{(typed.limits.nanoCPUs / 1e9).toFixed(2)} cores</div>
               </div>
             )}
-            {typed.Limits?.MemoryBytes != null && (
+            {typed.limits?.memoryBytes != null && (
               <div>
                 <div className="text-xs text-muted-foreground">Memory Limit</div>
-                <div className="font-mono">{formatBytes(typed.Limits.MemoryBytes)}</div>
+                <div className="font-mono">{formatBytes(typed.limits.memoryBytes)}</div>
               </div>
             )}
-            {typed.Reservations?.NanoCPUs != null && (
+            {typed.reservations?.nanoCPUs != null && (
               <div>
                 <div className="text-xs text-muted-foreground">CPU Reserved</div>
-                <div className="font-mono">{(typed.Reservations.NanoCPUs / 1e9).toFixed(2)} cores</div>
+                <div className="font-mono">{(typed.reservations.nanoCPUs / 1e9).toFixed(2)} cores</div>
               </div>
             )}
-            {typed.Reservations?.MemoryBytes != null && (
+            {typed.reservations?.memoryBytes != null && (
               <div>
                 <div className="text-xs text-muted-foreground">Memory Reserved</div>
-                <div className="font-mono">{formatBytes(typed.Reservations.MemoryBytes)}</div>
+                <div className="font-mono">{formatBytes(typed.reservations.memoryBytes)}</div>
               </div>
             )}
           </div>
@@ -1421,13 +1699,13 @@ function ResourcesEditor({
                 />
               </label>
               <label className="flex flex-col gap-1">
-                <span className="text-xs text-muted-foreground">Memory (MB)</span>
+                <span className="text-xs text-muted-foreground">Memory (bytes)</span>
                 <input
                   type="number"
                   min="0"
                   value={limitMem}
                   onChange={(e) => setLimitMem(e.target.value)}
-                  placeholder="e.g. 512"
+                  placeholder="e.g. 536870912"
                   className="rounded border bg-background px-2 py-1 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </label>
@@ -1447,13 +1725,13 @@ function ResourcesEditor({
                 />
               </label>
               <label className="flex flex-col gap-1">
-                <span className="text-xs text-muted-foreground">Memory (MB)</span>
+                <span className="text-xs text-muted-foreground">Memory (bytes)</span>
                 <input
                   type="number"
                   min="0"
                   value={resMem}
                   onChange={(e) => setResMem(e.target.value)}
-                  placeholder="e.g. 256"
+                  placeholder="e.g. 268435456"
                   className="rounded border bg-background px-2 py-1 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </label>

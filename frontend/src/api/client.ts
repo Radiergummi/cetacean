@@ -90,19 +90,19 @@ async function mutationFetch<T>(
   return res.json();
 }
 
-function put<T>(path: string, body: unknown): Promise<T> {
+export function put<T>(path: string, body: unknown): Promise<T> {
   return mutationFetch(path, "PUT", body, "application/json");
 }
 
-function post<T>(path: string): Promise<T> {
+export function post<T>(path: string): Promise<T> {
   return mutationFetch(path, "POST");
 }
 
-function patch<T>(path: string, body: unknown, contentType: string): Promise<T> {
+export function patch<T>(path: string, body: unknown, contentType: string): Promise<T> {
   return mutationFetch(path, "PATCH", body, contentType);
 }
 
-function del(path: string): Promise<void> {
+export function del(path: string): Promise<void> {
   return mutationFetch(path, "DELETE");
 }
 
