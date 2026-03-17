@@ -309,7 +309,7 @@ func (c *Client) ScaleService(ctx context.Context, id string, replicas uint64) (
 		return swarm.Service{}, err
 	}
 	if svc.Spec.Mode.Replicated == nil {
-		return swarm.Service{}, fmt.Errorf("cannot scale a global-mode service")
+		return swarm.Service{}, errdefs.InvalidParameter(fmt.Errorf("cannot scale a global-mode service"))
 	}
 	svc.Spec.Mode.Replicated.Replicas = &replicas
 	_, err = c.docker.ServiceUpdate(ctx, svc.ID, svc.Version, svc.Spec, swarm.ServiceUpdateOptions{})
@@ -323,6 +323,9 @@ func (c *Client) UpdateServiceImage(ctx context.Context, id string, image string
 	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
 	if err != nil {
 		return swarm.Service{}, err
+	}
+	if svc.Spec.TaskTemplate.ContainerSpec == nil {
+		return swarm.Service{}, errdefs.InvalidParameter(fmt.Errorf("service has no container spec"))
 	}
 	svc.Spec.TaskTemplate.ContainerSpec.Image = image
 	_, err = c.docker.ServiceUpdate(ctx, svc.ID, svc.Version, svc.Spec, swarm.ServiceUpdateOptions{})
@@ -338,7 +341,7 @@ func (c *Client) RollbackService(ctx context.Context, id string) (swarm.Service,
 		return swarm.Service{}, err
 	}
 	if svc.PreviousSpec == nil {
-		return swarm.Service{}, fmt.Errorf("service has no previous spec to rollback to")
+		return swarm.Service{}, errdefs.InvalidParameter(fmt.Errorf("service has no previous spec to rollback to"))
 	}
 	_, err = c.docker.ServiceUpdate(ctx, svc.ID, svc.Version, svc.Spec, swarm.ServiceUpdateOptions{
 		Rollback: "previous",
@@ -390,6 +393,9 @@ func (c *Client) UpdateServiceEnv(ctx context.Context, id string, env map[string
 	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
 	if err != nil {
 		return swarm.Service{}, err
+	}
+	if svc.Spec.TaskTemplate.ContainerSpec == nil {
+		return swarm.Service{}, errdefs.InvalidParameter(fmt.Errorf("service has no container spec"))
 	}
 	envSlice := make([]string, 0, len(env))
 	for k, v := range env {

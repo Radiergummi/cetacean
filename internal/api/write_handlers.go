@@ -22,6 +22,10 @@ func writeDockerError(w http.ResponseWriter, r *http.Request, err error, resourc
 		writeProblem(w, r, http.StatusConflict, resource+" was modified by another client, please retry")
 		return
 	}
+	if errdefs.IsInvalidParameter(err) {
+		writeProblem(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
 	slog.Error("failed to update "+resource, "error", err)
 	writeProblem(w, r, http.StatusInternalServerError, "failed to update "+resource)
 }
@@ -46,6 +50,7 @@ type scaleRequest struct {
 
 func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
 	var req scaleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -85,6 +90,7 @@ func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
 	var req updateImageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -147,6 +153,7 @@ type updateAvailabilityRequest struct {
 
 func (h *Handlers) HandleUpdateNodeAvailability(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
 	var req updateAvailabilityRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -255,6 +262,7 @@ func (h *Handlers) HandleGetServiceEnv(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
 	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json-patch+json") {
 		writeProblem(w, r, http.StatusUnsupportedMediaType, "Content-Type must be application/json-patch+json")
@@ -316,6 +324,7 @@ func (h *Handlers) HandleGetNodeLabels(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
 	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json-patch+json") {
 		writeProblem(w, r, http.StatusUnsupportedMediaType, "Content-Type must be application/json-patch+json")
@@ -376,13 +385,14 @@ func (h *Handlers) HandleGetServiceResources(w http.ResponseWriter, r *http.Requ
 
 func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
 	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/merge-patch+json") {
 		writeProblem(w, r, http.StatusUnsupportedMediaType, "Content-Type must be application/merge-patch+json")
 		return
 	}
 
-	patchBytes, err := io.ReadAll(io.LimitReader(r.Body, 1<<20)) // 1 MB limit
+	patchBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
 		return
