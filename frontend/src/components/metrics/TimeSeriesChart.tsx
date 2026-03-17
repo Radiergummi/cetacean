@@ -4,6 +4,7 @@ import { getChartColor } from "../../lib/chartColors";
 import { CHART_TOOLTIP_CLASS } from "../../lib/chartTooltip";
 import { formatMetricValue } from "../../lib/formatMetricValue";
 import { generateMockSeries } from "../../lib/mockChartData";
+import { useMatchesBreakpoint } from "../../hooks/useMatchesBreakpoint";
 import { useChartSync } from "./ChartSyncProvider";
 import { useMetricsPanelContext } from "./MetricsPanelContext";
 import {
@@ -647,6 +648,8 @@ export default function TimeSeriesChart({
     [chartId, sync, setIsolatedIndex],
   );
 
+  const isMobile = useMatchesBreakpoint("md", "below");
+
   const options = useMemo<ChartOptions<"line">>(
     () => ({
       responsive: true,
@@ -672,7 +675,7 @@ export default function TimeSeriesChart({
         zoom: {
           zoom: {
             drag: {
-              enabled: true,
+              enabled: !isMobile,
               backgroundColor: "rgba(100, 143, 255, 0.1)",
               borderColor: "rgba(100, 143, 255, 0.3)",
               borderWidth: 1,
@@ -708,7 +711,7 @@ export default function TimeSeriesChart({
         point: { radius: 0 },
       },
     }),
-    [yMin, suggestedMax, stacked],
+    [yMin, suggestedMax, stacked, isMobile],
   );
 
   const plugins = useMemo(
