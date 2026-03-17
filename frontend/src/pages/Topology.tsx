@@ -27,8 +27,7 @@ const physicalNodeTypes = { physicalNode: PhysicalNodeCard };
 
 type View = "logical" | "physical";
 
-function StackLegend({ stackColors }: { stackColors: Map<string, string> }) {
-  const isMobile = useMatchesBreakpoint("md", "below");
+function StackLegend({ stackColors, isMobile }: { stackColors: Map<string, string>; isMobile: boolean }) {
   const [open, setOpen] = useState(!isMobile);
 
   if (stackColors.size === 0) return null;
@@ -173,7 +172,7 @@ function LogicalView({ data }: { data: NetworkTopology }) {
         >
           <Background />
         </ReactFlow>
-        <StackLegend stackColors={stackColors} />
+        <StackLegend stackColors={stackColors} isMobile={isMobile} />
       </div>
     </HighlightProvider>
   );

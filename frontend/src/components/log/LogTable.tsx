@@ -315,7 +315,7 @@ function VirtualLogBody({
 
   const virtualItems = virtualizer.getVirtualItems();
   const totalSize = virtualizer.getTotalSize();
-  const colCount = showAttrs ? 4 : 3;
+  const colCount = showAttrs && !isMobile ? 4 : 3;
 
   return (
     <tbody>

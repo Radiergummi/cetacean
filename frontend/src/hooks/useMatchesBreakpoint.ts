@@ -19,7 +19,6 @@ export function useMatchesBreakpoint(
 
   useEffect(() => {
     const mql = matchMedia(query);
-    setMatches(mql.matches);
     const handler = (e: { matches: boolean }) => setMatches(e.matches);
     mql.addEventListener("change", handler);
     return () => mql.removeEventListener("change", handler);
