@@ -280,4 +280,20 @@ export const api = {
   updateNodeAvailability: (id: string, availability: "active" | "drain" | "pause") =>
     put<{ node: Node }>(`/nodes/${id}/availability`, { availability }),
   removeTask: (id: string) => del(`/tasks/${id}`),
+
+  // Tier 2: sub-resource GETs
+  serviceEnv: (id: string, signal?: AbortSignal) =>
+    fetchJSON<Record<string, string>>(`/services/${id}/env`, signal),
+  nodeLabels: (id: string, signal?: AbortSignal) =>
+    fetchJSON<Record<string, string>>(`/nodes/${id}/labels`, signal),
+  serviceResources: (id: string, signal?: AbortSignal) =>
+    fetchJSON<Record<string, unknown>>(`/services/${id}/resources`, signal),
+
+  // Tier 2: sub-resource PATCHes
+  patchServiceEnv: (id: string, ops: Array<{ op: string; path: string; value?: string }>) =>
+    patch<Record<string, string>>(`/services/${id}/env`, ops, "application/json-patch+json"),
+  patchNodeLabels: (id: string, ops: Array<{ op: string; path: string; value?: string }>) =>
+    patch<Record<string, string>>(`/nodes/${id}/labels`, ops, "application/json-patch+json"),
+  patchServiceResources: (id: string, partial: unknown) =>
+    patch<Record<string, unknown>>(`/services/${id}/resources`, partial, "application/merge-patch+json"),
 };

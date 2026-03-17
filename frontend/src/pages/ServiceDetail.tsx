@@ -20,7 +20,7 @@ import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { formatBytes } from "../lib/formatBytes";
 import { formatNs } from "../lib/formatNs";
 import { escapePromQL } from "../lib/utils";
-import { ArrowRight, Globe, ImageIcon, RefreshCw, RotateCcw, Shuffle } from "lucide-react";
+import { ArrowRight, Globe, ImageIcon, Pencil, Plus, RefreshCw, RotateCcw, Shuffle, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -30,6 +30,8 @@ export default function ServiceDetail() {
   const [changes, setChanges] = useState<SpecChange[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [envVars, setEnvVars] = useState<Record<string, string> | null>(null);
+  const [serviceResources, setServiceResources] = useState<Record<string, unknown> | null>(null);
   const monitoring = useMonitoringStatus();
   const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
   const hasCadvisor = !!monitoring?.cadvisor?.targets;
@@ -57,6 +59,14 @@ export default function ServiceDetail() {
     api
       .history({ resourceId: id, limit: 10 })
       .then(setHistory)
+      .catch(() => {});
+    api
+      .serviceEnv(id)
+      .then(setEnvVars)
+      .catch(() => {});
+    api
+      .serviceResources(id)
+      .then(setServiceResources)
       .catch(() => {});
   }, [id]);
 
@@ -259,6 +269,15 @@ export default function ServiceDetail() {
         </CollapsibleSection>
       )}
 
+      {/* Resources editor */}
+      {serviceResources !== null && (
+        <ResourcesEditor
+          serviceId={id!}
+          resources={serviceResources}
+          onSaved={setServiceResources}
+        />
+      )}
+
       {/* Container configuration */}
       {hasContainerConfig && (
         <CollapsibleSection
@@ -285,28 +304,12 @@ export default function ServiceDetail() {
       )}
 
       {/* Environment variables */}
-      {containerSpec.Env && containerSpec.Env.length > 0 && (
-        <CollapsibleSection
-          title="Environment Variables"
-          defaultOpen={false}
-        >
-          <SimpleTable
-            columns={["Variable", "Value"]}
-            items={containerSpec.Env}
-            keyFn={(env) => env}
-            renderRow={(env) => {
-              const eqIdx = env.indexOf("=");
-              const key = eqIdx >= 0 ? env.slice(0, eqIdx) : env;
-              const val = eqIdx >= 0 ? env.slice(eqIdx + 1) : "";
-              return (
-                <>
-                  <td className="p-3 font-mono text-xs">{key}</td>
-                  <td className="p-3 font-mono text-xs break-all">{val}</td>
-                </>
-              );
-            }}
-          />
-        </CollapsibleSection>
+      {envVars !== null && (
+        <EnvEditor
+          serviceId={id!}
+          envVars={envVars}
+          onSaved={setEnvVars}
+        />
       )}
 
       {/* Healthcheck */}
@@ -1342,6 +1345,422 @@ function DeploymentChanges({
         ))}
       </div>
     </div>
+  );
+}
+
+function EnvEditor({
+  serviceId,
+  envVars,
+  onSaved,
+}: {
+  serviceId: string;
+  envVars: Record<string, string>;
+  onSaved: (updated: Record<string, string>) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [newKey, setNewKey] = useState("");
+  const [newVal, setNewVal] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  function openEdit() {
+    setDraft({ ...envVars });
+    setNewKey("");
+    setNewVal("");
+    setSaveError(null);
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+    setSaveError(null);
+  }
+
+  function addRow() {
+    const k = newKey.trim();
+    if (!k) return;
+    setDraft((prev) => ({ ...prev, [k]: newVal }));
+    setNewKey("");
+    setNewVal("");
+  }
+
+  function removeRow(key: string) {
+    if (!window.confirm(`Remove env var "${key}"?`)) return;
+    setDraft((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }
+
+  async function save() {
+    // Build JSON Patch ops
+    const ops: Array<{ op: string; path: string; value?: string }> = [];
+    const original = envVars;
+
+    // Removed keys
+    for (const k of Object.keys(original)) {
+      if (!(k in draft)) {
+        ops.push({ op: "remove", path: `/${k}` });
+      }
+    }
+    // Added / replaced keys
+    for (const [k, v] of Object.entries(draft)) {
+      if (!(k in original)) {
+        ops.push({ op: "add", path: `/${k}`, value: v });
+      } else if (original[k] !== v) {
+        ops.push({ op: "replace", path: `/${k}`, value: v });
+      }
+    }
+    if (ops.length === 0) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const updated = await api.patchServiceEnv(serviceId, ops);
+      onSaved(updated);
+      setEditing(false);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const entries = Object.entries(envVars).sort(([a], [b]) => a.localeCompare(b));
+  const draftEntries = Object.entries(draft).sort(([a], [b]) => a.localeCompare(b));
+
+  const controls = !editing ? (
+    <button
+      type="button"
+      onClick={openEdit}
+      className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs font-medium hover:bg-accent"
+    >
+      <Pencil className="h-3 w-3" />
+      Edit
+    </button>
+  ) : null;
+
+  return (
+    <CollapsibleSection
+      title="Environment Variables"
+      defaultOpen={false}
+      controls={controls}
+    >
+      {!editing ? (
+        entries.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No environment variables.</p>
+        ) : (
+          <SimpleTable
+            columns={["Variable", "Value"]}
+            items={entries}
+            keyFn={([k]) => k}
+            renderRow={([k, v]) => (
+              <>
+                <td className="p-3 font-mono text-xs">{k}</td>
+                <td className="p-3 font-mono text-xs break-all">{v}</td>
+              </>
+            )}
+          />
+        )
+      ) : (
+        <div className="space-y-3">
+          <div className="overflow-x-auto rounded-lg border">
+            <table className="w-full min-w-max whitespace-nowrap">
+              <thead className="sticky top-0 z-10 bg-background">
+                <tr className="border-b bg-muted/50">
+                  <th className="p-3 text-left text-sm font-medium">Variable</th>
+                  <th className="p-3 text-left text-sm font-medium">Value</th>
+                  <th className="p-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {draftEntries.map(([k, v]) => (
+                  <tr key={k} className="border-b last:border-b-0">
+                    <td className="p-3 font-mono text-xs">{k}</td>
+                    <td className="p-2">
+                      <input
+                        type="text"
+                        value={v}
+                        onChange={(e) => setDraft((prev) => ({ ...prev, [k]: e.target.value }))}
+                        className="w-full rounded border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                      />
+                    </td>
+                    <td className="p-2">
+                      <button
+                        type="button"
+                        onClick={() => removeRow(k)}
+                        className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-red-600"
+                        title="Remove"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                <tr>
+                  <td className="p-2">
+                    <input
+                      type="text"
+                      value={newKey}
+                      onChange={(e) => setNewKey(e.target.value)}
+                      placeholder="NEW_VAR"
+                      className="w-full rounded border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  </td>
+                  <td className="p-2">
+                    <input
+                      type="text"
+                      value={newVal}
+                      onChange={(e) => setNewVal(e.target.value)}
+                      placeholder="value"
+                      onKeyDown={(e) => { if (e.key === "Enter") addRow(); }}
+                      className="w-full rounded border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  </td>
+                  <td className="p-2">
+                    <button
+                      type="button"
+                      onClick={addRow}
+                      disabled={!newKey.trim()}
+                      className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
+                      title="Add"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={saving}
+              className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+            >
+              {saving && <Spinner />}
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={cancelEdit}
+              disabled={saving}
+              className="inline-flex items-center gap-1 rounded border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+            >
+              <X className="h-3 w-3" />
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </CollapsibleSection>
+  );
+}
+
+interface ServiceResourceShape {
+  limits?: { nanoCPUs?: number; memoryBytes?: number; pids?: number };
+  reservations?: { nanoCPUs?: number; memoryBytes?: number };
+}
+
+function ResourcesEditor({
+  serviceId,
+  resources,
+  onSaved,
+}: {
+  serviceId: string;
+  resources: Record<string, unknown>;
+  onSaved: (updated: Record<string, unknown>) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const typed = resources as ServiceResourceShape;
+
+  const [limitCpu, setLimitCpu] = useState("");
+  const [limitMem, setLimitMem] = useState("");
+  const [resCpu, setResCpu] = useState("");
+  const [resMem, setResMem] = useState("");
+
+  function openEdit() {
+    setLimitCpu(typed.limits?.nanoCPUs != null ? String(typed.limits.nanoCPUs / 1e9) : "");
+    setLimitMem(typed.limits?.memoryBytes != null ? String(typed.limits.memoryBytes) : "");
+    setResCpu(typed.reservations?.nanoCPUs != null ? String(typed.reservations.nanoCPUs / 1e9) : "");
+    setResMem(typed.reservations?.memoryBytes != null ? String(typed.reservations.memoryBytes) : "");
+    setSaveError(null);
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+    setSaveError(null);
+  }
+
+  async function save() {
+    const patch: ServiceResourceShape = {};
+    if (limitCpu || limitMem) {
+      patch.limits = {};
+      if (limitCpu) patch.limits.nanoCPUs = Math.round(parseFloat(limitCpu) * 1e9);
+      if (limitMem) patch.limits.memoryBytes = parseInt(limitMem, 10);
+    }
+    if (resCpu || resMem) {
+      patch.reservations = {};
+      if (resCpu) patch.reservations.nanoCPUs = Math.round(parseFloat(resCpu) * 1e9);
+      if (resMem) patch.reservations.memoryBytes = parseInt(resMem, 10);
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const updated = await api.patchServiceResources(serviceId, patch);
+      onSaved(updated);
+      setEditing(false);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const hasResources =
+    typed.limits?.nanoCPUs ||
+    typed.limits?.memoryBytes ||
+    typed.reservations?.nanoCPUs ||
+    typed.reservations?.memoryBytes;
+
+  const controls = !editing ? (
+    <button
+      type="button"
+      onClick={openEdit}
+      className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs font-medium hover:bg-accent"
+    >
+      <Pencil className="h-3 w-3" />
+      Edit
+    </button>
+  ) : null;
+
+  return (
+    <CollapsibleSection
+      title="Resource Limits"
+      defaultOpen={false}
+      controls={controls}
+    >
+      {!editing ? (
+        !hasResources ? (
+          <p className="text-sm text-muted-foreground">No resource limits configured.</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+            {typed.limits?.nanoCPUs != null && (
+              <div>
+                <div className="text-xs text-muted-foreground">CPU Limit</div>
+                <div className="font-mono">{(typed.limits.nanoCPUs / 1e9).toFixed(2)} cores</div>
+              </div>
+            )}
+            {typed.limits?.memoryBytes != null && (
+              <div>
+                <div className="text-xs text-muted-foreground">Memory Limit</div>
+                <div className="font-mono">{formatBytes(typed.limits.memoryBytes)}</div>
+              </div>
+            )}
+            {typed.reservations?.nanoCPUs != null && (
+              <div>
+                <div className="text-xs text-muted-foreground">CPU Reserved</div>
+                <div className="font-mono">{(typed.reservations.nanoCPUs / 1e9).toFixed(2)} cores</div>
+              </div>
+            )}
+            {typed.reservations?.memoryBytes != null && (
+              <div>
+                <div className="text-xs text-muted-foreground">Memory Reserved</div>
+                <div className="font-mono">{formatBytes(typed.reservations.memoryBytes)}</div>
+              </div>
+            )}
+          </div>
+        )
+      ) : (
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-2 rounded-lg border p-3">
+              <h4 className="text-xs font-medium text-muted-foreground uppercase">Limits</h4>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">CPU (cores)</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={limitCpu}
+                  onChange={(e) => setLimitCpu(e.target.value)}
+                  placeholder="e.g. 0.5"
+                  className="rounded border bg-background px-2 py-1 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">Memory (bytes)</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={limitMem}
+                  onChange={(e) => setLimitMem(e.target.value)}
+                  placeholder="e.g. 536870912"
+                  className="rounded border bg-background px-2 py-1 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </label>
+            </div>
+            <div className="space-y-2 rounded-lg border p-3">
+              <h4 className="text-xs font-medium text-muted-foreground uppercase">Reservations</h4>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">CPU (cores)</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={resCpu}
+                  onChange={(e) => setResCpu(e.target.value)}
+                  placeholder="e.g. 0.25"
+                  className="rounded border bg-background px-2 py-1 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">Memory (bytes)</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={resMem}
+                  onChange={(e) => setResMem(e.target.value)}
+                  placeholder="e.g. 268435456"
+                  className="rounded border bg-background px-2 py-1 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </label>
+            </div>
+          </div>
+          {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={saving}
+              className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+            >
+              {saving && <Spinner />}
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={cancelEdit}
+              disabled={saving}
+              className="inline-flex items-center gap-1 rounded border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+            >
+              <X className="h-3 w-3" />
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </CollapsibleSection>
   );
 }
 
