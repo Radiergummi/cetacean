@@ -4,7 +4,7 @@
 
 **Goal:** Add targeted write operations (scale, image update, rollback, restart, drain, task removal) to the Cetacean dashboard, with inline UI actions and command palette integration.
 
-**Architecture:** Action-oriented POST sub-resource routes on the existing REST API. Mutations go through Docker Engine API; the existing watcher→cache→SSE pipeline propagates updates to all clients. Frontend uses separate `post`/`del` helpers and waits for SSE confirmation rather than optimistic updates.
+**Architecture:** Sub-resource routes with method-per-semantics: PUT for idempotent replacements, POST for non-idempotent actions, PATCH with RFC 6902 (JSON Patch) / RFC 7396 (Merge Patch) for partial updates, DELETE for removal. Mutations go through Docker Engine API; the existing watcher→cache→SSE pipeline propagates updates to all clients. Frontend uses `put`/`post`/`patch`/`del` helpers and waits for SSE confirmation rather than optimistic updates.
 
 **Tech Stack:** Go stdlib `net/http`, Docker Engine SDK, React 19, TypeScript, Tailwind CSS, shadcn/ui
 
@@ -270,7 +270,7 @@ func TestHandleScaleService_OK(t *testing.T) {
 
 	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
 	body := `{"replicas": 5}`
-	req := httptest.NewRequest("POST", "/services/svc1/scale", strings.NewReader(body))
+	req := httptest.NewRequest("PUT", "/services/svc1/scale", strings.NewReader(body))
 	req.SetPathValue("id", "svc1")
 	w := httptest.NewRecorder()
 	h.HandleScaleService(w, req)
@@ -285,7 +285,7 @@ func TestHandleScaleService_NotFound(t *testing.T) {
 	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
 
 	body := `{"replicas": 5}`
-	req := httptest.NewRequest("POST", "/services/missing/scale", strings.NewReader(body))
+	req := httptest.NewRequest("PUT", "/services/missing/scale", strings.NewReader(body))
 	req.SetPathValue("id", "missing")
 	w := httptest.NewRecorder()
 	h.HandleScaleService(w, req)
@@ -304,7 +304,7 @@ func TestHandleScaleService_GlobalMode(t *testing.T) {
 
 	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
 	body := `{"replicas": 5}`
-	req := httptest.NewRequest("POST", "/services/svc-global/scale", strings.NewReader(body))
+	req := httptest.NewRequest("PUT", "/services/svc-global/scale", strings.NewReader(body))
 	req.SetPathValue("id", "svc-global")
 	w := httptest.NewRecorder()
 	h.HandleScaleService(w, req)
@@ -323,7 +323,7 @@ func TestHandleScaleService_InvalidBody(t *testing.T) {
 	})
 
 	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
-	req := httptest.NewRequest("POST", "/services/svc1/scale", strings.NewReader("not json"))
+	req := httptest.NewRequest("PUT", "/services/svc1/scale", strings.NewReader("not json"))
 	req.SetPathValue("id", "svc1")
 	w := httptest.NewRecorder()
 	h.HandleScaleService(w, req)
@@ -418,7 +418,7 @@ In `internal/api/router.go`, add after the service routes (after line 50, the `G
 
 ```go
 	// Service write operations
-	mux.Handle("POST /services/{id}/scale", requireWrite(h.HandleScaleService))
+	mux.Handle("PUT /services/{id}/scale", requireWrite(h.HandleScaleService))
 ```
 
 - [ ] **Step 6: Run all tests to verify nothing broke**
@@ -430,7 +430,7 @@ Expected: All tests pass
 
 ```bash
 git add internal/api/write_handlers.go internal/api/write_handlers_test.go internal/api/router.go
-git commit -m "feat: add POST /services/{id}/scale endpoint"
+git commit -m "feat: add PUT /services/{id}/scale endpoint"
 ```
 
 ### Task 4: Frontend mutation helpers
@@ -438,16 +438,21 @@ git commit -m "feat: add POST /services/{id}/scale endpoint"
 **Files:**
 - Modify: `frontend/src/api/client.ts:31-54` (add post/del helpers)
 
-- [ ] **Step 1: Add post and del helpers to client.ts**
+- [ ] **Step 1: Add mutation helpers to client.ts**
 
-In `frontend/src/api/client.ts`, add after the `fetchJSON` function (after line 54):
+In `frontend/src/api/client.ts`, add after the `fetchJSON` function (after line 54). All helpers share the same error handling pattern as `fetchJSON` (401 redirect for OIDC, problem detail extraction):
 
 ```typescript
-async function post<T>(path: string, body?: unknown): Promise<T> {
+async function mutationFetch<T>(
+  path: string,
+  method: string,
+  body?: unknown,
+  contentType?: string,
+): Promise<T> {
   const h: Record<string, string> = { Accept: "application/json" };
-  if (body !== undefined) h["Content-Type"] = "application/json";
+  if (contentType) h["Content-Type"] = contentType;
   const res = await fetch(path, {
-    method: "POST",
+    method,
     headers: h,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
@@ -471,32 +476,24 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
     }
     throw new Error(message);
   }
+  if (res.status === 204) return undefined as T;
   return res.json();
 }
 
-async function del(path: string): Promise<void> {
-  const res = await fetch(path, {
-    method: "DELETE",
-    headers: { Accept: "application/json" },
-  });
-  if (!res.ok) {
-    if (
-      res.status === 401 &&
-      res.headers.get("WWW-Authenticate")?.startsWith("Bearer")
-    ) {
-      const redirect = encodeURIComponent(
-        window.location.pathname + window.location.search,
-      );
-      window.location.href = `/auth/login?redirect=${redirect}`;
-      return new Promise<void>(() => {});
-    }
-    let message = `${res.status} ${res.statusText}`;
-    try {
-      const body = await res.json();
-      if (body?.detail) message = body.detail;
-    } catch {}
-    throw new Error(message);
-  }
+function put<T>(path: string, body: unknown): Promise<T> {
+  return mutationFetch(path, "PUT", body, "application/json");
+}
+
+function post<T>(path: string): Promise<T> {
+  return mutationFetch(path, "POST");
+}
+
+function patch<T>(path: string, body: unknown, contentType: string): Promise<T> {
+  return mutationFetch(path, "PATCH", body, contentType);
+}
+
+function del(path: string): Promise<void> {
+  return mutationFetch(path, "DELETE");
 }
 ```
 
@@ -506,7 +503,7 @@ In the `api` object (around line 138), add at the end before the closing `}`:
 
 ```typescript
   scaleService: (id: string, replicas: number) =>
-    post<ServiceDetail>(`/services/${id}/scale`, { replicas }),
+    put<ServiceDetail>(`/services/${id}/scale`, { replicas }),
 ```
 
 - [ ] **Step 3: Verify frontend compiles**
@@ -518,7 +515,7 @@ Expected: No errors
 
 ```bash
 git add frontend/src/api/client.ts
-git commit -m "feat: add post/del mutation helpers and scaleService API method"
+git commit -m "feat: add put/post/patch/del mutation helpers and scaleService API method"
 ```
 
 ### Task 5: Scale action on service detail page
@@ -717,7 +714,7 @@ func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Reque
 In `router.go`, after the scale route:
 
 ```go
-	mux.Handle("POST /services/{id}/image", requireWrite(h.HandleUpdateServiceImage))
+	mux.Handle("PUT /services/{id}/image", requireWrite(h.HandleUpdateServiceImage))
 ```
 
 - [ ] **Step 6: Run tests**
@@ -729,7 +726,7 @@ Expected: All pass
 
 ```bash
 git add internal/api/handlers.go internal/docker/client.go internal/api/write_handlers.go internal/api/write_handlers_test.go internal/api/router.go
-git commit -m "feat: add POST /services/{id}/image endpoint"
+git commit -m "feat: add PUT /services/{id}/image endpoint"
 ```
 
 ### Task 8: RollbackService
@@ -842,7 +839,7 @@ In the `api` object in `client.ts`:
 
 ```typescript
   updateServiceImage: (id: string, image: string) =>
-    post<ServiceDetail>(`/services/${id}/image`, { image }),
+    put<ServiceDetail>(`/services/${id}/image`, { image }),
   rollbackService: (id: string) =>
     post<ServiceDetail>(`/services/${id}/rollback`),
   restartService: (id: string) =>
@@ -913,13 +910,13 @@ Validate that `availability` is one of `"active"`, `"drain"`, `"pause"`. Map str
 - [ ] **Step 5: Register route**
 
 ```go
-	mux.Handle("POST /nodes/{id}/availability", requireWrite(h.HandleUpdateNodeAvailability))
+	mux.Handle("PUT /nodes/{id}/availability", requireWrite(h.HandleUpdateNodeAvailability))
 ```
 
 - [ ] **Step 6: Run tests, commit**
 
 ```bash
-git commit -m "feat: add POST /nodes/{id}/availability endpoint"
+git commit -m "feat: add PUT /nodes/{id}/availability endpoint"
 ```
 
 ### Task 12: RemoveTask (force-kill backing container)
@@ -979,7 +976,7 @@ git commit -m "feat: add DELETE /tasks/{id} endpoint (force-remove via container
 
 ```typescript
   updateNodeAvailability: (id: string, availability: "active" | "drain" | "pause") =>
-    post<{ node: Node }>(`/nodes/${id}/availability`, { availability }),
+    put<{ node: Node }>(`/nodes/${id}/availability`, { availability }),
   removeTask: (id: string) => del(`/tasks/${id}`),
 ```
 
@@ -1184,82 +1181,248 @@ git commit -m "feat: integrate write actions into command palette"
 
 ---
 
-## Chunk 5: Tier 2 Operations (Node Labels, Service Env, Service Resources)
+## Chunk 5: Tier 2 Sub-Resource Endpoints (JSON Patch / Merge Patch)
 
-### Task 16: UpdateNodeLabels
+### Task 16: JSON Patch infrastructure
 
-**Files:** Same backend pattern as previous tasks.
+**Files:**
+- Create: `internal/api/jsonpatch.go` (JSON Patch application for flat maps)
+- Create: `internal/api/jsonpatch_test.go`
 
-- [ ] **Step 1: Add to interface**
+- [ ] **Step 1: Write failing tests for JSON Patch on flat maps**
+
+Test cases:
+- `add` new key → key added
+- `replace` existing key → value updated
+- `remove` existing key → key removed
+- `test` matching value → passes (no error)
+- `test` non-matching value → returns error (handler maps to 409)
+- `move` → returns error (unsupported, handler maps to 400)
+- `copy` → returns error (unsupported, handler maps to 400)
+- Path with leading slash (`/FOO`) → works
+- Path without leading slash (`FOO`) → also works (convenience)
+- `add` to existing key → acts as replace (per RFC 6902 §4.1)
+- `remove` non-existent key → returns error (per RFC 6902 §4.2)
+- Empty patch array → no-op, returns original map
+
+- [ ] **Step 2: Implement applyJSONPatch**
 
 ```go
-UpdateNodeLabels(ctx context.Context, id string, set map[string]string, remove []string) (swarm.Node, error)
+package api
+
+import "fmt"
+
+type PatchOp struct {
+	Op    string `json:"op"`
+	Path  string `json:"path"`
+	Value string `json:"value,omitempty"`
+}
+
+// normalizePath strips a leading "/" if present, for convenience on flat maps.
+func normalizePath(p string) string {
+	if len(p) > 0 && p[0] == '/' {
+		return p[1:]
+	}
+	return p
+}
+
+// applyJSONPatch applies RFC 6902 operations to a flat string map.
+// Returns the updated map or an error. Supports add, remove, replace, test.
+func applyJSONPatch(m map[string]string, ops []PatchOp) (map[string]string, error) {
+	result := make(map[string]string, len(m))
+	for k, v := range m {
+		result[k] = v
+	}
+	for _, op := range ops {
+		key := normalizePath(op.Path)
+		if key == "" {
+			return nil, fmt.Errorf("empty path")
+		}
+		switch op.Op {
+		case "add":
+			result[key] = op.Value
+		case "remove":
+			if _, ok := result[key]; !ok {
+				return nil, fmt.Errorf("key %q does not exist", key)
+			}
+			delete(result, key)
+		case "replace":
+			if _, ok := result[key]; !ok {
+				return nil, fmt.Errorf("key %q does not exist", key)
+			}
+			result[key] = op.Value
+		case "test":
+			if v, ok := result[key]; !ok {
+				return nil, &testFailedError{key: key, expected: op.Value, actual: "(missing)"}
+			} else if v != op.Value {
+				return nil, &testFailedError{key: key, expected: op.Value, actual: v}
+			}
+		default:
+			return nil, fmt.Errorf("unsupported operation %q", op.Op)
+		}
+	}
+	return result, nil
+}
+
+type testFailedError struct {
+	key, expected, actual string
+}
+
+func (e *testFailedError) Error() string {
+	return fmt.Sprintf("test failed for %q: expected %q, got %q", e.key, e.expected, e.actual)
+}
 ```
 
-- [ ] **Step 2: Implement Docker client, handler, tests, route**
+- [ ] **Step 3: Run tests**
 
-Route: `POST /nodes/{id}/labels`
-Body: `{"set": {"key": "val"}, "remove": ["key2"]}`
-
-- [ ] **Step 3: Frontend API method + labels edit UI on node detail page**
+Run: `go test ./internal/api/ -count=1 -run TestApplyJSONPatch`
+Expected: All pass
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git commit -m "feat: add POST /nodes/{id}/labels endpoint and UI"
+git add internal/api/jsonpatch.go internal/api/jsonpatch_test.go
+git commit -m "feat: add RFC 6902 JSON Patch implementation for flat string maps"
 ```
 
-### Task 17: UpdateServiceEnv
+### Task 17: Service env sub-resource (GET + PATCH)
 
-- [ ] **Step 1: Add to interface**
+**Files:**
+- Modify: `internal/api/handlers.go` (extend DockerWriteClient for env)
+- Modify: `internal/docker/client.go` (add UpdateServiceEnv method)
+- Modify: `internal/api/write_handlers.go` (add GET + PATCH handlers)
+- Modify: `internal/api/write_handlers_test.go` (add tests)
+- Modify: `internal/api/router.go` (add routes)
+
+- [ ] **Step 1: Add GET handler for service env**
+
+The GET handler reads env vars from cache, converts `[]string` (`KEY=VALUE` format) to `map[string]string`, and returns it as a JSON-LD sub-resource.
+
+- [ ] **Step 2: Add PATCH handler for service env**
+
+The PATCH handler:
+1. Validates `Content-Type: application/json-patch+json` (return 415 if wrong)
+2. Decodes `[]PatchOp` from body
+3. GETs current env from cache (as map)
+4. Applies `applyJSONPatch` — map `testFailedError` to 409, unsupported op to 400, other errors to 400
+5. Calls `h.writeClient.UpdateServiceEnv(ctx, id, updatedMap)` which converts back to `[]string`
+6. Returns updated env map with `writeJSON`
+
+- [ ] **Step 3: Add Docker client method**
 
 ```go
-UpdateServiceEnv(ctx context.Context, id string, set map[string]string, remove []string) (swarm.Service, error)
+// UpdateServiceEnv replaces the service's env vars with the given map.
+func (c *Client) UpdateServiceEnv(ctx context.Context, id string, env map[string]string) (swarm.Service, error) {
+	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	envSlice := make([]string, 0, len(env))
+	for k, v := range env {
+		envSlice = append(envSlice, k+"="+v)
+	}
+	sort.Strings(envSlice) // deterministic order
+	svc.Spec.TaskTemplate.ContainerSpec.Env = envSlice
+	_, err = c.docker.ServiceUpdate(ctx, svc.ID, svc.Version, svc.Spec, swarm.ServiceUpdateOptions{})
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	return c.InspectService(ctx, id)
+}
 ```
 
-- [ ] **Step 2: Implement**
+- [ ] **Step 4: Write tests**
 
-Docker stores env vars as `[]string` in format `KEY=VALUE` on `svc.Spec.TaskTemplate.ContainerSpec.Env`. The method must merge `set` values and remove `remove` keys from this slice.
+Tests: GET returns map, PATCH add/remove/replace works, wrong Content-Type → 415, test failure → 409, not found → 404.
 
-- [ ] **Step 3: Handler, tests, route**
+- [ ] **Step 5: Register routes**
 
-Route: `POST /services/{id}/env`
+```go
+mux.HandleFunc("GET /services/{id}/env", contentNegotiated(h.HandleGetServiceEnv, spa))
+mux.Handle("PATCH /services/{id}/env", requireWrite(h.HandlePatchServiceEnv))
+```
 
-- [ ] **Step 4: Frontend API method + UI**
+- [ ] **Step 6: Frontend API methods**
 
+```typescript
+serviceEnv: (id: string) => fetchJSON<Record<string, string>>(`/services/${id}/env`),
+patchServiceEnv: (id: string, ops: Array<{op: string; path: string; value?: string}>) =>
+  patch<Record<string, string>>(`/services/${id}/env`, ops, "application/json-patch+json"),
+```
+
+- [ ] **Step 7: Run tests, commit**
+
+```bash
+git commit -m "feat: add GET/PATCH /services/{id}/env with RFC 6902 JSON Patch"
+```
+
+### Task 18: Node labels sub-resource (GET + PATCH)
+
+**Files:** Same pattern as Task 17 but simpler — labels are already `map[string]string` in Docker, no `KEY=VALUE` conversion needed.
+
+- [ ] **Step 1: Add GET handler** — reads `node.Spec.Labels` from cache
+- [ ] **Step 2: Add PATCH handler** — same as env but calls `UpdateNodeLabels`
+- [ ] **Step 3: Add Docker client method**
+
+```go
+func (c *Client) UpdateNodeLabels(ctx context.Context, id string, labels map[string]string) (swarm.Node, error) {
+	node, _, err := c.docker.NodeInspectWithRaw(ctx, id)
+	if err != nil {
+		return swarm.Node{}, err
+	}
+	node.Spec.Labels = labels
+	err = c.docker.NodeUpdate(ctx, node.ID, node.Version, node.Spec)
+	if err != nil {
+		return swarm.Node{}, err
+	}
+	return c.InspectNode(ctx, id)
+}
+```
+
+- [ ] **Step 4: Register routes, frontend API, tests**
 - [ ] **Step 5: Commit**
 
 ```bash
-git commit -m "feat: add POST /services/{id}/env endpoint and UI"
+git commit -m "feat: add GET/PATCH /nodes/{id}/labels with RFC 6902 JSON Patch"
 ```
 
-### Task 18: UpdateServiceResources
+### Task 19: Service resources sub-resource (GET + PATCH with Merge Patch)
 
-- [ ] **Step 1: Add to interface**
+**Files:** Same backend pattern.
 
-```go
-UpdateServiceResources(ctx context.Context, id string, limits, reservations *swarm.Resources) (swarm.Service, error)
-```
+- [ ] **Step 1: Add GET handler** — reads `svc.Spec.TaskTemplate.Resources` from cache, returns `{limits, reservations}`
+- [ ] **Step 2: Add PATCH handler**
 
-- [ ] **Step 2: Implement**
+This handler uses RFC 7396 JSON Merge Patch:
+1. Validates `Content-Type: application/merge-patch+json` (return 415 if wrong)
+2. Decodes partial JSON object from body
+3. Merges with current resources (null = delete field)
+4. Calls `h.writeClient.UpdateServiceResources(ctx, id, merged)`
+5. Returns updated resources with `writeJSON`
 
-Updates `svc.Spec.TaskTemplate.Resources.Limits` and/or `svc.Spec.TaskTemplate.Resources.Reservations`. Either field can be nil (meaning "don't change").
+Use `encoding/json` merge semantics: unmarshal patch on top of current value.
 
-- [ ] **Step 3: Handler, tests, route**
-
-Route: `POST /services/{id}/resources`
-
-- [ ] **Step 4: Frontend API method + UI**
-
-- [ ] **Step 5: Commit**
+- [ ] **Step 3: Add Docker client method, register routes, frontend API, tests**
+- [ ] **Step 4: Commit**
 
 ```bash
-git commit -m "feat: add POST /services/{id}/resources endpoint and UI"
+git commit -m "feat: add GET/PATCH /services/{id}/resources with RFC 7396 JSON Merge Patch"
 ```
 
-### Task 19: Final OpenAPI + CLAUDE.md update
+### Task 20: Env and labels edit UI on detail pages
 
-- [ ] **Step 1: Add all remaining endpoints to openapi.yaml**
+- [ ] **Step 1: Add env editor on service detail page** — table with add/edit/remove buttons that construct JSON Patch ops
+- [ ] **Step 2: Add labels editor on node detail page** — same pattern
+- [ ] **Step 3: Add resources editor on service detail page** — form for limits/reservations
+- [ ] **Step 4: Commit**
+
+```bash
+git commit -m "feat: add env, labels, and resources editors on detail pages"
+```
+
+### Task 21: Final OpenAPI + CLAUDE.md update
+
+- [ ] **Step 1: Add all remaining endpoints to openapi.yaml** — include `application/json-patch+json` and `application/merge-patch+json` content types
 - [ ] **Step 2: Update CLAUDE.md with complete write operation documentation**
 - [ ] **Step 3: Commit**
 
