@@ -43,11 +43,16 @@ type DockerSystemClient interface {
 	LocalNodeID(ctx context.Context) (string, error)
 }
 
+type DockerWriteClient interface {
+	ScaleService(ctx context.Context, id string, replicas uint64) (swarm.Service, error)
+}
+
 type Handlers struct {
 	cache         *cache.Cache
 	broadcaster   *Broadcaster
 	dockerClient  DockerLogStreamer
 	systemClient  DockerSystemClient
+	writeClient   DockerWriteClient
 	ready         <-chan struct{}
 	promClient    *PromClient
 	localNodeMu   sync.Mutex
@@ -55,8 +60,8 @@ type Handlers struct {
 	localNodeDone bool
 }
 
-func NewHandlers(c *cache.Cache, b *Broadcaster, dc DockerLogStreamer, sc DockerSystemClient, ready <-chan struct{}, promClient *PromClient) *Handlers {
-	return &Handlers{cache: c, broadcaster: b, dockerClient: dc, systemClient: sc, ready: ready, promClient: promClient}
+func NewHandlers(c *cache.Cache, b *Broadcaster, dc DockerLogStreamer, sc DockerSystemClient, wc DockerWriteClient, ready <-chan struct{}, promClient *PromClient) *Handlers {
+	return &Handlers{cache: c, broadcaster: b, dockerClient: dc, systemClient: sc, writeClient: wc, ready: ready, promClient: promClient}
 }
 
 func (h *Handlers) streamList(w http.ResponseWriter, r *http.Request, typ string) {

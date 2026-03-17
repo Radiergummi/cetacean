@@ -78,7 +78,7 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 		Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
 	})
 
-	h := NewHandlers(c, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
 	b := NewBroadcaster(0)
 	defer b.Close()
 	noopSPA := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

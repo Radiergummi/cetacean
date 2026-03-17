@@ -300,3 +300,19 @@ func (c *Client) Logs(ctx context.Context, kind LogKind, id string, tail string,
 		return nil, fmt.Errorf("unknown log kind: %d", kind)
 	}
 }
+
+func (c *Client) ScaleService(ctx context.Context, id string, replicas uint64) (swarm.Service, error) {
+	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	if svc.Spec.Mode.Replicated == nil {
+		return swarm.Service{}, fmt.Errorf("cannot scale a global-mode service")
+	}
+	svc.Spec.Mode.Replicated.Replicas = &replicas
+	_, err = c.docker.ServiceUpdate(ctx, svc.ID, svc.Version, svc.Spec, swarm.ServiceUpdateOptions{})
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	return c.InspectService(ctx, id)
+}
