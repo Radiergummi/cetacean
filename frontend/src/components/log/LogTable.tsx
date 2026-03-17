@@ -1,3 +1,4 @@
+import { useMatchesBreakpoint } from "../../hooks/useMatchesBreakpoint";
 import type { LogLine } from "./log-utils";
 import {
   formatTime,
@@ -33,6 +34,7 @@ export interface LogTableProps {
 function LogRow({
   line,
   showAttrs,
+  isMobile,
   wrapLines,
   search,
   caseSensitive,
@@ -48,6 +50,7 @@ function LogRow({
 }: {
   line: LogLine;
   showAttrs: boolean;
+  isMobile: boolean;
   wrapLines: boolean;
   search: string;
   caseSensitive: boolean;
@@ -99,7 +102,7 @@ function LogRow({
       >
         {formatTime(line.timestamp)}
       </td>
-      {showAttrs && (
+      {showAttrs && !isMobile && (
         <td
           className="py-px pe-2 align-top font-mono whitespace-nowrap"
           title={
@@ -158,6 +161,7 @@ export function LogTable({
   pinnedLines,
   onTogglePin,
 }: LogTableProps) {
+  const isMobile = useMatchesBreakpoint("md", "below");
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
   const useVirtual = filtered.length > LOG_VIRTUAL_THRESHOLD;
 
@@ -219,6 +223,7 @@ export function LogTable({
             containerRef={containerRef}
             filtered={filtered}
             showAttrs={showAttrs}
+            isMobile={isMobile}
             wrapLines={wrapLines}
             search={search}
             caseSensitive={caseSensitive}
@@ -239,6 +244,7 @@ export function LogTable({
                 key={line.index}
                 line={line}
                 showAttrs={showAttrs}
+                isMobile={isMobile}
                 wrapLines={wrapLines}
                 search={search}
                 caseSensitive={caseSensitive}
@@ -262,6 +268,7 @@ function VirtualLogBody({
   containerRef,
   filtered,
   showAttrs,
+  isMobile,
   wrapLines,
   search,
   caseSensitive,
@@ -278,6 +285,7 @@ function VirtualLogBody({
   containerRef: RefObject<HTMLDivElement | null>;
   filtered: LogLine[];
   showAttrs: boolean;
+  isMobile: boolean;
   wrapLines: boolean;
   search: string;
   caseSensitive: boolean;
@@ -328,6 +336,7 @@ function VirtualLogBody({
             key={line.index}
             line={line}
             showAttrs={showAttrs}
+            isMobile={isMobile}
             wrapLines={wrapLines}
             search={search}
             caseSensitive={caseSensitive}

@@ -1,3 +1,4 @@
+import { useMatchesBreakpoint } from "../../hooks/useMatchesBreakpoint";
 import { SectionToggle, useSectionCollapse } from "../CollapsibleSection";
 import { Spinner } from "../Spinner";
 import type { LogLine } from "./log-utils";
@@ -36,7 +37,8 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
   const isTask = !!taskId;
 
   const { open, toggle: toggleCollapse } = useSectionCollapse(header ? String(header) : "Logs");
-  const [wrapLines, setWrapLines] = useState(false);
+  const isMobile = useMatchesBreakpoint("md", "below");
+  const [wrapLines, setWrapLines] = useState(isMobile);
   const [streamFilter, setStreamFilter] = useState<"all" | "stdout" | "stderr">("all");
   const [pinnedLines, setPinnedLines] = useState<LogLine[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -174,7 +176,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
           active={wrapLines}
         />
 
-        <div className="mx-0.5 h-5 w-px bg-border" />
+        <div className="mx-0.5 hidden h-5 w-px bg-border md:block" />
 
         <StreamFilterToggle
           value={streamFilter}
@@ -185,7 +187,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
           onChange={setLevelFilter}
         />
 
-        <div className="mx-0.5 h-5 w-px bg-border" />
+        <div className="mx-0.5 hidden h-5 w-px bg-border md:block" />
 
         <ToolbarButton
           onClick={copyLogs}
@@ -198,7 +200,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
           icon={<Download className="size-3.5" />}
         />
 
-        <div className="mx-0.5 h-5 w-px bg-border" />
+        <div className="mx-0.5 hidden h-5 w-px bg-border md:block" />
 
         {/* Search */}
         <div className="relative flex items-center">
@@ -209,7 +211,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Filter logs..."
-            className="h-8 w-56 rounded-md border bg-background pr-16 pl-7 font-mono text-xs"
+            className="h-8 w-56 max-w-full rounded-md border bg-background pr-16 pl-7 font-mono text-xs"
             onKeyDown={(event) => {
               if (event.key === "Escape") {
                 setSearch("");
