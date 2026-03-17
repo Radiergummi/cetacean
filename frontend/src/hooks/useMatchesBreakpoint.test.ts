@@ -1,6 +1,6 @@
+import { useMatchesBreakpoint } from "./useMatchesBreakpoint";
 import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { useMatchesBreakpoint } from "./useMatchesBreakpoint";
 
 let listeners: Array<(e: { matches: boolean }) => void> = [];
 let currentMatches = false;
@@ -8,16 +8,19 @@ let currentMatches = false;
 beforeEach(() => {
   listeners = [];
   currentMatches = false;
-  vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
-    matches: currentMatches,
-    media: query,
-    addEventListener: (_: string, cb: (e: { matches: boolean }) => void) => {
-      listeners.push(cb);
-    },
-    removeEventListener: (_: string, cb: (e: { matches: boolean }) => void) => {
-      listeners = listeners.filter((l) => l !== cb);
-    },
-  })));
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn((query: string) => ({
+      matches: currentMatches,
+      media: query,
+      addEventListener: (_: string, cb: (e: { matches: boolean }) => void) => {
+        listeners.push(cb);
+      },
+      removeEventListener: (_: string, cb: (e: { matches: boolean }) => void) => {
+        listeners = listeners.filter((l) => l !== cb);
+      },
+    })),
+  );
 });
 
 afterEach(() => vi.restoreAllMocks());

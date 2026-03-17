@@ -1,7 +1,7 @@
+import { useMatchesBreakpoint } from "./useMatchesBreakpoint";
 import { useViewMode } from "./useViewMode";
 import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { useMatchesBreakpoint } from "./useMatchesBreakpoint";
 
 vi.mock("./useMatchesBreakpoint", () => ({
   useMatchesBreakpoint: vi.fn(() => false),

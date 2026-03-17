@@ -13,10 +13,7 @@ export function useMatchesBreakpoint(
   direction: "above" | "below",
 ): boolean {
   const px = BREAKPOINTS[breakpoint];
-  const query =
-    direction === "below"
-      ? `(max-width: ${px - 1}px)`
-      : `(min-width: ${px}px)`;
+  const query = direction === "below" ? `(max-width: ${px - 1}px)` : `(min-width: ${px}px)`;
 
   const [matches, setMatches] = useState(() => matchMedia(query).matches);
 
