@@ -698,6 +698,47 @@ function updateConfigRows(cfg: UpdateConfigShape) {
   ];
 }
 
+function ReplicaDoughnut({ running, desired }: { running: number; desired: number }) {
+  const size = 50;
+  const stroke = 5;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const ratio = desired > 0 ? Math.min(running / desired, 1) : 0;
+  const offset = circumference * (1 - ratio);
+  const healthy = running >= desired;
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+    >
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={stroke}
+        className="text-muted/30"
+      />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={stroke}
+        strokeDasharray={circumference}
+        strokeDashoffset={offset}
+        strokeLinecap="round"
+        transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        className={healthy ? "text-green-500" : "text-red-500"}
+      />
+    </svg>
+  );
+}
+
 function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[] }) {
   const replicated = service.Spec.Mode.Replicated;
   if (!replicated) {
@@ -731,6 +772,7 @@ function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[] }) {
     <InfoCard
       label="Replicas"
       value={value}
+      right={desired > 0 ? <ReplicaDoughnut running={running} desired={desired} /> : undefined}
     />
   );
 }
