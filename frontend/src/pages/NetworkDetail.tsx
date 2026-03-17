@@ -14,6 +14,7 @@ import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
+import ResourceName from "../components/ResourceName";
 import ServiceRefList from "../components/ServiceRefList";
 import { useDetailResource } from "../hooks/useDetailResource";
 import { parseStackLabels } from "../lib/parseStackLabels";
@@ -105,8 +106,8 @@ export default function NetworkDetail() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={network.Name}
-        breadcrumbs={[{ label: "Networks", to: "/networks" }, { label: network.Name }]}
+        title={<ResourceName name={network.Name} direction="column" />}
+        breadcrumbs={[{ label: "Networks", to: "/networks" }, { label: <ResourceName name={network.Name} /> }]}
       />
 
       <MetadataGrid>

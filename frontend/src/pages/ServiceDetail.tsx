@@ -182,7 +182,7 @@ export default function ServiceDetail() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={<ResourceName name={name} />}
+        title={<ResourceName name={name} direction="column" />}
         breadcrumbs={[
           { label: "Services", to: "/services" },
           { label: <ResourceName name={name} /> },
@@ -628,15 +628,6 @@ export default function ServiceDetail() {
   );
 }
 
-const statusStyles: Record<string, string> = {
-  stable: "text-green-600 dark:text-green-400",
-  updating: "text-blue-600 dark:text-blue-400",
-  rollback_started: "text-amber-600 dark:text-amber-400",
-  paused: "text-amber-600 dark:text-amber-400",
-  rollback_paused: "text-amber-600 dark:text-amber-400",
-  rollback_completed: "text-amber-600 dark:text-amber-400",
-};
-
 const statusLabels: Record<string, string> = {
   stable: "Stable",
   updating: "Updating",
@@ -647,19 +638,16 @@ const statusLabels: Record<string, string> = {
   rollback_completed: "Rolled back",
 };
 
-function serviceStatusLabel(service: Service): { label: string; color: string } {
+function serviceStatus(service: Service): { label: string; state: string } {
   const state = service.UpdateStatus?.State;
   if (!state || state === "completed") {
-    return { label: "Stable", color: statusStyles.stable };
+    return { label: "Stable", state: "stable" };
   }
-  return {
-    label: statusLabels[state] || state,
-    color: statusStyles[state] || statusStyles.stable,
-  };
+  return { label: statusLabels[state] || state, state };
 }
 
 function ServiceStatusCard({ service }: { service: Service }) {
-  const { label, color } = serviceStatusLabel(service);
+  const { label, state } = serviceStatus(service);
   const ts = service.UpdateStatus?.CompletedAt || service.UpdateStatus?.StartedAt;
   const msg = service.UpdateStatus?.Message;
 
@@ -668,7 +656,7 @@ function ServiceStatusCard({ service }: { service: Service }) {
       label="Status"
       value={
         <div className="flex flex-col">
-          <span className={`text-base font-medium ${color}`}>{label}</span>
+          <span data-state={state} className="text-base font-medium text-green-600 dark:text-green-400 data-[state=updating]:text-blue-600 dark:data-[state=updating]:text-blue-400 data-[state=rollback_started]:text-amber-600 dark:data-[state=rollback_started]:text-amber-400 data-[state=paused]:text-amber-600 dark:data-[state=paused]:text-amber-400 data-[state=rollback_paused]:text-amber-600 dark:data-[state=rollback_paused]:text-amber-400 data-[state=rollback_completed]:text-amber-600 dark:data-[state=rollback_completed]:text-amber-400">{label}</span>
           {ts && <span className="text-xs text-muted-foreground">{timeAgo(ts)}</span>}
           {msg && label !== "Stable" && (
             <span
@@ -707,6 +695,31 @@ function ReplicaDoughnut({ running, desired }: { running: number; desired: numbe
   const offset = circumference * (1 - ratio);
   const healthy = running >= desired;
 
+  if (healthy) {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+      >
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={size / 2}
+          className="fill-green-500"
+        />
+        <path
+          d="M15 25.5 L21.5 32 L35 19"
+          fill="none"
+          stroke="white"
+          strokeWidth={3}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
   return (
     <svg
       width={size}
@@ -720,7 +733,7 @@ function ReplicaDoughnut({ running, desired }: { running: number; desired: numbe
         fill="none"
         stroke="currentColor"
         strokeWidth={stroke}
-        className="text-muted/30"
+        className="text-muted"
       />
       <circle
         cx={size / 2}
@@ -733,7 +746,7 @@ function ReplicaDoughnut({ running, desired }: { running: number; desired: numbe
         strokeDashoffset={offset}
         strokeLinecap="round"
         transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        className={healthy ? "text-green-500" : "text-red-500"}
+        className="text-red-500"
       />
     </svg>
   );
@@ -772,22 +785,23 @@ function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[] }) {
     <InfoCard
       label="Replicas"
       value={value}
-      right={desired > 0 ? <ReplicaDoughnut running={running} desired={desired} /> : undefined}
+      right={
+        desired > 0 ? (
+          <ReplicaDoughnut
+            running={running}
+            desired={desired}
+          />
+        ) : undefined
+      }
     />
   );
 }
 
-const mountTypeColors: Record<string, string> = {
-  volume: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-  bind: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-  tmpfs: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
-};
-
 function MountTypeBadge({ type }: { type: string }) {
-  const color = mountTypeColors[type] || "bg-muted text-muted-foreground";
   return (
     <span
-      className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${color}`}
+      data-type={type}
+      className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground data-[type=volume]:bg-blue-100 data-[type=volume]:text-blue-800 dark:data-[type=volume]:bg-blue-900/30 dark:data-[type=volume]:text-blue-300 data-[type=bind]:bg-amber-100 data-[type=bind]:text-amber-800 dark:data-[type=bind]:bg-amber-900/30 dark:data-[type=bind]:text-amber-300 data-[type=tmpfs]:bg-purple-100 data-[type=tmpfs]:text-purple-800 dark:data-[type=tmpfs]:bg-purple-900/30 dark:data-[type=tmpfs]:text-purple-300"
     >
       {type}
     </span>
@@ -1004,7 +1018,7 @@ function DeploymentChanges({
         </p>
       )}
       <div className="divide-y rounded-lg border">
-        {changes.map(({field, new: change, old}, index) => (
+        {changes.map(({ field, new: change, old }, index) => (
           <div
             key={index}
             className="flex items-center gap-2 px-3 py-2 text-sm"
