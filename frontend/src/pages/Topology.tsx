@@ -10,13 +10,13 @@ import { HighlightProvider } from "../components/topology/HighlightContext";
 import NetworkEdge from "../components/topology/NetworkEdge";
 import PhysicalNodeCard from "../components/topology/PhysicalNodeCard";
 import ServiceCardNode from "../components/topology/ServiceCardNode";
+import { useMatchesBreakpoint } from "../hooks/useMatchesBreakpoint";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { computeLayout } from "../lib/layoutElk";
 import { buildLogicalFlow, buildPhysicalFlow, hashColor } from "../lib/topologyTransform";
 import { ReactFlow, ReactFlowProvider, Background, type Node, type Edge } from "@xyflow/react";
 import { Info, Network, Server, X } from "lucide-react";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useMatchesBreakpoint } from "../hooks/useMatchesBreakpoint";
 
 const logicalNodeTypes = {
   stackGroup: GroupNode,
@@ -27,7 +27,13 @@ const physicalNodeTypes = { physicalNode: PhysicalNodeCard };
 
 type View = "logical" | "physical";
 
-function StackLegend({ stackColors, isMobile }: { stackColors: Map<string, string>; isMobile: boolean }) {
+function StackLegend({
+  stackColors,
+  isMobile,
+}: {
+  stackColors: Map<string, string>;
+  isMobile: boolean;
+}) {
   const [open, setOpen] = useState(!isMobile);
 
   useEffect(() => setOpen(!isMobile), [isMobile]);
@@ -38,7 +44,7 @@ function StackLegend({ stackColors, isMobile }: { stackColors: Map<string, strin
     return (
       <button
         onClick={() => setOpen(true)}
-        className="absolute bottom-3 right-3 z-10 rounded-lg border bg-card/90 p-2 shadow-sm backdrop-blur-sm"
+        className="absolute right-3 bottom-3 z-10 rounded-lg border bg-card/90 p-2 shadow-sm backdrop-blur-sm"
         title="Show legend"
       >
         <Info className="size-4 text-muted-foreground" />
@@ -173,7 +179,10 @@ function LogicalView({ data, isMobile }: { data: NetworkTopology; isMobile: bool
         >
           <Background />
         </ReactFlow>
-        <StackLegend stackColors={stackColors} isMobile={isMobile} />
+        <StackLegend
+          stackColors={stackColors}
+          isMobile={isMobile}
+        />
       </div>
     </HighlightProvider>
   );
@@ -292,13 +301,19 @@ export default function Topology() {
       <div className="rounded-lg ring-1 ring-border">
         {!loading && !error && view === "logical" && networkData && (
           <ReactFlowProvider>
-            <LogicalView data={networkData} isMobile={isMobile} />
+            <LogicalView
+              data={networkData}
+              isMobile={isMobile}
+            />
           </ReactFlowProvider>
         )}
 
         {!loading && !error && view === "physical" && placementData && (
           <ReactFlowProvider>
-            <PhysicalView data={placementData} isMobile={isMobile} />
+            <PhysicalView
+              data={placementData}
+              isMobile={isMobile}
+            />
           </ReactFlowProvider>
         )}
       </div>

@@ -26,9 +26,6 @@ export default function MonitoringStatus({ status, source }: Props) {
     return (
       <Banner
         icon={<BarChart3 className="size-5 shrink-0 text-blue-600 dark:text-blue-400" />}
-        border="border-blue-300 dark:border-blue-500/30"
-        bg="bg-blue-50 dark:bg-blue-500/10"
-        textColor="text-blue-800 dark:text-blue-200"
         onDismiss={() => {
           localStorage.setItem(DISMISS_KEY, "true");
           setDismissed(true);
@@ -57,9 +54,7 @@ export default function MonitoringStatus({ status, source }: Props) {
     return (
       <Banner
         icon={<AlertTriangle className="size-5 shrink-0 text-amber-600 dark:text-amber-400" />}
-        border="border-amber-300 dark:border-amber-500/30"
-        bg="bg-amber-50 dark:bg-amber-500/10"
-        textColor="text-amber-800 dark:text-amber-200"
+        variant="warn"
       >
         <p className="text-sm">
           <strong>Cannot reach Prometheus</strong> — metrics unavailable. Check that the Prometheus
@@ -95,9 +90,6 @@ export default function MonitoringStatus({ status, source }: Props) {
   return (
     <Banner
       icon={<BarChart3 className="size-5 shrink-0 text-blue-600 dark:text-blue-400" />}
-      border="border-blue-300 dark:border-blue-500/30"
-      bg="bg-blue-50 dark:bg-blue-500/10"
-      textColor="text-blue-800 dark:text-blue-200"
       onDismiss={() => {
         localStorage.setItem(DISMISS_KEY, "true");
         setDismissed(true);
@@ -117,23 +109,24 @@ export default function MonitoringStatus({ status, source }: Props) {
 
 function Banner({
   icon,
-  border,
-  bg,
-  textColor,
+  variant = "info",
   onDismiss,
   children,
 }: {
   icon: React.ReactNode;
-  border: string;
-  bg: string;
-  textColor: string;
+  variant?: "info" | "warn";
   onDismiss?: () => void;
   children: React.ReactNode;
 }) {
   return (
-    <div className={`flex items-start gap-3 rounded-lg border ${border} ${bg} mb-4 px-4 py-3`}>
+    <div
+      data-variant={variant}
+      className="group mb-4 flex items-start gap-3 rounded-lg border border-blue-300 bg-blue-50 px-4 py-3 data-[variant=warn]:border-amber-300 data-[variant=warn]:bg-amber-50 dark:border-blue-500/30 dark:bg-blue-500/10 dark:data-[variant=warn]:border-amber-500/30 dark:data-[variant=warn]:bg-amber-500/10"
+    >
       {icon}
-      <div className={`flex-1 ${textColor}`}>{children}</div>
+      <div className="flex-1 text-blue-800 group-data-[variant=warn]:text-amber-800 dark:text-blue-200 dark:group-data-[variant=warn]:text-amber-200">
+        {children}
+      </div>
       {onDismiss && (
         <button
           onClick={onDismiss}

@@ -238,19 +238,17 @@ const statusLabels: Record<string, string> = {
   rollback_completed: "Rolled back",
 };
 
-const statusColors: Record<string, string> = {
-  stable: "text-green-600 dark:text-green-400",
-  updating: "text-blue-600 dark:text-blue-400",
-  rollback_started: "text-amber-600 dark:text-amber-400",
-  paused: "text-amber-600 dark:text-amber-400",
-  rollback_paused: "text-amber-600 dark:text-amber-400",
-  rollback_completed: "text-amber-600 dark:text-amber-400",
-};
-
 function ServiceStatusBadge({ service }: { service: Pick<Service, "UpdateStatus"> }) {
-  const state = service.UpdateStatus?.State;
-  const label = !state || state === "completed" ? "Stable" : statusLabels[state] || state;
-  const color = statusColors[state || "stable"] || statusColors.stable;
+  const raw = service.UpdateStatus?.State;
+  const state = !raw || raw === "completed" ? "stable" : raw;
+  const label = statusLabels[state] || state;
 
-  return <span className={`text-sm font-medium ${color}`}>{label}</span>;
+  return (
+    <span
+      data-state={state}
+      className="text-sm font-medium text-green-600 data-[state=paused]:text-amber-600 data-[state=rollback_completed]:text-amber-600 data-[state=rollback_paused]:text-amber-600 data-[state=rollback_started]:text-amber-600 data-[state=updating]:text-blue-600 dark:text-green-400 dark:data-[state=paused]:text-amber-400 dark:data-[state=rollback_completed]:text-amber-400 dark:data-[state=rollback_paused]:text-amber-400 dark:data-[state=rollback_started]:text-amber-400 dark:data-[state=updating]:text-blue-400"
+    >
+      {label}
+    </span>
+  );
 }

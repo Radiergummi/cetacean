@@ -8,13 +8,6 @@ interface ActivityFeedProps {
   loading?: boolean;
 }
 
-function dotColor(action: string): string {
-  if (action === "remove") {
-    return "bg-red-500";
-  }
-  return "bg-green-500";
-}
-
 export default function ActivityFeed({ entries, loading }: ActivityFeedProps) {
   if (loading) {
     return (
@@ -43,9 +36,8 @@ export default function ActivityFeed({ entries, loading }: ActivityFeedProps) {
           className="relative flex min-h-8 items-center gap-3 py-1.5 ps-3"
         >
           <div
-            className={`absolute top-1/2 -left-3.25 h-2.5 w-2.5 -translate-y-1/2 rounded-full ring-2 ring-background ${dotColor(
-              action,
-            )}`}
+            data-action={action}
+            className="absolute top-1/2 -left-3.25 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-green-500 ring-2 ring-background data-[action=remove]:bg-red-500"
           />
 
           <span className="text-xs leading-none whitespace-nowrap text-muted-foreground">

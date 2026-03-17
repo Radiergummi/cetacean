@@ -6,8 +6,10 @@ export default function KeyValuePills({ entries }: { entries: [string, string][]
           key={key}
           className="inline-flex items-baseline overflow-hidden rounded-md border font-mono text-xs"
         >
-          <span className="bg-muted/50 px-2 py-1 text-muted-foreground">{key}</span>
-          {value ? <span className="px-2 py-1">{value}</span> : undefined}
+          <span className="bg-muted/50 px-2 py-1 whitespace-nowrap text-muted-foreground">
+            {key}
+          </span>
+          {value ? <span className="truncate px-2 py-1">{value}</span> : undefined}
         </li>
       ))}
     </ul>

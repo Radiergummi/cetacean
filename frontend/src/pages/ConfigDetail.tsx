@@ -43,8 +43,16 @@ export default function ConfigDetail() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={<ResourceName name={name} direction="column" />}
-        breadcrumbs={[{ label: "Configs", to: "/configs" }, { label: <ResourceName name={name} /> }]}
+        title={
+          <ResourceName
+            name={name}
+            direction="column"
+          />
+        }
+        breadcrumbs={[
+          { label: "Configs", to: "/configs" },
+          { label: <ResourceName name={name} /> },
+        ]}
       />
 
       <MetadataGrid>

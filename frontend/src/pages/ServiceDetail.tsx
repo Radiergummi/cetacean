@@ -182,7 +182,12 @@ export default function ServiceDetail() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={<ResourceName name={name} direction="column" />}
+        title={
+          <ResourceName
+            name={name}
+            direction="column"
+          />
+        }
         breadcrumbs={[
           { label: "Services", to: "/services" },
           { label: <ResourceName name={name} /> },
@@ -656,7 +661,12 @@ function ServiceStatusCard({ service }: { service: Service }) {
       label="Status"
       value={
         <div className="flex flex-col">
-          <span data-state={state} className="text-base font-medium text-green-600 dark:text-green-400 data-[state=updating]:text-blue-600 dark:data-[state=updating]:text-blue-400 data-[state=rollback_started]:text-amber-600 dark:data-[state=rollback_started]:text-amber-400 data-[state=paused]:text-amber-600 dark:data-[state=paused]:text-amber-400 data-[state=rollback_paused]:text-amber-600 dark:data-[state=rollback_paused]:text-amber-400 data-[state=rollback_completed]:text-amber-600 dark:data-[state=rollback_completed]:text-amber-400">{label}</span>
+          <span
+            data-state={state}
+            className="text-base font-medium text-green-600 data-[state=paused]:text-amber-600 data-[state=rollback_completed]:text-amber-600 data-[state=rollback_paused]:text-amber-600 data-[state=rollback_started]:text-amber-600 data-[state=updating]:text-blue-600 dark:text-green-400 dark:data-[state=paused]:text-amber-400 dark:data-[state=rollback_completed]:text-amber-400 dark:data-[state=rollback_paused]:text-amber-400 dark:data-[state=rollback_started]:text-amber-400 dark:data-[state=updating]:text-blue-400"
+          >
+            {label}
+          </span>
           {ts && <span className="text-xs text-muted-foreground">{timeAgo(ts)}</span>}
           {msg && label !== "Stable" && (
             <span
@@ -801,7 +811,7 @@ function MountTypeBadge({ type }: { type: string }) {
   return (
     <span
       data-type={type}
-      className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground data-[type=volume]:bg-blue-100 data-[type=volume]:text-blue-800 dark:data-[type=volume]:bg-blue-900/30 dark:data-[type=volume]:text-blue-300 data-[type=bind]:bg-amber-100 data-[type=bind]:text-amber-800 dark:data-[type=bind]:bg-amber-900/30 dark:data-[type=bind]:text-amber-300 data-[type=tmpfs]:bg-purple-100 data-[type=tmpfs]:text-purple-800 dark:data-[type=tmpfs]:bg-purple-900/30 dark:data-[type=tmpfs]:text-purple-300"
+      className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground data-[type=bind]:bg-amber-100 data-[type=bind]:text-amber-800 data-[type=tmpfs]:bg-purple-100 data-[type=tmpfs]:text-purple-800 data-[type=volume]:bg-blue-100 data-[type=volume]:text-blue-800 dark:data-[type=bind]:bg-amber-900/30 dark:data-[type=bind]:text-amber-300 dark:data-[type=tmpfs]:bg-purple-900/30 dark:data-[type=tmpfs]:text-purple-300 dark:data-[type=volume]:bg-blue-900/30 dark:data-[type=volume]:text-blue-300"
     >
       {type}
     </span>

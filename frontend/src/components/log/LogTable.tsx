@@ -77,7 +77,10 @@ function LogRow({
       className="group even:bg-background/50 hover:bg-muted/50 data-highlight:bg-yellow-500/10 data-json:cursor-pointer"
       onClick={onToggle && jsonLine ? () => onToggle(line.index) : undefined}
     >
-      <td data-pinnable={onTogglePin ? "" : undefined} className="w-0.75 align-stretch relative ps-0.75 data-pinnable:w-6">
+      <td
+        data-pinnable={onTogglePin ? "" : undefined}
+        className="align-stretch relative w-0.75 ps-0.75 data-pinnable:w-6"
+      >
         <div
           className={`min-h-full w-0.75 ${LEVEL_BAR[line.level]} absolute top-0 bottom-0 left-0`}
         />

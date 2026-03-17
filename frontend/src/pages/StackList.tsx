@@ -95,7 +95,6 @@ function stackHealth(s: StackSummary): "healthy" | "warning" | "critical" {
   return "healthy";
 }
 
-
 function StackCard({ stack }: { stack: StackSummary }) {
   const health = stackHealth(stack);
   const running = stack.tasksByState["running"] ?? 0;
@@ -110,7 +109,7 @@ function StackCard({ stack }: { stack: StackSummary }) {
     >
       {/* Header */}
       <div className="mb-3 flex items-center gap-2">
-        <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-yellow-500 group-data-[health=healthy]:bg-green-500 group-data-[health=critical]:bg-red-500" />
+        <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-yellow-500 group-data-[health=critical]:bg-red-500 group-data-[health=healthy]:bg-green-500" />
         <span className="truncate font-medium">{stack.name}</span>
         {stack.updatingServices > 0 && (
           <span className="ml-auto rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">

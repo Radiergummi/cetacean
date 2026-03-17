@@ -1,7 +1,13 @@
 import { splitStackPrefix } from "../lib/searchConstants";
 
 /** Renders "stack_thing" as `<muted>stack/</muted><strong>thing</strong>` */
-export default function ResourceName({ name, direction = "row" }: { name: string; direction?: "row" | "column" }) {
+export default function ResourceName({
+  name,
+  direction = "row",
+}: {
+  name: string;
+  direction?: "row" | "column";
+}) {
   const { prefix, name: rest } = splitStackPrefix(name);
 
   if (!prefix) {

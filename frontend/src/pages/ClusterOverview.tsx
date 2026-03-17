@@ -206,13 +206,15 @@ function HealthCard({
     <Link
       to={to}
       data-status={status}
-      className="group block cursor-pointer rounded-lg border bg-card p-5 transition-all hover:border-foreground/20 hover:shadow-sm data-[status=green]:border-green-500/30 data-[status=green]:bg-green-500/5 data-[status=amber]:border-amber-500/30 data-[status=amber]:bg-amber-500/5 data-[status=red]:border-red-500/30 data-[status=red]:bg-red-500/5"
+      className="group block cursor-pointer rounded-lg border bg-card p-5 transition-all hover:border-foreground/20 hover:shadow-sm data-[status=amber]:border-amber-500/30 data-[status=amber]:bg-amber-500/5 data-[status=green]:border-green-500/30 data-[status=green]:bg-green-500/5 data-[status=red]:border-red-500/30 data-[status=red]:bg-red-500/5"
     >
       <div className="mb-1.5 text-xs font-medium tracking-wider text-muted-foreground uppercase">
         {label}
       </div>
       <div className="flex items-center gap-2">
-        <span className="text-2xl font-semibold tabular-nums group-data-[status=green]:text-green-500 group-data-[status=amber]:text-amber-500 group-data-[status=red]:text-red-500">{primary}</span>
+        <span className="text-2xl font-semibold tabular-nums group-data-[status=amber]:text-amber-500 group-data-[status=green]:text-green-500 group-data-[status=red]:text-red-500">
+          {primary}
+        </span>
         {delta != null && delta !== 0 && (
           <span
             data-negative={delta < 0 || undefined}
