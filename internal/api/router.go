@@ -51,6 +51,9 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 
 	// Service write operations
 	mux.Handle("PUT /services/{id}/scale", requireWrite(h.HandleScaleService))
+	mux.Handle("PUT /services/{id}/image", requireWrite(h.HandleUpdateServiceImage))
+	mux.Handle("POST /services/{id}/rollback", requireWrite(h.HandleRollbackService))
+	mux.Handle("POST /services/{id}/restart", requireWrite(h.HandleRestartService))
 
 	// Tasks
 	mux.HandleFunc("GET /tasks", contentNegotiatedWithSSE(h.HandleListTasks, func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, "task") }, spa))

@@ -45,6 +45,9 @@ type DockerSystemClient interface {
 
 type DockerWriteClient interface {
 	ScaleService(ctx context.Context, id string, replicas uint64) (swarm.Service, error)
+	UpdateServiceImage(ctx context.Context, id string, image string) (swarm.Service, error)
+	RollbackService(ctx context.Context, id string) (swarm.Service, error)
+	RestartService(ctx context.Context, id string) (swarm.Service, error)
 }
 
 type Handlers struct {

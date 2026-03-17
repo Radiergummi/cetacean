@@ -316,3 +316,46 @@ func (c *Client) ScaleService(ctx context.Context, id string, replicas uint64) (
 	}
 	return c.InspectService(ctx, id)
 }
+
+func (c *Client) UpdateServiceImage(ctx context.Context, id string, image string) (swarm.Service, error) {
+	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	svc.Spec.TaskTemplate.ContainerSpec.Image = image
+	_, err = c.docker.ServiceUpdate(ctx, svc.ID, svc.Version, svc.Spec, swarm.ServiceUpdateOptions{})
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	return c.InspectService(ctx, id)
+}
+
+func (c *Client) RollbackService(ctx context.Context, id string) (swarm.Service, error) {
+	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	if svc.PreviousSpec == nil {
+		return swarm.Service{}, fmt.Errorf("service has no previous spec to rollback to")
+	}
+	_, err = c.docker.ServiceUpdate(ctx, svc.ID, svc.Version, svc.Spec, swarm.ServiceUpdateOptions{
+		Rollback: "previous",
+	})
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	return c.InspectService(ctx, id)
+}
+
+func (c *Client) RestartService(ctx context.Context, id string) (swarm.Service, error) {
+	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	svc.Spec.TaskTemplate.ForceUpdate++
+	_, err = c.docker.ServiceUpdate(ctx, svc.ID, svc.Version, svc.Spec, swarm.ServiceUpdateOptions{})
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	return c.InspectService(ctx, id)
+}
