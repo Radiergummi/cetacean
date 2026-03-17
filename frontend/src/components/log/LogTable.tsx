@@ -10,7 +10,7 @@ import {
 import { LogMessage } from "./LogMessage";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Pin, PinOff } from "lucide-react";
-import { type RefObject, useCallback, useEffect, useState } from "react";
+import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 
 export interface LogTableProps {
   containerRef: RefObject<HTMLDivElement | null>;
@@ -291,13 +291,27 @@ function VirtualLogBody({
   pinnedKeys?: Set<string>;
   onTogglePin?: (line: LogLine) => void;
 }) {
+  // Track when the scroll container ref becomes available so we can
+  // force a re-render — the virtualizer gets null from getScrollElement
+  // on the first render (ref attaches during commit, not render phase).
+  const [, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const virtualizer = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => containerRef.current,
     estimateSize: () => LOG_ROW_HEIGHT_ESTIMATE,
     overscan: 50,
-    initialOffset: following ? filtered.length * LOG_ROW_HEIGHT_ESTIMATE : 0,
   });
+
+  // Scroll to bottom on initial mount when following.
+  const didInitialScroll = useRef(false);
+  useEffect(() => {
+    if (!didInitialScroll.current && following && filtered.length > 0) {
+      didInitialScroll.current = true;
+      virtualizer.scrollToIndex(filtered.length - 1, { align: "end" });
+    }
+  }, [filtered.length, following, virtualizer]);
 
   useEffect(() => {
     if (scrollToFiltered !== undefined) {
