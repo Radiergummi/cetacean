@@ -20,7 +20,7 @@ import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { formatBytes } from "../lib/formatBytes";
 import { formatNs } from "../lib/formatNs";
 import { escapePromQL } from "../lib/utils";
-import { ArrowRight, Globe, Shuffle } from "lucide-react";
+import { ArrowRight, Globe, ImageIcon, RefreshCw, RotateCcw, Shuffle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -187,6 +187,11 @@ export default function ServiceDetail() {
           { label: "Services", to: "/services" },
           { label: <ResourceName name={name} /> },
         ]}
+      />
+
+      <ServiceActions
+        service={service}
+        serviceId={id!}
       />
 
       {/* Overview cards */}
@@ -696,6 +701,196 @@ function updateConfigRows(cfg: UpdateConfigShape) {
       (["Max Failure Ratio", String(cfg.MaxFailureRatio)] as [string, string]),
     cfg.Order && (["Order", cfg.Order] as [string, string]),
   ];
+}
+
+function Spinner() {
+  return (
+    <svg
+      className="h-3 w-3 animate-spin"
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="4"
+      />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+      />
+    </svg>
+  );
+}
+
+function ServiceActions({ service, serviceId }: { service: Service; serviceId: string }) {
+  const currentImage = service.Spec.TaskTemplate.ContainerSpec.Image;
+  // Strip digest suffix for display/editing
+  const imageWithoutDigest = currentImage.replace(/@sha256:[a-f0-9]+$/, "");
+
+  const [imageOpen, setImageOpen] = useState(false);
+  const [imageValue, setImageValue] = useState("");
+  const [imageLoading, setImageLoading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+
+  const [rollbackLoading, setRollbackLoading] = useState(false);
+  const [rollbackError, setRollbackError] = useState<string | null>(null);
+
+  const [restartLoading, setRestartLoading] = useState(false);
+  const [restartError, setRestartError] = useState<string | null>(null);
+
+  const canRollback = !!service.PreviousSpec;
+
+  function openImage() {
+    setImageValue(imageWithoutDigest);
+    setImageError(null);
+    setImageOpen(true);
+  }
+
+  function cancelImage() {
+    setImageOpen(false);
+    setImageError(null);
+  }
+
+  async function submitImage() {
+    const trimmed = imageValue.trim();
+    if (!trimmed) {
+      setImageError("Enter an image name");
+      return;
+    }
+    setImageLoading(true);
+    setImageError(null);
+    try {
+      await api.updateServiceImage(serviceId, trimmed);
+      setImageOpen(false);
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : "Failed to update image");
+    } finally {
+      setImageLoading(false);
+    }
+  }
+
+  async function handleRollback() {
+    if (!window.confirm("Are you sure you want to rollback this service?")) return;
+    setRollbackLoading(true);
+    setRollbackError(null);
+    try {
+      await api.rollbackService(serviceId);
+    } catch (err) {
+      setRollbackError(err instanceof Error ? err.message : "Failed to rollback");
+    } finally {
+      setRollbackLoading(false);
+    }
+  }
+
+  async function handleRestart() {
+    if (!window.confirm("Are you sure you want to restart this service? This triggers a rolling restart.")) return;
+    setRestartLoading(true);
+    setRestartError(null);
+    try {
+      await api.restartService(serviceId);
+    } catch (err) {
+      setRestartError(err instanceof Error ? err.message : "Failed to restart");
+    } finally {
+      setRestartLoading(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {/* Update Image */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={openImage}
+          className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-sm font-medium hover:bg-accent disabled:opacity-50"
+        >
+          <ImageIcon className="h-3.5 w-3.5" />
+          Update Image
+        </button>
+        {imageOpen && (
+          <div className="absolute left-0 top-full z-50 mt-1 w-80 rounded-lg border bg-card p-3 shadow-lg">
+            <p className="mb-1 text-xs font-medium text-muted-foreground">New image</p>
+            <p className="mb-2 truncate font-mono text-xs text-muted-foreground" title={currentImage}>
+              Current: {imageWithoutDigest}
+            </p>
+            <input
+              type="text"
+              value={imageValue}
+              onChange={(e) => setImageValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void submitImage();
+                if (e.key === "Escape") cancelImage();
+              }}
+              placeholder="image:tag"
+              className="mb-2 w-full rounded border bg-background px-2 py-1 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              autoFocus
+            />
+            {imageError && (
+              <p className="mb-2 text-xs text-red-600 dark:text-red-400">{imageError}</p>
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void submitImage()}
+                disabled={imageLoading}
+                className="flex flex-1 items-center justify-center gap-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+              >
+                {imageLoading && <Spinner />}
+                Update
+              </button>
+              <button
+                type="button"
+                onClick={cancelImage}
+                disabled={imageLoading}
+                className="flex-1 rounded border px-2 py-1 text-xs font-medium disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Rollback */}
+      <div className="flex flex-col items-start gap-1">
+        <button
+          type="button"
+          onClick={() => void handleRollback()}
+          disabled={!canRollback || rollbackLoading}
+          title={canRollback ? "Rollback to previous spec" : "No previous spec available"}
+          className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-sm font-medium hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {rollbackLoading ? <Spinner /> : <RotateCcw className="h-3.5 w-3.5" />}
+          Rollback
+        </button>
+        {rollbackError && (
+          <p className="text-xs text-red-600 dark:text-red-400">{rollbackError}</p>
+        )}
+      </div>
+
+      {/* Restart */}
+      <div className="flex flex-col items-start gap-1">
+        <button
+          type="button"
+          onClick={() => void handleRestart()}
+          disabled={restartLoading}
+          className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-sm font-medium hover:bg-accent disabled:opacity-50"
+        >
+          {restartLoading ? <Spinner /> : <RefreshCw className="h-3.5 w-3.5" />}
+          Restart
+        </button>
+        {restartError && (
+          <p className="text-xs text-red-600 dark:text-red-400">{restartError}</p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function ReplicaDoughnut({ running, desired }: { running: number; desired: number }) {

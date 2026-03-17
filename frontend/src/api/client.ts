@@ -271,4 +271,10 @@ export const api = {
     ),
   scaleService: (id: string, replicas: number) =>
     put<ServiceDetail>(`/services/${id}/scale`, { replicas }),
+  updateServiceImage: (id: string, image: string) =>
+    put<ServiceDetail>(`/services/${id}/image`, { image }),
+  rollbackService: (id: string) =>
+    post<ServiceDetail>(`/services/${id}/rollback`),
+  restartService: (id: string) =>
+    post<ServiceDetail>(`/services/${id}/restart`),
 };
