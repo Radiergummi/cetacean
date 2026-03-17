@@ -76,7 +76,9 @@ function Layout({ children }: { children: React.ReactNode }) {
 
               <span className="hidden text-border sm:block">|</span>
 
-              <ConnectionStatus />
+              <span className="hidden sm:block">
+                <ConnectionStatus />
+              </span>
             </div>
 
             <div className="flex items-center gap-3">
@@ -87,7 +89,7 @@ function Layout({ children }: { children: React.ReactNode }) {
               <UserBadge />
 
               <button
-                className="rounded-md p-2 hover:bg-muted lg:hidden"
+                className="rounded-md p-2.5 hover:bg-muted lg:hidden"
                 onClick={() => setMenuOpen(!menuOpen)}
                 aria-label="Toggle menu"
               >
@@ -110,7 +112,7 @@ function Layout({ children }: { children: React.ReactNode }) {
           )}
         </div>
       </nav>
-      <main className="mx-auto max-w-7xl px-4 py-6 pb-48 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-7xl px-4 py-6 pb-48 sm:px-6 lg:px-8" style={{ paddingBottom: "max(12rem, env(safe-area-inset-bottom))" }}>
         <ErrorBoundary>{children}</ErrorBoundary>
       </main>
       {shortcutsOpen && <ShortcutsHelp onClose={() => setShortcutsOpen(false)} />}
@@ -144,7 +146,7 @@ function NavLinks() {
             <Link
               to={to}
               aria-current={active ? "page" : undefined}
-              className="border-b-2 border-transparent px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground aria-[current=page]:border-foreground aria-[current=page]:font-medium aria-[current=page]:text-foreground"
+              className="border-b-2 border-transparent px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground aria-[current=page]:border-foreground aria-[current=page]:font-medium aria-[current=page]:text-foreground"
             >
               {label}
             </Link>
