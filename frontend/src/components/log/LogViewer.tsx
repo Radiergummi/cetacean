@@ -1,4 +1,3 @@
-import { useMatchesBreakpoint } from "../../hooks/useMatchesBreakpoint";
 import { SectionToggle, useSectionCollapse } from "../CollapsibleSection";
 import { Spinner } from "../Spinner";
 import type { LogLine } from "./log-utils";
@@ -37,8 +36,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
   const isTask = !!taskId;
 
   const { open, toggle: toggleCollapse } = useSectionCollapse(header ? String(header) : "Logs");
-  const isMobile = useMatchesBreakpoint("md", "below");
-  const [wrapLines, setWrapLines] = useState(isMobile);
+  const [wrapLines, setWrapLines] = useState(() => matchMedia("(max-width: 767px)").matches);
   const [streamFilter, setStreamFilter] = useState<"all" | "stdout" | "stderr">("all");
   const [pinnedLines, setPinnedLines] = useState<LogLine[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);

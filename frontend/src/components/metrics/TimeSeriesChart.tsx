@@ -165,6 +165,7 @@ export default function TimeSeriesChart({
   isolatedLabel,
   onIsolationChange,
 }: Props) {
+  const isMobile = useMatchesBreakpoint("md", "below");
   const chartRef = useRef<ChartJS<"line"> | null>(null);
   const tooltipElRef = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<State>("loading");
@@ -647,8 +648,6 @@ export default function TimeSeriesChart({
     }),
     [chartId, sync, setIsolatedIndex],
   );
-
-  const isMobile = useMatchesBreakpoint("md", "below");
 
   const options = useMemo<ChartOptions<"line">>(
     () => ({

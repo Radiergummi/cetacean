@@ -112,7 +112,7 @@ function Layout({ children }: { children: React.ReactNode }) {
           )}
         </div>
       </nav>
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8" style={{ paddingBottom: "max(12rem, env(safe-area-inset-bottom))" }}>
+      <main className="mx-auto max-w-7xl px-4 py-6 pb-48 sm:px-6 lg:px-8">
         <ErrorBoundary>{children}</ErrorBoundary>
       </main>
       {shortcutsOpen && <ShortcutsHelp onClose={() => setShortcutsOpen(false)} />}

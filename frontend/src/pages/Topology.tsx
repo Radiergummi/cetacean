@@ -30,6 +30,8 @@ type View = "logical" | "physical";
 function StackLegend({ stackColors, isMobile }: { stackColors: Map<string, string>; isMobile: boolean }) {
   const [open, setOpen] = useState(!isMobile);
 
+  useEffect(() => setOpen(!isMobile), [isMobile]);
+
   if (stackColors.size === 0) return null;
 
   if (isMobile && !open) {
@@ -130,8 +132,7 @@ function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
   return { nodes, edges, ready };
 }
 
-function LogicalView({ data }: { data: NetworkTopology }) {
-  const isMobile = useMatchesBreakpoint("md", "below");
+function LogicalView({ data, isMobile }: { data: NetworkTopology; isMobile: boolean }) {
   const { nodes: rawNodes, edges: rawEdges } = useMemo(() => buildLogicalFlow(data), [data]);
   const { nodes, edges, ready } = useElkLayout(rawNodes, rawEdges);
 
@@ -178,8 +179,7 @@ function LogicalView({ data }: { data: NetworkTopology }) {
   );
 }
 
-function PhysicalView({ data }: { data: PlacementTopology }) {
-  const isMobile = useMatchesBreakpoint("md", "below");
+function PhysicalView({ data, isMobile }: { data: PlacementTopology; isMobile: boolean }) {
   const { nodes } = useMemo(() => buildPhysicalFlow(data), [data]);
 
   if (data.nodes.length === 0) {
@@ -210,6 +210,7 @@ function PhysicalView({ data }: { data: PlacementTopology }) {
 }
 
 export default function Topology() {
+  const isMobile = useMatchesBreakpoint("md", "below");
   const [view, setView] = useState<View>("logical");
   const [networkData, setNetworkData] = useState<NetworkTopology | null>(null);
   const [placementData, setPlacementData] = useState<PlacementTopology | null>(null);
@@ -291,13 +292,13 @@ export default function Topology() {
       <div className="rounded-lg ring-1 ring-border">
         {!loading && !error && view === "logical" && networkData && (
           <ReactFlowProvider>
-            <LogicalView data={networkData} />
+            <LogicalView data={networkData} isMobile={isMobile} />
           </ReactFlowProvider>
         )}
 
         {!loading && !error && view === "physical" && placementData && (
           <ReactFlowProvider>
-            <PhysicalView data={placementData} />
+            <PhysicalView data={placementData} isMobile={isMobile} />
           </ReactFlowProvider>
         )}
       </div>
