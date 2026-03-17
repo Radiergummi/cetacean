@@ -66,7 +66,7 @@ export default function NodeResourceGauges({ instance }: Props) {
   }, [fetchAll]);
 
   return (
-    <div className="flex items-center justify-center gap-8 py-2">
+    <div className="flex flex-wrap items-center justify-center gap-8 py-2">
       {GAUGES.map((g, i) => (
         <ResourceGauge
           key={g.label}
