@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Last deployment diff on service detail page showing what changed in the most recent service update
+- Node availability control on node detail page (Active / Drain / Pause) with drain confirmation
+- Force Remove button on task detail page to kill a task and its backing container
 
 ### Fixed
 - Log viewer appearing empty on service and task detail pages until user interaction

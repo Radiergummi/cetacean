@@ -277,4 +277,7 @@ export const api = {
     post<ServiceDetail>(`/services/${id}/rollback`),
   restartService: (id: string) =>
     post<ServiceDetail>(`/services/${id}/restart`),
+  updateNodeAvailability: (id: string, availability: "active" | "drain" | "pause") =>
+    put<{ node: Node }>(`/nodes/${id}/availability`, { availability }),
+  removeTask: (id: string) => del(`/tasks/${id}`),
 };

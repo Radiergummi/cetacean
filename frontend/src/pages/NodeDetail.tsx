@@ -19,6 +19,43 @@ import { escapePromQL } from "../lib/utils";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
+function NodeAvailabilityControl({ nodeId, current }: { nodeId: string; current: string }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleChange(value: "active" | "drain" | "pause") {
+    if (value === current) return;
+    if (value === "drain") {
+      if (!window.confirm("Draining this node will reschedule all running tasks. Continue?")) return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await api.updateNodeAvailability(nodeId, value);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update availability");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <select
+        value={current}
+        disabled={loading}
+        onChange={(e) => void handleChange(e.target.value as "active" | "drain" | "pause")}
+        className="rounded border bg-background px-2 py-1 text-sm disabled:opacity-50"
+      >
+        <option value="active">Active</option>
+        <option value="drain">Drain</option>
+        <option value="pause">Pause</option>
+      </select>
+      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+    </div>
+  );
+}
+
 export default function NodeDetail() {
   const { id } = useParams<{ id: string }>();
   const [node, setNode] = useState<Node | null>(null);
@@ -101,10 +138,12 @@ export default function NodeDetail() {
           label="Status"
           value={node.Status.State}
         />
-        <InfoCard
-          label="Availability"
-          value={node.Spec.Availability}
-        />
+        <div className="rounded-lg border bg-card p-4">
+          <div className="mb-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
+            Availability
+          </div>
+          <NodeAvailabilityControl nodeId={node.ID} current={node.Spec.Availability} />
+        </div>
         <InfoCard
           label="Engine"
           value={node.Description.Engine.EngineVersion}
