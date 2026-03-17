@@ -119,7 +119,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
       title={header}
       open={open}
       onToggle={toggleCollapse}
-      className="mr-auto flex cursor-pointer items-center gap-1.5 text-sm font-medium tracking-wider text-muted-foreground uppercase transition-colors hover:text-foreground"
+      className="w-full flex cursor-pointer items-center gap-1.5 text-sm font-medium tracking-wider text-muted-foreground uppercase transition-colors hover:text-foreground sm:mr-auto sm:w-auto"
     />
   ) : null;
 

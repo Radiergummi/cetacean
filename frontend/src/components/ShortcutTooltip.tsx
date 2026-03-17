@@ -33,7 +33,7 @@ export default function ShortcutTooltip({ keys, children }: Props) {
     >
       {children}
       {visible && (
-        <div className="pointer-events-none absolute top-full left-1/2 z-50 mt-1.5 -translate-x-1/2">
+        <div className="pointer-events-none absolute top-full left-1/2 z-50 mt-1.5 hidden -translate-x-1/2 lg:block">
           <div className="flex items-center gap-1.5 rounded-md border bg-popover px-2 py-1 text-[11px] whitespace-nowrap text-popover-foreground shadow-md">
             {keys.map((key, i) => (
               <span

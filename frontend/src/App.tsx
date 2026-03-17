@@ -146,7 +146,7 @@ function NavLinks() {
             <Link
               to={to}
               aria-current={active ? "page" : undefined}
-              className="border-b-2 border-transparent px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground aria-[current=page]:border-foreground aria-[current=page]:font-medium aria-[current=page]:text-foreground"
+              className="py-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground aria-[current=page]:font-medium aria-[current=page]:text-foreground lg:border-b-2 lg:border-transparent lg:px-3 lg:aria-[current=page]:border-foreground"
             >
               {label}
             </Link>

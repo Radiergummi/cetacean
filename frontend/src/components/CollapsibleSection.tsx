@@ -75,13 +75,13 @@ export default function CollapsibleSection({
 
   return (
     <div>
-      <div className="mb-3 flex min-h-8 items-center gap-2">
+      <div className="mb-3 flex min-h-8 flex-wrap items-center gap-2">
         <SectionToggle
           title={title}
           open={open}
           onToggle={toggle}
         />
-        {open && controls && <div className="ml-auto flex items-center gap-2">{controls}</div>}
+        {open && controls && <div className="flex items-center gap-2 sm:ml-auto">{controls}</div>}
       </div>
       {open && children}
     </div>
