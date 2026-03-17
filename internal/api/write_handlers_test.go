@@ -22,6 +22,9 @@ type mockWriteClient struct {
 	restartServiceFn           func(ctx context.Context, id string) (swarm.Service, error)
 	updateNodeAvailabilityFn   func(ctx context.Context, id string, availability swarm.NodeAvailability) (swarm.Node, error)
 	removeTaskFn               func(ctx context.Context, id string) error
+	updateServiceEnvFn         func(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
+	updateNodeLabelsFn         func(ctx context.Context, id string, labels map[string]string) (swarm.Node, error)
+	updateServiceResourcesFn   func(ctx context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error)
 }
 
 func (m *mockWriteClient) ScaleService(ctx context.Context, id string, replicas uint64) (swarm.Service, error) {
@@ -64,6 +67,27 @@ func (m *mockWriteClient) RemoveTask(ctx context.Context, id string) error {
 		return m.removeTaskFn(ctx, id)
 	}
 	return fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) UpdateServiceEnv(ctx context.Context, id string, env map[string]string) (swarm.Service, error) {
+	if m.updateServiceEnvFn != nil {
+		return m.updateServiceEnvFn(ctx, id, env)
+	}
+	return swarm.Service{}, fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) UpdateNodeLabels(ctx context.Context, id string, labels map[string]string) (swarm.Node, error) {
+	if m.updateNodeLabelsFn != nil {
+		return m.updateNodeLabelsFn(ctx, id, labels)
+	}
+	return swarm.Node{}, fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) UpdateServiceResources(ctx context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error) {
+	if m.updateServiceResourcesFn != nil {
+		return m.updateServiceResourcesFn(ctx, id, resources)
+	}
+	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
 func replicatedService(id string) swarm.Service {
@@ -453,5 +477,248 @@ func TestHandleRemoveTask_NoContainer(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+func serviceWithEnv(id string, env []string) swarm.Service {
+	svc := replicatedService(id)
+	svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{Env: env}
+	return svc
+}
+
+func TestHandleGetServiceEnv(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(serviceWithEnv("svc1", []string{"FOO=bar", "BAZ=qux"}))
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+
+	req := httptest.NewRequest("GET", "/services/svc1/env", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetServiceEnv(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var result map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if result["FOO"] != "bar" {
+		t.Errorf("FOO=%q, want bar", result["FOO"])
+	}
+	if result["BAZ"] != "qux" {
+		t.Errorf("BAZ=%q, want qux", result["BAZ"])
+	}
+}
+
+func TestHandlePatchServiceEnv_Add(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(serviceWithEnv("svc1", []string{"FOO=bar"}))
+
+	wc := &mockWriteClient{
+		updateServiceEnvFn: func(_ context.Context, id string, env map[string]string) (swarm.Service, error) {
+			envSlice := make([]string, 0, len(env))
+			for k, v := range env {
+				envSlice = append(envSlice, k+"="+v)
+			}
+			return serviceWithEnv(id, envSlice), nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+
+	body := `[{"op":"add","path":"/NEW","value":"val"}]`
+	req := httptest.NewRequest("PATCH", "/services/svc1/env", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json-patch+json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceEnv(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandlePatchServiceEnv_WrongContentType(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(serviceWithEnv("svc1", nil))
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+
+	req := httptest.NewRequest("PATCH", "/services/svc1/env", strings.NewReader(`[]`))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceEnv(w, req)
+
+	if w.Code != http.StatusUnsupportedMediaType {
+		t.Errorf("status=%d, want 415", w.Code)
+	}
+}
+
+func TestHandlePatchServiceEnv_TestFailed(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(serviceWithEnv("svc1", []string{"FOO=bar"}))
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+
+	body := `[{"op":"test","path":"/FOO","value":"wrong"}]`
+	req := httptest.NewRequest("PATCH", "/services/svc1/env", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json-patch+json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceEnv(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Errorf("status=%d, want 409", w.Code)
+	}
+}
+
+func TestHandlePatchServiceEnv_NotFound(t *testing.T) {
+	c := cache.New(nil)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+
+	body := `[{"op":"add","path":"/K","value":"v"}]`
+	req := httptest.NewRequest("PATCH", "/services/missing/env", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json-patch+json")
+	req.SetPathValue("id", "missing")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceEnv(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestHandleGetNodeLabels(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{
+		ID:   "node1",
+		Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: map[string]string{"region": "us-east"}}},
+	})
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+
+	req := httptest.NewRequest("GET", "/nodes/node1/labels", nil)
+	req.SetPathValue("id", "node1")
+	w := httptest.NewRecorder()
+	h.HandleGetNodeLabels(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var result map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if result["region"] != "us-east" {
+		t.Errorf("region=%q, want us-east", result["region"])
+	}
+}
+
+func TestHandlePatchNodeLabels_Add(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{
+		ID:   "node1",
+		Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: map[string]string{"existing": "value"}}},
+	})
+
+	wc := &mockWriteClient{
+		updateNodeLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Node, error) {
+			return swarm.Node{ID: id, Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: labels}}}, nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+
+	body := `[{"op":"add","path":"/new","value":"label"}]`
+	req := httptest.NewRequest("PATCH", "/nodes/node1/labels", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json-patch+json")
+	req.SetPathValue("id", "node1")
+	w := httptest.NewRecorder()
+	h.HandlePatchNodeLabels(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandlePatchNodeLabels_WrongContentType(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{ID: "node1"})
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+
+	req := httptest.NewRequest("PATCH", "/nodes/node1/labels", strings.NewReader(`[]`))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("id", "node1")
+	w := httptest.NewRecorder()
+	h.HandlePatchNodeLabels(w, req)
+
+	if w.Code != http.StatusUnsupportedMediaType {
+		t.Errorf("status=%d, want 415", w.Code)
+	}
+}
+
+func TestHandleGetServiceResources(t *testing.T) {
+	c := cache.New(nil)
+	svc := replicatedService("svc1")
+	svc.Spec.TaskTemplate.Resources = &swarm.ResourceRequirements{
+		Limits: &swarm.Limit{NanoCPUs: 1000000000},
+	}
+	c.SetService(svc)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+
+	req := httptest.NewRequest("GET", "/services/svc1/resources", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetServiceResources(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var result map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if result["Limits"] == nil {
+		t.Error("expected Limits in response")
+	}
+}
+
+func TestHandlePatchServiceResources_Merge(t *testing.T) {
+	c := cache.New(nil)
+	svc := replicatedService("svc1")
+	svc.Spec.TaskTemplate.Resources = &swarm.ResourceRequirements{}
+	c.SetService(svc)
+
+	wc := &mockWriteClient{
+		updateServiceResourcesFn: func(_ context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error) {
+			s := replicatedService(id)
+			s.Spec.TaskTemplate.Resources = resources
+			return s, nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+
+	body := `{"Limits":{"NanoCPUs":500000000}}`
+	req := httptest.NewRequest("PATCH", "/services/svc1/resources", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceResources(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandlePatchServiceResources_WrongContentType(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(replicatedService("svc1"))
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+
+	req := httptest.NewRequest("PATCH", "/services/svc1/resources", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceResources(w, req)
+
+	if w.Code != http.StatusUnsupportedMediaType {
+		t.Errorf("status=%d, want 415", w.Code)
 	}
 }

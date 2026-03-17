@@ -50,6 +50,9 @@ type DockerWriteClient interface {
 	RestartService(ctx context.Context, id string) (swarm.Service, error)
 	UpdateNodeAvailability(ctx context.Context, id string, availability swarm.NodeAvailability) (swarm.Node, error)
 	RemoveTask(ctx context.Context, id string) error
+	UpdateServiceEnv(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
+	UpdateNodeLabels(ctx context.Context, id string, labels map[string]string) (swarm.Node, error)
+	UpdateServiceResources(ctx context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error)
 }
 
 type Handlers struct {
