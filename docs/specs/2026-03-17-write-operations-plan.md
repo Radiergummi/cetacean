@@ -398,7 +398,10 @@ func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id, "Service", map[string]any{
+	// Use writeJSON (not writeJSONWithETag) for mutation responses:
+	// ETag + If-None-Match → 304 is only valid for safe methods (GET/HEAD)
+	// per RFC 9110 Section 13.1.1.
+	writeJSON(w, NewDetailResponse("/services/"+id, "Service", map[string]any{
 		"service": updated,
 	}))
 }
@@ -441,12 +444,11 @@ In `frontend/src/api/client.ts`, add after the `fetchJSON` function (after line 
 
 ```typescript
 async function post<T>(path: string, body?: unknown): Promise<T> {
+  const h: Record<string, string> = { Accept: "application/json" };
+  if (body !== undefined) h["Content-Type"] = "application/json";
   const res = await fetch(path, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
+    headers: h,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
@@ -704,7 +706,7 @@ func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id, "Service", map[string]any{
+	writeJSON(w, NewDetailResponse("/services/"+id, "Service", map[string]any{
 		"service": updated,
 	}))
 }
@@ -765,7 +767,9 @@ func (c *Client) RollbackService(ctx context.Context, id string) (swarm.Service,
 }
 ```
 
-- [ ] **Step 4: Implement handler** (same pattern, no request body, POST)
+- [ ] **Step 4: Implement handler**
+
+No request body — the handler must NOT call `json.NewDecoder(r.Body).Decode(...)`. It should go straight from cache lookup to `h.writeClient.RollbackService(...)`. Check `svc.PreviousSpec == nil` in the handler (from cache) and return 400 before calling the Docker client. Use `writeJSON` (not `writeJSONWithETag`) for the response.
 
 - [ ] **Step 5: Register route**
 
@@ -810,7 +814,9 @@ func (c *Client) RestartService(ctx context.Context, id string) (swarm.Service, 
 }
 ```
 
-- [ ] **Step 4: Implement handler** (no request body)
+- [ ] **Step 4: Implement handler**
+
+No request body — same as rollback, do NOT decode body. Go from cache lookup straight to `h.writeClient.RestartService(...)`. Use `writeJSON` for the response.
 
 - [ ] **Step 5: Register route**
 
