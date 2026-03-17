@@ -257,7 +257,9 @@ func (h *Handlers) HandleGetServiceEnv(w http.ResponseWriter, r *http.Request) {
 	if svc.Spec.TaskTemplate.ContainerSpec != nil {
 		env = svc.Spec.TaskTemplate.ContainerSpec.Env
 	}
-	writeJSONWithETag(w, r, envSliceToMap(env))
+	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/env", "ServiceEnv", map[string]any{
+		"env": envSliceToMap(env),
+	}))
 }
 
 func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request) {
@@ -319,7 +321,9 @@ func (h *Handlers) HandleGetNodeLabels(w http.ResponseWriter, r *http.Request) {
 	if labels == nil {
 		labels = map[string]string{}
 	}
-	writeJSONWithETag(w, r, labels)
+	writeJSONWithETag(w, r, NewDetailResponse("/nodes/"+id+"/labels", "NodeLabels", map[string]any{
+		"labels": labels,
+	}))
 }
 
 func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request) {
@@ -380,21 +384,18 @@ func (h *Handlers) HandleGetServiceResources(w http.ResponseWriter, r *http.Requ
 	if resources == nil {
 		resources = &swarm.ResourceRequirements{}
 	}
-	writeJSONWithETag(w, r, resources)
+	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/resources", "ServiceResources", map[string]any{
+		"resources": resources,
+	}))
 }
 
 func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/merge-patch+json") {
-		writeProblem(w, r, http.StatusUnsupportedMediaType, "Content-Type must be application/merge-patch+json")
-		return
-	}
-
-	patchBytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
+	ct := r.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/merge-patch+json") {
+		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
 		return
 	}
 
@@ -409,32 +410,68 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 		current = &swarm.ResourceRequirements{}
 	}
 
+	// Marshal current state to JSON, then to a generic map
 	base, err := json.Marshal(current)
 	if err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to process resources")
+		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal current resources")
 		return
 	}
-	var merged swarm.ResourceRequirements
-	if err := json.Unmarshal(base, &merged); err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to process resources")
+	var baseMap map[string]any
+	json.Unmarshal(base, &baseMap)
+
+	// Read the patch
+	patchBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
 		return
 	}
-	if err := json.Unmarshal(patchBytes, &merged); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid patch body")
+	var patchMap map[string]any
+	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid JSON")
 		return
 	}
 
-	slog.Info("patching service resources", "service", id)
+	// Apply RFC 7396 merge: null deletes, non-null overwrites
+	mergePatch(baseMap, patchMap)
 
-	result, err := h.writeClient.UpdateServiceResources(r.Context(), id, &merged)
+	// Marshal back to struct
+	merged, err := json.Marshal(baseMap)
+	if err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal merged resources")
+		return
+	}
+	var result swarm.ResourceRequirements
+	if err := json.Unmarshal(merged, &result); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid resource specification")
+		return
+	}
+
+	slog.Info("updating service resources", "service", id)
+	updated, err := h.writeClient.UpdateServiceResources(r.Context(), id, &result)
 	if err != nil {
 		writeDockerError(w, r, err, "service")
 		return
 	}
+	writeJSON(w, NewDetailResponse("/services/"+id+"/resources", "ServiceResources", map[string]any{
+		"resources": updated.Spec.TaskTemplate.Resources,
+	}))
+}
 
-	resources := result.Spec.TaskTemplate.Resources
-	if resources == nil {
-		resources = &swarm.ResourceRequirements{}
+// mergePatch applies RFC 7396 JSON Merge Patch semantics to a base map.
+// null values in patch delete keys from base; non-null values overwrite.
+// Nested objects are merged recursively.
+func mergePatch(base, patch map[string]any) {
+	for k, v := range patch {
+		if v == nil {
+			delete(base, k)
+		} else if patchObj, ok := v.(map[string]any); ok {
+			if baseObj, ok := base[k].(map[string]any); ok {
+				mergePatch(baseObj, patchObj)
+			} else {
+				base[k] = v
+			}
+		} else {
+			base[k] = v
+		}
 	}
-	writeJSON(w, resources)
 }

@@ -194,7 +194,12 @@ export default function ServiceDetail() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={<ResourceName name={name} />}
+        title={
+          <ResourceName
+            name={name}
+            direction="column"
+          />
+        }
         breadcrumbs={[
           { label: "Services", to: "/services" },
           { label: <ResourceName name={name} /> },
@@ -639,15 +644,6 @@ export default function ServiceDetail() {
   );
 }
 
-const statusStyles: Record<string, string> = {
-  stable: "text-green-600 dark:text-green-400",
-  updating: "text-blue-600 dark:text-blue-400",
-  rollback_started: "text-amber-600 dark:text-amber-400",
-  paused: "text-amber-600 dark:text-amber-400",
-  rollback_paused: "text-amber-600 dark:text-amber-400",
-  rollback_completed: "text-amber-600 dark:text-amber-400",
-};
-
 const statusLabels: Record<string, string> = {
   stable: "Stable",
   updating: "Updating",
@@ -658,19 +654,16 @@ const statusLabels: Record<string, string> = {
   rollback_completed: "Rolled back",
 };
 
-function serviceStatusLabel(service: Service): { label: string; color: string } {
+function serviceStatus(service: Service): { label: string; state: string } {
   const state = service.UpdateStatus?.State;
   if (!state || state === "completed") {
-    return { label: "Stable", color: statusStyles.stable };
+    return { label: "Stable", state: "stable" };
   }
-  return {
-    label: statusLabels[state] || state,
-    color: statusStyles[state] || statusStyles.stable,
-  };
+  return { label: statusLabels[state] || state, state };
 }
 
 function ServiceStatusCard({ service }: { service: Service }) {
-  const { label, color } = serviceStatusLabel(service);
+  const { label, state } = serviceStatus(service);
   const ts = service.UpdateStatus?.CompletedAt || service.UpdateStatus?.StartedAt;
   const msg = service.UpdateStatus?.Message;
 
@@ -679,7 +672,12 @@ function ServiceStatusCard({ service }: { service: Service }) {
       label="Status"
       value={
         <div className="flex flex-col">
-          <span className={`text-base font-medium ${color}`}>{label}</span>
+          <span
+            data-state={state}
+            className="text-base font-medium text-green-600 data-[state=paused]:text-amber-600 data-[state=rollback_completed]:text-amber-600 data-[state=rollback_paused]:text-amber-600 data-[state=rollback_started]:text-amber-600 data-[state=updating]:text-blue-600 dark:text-green-400 dark:data-[state=paused]:text-amber-400 dark:data-[state=rollback_completed]:text-amber-400 dark:data-[state=rollback_paused]:text-amber-400 dark:data-[state=rollback_started]:text-amber-400 dark:data-[state=updating]:text-blue-400"
+          >
+            {label}
+          </span>
           {ts && <span className="text-xs text-muted-foreground">{timeAgo(ts)}</span>}
           {msg && label !== "Stable" && (
             <span
@@ -984,20 +982,7 @@ function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[] }) {
         className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
         title="Scale service"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-        </svg>
+        <Pencil className="h-3.5 w-3.5" />
       </button>
 
       {scaleOpen && (
@@ -1051,17 +1036,11 @@ function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[] }) {
   );
 }
 
-const mountTypeColors: Record<string, string> = {
-  volume: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-  bind: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-  tmpfs: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
-};
-
 function MountTypeBadge({ type }: { type: string }) {
-  const color = mountTypeColors[type] || "bg-muted text-muted-foreground";
   return (
     <span
-      className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${color}`}
+      data-type={type}
+      className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground data-[type=bind]:bg-amber-100 data-[type=bind]:text-amber-800 data-[type=tmpfs]:bg-purple-100 data-[type=tmpfs]:text-purple-800 data-[type=volume]:bg-blue-100 data-[type=volume]:text-blue-800 dark:data-[type=bind]:bg-amber-900/30 dark:data-[type=bind]:text-amber-300 dark:data-[type=tmpfs]:bg-purple-900/30 dark:data-[type=tmpfs]:text-purple-300 dark:data-[type=volume]:bg-blue-900/30 dark:data-[type=volume]:text-blue-300"
     >
       {type}
     </span>

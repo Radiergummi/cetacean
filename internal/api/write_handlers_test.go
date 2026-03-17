@@ -2,7 +2,7 @@ package api
 
 import (
 	"context"
-	"encoding/json"
+	json "github.com/goccy/go-json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -170,6 +170,34 @@ func TestHandleScaleService_GlobalMode(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("status=%d, want 400", w.Code)
+	}
+}
+
+func TestHandleScaleService_Conflict(t *testing.T) {
+	c := cache.New(nil)
+	replicas := uint64(3)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Mode: swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: &replicas}},
+		},
+	})
+
+	wc := &mockWriteClient{
+		scaleServiceFn: func(_ context.Context, _ string, _ uint64) (swarm.Service, error) {
+			return swarm.Service{}, errdefs.Conflict(fmt.Errorf("update out of sequence"))
+		},
+	}
+
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	body := `{"replicas": 5}`
+	req := httptest.NewRequest("PUT", "/services/svc1/scale", strings.NewReader(body))
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleScaleService(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Errorf("status=%d, want 409", w.Code)
 	}
 }
 
@@ -499,15 +527,22 @@ func TestHandleGetServiceEnv(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
 	}
-	var result map[string]string
-	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
-	if result["FOO"] != "bar" {
-		t.Errorf("FOO=%q, want bar", result["FOO"])
+	if resp["@type"] != "ServiceEnv" {
+		t.Errorf("@type=%v, want ServiceEnv", resp["@type"])
 	}
-	if result["BAZ"] != "qux" {
-		t.Errorf("BAZ=%q, want qux", result["BAZ"])
+	envMap, ok := resp["env"].(map[string]any)
+	if !ok {
+		t.Fatal("expected env key in response")
+	}
+	if envMap["FOO"] != "bar" {
+		t.Errorf("FOO=%v, want bar", envMap["FOO"])
+	}
+	if envMap["BAZ"] != "qux" {
+		t.Errorf("BAZ=%v, want qux", envMap["BAZ"])
 	}
 }
 
@@ -603,12 +638,19 @@ func TestHandleGetNodeLabels(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
 	}
-	var result map[string]string
-	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
-	if result["region"] != "us-east" {
-		t.Errorf("region=%q, want us-east", result["region"])
+	if resp["@type"] != "NodeLabels" {
+		t.Errorf("@type=%v, want NodeLabels", resp["@type"])
+	}
+	labels, ok := resp["labels"].(map[string]any)
+	if !ok {
+		t.Fatal("expected labels key in response")
+	}
+	if labels["region"] != "us-east" {
+		t.Errorf("region=%v, want us-east", labels["region"])
 	}
 }
 
@@ -671,12 +713,19 @@ func TestHandleGetServiceResources(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
 	}
-	var result map[string]any
-	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
-	if result["Limits"] == nil {
-		t.Error("expected Limits in response")
+	if resp["@type"] != "ServiceResources" {
+		t.Errorf("@type=%v, want ServiceResources", resp["@type"])
+	}
+	resources, ok := resp["resources"].(map[string]any)
+	if !ok {
+		t.Fatal("expected resources key in response")
+	}
+	if resources["Limits"] == nil {
+		t.Error("expected Limits in resources")
 	}
 }
 

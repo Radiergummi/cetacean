@@ -1,5 +1,5 @@
-import { useCallback, useState } from "react";
 import { useMatchesBreakpoint } from "./useMatchesBreakpoint";
+import { useCallback, useState } from "react";
 
 export type ViewMode = "table" | "grid";
 

@@ -9,7 +9,9 @@ export default function ResourceId({
   id?: string;
   truncate?: number;
 }) {
-  if (!id) return null;
+  if (!id) {
+    return null;
+  }
 
   const display = truncate ? id.slice(0, truncate) : id;
   const value =
@@ -21,7 +23,7 @@ export default function ResourceId({
         {display}
       </span>
     ) : (
-      <span className="font-mono">{display}</span>
+      <span className="truncate font-mono">{display}</span>
     );
 
   return (

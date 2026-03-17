@@ -325,7 +325,7 @@ describe("LogViewer", () => {
     await waitFor(() => expect(screen.getByText("line 0")).toBeInTheDocument());
 
     // Simulate being at scroll top so atTop becomes true and "Load older" appears
-    const container = document.querySelector(".log-panel")!;
+    const container = document.querySelector("#log-panel")!;
     Object.defineProperty(container, "scrollTop", { value: 0, writable: true, configurable: true });
     Object.defineProperty(container, "scrollHeight", {
       value: 500,

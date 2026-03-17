@@ -18,14 +18,18 @@ interface Props {
 export default function PageHeader({ title, subtitle, breadcrumbs, actions }: Props) {
   useEffect(() => {
     const text = typeof title === "string" ? title : null;
-    if (text) document.title = `${text} · Cetacean`;
+
+    if (text) {
+      document.title = `${text} · Cetacean`;
+    }
+
     return () => {
       document.title = "Cetacean";
     };
   }, [title]);
 
   return (
-    <header className="mb-6">
+    <header className="mb-6 flex max-w-full flex-col gap-6 overflow-x-hidden">
       {breadcrumbs && breadcrumbs.length > 0 && (
         <nav className="mb-1.5 flex items-center gap-1 text-sm text-muted-foreground">
           {breadcrumbs.map(({ label, to }, index) => (
@@ -42,16 +46,16 @@ export default function PageHeader({ title, subtitle, breadcrumbs, actions }: Pr
                   {label}
                 </Link>
               ) : (
-                <span className="text-foreground">{label}</span>
+                <span className="truncate text-foreground">{label}</span>
               )}
             </span>
           ))}
         </nav>
       )}
 
-      <div className="mt-6 flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-4 truncate">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight slashed-zero tabular-nums">
+          <h1 className="max-w-full text-2xl font-semibold tracking-tight slashed-zero tabular-nums">
             {title}
           </h1>
           {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}

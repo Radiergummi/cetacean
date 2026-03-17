@@ -19,7 +19,8 @@ export default function InfoCard({
 
   return (
     <div
-      className={`${right ? "grid grid-cols-[1fr_auto] grid-rows-[auto_1fr] gap-x-3" : "flex flex-col"} gap-y-1 rounded-lg border bg-card p-4 ${className}`}
+      data-right={right ? "" : undefined}
+      className={`flex flex-col gap-y-1 rounded-lg border bg-card p-4 data-right:grid data-right:grid-cols-[1fr_auto] data-right:grid-rows-[auto_1fr] data-right:gap-x-3 ${className}`}
     >
       <span className="block text-xs font-medium tracking-wider text-muted-foreground uppercase">
         {label}
@@ -52,11 +53,7 @@ export default function InfoCard({
         )}
       </div>
 
-      {right && (
-        <div className="row-span-2 col-start-2 row-start-1 flex items-center">
-          {right}
-        </div>
-      )}
+      {right && <div className="col-start-2 row-span-2 row-start-1 flex items-center">{right}</div>}
     </div>
   );
 }
