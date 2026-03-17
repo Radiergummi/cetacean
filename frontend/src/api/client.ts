@@ -1,6 +1,6 @@
 import type {
   Node,
-  Service,
+  ServiceDetail,
   ServiceListItem,
   Task,
   Stack,
@@ -146,8 +146,7 @@ export const api = {
   node: (id: string) => fetchJSON<{ node: Node }>(`/nodes/${id}`).then((r) => r.node),
   services: (params?: ListParams) =>
     fetchJSON<PagedResponse<ServiceListItem>>(buildListURL("/services", params)),
-  service: (id: string) =>
-    fetchJSON<{ service: Service }>(`/services/${id}`).then((r) => r.service),
+  service: (id: string) => fetchJSON<ServiceDetail>(`/services/${id}`),
   tasks: (params?: ListParams) => fetchJSON<PagedResponse<Task>>(buildListURL("/tasks", params)),
   stacks: (params?: ListParams) => fetchJSON<PagedResponse<Stack>>(buildListURL("/stacks", params)),
   stacksSummary: () =>

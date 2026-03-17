@@ -677,9 +677,13 @@ func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("service %q not found", id))
 		return
 	}
-	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id, "Service", map[string]any{
+	extra := map[string]any{
 		"service": svc,
-	}))
+	}
+	if changes := DiffServiceSpecs(svc.PreviousSpec, &svc.Spec); len(changes) > 0 {
+		extra["changes"] = changes
+	}
+	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id, "Service", extra))
 }
 
 func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {

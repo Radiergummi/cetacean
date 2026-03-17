@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Last deployment diff on service detail page showing what changed in the most recent service update
+
 ## [0.6.0] - 2026-03-16
 
 ### Added

@@ -311,9 +311,20 @@ export interface TopoTask {
   image: string;
 }
 
+export interface SpecChange {
+  field: string;
+  old?: string;
+  new?: string;
+}
+
 export interface ServiceRef {
   id: string;
   name: string;
+}
+
+export interface ServiceDetail {
+  service: Service;
+  changes?: SpecChange[];
 }
 
 export interface ConfigDetail {

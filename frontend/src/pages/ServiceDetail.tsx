@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { HistoryEntry, Service, Task } from "../api/types";
+import type { HistoryEntry, Service, SpecChange, Task } from "../api/types";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
 import { ContainerImage, KVTable, MetadataGrid, ResourceLink, Timestamp } from "../components/data";
@@ -20,13 +20,14 @@ import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { formatBytes } from "../lib/formatBytes";
 import { formatNs } from "../lib/formatNs";
 import { escapePromQL } from "../lib/utils";
-import { Globe, Shuffle } from "lucide-react";
+import { ArrowRight, Globe, Shuffle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 export default function ServiceDetail() {
   const { id } = useParams<{ id: string }>();
   const [service, setService] = useState<Service | null>(null);
+  const [changes, setChanges] = useState<SpecChange[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const monitoring = useMonitoringStatus();
@@ -44,7 +45,10 @@ export default function ServiceDetail() {
 
     api
       .service(id)
-      .then(setService)
+      .then((r) => {
+        setService(r.service);
+        setChanges(r.changes ?? []);
+      })
       .catch(() => setError(true));
     api
       .serviceTasks(id)
@@ -208,6 +212,19 @@ export default function ServiceDetail() {
         />
       </MetadataGrid>
 
+      {/* Last Deployment */}
+      {changes.length > 0 && (
+        <CollapsibleSection
+          title="Last Deployment"
+          defaultOpen={service.UpdateStatus?.State === "updating"}
+        >
+          <DeploymentChanges
+            changes={changes}
+            updateStatus={service.UpdateStatus}
+          />
+        </CollapsibleSection>
+      )}
+
       {/* Tasks */}
       <TasksTable
         tasks={tasks}
@@ -351,7 +368,7 @@ export default function ServiceDetail() {
                   className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 font-mono text-sm"
                 >
                   <span className="font-semibold">{PublishedPort}</span>
-                  <span className="text-muted-foreground">&rarr;</span>
+                  <ArrowRight className="size-3 text-muted-foreground" />
                   <span>
                     {TargetPort}/{Protocol}
                   </span>
@@ -917,6 +934,58 @@ function ResourcesPanel({ resources }: { resources: ResourceShape }) {
           <span className="font-mono">{resources.Limits!.Pids}</span>
         </div>
       )}
+    </div>
+  );
+}
+
+function DeploymentChanges({
+  changes,
+  updateStatus,
+}: {
+  changes: SpecChange[];
+  updateStatus?: Service["UpdateStatus"];
+}) {
+  const ts = updateStatus?.CompletedAt || updateStatus?.StartedAt;
+  const deploymentLabels: Record<string, string> = {
+    updating: "In progress",
+    rollback_started: "Rolling back",
+    rollback_paused: "Rollback paused",
+    rollback_completed: "Rolled back",
+  };
+  const stateLabel = deploymentLabels[updateStatus?.State ?? ""] ?? "Completed";
+
+  return (
+    <div className="space-y-3">
+      {ts && (
+        <p className="text-sm text-muted-foreground">
+          {stateLabel} {timeAgo(ts)}
+        </p>
+      )}
+      <div className="divide-y rounded-lg border">
+        {changes.map(({field, new: change, old}, index) => (
+          <div
+            key={index}
+            className="flex items-center gap-2 px-3 py-2 text-sm"
+          >
+            <span className="min-w-40 shrink-0 font-medium">{field}</span>
+            {old && change ? (
+              <>
+                <span className="font-mono text-xs text-red-600 line-through dark:text-red-400">
+                  {old}
+                </span>
+                <ArrowRight className="size-3 shrink-0 text-muted-foreground" />
+                <span className="font-mono text-xs text-green-600 dark:text-green-400">
+                  {change}
+                </span>
+              </>
+            ) : old ? (
+              <span className="font-mono text-xs text-red-600 dark:text-red-400">{old}</span>
+            ) : (
+              <span className="font-mono text-xs text-green-600 dark:text-green-400">{change}</span>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

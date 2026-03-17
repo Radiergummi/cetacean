@@ -33,7 +33,7 @@ export default function TaskDetail() {
         setTask(t);
         api
           .service(t.ServiceID)
-          .then(setService)
+          .then((r) => setService(r.service))
           .catch(() => {});
       })
       .catch(() => setError(true));
