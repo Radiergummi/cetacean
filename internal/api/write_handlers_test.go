@@ -10,15 +10,18 @@ import (
 	"testing"
 
 	"github.com/docker/docker/api/types/swarm"
+	"github.com/docker/docker/errdefs"
 
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 type mockWriteClient struct {
-	scaleServiceFn       func(ctx context.Context, id string, replicas uint64) (swarm.Service, error)
-	updateServiceImageFn func(ctx context.Context, id string, image string) (swarm.Service, error)
-	rollbackServiceFn    func(ctx context.Context, id string) (swarm.Service, error)
-	restartServiceFn     func(ctx context.Context, id string) (swarm.Service, error)
+	scaleServiceFn             func(ctx context.Context, id string, replicas uint64) (swarm.Service, error)
+	updateServiceImageFn       func(ctx context.Context, id string, image string) (swarm.Service, error)
+	rollbackServiceFn          func(ctx context.Context, id string) (swarm.Service, error)
+	restartServiceFn           func(ctx context.Context, id string) (swarm.Service, error)
+	updateNodeAvailabilityFn   func(ctx context.Context, id string, availability swarm.NodeAvailability) (swarm.Node, error)
+	removeTaskFn               func(ctx context.Context, id string) error
 }
 
 func (m *mockWriteClient) ScaleService(ctx context.Context, id string, replicas uint64) (swarm.Service, error) {
@@ -47,6 +50,20 @@ func (m *mockWriteClient) RestartService(ctx context.Context, id string) (swarm.
 		return m.restartServiceFn(ctx, id)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) UpdateNodeAvailability(ctx context.Context, id string, availability swarm.NodeAvailability) (swarm.Node, error) {
+	if m.updateNodeAvailabilityFn != nil {
+		return m.updateNodeAvailabilityFn(ctx, id, availability)
+	}
+	return swarm.Node{}, fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) RemoveTask(ctx context.Context, id string) error {
+	if m.removeTaskFn != nil {
+		return m.removeTaskFn(ctx, id)
+	}
+	return fmt.Errorf("not implemented")
 }
 
 func replicatedService(id string) swarm.Service {
@@ -314,6 +331,125 @@ func TestHandleRestartService_NotFound(t *testing.T) {
 	req.SetPathValue("id", "missing")
 	w := httptest.NewRecorder()
 	h.HandleRestartService(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestHandleUpdateNodeAvailability_OK(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{ID: "node1"})
+
+	wc := &mockWriteClient{
+		updateNodeAvailabilityFn: func(_ context.Context, id string, availability swarm.NodeAvailability) (swarm.Node, error) {
+			return swarm.Node{ID: id, Spec: swarm.NodeSpec{Availability: availability}}, nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+
+	body := `{"availability":"drain"}`
+	req := httptest.NewRequest("PUT", "/nodes/node1/availability", strings.NewReader(body))
+	req.SetPathValue("id", "node1")
+	w := httptest.NewRecorder()
+	h.HandleUpdateNodeAvailability(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["@type"] != "Node" {
+		t.Errorf("@type=%v, want Node", resp["@type"])
+	}
+}
+
+func TestHandleUpdateNodeAvailability_NotFound(t *testing.T) {
+	c := cache.New(nil)
+	wc := &mockWriteClient{}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+
+	body := `{"availability":"drain"}`
+	req := httptest.NewRequest("PUT", "/nodes/missing/availability", strings.NewReader(body))
+	req.SetPathValue("id", "missing")
+	w := httptest.NewRecorder()
+	h.HandleUpdateNodeAvailability(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestHandleUpdateNodeAvailability_InvalidAvailability(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{ID: "node1"})
+	wc := &mockWriteClient{}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+
+	body := `{"availability":"invalid"}`
+	req := httptest.NewRequest("PUT", "/nodes/node1/availability", strings.NewReader(body))
+	req.SetPathValue("id", "node1")
+	w := httptest.NewRecorder()
+	h.HandleUpdateNodeAvailability(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status=%d, want 400", w.Code)
+	}
+}
+
+func TestHandleRemoveTask_OK(t *testing.T) {
+	c := cache.New(nil)
+	c.SetTask(swarm.Task{ID: "task1"})
+
+	wc := &mockWriteClient{
+		removeTaskFn: func(_ context.Context, id string) error {
+			return nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+
+	req := httptest.NewRequest("DELETE", "/tasks/task1", nil)
+	req.SetPathValue("id", "task1")
+	w := httptest.NewRecorder()
+	h.HandleRemoveTask(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status=%d, want 204; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleRemoveTask_NotFoundInCache(t *testing.T) {
+	c := cache.New(nil)
+	wc := &mockWriteClient{}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+
+	req := httptest.NewRequest("DELETE", "/tasks/missing", nil)
+	req.SetPathValue("id", "missing")
+	w := httptest.NewRecorder()
+	h.HandleRemoveTask(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestHandleRemoveTask_NoContainer(t *testing.T) {
+	c := cache.New(nil)
+	c.SetTask(swarm.Task{ID: "task1"})
+
+	wc := &mockWriteClient{
+		removeTaskFn: func(_ context.Context, id string) error {
+			return errdefs.NotFound(fmt.Errorf("task has no running container"))
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+
+	req := httptest.NewRequest("DELETE", "/tasks/task1", nil)
+	req.SetPathValue("id", "task1")
+	w := httptest.NewRecorder()
+	h.HandleRemoveTask(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("status=%d, want 404", w.Code)

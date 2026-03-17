@@ -15,6 +15,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/errdefs"
 
 	"github.com/radiergummi/cetacean/internal/cache"
 )
@@ -358,4 +359,29 @@ func (c *Client) RestartService(ctx context.Context, id string) (swarm.Service, 
 		return swarm.Service{}, err
 	}
 	return c.InspectService(ctx, id)
+}
+
+func (c *Client) UpdateNodeAvailability(ctx context.Context, id string, availability swarm.NodeAvailability) (swarm.Node, error) {
+	node, _, err := c.docker.NodeInspectWithRaw(ctx, id)
+	if err != nil {
+		return swarm.Node{}, err
+	}
+	node.Spec.Availability = availability
+	err = c.docker.NodeUpdate(ctx, node.ID, node.Version, node.Spec)
+	if err != nil {
+		return swarm.Node{}, err
+	}
+	return c.InspectNode(ctx, id)
+}
+
+func (c *Client) RemoveTask(ctx context.Context, id string) error {
+	task, _, err := c.docker.TaskInspectWithRaw(ctx, id)
+	if err != nil {
+		return err
+	}
+	containerID := task.Status.ContainerStatus.ContainerID
+	if containerID == "" {
+		return errdefs.NotFound(fmt.Errorf("task has no running container"))
+	}
+	return c.docker.ContainerRemove(ctx, containerID, container.RemoveOptions{Force: true})
 }
