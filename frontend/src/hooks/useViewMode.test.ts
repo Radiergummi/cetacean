@@ -1,6 +1,13 @@
+import { useMatchesBreakpoint } from "./useMatchesBreakpoint";
 import { useViewMode } from "./useViewMode";
 import { renderHook, act } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+vi.mock("./useMatchesBreakpoint", () => ({
+  useMatchesBreakpoint: vi.fn(() => false),
+}));
+
+const mockUseMatchesBreakpoint = vi.mocked(useMatchesBreakpoint);
 
 const store = new Map<string, string>();
 
@@ -41,5 +48,31 @@ describe("useViewMode", () => {
     store.set("viewMode:test", "invalid");
     const { result } = renderHook(() => useViewMode("test"));
     expect(result.current[0]).toBe("table");
+  });
+
+  describe("mobile", () => {
+    beforeEach(() => mockUseMatchesBreakpoint.mockReturnValue(true));
+    afterEach(() => mockUseMatchesBreakpoint.mockReturnValue(false));
+
+    it("returns grid on mobile regardless of stored value", () => {
+      store.set("viewMode:test", "table");
+      const { result } = renderHook(() => useViewMode("test"));
+      expect(result.current[0]).toBe("grid");
+    });
+
+    it("still persists user choice on mobile", () => {
+      const { result } = renderHook(() => useViewMode("test"));
+      act(() => result.current[1]("table"));
+      expect(store.get("viewMode:test")).toBe("table");
+      // But returns grid because mobile override
+      expect(result.current[0]).toBe("grid");
+    });
+
+    it("returns stored value on desktop", () => {
+      mockUseMatchesBreakpoint.mockReturnValue(false);
+      store.set("viewMode:test", "table");
+      const { result } = renderHook(() => useViewMode("test"));
+      expect(result.current[0]).toBe("table");
+    });
   });
 });

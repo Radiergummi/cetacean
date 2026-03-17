@@ -25,10 +25,12 @@ export default function ListToolbar({
         placeholder={placeholder}
       />
       {viewMode != null && onViewModeChange && (
-        <ViewToggle
-          mode={viewMode}
-          onChange={onViewModeChange}
-        />
+        <div className="hidden md:block">
+          <ViewToggle
+            mode={viewMode}
+            onChange={onViewModeChange}
+          />
+        </div>
       )}
     </div>
   );

@@ -14,8 +14,9 @@ import { useResourceStream } from "../hooks/useResourceStream";
 import { computeLayout } from "../lib/layoutElk";
 import { buildLogicalFlow, buildPhysicalFlow, hashColor } from "../lib/topologyTransform";
 import { ReactFlow, ReactFlowProvider, Background, type Node, type Edge } from "@xyflow/react";
-import { Network, Server } from "lucide-react";
+import { Info, Network, Server, X } from "lucide-react";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useMatchesBreakpoint } from "../hooks/useMatchesBreakpoint";
 
 const logicalNodeTypes = {
   stackGroup: GroupNode,
@@ -26,12 +27,38 @@ const physicalNodeTypes = { physicalNode: PhysicalNodeCard };
 
 type View = "logical" | "physical";
 
-function StackLegend({ stackColors }: { stackColors: Map<string, string> }) {
+function StackLegend({ stackColors, isMobile }: { stackColors: Map<string, string>; isMobile: boolean }) {
+  const [open, setOpen] = useState(!isMobile);
+
+  useEffect(() => setOpen(!isMobile), [isMobile]);
+
   if (stackColors.size === 0) return null;
+
+  if (isMobile && !open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="absolute bottom-3 right-3 z-10 rounded-lg border bg-card/90 p-2 shadow-sm backdrop-blur-sm"
+        title="Show legend"
+      >
+        <Info className="size-4 text-muted-foreground" />
+      </button>
+    );
+  }
 
   return (
     <div className="absolute bottom-3 left-3 z-10 rounded-lg border bg-card/90 p-3 text-xs shadow-sm backdrop-blur-sm">
-      <div className="mb-1.5 font-medium text-muted-foreground">Stacks</div>
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="font-medium text-muted-foreground">Stacks</span>
+        {isMobile && (
+          <button
+            onClick={() => setOpen(false)}
+            className="ml-2 text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-3" />
+          </button>
+        )}
+      </div>
       <div className="flex flex-col gap-1">
         {[...stackColors.entries()].map(([stack, color]) => (
           <span
@@ -105,7 +132,7 @@ function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
   return { nodes, edges, ready };
 }
 
-function LogicalView({ data }: { data: NetworkTopology }) {
+function LogicalView({ data, isMobile }: { data: NetworkTopology; isMobile: boolean }) {
   const { nodes: rawNodes, edges: rawEdges } = useMemo(() => buildLogicalFlow(data), [data]);
   const { nodes, edges, ready } = useElkLayout(rawNodes, rawEdges);
 
@@ -132,7 +159,7 @@ function LogicalView({ data }: { data: NetworkTopology }) {
     <HighlightProvider edges={rawEdges}>
       <div
         className="relative"
-        style={{ height: "calc(100vh - 12rem)" }}
+        style={{ height: isMobile ? "calc(100dvh - 3rem)" : "calc(100vh - 12rem)" }}
       >
         <ReactFlow
           nodes={nodes}
@@ -146,13 +173,13 @@ function LogicalView({ data }: { data: NetworkTopology }) {
         >
           <Background />
         </ReactFlow>
-        <StackLegend stackColors={stackColors} />
+        <StackLegend stackColors={stackColors} isMobile={isMobile} />
       </div>
     </HighlightProvider>
   );
 }
 
-function PhysicalView({ data }: { data: PlacementTopology }) {
+function PhysicalView({ data, isMobile }: { data: PlacementTopology; isMobile: boolean }) {
   const { nodes } = useMemo(() => buildPhysicalFlow(data), [data]);
 
   if (data.nodes.length === 0) {
@@ -165,7 +192,7 @@ function PhysicalView({ data }: { data: PlacementTopology }) {
   }
 
   return (
-    <div style={{ height: "calc(100vh - 12rem)" }}>
+    <div style={{ height: isMobile ? "calc(100dvh - 3rem)" : "calc(100vh - 12rem)" }}>
       <ReactFlow
         nodes={nodes}
         edges={[]}
@@ -183,6 +210,7 @@ function PhysicalView({ data }: { data: PlacementTopology }) {
 }
 
 export default function Topology() {
+  const isMobile = useMatchesBreakpoint("md", "below");
   const [view, setView] = useState<View>("logical");
   const [networkData, setNetworkData] = useState<NetworkTopology | null>(null);
   const [placementData, setPlacementData] = useState<PlacementTopology | null>(null);
@@ -264,13 +292,13 @@ export default function Topology() {
       <div className="rounded-lg ring-1 ring-border">
         {!loading && !error && view === "logical" && networkData && (
           <ReactFlowProvider>
-            <LogicalView data={networkData} />
+            <LogicalView data={networkData} isMobile={isMobile} />
           </ReactFlowProvider>
         )}
 
         {!loading && !error && view === "physical" && placementData && (
           <ReactFlowProvider>
-            <PhysicalView data={placementData} />
+            <PhysicalView data={placementData} isMobile={isMobile} />
           </ReactFlowProvider>
         )}
       </div>

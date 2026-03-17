@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useMatchesBreakpoint } from "./useMatchesBreakpoint";
 
 export type ViewMode = "table" | "grid";
 
@@ -6,6 +7,8 @@ export function useViewMode(
   key: string,
   defaultMode: ViewMode = "table",
 ): [ViewMode, (m: ViewMode) => void] {
+  const isMobile = useMatchesBreakpoint("md", "below");
+
   const [mode, setMode] = useState<ViewMode>(() => {
     const stored = localStorage.getItem(`viewMode:${key}`);
     return stored === "table" || stored === "grid" ? stored : defaultMode;
@@ -19,5 +22,5 @@ export function useViewMode(
     [key],
   );
 
-  return [mode, set];
+  return [isMobile ? "grid" : mode, set];
 }

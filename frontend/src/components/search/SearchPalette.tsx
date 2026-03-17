@@ -210,7 +210,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
-        className="mx-auto mt-[15vh] max-w-lg animate-[slide-down_150ms_ease-out] rounded-lg border bg-popover shadow-lg"
+        className="mx-4 mt-[5vh] max-w-lg animate-[slide-down_150ms_ease-out] rounded-lg border bg-popover shadow-lg md:mx-auto md:mt-[15vh]"
         onClick={(event) => event.stopPropagation()}
         onKeyDown={onKeyDown}
       >
