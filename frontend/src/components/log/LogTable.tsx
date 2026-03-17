@@ -74,10 +74,10 @@ function LogRow({
       data-index={dataIndex}
       data-json={jsonLine ? "" : undefined}
       data-highlight={highlight || undefined}
-      className="group hover:bg-muted/50 data-highlight:bg-yellow-500/10 data-json:cursor-pointer"
+      className="group even:bg-background/50 hover:bg-muted/50 data-highlight:bg-yellow-500/10 data-json:cursor-pointer"
       onClick={onToggle && jsonLine ? () => onToggle(line.index) : undefined}
     >
-      <td className={`${onTogglePin ? "w-6" : "w-0.75"} align-stretch relative ps-0.75`}>
+      <td data-pinnable={onTogglePin ? "" : undefined} className="w-0.75 align-stretch relative ps-0.75 data-pinnable:w-6">
         <div
           className={`min-h-full w-0.75 ${LEVEL_BAR[line.level]} absolute top-0 bottom-0 left-0`}
         />
@@ -181,7 +181,8 @@ export function LogTable({
     <div
       ref={containerRef}
       onScroll={handleScroll}
-      className="log-panel overflow-auto"
+      id="log-panel"
+      className="h-100 overflow-auto rounded-lg border bg-muted/30 dark:border-gray-800 dark:bg-gray-950"
     >
       <table className="w-full border-collapse font-mono text-xs leading-5">
         {pinnedLines && pinnedLines.length > 0 && (

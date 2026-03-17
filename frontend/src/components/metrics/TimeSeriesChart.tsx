@@ -1,10 +1,10 @@
 import { api } from "../../api/client";
 import type { PrometheusResponse } from "../../api/types";
+import { useMatchesBreakpoint } from "../../hooks/useMatchesBreakpoint";
 import { getChartColor } from "../../lib/chartColors";
 import { CHART_TOOLTIP_CLASS } from "../../lib/chartTooltip";
 import { formatMetricValue } from "../../lib/formatMetricValue";
 import { generateMockSeries } from "../../lib/mockChartData";
-import { useMatchesBreakpoint } from "../../hooks/useMatchesBreakpoint";
 import { useChartSync } from "./ChartSyncProvider";
 import { useMetricsPanelContext } from "./MetricsPanelContext";
 import {
@@ -726,14 +726,16 @@ export default function TimeSeriesChart({
           <div className="ml-1 flex items-center gap-0.5">
             <button
               onClick={() => setLocalStacked(false)}
-              className={`rounded p-0.5 ${!stacked ? "bg-muted" : "hover:bg-muted/50"}`}
+              aria-pressed={!stacked}
+              className="rounded p-0.5 hover:bg-muted/50 aria-pressed:bg-muted"
               title="Line chart"
             >
               <LineChart className="size-3.5" />
             </button>
             <button
               onClick={() => setLocalStacked(true)}
-              className={`rounded p-0.5 ${stacked ? "bg-muted" : "hover:bg-muted/50"}`}
+              aria-pressed={stacked}
+              className="rounded p-0.5 hover:bg-muted/50 aria-pressed:bg-muted"
               title="Stacked area"
             >
               <AreaChart className="size-3.5" />

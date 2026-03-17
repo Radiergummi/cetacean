@@ -15,7 +15,8 @@ export default function SimpleTable<T>({
 }) {
   return (
     <div
-      className={`overflow-x-auto rounded-lg border ${maxHeight ? "max-h-96 overflow-y-auto" : ""}`}
+      data-max-height={maxHeight || undefined}
+      className="overflow-x-auto rounded-lg border data-max-height:max-h-96 data-max-height:overflow-y-auto"
     >
       <table className="w-full min-w-max whitespace-nowrap">
         {columns && columns.length > 0 && (
