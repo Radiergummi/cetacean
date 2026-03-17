@@ -8,9 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Last deployment diff on service detail page showing what changed in the most recent service update
-- Node availability control on node detail page (Active / Drain / Pause) with drain confirmation
+- Scale, update image, rollback, and restart actions on the service detail page
+- Drain, activate, and pause node availability controls on the node detail page
 - Force Remove button on task detail page to kill a task and its backing container
+- Last deployment diff on service detail page showing what changed in the most recent service update
+- Inline environment variable editor on service detail page (add, edit, remove variables)
+- Inline node label editor on node detail page (add, edit, remove labels)
+- Service resource limits editor on service detail page (CPU and memory limits/reservations)
+- Write actions accessible via the command palette (Cmd+K)
 
 ### Fixed
 - Log viewer appearing empty on service and task detail pages until user interaction

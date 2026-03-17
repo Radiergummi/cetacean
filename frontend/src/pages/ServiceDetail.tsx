@@ -2,6 +2,7 @@ import { api } from "../api/client";
 import type { HistoryEntry, Service, SpecChange, Task } from "../api/types";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
+import KeyValueEditor from "../components/KeyValueEditor";
 import { ContainerImage, KVTable, MetadataGrid, ResourceLink, Timestamp } from "../components/data";
 import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
@@ -21,7 +22,7 @@ import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { formatBytes } from "../lib/formatBytes";
 import { formatNs } from "../lib/formatNs";
 import { escapePromQL } from "../lib/utils";
-import { ArrowRight, Globe, ImageIcon, Pencil, Plus, RefreshCw, RotateCcw, Shuffle, Trash2, X } from "lucide-react";
+import { ArrowRight, Globe, ImageIcon, Pencil, RefreshCw, RotateCcw, Shuffle, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -305,13 +306,14 @@ export default function ServiceDetail() {
       )}
 
       {/* Environment variables */}
-      {envVars !== null && (
-        <EnvEditor
-          serviceId={id!}
-          envVars={envVars}
-          onSaved={setEnvVars}
-        />
-      )}
+      <KeyValueEditor
+        title="Environment Variables"
+        keyLabel="Variable"
+        valueLabel="Value"
+        data={envVars}
+        loading={false}
+        onSave={(ops) => api.patchServiceEnv(id!, ops).then(setEnvVars)}
+      />
 
       {/* Healthcheck */}
       {containerSpec.Healthcheck && (
@@ -1304,221 +1306,6 @@ function DeploymentChanges({
   );
 }
 
-function EnvEditor({
-  serviceId,
-  envVars,
-  onSaved,
-}: {
-  serviceId: string;
-  envVars: Record<string, string>;
-  onSaved: (updated: Record<string, string>) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<Record<string, string>>({});
-  const [newKey, setNewKey] = useState("");
-  const [newVal, setNewVal] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-
-  function openEdit() {
-    setDraft({ ...envVars });
-    setNewKey("");
-    setNewVal("");
-    setSaveError(null);
-    setEditing(true);
-  }
-
-  function cancelEdit() {
-    setEditing(false);
-    setSaveError(null);
-  }
-
-  function addRow() {
-    const k = newKey.trim();
-    if (!k) return;
-    setDraft((prev) => ({ ...prev, [k]: newVal }));
-    setNewKey("");
-    setNewVal("");
-  }
-
-  function removeRow(key: string) {
-    if (!window.confirm(`Remove env var "${key}"?`)) return;
-    setDraft((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-  }
-
-  async function save() {
-    // Build JSON Patch ops
-    const ops: Array<{ op: string; path: string; value?: string }> = [];
-    const original = envVars;
-
-    // Removed keys
-    for (const k of Object.keys(original)) {
-      if (!(k in draft)) {
-        ops.push({ op: "remove", path: `/${k}` });
-      }
-    }
-    // Added / replaced keys
-    for (const [k, v] of Object.entries(draft)) {
-      if (!(k in original)) {
-        ops.push({ op: "add", path: `/${k}`, value: v });
-      } else if (original[k] !== v) {
-        ops.push({ op: "replace", path: `/${k}`, value: v });
-      }
-    }
-    if (ops.length === 0) {
-      setEditing(false);
-      return;
-    }
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const updated = await api.patchServiceEnv(serviceId, ops);
-      onSaved(updated);
-      setEditing(false);
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Save failed");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const entries = Object.entries(envVars).sort(([a], [b]) => a.localeCompare(b));
-  const draftEntries = Object.entries(draft).sort(([a], [b]) => a.localeCompare(b));
-
-  const controls = !editing ? (
-    <button
-      type="button"
-      onClick={openEdit}
-      className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs font-medium hover:bg-accent"
-    >
-      <Pencil className="h-3 w-3" />
-      Edit
-    </button>
-  ) : null;
-
-  return (
-    <CollapsibleSection
-      title="Environment Variables"
-      defaultOpen={false}
-      controls={controls}
-    >
-      {!editing ? (
-        entries.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No environment variables.</p>
-        ) : (
-          <SimpleTable
-            columns={["Variable", "Value"]}
-            items={entries}
-            keyFn={([k]) => k}
-            renderRow={([k, v]) => (
-              <>
-                <td className="p-3 font-mono text-xs">{k}</td>
-                <td className="p-3 font-mono text-xs break-all">{v}</td>
-              </>
-            )}
-          />
-        )
-      ) : (
-        <div className="space-y-3">
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full min-w-max whitespace-nowrap">
-              <thead className="sticky top-0 z-10 bg-background">
-                <tr className="border-b bg-muted/50">
-                  <th className="p-3 text-left text-sm font-medium">Variable</th>
-                  <th className="p-3 text-left text-sm font-medium">Value</th>
-                  <th className="p-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {draftEntries.map(([k, v]) => (
-                  <tr key={k} className="border-b last:border-b-0">
-                    <td className="p-3 font-mono text-xs">{k}</td>
-                    <td className="p-2">
-                      <input
-                        type="text"
-                        value={v}
-                        onChange={(e) => setDraft((prev) => ({ ...prev, [k]: e.target.value }))}
-                        className="w-full rounded border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-                      />
-                    </td>
-                    <td className="p-2">
-                      <button
-                        type="button"
-                        onClick={() => removeRow(k)}
-                        className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-red-600"
-                        title="Remove"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                <tr>
-                  <td className="p-2">
-                    <input
-                      type="text"
-                      value={newKey}
-                      onChange={(e) => setNewKey(e.target.value)}
-                      placeholder="NEW_VAR"
-                      className="w-full rounded border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-                    />
-                  </td>
-                  <td className="p-2">
-                    <input
-                      type="text"
-                      value={newVal}
-                      onChange={(e) => setNewVal(e.target.value)}
-                      placeholder="value"
-                      onKeyDown={(e) => { if (e.key === "Enter") addRow(); }}
-                      className="w-full rounded border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-                    />
-                  </td>
-                  <td className="p-2">
-                    <button
-                      type="button"
-                      onClick={addRow}
-                      disabled={!newKey.trim()}
-                      className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
-                      title="Add"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => void save()}
-              disabled={saving}
-              className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
-            >
-              {saving && <Spinner />}
-              Save
-            </button>
-            <button
-              type="button"
-              onClick={cancelEdit}
-              disabled={saving}
-              className="inline-flex items-center gap-1 rounded border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
-            >
-              <X className="h-3 w-3" />
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-    </CollapsibleSection>
-  );
-}
-
 interface ServiceResourceShape {
   Limits?: { NanoCPUs?: number; MemoryBytes?: number; Pids?: number };
   Reservations?: { NanoCPUs?: number; MemoryBytes?: number };
@@ -1546,9 +1333,9 @@ function ResourcesEditor({
 
   function openEdit() {
     setLimitCpu(typed.Limits?.NanoCPUs != null ? String(typed.Limits.NanoCPUs / 1e9) : "");
-    setLimitMem(typed.Limits?.MemoryBytes != null ? String(typed.Limits.MemoryBytes) : "");
+    setLimitMem(typed.Limits?.MemoryBytes != null ? String(Math.round(typed.Limits.MemoryBytes / (1024 * 1024))) : "");
     setResCpu(typed.Reservations?.NanoCPUs != null ? String(typed.Reservations.NanoCPUs / 1e9) : "");
-    setResMem(typed.Reservations?.MemoryBytes != null ? String(typed.Reservations.MemoryBytes) : "");
+    setResMem(typed.Reservations?.MemoryBytes != null ? String(Math.round(typed.Reservations.MemoryBytes / (1024 * 1024))) : "");
     setSaveError(null);
     setEditing(true);
   }
@@ -1563,12 +1350,12 @@ function ResourcesEditor({
     if (limitCpu || limitMem) {
       patch.Limits = {};
       if (limitCpu) patch.Limits.NanoCPUs = Math.round(parseFloat(limitCpu) * 1e9);
-      if (limitMem) patch.Limits.MemoryBytes = parseInt(limitMem, 10);
+      if (limitMem) patch.Limits.MemoryBytes = parseInt(limitMem, 10) * 1024 * 1024;
     }
     if (resCpu || resMem) {
       patch.Reservations = {};
       if (resCpu) patch.Reservations.NanoCPUs = Math.round(parseFloat(resCpu) * 1e9);
-      if (resMem) patch.Reservations.MemoryBytes = parseInt(resMem, 10);
+      if (resMem) patch.Reservations.MemoryBytes = parseInt(resMem, 10) * 1024 * 1024;
     }
     setSaving(true);
     setSaveError(null);
@@ -1655,13 +1442,13 @@ function ResourcesEditor({
                 />
               </label>
               <label className="flex flex-col gap-1">
-                <span className="text-xs text-muted-foreground">Memory (bytes)</span>
+                <span className="text-xs text-muted-foreground">Memory (MB)</span>
                 <input
                   type="number"
                   min="0"
                   value={limitMem}
                   onChange={(e) => setLimitMem(e.target.value)}
-                  placeholder="e.g. 536870912"
+                  placeholder="e.g. 512"
                   className="rounded border bg-background px-2 py-1 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </label>
@@ -1681,13 +1468,13 @@ function ResourcesEditor({
                 />
               </label>
               <label className="flex flex-col gap-1">
-                <span className="text-xs text-muted-foreground">Memory (bytes)</span>
+                <span className="text-xs text-muted-foreground">Memory (MB)</span>
                 <input
                   type="number"
                   min="0"
                   value={resMem}
                   onChange={(e) => setResMem(e.target.value)}
-                  placeholder="e.g. 268435456"
+                  placeholder="e.g. 256"
                   className="rounded border bg-background px-2 py-1 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </label>
