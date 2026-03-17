@@ -12,6 +12,30 @@ import (
 	json "github.com/goccy/go-json"
 )
 
+// writeDockerError maps Docker API errors to appropriate HTTP status codes.
+func writeDockerError(w http.ResponseWriter, r *http.Request, err error, resource string) {
+	if errdefs.IsNotFound(err) {
+		writeProblem(w, r, http.StatusNotFound, resource+" not found")
+		return
+	}
+	if errdefs.IsConflict(err) {
+		writeProblem(w, r, http.StatusConflict, resource+" was modified by another client, please retry")
+		return
+	}
+	slog.Error("failed to update "+resource, "error", err)
+	writeProblem(w, r, http.StatusInternalServerError, "failed to update "+resource)
+}
+
+// writePatchError maps JSON Patch application errors to HTTP status codes.
+func writePatchError(w http.ResponseWriter, r *http.Request, err error) {
+	var tfe *testFailedError
+	if errors.As(err, &tfe) {
+		writeProblem(w, r, http.StatusConflict, err.Error())
+		return
+	}
+	writeProblem(w, r, http.StatusBadRequest, err.Error())
+}
+
 type updateImageRequest struct {
 	Image string `json:"image"`
 }
@@ -47,16 +71,7 @@ func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := h.writeClient.ScaleService(r.Context(), id, *req.Replicas)
 	if err != nil {
-		if errdefs.IsNotFound(err) {
-			writeProblem(w, r, http.StatusNotFound, "service not found")
-			return
-		}
-		if errdefs.IsConflict(err) {
-			writeProblem(w, r, http.StatusConflict, "service was modified by another client, please retry")
-			return
-		}
-		slog.Error("failed to scale service", "service", id, "error", err)
-		writeProblem(w, r, http.StatusInternalServerError, "failed to scale service")
+		writeDockerError(w, r, err, "service")
 		return
 	}
 
@@ -91,16 +106,7 @@ func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Reque
 
 	updated, err := h.writeClient.UpdateServiceImage(r.Context(), id, req.Image)
 	if err != nil {
-		if errdefs.IsNotFound(err) {
-			writeProblem(w, r, http.StatusNotFound, "service not found")
-			return
-		}
-		if errdefs.IsConflict(err) {
-			writeProblem(w, r, http.StatusConflict, "service was modified by another client, please retry")
-			return
-		}
-		slog.Error("failed to update service image", "service", id, "error", err)
-		writeProblem(w, r, http.StatusInternalServerError, "failed to update service image")
+		writeDockerError(w, r, err, "service")
 		return
 	}
 
@@ -126,16 +132,7 @@ func (h *Handlers) HandleRollbackService(w http.ResponseWriter, r *http.Request)
 
 	updated, err := h.writeClient.RollbackService(r.Context(), id)
 	if err != nil {
-		if errdefs.IsNotFound(err) {
-			writeProblem(w, r, http.StatusNotFound, "service not found")
-			return
-		}
-		if errdefs.IsConflict(err) {
-			writeProblem(w, r, http.StatusConflict, "service was modified by another client, please retry")
-			return
-		}
-		slog.Error("failed to rollback service", "service", id, "error", err)
-		writeProblem(w, r, http.StatusInternalServerError, "failed to rollback service")
+		writeDockerError(w, r, err, "service")
 		return
 	}
 
@@ -180,16 +177,7 @@ func (h *Handlers) HandleUpdateNodeAvailability(w http.ResponseWriter, r *http.R
 
 	updated, err := h.writeClient.UpdateNodeAvailability(r.Context(), id, availability)
 	if err != nil {
-		if errdefs.IsNotFound(err) {
-			writeProblem(w, r, http.StatusNotFound, "node not found")
-			return
-		}
-		if errdefs.IsConflict(err) {
-			writeProblem(w, r, http.StatusConflict, "node was modified by another client, please retry")
-			return
-		}
-		slog.Error("failed to update node availability", "node", id, "error", err)
-		writeProblem(w, r, http.StatusInternalServerError, "failed to update node availability")
+		writeDockerError(w, r, err, "node")
 		return
 	}
 
@@ -211,16 +199,7 @@ func (h *Handlers) HandleRemoveTask(w http.ResponseWriter, r *http.Request) {
 
 	err := h.writeClient.RemoveTask(r.Context(), id)
 	if err != nil {
-		if errdefs.IsNotFound(err) {
-			writeProblem(w, r, http.StatusNotFound, "task not found")
-			return
-		}
-		if errdefs.IsConflict(err) {
-			writeProblem(w, r, http.StatusConflict, "task container is in a conflicting state")
-			return
-		}
-		slog.Error("failed to remove task", "task", id, "error", err)
-		writeProblem(w, r, http.StatusInternalServerError, "failed to remove task")
+		writeDockerError(w, r, err, "task")
 		return
 	}
 
@@ -240,16 +219,7 @@ func (h *Handlers) HandleRestartService(w http.ResponseWriter, r *http.Request) 
 
 	updated, err := h.writeClient.RestartService(r.Context(), id)
 	if err != nil {
-		if errdefs.IsNotFound(err) {
-			writeProblem(w, r, http.StatusNotFound, "service not found")
-			return
-		}
-		if errdefs.IsConflict(err) {
-			writeProblem(w, r, http.StatusConflict, "service was modified by another client, please retry")
-			return
-		}
-		slog.Error("failed to restart service", "service", id, "error", err)
-		writeProblem(w, r, http.StatusInternalServerError, "failed to restart service")
+		writeDockerError(w, r, err, "service")
 		return
 	}
 
@@ -311,12 +281,7 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 
 	updated, err := applyJSONPatch(current, ops)
 	if err != nil {
-		var tfe *testFailedError
-		if errors.As(err, &tfe) {
-			writeProblem(w, r, http.StatusConflict, err.Error())
-			return
-		}
-		writeProblem(w, r, http.StatusBadRequest, err.Error())
+		writePatchError(w, r, err)
 		return
 	}
 
@@ -324,16 +289,7 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 
 	result, err := h.writeClient.UpdateServiceEnv(r.Context(), id, updated)
 	if err != nil {
-		if errdefs.IsNotFound(err) {
-			writeProblem(w, r, http.StatusNotFound, "service not found")
-			return
-		}
-		if errdefs.IsConflict(err) {
-			writeProblem(w, r, http.StatusConflict, "service was modified by another client, please retry")
-			return
-		}
-		slog.Error("failed to update service env", "service", id, "error", err)
-		writeProblem(w, r, http.StatusInternalServerError, "failed to update service env")
+		writeDockerError(w, r, err, "service")
 		return
 	}
 
@@ -385,12 +341,7 @@ func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request)
 
 	updated, err := applyJSONPatch(current, ops)
 	if err != nil {
-		var tfe *testFailedError
-		if errors.As(err, &tfe) {
-			writeProblem(w, r, http.StatusConflict, err.Error())
-			return
-		}
-		writeProblem(w, r, http.StatusBadRequest, err.Error())
+		writePatchError(w, r, err)
 		return
 	}
 
@@ -398,16 +349,7 @@ func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request)
 
 	result, err := h.writeClient.UpdateNodeLabels(r.Context(), id, updated)
 	if err != nil {
-		if errdefs.IsNotFound(err) {
-			writeProblem(w, r, http.StatusNotFound, "node not found")
-			return
-		}
-		if errdefs.IsConflict(err) {
-			writeProblem(w, r, http.StatusConflict, "node was modified by another client, please retry")
-			return
-		}
-		slog.Error("failed to update node labels", "node", id, "error", err)
-		writeProblem(w, r, http.StatusInternalServerError, "failed to update node labels")
+		writeDockerError(w, r, err, "node")
 		return
 	}
 
@@ -440,7 +382,7 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	patchBytes, err := io.ReadAll(r.Body)
+	patchBytes, err := io.ReadAll(io.LimitReader(r.Body, 1<<20)) // 1 MB limit
 	if err != nil {
 		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
 		return
@@ -476,16 +418,7 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 
 	result, err := h.writeClient.UpdateServiceResources(r.Context(), id, &merged)
 	if err != nil {
-		if errdefs.IsNotFound(err) {
-			writeProblem(w, r, http.StatusNotFound, "service not found")
-			return
-		}
-		if errdefs.IsConflict(err) {
-			writeProblem(w, r, http.StatusConflict, "service was modified by another client, please retry")
-			return
-		}
-		slog.Error("failed to update service resources", "service", id, "error", err)
-		writeProblem(w, r, http.StatusInternalServerError, "failed to update service resources")
+		writeDockerError(w, r, err, "service")
 		return
 	}
 

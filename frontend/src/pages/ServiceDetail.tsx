@@ -12,6 +12,7 @@ import { MetricsPanel, ResourceAllocationChart, type Threshold } from "../compon
 import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
 import SimpleTable from "../components/SimpleTable";
+import { Spinner } from "../components/Spinner";
 import TasksTable from "../components/TasksTable";
 import { timeAgo } from "../components/TimeAgo";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
@@ -706,30 +707,6 @@ function updateConfigRows(cfg: UpdateConfigShape) {
   ];
 }
 
-function Spinner() {
-  return (
-    <svg
-      className="h-3 w-3 animate-spin"
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-    >
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-      />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-      />
-    </svg>
-  );
-}
 
 function ServiceActions({ service, serviceId }: { service: Service; serviceId: string }) {
   const currentImage = service.Spec.TaskTemplate.ContainerSpec.Image;
@@ -844,7 +821,7 @@ function ServiceActions({ service, serviceId }: { service: Service; serviceId: s
                 disabled={imageLoading}
                 className="flex flex-1 items-center justify-center gap-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
               >
-                {imageLoading && <Spinner />}
+                {imageLoading && <Spinner className="size-3" />}
                 Update
               </button>
               <button
@@ -869,7 +846,7 @@ function ServiceActions({ service, serviceId }: { service: Service; serviceId: s
           title={canRollback ? "Rollback to previous spec" : "No previous spec available"}
           className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-sm font-medium hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {rollbackLoading ? <Spinner /> : <RotateCcw className="h-3.5 w-3.5" />}
+          {rollbackLoading ? <Spinner className="size-3.5" /> : <RotateCcw className="h-3.5 w-3.5" />}
           Rollback
         </button>
         {rollbackError && (
@@ -885,7 +862,7 @@ function ServiceActions({ service, serviceId }: { service: Service; serviceId: s
           disabled={restartLoading}
           className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-sm font-medium hover:bg-accent disabled:opacity-50"
         >
-          {restartLoading ? <Spinner /> : <RefreshCw className="h-3.5 w-3.5" />}
+          {restartLoading ? <Spinner className="size-3.5" /> : <RefreshCw className="h-3.5 w-3.5" />}
           Restart
         </button>
         {restartError && (
@@ -1046,28 +1023,7 @@ function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[] }) {
               disabled={scaleLoading}
               className="flex flex-1 items-center justify-center gap-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
             >
-              {scaleLoading && (
-                <svg
-                  className="h-3 w-3 animate-spin"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                  />
-                </svg>
-              )}
+              {scaleLoading && <Spinner className="size-3" />}
               Scale
             </button>
             <button
@@ -1564,8 +1520,8 @@ function EnvEditor({
 }
 
 interface ServiceResourceShape {
-  limits?: { nanoCPUs?: number; memoryBytes?: number; pids?: number };
-  reservations?: { nanoCPUs?: number; memoryBytes?: number };
+  Limits?: { NanoCPUs?: number; MemoryBytes?: number; Pids?: number };
+  Reservations?: { NanoCPUs?: number; MemoryBytes?: number };
 }
 
 function ResourcesEditor({
@@ -1589,10 +1545,10 @@ function ResourcesEditor({
   const [resMem, setResMem] = useState("");
 
   function openEdit() {
-    setLimitCpu(typed.limits?.nanoCPUs != null ? String(typed.limits.nanoCPUs / 1e9) : "");
-    setLimitMem(typed.limits?.memoryBytes != null ? String(typed.limits.memoryBytes) : "");
-    setResCpu(typed.reservations?.nanoCPUs != null ? String(typed.reservations.nanoCPUs / 1e9) : "");
-    setResMem(typed.reservations?.memoryBytes != null ? String(typed.reservations.memoryBytes) : "");
+    setLimitCpu(typed.Limits?.NanoCPUs != null ? String(typed.Limits.NanoCPUs / 1e9) : "");
+    setLimitMem(typed.Limits?.MemoryBytes != null ? String(typed.Limits.MemoryBytes) : "");
+    setResCpu(typed.Reservations?.NanoCPUs != null ? String(typed.Reservations.NanoCPUs / 1e9) : "");
+    setResMem(typed.Reservations?.MemoryBytes != null ? String(typed.Reservations.MemoryBytes) : "");
     setSaveError(null);
     setEditing(true);
   }
@@ -1605,14 +1561,14 @@ function ResourcesEditor({
   async function save() {
     const patch: ServiceResourceShape = {};
     if (limitCpu || limitMem) {
-      patch.limits = {};
-      if (limitCpu) patch.limits.nanoCPUs = Math.round(parseFloat(limitCpu) * 1e9);
-      if (limitMem) patch.limits.memoryBytes = parseInt(limitMem, 10);
+      patch.Limits = {};
+      if (limitCpu) patch.Limits.NanoCPUs = Math.round(parseFloat(limitCpu) * 1e9);
+      if (limitMem) patch.Limits.MemoryBytes = parseInt(limitMem, 10);
     }
     if (resCpu || resMem) {
-      patch.reservations = {};
-      if (resCpu) patch.reservations.nanoCPUs = Math.round(parseFloat(resCpu) * 1e9);
-      if (resMem) patch.reservations.memoryBytes = parseInt(resMem, 10);
+      patch.Reservations = {};
+      if (resCpu) patch.Reservations.NanoCPUs = Math.round(parseFloat(resCpu) * 1e9);
+      if (resMem) patch.Reservations.MemoryBytes = parseInt(resMem, 10);
     }
     setSaving(true);
     setSaveError(null);
@@ -1628,10 +1584,10 @@ function ResourcesEditor({
   }
 
   const hasResources =
-    typed.limits?.nanoCPUs ||
-    typed.limits?.memoryBytes ||
-    typed.reservations?.nanoCPUs ||
-    typed.reservations?.memoryBytes;
+    typed.Limits?.NanoCPUs ||
+    typed.Limits?.MemoryBytes ||
+    typed.Reservations?.NanoCPUs ||
+    typed.Reservations?.MemoryBytes;
 
   const controls = !editing ? (
     <button
@@ -1655,28 +1611,28 @@ function ResourcesEditor({
           <p className="text-sm text-muted-foreground">No resource limits configured.</p>
         ) : (
           <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-            {typed.limits?.nanoCPUs != null && (
+            {typed.Limits?.NanoCPUs != null && (
               <div>
                 <div className="text-xs text-muted-foreground">CPU Limit</div>
-                <div className="font-mono">{(typed.limits.nanoCPUs / 1e9).toFixed(2)} cores</div>
+                <div className="font-mono">{(typed.Limits.NanoCPUs / 1e9).toFixed(2)} cores</div>
               </div>
             )}
-            {typed.limits?.memoryBytes != null && (
+            {typed.Limits?.MemoryBytes != null && (
               <div>
                 <div className="text-xs text-muted-foreground">Memory Limit</div>
-                <div className="font-mono">{formatBytes(typed.limits.memoryBytes)}</div>
+                <div className="font-mono">{formatBytes(typed.Limits.MemoryBytes)}</div>
               </div>
             )}
-            {typed.reservations?.nanoCPUs != null && (
+            {typed.Reservations?.NanoCPUs != null && (
               <div>
                 <div className="text-xs text-muted-foreground">CPU Reserved</div>
-                <div className="font-mono">{(typed.reservations.nanoCPUs / 1e9).toFixed(2)} cores</div>
+                <div className="font-mono">{(typed.Reservations.NanoCPUs / 1e9).toFixed(2)} cores</div>
               </div>
             )}
-            {typed.reservations?.memoryBytes != null && (
+            {typed.Reservations?.MemoryBytes != null && (
               <div>
                 <div className="text-xs text-muted-foreground">Memory Reserved</div>
-                <div className="font-mono">{formatBytes(typed.reservations.memoryBytes)}</div>
+                <div className="font-mono">{formatBytes(typed.Reservations.MemoryBytes)}</div>
               </div>
             )}
           </div>

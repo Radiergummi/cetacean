@@ -380,11 +380,10 @@ func (c *Client) RemoveTask(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	containerID := task.Status.ContainerStatus.ContainerID
-	if containerID == "" {
+	if task.Status.ContainerStatus == nil || task.Status.ContainerStatus.ContainerID == "" {
 		return errdefs.NotFound(fmt.Errorf("task has no running container"))
 	}
-	return c.docker.ContainerRemove(ctx, containerID, container.RemoveOptions{Force: true})
+	return c.docker.ContainerRemove(ctx, task.Status.ContainerStatus.ContainerID, container.RemoveOptions{Force: true})
 }
 
 func (c *Client) UpdateServiceEnv(ctx context.Context, id string, env map[string]string) (swarm.Service, error) {
