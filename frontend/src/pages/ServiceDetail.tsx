@@ -220,11 +220,12 @@ export default function ServiceDetail() {
           { label: "Services", to: "/services" },
           { label: <ResourceName name={name} /> },
         ]}
-      />
-
-      <ServiceActions
-        service={service}
-        serviceId={id!}
+        actions={
+          <ServiceActions
+            service={service}
+            serviceId={id!}
+          />
+        }
       />
 
       {/* Overview cards */}
