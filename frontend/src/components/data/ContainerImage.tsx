@@ -155,7 +155,7 @@ export default function ContainerImage({
     </>
   );
 
-  const value = href ? (
+  const link = href ? (
     <a
       href={href}
       target="_blank"
@@ -168,11 +168,19 @@ export default function ContainerImage({
     <span className="inline-flex items-center gap-1.5">{inner}</span>
   );
 
+  const value = serviceId ? (
+    <>
+      {link}
+      <ImageUpdatePopover serviceId={serviceId} currentImage={image} />
+    </>
+  ) : (
+    link
+  );
+
   return (
     <InfoCard
       label={label}
       value={value}
-      right={serviceId ? <ImageUpdatePopover serviceId={serviceId} currentImage={image} /> : undefined}
     />
   );
 }
