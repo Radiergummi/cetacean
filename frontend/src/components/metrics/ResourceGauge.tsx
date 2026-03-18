@@ -11,9 +11,9 @@ const SIZES = {
 };
 
 function colorForValue(v: number): string {
-  if (v >= 90) return "#ef4444"; // red
-  if (v >= 75) return "#f59e0b"; // amber
-  return "#10b981"; // emerald
+  if (v >= 90) return "var(--chart-critical)";
+  if (v >= 75) return "var(--chart-warning)";
+  return "var(--chart-ok)";
 }
 
 export default function ResourceGauge({ label, value, subtitle, size = "md" }: Props) {
