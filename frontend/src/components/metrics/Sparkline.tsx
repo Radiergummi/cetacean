@@ -2,12 +2,12 @@ interface Props {
   data: number[];
   width?: number;
   height?: number;
-  color?: string;
+  className?: string;
 }
 
-export default function Sparkline({ data, width = 80, height = 24, color = "#6366f1" }: Props) {
+export default function Sparkline({data, width = 80, height = 24, className = "text-chart-1"}: Props) {
   if (data.length < 2) {
-    return <div style={{ width, height }} />;
+    return <div style={{width, height}} />;
   }
 
   const min = Math.min(...data);
@@ -19,7 +19,6 @@ export default function Sparkline({ data, width = 80, height = 24, color = "#636
     .map((value, index) => {
       const x = pad + (index / (data.length - 1)) * (width - pad * 2);
       const y = pad + (1 - (value - min) / range) * (height - pad * 2);
-
       return `${x},${y}`;
     })
     .join(" ");
@@ -28,12 +27,12 @@ export default function Sparkline({ data, width = 80, height = 24, color = "#636
     <svg
       width={width}
       height={height}
-      className="inline-block align-middle"
+      className={`inline-block align-middle ${className}`}
     >
       <polyline
         points={points}
         fill="none"
-        stroke={color}
+        stroke="currentColor"
         strokeWidth={1.5}
         strokeLinejoin="round"
         strokeLinecap="round"
