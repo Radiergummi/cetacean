@@ -1,8 +1,12 @@
+import { NumberField } from "@base-ui/react/number-field";
+import { Minus, Pencil, Plus } from "lucide-react";
+import { useState } from "react";
 import { api } from "../../api/client";
 import type { Service, Task } from "../../api/types";
 import InfoCard from "../InfoCard";
 import { Spinner } from "../Spinner";
-import { useState } from "react";
+import { Button } from "../ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 
 function ReplicaDoughnut({ running, desired }: { running: number; desired: number }) {
   const size = 50;
@@ -72,7 +76,7 @@ function ReplicaDoughnut({ running, desired }: { running: number; desired: numbe
 
 export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[] }) {
   const [scaleOpen, setScaleOpen] = useState(false);
-  const [scaleValue, setScaleValue] = useState("");
+  const [scaleValue, setScaleValue] = useState<number | null>(0);
   const [scaleLoading, setScaleLoading] = useState(false);
   const [scaleError, setScaleError] = useState<string | null>(null);
 
@@ -90,10 +94,14 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
   const running = tasks.filter((t) => t.Status.State === "running").length;
   const healthy = running >= desired;
 
-  function openScale() {
-    setScaleValue(String(desired));
-    setScaleError(null);
-    setScaleOpen(true);
+  function handleOpenChange(open: boolean) {
+    if (open) {
+      setScaleValue(desired);
+      setScaleError(null);
+    } else {
+      setScaleError(null);
+    }
+    setScaleOpen(open);
   }
 
   function cancelScale() {
@@ -102,15 +110,14 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
   }
 
   async function submitScale() {
-    const n = parseInt(scaleValue, 10);
-    if (isNaN(n) || n < 0) {
+    if (scaleValue === null || scaleValue < 0) {
       setScaleError("Enter a valid replica count");
       return;
     }
     setScaleLoading(true);
     setScaleError(null);
     try {
-      await api.scaleService(service.ID, n);
+      await api.scaleService(service.ID, scaleValue);
       setScaleOpen(false);
     } catch (err) {
       setScaleError(err instanceof Error ? err.message : "Failed to scale");
@@ -135,78 +142,53 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
   );
 
   const scaleControl = (
-    <div className="relative flex items-center gap-2">
+    <div className="flex items-center gap-2">
       {desired > 0 && (
         <ReplicaDoughnut
           running={running}
           desired={desired}
         />
       )}
-      <button
-        type="button"
-        onClick={openScale}
-        className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-        title="Scale service"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-        </svg>
-      </button>
-
-      {scaleOpen && (
-        <div className="absolute top-full right-0 z-50 mt-1 w-52 rounded-lg border bg-card p-3 shadow-lg">
+      <Popover open={scaleOpen} onOpenChange={handleOpenChange} modal>
+        <PopoverTrigger
+          render={
+            <Button variant="ghost" size="icon-xs" title="Scale service">
+              <Pencil className="size-3.5" />
+            </Button>
+          }
+        />
+        <PopoverContent className="w-52" align="end">
           <p className="mb-2 text-xs font-medium text-muted-foreground">Scale replicas</p>
-          <input
-            type="number"
-            min={0}
+          <NumberField.Root
             value={scaleValue}
-            onChange={(e) => setScaleValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                void submitScale();
-              }
-              if (e.key === "Escape") {
-                cancelScale();
-              }
-            }}
-            className="mb-2 w-full rounded border bg-background px-2 py-1 text-sm focus:ring-1 focus:ring-ring focus:outline-none"
-            autoFocus
-          />
+            onValueChange={(value) => setScaleValue(value)}
+            min={0}
+            step={1}
+          >
+            <NumberField.Group className="mb-2 flex items-center rounded-md border">
+              <NumberField.Decrement className="flex size-8 items-center justify-center border-r text-muted-foreground hover:bg-accent disabled:opacity-50">
+                <Minus className="size-3" />
+              </NumberField.Decrement>
+              <NumberField.Input className="w-full bg-transparent px-2 py-1 text-center font-mono text-sm focus:outline-none" />
+              <NumberField.Increment className="flex size-8 items-center justify-center border-l text-muted-foreground hover:bg-accent disabled:opacity-50">
+                <Plus className="size-3" />
+              </NumberField.Increment>
+            </NumberField.Group>
+          </NumberField.Root>
           {scaleError && (
             <p className="mb-2 text-xs text-red-600 dark:text-red-400">{scaleError}</p>
           )}
           <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => void submitScale()}
-              disabled={scaleLoading}
-              className="flex flex-1 items-center justify-center gap-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
-            >
+            <Button size="sm" className="flex-1" onClick={() => void submitScale()} disabled={scaleLoading}>
               {scaleLoading && <Spinner className="size-3" />}
               Scale
-            </button>
-            <button
-              type="button"
-              onClick={cancelScale}
-              disabled={scaleLoading}
-              className="flex-1 rounded border px-2 py-1 text-xs font-medium disabled:opacity-50"
-            >
+            </Button>
+            <Button variant="outline" size="sm" className="flex-1" onClick={cancelScale} disabled={scaleLoading}>
               Cancel
-            </button>
+            </Button>
           </div>
-        </div>
-      )}
+        </PopoverContent>
+      </Popover>
     </div>
   );
 
