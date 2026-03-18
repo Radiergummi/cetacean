@@ -10,6 +10,18 @@ import { MetricsPanel, ResourceGauge } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import { Spinner } from "../components/Spinner";
 import TaskStatusBadge from "../components/TaskStatusBadge";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
@@ -28,6 +40,7 @@ export default function TaskDetail() {
   const [error, setError] = useState(false);
   const [removeLoading, setRemoveLoading] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
 
   const fetchData = useCallback(() => {
     if (!id) {
@@ -49,17 +62,8 @@ export default function TaskDetail() {
 
   useResourceStream(`/tasks/${id}`, fetchData);
 
-  async function handleRemove() {
-    if (!id) {
-      return;
-    }
-    if (
-      !window.confirm(
-        "Are you sure you want to force-remove this task? This will kill the backing container.",
-      )
-    ) {
-      return;
-    }
+  async function executeRemove() {
+    if (!id) return;
     setRemoveLoading(true);
     setRemoveError(null);
     try {
@@ -106,15 +110,31 @@ export default function TaskDetail() {
         ]}
         actions={
           <>
-            <button
-              type="button"
-              onClick={() => void handleRemove()}
-              disabled={removeLoading}
-              className="inline-flex items-center gap-1.5 rounded border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
-            >
-              {removeLoading ? <Spinner className="size-3" /> : <Trash2 className="size-3.5" />}
-              Force Remove
-            </button>
+            <AlertDialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm">
+                  {removeLoading ? <Spinner className="size-3" /> : <Trash2 className="size-3.5" />}
+                  Remove
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Force-remove this task?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will kill the backing container. The service scheduler will start a replacement.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => void executeRemove()}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Remove
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
             {removeError && <p className="text-xs text-red-600 dark:text-red-400">{removeError}</p>}
           </>
         }
