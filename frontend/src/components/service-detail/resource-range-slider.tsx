@@ -1,3 +1,4 @@
+import { formatNumber } from "@/lib/format";
 import { NumberField } from "@base-ui/react/number-field";
 import { Slider as SliderPrimitive } from "@base-ui/react/slider";
 import { Minus, Plus } from "lucide-react";
@@ -120,7 +121,10 @@ export function ResourceRangeSlider({
           className="data-horizontal:w-full"
         >
           <SliderPrimitive.Control className="relative flex h-6 w-full touch-none items-center select-none">
-            <SliderPrimitive.Track className="relative grow rounded-full bg-transparent select-none data-horizontal:h-1.5 data-horizontal:w-full">
+            <SliderPrimitive.Track
+              className="relative grow rounded-full select-none data-horizontal:h-1.5 data-horizontal:w-full"
+              style={{ background: "none" }}
+            >
               <SliderPrimitive.Indicator
                 className={`rounded-full bg-primary data-horizontal:h-full ${!isReservationActive && !isLimitActive ? "opacity-40" : ""}`}
               />
@@ -241,23 +245,18 @@ export function computeTicks(max: number, step: number): Tick[] {
     if (interval < step) interval = step;
   }
 
-  ticks.push({ value: step, tall: true, label: formatTickLabel(step) });
+  const fractionDigits = step < 1 ? 2 : 0;
+  ticks.push({ value: step, tall: true, label: formatNumber(step, fractionDigits) });
 
   for (let value = interval; value < max; value += interval) {
     if (Math.abs(value - step) > step * 0.01 && Math.abs(value - max) > step * 0.01) {
-      ticks.push({ value, tall: false, label: formatTickLabel(value) });
+      ticks.push({ value, tall: false, label: formatNumber(value, fractionDigits) });
     }
   }
 
   if (max > step) {
-    ticks.push({ value: max, tall: true, label: formatTickLabel(max) });
+    ticks.push({ value: max, tall: true, label: formatNumber(max, fractionDigits) });
   }
 
   return ticks;
-}
-
-function formatTickLabel(value: number): string {
-  if (value >= 1024) return `${value / 1024}k`;
-  if (Number.isInteger(value)) return String(value);
-  return String(value);
 }

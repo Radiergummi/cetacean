@@ -83,8 +83,9 @@ describe("computeTicks", () => {
     expect(ticks[ticks.length - 1].label).toBe("4");
   });
 
-  it("formats large memory values with k suffix", () => {
+  it("formats memory tick labels as integers", () => {
     const ticks = computeTicks(4096, 16);
-    expect(ticks[ticks.length - 1].label).toBe("4k");
+    expect(ticks[0].label).toBe("16");
+    expect(ticks[ticks.length - 1].label).toBe("4,096");
   });
 });
