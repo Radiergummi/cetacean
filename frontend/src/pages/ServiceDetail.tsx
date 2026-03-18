@@ -229,7 +229,7 @@ export default function ServiceDetail() {
 
       {/* Overview cards */}
       <MetadataGrid>
-        <ContainerImage image={containerSpec.Image} />
+        <ContainerImage image={containerSpec.Image} serviceId={id} />
         <ReplicaCard
           service={service}
           tasks={tasks}

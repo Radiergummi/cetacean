@@ -1,4 +1,12 @@
-import { imageRegistryUrl } from "../../lib/imageUrl";
+import { api } from "@/api/client";
+import { Spinner } from "@/components/Spinner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { imageRegistryUrl } from "@/lib/imageUrl";
+import { Pencil } from "lucide-react";
+import { useState } from "react";
 import InfoCard from "../InfoCard";
 
 function registryFavicon(image: string): string | null {
@@ -24,12 +32,107 @@ function registryFavicon(image: string): string | null {
   return null;
 }
 
+function ImageUpdatePopover({
+  serviceId,
+  currentImage,
+}: {
+  serviceId: string;
+  currentImage: string;
+}) {
+  const imageWithoutDigest = currentImage.replace(/@sha256:[a-f0-9]+$/, "");
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState("");
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const update = useAsyncAction();
+
+  function handleOpenChange(next: boolean) {
+    if (next) {
+      setValue(imageWithoutDigest);
+    }
+    setValidationError(null);
+    setOpen(next);
+  }
+
+  async function submit() {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setValidationError("Enter an image name");
+      return;
+    }
+    setValidationError(null);
+    await update.execute(async () => {
+      await api.updateServiceImage(serviceId, trimmed);
+      setOpen(false);
+    }, "Failed to update image");
+  }
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange} modal>
+      <PopoverTrigger
+        render={
+          <Button variant="ghost" size="icon-xs" title="Update image">
+            <Pencil className="size-3.5" />
+          </Button>
+        }
+      />
+      <PopoverContent className="w-80" align="end">
+        <p className="mb-1 text-xs font-medium text-muted-foreground">New image</p>
+        <p
+          className="mb-2 truncate font-mono text-xs text-muted-foreground"
+          title={currentImage}
+        >
+          Current: {imageWithoutDigest}
+        </p>
+        <Input
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              void submit();
+            }
+          }}
+          placeholder="image:tag"
+          className="mb-2 font-mono"
+          autoFocus
+        />
+        {(validationError || update.error) && (
+          <p className="mb-2 text-xs text-red-600 dark:text-red-400">
+            {validationError || update.error}
+          </p>
+        )}
+        <div className="flex gap-2">
+          <Button
+            onClick={() => void submit()}
+            disabled={update.loading}
+            size="sm"
+            className="flex-1"
+          >
+            {update.loading && <Spinner className="size-3" />}
+            Update
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setOpen(false)}
+            disabled={update.loading}
+            size="sm"
+            className="flex-1"
+          >
+            Cancel
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export default function ContainerImage({
   image,
   label = "Image",
+  serviceId,
 }: {
   image?: string;
   label?: string;
+  serviceId?: string;
 }) {
   if (!image) {
     return null;
@@ -69,6 +172,7 @@ export default function ContainerImage({
     <InfoCard
       label={label}
       value={value}
+      right={serviceId ? <ImageUpdatePopover serviceId={serviceId} currentImage={image} /> : undefined}
     />
   );
 }
