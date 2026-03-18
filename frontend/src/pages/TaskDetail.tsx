@@ -111,12 +111,14 @@ export default function TaskDetail() {
         actions={
           <>
             <AlertDialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm">
-                  {removeLoading ? <Spinner className="size-3" /> : <Trash2 className="size-3.5" />}
-                  Remove
-                </Button>
-              </AlertDialogTrigger>
+              <AlertDialogTrigger
+                render={
+                  <Button variant="destructive" size="sm">
+                    {removeLoading ? <Spinner className="size-3" /> : <Trash2 className="size-3.5" />}
+                    Remove
+                  </Button>
+                }
+              />
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Force-remove this task?</AlertDialogTitle>
