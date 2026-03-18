@@ -102,6 +102,52 @@ func TestHandleClusterMetrics_NoPrometheus(t *testing.T) {
 	}
 }
 
+func TestHandleClusterCapacity(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{
+		ID: "n1",
+		Description: swarm.NodeDescription{
+			Resources: swarm.Resources{
+				NanoCPUs:    4000000000,
+				MemoryBytes: 8589934592,
+			},
+		},
+	})
+	c.SetNode(swarm.Node{
+		ID: "n2",
+		Description: swarm.NodeDescription{
+			Resources: swarm.Resources{
+				NanoCPUs:    8000000000,
+				MemoryBytes: 4294967296,
+			},
+		},
+	})
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+
+	req := httptest.NewRequest("GET", "/cluster/capacity", nil)
+	w := httptest.NewRecorder()
+	h.HandleClusterCapacity(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var body map[string]any
+	json.NewDecoder(w.Body).Decode(&body)
+	if body["@type"] != "ClusterCapacity" {
+		t.Errorf("@type=%v, want ClusterCapacity", body["@type"])
+	}
+	if body["maxNodeCPU"].(float64) != 8 {
+		t.Errorf("maxNodeCPU=%v, want 8", body["maxNodeCPU"])
+	}
+	if body["maxNodeMemory"].(float64) != 8589934592 {
+		t.Errorf("maxNodeMemory=%v, want 8589934592", body["maxNodeMemory"])
+	}
+	if body["nodeCount"].(float64) != 2 {
+		t.Errorf("nodeCount=%v, want 2", body["nodeCount"])
+	}
+}
+
 func TestHandleClusterMetrics_WithPrometheus(t *testing.T) {
 	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query().Get("query")

@@ -778,6 +778,38 @@ func TestSnapshot_ResourceTotals(t *testing.T) {
 	}
 }
 
+func TestSnapshot_MaxNodeResources(t *testing.T) {
+	c := New(nil)
+	c.SetNode(swarm.Node{
+		ID:     "n1",
+		Status: swarm.NodeStatus{State: swarm.NodeStateReady},
+		Description: swarm.NodeDescription{
+			Resources: swarm.Resources{
+				NanoCPUs:    4000000000, // 4 cores
+				MemoryBytes: 8589934592, // 8 GB
+			},
+		},
+	})
+	c.SetNode(swarm.Node{
+		ID:     "n2",
+		Status: swarm.NodeStatus{State: swarm.NodeStateReady},
+		Description: swarm.NodeDescription{
+			Resources: swarm.Resources{
+				NanoCPUs:    8000000000, // 8 cores
+				MemoryBytes: 4294967296, // 4 GB
+			},
+		},
+	})
+
+	snap := c.Snapshot()
+	if snap.MaxNodeCPU != 8 {
+		t.Errorf("MaxNodeCPU=%d, want 8", snap.MaxNodeCPU)
+	}
+	if snap.MaxNodeMemory != 8589934592 {
+		t.Errorf("MaxNodeMemory=%d, want 8589934592", snap.MaxNodeMemory)
+	}
+}
+
 func TestCache_ListStackSummaries(t *testing.T) {
 	c := New(nil)
 

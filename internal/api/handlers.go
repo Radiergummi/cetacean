@@ -278,6 +278,18 @@ type ResourceMetric struct {
 	Percent float64 `json:"percent"`
 }
 
+func (h *Handlers) HandleClusterCapacity(w http.ResponseWriter, r *http.Request) {
+	snap := h.cache.Snapshot()
+	extra := map[string]any{
+		"maxNodeCPU":    snap.MaxNodeCPU,
+		"maxNodeMemory": snap.MaxNodeMemory,
+		"totalCPU":      snap.TotalCPU,
+		"totalMemory":   snap.TotalMemory,
+		"nodeCount":     snap.NodeCount,
+	}
+	writeJSONWithETag(w, r, NewDetailResponse("/cluster/capacity", "ClusterCapacity", extra))
+}
+
 func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) {
 	if h.promClient == nil {
 		writeProblem(w, r, http.StatusNotFound, "prometheus not configured")

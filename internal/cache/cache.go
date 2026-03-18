@@ -65,6 +65,8 @@ type ClusterSnapshot struct {
 	ServicesDegraded  int            `json:"servicesDegraded"`
 	ReservedCPU       int64          `json:"reservedCPU"`
 	ReservedMemory    int64          `json:"reservedMemory"`
+	MaxNodeCPU        int            `json:"maxNodeCPU"`
+	MaxNodeMemory     int64          `json:"maxNodeMemory"`
 	LastSync          time.Time      `json:"lastSync"`
 }
 
@@ -826,6 +828,8 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 	var nodesReady, nodesDown, nodesDraining int
 	var totalNanoCPUs int64
 	var totalMemory int64
+	var maxNanoCPUs int64
+	var maxMemory int64
 	for _, n := range c.nodes {
 		switch n.Status.State {
 		case swarm.NodeStateReady:
@@ -840,6 +844,12 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 		}
 		totalNanoCPUs += n.Description.Resources.NanoCPUs
 		totalMemory += n.Description.Resources.MemoryBytes
+		if n.Description.Resources.NanoCPUs > maxNanoCPUs {
+			maxNanoCPUs = n.Description.Resources.NanoCPUs
+		}
+		if n.Description.Resources.MemoryBytes > maxMemory {
+			maxMemory = n.Description.Resources.MemoryBytes
+		}
 	}
 
 	// Count running tasks per service
@@ -885,6 +895,8 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 		ServicesDegraded:  servicesDegraded,
 		ReservedCPU:       reservedCPU,
 		ReservedMemory:    reservedMemory,
+		MaxNodeCPU:        int(maxNanoCPUs / 1e9),
+		MaxNodeMemory:     maxMemory,
 		LastSync:          c.lastSync,
 	}
 }
