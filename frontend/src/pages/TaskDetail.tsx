@@ -13,6 +13,7 @@ import TaskStatusBadge from "../components/TaskStatusBadge";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
+import { getSemanticChartColor } from "../lib/chartColors";
 import { formatBytes, formatPercentage } from "../lib/format";
 import { escapePromQL } from "../lib/utils";
 import { Trash2 } from "lucide-react";
@@ -218,7 +219,7 @@ export default function TaskDetail() {
                 query: `sum(container_memory_usage_bytes{container_label_com_docker_swarm_task_id="${escapePromQL(id!)}"})`,
                 unit: "bytes",
                 yMin: 0,
-                color: "#34d399",
+                color: getSemanticChartColor("memory"),
               },
             ]}
           />

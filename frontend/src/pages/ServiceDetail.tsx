@@ -24,6 +24,7 @@ import TasksTable from "../components/TasksTable";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
+import { getSemanticChartColor } from "../lib/chartColors";
 import { formatBytes, formatCores, formatDuration, formatRelativeDate } from "../lib/format";
 import { escapePromQL } from "../lib/utils";
 import { ArrowRight, Globe, Shuffle } from "lucide-react";
@@ -157,7 +158,7 @@ export default function ServiceDetail() {
               unit: "bytes",
               thresholds: memoryThresholds(service),
               yMin: 0,
-              color: "#34d399",
+              color: getSemanticChartColor("memory"),
             },
           ]
         : [],
@@ -835,7 +836,7 @@ function cpuThresholds(service: Service): Threshold[] {
     out.push({
       label: "Reserved",
       value,
-      color: "#3b82f6",
+      color: getSemanticChartColor("reserved"),
       dash: [12, 6],
     });
   }
@@ -846,7 +847,7 @@ function cpuThresholds(service: Service): Threshold[] {
     out.push({
       label: "Limit",
       value,
-      color: "#ef4444",
+      color: getSemanticChartColor("critical"),
       dash: [12, 6],
     });
   }
@@ -867,7 +868,7 @@ function memoryThresholds(service: Service): Threshold[] {
     out.push({
       label: "Reserved",
       value: resources.Reservations.MemoryBytes,
-      color: "#3b82f6",
+      color: getSemanticChartColor("reserved"),
       dash: [12, 6],
     });
   }
@@ -876,7 +877,7 @@ function memoryThresholds(service: Service): Threshold[] {
     out.push({
       label: "Limit",
       value: resources.Limits.MemoryBytes,
-      color: "#ef4444",
+      color: getSemanticChartColor("critical"),
       dash: [12, 6],
     });
   }
