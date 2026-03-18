@@ -4,6 +4,7 @@ import SimpleTable from "@/components/SimpleTable";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getErrorMessage } from "@/lib/utils";
 import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
@@ -93,7 +94,7 @@ export function KeyValueEditor({
       await onSave(ops);
       setEditing(false);
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Save failed");
+      setSaveError(getErrorMessage(error, "Save failed"));
     } finally {
       setSaving(false);
     }

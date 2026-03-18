@@ -7,6 +7,7 @@ import { getChartColor, getSemanticChartColor } from "@/lib/chartColors.ts";
 import { chartTooltipClasses } from "@/lib/chartTooltip.ts";
 import { formatMetricValue } from "@/lib/format.ts";
 import { generateMockSeries } from "@/lib/mockChartData.ts";
+import { getErrorMessage } from "@/lib/utils";
 import {
   CategoryScale,
   Chart as ChartJS,
@@ -331,7 +332,7 @@ export default function TimeSeriesChart({
       })
       .catch((error) => {
         if (!cancelled) {
-          setErrorMessage(error instanceof Error ? error.message : "Failed to load metrics");
+          setErrorMessage(getErrorMessage(error, "Failed to load metrics"));
           setState("error");
         }
       });

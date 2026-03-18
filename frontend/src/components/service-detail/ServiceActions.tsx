@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { getErrorMessage } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 import { ImageIcon, RefreshCw, RotateCcw } from "lucide-react";
 import { useState } from "react";
@@ -110,7 +111,7 @@ export function ServiceActions({ service, serviceId }: { service: Service; servi
       await api.updateServiceImage(serviceId, trimmed);
       setImageOpen(false);
     } catch (error) {
-      setImageError(error instanceof Error ? error.message : "Failed to update image");
+      setImageError(getErrorMessage(error, "Failed to update image"));
     } finally {
       setImageLoading(false);
     }

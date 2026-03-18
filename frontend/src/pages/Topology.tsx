@@ -14,6 +14,7 @@ import { useMatchesBreakpoint } from "../hooks/useMatchesBreakpoint";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { computeLayout } from "../lib/layoutElk";
 import { buildLogicalFlow, buildPhysicalFlow, hashColor } from "../lib/topologyTransform";
+import { getErrorMessage } from "../lib/utils";
 import { ReactFlow, ReactFlowProvider, Background, type Node, type Edge } from "@xyflow/react";
 import { Info, Network, Server, X } from "lucide-react";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
@@ -237,7 +238,7 @@ export default function Topology() {
       setNetworkData(net);
       setPlacementData(place);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load topology");
+      setError(getErrorMessage(e, "Failed to load topology"));
     } finally {
       setLoading(false);
       initialLoadRef.current = false;

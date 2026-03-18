@@ -5,6 +5,7 @@ import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { SliderNumberField } from "@/components/ui/slider-number-field";
 import { formatBytes, formatCores } from "@/lib/format";
+import { getErrorMessage } from "@/lib/utils";
 import { Pencil, X } from "lucide-react";
 import { useState } from "react";
 
@@ -91,7 +92,7 @@ export function ResourcesEditor({
       onSaved(updated);
       setEditing(false);
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Save failed");
+      setSaveError(getErrorMessage(err, "Save failed"));
     } finally {
       setSaving(false);
     }

@@ -7,6 +7,7 @@ import ResourceName from "../components/ResourceName";
 import { SearchInput } from "../components/search";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { resourcePath, statusColor, TYPE_LABELS, TYPE_ORDER } from "../lib/searchConstants";
+import { getErrorMessage } from "../lib/utils";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -52,7 +53,7 @@ export default function SearchPage() {
       },
       (error) => {
         if (!controller.signal.aborted) {
-          setError(error instanceof Error ? error.message : String(error));
+          setError(getErrorMessage(error, String(error)));
           setLoading(false);
         }
       },

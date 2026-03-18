@@ -5,6 +5,7 @@ import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SliderNumberField } from "@/components/ui/slider-number-field";
+import { getErrorMessage } from "@/lib/utils";
 import { Pencil } from "lucide-react";
 import { useState } from "react";
 
@@ -113,7 +114,7 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
       await api.scaleService(service.ID, scaleValue);
       setScaleOpen(false);
     } catch (err) {
-      setScaleError(err instanceof Error ? err.message : "Failed to scale");
+      setScaleError(getErrorMessage(err, "Failed to scale"));
     } finally {
       setScaleLoading(false);
     }

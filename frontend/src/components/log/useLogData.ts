@@ -1,5 +1,6 @@
 import type { LogLine as ApiLogLine } from "../../api/client";
 import { api } from "../../api/client";
+import { getErrorMessage } from "../../lib/utils";
 import type { LogLine, TimeRange } from "./log-utils";
 import { MAX_LIVE_LINES, toLogLine } from "./log-utils";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -77,7 +78,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
         if (timedOut) {
           setError("Request timed out");
         } else {
-          setError(caught instanceof Error ? caught.message : "Failed to load logs");
+          setError(getErrorMessage(caught, "Failed to load logs"));
         }
         setLoading(false);
       })

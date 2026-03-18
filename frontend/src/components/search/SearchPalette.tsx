@@ -2,6 +2,7 @@ import { api } from "../../api/client";
 import type { SearchResourceType, SearchResponse, SearchResult } from "../../api/types";
 import { getActions, matchAction, type PaletteAction, type PaletteStep } from "../../lib/actions";
 import { resourcePath, statusColor, TYPE_LABELS, TYPE_ORDER } from "../../lib/searchConstants";
+import { getErrorMessage } from "../../lib/utils";
 import ResourceName from "../ResourceName";
 import { Spinner } from "../Spinner";
 import { ChevronRight, Search, Zap } from "lucide-react";
@@ -262,7 +263,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
         await action.execute(...args);
         onClose();
       } catch (err) {
-        setActionError(err instanceof Error ? err.message : String(err));
+        setActionError(getErrorMessage(err, String(err)));
       } finally {
         setActionLoading(false);
       }

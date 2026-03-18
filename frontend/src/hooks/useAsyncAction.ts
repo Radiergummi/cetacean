@@ -1,3 +1,4 @@
+import { getErrorMessage } from "@/lib/utils";
 import { useState } from "react";
 
 export function useAsyncAction() {
@@ -10,7 +11,7 @@ export function useAsyncAction() {
     try {
       await action();
     } catch (thrown) {
-      setError(thrown instanceof Error ? thrown.message : errorMessage);
+      setError(getErrorMessage(thrown, errorMessage));
     } finally {
       setLoading(false);
     }
