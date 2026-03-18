@@ -11,12 +11,6 @@ import { LoadingDetail } from "../components/LoadingSkeleton";
 import { MetricsPanel, NodeResourceGauges } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import TasksTable from "../components/TasksTable";
-import { useInstanceResolver } from "../hooks/useInstanceResolver";
-import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
-import { useResourceStream } from "../hooks/useResourceStream";
-import { useTaskMetrics } from "../hooks/useTaskMetrics";
-import { formatBytes, formatNumber } from "../lib/format";
-import { escapePromQL } from "../lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,14 +20,20 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "../components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "../components/ui/select";
+import { useInstanceResolver } from "../hooks/useInstanceResolver";
+import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { useResourceStream } from "../hooks/useResourceStream";
+import { useTaskMetrics } from "../hooks/useTaskMetrics";
+import { formatBytes, formatNumber } from "../lib/format";
+import { escapePromQL } from "../lib/utils";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 

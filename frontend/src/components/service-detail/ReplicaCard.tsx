@@ -76,7 +76,7 @@ function ReplicaDoughnut({ running, desired }: { running: number; desired: numbe
 
 export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[] }) {
   const [scaleOpen, setScaleOpen] = useState(false);
-  const [scaleValue, setScaleValue] = useState<number | undefined>(0);
+  const [scaleValue, setScaleValue] = useState<number | undefined>();
   const [scaleLoading, setScaleLoading] = useState(false);
   const [scaleError, setScaleError] = useState<string | null>(null);
 

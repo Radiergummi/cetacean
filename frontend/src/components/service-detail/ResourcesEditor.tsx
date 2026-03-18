@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { SliderNumberField } from "@/components/ui/slider-number-field";
 import { formatBytes, formatCores } from "@/lib/format";
 import { Pencil, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 export interface ServiceResourceShape {
   limits?: { nanoCPUs?: number; memoryBytes?: number; pids?: number };
@@ -31,7 +31,6 @@ export function ResourcesEditor({
   const [reservedCpuCores, setReservedCpuCores] = useState<number | undefined>();
   const [reservedMemoryMegabytes, setReservedMemoryMegabytes] = useState<number | undefined>();
   const [capacity, setCapacity] = useState<ClusterCapacity | null>(null);
-  const capacityFetched = useRef(false);
 
   function openEdit() {
     setLimitCpuCores(
@@ -50,8 +49,7 @@ export function ResourcesEditor({
         ? resources.reservations.memoryBytes / (1024 * 1024)
         : undefined,
     );
-    if (!capacityFetched.current) {
-      capacityFetched.current = true;
+    if (!capacity) {
       api
         .clusterCapacity()
         .then(setCapacity)

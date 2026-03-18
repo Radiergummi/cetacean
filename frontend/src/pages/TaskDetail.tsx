@@ -10,12 +10,6 @@ import { MetricsPanel, ResourceGauge } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import { Spinner } from "../components/Spinner";
 import TaskStatusBadge from "../components/TaskStatusBadge";
-import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
-import { useResourceStream } from "../hooks/useResourceStream";
-import { useTaskMetrics } from "../hooks/useTaskMetrics";
-import { getSemanticChartColor } from "../lib/chartColors";
-import { formatBytes, formatPercentage } from "../lib/format";
-import { escapePromQL } from "../lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,8 +20,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+} from "../components/ui/alert-dialog";
+import { Button } from "../components/ui/button";
+import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { useResourceStream } from "../hooks/useResourceStream";
+import { useTaskMetrics } from "../hooks/useTaskMetrics";
+import { getSemanticChartColor } from "../lib/chartColors";
+import { formatBytes, formatPercentage } from "../lib/format";
+import { escapePromQL } from "../lib/utils";
 import { Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
