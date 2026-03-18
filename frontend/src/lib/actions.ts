@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { Node, ServiceListItem, Task } from "../api/types";
+import type { SearchResult } from "../api/types";
 
 export interface PaletteAction {
   id: string;
@@ -28,8 +28,8 @@ export function getActions(): PaletteAction[] {
         { type: "resource", resourceType: "service", label: "Service" },
         { type: "number", label: "Replicas", placeholder: "Number of replicas" },
       ],
-      execute: async (service: ServiceListItem, replicas: number) => {
-        await api.scaleService(service.ID, replicas);
+      execute: async (service: SearchResult, replicas: number) => {
+        await api.scaleService(service.id, replicas);
       },
     },
     {
@@ -40,8 +40,8 @@ export function getActions(): PaletteAction[] {
         { type: "resource", resourceType: "service", label: "Service" },
         { type: "text", label: "Image", placeholder: "e.g. nginx:1.27" },
       ],
-      execute: async (service: ServiceListItem, image: string) => {
-        await api.updateServiceImage(service.ID, image);
+      execute: async (service: SearchResult, image: string) => {
+        await api.updateServiceImage(service.id, image);
       },
     },
     {
@@ -50,8 +50,8 @@ export function getActions(): PaletteAction[] {
       keywords: ["rollback", "revert"],
       steps: [{ type: "resource", resourceType: "service", label: "Service" }],
       destructive: true,
-      execute: async (service: ServiceListItem) => {
-        await api.rollbackService(service.ID);
+      execute: async (service: SearchResult) => {
+        await api.rollbackService(service.id);
       },
     },
     {
@@ -60,8 +60,8 @@ export function getActions(): PaletteAction[] {
       keywords: ["restart", "redeploy"],
       steps: [{ type: "resource", resourceType: "service", label: "Service" }],
       destructive: true,
-      execute: async (service: ServiceListItem) => {
-        await api.restartService(service.ID);
+      execute: async (service: SearchResult) => {
+        await api.restartService(service.id);
       },
     },
     {
@@ -70,8 +70,8 @@ export function getActions(): PaletteAction[] {
       keywords: ["drain"],
       steps: [{ type: "resource", resourceType: "node", label: "Node" }],
       destructive: true,
-      execute: async (node: Node) => {
-        await api.updateNodeAvailability(node.ID, "drain");
+      execute: async (node: SearchResult) => {
+        await api.updateNodeAvailability(node.id, "drain");
       },
     },
     {
@@ -79,8 +79,8 @@ export function getActions(): PaletteAction[] {
       label: "Activate Node",
       keywords: ["activate", "undrain"],
       steps: [{ type: "resource", resourceType: "node", label: "Node" }],
-      execute: async (node: Node) => {
-        await api.updateNodeAvailability(node.ID, "active");
+      execute: async (node: SearchResult) => {
+        await api.updateNodeAvailability(node.id, "active");
       },
     },
     {
@@ -89,8 +89,8 @@ export function getActions(): PaletteAction[] {
       keywords: ["pause"],
       steps: [{ type: "resource", resourceType: "node", label: "Node" }],
       destructive: true,
-      execute: async (node: Node) => {
-        await api.updateNodeAvailability(node.ID, "pause");
+      execute: async (node: SearchResult) => {
+        await api.updateNodeAvailability(node.id, "pause");
       },
     },
     {
@@ -99,8 +99,8 @@ export function getActions(): PaletteAction[] {
       keywords: ["remove", "kill", "task"],
       steps: [{ type: "resource", resourceType: "task", label: "Task" }],
       destructive: true,
-      execute: async (task: Task) => {
-        await api.removeTask(task.ID);
+      execute: async (task: SearchResult) => {
+        await api.removeTask(task.id);
       },
     },
   ];
