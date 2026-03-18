@@ -15,28 +15,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 import type { LucideIcon } from "lucide-react";
 import { ImageIcon, RefreshCw, RotateCcw } from "lucide-react";
 import { useState } from "react";
-
-function useAsyncAction() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function execute(action: () => Promise<unknown>, errorMessage: string) {
-    setLoading(true);
-    setError(null);
-    try {
-      await action();
-    } catch (thrown) {
-      setError(thrown instanceof Error ? thrown.message : errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return { loading, error, execute };
-}
 
 function ConfirmAction({
   icon: Icon,

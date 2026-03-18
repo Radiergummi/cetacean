@@ -22,6 +22,7 @@ import {
   AlertDialogTrigger,
 } from "../components/ui/alert-dialog";
 import { Button } from "../components/ui/button";
+import { useAsyncAction } from "../hooks/useAsyncAction";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
@@ -38,8 +39,7 @@ export default function TaskDetail() {
   const [task, setTask] = useState<Task | null>(null);
   const [service, setService] = useState<Service | null>(null);
   const [error, setError] = useState(false);
-  const [removeLoading, setRemoveLoading] = useState(false);
-  const [removeError, setRemoveError] = useState<string | null>(null);
+  const remove = useAsyncAction();
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
 
   const fetchTask = useCallback(() => {
@@ -63,17 +63,12 @@ export default function TaskDetail() {
       .catch(() => {});
   }, [serviceId]);
 
-  async function executeRemove() {
+  function executeRemove() {
     if (!id) return;
-    setRemoveLoading(true);
-    setRemoveError(null);
-    try {
+    void remove.execute(async () => {
       await api.removeTask(id);
       navigate(task?.ServiceID ? `/services/${task.ServiceID}` : "/tasks");
-    } catch (err) {
-      setRemoveError(err instanceof Error ? err.message : "Failed to remove task");
-      setRemoveLoading(false);
-    }
+    }, "Failed to remove task");
   }
 
   const monitoring = useMonitoringStatus();
@@ -121,7 +116,7 @@ export default function TaskDetail() {
                     variant="destructive"
                     size="sm"
                   >
-                    {removeLoading ? (
+                    {remove.loading ? (
                       <Spinner className="size-3" />
                     ) : (
                       <Trash2 className="size-3.5" />
@@ -149,7 +144,9 @@ export default function TaskDetail() {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-            {removeError && <p className="text-xs text-red-600 dark:text-red-400">{removeError}</p>}
+            {remove.error && (
+              <p className="text-xs text-red-600 dark:text-red-400">{remove.error}</p>
+            )}
           </>
         }
       />

@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
+import { useAsyncAction } from "../hooks/useAsyncAction";
 import { useInstanceResolver } from "../hooks/useInstanceResolver";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
@@ -64,35 +65,27 @@ function LabelsEditor({
 }
 
 function NodeAvailabilityControl({ nodeId, current }: { nodeId: string; current: string }) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { loading, error, execute } = useAsyncAction();
   const [drainPending, setDrainPending] = useState(false);
 
-  async function handleChange(value: "active" | "drain" | "pause") {
-    if (value === current) return;
-    setLoading(true);
-    setError(null);
-    try {
-      await api.updateNodeAvailability(nodeId, value);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update availability");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   function handleValueChange(value: string | null) {
-    if (value === null) return;
+    if (value === null || value === current) return;
     if (value === "drain" && current !== "drain") {
       setDrainPending(true);
     } else {
-      void handleChange(value as "active" | "drain" | "pause");
+      void execute(
+        () => api.updateNodeAvailability(nodeId, value as "active" | "pause"),
+        "Failed to update availability",
+      );
     }
   }
 
   function confirmDrain() {
     setDrainPending(false);
-    void handleChange("drain");
+    void execute(
+      () => api.updateNodeAvailability(nodeId, "drain"),
+      "Failed to update availability",
+    );
   }
 
   return (
