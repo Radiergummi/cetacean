@@ -40,7 +40,6 @@ export default function TaskDetail() {
   const [service, setService] = useState<Service | null>(null);
   const [error, setError] = useState(false);
   const remove = useAsyncAction();
-  const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
 
   const fetchTask = useCallback(() => {
     if (!id) return;
@@ -106,10 +105,7 @@ export default function TaskDetail() {
         ]}
         actions={
           <>
-            <AlertDialog
-              open={removeDialogOpen}
-              onOpenChange={setRemoveDialogOpen}
-            >
+            <AlertDialog>
               <AlertDialogTrigger
                 render={
                   <Button

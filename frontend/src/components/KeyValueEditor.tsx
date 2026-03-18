@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil, Plus, Trash2, X } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 interface KeyValueEditorProps {
   title: string;
@@ -100,8 +100,14 @@ export function KeyValueEditor({
     }
   }
 
-  const sortedEntries = Object.entries(entries).sort(([a], [b]) => a.localeCompare(b));
-  const draftEntries = Object.entries(draft).sort(([a], [b]) => a.localeCompare(b));
+  const sortedEntries = useMemo(
+    () => Object.entries(entries).sort(([a], [b]) => a.localeCompare(b)),
+    [entries],
+  );
+  const draftEntries = useMemo(
+    () => Object.entries(draft).sort(([a], [b]) => a.localeCompare(b)),
+    [draft],
+  );
 
   const controls = !editing ? (
     <Button

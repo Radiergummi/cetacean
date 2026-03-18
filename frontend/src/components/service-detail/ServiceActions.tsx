@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
-import { getErrorMessage } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 import { ImageIcon, RefreshCw, RotateCcw } from "lucide-react";
 import { useState } from "react";
@@ -80,8 +79,8 @@ export function ServiceActions({ service, serviceId }: { service: Service; servi
 
   const [imageOpen, setImageOpen] = useState(false);
   const [imageValue, setImageValue] = useState("");
-  const [imageLoading, setImageLoading] = useState(false);
-  const [imageError, setImageError] = useState<string | null>(null);
+  const [imageValidationError, setImageValidationError] = useState<string | null>(null);
+  const imageUpdate = useAsyncAction();
 
   const rollback = useAsyncAction();
   const restart = useAsyncAction();
@@ -92,7 +91,7 @@ export function ServiceActions({ service, serviceId }: { service: Service; servi
     if (open) {
       setImageValue(imageWithoutDigest);
     }
-    setImageError(null);
+    setImageValidationError(null);
     setImageOpen(open);
   }
 
@@ -100,21 +99,15 @@ export function ServiceActions({ service, serviceId }: { service: Service; servi
     const trimmed = imageValue.trim();
 
     if (!trimmed) {
-      setImageError("Enter an image name");
+      setImageValidationError("Enter an image name");
       return;
     }
 
-    setImageLoading(true);
-    setImageError(null);
-
-    try {
+    setImageValidationError(null);
+    await imageUpdate.execute(async () => {
       await api.updateServiceImage(serviceId, trimmed);
       setImageOpen(false);
-    } catch (error) {
-      setImageError(getErrorMessage(error, "Failed to update image"));
-    } finally {
-      setImageLoading(false);
-    }
+    }, "Failed to update image");
   }
 
   return (
@@ -156,23 +149,25 @@ export function ServiceActions({ service, serviceId }: { service: Service; servi
             className="mb-2 font-mono"
             autoFocus
           />
-          {imageError && (
-            <p className="mb-2 text-xs text-red-600 dark:text-red-400">{imageError}</p>
+          {(imageValidationError || imageUpdate.error) && (
+            <p className="mb-2 text-xs text-red-600 dark:text-red-400">
+              {imageValidationError || imageUpdate.error}
+            </p>
           )}
           <div className="flex gap-2">
             <Button
               onClick={() => void submitImage()}
-              disabled={imageLoading}
+              disabled={imageUpdate.loading}
               size="sm"
               className="flex-1"
             >
-              {imageLoading && <Spinner className="size-3" />}
+              {imageUpdate.loading && <Spinner className="size-3" />}
               Update
             </Button>
             <Button
               variant="outline"
               onClick={() => setImageOpen(false)}
-              disabled={imageLoading}
+              disabled={imageUpdate.loading}
               size="sm"
               className="flex-1"
             >

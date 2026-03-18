@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { HistoryEntry, Node, PatchOp, Task } from "../api/types";
+import type { HistoryEntry, Node, Task } from "../api/types";
 import ActivitySection from "../components/ActivitySection";
 import { MetadataGrid } from "../components/data";
 import DiskUsageSection from "../components/DiskUsageSection";
@@ -37,32 +37,6 @@ import { formatBytes, formatNumber } from "../lib/format";
 import { escapePromQL } from "../lib/utils";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-
-function LabelsEditor({
-  nodeId,
-  labels,
-  onSaved,
-}: {
-  nodeId: string;
-  labels: Record<string, string>;
-  onSaved: (updated: Record<string, string>) => void;
-}) {
-  async function handleSave(ops: PatchOp[]) {
-    const updated = await api.patchNodeLabels(nodeId, ops);
-    onSaved(updated);
-    return updated;
-  }
-
-  return (
-    <KeyValueEditor
-      title="Labels"
-      entries={labels}
-      keyPlaceholder="key"
-      valuePlaceholder="value"
-      onSave={handleSave}
-    />
-  );
-}
 
 function NodeAvailabilityControl({ nodeId, current }: { nodeId: string; current: string }) {
   const { loading, error, execute } = useAsyncAction();
@@ -258,10 +232,16 @@ export default function NodeDetail() {
       </MetadataGrid>
 
       {nodeLabels !== null && (
-        <LabelsEditor
-          nodeId={node.ID}
-          labels={nodeLabels}
-          onSaved={setNodeLabels}
+        <KeyValueEditor
+          title="Labels"
+          entries={nodeLabels}
+          keyPlaceholder="key"
+          valuePlaceholder="value"
+          onSave={async (ops) => {
+            const updated = await api.patchNodeLabels(node.ID, ops);
+            setNodeLabels(updated);
+            return updated;
+          }}
         />
       )}
 

@@ -50,12 +50,10 @@ export function ResourcesEditor({
         ? resources.reservations.memoryBytes / (1024 * 1024)
         : undefined,
     );
-    if (!capacity) {
-      api
-        .clusterCapacity()
-        .then(setCapacity)
-        .catch(() => {});
-    }
+    api
+      .clusterCapacity()
+      .then(setCapacity)
+      .catch(() => {});
     setSaveError(null);
     setEditing(true);
   }
@@ -99,10 +97,10 @@ export function ResourcesEditor({
   }
 
   const hasResources =
-    resources.limits?.nanoCPUs ||
-    resources.limits?.memoryBytes ||
-    resources.reservations?.nanoCPUs ||
-    resources.reservations?.memoryBytes;
+    resources.limits?.nanoCPUs != null ||
+    resources.limits?.memoryBytes != null ||
+    resources.reservations?.nanoCPUs != null ||
+    resources.reservations?.memoryBytes != null;
 
   const controls = !editing ? (
     <Button

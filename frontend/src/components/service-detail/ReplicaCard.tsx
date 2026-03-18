@@ -5,7 +5,7 @@ import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SliderNumberField } from "@/components/ui/slider-number-field";
-import { getErrorMessage } from "@/lib/utils";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { Pencil } from "lucide-react";
 import { useState } from "react";
 
@@ -78,8 +78,8 @@ function ReplicaDoughnut({ running, desired }: { running: number; desired: numbe
 export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[] }) {
   const [scaleOpen, setScaleOpen] = useState(false);
   const [scaleValue, setScaleValue] = useState<number | undefined>();
-  const [scaleLoading, setScaleLoading] = useState(false);
-  const [scaleError, setScaleError] = useState<string | null>(null);
+  const [scaleValidationError, setScaleValidationError] = useState<string | null>(null);
+  const scale = useAsyncAction();
 
   const replicated = service.Spec.Mode.Replicated;
   if (!replicated) {
@@ -99,25 +99,20 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
     if (open) {
       setScaleValue(desired);
     }
-    setScaleError(null);
+    setScaleValidationError(null);
     setScaleOpen(open);
   }
 
   async function submitScale() {
     if (scaleValue === undefined || scaleValue < 0) {
-      setScaleError("Enter a valid replica count");
+      setScaleValidationError("Enter a valid replica count");
       return;
     }
-    setScaleLoading(true);
-    setScaleError(null);
-    try {
+    setScaleValidationError(null);
+    await scale.execute(async () => {
       await api.scaleService(service.ID, scaleValue);
       setScaleOpen(false);
-    } catch (err) {
-      setScaleError(getErrorMessage(err, "Failed to scale"));
-    } finally {
-      setScaleLoading(false);
-    }
+    }, "Failed to scale");
   }
 
   const value = (
@@ -170,17 +165,19 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
             min={0}
             step={1}
           />
-          {scaleError && (
-            <p className="mb-2 text-xs text-red-600 dark:text-red-400">{scaleError}</p>
+          {(scaleValidationError || scale.error) && (
+            <p className="mb-2 text-xs text-red-600 dark:text-red-400">
+              {scaleValidationError || scale.error}
+            </p>
           )}
           <div className="flex gap-2">
             <Button
               size="sm"
               className="flex-1"
               onClick={() => void submitScale()}
-              disabled={scaleLoading}
+              disabled={scale.loading}
             >
-              {scaleLoading && <Spinner className="size-3" />}
+              {scale.loading && <Spinner className="size-3" />}
               Scale
             </Button>
             <Button
@@ -188,7 +185,7 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
               size="sm"
               className="flex-1"
               onClick={() => handleOpenChange(false)}
-              disabled={scaleLoading}
+              disabled={scale.loading}
             >
               Cancel
             </Button>
