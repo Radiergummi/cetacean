@@ -41,7 +41,7 @@ export function KeyValueEditor({
     setDraft({ ...entries });
     setNewKey("");
     setNewValue("");
-    setAdding(false);
+    setAdding(Object.keys(entries).length === 0);
     setSaveError(null);
     setEditing(true);
   }
