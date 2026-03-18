@@ -222,8 +222,11 @@ export function KeyValueEditor({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setAdding(true)}
-                disabled={adding}
+                onClick={() => {
+                  if (adding && newKey.trim()) addRow();
+                  setAdding(true);
+                }}
+                disabled={adding && !newKey.trim()}
               >
                 Add another
               </Button>
