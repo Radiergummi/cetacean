@@ -1,27 +1,13 @@
 import type { NetworkTopology, PlacementTopology } from "../api/types";
+import { getChartColor } from "./chartColors";
 import type { Node, Edge } from "@xyflow/react";
-
-const COLORS = [
-  "#3b82f6",
-  "#ef4444",
-  "#10b981",
-  "#f59e0b",
-  "#8b5cf6",
-  "#ec4899",
-  "#06b6d4",
-  "#f97316",
-  "#6366f1",
-  "#14b8a6",
-  "#e11d48",
-  "#84cc16",
-];
 
 export function hashColor(id: string): string {
   let h = 0;
   for (let i = 0; i < id.length; i++) {
     h = (h * 31 + id.charCodeAt(i)) | 0;
   }
-  return COLORS[Math.abs(h) % COLORS.length];
+  return getChartColor(Math.abs(h));
 }
 
 function stripStackPrefix(name: string, stack?: string): string {
