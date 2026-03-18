@@ -26,6 +26,8 @@ import type {
   Identity,
   MonitoringStatus,
   PrometheusResponse,
+  ClusterCapacity,
+  PatchOp,
 } from "./types";
 
 const headers = { Accept: "application/json" };
@@ -259,6 +261,7 @@ export const api = {
   },
   diskUsage: () =>
     fetchJSON<CollectionResponse<DiskUsageSummary>>("/disk-usage").then((r) => r.items),
+  clusterCapacity: () => fetchJSON<ClusterCapacity>("/cluster/capacity"),
   search: (q: string, limit?: number, signal?: AbortSignal) =>
     fetchJSON<SearchResponse>(
       `/search?q=${encodeURIComponent(q)}${limit !== undefined ? `&limit=${limit}` : ""}`,
@@ -287,9 +290,9 @@ export const api = {
     ),
 
   // Tier 2: sub-resource PATCHes
-  patchServiceEnv: (id: string, ops: Array<{ op: string; path: string; value?: string }>) =>
+  patchServiceEnv: (id: string, ops: PatchOp[]) =>
     patch<Record<string, string>>(`/services/${id}/env`, ops, "application/json-patch+json"),
-  patchNodeLabels: (id: string, ops: Array<{ op: string; path: string; value?: string }>) =>
+  patchNodeLabels: (id: string, ops: PatchOp[]) =>
     patch<Record<string, string>>(`/nodes/${id}/labels`, ops, "application/json-patch+json"),
   patchServiceResources: (id: string, partial: unknown) =>
     patch<Record<string, unknown>>(

@@ -469,6 +469,20 @@ export interface Identity {
   raw?: Record<string, unknown>;
 }
 
+export interface ClusterCapacity {
+  maxNodeCPU: number;
+  maxNodeMemory: number;
+  totalCPU: number;
+  totalMemory: number;
+  nodeCount: number;
+}
+
+export interface PatchOp {
+  op: string;
+  path: string;
+  value?: string;
+}
+
 export interface PrometheusResponse {
   data: {
     result: Array<{
