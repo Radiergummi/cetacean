@@ -47,11 +47,25 @@ export function SliderNumberField({
     setSliderValue(min);
   }
 
+  if (clearable && value === undefined) {
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onChange(step ?? 1)}
+        className="w-full justify-start text-muted-foreground"
+      >
+        <Plus className="size-3" />
+        Set {label.toLowerCase()}
+      </Button>
+    );
+  }
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <Label className="text-xs text-muted-foreground">{label}</Label>
-        {clearable && value !== undefined && (
+        {clearable && (
           <Button variant="ghost" size="icon-xs" onClick={clear} title="Remove">
             <X className="size-3" />
           </Button>
