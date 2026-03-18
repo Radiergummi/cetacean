@@ -172,14 +172,16 @@ export function ResourcesEditor({
             onChange={setCpu}
             max={capacity.maxNodeCPU}
             step={0.25}
+            formatLabel={formatCores}
           />
           <ResourceRangeSlider
-            label="Memory (MB)"
+            label="Memory"
             reservation={memory.reservation}
             limit={memory.limit}
             onChange={setMemory}
             max={capacity.maxNodeMemory / (1024 * 1024)}
             step={16}
+            formatLabel={(megabytes) => formatBytes(megabytes * 1024 * 1024)}
           />
         </div>
       ) : (

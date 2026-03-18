@@ -1,4 +1,3 @@
-import { formatNumber } from "@/lib/format";
 import { NumberField } from "@base-ui/react/number-field";
 import { Slider as SliderPrimitive } from "@base-ui/react/slider";
 import { Minus, Plus } from "lucide-react";
@@ -11,11 +10,14 @@ interface ResourceRangeSliderProps {
   onChange: (values: { reservation: number | undefined; limit: number | undefined }) => void;
   max: number;
   step: number;
+  formatLabel: (value: number) => string;
 }
 
 const THUMB_BASE =
   "relative block size-3.5 shrink-0 rounded-full border-2 transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3";
 const THUMB_ACTIVE = "border-primary bg-white ring-primary/50";
+
+const DEAD_ZONE_PERCENT = 5;
 
 function toPosition(
   value: number | undefined,
@@ -45,14 +47,20 @@ export function ResourceRangeSlider({
   onChange,
   max,
   step,
+  formatLabel,
 }: ResourceRangeSliderProps) {
-  const sliderMax = max + step; // extra position for ∞
+  const sliderMax = max + step;
   const reservationPosition = toPosition(reservation, max, step, "reservation");
   const limitPosition = toPosition(limit, max, step, "limit");
 
-  const ticks = useMemo(() => computeTicks(max, step), [max, step]);
+  const ticks = useMemo(() => computeTicks(max, step, formatLabel), [max, step, formatLabel]);
 
-  const deadZonePercent = 5;
+  // Compute fill position as percentage of the full slider width
+  const fillLeft = (reservationPosition / sliderMax) * 100;
+  const fillRight = 100 - (limitPosition / sliderMax) * 100;
+
+  const isReservationActive = reservation !== undefined;
+  const isLimitActive = limit !== undefined;
 
   function handleSliderChange(positions: number[]) {
     onChange({
@@ -67,7 +75,6 @@ export function ResourceRangeSlider({
       return;
     }
     const clamped = Math.max(step, Math.min(max, next));
-    // Push limit if reservation exceeds it
     const newLimit = limit !== undefined && clamped > limit ? clamped : limit;
     onChange({ reservation: clamped, limit: newLimit });
   }
@@ -78,40 +85,41 @@ export function ResourceRangeSlider({
       return;
     }
     const clamped = Math.max(step, Math.min(max, next));
-    // Push reservation down if limit is below it
     const newReservation =
       reservation !== undefined && clamped < reservation ? clamped : reservation;
     onChange({ reservation: newReservation, limit: clamped });
   }
 
-  const isReservationActive = reservation !== undefined;
-  const isLimitActive = limit !== undefined;
-
   return (
     <div className="flex w-full flex-col gap-1">
       <span className="text-xs text-muted-foreground">{label}</span>
 
-      {/* Slider with dead zones */}
       <div className="relative">
-        {/* Visual track layers (behind the interactive slider) */}
+        {/* All visual layers — rendered independently from Base UI's Track */}
         <div className="pointer-events-none absolute inset-x-0 top-0 flex h-6 items-center">
           {/* Dead zone left */}
           <div
             className="absolute top-1/2 left-0 h-0.5 -translate-y-1/2 rounded-full bg-muted-foreground/20"
-            style={{ width: `${deadZonePercent}%` }}
+            style={{ width: `${DEAD_ZONE_PERCENT}%` }}
           />
           {/* Main track */}
           <div
             className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-muted"
-            style={{ left: `${deadZonePercent}%`, right: `${deadZonePercent}%` }}
+            style={{ left: `${DEAD_ZONE_PERCENT}%`, right: `${DEAD_ZONE_PERCENT}%` }}
           />
           {/* Dead zone right */}
           <div
             className="absolute top-1/2 right-0 h-0.5 -translate-y-1/2 rounded-full bg-muted-foreground/20"
-            style={{ width: `${deadZonePercent}%` }}
+            style={{ width: `${DEAD_ZONE_PERCENT}%` }}
+          />
+          {/* Filled range between thumbs */}
+          <div
+            className={`absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-primary ${!isReservationActive && !isLimitActive ? "opacity-40" : ""}`}
+            style={{ left: `${fillLeft}%`, right: `${fillRight}%` }}
           />
         </div>
 
+        {/* Interactive slider — Track is invisible, only thumbs are visible */}
         <SliderPrimitive.Root
           value={[reservationPosition, limitPosition]}
           onValueChange={handleSliderChange}
@@ -121,13 +129,8 @@ export function ResourceRangeSlider({
           className="data-horizontal:w-full"
         >
           <SliderPrimitive.Control className="relative flex h-6 w-full touch-none items-center select-none">
-            <SliderPrimitive.Track
-              className="relative grow rounded-full select-none data-horizontal:h-1.5 data-horizontal:w-full"
-              style={{ background: "none" }}
-            >
-              <SliderPrimitive.Indicator
-                className={`rounded-full bg-primary data-horizontal:h-full ${!isReservationActive && !isLimitActive ? "opacity-40" : ""}`}
-              />
+            <SliderPrimitive.Track className="relative grow select-none data-horizontal:h-0 data-horizontal:w-full">
+              <SliderPrimitive.Indicator className="data-horizontal:h-0" />
             </SliderPrimitive.Track>
             <SliderPrimitive.Thumb className={`${THUMB_BASE} ${THUMB_ACTIVE}`} />
             <SliderPrimitive.Thumb className={`${THUMB_BASE} ${THUMB_ACTIVE}`} />
@@ -137,7 +140,7 @@ export function ResourceRangeSlider({
         {/* Tick marks with labels */}
         <div
           className="relative h-6"
-          style={{ marginLeft: `${deadZonePercent}%`, marginRight: `${deadZonePercent}%` }}
+          style={{ marginLeft: `${DEAD_ZONE_PERCENT}%`, marginRight: `${DEAD_ZONE_PERCENT}%` }}
         >
           {ticks.map((tick) => (
             <div
@@ -231,7 +234,11 @@ interface Tick {
 }
 
 /** Generate tick positions. Boundary ticks (step and max) are tall with labels; intermediate ticks are short. */
-export function computeTicks(max: number, step: number): Tick[] {
+export function computeTicks(
+  max: number,
+  step: number,
+  formatLabel: (value: number) => string,
+): Tick[] {
   const ticks: Tick[] = [];
 
   // For CPU (step ≤ 1): ticks at every whole core. For memory: power-of-two intervals.
@@ -245,17 +252,16 @@ export function computeTicks(max: number, step: number): Tick[] {
     if (interval < step) interval = step;
   }
 
-  const fractionDigits = step < 1 ? 2 : 0;
-  ticks.push({ value: step, tall: true, label: formatNumber(step, fractionDigits) });
+  ticks.push({ value: step, tall: true, label: formatLabel(step) });
 
   for (let value = interval; value < max; value += interval) {
     if (Math.abs(value - step) > step * 0.01 && Math.abs(value - max) > step * 0.01) {
-      ticks.push({ value, tall: false, label: formatNumber(value, fractionDigits) });
+      ticks.push({ value, tall: false, label: formatLabel(value) });
     }
   }
 
   if (max > step) {
-    ticks.push({ value: max, tall: true, label: formatNumber(max, fractionDigits) });
+    ticks.push({ value: max, tall: true, label: formatLabel(max) });
   }
 
   return ticks;

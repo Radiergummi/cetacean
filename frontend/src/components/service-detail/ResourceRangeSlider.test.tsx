@@ -2,6 +2,8 @@ import { ResourceRangeSlider, computeTicks } from "./resource-range-slider";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+const identity = String;
+
 describe("ResourceRangeSlider", () => {
   const defaultProps = {
     label: "CPU (cores)",
@@ -10,6 +12,7 @@ describe("ResourceRangeSlider", () => {
     onChange: vi.fn(),
     max: 4,
     step: 0.25,
+    formatLabel: identity,
   };
 
   it("renders label", () => {
@@ -54,38 +57,32 @@ describe("ResourceRangeSlider", () => {
 
 describe("computeTicks", () => {
   it("produces boundary ticks at step and max for CPU", () => {
-    const ticks = computeTicks(4, 0.25);
+    const ticks = computeTicks(4, 0.25, identity);
     expect(ticks[0]).toMatchObject({ value: 0.25, tall: true });
     expect(ticks[ticks.length - 1]).toMatchObject({ value: 4, tall: true });
   });
 
   it("produces intermediate ticks at whole cores", () => {
-    const ticks = computeTicks(4, 0.25);
+    const ticks = computeTicks(4, 0.25, identity);
     const intermediates = ticks.filter((t) => !t.tall);
     expect(intermediates.map((t) => t.value)).toEqual([1, 2, 3]);
   });
 
   it("produces boundary ticks for memory", () => {
-    const ticks = computeTicks(4096, 16);
+    const ticks = computeTicks(4096, 16, identity);
     expect(ticks[0]).toMatchObject({ value: 16, tall: true });
     expect(ticks[ticks.length - 1]).toMatchObject({ value: 4096, tall: true });
   });
 
   it("does not produce ticks when max equals step", () => {
-    const ticks = computeTicks(0.25, 0.25);
+    const ticks = computeTicks(0.25, 0.25, identity);
     expect(ticks).toHaveLength(1);
     expect(ticks[0]).toMatchObject({ value: 0.25, tall: true });
   });
 
-  it("includes labels on ticks", () => {
-    const ticks = computeTicks(4, 0.25);
-    expect(ticks[0].label).toBe("0.25");
-    expect(ticks[ticks.length - 1].label).toBe("4");
-  });
-
-  it("formats memory tick labels as integers", () => {
-    const ticks = computeTicks(4096, 16);
-    expect(ticks[0].label).toBe("16");
-    expect(ticks[ticks.length - 1].label).toBe("4,096");
+  it("uses formatLabel for tick labels", () => {
+    const ticks = computeTicks(4, 0.25, (v) => `${v} cores`);
+    expect(ticks[0].label).toBe("0.25 cores");
+    expect(ticks[ticks.length - 1].label).toBe("4 cores");
   });
 });
