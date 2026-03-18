@@ -11,6 +11,7 @@ import { LoadingDetail } from "../components/LoadingSkeleton";
 import { MetricsPanel, NodeResourceGauges } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import SimpleTable from "../components/SimpleTable";
+import { Spinner } from "../components/Spinner";
 import TasksTable from "../components/TasksTable";
 import { useInstanceResolver } from "../hooks/useInstanceResolver";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
@@ -21,20 +22,6 @@ import { escapePromQL } from "../lib/utils";
 import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-
-function Spinner() {
-  return (
-    <svg
-      className="h-3 w-3 animate-spin"
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-    >
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-    </svg>
-  );
-}
 
 function LabelsEditor({
   nodeId,
@@ -164,14 +151,17 @@ function LabelsEditor({
               </thead>
               <tbody>
                 {draftEntries.map(([k, v]) => (
-                  <tr key={k} className="border-b last:border-b-0">
+                  <tr
+                    key={k}
+                    className="border-b last:border-b-0"
+                  >
                     <td className="p-3 font-mono text-xs">{k}</td>
                     <td className="p-2">
                       <input
                         type="text"
                         value={v}
                         onChange={(e) => setDraft((prev) => ({ ...prev, [k]: e.target.value }))}
-                        className="w-full rounded border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                        className="w-full rounded border bg-background px-2 py-1 font-mono text-xs focus:ring-1 focus:ring-ring focus:outline-none"
                       />
                     </td>
                     <td className="p-2">
@@ -193,7 +183,7 @@ function LabelsEditor({
                       value={newKey}
                       onChange={(e) => setNewKey(e.target.value)}
                       placeholder="key"
-                      className="w-full rounded border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                      className="w-full rounded border bg-background px-2 py-1 font-mono text-xs focus:ring-1 focus:ring-ring focus:outline-none"
                     />
                   </td>
                   <td className="p-2">
@@ -202,8 +192,10 @@ function LabelsEditor({
                       value={newVal}
                       onChange={(e) => setNewVal(e.target.value)}
                       placeholder="value"
-                      onKeyDown={(e) => { if (e.key === "Enter") addRow(); }}
-                      className="w-full rounded border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") addRow();
+                      }}
+                      className="w-full rounded border bg-background px-2 py-1 font-mono text-xs focus:ring-1 focus:ring-ring focus:outline-none"
                     />
                   </td>
                   <td className="p-2">
@@ -229,7 +221,7 @@ function LabelsEditor({
               disabled={saving}
               className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
             >
-              {saving && <Spinner />}
+              {saving && <Spinner className="size-3" />}
               Save
             </button>
             <button
@@ -255,7 +247,8 @@ function NodeAvailabilityControl({ nodeId, current }: { nodeId: string; current:
   async function handleChange(value: "active" | "drain" | "pause") {
     if (value === current) return;
     if (value === "drain") {
-      if (!window.confirm("Draining this node will reschedule all running tasks. Continue?")) return;
+      if (!window.confirm("Draining this node will reschedule all running tasks. Continue?"))
+        return;
     }
     setLoading(true);
     setError(null);
@@ -376,7 +369,10 @@ export default function NodeDetail() {
           <div className="mb-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
             Availability
           </div>
-          <NodeAvailabilityControl nodeId={node.ID} current={node.Spec.Availability} />
+          <NodeAvailabilityControl
+            nodeId={node.ID}
+            current={node.Spec.Availability}
+          />
         </div>
         <InfoCard
           label="Engine"
