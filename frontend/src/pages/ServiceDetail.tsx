@@ -26,7 +26,7 @@ import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
-import { formatBytes, formatCores, formatDuration, formatRelativeDate } from "../lib/format";
+import { formatDuration, formatRelativeDate } from "../lib/format";
 import { escapePromQL } from "../lib/utils";
 import { ArrowRight, Globe, Shuffle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -293,15 +293,6 @@ export default function ServiceDetail() {
         </CollapsibleSection>
       )}
 
-      {/* Resources editor */}
-      {serviceResources !== null && (
-        <ResourcesEditor
-          serviceId={id!}
-          resources={serviceResources}
-          onSaved={setServiceResources}
-        />
-      )}
-
       {/* Container configuration */}
       {hasContainerConfig && (
         <CollapsibleSection
@@ -538,13 +529,17 @@ export default function ServiceDetail() {
         defaultOpen={false}
       >
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {taskTemplate.Resources && (
+          {serviceResources !== null && (
             <div className="flex flex-col gap-3 rounded-lg border p-4">
               <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 Resources
               </h3>
-
-              <ResourcesPanel resources={taskTemplate.Resources} />
+              <ResourcesEditor
+                serviceId={id!}
+                resources={serviceResources}
+                onSaved={setServiceResources}
+                pids={taskTemplate.Resources?.Limits?.Pids}
+              />
             </div>
           )}
 
@@ -739,87 +734,6 @@ function MountTypeBadge({ type }: { type: string }) {
     >
       {type}
     </span>
-  );
-}
-
-type ResourceShape = NonNullable<Service["Spec"]["TaskTemplate"]["Resources"]>;
-
-function ResourceLimitsBar({
-  label,
-  reserved,
-  limit,
-  format,
-}: {
-  label: string;
-  reserved?: number;
-  limit?: number;
-  format: (v: number) => string;
-}) {
-  if (!reserved && !limit) {
-    return null;
-  }
-  const max = limit || reserved || 0;
-  const reservedPct = reserved && max ? Math.round((reserved / max) * 100) : 0;
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between text-sm">
-        <span className="font-medium">{label}</span>
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          {reserved != null && (
-            <span>
-              Reserved: <span className="font-mono text-foreground">{format(reserved)}</span>
-            </span>
-          )}
-          {limit != null && (
-            <span>
-              Limit: <span className="font-mono text-foreground">{format(limit)}</span>
-            </span>
-          )}
-        </div>
-      </div>
-      {limit && reserved ? (
-        <div className="h-2 overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full rounded-full bg-blue-500"
-            style={{ width: `${reservedPct}%` }}
-          />
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function ResourcesPanel({ resources }: { resources: ResourceShape }) {
-  const hasCpu = resources.Limits?.NanoCPUs || resources.Reservations?.NanoCPUs;
-  const hasMem = resources.Limits?.MemoryBytes || resources.Reservations?.MemoryBytes;
-  const hasPids = resources.Limits?.Pids;
-
-  if (!hasCpu && !hasMem && !hasPids) {
-    return null;
-  }
-
-  return (
-    <div className="space-y-4">
-      <ResourceLimitsBar
-        label="CPU"
-        reserved={resources.Reservations?.NanoCPUs}
-        limit={resources.Limits?.NanoCPUs}
-        format={(v) => formatCores(v / 1_000_000_000)}
-      />
-      <ResourceLimitsBar
-        label="Memory"
-        reserved={resources.Reservations?.MemoryBytes}
-        limit={resources.Limits?.MemoryBytes}
-        format={formatBytes}
-      />
-      {hasPids && (
-        <div className="flex items-center justify-between text-sm">
-          <span className="font-medium">PID Limit</span>
-          <span className="font-mono">{resources.Limits!.Pids}</span>
-        </div>
-      )}
-    </div>
   );
 }
 
