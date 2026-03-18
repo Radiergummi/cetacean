@@ -11,6 +11,23 @@ import { LoadingDetail } from "../components/LoadingSkeleton";
 import { MetricsPanel, NodeResourceGauges } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import TasksTable from "../components/TasksTable";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useInstanceResolver } from "../hooks/useInstanceResolver";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
@@ -49,13 +66,10 @@ function LabelsEditor({
 function NodeAvailabilityControl({ nodeId, current }: { nodeId: string; current: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [drainPending, setDrainPending] = useState(false);
 
   async function handleChange(value: "active" | "drain" | "pause") {
     if (value === current) return;
-    if (value === "drain") {
-      if (!window.confirm("Draining this node will reschedule all running tasks. Continue?"))
-        return;
-    }
     setLoading(true);
     setError(null);
     try {
@@ -67,19 +81,47 @@ function NodeAvailabilityControl({ nodeId, current }: { nodeId: string; current:
     }
   }
 
+  function handleValueChange(value: string | null) {
+    if (value === null) return;
+    if (value === "drain" && current !== "drain") {
+      setDrainPending(true);
+    } else {
+      void handleChange(value as "active" | "drain" | "pause");
+    }
+  }
+
+  function confirmDrain() {
+    setDrainPending(false);
+    void handleChange("drain");
+  }
+
   return (
     <div className="flex flex-col items-start gap-1">
-      <select
-        value={current}
-        disabled={loading}
-        onChange={(e) => void handleChange(e.target.value as "active" | "drain" | "pause")}
-        className="rounded border bg-background px-2 py-1 text-sm disabled:opacity-50"
-      >
-        <option value="active">Active</option>
-        <option value="drain">Drain</option>
-        <option value="pause">Pause</option>
-      </select>
+      <Select value={current} onValueChange={handleValueChange} disabled={loading}>
+        <SelectTrigger className="w-32">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="active">Active</SelectItem>
+          <SelectItem value="drain">Drain</SelectItem>
+          <SelectItem value="pause">Pause</SelectItem>
+        </SelectContent>
+      </Select>
       {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+      <AlertDialog open={drainPending} onOpenChange={setDrainPending}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Drain this node?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Draining this node will reschedule all running tasks to other nodes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDrain}>Drain</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
