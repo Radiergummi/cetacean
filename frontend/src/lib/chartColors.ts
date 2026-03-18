@@ -34,3 +34,22 @@ export function getChartColor(index: number): string {
   const colors = resolveColors();
   return colors[index % colors.length];
 }
+
+/** Cached semantic color resolutions. */
+const semanticCache = new Map<string, string>();
+
+/**
+ * Get a semantic chart color by name (e.g. "cpu", "memory", "critical").
+ * Reads from CSS custom property `--chart-{name}`, caches after first call.
+ * For Chart.js contexts that need resolved hex/rgba values.
+ */
+export function getSemanticChartColor(name: string): string {
+  const cached = semanticCache.get(name);
+  if (cached) return cached;
+  if (typeof document === "undefined") return "";
+  const value = getComputedStyle(document.documentElement)
+    .getPropertyValue(`--chart-${name}`)
+    .trim();
+  if (value) semanticCache.set(name, value);
+  return value;
+}
