@@ -338,6 +338,28 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /cluster/capacity:
+    get:
+      operationId: getClusterCapacity
+      tags: [Cluster]
+      summary: Cluster resource capacity
+      description: |
+        Max single-node CPU and memory (for slider bounds) plus cluster-wide totals.
+      responses:
+        "200":
+          description: Cluster capacity
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - $ref: "#/components/schemas/ClusterCapacity"
+        "304":
+          $ref: "#/components/responses/NotModified"
+
   /swarm:
     get:
       operationId: getSwarm
@@ -2106,6 +2128,13 @@ components:
         reservedMemory:
           type: integer
           format: int64
+        maxNodeCPU:
+          type: integer
+          description: CPU cores of the largest single node
+        maxNodeMemory:
+          type: integer
+          format: int64
+          description: Memory bytes of the largest single node
         lastSync:
           type: string
           format: date-time
@@ -2113,6 +2142,27 @@ components:
           type: boolean
         localNodeID:
           type: string
+
+    ClusterCapacity:
+      type: object
+      properties:
+        maxNodeCPU:
+          type: integer
+          description: CPU cores of the largest single node
+        maxNodeMemory:
+          type: integer
+          format: int64
+          description: Memory bytes of the largest single node
+        totalCPU:
+          type: integer
+          description: Total CPU cores across all nodes
+        totalMemory:
+          type: integer
+          format: int64
+          description: Total memory bytes across all nodes
+        nodeCount:
+          type: integer
+          description: Number of nodes in the cluster
 
     ClusterMetrics:
       type: object
