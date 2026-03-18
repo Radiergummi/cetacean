@@ -129,9 +129,7 @@ export function ResourceRangeSlider({
           className="data-horizontal:w-full"
         >
           <SliderPrimitive.Control className="relative flex h-6 w-full touch-none items-center select-none">
-            <SliderPrimitive.Track className="relative grow select-none data-horizontal:h-0 data-horizontal:w-full">
-              <SliderPrimitive.Indicator className="data-horizontal:h-0" />
-            </SliderPrimitive.Track>
+            <SliderPrimitive.Track className="relative grow opacity-0 select-none data-horizontal:w-full" />
             <SliderPrimitive.Thumb className={`${THUMB_BASE} ${THUMB_ACTIVE}`} />
             <SliderPrimitive.Thumb className={`${THUMB_BASE} ${THUMB_ACTIVE}`} />
           </SliderPrimitive.Control>

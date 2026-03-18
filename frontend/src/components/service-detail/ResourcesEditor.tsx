@@ -3,7 +3,7 @@ import { api } from "@/api/client";
 import type { ClusterCapacity } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
-import { formatBytes, formatCores } from "@/lib/format";
+import { formatBytes, formatCores, formatNumber } from "@/lib/format";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil } from "lucide-react";
 import { useState } from "react";
@@ -172,7 +172,7 @@ export function ResourcesEditor({
             onChange={setCpu}
             max={capacity.maxNodeCPU}
             step={0.25}
-            formatLabel={formatCores}
+            formatLabel={(cores) => formatNumber(cores, 2)}
           />
           <ResourceRangeSlider
             label="Memory"
