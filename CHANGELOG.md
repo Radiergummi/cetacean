@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Inline node label editor on node detail page (add, edit, remove labels)
 - Service resource limits editor on service detail page (CPU and memory limits/reservations)
 - Write actions accessible via the command palette (Cmd+K)
+- Cluster capacity API endpoint for resource slider bounds
+
+### Improved
+- All mutation forms use polished shadcn/ui components (popovers, confirmation dialogs, styled dropdowns)
+- Resource limits editor shows sliders with cluster-aware bounds and accepts memory in megabytes
+- Scale replica input has increment/decrement buttons
+- Destructive actions use styled confirmation dialogs instead of browser-native confirms
 
 ### Fixed
 - Log viewer appearing empty on service and task detail pages until user interaction
