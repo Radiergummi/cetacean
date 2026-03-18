@@ -55,7 +55,7 @@ function withMinSlice(values: number[], total?: number): number[] {
   return values.map((value) => Math.max(value, sum * minFraction));
 }
 
-function buildTooltipEl(
+function buildTooltipElement(
   color: string,
   label: string,
   size: string,
@@ -128,10 +128,10 @@ function externalTooltipHandler(context: {
   const color = getChartColor(index);
   const label = typeMeta[type]?.label ?? type;
   const size = formatBytes(totalSize);
-  const pct = total > 0 ? Math.round((totalSize / total) * 100) : 0;
-  const percentageText = `${pct}% of total`;
+  const percentage = total > 0 ? Math.round((totalSize / total) * 100) : 0;
+  const percentageText = `${percentage}% of total`;
 
-  const node = buildTooltipEl(color, label, size, percentageText);
+  const node = buildTooltipElement(color, label, size, percentageText);
 
   // Add reclaimable info line
   if (reclaimable > 0) {
@@ -273,10 +273,14 @@ function DiskUsageTable({ data }: { data: DiskUsageSummary[] }) {
                       {meta?.label ?? type}
                     </span>
                   </td>
-                  <td className="p-3 text-right tabular-nums">{count}</td>
-                  <td className="p-3 text-right tabular-nums">{active}</td>
                   <td className="p-3 text-right tabular-nums">
-                    {totalSize > 0 ? formatBytes(totalSize) : "0 B"}
+                    {count}
+                  </td>
+                  <td className="p-3 text-right tabular-nums">
+                    {active}
+                  </td>
+                  <td className="p-3 text-right tabular-nums">
+                    {formatBytes(totalSize)}
                   </td>
                   <td className="p-3 text-right text-muted-foreground tabular-nums">
                     {reclaimableCell(reclaimable, totalSize)}
@@ -291,7 +295,9 @@ function DiskUsageTable({ data }: { data: DiskUsageSummary[] }) {
                 <td className="p-3 font-medium">Total</td>
                 <td className="p-3" />
                 <td className="p-3" />
-                <td className="p-3 text-right font-medium tabular-nums">{formatBytes(total)}</td>
+                <td className="p-3 text-right font-medium tabular-nums">
+                  {formatBytes(total)}
+                </td>
                 <td className="p-3 text-right font-medium text-muted-foreground tabular-nums">
                   {reclaimableCell(reclaimable, total)}
                 </td>
