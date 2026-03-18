@@ -1,5 +1,5 @@
 import { api, type ClusterSnapshot, type ClusterMetrics } from "../../api/client";
-import { formatBytes } from "../../lib/formatBytes";
+import { formatBytes, formatNumber, formatPercentage } from "../../lib/format";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -36,7 +36,7 @@ function Bar({
           {label}
           {isReservation ? " (reserved)" : ""}
         </span>
-        <span className="tabular-nums">{clamped.toFixed(0)}%</span>
+        <span className="tabular-nums">{formatPercentage(clamped, 0)}</span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-muted">
         <div
@@ -96,7 +96,7 @@ export default function CapacitySection({ snapshot }: { snapshot: ClusterSnapsho
         <Bar
           label="CPU"
           percent={metrics.cpu.percent}
-          detail={`${metrics.cpu.used.toFixed(1)} / ${metrics.cpu.total.toFixed(0)} cores`}
+          detail={`${formatNumber(metrics.cpu.used, 1)} / ${formatNumber(metrics.cpu.total)} cores`}
           isReservation={false}
           onClick={goToNodes}
         />
@@ -128,7 +128,7 @@ export default function CapacitySection({ snapshot }: { snapshot: ClusterSnapsho
       <Bar
         label="CPU"
         percent={cpuPct}
-        detail={`${cpuReservedCores.toFixed(1)} / ${snapshot.totalCPU} cores reserved`}
+        detail={`${formatNumber(cpuReservedCores, 1)} / ${snapshot.totalCPU} cores reserved`}
         isReservation={true}
         onClick={goToNodes}
       />

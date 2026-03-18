@@ -1,27 +1,27 @@
-import { api } from "../../api/client";
-import type { PrometheusResponse } from "../../api/types";
-import { useMatchesBreakpoint } from "../../hooks/useMatchesBreakpoint";
-import { getChartColor } from "../../lib/chartColors";
-import { CHART_TOOLTIP_CLASS } from "../../lib/chartTooltip";
-import { formatMetricValue } from "../../lib/formatMetricValue";
-import { generateMockSeries } from "../../lib/mockChartData";
 import { useChartSync } from "./ChartSyncProvider";
 import { useMetricsPanelContext } from "./MetricsPanelContext";
+import { api } from "@/api/client.ts";
+import type { PrometheusResponse } from "@/api/types.ts";
+import { useMatchesBreakpoint } from "@/hooks/useMatchesBreakpoint.ts";
+import { getChartColor } from "@/lib/chartColors.ts";
+import { chartTooltipClasses } from "@/lib/chartTooltip.ts";
+import { formatMetricValue } from "@/lib/format.ts";
+import { generateMockSeries } from "@/lib/mockChartData.ts";
 import {
-  Chart as ChartJS,
-  LineElement,
-  PointElement,
-  LinearScale,
   CategoryScale,
-  Filler,
-  Tooltip as ChartTooltip,
+  Chart as ChartJS,
   type ChartData,
   type ChartOptions,
+  Filler,
+  LinearScale,
+  LineElement,
   type Plugin,
+  PointElement,
+  Tooltip as ChartTooltip,
 } from "chart.js";
 import zoomPlugin from "chartjs-plugin-zoom";
-import { RefreshCw, BarChart3, LineChart, AreaChart } from "lucide-react";
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { AreaChart, BarChart3, LineChart, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Line } from "react-chartjs-2";
 
 ChartJS.register(
@@ -74,7 +74,7 @@ interface TooltipData {
   top: number;
 }
 
-const RANGE_SECONDS: Record<string, number> = {
+const rangeIntervals: Record<string, number> = {
   "1h": 3600,
   "6h": 21600,
   "24h": 86400,
@@ -84,11 +84,21 @@ const RANGE_SECONDS: Record<string, number> = {
 const formatValue = formatMetricValue;
 
 function seriesLabel(metric: Record<string, string> | undefined, fallback?: string): string {
-  if (!metric) return fallback ?? "value";
+  if (!metric) {
+    return fallback ?? "value";
+  }
+
   const { __name__, ...labels } = metric;
   const labelStr = Object.values(labels).filter(Boolean).join(", ");
-  if (labelStr) return labelStr;
-  if (__name__) return __name__;
+
+  if (labelStr) {
+    return labelStr;
+  }
+
+  if (__name__) {
+    return __name__;
+  }
+
   return fallback ?? "value";
 }
 
@@ -98,7 +108,9 @@ function parseRangeResult(
   title: string,
   colorOverride?: string,
 ): FetchedData | null {
-  if (!resp.data?.result?.length) return null;
+  if (!resp.data?.result?.length) {
+    return null;
+  }
   const result = resp.data.result;
   const timestamps = result[0].values!.map((v) => Number(v[0]));
   const labels = timestamps.map((ts) => new Date(ts * 1000).toLocaleTimeString());
@@ -127,7 +139,9 @@ const TOOLTIP_GAP = 20;
 function tooltipLeft(tt: TooltipData, el: HTMLDivElement | null): number {
   const w = el?.offsetWidth ?? 0;
   const showLeft = tt.x > tt.chartWidth / 2;
-  if (showLeft) return tt.x - w - TOOLTIP_GAP;
+  if (showLeft) {
+    return tt.x - w - TOOLTIP_GAP;
+  }
   return tt.x + TOOLTIP_GAP;
 }
 
@@ -143,7 +157,9 @@ interface FetchedData {
 
 /** Returns true if the series labels changed between two datasets. */
 function seriesChanged(prev: FetchedData | null, next: FetchedData): boolean {
-  if (!prev || prev.series.length !== next.series.length) return true;
+  if (!prev || prev.series.length !== next.series.length) {
+    return true;
+  }
   return prev.series.some((s, i) => s.label !== next.series[i].label);
 }
 
@@ -169,7 +185,7 @@ export default function TimeSeriesChart({
   const chartRef = useRef<ChartJS<"line"> | null>(null);
   const tooltipElRef = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<State>("loading");
-  const [errorMsg, setErrorMsg] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
   const [fetchedData, setFetchedData] = useState<FetchedData | null>(null);
   const tooltipRef = useRef(setTooltip);
@@ -196,18 +212,21 @@ export default function TimeSeriesChart({
   const controlled = isolatedLabel !== undefined;
   const [localIsolatedIndex, setLocalIsolatedIndex] = useState<number | null>(null);
   const controlledIndex = useMemo(() => {
-    if (!controlled || isolatedLabel == null || !fetchedData) return null;
-    const idx = fetchedData.series.findIndex((s) => s.label === isolatedLabel);
+    if (!controlled || isolatedLabel == null || !fetchedData) {
+      return null;
+    }
+    const idx = fetchedData.series.findIndex(({ label }) => label === isolatedLabel);
     return idx >= 0 ? idx : null;
   }, [controlled, isolatedLabel, fetchedData]);
   const isolatedIndex = controlled ? controlledIndex : localIsolatedIndex;
   const setIsolatedIndex = useCallback(
-    (idx: number | null) => {
+    (index: number | null) => {
       if (controlled) {
-        const label = idx != null ? (fetchedDataRef.current?.series[idx]?.label ?? null) : null;
+        const label = index != null ? (fetchedDataRef.current?.series[index]?.label ?? null) : null;
+
         onIsolationChange?.(label);
       } else {
-        setLocalIsolatedIndex(idx);
+        setLocalIsolatedIndex(index);
       }
     },
     [controlled, onIsolationChange],
@@ -225,12 +244,16 @@ export default function TimeSeriesChart({
   useEffect(() => {
     return sync.subscribeIsolation(chartId, (seriesLabel) => {
       const data = fetchedDataRef.current;
+
       if (!data || seriesLabel == null) {
         setIsolatedIndex(null);
+
         return;
       }
-      const idx = data.series.findIndex((s) => s.label === seriesLabel);
-      setIsolatedIndex(idx >= 0 ? idx : null);
+
+      const index = data.series.findIndex(({ label }) => label === seriesLabel);
+
+      setIsolatedIndex(index >= 0 ? index : null);
     });
   }, [chartId, sync, setIsolatedIndex]);
 
@@ -238,11 +261,13 @@ export default function TimeSeriesChart({
     return sync.subscribe(chartId, (timestamp) => {
       syncTimestampRef.current = timestamp > 0 ? timestamp : null;
       const data = fetchedDataRef.current;
+
       if (timestamp > 0 && data) {
         syncIndexRef.current = data.timestamps.findIndex((t) => t >= timestamp);
       } else {
         syncIndexRef.current = null;
       }
+
       chartRef.current?.draw();
     });
   }, [chartId, sync]);
@@ -250,7 +275,7 @@ export default function TimeSeriesChart({
   const fetchData = useCallback(() => {
     setState("loading");
 
-    const rangeSec = RANGE_SECONDS[range] || 3600;
+    const rangeSec = rangeIntervals[range] || 3600;
     const now = Math.floor(Date.now() / 1000);
     const start = from ?? now - rangeSec;
     const end = to ?? now;
@@ -261,9 +286,12 @@ export default function TimeSeriesChart({
     api
       .metricsQueryRange(query, String(start), String(end), String(step))
       .then((resp) => {
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
 
         const parsed = parseRangeResult(resp, title, colorOverride);
+
         if (!parsed) {
           if (import.meta.env.DEV) {
             const mock = generateMockSeries(
@@ -274,23 +302,36 @@ export default function TimeSeriesChart({
               step,
               colorOverride,
             );
+
             setFetchedData(mock);
             onSeriesInfoRef.current?.(mock.series.map((s) => ({ label: s.label, color: s.color })));
-            if (seriesChanged(fetchedDataRef.current, mock)) setIsolatedIndex(null);
+
+            if (seriesChanged(fetchedDataRef.current, mock)) {
+              setIsolatedIndex(null);
+            }
+
             setState("data");
+
             return;
           }
+
           setState("empty");
+
           return;
         }
+
         setFetchedData(parsed);
         onSeriesInfoRef.current?.(parsed.series.map((s) => ({ label: s.label, color: s.color })));
-        if (seriesChanged(fetchedDataRef.current, parsed)) setIsolatedIndex(null);
+
+        if (seriesChanged(fetchedDataRef.current, parsed)) {
+          setIsolatedIndex(null);
+        }
+
         setState("data");
       })
-      .catch((err) => {
+      .catch((error) => {
         if (!cancelled) {
-          setErrorMsg(err instanceof Error ? err.message : "Failed to load metrics");
+          setErrorMessage(error instanceof Error ? error.message : "Failed to load metrics");
           setState("error");
         }
       });
@@ -302,6 +343,7 @@ export default function TimeSeriesChart({
 
   useEffect(() => {
     const cancel = fetchData();
+
     return () => {
       cancel?.();
     };
@@ -321,114 +363,145 @@ export default function TimeSeriesChart({
 
   // Mark ready once we have data
   useEffect(() => {
-    if (fetchedData != null) hasOpenedRef.current = true;
+    if (fetchedData != null) {
+      hasOpenedRef.current = true;
+    }
   }, [fetchedData]);
 
   useEffect(() => {
-    if (!hasOpenedRef.current || from != null || to != null || !streaming) return;
+    if (!hasOpenedRef.current || from != null || to != null || !streaming) {
+      return;
+    }
 
-    const rangeSec = RANGE_SECONDS[range] || 3600;
+    const rangeSec = rangeIntervals[range] || 3600;
     const step = Math.max(Math.floor(rangeSec / 300), 15);
     const url = api.metricsStreamURL(query, step, rangeSec);
-    const es = new EventSource(url);
+    const eventSource = new EventSource(url);
 
-    es.addEventListener("initial", (e: MessageEvent) => {
+    eventSource.addEventListener("initial", (e: MessageEvent) => {
       try {
         const resp = JSON.parse(e.data) as PrometheusResponse;
         const parsed = parseRangeResult(resp, title, colorOverride);
-        if (!parsed) return;
+
+        if (!parsed) {
+          return;
+        }
+
         setFetchedData(parsed);
-        onSeriesInfoRef.current?.(parsed.series.map((s) => ({ label: s.label, color: s.color })));
+        onSeriesInfoRef.current?.(parsed.series.map(({ color, label }) => ({ color, label })));
         setState("data");
       } catch {
         /* ignore parse errors */
       }
     });
 
-    es.addEventListener("point", (e: MessageEvent) => {
+    eventSource.addEventListener("point", (event: MessageEvent) => {
       try {
-        const resp = JSON.parse(e.data) as PrometheusResponse;
-        if (!resp.data?.result?.length) return;
-        setFetchedData((prev) => {
-          if (!prev) return prev;
-          const ts = Number(resp.data.result[0].value![0]);
-          const timeLabel = new Date(ts * 1000).toLocaleTimeString();
-          const newTimestamps = [...prev.timestamps.slice(1), ts];
-          const newLabels = [...prev.labels.slice(1), timeLabel];
-          const newSeries = prev.series.map((s) => {
-            const match = resp.data.result.find((r) => seriesLabel(r.metric) === s.label);
-            const val = match ? Number(match.value![1]) : 0;
-            return { ...s, data: [...s.data.slice(1), val] };
+        const response = JSON.parse(event.data) as PrometheusResponse;
+
+        if (!response.data?.result?.length) {
+          return;
+        }
+
+        setFetchedData((previous) => {
+          if (!previous) {
+            return previous;
+          }
+
+          const timestamp = Number(response.data.result[0].value![0]);
+          const timeLabel = new Date(timestamp * 1000).toLocaleTimeString();
+          const newTimestamps = [...previous.timestamps.slice(1), timestamp];
+          const newLabels = [...previous.labels.slice(1), timeLabel];
+          const newSeries = previous.series.map((series) => {
+            const match = response.data.result.find(
+              ({ metric }) => seriesLabel(metric) === series.label,
+            );
+            const value = match ? Number(match.value![1]) : 0;
+
+            return { ...series, data: [...series.data.slice(1), value] };
           });
-          return { labels: newLabels, timestamps: newTimestamps, series: newSeries };
+
+          return {
+            labels: newLabels,
+            timestamps: newTimestamps,
+            series: newSeries,
+          };
         });
       } catch {
         /* ignore parse errors */
       }
     });
 
-    es.addEventListener("query_error", (e: MessageEvent) => {
-      console.warn("[metrics stream] Prometheus error:", e.data); // eslint-disable-line no-console
+    eventSource.addEventListener("query_error", (event: MessageEvent) => {
+      console.warn("[metrics stream] Prometheus error:", event.data); // eslint-disable-line no-console
     });
 
-    es.onerror = () => {
-      es.close();
+    eventSource.onerror = () => {
+      eventSource.close();
     };
 
     // Close SSE on tab hide; tab show triggers a re-run via sseKey
     const visHandler = () => {
       if (document.visibilityState === "hidden") {
-        es.close();
+        eventSource.close();
       } else {
         hasOpenedRef.current = false;
         fetchDataRef.current();
-        setSSEKey((k) => k + 1);
+        setSSEKey((key) => key + 1);
       }
     };
+
     document.addEventListener("visibilitychange", visHandler);
 
     return () => {
-      es.close();
+      eventSource.close();
       document.removeEventListener("visibilitychange", visHandler);
     };
   }, [query, range, from, to, streaming, title, colorOverride, sseKey]);
 
   const chartData = useMemo<ChartData<"line"> | null>(() => {
-    if (!fetchedData) return null;
+    if (!fetchedData) {
+      return null;
+    }
+
     return {
       labels: fetchedData.labels,
-      datasets: fetchedData.series.map((s, i) => {
+      datasets: fetchedData.series.map(({ color, data, label }, i) => {
         const dimmed = isolatedIndex != null && isolatedIndex !== i;
         const base = {
-          label: s.label,
+          label: label,
           pointRadius: 0,
           pointHoverRadius: dimmed ? 0 : 3,
-          pointHoverBackgroundColor: s.color,
+          pointHoverBackgroundColor: color,
           pointHoverBorderWidth: 0,
           tension: 0.3,
-        };
+        } as const;
+
         if (stacked) {
           return {
             ...base,
-            data: dimmed ? s.data.map(() => 0) : s.data,
-            borderColor: s.color,
+            data: dimmed ? data.map(() => 0) : data,
+            borderColor: color,
             borderWidth: 1,
             fill: "stack" as const,
-            backgroundColor: s.color + "66",
+            backgroundColor: color + "66",
           };
         }
+
         return {
           ...base,
-          data: s.data,
-          borderColor: dimmed ? s.color + "4D" : s.color,
+          data,
+          borderColor: dimmed ? color + "4D" : color,
           borderWidth: 1.5,
           fill: !dimmed,
           backgroundColor: dimmed
             ? "transparent"
-            : (ctx: { chart: ChartJS }) => {
-                const chart = ctx.chart;
-                if (!chart.chartArea) return s.color + "18";
-                return makeGradient(chart.ctx, chart.chartArea, s.color);
+            : ({ chart }: { chart: ChartJS }) => {
+                if (!chart.chartArea) {
+                  return color + "18";
+                }
+
+                return makeGradient(chart.ctx, chart.chartArea, color);
               },
         };
       }),
@@ -436,34 +509,56 @@ export default function TimeSeriesChart({
   }, [fetchedData, isolatedIndex, stacked]);
 
   const suggestedMax = useMemo<number | undefined>(() => {
-    if (!thresholds?.length || !fetchedData) return undefined;
-    const dataMax = Math.max(...fetchedData.series.flatMap((s) => s.data));
-    let hi = dataMax;
-    for (const t of thresholds) hi = Math.max(hi, t.value);
-    const lo = yMin ?? Math.min(...fetchedData.series.flatMap((s) => s.data));
-    return hi + (hi - lo) * 0.1 || hi + 1;
+    if (!thresholds?.length || !fetchedData) {
+      return undefined;
+    }
+
+    let high = Math.max(...fetchedData.series.flatMap(({ data }) => data));
+
+    for (const threshold of thresholds) {
+      high = Math.max(high, threshold.value);
+    }
+
+    const low = yMin ?? Math.min(...fetchedData.series.flatMap(({ data }) => data));
+
+    return high + (high - low) * 0.1 || high + 1;
   }, [thresholds, fetchedData, yMin]);
 
   const thresholdPlugin = useMemo<Plugin<"line">>(
     () => ({
       id: "thresholdLines",
       afterDatasetsDraw(chart) {
-        const ts = thresholdsRef.current;
-        if (!ts?.length) return;
+        const thresholds = thresholdsRef.current;
+
+        if (!thresholds?.length) {
+          return;
+        }
+
         const { ctx, chartArea, scales } = chart;
         const yScale = scales.y;
-        if (!yScale || !chartArea) return;
 
-        for (const t of ts) {
-          const yPos = yScale.getPixelForValue(t.value);
-          if (yPos < chartArea.top || yPos > chartArea.top + chartArea.height) continue;
+        if (!yScale || !chartArea) {
+          return;
+        }
+
+        for (const threshold of thresholds) {
+          const yPosition = yScale.getPixelForValue(threshold.value);
+
+          if (yPosition < chartArea.top || yPosition > chartArea.top + chartArea.height) {
+            continue;
+          }
+
           ctx.save();
-          ctx.strokeStyle = t.color;
+          ctx.strokeStyle = threshold.color;
           ctx.lineWidth = 1.5;
-          if (t.dash) ctx.setLineDash(t.dash);
+
+          if (threshold.dash) {
+            ctx.setLineDash(threshold.dash);
+          }
+
           ctx.beginPath();
-          ctx.moveTo(chartArea.left, yPos);
-          ctx.lineTo(chartArea.right, yPos);
+          ctx.moveTo(chartArea.left, yPosition);
+          ctx.lineTo(chartArea.right, yPosition);
           ctx.stroke();
           ctx.restore();
         }
@@ -475,109 +570,158 @@ export default function TimeSeriesChart({
   const crosshairPlugin = useMemo<Plugin<"line">>(
     () => ({
       id: "crosshair",
-      afterEvent(chart, args) {
-        if (args.event.type === "mouseout") {
+      afterEvent(chart, { event: { native, type, x, x: cx, y: cy } }) {
+        if (type === "mouseout") {
           tooltipRef.current(null);
           sync.publish(chartId, -1);
           chart.draw();
+
           return;
         }
-        if (args.event.type === "dblclick") {
+
+        if (type === "dblclick") {
           if (clickTimerRef.current) {
             clearTimeout(clickTimerRef.current);
+
             clickTimerRef.current = null;
           }
+
           const elements = chart.getElementsAtEventForMode(
-            args.event.native as Event,
+            native as Event,
             "nearest",
             { intersect: false },
             false,
           );
+
           if (elements.length > 0 && onSeriesDoubleClickRef.current) {
             const label = chart.data.datasets[elements[0].datasetIndex]?.label;
-            if (label) onSeriesDoubleClickRef.current(label);
+
+            if (label) {
+              onSeriesDoubleClickRef.current(label);
+            }
           }
+
           return;
         }
-        if (args.event.type === "click") {
+
+        if (type === "click") {
           if (justZoomedRef.current) {
             justZoomedRef.current = false;
+
             return;
           }
-          const { x: cx, y: cy } = args.event;
-          if (cx == null || cy == null) return;
+
+          if (cx == null || cy == null) {
+            return;
+          }
           const elements = chart.getElementsAtEventForMode(
-            args.event.native as Event,
+            native as Event,
             "nearest",
             { intersect: false },
             false,
           );
+
           const datasets = chart.data.datasets;
-          if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+
+          if (clickTimerRef.current) {
+            clearTimeout(clickTimerRef.current);
+          }
+
           clickTimerRef.current = setTimeout(() => {
             clickTimerRef.current = null;
+
             if (elements.length > 0) {
               const clickedIdx = elements[0].datasetIndex;
               const wasIsolated = isolatedIndexRef.current === clickedIdx;
-              const newIdx = wasIsolated ? null : clickedIdx;
-              setIsolatedIndex(newIdx);
-              const label = newIdx != null ? (datasets[newIdx]?.label ?? null) : null;
+              const newIndex = wasIsolated ? null : clickedIdx;
+
+              setIsolatedIndex(newIndex);
+
+              const label = newIndex != null ? (datasets[newIndex]?.label ?? null) : null;
+
               sync.publishIsolation(chartId, label);
             } else {
               setIsolatedIndex(null);
               sync.publishIsolation(chartId, null);
             }
           }, 250);
+
           return;
         }
-        if (args.event.type !== "mousemove") return;
 
-        const { x } = args.event;
-        if (x == null) return;
+        if (type !== "mousemove") {
+          return;
+        }
+
+        if (x == null) {
+          return;
+        }
+
         const { chartArea, scales } = chart;
-        if (!chartArea || !scales.x) return;
+
+        if (!chartArea || !scales.x) {
+          return;
+        }
+
         if (x < chartArea.left || x > chartArea.right) {
           tooltipRef.current(null);
+
           return;
         }
 
         const xScale = scales.x;
-        const xVal = xScale.getValueForPixel(x);
-        if (xVal == null) return;
-        const idx = Math.round(xVal);
-        const ds = chart.data.datasets;
-        if (idx < 0 || !ds.length || idx >= (ds[0].data?.length ?? 0)) return;
+        const xValue = xScale.getValueForPixel(x);
+
+        if (xValue == null) {
+          return;
+        }
+
+        const index = Math.round(xValue);
+        const datasets = chart.data.datasets;
+
+        if (index < 0 || !datasets.length || index >= (datasets[0].data?.length ?? 0)) {
+          return;
+        }
 
         const items: TooltipData["series"] = [];
-        for (const dataset of ds) {
-          const v = dataset.data[idx] as number;
-          if (v == null) continue;
+
+        for (const dataset of datasets) {
+          const value = dataset.data[index] as number;
+
+          if (value == null) {
+            continue;
+          }
+
           items.push({
             label: dataset.label ?? "value",
             color: dataset.borderColor as string,
-            value: formatValue(v, unitRef.current),
-            raw: v,
+            value: formatValue(value, unitRef.current),
+            raw: value,
           });
         }
-        const ts = thresholdsRef.current;
-        if (ts?.length) {
-          for (const t of ts) {
+        const thresholds = thresholdsRef.current;
+
+        if (thresholds?.length) {
+          for (const { color, label, value } of thresholds) {
             items.push({
-              label: t.label,
-              color: t.color,
-              value: formatValue(t.value, unitRef.current),
-              raw: t.value,
+              label: label,
+              color: color,
+              value: formatValue(value, unitRef.current),
+              raw: value,
               dashed: true,
             });
           }
         }
+
         items.sort((a, b) => b.raw - a.raw);
 
         if (stackedRef.current && fetchedDataRef.current?.series) {
-          const total = fetchedDataRef.current.series.reduce((sum, ser) => {
-            const v = ser.data[idx];
-            return sum + (v ?? 0);
+          const total = fetchedDataRef.current.series.reduce((sum, { data }) => {
+            const value = data[index] ?? 0;
+
+            return sum + value;
           }, 0);
+
           items.unshift({
             label: "Total",
             color: "transparent",
@@ -587,26 +731,34 @@ export default function TimeSeriesChart({
         }
 
         const fetched = fetchedDataRef.current;
-        const timestamp = fetched?.timestamps[idx];
+        const timestamp = fetched?.timestamps[index];
         const time = timestamp ? new Date(timestamp * 1000).toLocaleTimeString() : "";
 
         tooltipRef.current({
           time,
           series: items,
-          x: x,
+          x,
           chartWidth: chartArea.right,
           top: chartArea.top + 8,
         });
 
-        if (timestamp != null) sync.publish(chartId, timestamp);
+        if (timestamp != null) {
+          sync.publish(chartId, timestamp);
+        }
       },
       afterDraw(chart) {
         const { ctx, chartArea } = chart;
-        if (!chartArea) return;
+
+        if (!chartArea) {
+          return;
+        }
+
         // Draw crosshair line at cursor position
         const active = chart.getActiveElements();
+
         if (active.length) {
           const x = active[0].element.x;
+
           ctx.save();
           ctx.beginPath();
           ctx.moveTo(x, chartArea.top);
@@ -618,29 +770,42 @@ export default function TimeSeriesChart({
         }
 
         // Draw synced crosshair from sibling chart (uses cached index)
-        const syncIdx = syncIndexRef.current;
-        if (syncIdx != null && syncIdx >= 0) {
-          const xPixel = chart.scales.x?.getPixelForValue(syncIdx);
+        const syncIndex = syncIndexRef.current;
+
+        if (syncIndex != null && syncIndex >= 0) {
+          const xPixel = chart.scales.x?.getPixelForValue(syncIndex);
+
           if (xPixel != null && xPixel >= chartArea.left && xPixel <= chartArea.right) {
             ctx.save();
             ctx.beginPath();
             ctx.moveTo(xPixel, chartArea.top);
             ctx.lineTo(xPixel, chartArea.bottom);
+
             ctx.lineWidth = 1;
             ctx.strokeStyle = "rgba(136,136,136,0.2)";
+
             ctx.setLineDash([4, 4]);
             ctx.stroke();
 
             const datasets = chart.data.datasets;
-            for (let si = 0; si < datasets.length; si++) {
-              const val = datasets[si].data[syncIdx] as number;
-              if (val == null) continue;
-              const yPixel = chart.scales.y.getPixelForValue(val);
+
+            for (let seriesIndex = 0; seriesIndex < datasets.length; seriesIndex++) {
+              const value = datasets[seriesIndex].data[syncIndex] as number;
+
+              if (value == null) {
+                continue;
+              }
+
+              const yPixel = chart.scales.y.getPixelForValue(value);
+
               ctx.beginPath();
               ctx.arc(xPixel, yPixel, 3, 0, Math.PI * 2);
-              ctx.fillStyle = datasets[si].borderColor as string;
+
+              ctx.fillStyle = datasets[seriesIndex].borderColor as string;
+
               ctx.fill();
             }
+
             ctx.restore();
           }
         }
@@ -684,21 +849,31 @@ export default function TimeSeriesChart({
             onZoom: ({ chart }: { chart: ChartJS }) => {
               justZoomedRef.current = true;
               const data = fetchedDataRef.current;
-              const cb = onRangeSelectRef.current;
-              if (!cb || !data) return;
+              const callback = onRangeSelectRef.current;
+
+              if (!callback || !data) {
+                return;
+              }
+
               const xScale = chart.scales.x;
-              const minIdx = Math.max(0, Math.floor(xScale.min));
-              const maxIdx = Math.min(data.timestamps.length - 1, Math.ceil(xScale.max));
-              const fromTs = data.timestamps[minIdx];
-              const toTs = data.timestamps[maxIdx];
-              if (fromTs && toTs) cb(fromTs, toTs);
+              const minIndex = Math.max(0, Math.floor(xScale.min));
+              const maxIndex = Math.min(data.timestamps.length - 1, Math.ceil(xScale.max));
+              const fromTimestamp = data.timestamps[minIndex];
+              const toTimestamp = data.timestamps[maxIndex];
+
+              if (fromTimestamp && toTimestamp) {
+                callback(fromTimestamp, toTimestamp);
+              }
+
               chart.resetZoom();
             },
           },
         },
       },
       scales: {
-        x: { display: false },
+        x: {
+          display: false,
+        },
         y: {
           display: false,
           stacked: stacked || undefined,
@@ -722,6 +897,7 @@ export default function TimeSeriesChart({
     <div className="overflow-visible rounded-lg border bg-card">
       <div className="flex items-center gap-2 px-4 pt-4 pb-2">
         <span className="text-sm font-medium">{title}</span>
+
         {stackable && panel?.stacked == null && (
           <div className="ml-1 flex items-center gap-0.5">
             <button
@@ -742,15 +918,16 @@ export default function TimeSeriesChart({
             </button>
           </div>
         )}
+
         {unit && <span className="ml-auto text-xs text-muted-foreground">{unit}</span>}
       </div>
 
-      {state === "loading" && !fetchedData && <div className="h-[200px] rounded bg-muted/50" />}
+      {state === "loading" && !fetchedData && <div className="h-50 rounded bg-muted/50" />}
 
       {state === "error" && (
-        <div className="flex h-[200px] items-center justify-center rounded border border-destructive/20 bg-destructive/5">
+        <div className="flex h-50 items-center justify-center rounded border border-destructive/20 bg-destructive/5">
           <div className="text-center">
-            <p className="mb-2 text-sm text-destructive">{errorMsg}</p>
+            <p className="mb-2 text-sm text-destructive">{errorMessage}</p>
             <button
               onClick={fetchData}
               className="inline-flex items-center gap-1.5 rounded-md border border-destructive/30 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10"
@@ -763,7 +940,7 @@ export default function TimeSeriesChart({
       )}
 
       {state === "empty" && (
-        <div className="flex h-[200px] items-center justify-center rounded bg-muted/30">
+        <div className="flex h-50 items-center justify-center rounded bg-muted/30">
           <div className="text-center text-muted-foreground">
             <BarChart3 className="mx-auto mb-2 size-8 opacity-30" />
             <p className="text-sm">No data for this time range</p>
@@ -782,7 +959,7 @@ export default function TimeSeriesChart({
           hidden={state !== "data"}
         >
           {chartData && (
-            <div className="h-[200px]">
+            <div className="h-50">
               <Line
                 ref={chartRef}
                 data={chartData}
@@ -794,7 +971,7 @@ export default function TimeSeriesChart({
         </div>
         <div
           ref={tooltipElRef}
-          className={CHART_TOOLTIP_CLASS}
+          className={chartTooltipClasses}
           style={{
             left: tooltip ? tooltipLeft(tooltip, tooltipElRef.current) : 0,
             top: tooltip?.top ?? 0,
@@ -805,24 +982,25 @@ export default function TimeSeriesChart({
           {tooltip && (
             <>
               <div className="mb-1.5 font-semibold text-foreground">{tooltip.time}</div>
-              {tooltip.series.map((s) => (
+              {tooltip.series.map(({ color, dashed, label, value }) => (
                 <div
-                  key={s.label}
+                  key={label}
                   className="flex items-center gap-2 whitespace-nowrap"
                 >
-                  {s.dashed ? (
+                  {dashed ? (
                     <span
                       className="w-3 shrink-0 border-t-2 border-dashed"
-                      style={{ borderColor: s.color }}
+                      style={{ borderColor: color }}
                     />
                   ) : (
                     <span
                       className="h-3 w-1 shrink-0 rounded-sm"
-                      style={{ background: s.color }}
+                      style={{ background: color }}
                     />
                   )}
-                  <span className="text-muted-foreground">{s.label}</span>
-                  <span className="ms-auto ps-4 font-semibold text-foreground">{s.value}</span>
+
+                  <span className="text-muted-foreground">{label}</span>
+                  <span className="ms-auto ps-4 font-semibold text-foreground">{value}</span>
                 </div>
               ))}
             </>

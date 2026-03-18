@@ -1,3 +1,4 @@
+import { formatDateTime } from "../../lib/format";
 import InfoCard from "../InfoCard";
 import TimeAgo from "../TimeAgo";
 
@@ -12,7 +13,7 @@ export default function Timestamp({
 }) {
   if (!date) return null;
 
-  const value = relative ? <TimeAgo date={date} /> : new Date(date).toLocaleString();
+  const value = relative ? <TimeAgo date={date} /> : formatDateTime(date);
 
   return (
     <InfoCard

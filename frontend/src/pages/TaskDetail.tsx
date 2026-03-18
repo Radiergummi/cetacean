@@ -13,7 +13,7 @@ import TaskStatusBadge from "../components/TaskStatusBadge";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
-import { formatBytes } from "../lib/formatBytes";
+import { formatBytes, formatPercentage } from "../lib/format";
 import { escapePromQL } from "../lib/utils";
 import { Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -187,7 +187,7 @@ export default function TaskDetail() {
             label="CPU"
             value={cpuGaugePercent(myMetrics.currentCpu, service)}
             subtitle={
-              myMetrics.currentCpu != null ? `${myMetrics.currentCpu.toFixed(1)}%` : undefined
+              myMetrics.currentCpu != null ? formatPercentage(myMetrics.currentCpu) : undefined
             }
           />
           <ResourceGauge

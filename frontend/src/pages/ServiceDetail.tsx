@@ -1,32 +1,37 @@
-import {ArrowRight, Globe, Shuffle} from "lucide-react";
-import {useCallback, useEffect, useMemo, useState} from "react";
-import {Link, useParams} from "react-router-dom";
-import {api} from "../api/client";
-import type {HistoryEntry, Service, SpecChange, Task} from "../api/types";
+import { api } from "../api/client";
+import type { HistoryEntry, Service, SpecChange, Task } from "../api/types";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
-import {ContainerImage, KVTable, MetadataGrid, ResourceLink, Timestamp} from "../components/data";
+import { ContainerImage, KVTable, MetadataGrid, ResourceLink, Timestamp } from "../components/data";
 import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
-import {LoadingDetail} from "../components/LoadingSkeleton";
-import {LogViewer} from "../components/log";
-import {MetricsPanel, ResourceAllocationChart, type Threshold} from "../components/metrics";
+import { LoadingDetail } from "../components/LoadingSkeleton";
+import { LogViewer } from "../components/log";
+import { MetricsPanel, ResourceAllocationChart, type Threshold } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
+import {
+  DeploymentChanges,
+  EnvEditor,
+  PlacementPanel,
+  ReplicaCard,
+  ResourcesEditor,
+  ServiceActions,
+} from "../components/service-detail";
 import SimpleTable from "../components/SimpleTable";
 import TasksTable from "../components/TasksTable";
-import {DeploymentChanges, EnvEditor, PlacementPanel, ReplicaCard, ResourcesEditor, ServiceActions} from "../components/service-detail";
-import {timeAgo} from "../components/TimeAgo";
-import {useMonitoringStatus} from "../hooks/useMonitoringStatus";
-import {useResourceStream} from "../hooks/useResourceStream";
-import {useTaskMetrics} from "../hooks/useTaskMetrics";
-import {formatBytes} from "../lib/formatBytes";
-import {formatNs} from "../lib/formatNs";
-import {escapePromQL} from "../lib/utils";
+import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { useResourceStream } from "../hooks/useResourceStream";
+import { useTaskMetrics } from "../hooks/useTaskMetrics";
+import { formatBytes, formatCores, formatDuration, formatRelativeDate } from "../lib/format";
+import { escapePromQL } from "../lib/utils";
+import { ArrowRight, Globe, Shuffle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
 
 export default function ServiceDetail() {
-  const {id} = useParams<{ id: string }>();
+  const { id } = useParams<{ id: string }>();
   const [service, setService] = useState<Service | null>(null);
   const [changes, setChanges] = useState<SpecChange[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -56,28 +61,24 @@ export default function ServiceDetail() {
     api
       .serviceTasks(id)
       .then(setTasks)
-      .catch(() => {
-      });
+      .catch(() => {});
     api
-      .history({resourceId: id, limit: 10})
+      .history({ resourceId: id, limit: 10 })
       .then(setHistory)
-      .catch(() => {
-      });
+      .catch(() => {});
     api
       .serviceEnv(id)
       .then(setEnvVars)
-      .catch(() => {
-      });
+      .catch(() => {});
     api
       .serviceResources(id)
       .then(setServiceResources)
-      .catch(() => {
-      });
+      .catch(() => {});
   }, [id]);
 
   useEffect(() => {
     api
-      .networks({limit: 0})
+      .networks({ limit: 0 })
       .then((res) => {
         const map: Record<string, string> = {};
         for (const n of res.items) {
@@ -85,8 +86,7 @@ export default function ServiceDetail() {
         }
         setNetworkNames(map);
       })
-      .catch(() => {
-      });
+      .catch(() => {});
   }, []);
 
   useEffect(fetchData, [fetchData]);
@@ -129,8 +129,7 @@ export default function ServiceDetail() {
           setMemActual(Number(memVal));
         }
       })
-      .catch(() => {
-      });
+      .catch(() => {});
 
     return () => {
       cancelled = true;
@@ -143,33 +142,34 @@ export default function ServiceDetail() {
     () =>
       service
         ? [
-          {
-            title: "CPU Usage",
-            query: `sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name="${escapePromQL(
-              name)}"}[5m])) * 100`,
-            unit: "%",
-            thresholds: cpuThresholds(service),
-            yMin: 0,
-          },
-          {
-            title: "Memory Usage",
-            query: `sum(container_memory_usage_bytes{container_label_com_docker_swarm_service_name="${escapePromQL(name)}"})`,
-            unit: "bytes",
-            thresholds: memoryThresholds(service),
-            yMin: 0,
-            color: "#34d399",
-          },
-        ]
+            {
+              title: "CPU Usage",
+              query: `sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name="${escapePromQL(
+                name,
+              )}"}[5m])) * 100`,
+              unit: "%",
+              thresholds: cpuThresholds(service),
+              yMin: 0,
+            },
+            {
+              title: "Memory Usage",
+              query: `sum(container_memory_usage_bytes{container_label_com_docker_swarm_service_name="${escapePromQL(name)}"})`,
+              unit: "bytes",
+              thresholds: memoryThresholds(service),
+              yMin: 0,
+              color: "#34d399",
+            },
+          ]
         : [],
     [name, service],
   );
 
   if (error) {
-    return <FetchError message="Failed to load service"/>;
+    return <FetchError message="Failed to load service" />;
   }
 
   if (!service) {
-    return <LoadingDetail/>;
+    return <LoadingDetail />;
   }
 
   const containerSpec = service.Spec.TaskTemplate.ContainerSpec;
@@ -193,14 +193,10 @@ export default function ServiceDetail() {
   const runningTasks = tasks?.filter((t) => t.Status?.State === "running").length ?? 0;
   const resources = service?.Spec?.TaskTemplate?.Resources;
   const cpuReserved = resources?.Reservations?.NanoCPUs
-    ? (
-    resources.Reservations.NanoCPUs / 1e9
-  ) * 100 * runningTasks
+    ? (resources.Reservations.NanoCPUs / 1e9) * 100 * runningTasks
     : undefined;
   const cpuLimit = resources?.Limits?.NanoCPUs
-    ? (
-    resources.Limits.NanoCPUs / 1e9
-  ) * 100 * runningTasks
+    ? (resources.Limits.NanoCPUs / 1e9) * 100 * runningTasks
     : undefined;
   const memReserved = resources?.Reservations?.MemoryBytes
     ? resources.Reservations.MemoryBytes * runningTasks
@@ -219,8 +215,8 @@ export default function ServiceDetail() {
           />
         }
         breadcrumbs={[
-          {label: "Services", to: "/services"},
-          {label: <ResourceName name={name}/>},
+          { label: "Services", to: "/services" },
+          { label: <ResourceName name={name} /> },
         ]}
       />
 
@@ -231,12 +227,12 @@ export default function ServiceDetail() {
 
       {/* Overview cards */}
       <MetadataGrid>
-        <ContainerImage image={containerSpec.Image}/>
+        <ContainerImage image={containerSpec.Image} />
         <ReplicaCard
           service={service}
           tasks={tasks}
         />
-        <ServiceStatusCard service={service}/>
+        <ServiceStatusCard service={service} />
         <ResourceLink
           label="Stack"
           name={labels["com.docker.stack.namespace"]}
@@ -281,9 +277,7 @@ export default function ServiceDetail() {
         </ErrorBoundary>
       )}
 
-      {(
-        cpuReserved != null || cpuLimit != null || memReserved != null || memLimit != null
-      ) && (
+      {(cpuReserved != null || cpuLimit != null || memReserved != null || memLimit != null) && (
         <CollapsibleSection title="Resource Allocation">
           <ResourceAllocationChart
             cpuReserved={cpuReserved}
@@ -321,7 +315,7 @@ export default function ServiceDetail() {
               containerSpec.StopSignal && ["Stop Signal", containerSpec.StopSignal],
               containerSpec.StopGracePeriod != null && [
                 "Stop Grace Period",
-                formatNs(containerSpec.StopGracePeriod),
+                formatDuration(containerSpec.StopGracePeriod),
               ],
               containerSpec.Init != null && ["Init", containerSpec.Init ? "yes" : "no"],
               containerSpec.ReadOnly && ["Read Only Root FS", "yes"],
@@ -350,11 +344,11 @@ export default function ServiceDetail() {
               containerSpec.Healthcheck.Test && ["Test", containerSpec.Healthcheck.Test.join(" ")],
               containerSpec.Healthcheck.Interval != null && [
                 "Interval",
-                formatNs(containerSpec.Healthcheck.Interval),
+                formatDuration(containerSpec.Healthcheck.Interval),
               ],
               containerSpec.Healthcheck.Timeout != null && [
                 "Timeout",
-                formatNs(containerSpec.Healthcheck.Timeout),
+                formatDuration(containerSpec.Healthcheck.Timeout),
               ],
               containerSpec.Healthcheck.Retries != null && [
                 "Retries",
@@ -362,7 +356,7 @@ export default function ServiceDetail() {
               ],
               containerSpec.Healthcheck.StartPeriod != null && [
                 "Start Period",
-                formatNs(containerSpec.Healthcheck.StartPeriod),
+                formatDuration(containerSpec.Healthcheck.StartPeriod),
               ],
             ]}
           />
@@ -397,13 +391,13 @@ export default function ServiceDetail() {
         >
           <div className="flex flex-wrap gap-2">
             {service.Endpoint.Ports.map(
-              ({Protocol, PublishMode, PublishedPort, TargetPort}, index) => (
+              ({ Protocol, PublishMode, PublishedPort, TargetPort }, index) => (
                 <span
                   key={index}
                   className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 font-mono text-sm"
                 >
                   <span className="font-semibold">{PublishedPort}</span>
-                  <ArrowRight className="size-3 text-muted-foreground"/>
+                  <ArrowRight className="size-3 text-muted-foreground" />
                   <span>
                     {TargetPort}/{Protocol}
                   </span>
@@ -425,10 +419,10 @@ export default function ServiceDetail() {
             columns={["Type", "Source", "Target", "Read Only"]}
             items={containerSpec.Mounts}
             keyFn={(_, i) => i}
-            renderRow={({ReadOnly, Source, Target, Type}) => (
+            renderRow={({ ReadOnly, Source, Target, Type }) => (
               <>
                 <td className="p-3 text-sm">
-                  <MountTypeBadge type={Type}/>
+                  <MountTypeBadge type={Type} />
                 </td>
                 <td className="p-3 font-mono text-xs">
                   {Type === "volume" && Source ? (
@@ -436,7 +430,7 @@ export default function ServiceDetail() {
                       to={`/volumes/${Source}`}
                       className="text-link hover:underline"
                     >
-                      <ResourceName name={Source}/>
+                      <ResourceName name={Source} />
                     </Link>
                   ) : (
                     Source || "\u2014"
@@ -459,8 +453,8 @@ export default function ServiceDetail() {
           <SimpleTable
             columns={["Network", "Virtual IP", "Aliases"]}
             items={taskTemplate.Networks}
-            keyFn={({Target}) => Target}
-            renderRow={({Aliases, Target}) => {
+            keyFn={({ Target }) => Target}
+            renderRow={({ Aliases, Target }) => {
               const vip = service.Endpoint?.VirtualIPs?.find((v) => v.NetworkID === Target);
               return (
                 <>
@@ -469,7 +463,7 @@ export default function ServiceDetail() {
                       to={`/networks/${Target}`}
                       className="text-link hover:underline"
                     >
-                      <ResourceName name={networkNames[Target] || Target}/>
+                      <ResourceName name={networkNames[Target] || Target} />
                     </Link>
                   </td>
                   <td className="p-3 font-mono text-xs">{vip?.Addr || "\u2014"}</td>
@@ -490,15 +484,15 @@ export default function ServiceDetail() {
           <SimpleTable
             columns={["Name", "Target"]}
             items={containerSpec.Configs}
-            keyFn={({ConfigID}) => ConfigID}
-            renderRow={({ConfigID, ConfigName, File}) => (
+            keyFn={({ ConfigID }) => ConfigID}
+            renderRow={({ ConfigID, ConfigName, File }) => (
               <>
                 <td className="p-3 text-sm">
                   <Link
                     to={`/configs/${ConfigID}`}
                     className="text-link hover:underline"
                   >
-                    <ResourceName name={ConfigName}/>
+                    <ResourceName name={ConfigName} />
                   </Link>
                 </td>
                 <td className="p-3 font-mono text-xs">{File?.Name ?? "\u2014"}</td>
@@ -517,15 +511,15 @@ export default function ServiceDetail() {
           <SimpleTable
             columns={["Name", "Target"]}
             items={containerSpec.Secrets}
-            keyFn={({SecretID}) => SecretID}
-            renderRow={({File, SecretID, SecretName}) => (
+            keyFn={({ SecretID }) => SecretID}
+            renderRow={({ File, SecretID, SecretName }) => (
               <>
                 <td className="p-3 text-sm">
                   <Link
                     to={`/secrets/${SecretID}`}
                     className="text-link hover:underline"
                   >
-                    <ResourceName name={SecretName}/>
+                    <ResourceName name={SecretName} />
                   </Link>
                 </td>
                 <td className="p-3 font-mono text-xs">{File?.Name || "\u2014"}</td>
@@ -547,7 +541,7 @@ export default function ServiceDetail() {
                 Resources
               </h3>
 
-              <ResourcesPanel resources={taskTemplate.Resources}/>
+              <ResourcesPanel resources={taskTemplate.Resources} />
             </div>
           )}
 
@@ -557,7 +551,7 @@ export default function ServiceDetail() {
                 Placement
               </h3>
 
-              <PlacementPanel placement={taskTemplate.Placement}/>
+              <PlacementPanel placement={taskTemplate.Placement} />
             </div>
           )}
 
@@ -574,7 +568,7 @@ export default function ServiceDetail() {
                   ],
                   taskTemplate.RestartPolicy.Delay != null && [
                     "Delay",
-                    formatNs(taskTemplate.RestartPolicy.Delay),
+                    formatDuration(taskTemplate.RestartPolicy.Delay),
                   ],
                   taskTemplate.RestartPolicy.MaxAttempts != null && [
                     "Max Attempts",
@@ -582,7 +576,7 @@ export default function ServiceDetail() {
                   ],
                   taskTemplate.RestartPolicy.Window != null && [
                     "Window",
-                    formatNs(taskTemplate.RestartPolicy.Window),
+                    formatDuration(taskTemplate.RestartPolicy.Window),
                   ],
                 ]}
               />
@@ -597,13 +591,11 @@ export default function ServiceDetail() {
               <KVTable
                 rows={[
                   ["Driver", taskTemplate.LogDriver.Name],
-                  ...(
-                    taskTemplate.LogDriver.Options
-                      ? Object.entries(taskTemplate.LogDriver.Options).map(
+                  ...(taskTemplate.LogDriver.Options
+                    ? Object.entries(taskTemplate.LogDriver.Options).map(
                         ([key, value]) => [key, value] as [string, string],
                       )
-                      : []
-                  ),
+                    : []),
                 ]}
               />
             </div>
@@ -614,7 +606,7 @@ export default function ServiceDetail() {
               <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 Update Config
               </h3>
-              <KVTable rows={updateConfigRows(service.Spec.UpdateConfig)}/>
+              <KVTable rows={updateConfigRows(service.Spec.UpdateConfig)} />
             </div>
           )}
 
@@ -623,7 +615,7 @@ export default function ServiceDetail() {
               <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 Rollback Config
               </h3>
-              <KVTable rows={updateConfigRows(service.Spec.RollbackConfig)}/>
+              <KVTable rows={updateConfigRows(service.Spec.RollbackConfig)} />
             </div>
           )}
 
@@ -636,11 +628,11 @@ export default function ServiceDetail() {
               <div className="flex items-center gap-2 text-sm">
                 {service.Spec.EndpointSpec.Mode === "vip" ? (
                   <>
-                    <Globe className="h-4 w-4 text-muted-foreground"/> VIP (Virtual IP)
+                    <Globe className="h-4 w-4 text-muted-foreground" /> VIP (Virtual IP)
                   </>
                 ) : (
                   <>
-                    <Shuffle className="h-4 w-4 text-muted-foreground"/> DNS-RR (DNS Round Robin)
+                    <Shuffle className="h-4 w-4 text-muted-foreground" /> DNS-RR (DNS Round Robin)
                   </>
                 )}
               </div>
@@ -651,7 +643,7 @@ export default function ServiceDetail() {
 
       {history.length > 0 && (
         <CollapsibleSection title="Recent Activity">
-          <ActivityFeed entries={history}/>
+          <ActivityFeed entries={history} />
         </CollapsibleSection>
       )}
 
@@ -675,18 +667,18 @@ const statusLabels: Record<string, string> = {
   rollback_completed: "Rolled back",
 };
 
-function serviceStatus({UpdateStatus}: Service): { label: string; state: string } {
+function serviceStatus({ UpdateStatus }: Service): { label: string; state: string } {
   const state = UpdateStatus?.State;
 
   if (!state || state === "completed") {
-    return {label: "Stable", state: "stable"};
+    return { label: "Stable", state: "stable" };
   }
 
-  return {label: statusLabels[state] || state, state};
+  return { label: statusLabels[state] || state, state };
 }
 
-function ServiceStatusCard({service}: { service: Service }) {
-  const {label, state} = serviceStatus(service);
+function ServiceStatusCard({ service }: { service: Service }) {
+  const { label, state } = serviceStatus(service);
   const ts = service.UpdateStatus?.CompletedAt || service.UpdateStatus?.StartedAt;
   const msg = service.UpdateStatus?.Message;
 
@@ -701,7 +693,7 @@ function ServiceStatusCard({service}: { service: Service }) {
           >
             {label}
           </span>
-          {ts && <span className="text-xs text-muted-foreground">{timeAgo(ts)}</span>}
+          {ts && <span className="text-xs text-muted-foreground">{formatRelativeDate(ts)}</span>}
           {msg && label !== "Stable" && (
             <span
               className="truncate text-xs text-muted-foreground"
@@ -718,35 +710,25 @@ function ServiceStatusCard({service}: { service: Service }) {
 
 type UpdateConfigShape = NonNullable<Service["Spec"]["UpdateConfig"]>;
 
-function updateConfigRows({Delay, FailureAction, MaxFailureRatio, Monitor, Order, Parallelism}: UpdateConfigShape) {
+function updateConfigRows({
+  Delay,
+  FailureAction,
+  MaxFailureRatio,
+  Monitor,
+  Order,
+  Parallelism,
+}: UpdateConfigShape) {
   return [
     ["Parallelism", String(Parallelism)] as [string, string],
-    Delay !=
-    null &&
-    (
-      ["Delay", formatNs(Delay)] as [string, string]
-    ),
-    FailureAction &&
-    (
-      ["Failure Action", FailureAction] as [string, string]
-    ),
-    Monitor !=
-    null &&
-    (
-      ["Monitor", formatNs(Monitor)] as [string, string]
-    ),
-    MaxFailureRatio != null &&
-    (
-      ["Max Failure Ratio", String(MaxFailureRatio)] as [string, string]
-    ),
-    Order &&
-    (
-      ["Order", Order] as [string, string]
-    ),
+    Delay != null && (["Delay", formatDuration(Delay)] as [string, string]),
+    FailureAction && (["Failure Action", FailureAction] as [string, string]),
+    Monitor != null && (["Monitor", formatDuration(Monitor)] as [string, string]),
+    MaxFailureRatio != null && (["Max Failure Ratio", String(MaxFailureRatio)] as [string, string]),
+    Order && (["Order", Order] as [string, string]),
   ];
 }
 
-function MountTypeBadge({type}: { type: string }) {
+function MountTypeBadge({ type }: { type: string }) {
   return (
     <span
       data-type={type}
@@ -774,9 +756,7 @@ function ResourceLimitsBar({
     return null;
   }
   const max = limit || reserved || 0;
-  const reservedPct = reserved && max ? Math.round((
-    reserved / max
-  ) * 100) : 0;
+  const reservedPct = reserved && max ? Math.round((reserved / max) * 100) : 0;
 
   return (
     <div className="space-y-1.5">
@@ -799,7 +779,7 @@ function ResourceLimitsBar({
         <div className="h-2 overflow-hidden rounded-full bg-muted">
           <div
             className="h-full rounded-full bg-blue-500"
-            style={{width: `${reservedPct}%`}}
+            style={{ width: `${reservedPct}%` }}
           />
         </div>
       ) : null}
@@ -807,7 +787,7 @@ function ResourceLimitsBar({
   );
 }
 
-function ResourcesPanel({resources}: { resources: ResourceShape }) {
+function ResourcesPanel({ resources }: { resources: ResourceShape }) {
   const hasCpu = resources.Limits?.NanoCPUs || resources.Reservations?.NanoCPUs;
   const hasMem = resources.Limits?.MemoryBytes || resources.Reservations?.MemoryBytes;
   const hasPids = resources.Limits?.Pids;
@@ -822,7 +802,7 @@ function ResourcesPanel({resources}: { resources: ResourceShape }) {
         label="CPU"
         reserved={resources.Reservations?.NanoCPUs}
         limit={resources.Limits?.NanoCPUs}
-        format={formatCpu}
+        format={(v) => formatCores(v / 1_000_000_000)}
       />
       <ResourceLimitsBar
         label="Memory"
@@ -840,62 +820,66 @@ function ResourcesPanel({resources}: { resources: ResourceShape }) {
   );
 }
 
-function formatCpu(nanoCpus: number): string {
-  return `${(
-    nanoCpus / 1_000_000_000
-  ).toFixed(2)} cores`;
-}
-
 function cpuThresholds(service: Service): Threshold[] {
-  const res = service.Spec.TaskTemplate.Resources;
-  if (!res) {
+  const resources = service.Spec.TaskTemplate.Resources;
+
+  if (!resources) {
     return [];
   }
+
   const out: Threshold[] = [];
-  if (res.Reservations?.NanoCPUs) {
+
+  if (resources.Reservations?.NanoCPUs) {
+    const value = (resources.Reservations.NanoCPUs / 1e9) * 100;
+
     out.push({
       label: "Reserved",
-      value: (
-        res.Reservations.NanoCPUs / 1e9
-      ) * 100,
+      value,
       color: "#3b82f6",
       dash: [12, 6],
     });
   }
-  if (res.Limits?.NanoCPUs) {
+
+  if (resources.Limits?.NanoCPUs) {
+    const value = (resources.Limits.NanoCPUs / 1e9) * 100;
+
     out.push({
       label: "Limit",
-      value: (
-        res.Limits.NanoCPUs / 1e9
-      ) * 100,
+      value,
       color: "#ef4444",
       dash: [12, 6],
     });
   }
+
   return out;
 }
 
 function memoryThresholds(service: Service): Threshold[] {
-  const res = service.Spec.TaskTemplate.Resources;
-  if (!res) {
+  const resources = service.Spec.TaskTemplate.Resources;
+
+  if (!resources) {
     return [];
   }
+
   const out: Threshold[] = [];
-  if (res.Reservations?.MemoryBytes) {
+
+  if (resources.Reservations?.MemoryBytes) {
     out.push({
       label: "Reserved",
-      value: res.Reservations.MemoryBytes,
+      value: resources.Reservations.MemoryBytes,
       color: "#3b82f6",
       dash: [12, 6],
     });
   }
-  if (res.Limits?.MemoryBytes) {
+
+  if (resources.Limits?.MemoryBytes) {
     out.push({
       label: "Limit",
-      value: res.Limits.MemoryBytes,
+      value: resources.Limits.MemoryBytes,
       color: "#ef4444",
       dash: [12, 6],
     });
   }
+
   return out;
 }

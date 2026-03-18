@@ -16,7 +16,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../components/ui/dialog";
-import { formatNs } from "../lib/formatNs";
+import { formatDuration } from "../lib/format";
 import { Check, Copy } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -187,7 +187,7 @@ export default function SwarmPage() {
             rows={[
               spec.CAConfig.NodeCertExpiry !== 0 && [
                 "Node Certificate Expiry",
-                formatNs(spec.CAConfig.NodeCertExpiry),
+                formatDuration(spec.CAConfig.NodeCertExpiry),
               ],
               ["Force Rotate", String(spec.CAConfig.ForceRotate)],
               ["Root Rotation In Progress", swarm.RootRotationInProgress ? "Yes" : "No"],
@@ -219,7 +219,7 @@ export default function SwarmPage() {
             rows={[
               spec.Dispatcher.HeartbeatPeriod !== 0 && [
                 "Heartbeat Period",
-                formatNs(spec.Dispatcher.HeartbeatPeriod),
+                formatDuration(spec.Dispatcher.HeartbeatPeriod),
               ],
             ]}
           />

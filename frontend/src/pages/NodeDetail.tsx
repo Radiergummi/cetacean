@@ -17,7 +17,7 @@ import { useInstanceResolver } from "../hooks/useInstanceResolver";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
-import { formatBytes } from "../lib/formatBytes";
+import { formatBytes, formatNumber } from "../lib/format";
 import { escapePromQL } from "../lib/utils";
 import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -388,7 +388,7 @@ export default function NodeDetail() {
         />
         <InfoCard
           label="CPUs"
-          value={`${(node.Description.Resources.NanoCPUs / 1_000_000_000).toFixed(0)}`}
+          value={formatNumber(node.Description.Resources.NanoCPUs / 1_000_000_000)}
         />
         <InfoCard
           label="Memory"

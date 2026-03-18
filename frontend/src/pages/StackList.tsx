@@ -7,7 +7,7 @@ import PageHeader from "../components/PageHeader";
 import { SearchInput } from "../components/search";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useSearchParam } from "../hooks/useSearchParam";
-import { formatBytes } from "../lib/formatBytes";
+import { formatBytes, formatPercentage } from "../lib/format";
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 
@@ -153,7 +153,7 @@ function StackCard({ stack }: { stack: StackSummary }) {
           label="CPU"
           used={stack.cpuUsagePercent}
           limit={stack.cpuLimitCores * 100}
-          format={(v) => `${v.toFixed(0)}%`}
+          format={(v) => formatPercentage(v, 0)}
         />
       )}
 

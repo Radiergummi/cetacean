@@ -1,9 +1,9 @@
-import {Pencil, X} from "lucide-react";
-import {useState} from "react";
-import {api} from "../../api/client";
-import {formatBytes} from "../../lib/formatBytes";
 import CollapsibleSection from "../CollapsibleSection";
-import {Spinner} from "../Spinner";
+import { Spinner } from "../Spinner";
+import { api } from "@/api/client.ts";
+import { formatBytes, formatCores } from "@/lib/format.ts";
+import { Pencil, X } from "lucide-react";
+import { useState } from "react";
 
 interface ServiceResourceShape {
   limits?: { nanoCPUs?: number; memoryBytes?: number; pids?: number };
@@ -33,8 +33,12 @@ export function ResourcesEditor({
   function openEdit() {
     setLimitCpu(typed.limits?.nanoCPUs != null ? String(typed.limits.nanoCPUs / 1e9) : "");
     setLimitMem(typed.limits?.memoryBytes != null ? String(typed.limits.memoryBytes) : "");
-    setResCpu(typed.reservations?.nanoCPUs != null ? String(typed.reservations.nanoCPUs / 1e9) : "");
-    setResMem(typed.reservations?.memoryBytes != null ? String(typed.reservations.memoryBytes) : "");
+    setResCpu(
+      typed.reservations?.nanoCPUs != null ? String(typed.reservations.nanoCPUs / 1e9) : "",
+    );
+    setResMem(
+      typed.reservations?.memoryBytes != null ? String(typed.reservations.memoryBytes) : "",
+    );
     setSaveError(null);
     setEditing(true);
   }
@@ -89,7 +93,7 @@ export function ResourcesEditor({
       onClick={openEdit}
       className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs font-medium hover:bg-accent"
     >
-      <Pencil className="size-3"/>
+      <Pencil className="size-3" />
       Edit
     </button>
   ) : null;
@@ -108,8 +112,7 @@ export function ResourcesEditor({
             {typed.limits?.nanoCPUs != null && (
               <div>
                 <div className="text-xs text-muted-foreground">CPU Limit</div>
-                <div className="font-mono">{(typed.limits.nanoCPUs / 1e9).toFixed(2)} cores
-                </div>
+                <div className="font-mono">{formatCores(typed.limits.nanoCPUs / 1e9)}</div>
               </div>
             )}
             {typed.limits?.memoryBytes != null && (
@@ -121,8 +124,7 @@ export function ResourcesEditor({
             {typed.reservations?.nanoCPUs != null && (
               <div>
                 <div className="text-xs text-muted-foreground">CPU Reserved</div>
-                <div className="font-mono">{(typed.reservations.nanoCPUs / 1e9).toFixed(2)} cores
-                </div>
+                <div className="font-mono">{formatCores(typed.reservations.nanoCPUs / 1e9)}</div>
               </div>
             )}
             {typed.reservations?.memoryBytes != null && (
@@ -147,7 +149,7 @@ export function ResourcesEditor({
                   value={limitCpu}
                   onChange={(e) => setLimitCpu(e.target.value)}
                   placeholder="e.g. 0.5"
-                  className="rounded border bg-background px-2 py-1 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="rounded border bg-background px-2 py-1 font-mono text-sm focus:ring-1 focus:ring-ring focus:outline-none"
                 />
               </label>
               <label className="flex flex-col gap-1">
@@ -158,7 +160,7 @@ export function ResourcesEditor({
                   value={limitMem}
                   onChange={(e) => setLimitMem(e.target.value)}
                   placeholder="e.g. 536870912"
-                  className="rounded border bg-background px-2 py-1 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="rounded border bg-background px-2 py-1 font-mono text-sm focus:ring-1 focus:ring-ring focus:outline-none"
                 />
               </label>
             </div>
@@ -173,7 +175,7 @@ export function ResourcesEditor({
                   value={resCpu}
                   onChange={(e) => setResCpu(e.target.value)}
                   placeholder="e.g. 0.25"
-                  className="rounded border bg-background px-2 py-1 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="rounded border bg-background px-2 py-1 font-mono text-sm focus:ring-1 focus:ring-ring focus:outline-none"
                 />
               </label>
               <label className="flex flex-col gap-1">
@@ -184,7 +186,7 @@ export function ResourcesEditor({
                   value={resMem}
                   onChange={(e) => setResMem(e.target.value)}
                   placeholder="e.g. 268435456"
-                  className="rounded border bg-background px-2 py-1 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="rounded border bg-background px-2 py-1 font-mono text-sm focus:ring-1 focus:ring-ring focus:outline-none"
                 />
               </label>
             </div>
@@ -197,7 +199,7 @@ export function ResourcesEditor({
               disabled={saving}
               className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
             >
-              {saving && <Spinner className="size-3"/>}
+              {saving && <Spinner className="size-3" />}
               Save
             </button>
             <button
@@ -206,7 +208,7 @@ export function ResourcesEditor({
               disabled={saving}
               className="inline-flex items-center gap-1 rounded border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
             >
-              <X className="size-3"/>
+              <X className="size-3" />
               Cancel
             </button>
           </div>

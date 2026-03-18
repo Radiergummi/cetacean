@@ -1,8 +1,8 @@
 import { api } from "../api/client";
 import type { DiskUsageSummary } from "../api/types";
 import { getChartColor } from "../lib/chartColors";
-import { CHART_TOOLTIP_CLASS } from "../lib/chartTooltip";
-import { formatBytes } from "../lib/formatBytes";
+import { chartTooltipClasses } from "../lib/chartTooltip";
+import { formatBytes } from "../lib/format";
 import CollapsibleSection from "./CollapsibleSection";
 import { ArcElement, Chart as ChartJS, Tooltip } from "chart.js";
 import { Box, Container, Hammer, HardDrive, type LucideIcon } from "lucide-react";
@@ -104,7 +104,7 @@ function externalTooltipHandler(context: {
 
   if (!element) {
     element = document.createElement("div");
-    element.className = `chartjs-tooltip ${CHART_TOOLTIP_CLASS}`;
+    element.className = `chartjs-tooltip ${chartTooltipClasses}`;
     canvas.parentElement?.appendChild(element);
   }
 

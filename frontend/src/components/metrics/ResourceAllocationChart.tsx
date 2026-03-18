@@ -1,5 +1,5 @@
 import { getChartColor } from "../../lib/chartColors";
-import { formatMetricValue } from "../../lib/formatMetricValue";
+import { formatMetricValue } from "../../lib/format";
 import {
   Chart as ChartJS,
   BarElement,
