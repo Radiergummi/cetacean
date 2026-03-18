@@ -51,8 +51,7 @@ export function ResourceRangeSlider({
 
   const ticks = useMemo(() => computeTicks(max, step), [max, step]);
 
-  // Fixed visual width for dead zones (independent of step/max ratio)
-  const deadZonePercent = 7;
+  const deadZonePercent = 5;
 
   function handleSliderChange(positions: number[]) {
     onChange({
@@ -93,6 +92,25 @@ export function ResourceRangeSlider({
 
       {/* Slider with dead zones */}
       <div className="relative">
+        {/* Visual track layers (behind the interactive slider) */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex h-6 items-center">
+          {/* Dead zone left */}
+          <div
+            className="absolute top-1/2 left-0 h-0.5 -translate-y-1/2 rounded-full bg-muted-foreground/20"
+            style={{ width: `${deadZonePercent}%` }}
+          />
+          {/* Main track */}
+          <div
+            className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-muted"
+            style={{ left: `${deadZonePercent}%`, right: `${deadZonePercent}%` }}
+          />
+          {/* Dead zone right */}
+          <div
+            className="absolute top-1/2 right-0 h-0.5 -translate-y-1/2 rounded-full bg-muted-foreground/20"
+            style={{ width: `${deadZonePercent}%` }}
+          />
+        </div>
+
         <SliderPrimitive.Root
           value={[reservationPosition, limitPosition]}
           onValueChange={handleSliderChange}
@@ -102,25 +120,9 @@ export function ResourceRangeSlider({
           className="data-horizontal:w-full"
         >
           <SliderPrimitive.Control className="relative flex h-6 w-full touch-none items-center select-none">
-            <SliderPrimitive.Track className="relative grow overflow-hidden rounded-full bg-transparent select-none data-horizontal:h-1.5 data-horizontal:w-full">
-              {/* Dead zone left */}
-              <div
-                className="absolute top-1/2 left-0 h-0.5 -translate-y-1/2 rounded-full bg-muted-foreground/20"
-                style={{ width: `${deadZonePercent}%` }}
-              />
-              {/* Main track */}
-              <div
-                className="absolute top-0 h-full rounded-full bg-muted"
-                style={{ left: `${deadZonePercent}%`, right: `${deadZonePercent}%` }}
-              />
-              {/* Dead zone right */}
-              <div
-                className="absolute top-1/2 right-0 h-0.5 -translate-y-1/2 rounded-full bg-muted-foreground/20"
-                style={{ width: `${deadZonePercent}%` }}
-              />
-              {/* Filled range indicator */}
+            <SliderPrimitive.Track className="relative grow rounded-full bg-transparent select-none data-horizontal:h-1.5 data-horizontal:w-full">
               <SliderPrimitive.Indicator
-                className={`bg-primary data-horizontal:h-full ${!isReservationActive && !isLimitActive ? "opacity-40" : ""}`}
+                className={`rounded-full bg-primary data-horizontal:h-full ${!isReservationActive && !isLimitActive ? "opacity-40" : ""}`}
               />
             </SliderPrimitive.Track>
             <SliderPrimitive.Thumb className={`${THUMB_BASE} ${THUMB_ACTIVE}`} />
@@ -128,9 +130,9 @@ export function ResourceRangeSlider({
           </SliderPrimitive.Control>
         </SliderPrimitive.Root>
 
-        {/* Tick marks */}
+        {/* Tick marks with labels */}
         <div
-          className="relative h-3"
+          className="relative h-6"
           style={{ marginLeft: `${deadZonePercent}%`, marginRight: `${deadZonePercent}%` }}
         >
           {ticks.map((tick) => (
@@ -140,6 +142,9 @@ export function ResourceRangeSlider({
               style={{ left: `${((tick.value - step) / (max - step)) * 100}%` }}
             >
               <div className={`w-px bg-muted-foreground/40 ${tick.tall ? "h-2.5" : "h-1.5"}`} />
+              {tick.label != null && (
+                <span className="mt-0.5 text-[9px] text-muted-foreground">{tick.label}</span>
+              )}
             </div>
           ))}
         </div>
@@ -215,9 +220,15 @@ function CompactStepper({
   );
 }
 
-/** Generate tick positions. Boundary ticks (step and max) are tall; intermediate ticks are short. */
-export function computeTicks(max: number, step: number): Array<{ value: number; tall: boolean }> {
-  const ticks: Array<{ value: number; tall: boolean }> = [];
+interface Tick {
+  value: number;
+  tall: boolean;
+  label?: string;
+}
+
+/** Generate tick positions. Boundary ticks (step and max) are tall with labels; intermediate ticks are short. */
+export function computeTicks(max: number, step: number): Tick[] {
+  const ticks: Tick[] = [];
 
   // For CPU (step ≤ 1): ticks at every whole core. For memory: power-of-two intervals.
   let interval: number;
@@ -230,17 +241,23 @@ export function computeTicks(max: number, step: number): Array<{ value: number; 
     if (interval < step) interval = step;
   }
 
-  ticks.push({ value: step, tall: true });
+  ticks.push({ value: step, tall: true, label: formatTickLabel(step) });
 
   for (let value = interval; value < max; value += interval) {
     if (Math.abs(value - step) > step * 0.01 && Math.abs(value - max) > step * 0.01) {
-      ticks.push({ value, tall: false });
+      ticks.push({ value, tall: false, label: formatTickLabel(value) });
     }
   }
 
   if (max > step) {
-    ticks.push({ value: max, tall: true });
+    ticks.push({ value: max, tall: true, label: formatTickLabel(max) });
   }
 
   return ticks;
+}
+
+function formatTickLabel(value: number): string {
+  if (value >= 1024) return `${value / 1024}k`;
+  if (Number.isInteger(value)) return String(value);
+  return String(value);
 }
