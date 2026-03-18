@@ -1,11 +1,6 @@
 import { api } from "../../api/client";
 import type { SearchResourceType, SearchResponse, SearchResult } from "../../api/types";
-import {
-  getActions,
-  matchAction,
-  type PaletteAction,
-  type PaletteStep,
-} from "../../lib/actions";
+import { getActions, matchAction, type PaletteAction, type PaletteStep } from "../../lib/actions";
 import { resourcePath, statusColor, TYPE_LABELS, TYPE_ORDER } from "../../lib/searchConstants";
 import ResourceName from "../ResourceName";
 import { Spinner } from "../Spinner";
@@ -33,10 +28,7 @@ interface FlatItem {
   result: SearchResult;
 }
 
-function flattenResults(
-  response: SearchResponse,
-  filterType?: SearchResourceType,
-): FlatItem[] {
+function flattenResults(response: SearchResponse, filterType?: SearchResourceType): FlatItem[] {
   const items: FlatItem[] = [];
   const types = filterType ? [filterType] : TYPE_ORDER;
 
@@ -73,12 +65,15 @@ function ActionBreadcrumbs({
     <div className="flex items-center gap-1 border-b px-3 py-1.5 text-xs text-muted-foreground">
       <span className="font-medium text-foreground">{action.label}</span>
       {steps.map((step, i) => (
-        <span key={step.label} className="flex items-center gap-1">
+        <span
+          key={step.label}
+          className="flex items-center gap-1"
+        >
           <ChevronRight className="size-3" />
           {i < currentStep ? (
             <span className="text-foreground">
               {step.type === "resource"
-                ? (actionArgs[i] as { name?: string })?.name ?? String(actionArgs[i])
+                ? ((actionArgs[i] as { name?: string })?.name ?? String(actionArgs[i]))
                 : String(actionArgs[i])}
             </span>
           ) : i === currentStep ? (
@@ -338,9 +333,14 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
         event.preventDefault();
 
         // In action mode with number/text step, submit the input value
-        if (activeAction && currentStep && (currentStep.type === "number" || currentStep.type === "text")) {
+        if (
+          activeAction &&
+          currentStep &&
+          (currentStep.type === "number" || currentStep.type === "text")
+        ) {
           const val = currentStep.type === "number" ? Number(query) : query;
-          if (currentStep.type === "number" && (isNaN(val as number) || query.trim() === "")) return;
+          if (currentStep.type === "number" && (isNaN(val as number) || query.trim() === ""))
+            return;
           if (currentStep.type === "text" && query.trim() === "") return;
           advanceStep(val);
           return;
@@ -387,11 +387,12 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   );
 
   // Compute placeholder
-  const placeholder = activeAction && currentStep
-    ? currentStep.type === "resource"
-      ? `Search for a ${currentStep.label}...`
-      : currentStep.placeholder ?? `Enter ${currentStep.label.toLowerCase()}...`
-    : "Search resources...";
+  const placeholder =
+    activeAction && currentStep
+      ? currentStep.type === "resource"
+        ? `Search for a ${currentStep.label}...`
+        : (currentStep.placeholder ?? `Enter ${currentStep.label.toLowerCase()}...`)
+      : "Search resources...";
 
   // Group items by type for rendering with section headers
   const groups: { type: SearchResourceType; items: { index: number; result: SearchResult }[] }[] =
@@ -515,15 +516,21 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
           )}
 
           {/* Number/text step hint */}
-          {activeAction && currentStep && (currentStep.type === "number" || currentStep.type === "text") && (
-            <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-              {hasQuery ? (
-                <span>Press <kbd className="rounded border px-1 py-0.5 text-xs">Enter</kbd> to confirm</span>
-              ) : (
-                <span>{currentStep.placeholder ?? `Enter ${currentStep.label.toLowerCase()}`}</span>
-              )}
-            </div>
-          )}
+          {activeAction &&
+            currentStep &&
+            (currentStep.type === "number" || currentStep.type === "text") && (
+              <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                {hasQuery ? (
+                  <span>
+                    Press <kbd className="rounded border px-1 py-0.5 text-xs">Enter</kbd> to confirm
+                  </span>
+                ) : (
+                  <span>
+                    {currentStep.placeholder ?? `Enter ${currentStep.label.toLowerCase()}`}
+                  </span>
+                )}
+              </div>
+            )}
         </div>
 
         {/* Footer */}

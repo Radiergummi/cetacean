@@ -6,7 +6,9 @@ interface Props {
 }
 
 export default function Sparkline({ data, width = 80, height = 24, color = "#6366f1" }: Props) {
-  if (data.length < 2) return <div style={{ width, height }} />;
+  if (data.length < 2) {
+    return <div style={{ width, height }} />;
+  }
 
   const min = Math.min(...data);
   const max = Math.max(...data);
@@ -14,9 +16,10 @@ export default function Sparkline({ data, width = 80, height = 24, color = "#636
   const pad = 1;
 
   const points = data
-    .map((v, i) => {
-      const x = pad + (i / (data.length - 1)) * (width - pad * 2);
-      const y = pad + (1 - (v - min) / range) * (height - pad * 2);
+    .map((value, index) => {
+      const x = pad + (index / (data.length - 1)) * (width - pad * 2);
+      const y = pad + (1 - (value - min) / range) * (height - pad * 2);
+
       return `${x},${y}`;
     })
     .join(" ");

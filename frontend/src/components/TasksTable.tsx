@@ -26,12 +26,23 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
       ? tasks.filter(({ Status: { State } }) => State === stateFilter)
       : tasks;
 
-    const stateWeight = (s: string) =>
-      s === "running"
-        ? 0
-        : s === "starting" || s === "preparing" || s === "ready" || s === "new"
-          ? 1
-          : 2;
+    const stateOrder: Record<string, number> = {
+      new: 0,
+      pending: 1,
+      assigned: 2,
+      accepted: 3,
+      ready: 4,
+      preparing: 5,
+      starting: 6,
+      running: 7,
+      complete: 8,
+      failed: 9,
+      shutdown: 10,
+      rejected: 11,
+      orphaned: 12,
+      remove: 13,
+    };
+    const stateWeight = (s: string) => stateOrder[s] ?? 99;
 
     return [...filtered].sort((a, b) => {
       const w = stateWeight(a.Status.State) - stateWeight(b.Status.State);

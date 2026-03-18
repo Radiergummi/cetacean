@@ -1,10 +1,10 @@
-import {ImageIcon, RefreshCw, RotateCcw} from "lucide-react";
-import {useState} from "react";
-import {api} from "../../api/client";
-import type {Service} from "../../api/types";
-import {Spinner} from "../Spinner";
+import { api } from "../../api/client";
+import type { Service } from "../../api/types";
+import { Spinner } from "../Spinner";
+import { ImageIcon, RefreshCw, RotateCcw } from "lucide-react";
+import { useState } from "react";
 
-export function ServiceActions({service, serviceId}: { service: Service; serviceId: string }) {
+export function ServiceActions({ service, serviceId }: { service: Service; serviceId: string }) {
   const currentImage = service.Spec.TaskTemplate.ContainerSpec.Image;
   const imageWithoutDigest = currentImage.replace(/@sha256:[a-f0-9]+$/, "");
 
@@ -71,7 +71,11 @@ export function ServiceActions({service, serviceId}: { service: Service; service
   }
 
   async function handleRestart() {
-    if (!window.confirm("Are you sure you want to restart this service? This triggers a rolling restart.")) {
+    if (
+      !window.confirm(
+        "Are you sure you want to restart this service? This triggers a rolling restart.",
+      )
+    ) {
       return;
     }
 
@@ -96,13 +100,16 @@ export function ServiceActions({service, serviceId}: { service: Service; service
           onClick={openImage}
           className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-sm font-medium hover:bg-accent disabled:opacity-50"
         >
-          <ImageIcon className="h-3.5 w-3.5"/>
+          <ImageIcon className="h-3.5 w-3.5" />
           Update Image
         </button>
         {imageOpen && (
-          <div className="absolute left-0 top-full z-50 mt-1 w-80 rounded-lg border bg-card p-3 shadow-lg">
+          <div className="absolute top-full left-0 z-50 mt-1 w-80 rounded-lg border bg-card p-3 shadow-lg">
             <p className="mb-1 text-xs font-medium text-muted-foreground">New image</p>
-            <p className="mb-2 truncate font-mono text-xs text-muted-foreground" title={currentImage}>
+            <p
+              className="mb-2 truncate font-mono text-xs text-muted-foreground"
+              title={currentImage}
+            >
               Current: {imageWithoutDigest}
             </p>
             <input
@@ -118,7 +125,7 @@ export function ServiceActions({service, serviceId}: { service: Service; service
                 }
               }}
               placeholder="image:tag"
-              className="mb-2 w-full rounded border bg-background px-2 py-1 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              className="mb-2 w-full rounded border bg-background px-2 py-1 font-mono text-sm focus:ring-1 focus:ring-ring focus:outline-none"
               autoFocus
             />
             {imageError && (
@@ -131,7 +138,7 @@ export function ServiceActions({service, serviceId}: { service: Service; service
                 disabled={imageLoading}
                 className="flex flex-1 items-center justify-center gap-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
               >
-                {imageLoading && <Spinner className="size-3"/>}
+                {imageLoading && <Spinner className="size-3" />}
                 Update
               </button>
               <button
@@ -156,12 +163,10 @@ export function ServiceActions({service, serviceId}: { service: Service; service
           title={canRollback ? "Rollback to previous spec" : "No previous spec available"}
           className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-sm font-medium hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {rollbackLoading ? <Spinner className="size-3"/> : <RotateCcw className="h-3.5 w-3.5"/>}
+          {rollbackLoading ? <Spinner className="size-3" /> : <RotateCcw className="h-3.5 w-3.5" />}
           Rollback
         </button>
-        {rollbackError && (
-          <p className="text-xs text-red-600 dark:text-red-400">{rollbackError}</p>
-        )}
+        {rollbackError && <p className="text-xs text-red-600 dark:text-red-400">{rollbackError}</p>}
       </div>
 
       {/* Restart */}
@@ -172,12 +177,10 @@ export function ServiceActions({service, serviceId}: { service: Service; service
           disabled={restartLoading}
           className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-sm font-medium hover:bg-accent disabled:opacity-50"
         >
-          {restartLoading ? <Spinner className="size-3"/> : <RefreshCw className="h-3.5 w-3.5"/>}
+          {restartLoading ? <Spinner className="size-3" /> : <RefreshCw className="h-3.5 w-3.5" />}
           Restart
         </button>
-        {restartError && (
-          <p className="text-xs text-red-600 dark:text-red-400">{restartError}</p>
-        )}
+        {restartError && <p className="text-xs text-red-600 dark:text-red-400">{restartError}</p>}
       </div>
     </div>
   );

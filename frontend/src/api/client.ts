@@ -67,13 +67,8 @@ async function mutationFetch<T>(
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
-    if (
-      res.status === 401 &&
-      res.headers.get("WWW-Authenticate")?.startsWith("Bearer")
-    ) {
-      const redirect = encodeURIComponent(
-        window.location.pathname + window.location.search,
-      );
+    if (res.status === 401 && res.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
+      const redirect = encodeURIComponent(window.location.pathname + window.location.search);
       window.location.href = `/auth/login?redirect=${redirect}`;
       return new Promise<T>(() => {});
     }
@@ -273,10 +268,8 @@ export const api = {
     put<ServiceDetail>(`/services/${id}/scale`, { replicas }),
   updateServiceImage: (id: string, image: string) =>
     put<ServiceDetail>(`/services/${id}/image`, { image }),
-  rollbackService: (id: string) =>
-    post<ServiceDetail>(`/services/${id}/rollback`),
-  restartService: (id: string) =>
-    post<ServiceDetail>(`/services/${id}/restart`),
+  rollbackService: (id: string) => post<ServiceDetail>(`/services/${id}/rollback`),
+  restartService: (id: string) => post<ServiceDetail>(`/services/${id}/restart`),
   updateNodeAvailability: (id: string, availability: "active" | "drain" | "pause") =>
     put<{ node: Node }>(`/nodes/${id}/availability`, { availability }),
   removeTask: (id: string) => del(`/tasks/${id}`),
@@ -285,7 +278,9 @@ export const api = {
   serviceEnv: (id: string, signal?: AbortSignal) =>
     fetchJSON<{ env: Record<string, string> }>(`/services/${id}/env`, signal).then((r) => r.env),
   nodeLabels: (id: string, signal?: AbortSignal) =>
-    fetchJSON<{ labels: Record<string, string> }>(`/nodes/${id}/labels`, signal).then((r) => r.labels),
+    fetchJSON<{ labels: Record<string, string> }>(`/nodes/${id}/labels`, signal).then(
+      (r) => r.labels,
+    ),
   serviceResources: (id: string, signal?: AbortSignal) =>
     fetchJSON<{ resources: Record<string, unknown> }>(`/services/${id}/resources`, signal).then(
       (r) => r.resources,
@@ -297,5 +292,9 @@ export const api = {
   patchNodeLabels: (id: string, ops: Array<{ op: string; path: string; value?: string }>) =>
     patch<Record<string, string>>(`/nodes/${id}/labels`, ops, "application/json-patch+json"),
   patchServiceResources: (id: string, partial: unknown) =>
-    patch<Record<string, unknown>>(`/services/${id}/resources`, partial, "application/merge-patch+json"),
+    patch<Record<string, unknown>>(
+      `/services/${id}/resources`,
+      partial,
+      "application/merge-patch+json",
+    ),
 };

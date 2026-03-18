@@ -1,10 +1,10 @@
-import {useState} from "react";
-import {api} from "../../api/client";
-import type {Service, Task} from "../../api/types";
+import { api } from "../../api/client";
+import type { Service, Task } from "../../api/types";
 import InfoCard from "../InfoCard";
-import {Spinner} from "../Spinner";
+import { Spinner } from "../Spinner";
+import { useState } from "react";
 
-function ReplicaDoughnut({running, desired}: { running: number; desired: number }) {
+function ReplicaDoughnut({ running, desired }: { running: number; desired: number }) {
   const size = 50;
   const stroke = 5;
   const radius = (size - stroke) / 2;
@@ -70,7 +70,7 @@ function ReplicaDoughnut({running, desired}: { running: number; desired: number 
   );
 }
 
-export function ReplicaCard({service, tasks}: { service: Service; tasks: Task[] }) {
+export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[] }) {
   const [scaleOpen, setScaleOpen] = useState(false);
   const [scaleValue, setScaleValue] = useState("");
   const [scaleLoading, setScaleLoading] = useState(false);
@@ -78,7 +78,12 @@ export function ReplicaCard({service, tasks}: { service: Service; tasks: Task[] 
 
   const replicated = service.Spec.Mode.Replicated;
   if (!replicated) {
-    return <InfoCard label="Mode" value="global"/>;
+    return (
+      <InfoCard
+        label="Mode"
+        value="global"
+      />
+    );
   }
 
   const desired = replicated.Replicas ?? 0;
@@ -131,7 +136,12 @@ export function ReplicaCard({service, tasks}: { service: Service; tasks: Task[] 
 
   const scaleControl = (
     <div className="relative flex items-center gap-2">
-      {desired > 0 && <ReplicaDoughnut running={running} desired={desired}/>}
+      {desired > 0 && (
+        <ReplicaDoughnut
+          running={running}
+          desired={desired}
+        />
+      )}
       <button
         type="button"
         onClick={openScale}
@@ -149,13 +159,13 @@ export function ReplicaCard({service, tasks}: { service: Service; tasks: Task[] 
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
         </svg>
       </button>
 
       {scaleOpen && (
-        <div className="absolute right-0 top-full z-50 mt-1 w-52 rounded-lg border bg-card p-3 shadow-lg">
+        <div className="absolute top-full right-0 z-50 mt-1 w-52 rounded-lg border bg-card p-3 shadow-lg">
           <p className="mb-2 text-xs font-medium text-muted-foreground">Scale replicas</p>
           <input
             type="number"
@@ -170,7 +180,7 @@ export function ReplicaCard({service, tasks}: { service: Service; tasks: Task[] 
                 cancelScale();
               }
             }}
-            className="mb-2 w-full rounded border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            className="mb-2 w-full rounded border bg-background px-2 py-1 text-sm focus:ring-1 focus:ring-ring focus:outline-none"
             autoFocus
           />
           {scaleError && (
@@ -183,7 +193,7 @@ export function ReplicaCard({service, tasks}: { service: Service; tasks: Task[] 
               disabled={scaleLoading}
               className="flex flex-1 items-center justify-center gap-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
             >
-              {scaleLoading && <Spinner className="size-3"/>}
+              {scaleLoading && <Spinner className="size-3" />}
               Scale
             </button>
             <button
