@@ -55,9 +55,9 @@ export function ResourceRangeSlider({
 
   const ticks = useMemo(() => computeTicks(max, step, formatLabel), [max, step, formatLabel]);
 
-  // Compute fill position as percentage of the full slider width
-  const fillLeft = (reservationPosition / sliderMax) * 100;
-  const fillRight = 100 - (limitPosition / sliderMax) * 100;
+  // Compute fill position, clamped to the main track (never into dead zones)
+  const fillLeft = Math.max(DEAD_ZONE_PERCENT, (reservationPosition / sliderMax) * 100);
+  const fillRight = Math.max(DEAD_ZONE_PERCENT, 100 - (limitPosition / sliderMax) * 100);
 
   const isReservationActive = reservation !== undefined;
   const isLimitActive = limit !== undefined;
@@ -95,27 +95,32 @@ export function ResourceRangeSlider({
       <span className="text-xs text-muted-foreground">{label}</span>
 
       <div className="relative">
-        {/* All visual layers — rendered independently from Base UI's Track */}
+        {/* Visual track layers — rendered independently from Base UI's Track */}
         <div className="pointer-events-none absolute inset-x-0 top-0 flex h-6 items-center">
-          {/* Dead zone left */}
-          <div
-            className="absolute top-1/2 left-0 h-0.5 -translate-y-1/2 rounded-full bg-muted-foreground/20"
-            style={{ width: `${DEAD_ZONE_PERCENT}%` }}
-          />
-          {/* Main track */}
-          <div
-            className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-muted"
-            style={{ left: `${DEAD_ZONE_PERCENT}%`, right: `${DEAD_ZONE_PERCENT}%` }}
-          />
-          {/* Dead zone right */}
-          <div
-            className="absolute top-1/2 right-0 h-0.5 -translate-y-1/2 rounded-full bg-muted-foreground/20"
-            style={{ width: `${DEAD_ZONE_PERCENT}%` }}
-          />
+          {/* Full-width track background */}
+          <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-muted" />
           {/* Filled range between thumbs */}
           <div
             className={`absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-primary ${!isReservationActive && !isLimitActive ? "opacity-40" : ""}`}
             style={{ left: `${fillLeft}%`, right: `${fillRight}%` }}
+          />
+          {/* Dead zone masks — card background covers track ends to create visual gap */}
+          <div
+            className="absolute top-1/2 left-0 h-1.5 -translate-y-1/2 bg-background"
+            style={{ width: `calc(${DEAD_ZONE_PERCENT}% - 2px)` }}
+          />
+          <div
+            className="absolute top-1/2 right-0 h-1.5 -translate-y-1/2 bg-background"
+            style={{ width: `calc(${DEAD_ZONE_PERCENT}% - 2px)` }}
+          />
+          {/* Thin dead zone lines */}
+          <div
+            className="absolute top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-muted-foreground/30"
+            style={{ left: 0, width: `${DEAD_ZONE_PERCENT}%` }}
+          />
+          <div
+            className="absolute top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-muted-foreground/30"
+            style={{ right: 0, width: `${DEAD_ZONE_PERCENT}%` }}
           />
         </div>
 
