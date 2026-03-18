@@ -1,17 +1,15 @@
 import { api } from "../api/client";
-import type { HistoryEntry, Node, Task } from "../api/types";
+import type { HistoryEntry, Node, PatchOp, Task } from "../api/types";
 import ActivitySection from "../components/ActivitySection";
-import CollapsibleSection from "../components/CollapsibleSection";
 import { MetadataGrid } from "../components/data";
 import DiskUsageSection from "../components/DiskUsageSection";
 import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
+import { KeyValueEditor } from "../components/KeyValueEditor";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import { MetricsPanel, NodeResourceGauges } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
-import SimpleTable from "../components/SimpleTable";
-import { Spinner } from "../components/Spinner";
 import TasksTable from "../components/TasksTable";
 import { useInstanceResolver } from "../hooks/useInstanceResolver";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
@@ -19,7 +17,6 @@ import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { formatBytes, formatNumber } from "../lib/format";
 import { escapePromQL } from "../lib/utils";
-import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
@@ -32,211 +29,20 @@ function LabelsEditor({
   labels: Record<string, string>;
   onSaved: (updated: Record<string, string>) => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<Record<string, string>>({});
-  const [newKey, setNewKey] = useState("");
-  const [newVal, setNewVal] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-
-  function openEdit() {
-    setDraft({ ...labels });
-    setNewKey("");
-    setNewVal("");
-    setSaveError(null);
-    setEditing(true);
+  async function handleSave(ops: PatchOp[]) {
+    const updated = await api.patchNodeLabels(nodeId, ops);
+    onSaved(updated);
+    return updated;
   }
-
-  function cancelEdit() {
-    setEditing(false);
-    setSaveError(null);
-  }
-
-  function addRow() {
-    const k = newKey.trim();
-    if (!k) return;
-    setDraft((prev) => ({ ...prev, [k]: newVal }));
-    setNewKey("");
-    setNewVal("");
-  }
-
-  function removeRow(key: string) {
-    if (!window.confirm(`Remove label "${key}"?`)) return;
-    setDraft((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-  }
-
-  async function save() {
-    const ops: Array<{ op: string; path: string; value?: string }> = [];
-    const original = labels;
-
-    for (const k of Object.keys(original)) {
-      if (!(k in draft)) {
-        ops.push({ op: "remove", path: `/${k}` });
-      }
-    }
-    for (const [k, v] of Object.entries(draft)) {
-      if (!(k in original)) {
-        ops.push({ op: "add", path: `/${k}`, value: v });
-      } else if (original[k] !== v) {
-        ops.push({ op: "replace", path: `/${k}`, value: v });
-      }
-    }
-    if (ops.length === 0) {
-      setEditing(false);
-      return;
-    }
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const updated = await api.patchNodeLabels(nodeId, ops);
-      onSaved(updated);
-      setEditing(false);
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Save failed");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const entries = Object.entries(labels).sort(([a], [b]) => a.localeCompare(b));
-  const draftEntries = Object.entries(draft).sort(([a], [b]) => a.localeCompare(b));
-
-  const controls = !editing ? (
-    <button
-      type="button"
-      onClick={openEdit}
-      className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs font-medium hover:bg-accent"
-    >
-      <Pencil className="h-3 w-3" />
-      Edit
-    </button>
-  ) : null;
 
   return (
-    <CollapsibleSection
+    <KeyValueEditor
       title="Labels"
-      defaultOpen={false}
-      controls={controls}
-    >
-      {!editing ? (
-        entries.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No labels.</p>
-        ) : (
-          <SimpleTable
-            columns={["Key", "Value"]}
-            items={entries}
-            keyFn={([k]) => k}
-            renderRow={([k, v]) => (
-              <>
-                <td className="p-3 font-mono text-xs">{k}</td>
-                <td className="p-3 font-mono text-xs break-all">{v}</td>
-              </>
-            )}
-          />
-        )
-      ) : (
-        <div className="space-y-3">
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full min-w-max whitespace-nowrap">
-              <thead className="sticky top-0 z-10 bg-background">
-                <tr className="border-b bg-muted/50">
-                  <th className="p-3 text-left text-sm font-medium">Key</th>
-                  <th className="p-3 text-left text-sm font-medium">Value</th>
-                  <th className="p-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {draftEntries.map(([k, v]) => (
-                  <tr
-                    key={k}
-                    className="border-b last:border-b-0"
-                  >
-                    <td className="p-3 font-mono text-xs">{k}</td>
-                    <td className="p-2">
-                      <input
-                        type="text"
-                        value={v}
-                        onChange={(e) => setDraft((prev) => ({ ...prev, [k]: e.target.value }))}
-                        className="w-full rounded border bg-background px-2 py-1 font-mono text-xs focus:ring-1 focus:ring-ring focus:outline-none"
-                      />
-                    </td>
-                    <td className="p-2">
-                      <button
-                        type="button"
-                        onClick={() => removeRow(k)}
-                        className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-red-600"
-                        title="Remove"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                <tr>
-                  <td className="p-2">
-                    <input
-                      type="text"
-                      value={newKey}
-                      onChange={(e) => setNewKey(e.target.value)}
-                      placeholder="key"
-                      className="w-full rounded border bg-background px-2 py-1 font-mono text-xs focus:ring-1 focus:ring-ring focus:outline-none"
-                    />
-                  </td>
-                  <td className="p-2">
-                    <input
-                      type="text"
-                      value={newVal}
-                      onChange={(e) => setNewVal(e.target.value)}
-                      placeholder="value"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") addRow();
-                      }}
-                      className="w-full rounded border bg-background px-2 py-1 font-mono text-xs focus:ring-1 focus:ring-ring focus:outline-none"
-                    />
-                  </td>
-                  <td className="p-2">
-                    <button
-                      type="button"
-                      onClick={addRow}
-                      disabled={!newKey.trim()}
-                      className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
-                      title="Add"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => void save()}
-              disabled={saving}
-              className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
-            >
-              {saving && <Spinner className="size-3" />}
-              Save
-            </button>
-            <button
-              type="button"
-              onClick={cancelEdit}
-              disabled={saving}
-              className="inline-flex items-center gap-1 rounded border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
-            >
-              <X className="h-3 w-3" />
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-    </CollapsibleSection>
+      entries={labels}
+      keyPlaceholder="key"
+      valuePlaceholder="value"
+      onSave={handleSave}
+    />
   );
 }
 
