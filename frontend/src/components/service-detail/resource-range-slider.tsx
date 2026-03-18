@@ -1,4 +1,3 @@
-import { Label } from "@/components/ui/label";
 import { NumberField } from "@base-ui/react/number-field";
 import { Slider as SliderPrimitive } from "@base-ui/react/slider";
 import { Minus, Plus } from "lucide-react";
@@ -12,6 +11,11 @@ interface ResourceRangeSliderProps {
   max: number;
   step: number;
 }
+
+const THUMB_BASE =
+  "relative block size-3.5 shrink-0 rounded-full border-2 transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3";
+const THUMB_ACTIVE = "border-primary bg-white ring-primary/50";
+const THUMB_MUTED = "border-muted-foreground/40 bg-muted ring-muted-foreground/20";
 
 function toPosition(
   value: number | undefined,
@@ -86,7 +90,7 @@ export function ResourceRangeSlider({
 
   return (
     <div className="flex w-full flex-col gap-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <span className="text-xs text-muted-foreground">{label}</span>
 
       {/* Slider with dead zones */}
       <div className="relative">
@@ -120,21 +124,11 @@ export function ResourceRangeSlider({
                 className={`bg-primary data-horizontal:h-full ${!isReservationActive && !isLimitActive ? "opacity-20" : ""}`}
               />
             </SliderPrimitive.Track>
-            {/* Reservation thumb */}
             <SliderPrimitive.Thumb
-              className={`relative block size-3.5 shrink-0 rounded-full border-2 transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3 ${
-                isReservationActive
-                  ? "border-primary bg-white ring-primary/50"
-                  : "border-muted-foreground/40 bg-muted ring-muted-foreground/20"
-              }`}
+              className={`${THUMB_BASE} ${isReservationActive ? THUMB_ACTIVE : THUMB_MUTED}`}
             />
-            {/* Limit thumb */}
             <SliderPrimitive.Thumb
-              className={`relative block size-3.5 shrink-0 rounded-full border-2 transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3 ${
-                isLimitActive
-                  ? "border-primary bg-white ring-primary/50"
-                  : "border-muted-foreground/40 bg-muted ring-muted-foreground/20"
-              }`}
+              className={`${THUMB_BASE} ${isLimitActive ? THUMB_ACTIVE : THUMB_MUTED}`}
             />
           </SliderPrimitive.Control>
         </SliderPrimitive.Root>
@@ -162,54 +156,22 @@ export function ResourceRangeSlider({
           <span className="text-[10px] tracking-wide text-muted-foreground uppercase">
             Reserved
           </span>
-          {isReservationActive ? (
-            <NumberField.Root
-              value={reservation}
-              onValueChange={handleReservationInput}
-              min={step}
-              max={max}
-              step={step}
-            >
-              <NumberField.Group className="flex items-center rounded-md border">
-                <NumberField.Decrement className="flex size-6 items-center justify-center border-r text-muted-foreground hover:bg-accent disabled:opacity-50">
-                  <Minus className="size-2.5" />
-                </NumberField.Decrement>
-                <NumberField.Input className="w-12 bg-transparent px-1 py-0.5 text-center font-mono text-xs focus:outline-none" />
-                <NumberField.Increment className="flex size-6 items-center justify-center border-l text-muted-foreground hover:bg-accent disabled:opacity-50">
-                  <Plus className="size-2.5" />
-                </NumberField.Increment>
-              </NumberField.Group>
-            </NumberField.Root>
-          ) : (
-            <span className="inline-flex size-6 items-center justify-center rounded-md border text-xs text-muted-foreground">
-              &mdash;
-            </span>
-          )}
+          <CompactStepper
+            value={reservation}
+            onChange={handleReservationInput}
+            min={step}
+            max={max}
+            step={step}
+          />
         </div>
         <div className="flex items-center gap-1.5">
-          {isLimitActive ? (
-            <NumberField.Root
-              value={limit}
-              onValueChange={handleLimitInput}
-              min={step}
-              max={max}
-              step={step}
-            >
-              <NumberField.Group className="flex items-center rounded-md border">
-                <NumberField.Decrement className="flex size-6 items-center justify-center border-r text-muted-foreground hover:bg-accent disabled:opacity-50">
-                  <Minus className="size-2.5" />
-                </NumberField.Decrement>
-                <NumberField.Input className="w-12 bg-transparent px-1 py-0.5 text-center font-mono text-xs focus:outline-none" />
-                <NumberField.Increment className="flex size-6 items-center justify-center border-l text-muted-foreground hover:bg-accent disabled:opacity-50">
-                  <Plus className="size-2.5" />
-                </NumberField.Increment>
-              </NumberField.Group>
-            </NumberField.Root>
-          ) : (
-            <span className="inline-flex size-6 items-center justify-center rounded-md border text-xs text-muted-foreground">
-              &mdash;
-            </span>
-          )}
+          <CompactStepper
+            value={limit}
+            onChange={handleLimitInput}
+            min={step}
+            max={max}
+            step={step}
+          />
           <span className="text-[10px] tracking-wide text-muted-foreground uppercase">Limit</span>
         </div>
       </div>
@@ -217,37 +179,70 @@ export function ResourceRangeSlider({
   );
 }
 
+function CompactStepper({
+  value,
+  onChange,
+  min,
+  max,
+  step,
+}: {
+  value: number | undefined;
+  onChange: (next: number | null) => void;
+  min: number;
+  max: number;
+  step: number;
+}) {
+  if (value === undefined) {
+    return (
+      <span className="inline-flex size-6 items-center justify-center rounded-md border text-xs text-muted-foreground">
+        &mdash;
+      </span>
+    );
+  }
+  return (
+    <NumberField.Root
+      value={value}
+      onValueChange={onChange}
+      min={min}
+      max={max}
+      step={step}
+    >
+      <NumberField.Group className="flex items-center rounded-md border">
+        <NumberField.Decrement className="flex size-6 items-center justify-center border-r text-muted-foreground hover:bg-accent disabled:opacity-50">
+          <Minus className="size-2.5" />
+        </NumberField.Decrement>
+        <NumberField.Input className="w-12 bg-transparent px-1 py-0.5 text-center font-mono text-xs focus:outline-none" />
+        <NumberField.Increment className="flex size-6 items-center justify-center border-l text-muted-foreground hover:bg-accent disabled:opacity-50">
+          <Plus className="size-2.5" />
+        </NumberField.Increment>
+      </NumberField.Group>
+    </NumberField.Root>
+  );
+}
+
 /** Generate tick positions. Boundary ticks (step and max) are tall; intermediate ticks are short. */
 export function computeTicks(max: number, step: number): Array<{ value: number; tall: boolean }> {
   const ticks: Array<{ value: number; tall: boolean }> = [];
 
-  // Determine intermediate tick interval
-  // For CPU (step ≤ 1): every whole core
-  // For memory (step > 1): power-of-two boundaries
+  // For CPU (step ≤ 1): ticks at every whole core. For memory: power-of-two intervals.
   let interval: number;
   if (step <= 1) {
     interval = 1;
   } else {
-    // Find a nice power-of-two interval that gives ~4-8 ticks
     const range = max - step;
-    const targetTicks = 6;
-    const raw = range / targetTicks;
+    const raw = range / 6;
     interval = Math.pow(2, Math.round(Math.log2(raw)));
     if (interval < step) interval = step;
   }
 
-  // Boundary tick at min (step)
   ticks.push({ value: step, tall: true });
 
-  // Intermediate ticks
-  const firstIntermediate = Math.ceil((step + 0.001) / interval) * interval;
-  for (let value = firstIntermediate; value < max; value += interval) {
+  for (let value = interval; value < max; value += interval) {
     if (Math.abs(value - step) > step * 0.01 && Math.abs(value - max) > step * 0.01) {
       ticks.push({ value, tall: false });
     }
   }
 
-  // Boundary tick at max
   if (max > step) {
     ticks.push({ value: max, tall: true });
   }
