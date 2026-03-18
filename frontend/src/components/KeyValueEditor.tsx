@@ -5,7 +5,7 @@ import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getErrorMessage } from "@/lib/utils";
-import { Pencil, Plus, Trash2, X } from "lucide-react";
+import { Pencil, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 interface KeyValueEditorProps {
@@ -33,6 +33,7 @@ export function KeyValueEditor({
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("");
+  const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -40,6 +41,7 @@ export function KeyValueEditor({
     setDraft({ ...entries });
     setNewKey("");
     setNewValue("");
+    setAdding(false);
     setSaveError(null);
     setEditing(true);
   }
@@ -55,6 +57,7 @@ export function KeyValueEditor({
     setDraft((previous) => ({ ...previous, [key]: newValue }));
     setNewKey("");
     setNewValue("");
+    setAdding(false);
   }
 
   // Intentional: no confirmation on row removal. Removals are draft-only
@@ -185,58 +188,65 @@ export function KeyValueEditor({
                     </td>
                   </tr>
                 ))}
+                {adding && (
+                  <tr>
+                    <td className="p-2">
+                      <Input
+                        value={newKey}
+                        onChange={(event) => setNewKey(event.target.value)}
+                        placeholder={keyPlaceholder}
+                        className="font-mono text-xs"
+                        autoFocus
+                      />
+                    </td>
+                    <td className="p-2">
+                      <Input
+                        value={newValue}
+                        onChange={(event) => setNewValue(event.target.value)}
+                        placeholder={valuePlaceholder}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") addRow();
+                        }}
+                        className="font-mono text-xs"
+                      />
+                    </td>
+                    <td />
+                  </tr>
+                )}
               </tbody>
             </table>
-          </div>
-          <div className="flex items-end gap-2">
-            <div className="flex-1">
-              <Input
-                value={newKey}
-                onChange={(event) => setNewKey(event.target.value)}
-                placeholder={keyPlaceholder}
-                className="font-mono text-xs"
-              />
-            </div>
-            <div className="flex-1">
-              <Input
-                value={newValue}
-                onChange={(event) => setNewValue(event.target.value)}
-                placeholder={valuePlaceholder}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") addRow();
-                }}
-                className="font-mono text-xs"
-              />
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={addRow}
-              disabled={!newKey.trim()}
-            >
-              <Plus className="size-3.5" />
-              Add another
-            </Button>
-          </div>
-          {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
-          <div className="flex justify-end gap-2">
-            <Button
-              size="sm"
-              onClick={() => void save()}
-              disabled={saving}
-            >
-              {saving && <Spinner className="size-3" />}
-              Save
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={cancelEdit}
-              disabled={saving}
-            >
-              <X className="size-3" />
-              Cancel
-            </Button>
+
+            {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
+
+            <footer className="flex items-center gap-2 border-t p-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAdding(true)}
+                disabled={adding}
+              >
+                Add another
+              </Button>
+              <div className="ml-auto flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => void save()}
+                  disabled={saving}
+                >
+                  {saving && <Spinner className="size-3" />}
+                  Save
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={cancelEdit}
+                  disabled={saving}
+                >
+                  <X className="size-3" />
+                  Cancel
+                </Button>
+              </div>
+            </footer>
           </div>
         </div>
       )}
