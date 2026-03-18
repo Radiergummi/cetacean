@@ -3,7 +3,7 @@ import { useMetricsPanelContext } from "./MetricsPanelContext";
 import { api } from "@/api/client.ts";
 import type { PrometheusResponse } from "@/api/types.ts";
 import { useMatchesBreakpoint } from "@/hooks/useMatchesBreakpoint.ts";
-import { getChartColor } from "@/lib/chartColors.ts";
+import { getChartColor, getSemanticChartColor } from "@/lib/chartColors.ts";
 import { chartTooltipClasses } from "@/lib/chartTooltip.ts";
 import { formatMetricValue } from "@/lib/format.ts";
 import { generateMockSeries } from "@/lib/mockChartData.ts";
@@ -764,7 +764,7 @@ export default function TimeSeriesChart({
           ctx.moveTo(x, chartArea.top);
           ctx.lineTo(x, chartArea.bottom);
           ctx.lineWidth = 1;
-          ctx.strokeStyle = "rgba(136,136,136,0.3)";
+          ctx.strokeStyle = getSemanticChartColor("crosshair");
           ctx.stroke();
           ctx.restore();
         }
@@ -782,7 +782,7 @@ export default function TimeSeriesChart({
             ctx.lineTo(xPixel, chartArea.bottom);
 
             ctx.lineWidth = 1;
-            ctx.strokeStyle = "rgba(136,136,136,0.2)";
+            ctx.strokeStyle = getSemanticChartColor("crosshair");
 
             ctx.setLineDash([4, 4]);
             ctx.stroke();
@@ -840,8 +840,8 @@ export default function TimeSeriesChart({
           zoom: {
             drag: {
               enabled: !isMobile,
-              backgroundColor: "rgba(100, 143, 255, 0.1)",
-              borderColor: "rgba(100, 143, 255, 0.3)",
+              backgroundColor: getSemanticChartColor("zoom"),
+              borderColor: getSemanticChartColor("zoom"),
               borderWidth: 1,
               threshold: 5,
             },
