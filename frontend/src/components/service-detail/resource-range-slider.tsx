@@ -15,7 +15,6 @@ interface ResourceRangeSliderProps {
 const THUMB_BASE =
   "relative block size-3.5 shrink-0 rounded-full border-2 transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3";
 const THUMB_ACTIVE = "border-primary bg-white ring-primary/50";
-const THUMB_MUTED = "border-muted-foreground/40 bg-muted ring-muted-foreground/20";
 
 function toPosition(
   value: number | undefined,
@@ -52,8 +51,8 @@ export function ResourceRangeSlider({
 
   const ticks = useMemo(() => computeTicks(max, step), [max, step]);
 
-  // Dead zone width as percentage of total slider width
-  const deadZonePercent = (step / sliderMax) * 100;
+  // Fixed visual width for dead zones (independent of step/max ratio)
+  const deadZonePercent = 7;
 
   function handleSliderChange(positions: number[]) {
     onChange({
@@ -121,15 +120,11 @@ export function ResourceRangeSlider({
               />
               {/* Filled range indicator */}
               <SliderPrimitive.Indicator
-                className={`bg-primary data-horizontal:h-full ${!isReservationActive && !isLimitActive ? "opacity-20" : ""}`}
+                className={`bg-primary data-horizontal:h-full ${!isReservationActive && !isLimitActive ? "opacity-40" : ""}`}
               />
             </SliderPrimitive.Track>
-            <SliderPrimitive.Thumb
-              className={`${THUMB_BASE} ${isReservationActive ? THUMB_ACTIVE : THUMB_MUTED}`}
-            />
-            <SliderPrimitive.Thumb
-              className={`${THUMB_BASE} ${isLimitActive ? THUMB_ACTIVE : THUMB_MUTED}`}
-            />
+            <SliderPrimitive.Thumb className={`${THUMB_BASE} ${THUMB_ACTIVE}`} />
+            <SliderPrimitive.Thumb className={`${THUMB_BASE} ${THUMB_ACTIVE}`} />
           </SliderPrimitive.Control>
         </SliderPrimitive.Root>
 
