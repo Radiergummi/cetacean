@@ -13,31 +13,19 @@ interface ResourceRangeSliderProps {
   formatLabel: (value: number) => string;
 }
 
-const THUMB_BASE =
-  "relative block size-3.5 shrink-0 rounded-full border-2 transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3";
-const THUMB_ACTIVE = "border-primary bg-white ring-primary/50";
+const THUMB_CLASS =
+  "relative block size-3.5 shrink-0 rounded-full border-2 border-primary bg-white ring-primary/50 transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3";
 
 const DEAD_ZONE_PERCENT = 5;
 
-function toPosition(
-  value: number | undefined,
-  max: number,
-  step: number,
-  side: "reservation" | "limit",
-): number {
-  if (value === undefined) return side === "reservation" ? 0 : max + step;
-  return value;
+/** Map domain value to slider position. undefined → dead zone position. */
+function toPosition(value: number | undefined, deadZonePosition: number): number {
+  return value ?? deadZonePosition;
 }
 
-function fromPosition(
-  position: number,
-  max: number,
-  step: number,
-  side: "reservation" | "limit",
-): number | undefined {
-  if (side === "reservation" && position === 0) return undefined;
-  if (side === "limit" && position >= max + step) return undefined;
-  return position;
+/** Map slider position back to domain value. Dead zone position → undefined. */
+function fromPosition(position: number, deadZonePosition: number): number | undefined {
+  return position === deadZonePosition ? undefined : position;
 }
 
 export function ResourceRangeSlider({
@@ -50,8 +38,8 @@ export function ResourceRangeSlider({
   formatLabel,
 }: ResourceRangeSliderProps) {
   const sliderMax = max + step;
-  const reservationPosition = toPosition(reservation, max, step, "reservation");
-  const limitPosition = toPosition(limit, max, step, "limit");
+  const reservationPosition = toPosition(reservation, 0);
+  const limitPosition = toPosition(limit, sliderMax);
 
   const ticks = useMemo(() => computeTicks(max, step, formatLabel), [max, step, formatLabel]);
 
@@ -64,8 +52,8 @@ export function ResourceRangeSlider({
 
   function handleSliderChange(positions: number[]) {
     onChange({
-      reservation: fromPosition(positions[0], max, step, "reservation"),
-      limit: fromPosition(positions[1], max, step, "limit"),
+      reservation: fromPosition(positions[0], 0),
+      limit: fromPosition(positions[1], sliderMax),
     });
   }
 
@@ -135,8 +123,8 @@ export function ResourceRangeSlider({
         >
           <SliderPrimitive.Control className="relative flex h-6 w-full touch-none items-center select-none">
             <SliderPrimitive.Track className="relative grow opacity-0 select-none data-horizontal:w-full" />
-            <SliderPrimitive.Thumb className={`${THUMB_BASE} ${THUMB_ACTIVE}`} />
-            <SliderPrimitive.Thumb className={`${THUMB_BASE} ${THUMB_ACTIVE}`} />
+            <SliderPrimitive.Thumb className={THUMB_CLASS} />
+            <SliderPrimitive.Thumb className={THUMB_CLASS} />
           </SliderPrimitive.Control>
         </SliderPrimitive.Root>
 

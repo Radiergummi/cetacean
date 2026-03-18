@@ -8,6 +8,9 @@ import { getErrorMessage } from "@/lib/utils";
 import { Pencil } from "lucide-react";
 import { useState } from "react";
 
+const formatCpuTick = (cores: number) => formatNumber(cores, 2);
+const formatMemoryTick = (megabytes: number) => formatBytes(megabytes * 1024 * 1024);
+
 export interface ServiceResourceShape {
   limits?: { nanoCPUs?: number; memoryBytes?: number; pids?: number };
   reservations?: { nanoCPUs?: number; memoryBytes?: number };
@@ -172,7 +175,7 @@ export function ResourcesEditor({
             onChange={setCpu}
             max={capacity.maxNodeCPU}
             step={0.25}
-            formatLabel={(cores) => formatNumber(cores, 2)}
+            formatLabel={formatCpuTick}
           />
           <ResourceRangeSlider
             label="Memory"
@@ -181,7 +184,7 @@ export function ResourcesEditor({
             onChange={setMemory}
             max={capacity.maxNodeMemory / (1024 * 1024)}
             step={16}
-            formatLabel={(megabytes) => formatBytes(megabytes * 1024 * 1024)}
+            formatLabel={formatMemoryTick}
           />
         </div>
       ) : (
