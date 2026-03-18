@@ -2,6 +2,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { NumberField } from "@base-ui/react/number-field";
 import { Minus, Plus } from "lucide-react";
+import { useState } from "react";
 
 interface SliderNumberFieldProps {
   value: number | undefined;
@@ -20,13 +21,31 @@ export function SliderNumberField({
   step,
   label,
 }: SliderNumberFieldProps) {
+  // Track the slider value separately so that clearing the number input
+  // (which sends undefined) doesn't snap the slider back to min.
+  const [sliderValue, setSliderValue] = useState(value ?? min);
+
+  function handleNumberChange(next: number | null) {
+    const resolved = next ?? undefined;
+    onChange(resolved);
+    if (resolved !== undefined) {
+      setSliderValue(resolved);
+    }
+  }
+
+  function handleSliderChange(next: number | readonly number[]) {
+    const resolved = Array.isArray(next) ? next[0] : next;
+    onChange(resolved);
+    setSliderValue(resolved);
+  }
+
   return (
     <div className="space-y-2">
       <Label className="text-xs text-muted-foreground">{label}</Label>
       <div className="flex items-center gap-3">
         <NumberField.Root
           value={value ?? null}
-          onValueChange={(val) => onChange(val ?? undefined)}
+          onValueChange={handleNumberChange}
           min={min}
           max={max}
           step={step}
@@ -43,11 +62,8 @@ export function SliderNumberField({
         </NumberField.Root>
         {max !== undefined && (
           <Slider
-            value={[value ?? min]}
-            onValueChange={(val) => {
-              const numbers = val as readonly number[];
-              onChange(numbers[0]);
-            }}
+            value={sliderValue}
+            onValueChange={handleSliderChange}
             min={min}
             max={max}
             step={step}

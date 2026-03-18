@@ -5,7 +5,7 @@ import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getErrorMessage } from "@/lib/utils";
-import { Pencil, Trash2, X } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 interface KeyValueEditorProps {
@@ -139,21 +139,21 @@ export function KeyValueEditor({
             keyFn={([key]) => key}
             renderRow={([key, value]) => (
               <>
-                <td className="p-3 font-mono text-xs">{key}</td>
-                <td className="p-3 font-mono text-xs break-all">{value}</td>
+                <td className="py-3 ps-3 font-mono text-xs">{key}</td>
+                <td className="py-3 ps-3 font-mono text-xs break-all">{value}</td>
               </>
             )}
           />
         )
       ) : (
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full min-w-max whitespace-nowrap">
               <thead className="sticky top-0 z-10 bg-background">
                 <tr className="border-b bg-muted/50">
-                  <th className="p-3 text-left text-sm font-medium">{keyLabel}</th>
-                  <th className="p-3 text-left text-sm font-medium">{valueLabel}</th>
-                  <th className="p-3" />
+                  <th className="py-3 ps-3 text-left text-sm font-medium">{keyLabel}</th>
+                  <th className="py-3 ps-3 text-left text-sm font-medium">{valueLabel}</th>
+                  <th className="py-3 ps-3 w-12" />
                 </tr>
               </thead>
               <tbody>
@@ -162,8 +162,8 @@ export function KeyValueEditor({
                     key={key}
                     className="border-b last:border-b-0"
                   >
-                    <td className="p-3 font-mono text-xs">{key}</td>
-                    <td className="p-2">
+                    <td className="py-3 ps-3 font-mono text-xs">{key}</td>
+                    <td className="py-1.5 ps-3">
                       <Input
                         value={value}
                         onChange={(event) =>
@@ -175,7 +175,7 @@ export function KeyValueEditor({
                         className="font-mono text-xs"
                       />
                     </td>
-                    <td className="p-2">
+                    <td className="py-1.5 ps-3">
                       <Button
                         variant="ghost"
                         size="icon-xs"
@@ -190,7 +190,7 @@ export function KeyValueEditor({
                 ))}
                 {adding && (
                   <tr>
-                    <td className="p-2">
+                    <td className="py-1.5 ps-3">
                       <Input
                         value={newKey}
                         onChange={(event) => setNewKey(event.target.value)}
@@ -199,7 +199,7 @@ export function KeyValueEditor({
                         autoFocus
                       />
                     </td>
-                    <td className="p-2">
+                    <td className="py-1.5 ps-3">
                       <Input
                         value={newValue}
                         onChange={(event) => setNewValue(event.target.value)}
@@ -245,7 +245,6 @@ export function KeyValueEditor({
                   onClick={cancelEdit}
                   disabled={saving}
                 >
-                  <X className="size-3" />
                   Cancel
                 </Button>
               </div>
