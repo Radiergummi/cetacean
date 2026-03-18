@@ -1,4 +1,4 @@
-import { getChartColor } from "../../lib/chartColors";
+import { getChartColor, getSemanticChartColor } from "../../lib/chartColors";
 import { formatMetricValue } from "../../lib/format";
 import {
   Chart as ChartJS,
@@ -57,9 +57,7 @@ function AllocationBar({ title, reserved, actual, limit, unit }: BarChartProps) 
         const xPixel = scales.x.getPixelForValue(lim);
         if (xPixel < chartArea.left || xPixel > chartArea.right) return;
         ctx.save();
-        ctx.strokeStyle =
-          getComputedStyle(document.documentElement).getPropertyValue("--destructive").trim() ||
-          "#ef4444";
+        ctx.strokeStyle = getSemanticChartColor("critical");
         ctx.lineWidth = 2;
         ctx.setLineDash([6, 4]);
         ctx.beginPath();
