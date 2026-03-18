@@ -1,6 +1,6 @@
+import { ResourceRangeSlider, computeTicks } from "./resource-range-slider";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { ResourceRangeSlider, computeTicks } from "./resource-range-slider";
 
 describe("ResourceRangeSlider", () => {
   const defaultProps = {
@@ -24,13 +24,23 @@ describe("ResourceRangeSlider", () => {
   });
 
   it("shows reservation input when reservation is set", () => {
-    render(<ResourceRangeSlider {...defaultProps} reservation={0.5} />);
+    render(
+      <ResourceRangeSlider
+        {...defaultProps}
+        reservation={0.5}
+      />,
+    );
     const input = screen.getAllByRole("textbox")[0];
     expect(input).toHaveValue("0.5");
   });
 
   it("shows limit input when limit is set", () => {
-    render(<ResourceRangeSlider {...defaultProps} limit={2} />);
+    render(
+      <ResourceRangeSlider
+        {...defaultProps}
+        limit={2}
+      />,
+    );
     const inputs = screen.getAllByRole("textbox");
     expect(inputs[inputs.length - 1]).toHaveValue("2");
   });

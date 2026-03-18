@@ -13,18 +13,35 @@ interface ResourceRangeSliderProps {
   step: number;
 }
 
-function toPosition(value: number | undefined, max: number, step: number, side: "reservation" | "limit"): number {
+function toPosition(
+  value: number | undefined,
+  max: number,
+  step: number,
+  side: "reservation" | "limit",
+): number {
   if (value === undefined) return side === "reservation" ? 0 : max + step;
   return value;
 }
 
-function fromPosition(position: number, max: number, step: number, side: "reservation" | "limit"): number | undefined {
+function fromPosition(
+  position: number,
+  max: number,
+  step: number,
+  side: "reservation" | "limit",
+): number | undefined {
   if (side === "reservation" && position === 0) return undefined;
   if (side === "limit" && position >= max + step) return undefined;
   return position;
 }
 
-export function ResourceRangeSlider({ label, reservation, limit, onChange, max, step }: ResourceRangeSliderProps) {
+export function ResourceRangeSlider({
+  label,
+  reservation,
+  limit,
+  onChange,
+  max,
+  step,
+}: ResourceRangeSliderProps) {
   const sliderMax = max + step; // extra position for ∞
   const reservationPosition = toPosition(reservation, max, step, "reservation");
   const limitPosition = toPosition(limit, max, step, "limit");
@@ -59,7 +76,8 @@ export function ResourceRangeSlider({ label, reservation, limit, onChange, max, 
     }
     const clamped = Math.max(step, Math.min(max, next));
     // Push reservation down if limit is below it
-    const newReservation = reservation !== undefined && clamped < reservation ? clamped : reservation;
+    const newReservation =
+      reservation !== undefined && clamped < reservation ? clamped : reservation;
     onChange({ reservation: newReservation, limit: clamped });
   }
 
@@ -67,7 +85,7 @@ export function ResourceRangeSlider({ label, reservation, limit, onChange, max, 
   const isLimitActive = limit !== undefined;
 
   return (
-    <div className="flex flex-col gap-1 w-full">
+    <div className="flex w-full flex-col gap-1">
       <Label className="text-xs text-muted-foreground">{label}</Label>
 
       {/* Slider with dead zones */}
@@ -80,7 +98,7 @@ export function ResourceRangeSlider({ label, reservation, limit, onChange, max, 
           step={step}
           className="data-horizontal:w-full"
         >
-          <SliderPrimitive.Control className="relative flex w-full touch-none items-center select-none h-6">
+          <SliderPrimitive.Control className="relative flex h-6 w-full touch-none items-center select-none">
             <SliderPrimitive.Track className="relative grow overflow-hidden rounded-full bg-transparent select-none data-horizontal:h-1.5 data-horizontal:w-full">
               {/* Dead zone left */}
               <div
@@ -99,7 +117,7 @@ export function ResourceRangeSlider({ label, reservation, limit, onChange, max, 
               />
               {/* Filled range indicator */}
               <SliderPrimitive.Indicator
-                className={`data-horizontal:h-full bg-primary ${!isReservationActive && !isLimitActive ? "opacity-20" : ""}`}
+                className={`bg-primary data-horizontal:h-full ${!isReservationActive && !isLimitActive ? "opacity-20" : ""}`}
               />
             </SliderPrimitive.Track>
             {/* Reservation thumb */}
@@ -122,11 +140,14 @@ export function ResourceRangeSlider({ label, reservation, limit, onChange, max, 
         </SliderPrimitive.Root>
 
         {/* Tick marks */}
-        <div className="relative h-3" style={{ marginLeft: `${deadZonePercent}%`, marginRight: `${deadZonePercent}%` }}>
+        <div
+          className="relative h-3"
+          style={{ marginLeft: `${deadZonePercent}%`, marginRight: `${deadZonePercent}%` }}
+        >
           {ticks.map((tick) => (
             <div
               key={tick.value}
-              className="absolute top-0 flex flex-col items-center -translate-x-1/2"
+              className="absolute top-0 flex -translate-x-1/2 flex-col items-center"
               style={{ left: `${((tick.value - step) / (max - step)) * 100}%` }}
             >
               <div className={`w-px bg-muted-foreground/40 ${tick.tall ? "h-2.5" : "h-1.5"}`} />
@@ -138,7 +159,9 @@ export function ResourceRangeSlider({ label, reservation, limit, onChange, max, 
       {/* Number inputs: reservation left, limit right */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Reserved</span>
+          <span className="text-[10px] tracking-wide text-muted-foreground uppercase">
+            Reserved
+          </span>
           {isReservationActive ? (
             <NumberField.Root
               value={reservation}
@@ -158,7 +181,9 @@ export function ResourceRangeSlider({ label, reservation, limit, onChange, max, 
               </NumberField.Group>
             </NumberField.Root>
           ) : (
-            <span className="inline-flex size-6 items-center justify-center rounded-md border text-xs text-muted-foreground">&mdash;</span>
+            <span className="inline-flex size-6 items-center justify-center rounded-md border text-xs text-muted-foreground">
+              &mdash;
+            </span>
           )}
         </div>
         <div className="flex items-center gap-1.5">
@@ -181,9 +206,11 @@ export function ResourceRangeSlider({ label, reservation, limit, onChange, max, 
               </NumberField.Group>
             </NumberField.Root>
           ) : (
-            <span className="inline-flex size-6 items-center justify-center rounded-md border text-xs text-muted-foreground">&mdash;</span>
+            <span className="inline-flex size-6 items-center justify-center rounded-md border text-xs text-muted-foreground">
+              &mdash;
+            </span>
           )}
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Limit</span>
+          <span className="text-[10px] tracking-wide text-muted-foreground uppercase">Limit</span>
         </div>
       </div>
     </div>
