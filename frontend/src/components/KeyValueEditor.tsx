@@ -185,44 +185,41 @@ export function KeyValueEditor({
                     </td>
                   </tr>
                 ))}
-                <tr>
-                  <td className="p-2">
-                    <Input
-                      value={newKey}
-                      onChange={(event) => setNewKey(event.target.value)}
-                      placeholder={keyPlaceholder}
-                      className="font-mono text-xs"
-                    />
-                  </td>
-                  <td className="p-2">
-                    <Input
-                      value={newValue}
-                      onChange={(event) => setNewValue(event.target.value)}
-                      placeholder={valuePlaceholder}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") addRow();
-                      }}
-                      className="font-mono text-xs"
-                    />
-                  </td>
-                  <td className="p-2">
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={addRow}
-                      disabled={!newKey.trim()}
-                      title="Add"
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      <Plus className="size-3.5" />
-                    </Button>
-                  </td>
-                </tr>
               </tbody>
             </table>
           </div>
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <Input
+                value={newKey}
+                onChange={(event) => setNewKey(event.target.value)}
+                placeholder={keyPlaceholder}
+                className="font-mono text-xs"
+              />
+            </div>
+            <div className="flex-1">
+              <Input
+                value={newValue}
+                onChange={(event) => setNewValue(event.target.value)}
+                placeholder={valuePlaceholder}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") addRow();
+                }}
+                className="font-mono text-xs"
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={addRow}
+              disabled={!newKey.trim()}
+            >
+              <Plus className="size-3.5" />
+              Add another
+            </Button>
+          </div>
           {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
-          <div className="flex gap-2">
+          <div className="flex justify-end gap-2">
             <Button
               size="sm"
               onClick={() => void save()}
