@@ -1,12 +1,12 @@
-import { NumberField } from "@base-ui/react/number-field";
-import { Minus, Pencil, Plus } from "lucide-react";
-import { useState } from "react";
 import { api } from "../../api/client";
 import type { Service, Task } from "../../api/types";
 import InfoCard from "../InfoCard";
 import { Spinner } from "../Spinner";
 import { Button } from "../ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { NumberField } from "@base-ui/react/number-field";
+import { Minus, Pencil, Plus } from "lucide-react";
+import { useState } from "react";
 
 function ReplicaDoughnut({ running, desired }: { running: number; desired: number }) {
   const size = 50;
@@ -149,15 +149,26 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
           desired={desired}
         />
       )}
-      <Popover open={scaleOpen} onOpenChange={handleOpenChange} modal>
+      <Popover
+        open={scaleOpen}
+        onOpenChange={handleOpenChange}
+        modal
+      >
         <PopoverTrigger
           render={
-            <Button variant="ghost" size="icon-xs" title="Scale service">
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              title="Scale service"
+            >
               <Pencil className="size-3.5" />
             </Button>
           }
         />
-        <PopoverContent className="w-52" align="end">
+        <PopoverContent
+          className="w-52"
+          align="end"
+        >
           <p className="mb-2 text-xs font-medium text-muted-foreground">Scale replicas</p>
           <NumberField.Root
             value={scaleValue}
@@ -179,11 +190,22 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
             <p className="mb-2 text-xs text-red-600 dark:text-red-400">{scaleError}</p>
           )}
           <div className="flex gap-2">
-            <Button size="sm" className="flex-1" onClick={() => void submitScale()} disabled={scaleLoading}>
+            <Button
+              size="sm"
+              className="flex-1"
+              onClick={() => void submitScale()}
+              disabled={scaleLoading}
+            >
               {scaleLoading && <Spinner className="size-3" />}
               Scale
             </Button>
-            <Button variant="outline" size="sm" className="flex-1" onClick={cancelScale} disabled={scaleLoading}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              onClick={cancelScale}
+              disabled={scaleLoading}
+            >
               Cancel
             </Button>
           </div>

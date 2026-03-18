@@ -43,13 +43,9 @@ export function DeploymentChanges({
                 </span>
               </>
             ) : old ? (
-              <span className="font-mono text-xs text-red-600 dark:text-red-400">
-                {old}
-              </span>
+              <span className="font-mono text-xs text-red-600 dark:text-red-400">{old}</span>
             ) : (
-              <span className="font-mono text-xs text-green-600 dark:text-green-400">
-                {change}
-              </span>
+              <span className="font-mono text-xs text-green-600 dark:text-green-400">{change}</span>
             )}
           </div>
         ))}

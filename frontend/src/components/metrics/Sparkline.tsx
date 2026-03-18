@@ -5,9 +5,14 @@ interface Props {
   className?: string;
 }
 
-export default function Sparkline({data, width = 80, height = 24, className = "text-chart-1"}: Props) {
+export default function Sparkline({
+  data,
+  width = 80,
+  height = 24,
+  className = "text-chart-1",
+}: Props) {
   if (data.length < 2) {
-    return <div style={{width, height}} />;
+    return <div style={{ width, height }} />;
   }
 
   const min = Math.min(...data);

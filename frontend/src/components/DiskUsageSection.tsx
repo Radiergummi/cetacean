@@ -273,15 +273,9 @@ function DiskUsageTable({ data }: { data: DiskUsageSummary[] }) {
                       {meta?.label ?? type}
                     </span>
                   </td>
-                  <td className="p-3 text-right tabular-nums">
-                    {count}
-                  </td>
-                  <td className="p-3 text-right tabular-nums">
-                    {active}
-                  </td>
-                  <td className="p-3 text-right tabular-nums">
-                    {formatBytes(totalSize)}
-                  </td>
+                  <td className="p-3 text-right tabular-nums">{count}</td>
+                  <td className="p-3 text-right tabular-nums">{active}</td>
+                  <td className="p-3 text-right tabular-nums">{formatBytes(totalSize)}</td>
                   <td className="p-3 text-right text-muted-foreground tabular-nums">
                     {reclaimableCell(reclaimable, totalSize)}
                   </td>
@@ -295,9 +289,7 @@ function DiskUsageTable({ data }: { data: DiskUsageSummary[] }) {
                 <td className="p-3 font-medium">Total</td>
                 <td className="p-3" />
                 <td className="p-3" />
-                <td className="p-3 text-right font-medium tabular-nums">
-                  {formatBytes(total)}
-                </td>
+                <td className="p-3 text-right font-medium tabular-nums">{formatBytes(total)}</td>
                 <td className="p-3 text-right font-medium text-muted-foreground tabular-nums">
                   {reclaimableCell(reclaimable, total)}
                 </td>

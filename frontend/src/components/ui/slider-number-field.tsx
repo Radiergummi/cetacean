@@ -1,6 +1,6 @@
-import { NumberField } from "@base-ui/react/number-field";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import { NumberField } from "@base-ui/react/number-field";
 import { Minus, Plus } from "lucide-react";
 
 interface SliderNumberFieldProps {

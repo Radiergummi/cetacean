@@ -10,7 +10,12 @@ import { MetricsPanel, ResourceGauge } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import { Spinner } from "../components/Spinner";
 import TaskStatusBadge from "../components/TaskStatusBadge";
-import { Button } from "@/components/ui/button";
+import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { useResourceStream } from "../hooks/useResourceStream";
+import { useTaskMetrics } from "../hooks/useTaskMetrics";
+import { getSemanticChartColor } from "../lib/chartColors";
+import { formatBytes, formatPercentage } from "../lib/format";
+import { escapePromQL } from "../lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,12 +27,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
-import { useResourceStream } from "../hooks/useResourceStream";
-import { useTaskMetrics } from "../hooks/useTaskMetrics";
-import { getSemanticChartColor } from "../lib/chartColors";
-import { formatBytes, formatPercentage } from "../lib/format";
-import { escapePromQL } from "../lib/utils";
+import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -110,11 +110,21 @@ export default function TaskDetail() {
         ]}
         actions={
           <>
-            <AlertDialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
+            <AlertDialog
+              open={removeDialogOpen}
+              onOpenChange={setRemoveDialogOpen}
+            >
               <AlertDialogTrigger
                 render={
-                  <Button variant="destructive" size="sm">
-                    {removeLoading ? <Spinner className="size-3" /> : <Trash2 className="size-3.5" />}
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                  >
+                    {removeLoading ? (
+                      <Spinner className="size-3" />
+                    ) : (
+                      <Trash2 className="size-3.5" />
+                    )}
                     Remove
                   </Button>
                 }
@@ -123,14 +133,15 @@ export default function TaskDetail() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Force-remove this task?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will kill the backing container. The service scheduler will start a replacement.
+                    This will kill the backing container. The service scheduler will start a
+                    replacement.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={() => void executeRemove()}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    className="text-destructive-foreground bg-destructive hover:bg-destructive/90"
                   >
                     Remove
                   </AlertDialogAction>

@@ -11,6 +11,12 @@ import { LoadingDetail } from "../components/LoadingSkeleton";
 import { MetricsPanel, NodeResourceGauges } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import TasksTable from "../components/TasksTable";
+import { useInstanceResolver } from "../hooks/useInstanceResolver";
+import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { useResourceStream } from "../hooks/useResourceStream";
+import { useTaskMetrics } from "../hooks/useTaskMetrics";
+import { formatBytes, formatNumber } from "../lib/format";
+import { escapePromQL } from "../lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,12 +34,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useInstanceResolver } from "../hooks/useInstanceResolver";
-import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
-import { useResourceStream } from "../hooks/useResourceStream";
-import { useTaskMetrics } from "../hooks/useTaskMetrics";
-import { formatBytes, formatNumber } from "../lib/format";
-import { escapePromQL } from "../lib/utils";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
@@ -97,7 +97,11 @@ function NodeAvailabilityControl({ nodeId, current }: { nodeId: string; current:
 
   return (
     <div className="flex flex-col items-start gap-1">
-      <Select value={current} onValueChange={handleValueChange} disabled={loading}>
+      <Select
+        value={current}
+        onValueChange={handleValueChange}
+        disabled={loading}
+      >
         <SelectTrigger className="w-32">
           <SelectValue />
         </SelectTrigger>
@@ -108,7 +112,10 @@ function NodeAvailabilityControl({ nodeId, current }: { nodeId: string; current:
         </SelectContent>
       </Select>
       {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
-      <AlertDialog open={drainPending} onOpenChange={setDrainPending}>
+      <AlertDialog
+        open={drainPending}
+        onOpenChange={setDrainPending}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Drain this node?</AlertDialogTitle>

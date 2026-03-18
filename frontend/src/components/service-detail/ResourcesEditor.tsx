@@ -35,25 +35,22 @@ export function ResourcesEditor({
   const [capacity, setCapacity] = useState<ClusterCapacity | null>(null);
 
   function openEdit() {
-    setLimitCpuCores(
-      typed.limits?.nanoCPUs != null ? String(typed.limits.nanoCPUs / 1e9) : "",
-    );
+    setLimitCpuCores(typed.limits?.nanoCPUs != null ? String(typed.limits.nanoCPUs / 1e9) : "");
     setLimitMemoryMegabytes(
-      typed.limits?.memoryBytes != null
-        ? String(typed.limits.memoryBytes / (1024 * 1024))
-        : "",
+      typed.limits?.memoryBytes != null ? String(typed.limits.memoryBytes / (1024 * 1024)) : "",
     );
     setReservedCpuCores(
-      typed.reservations?.nanoCPUs != null
-        ? String(typed.reservations.nanoCPUs / 1e9)
-        : "",
+      typed.reservations?.nanoCPUs != null ? String(typed.reservations.nanoCPUs / 1e9) : "",
     );
     setReservedMemoryMegabytes(
       typed.reservations?.memoryBytes != null
         ? String(typed.reservations.memoryBytes / (1024 * 1024))
         : "",
     );
-    api.clusterCapacity().then(setCapacity).catch(() => {});
+    api
+      .clusterCapacity()
+      .then(setCapacity)
+      .catch(() => {});
     setSaveError(null);
     setEditing(true);
   }
@@ -105,7 +102,11 @@ export function ResourcesEditor({
     typed.reservations?.memoryBytes;
 
   const controls = !editing ? (
-    <Button variant="outline" size="xs" onClick={openEdit}>
+    <Button
+      variant="outline"
+      size="xs"
+      onClick={openEdit}
+    >
       <Pencil className="size-3" />
       Edit
     </Button>
@@ -196,11 +197,20 @@ export function ResourcesEditor({
           </div>
           {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
           <div className="flex gap-2">
-            <Button size="xs" onClick={() => void save()} disabled={saving}>
+            <Button
+              size="xs"
+              onClick={() => void save()}
+              disabled={saving}
+            >
               {saving && <Spinner className="size-3" />}
               Save
             </Button>
-            <Button variant="outline" size="xs" onClick={cancelEdit} disabled={saving}>
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={cancelEdit}
+              disabled={saving}
+            >
               <X className="size-3" />
               Cancel
             </Button>

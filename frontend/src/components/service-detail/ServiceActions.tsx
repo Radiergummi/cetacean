@@ -95,10 +95,17 @@ export function ServiceActions({ service, serviceId }: { service: Service; servi
   return (
     <div className="flex flex-wrap items-center gap-2">
       {/* Update Image */}
-      <Popover open={imageOpen} onOpenChange={handleImageOpenChange} modal>
+      <Popover
+        open={imageOpen}
+        onOpenChange={handleImageOpenChange}
+        modal
+      >
         <PopoverTrigger
           render={
-            <Button variant="outline" size="sm">
+            <Button
+              variant="outline"
+              size="sm"
+            >
               <ImageIcon className="size-3.5" />
               Update Image
             </Button>
@@ -179,15 +186,11 @@ export function ServiceActions({ service, serviceId }: { service: Service; servi
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={() => void executeRollback()}>
-                Rollback
-              </AlertDialogAction>
+              <AlertDialogAction onClick={() => void executeRollback()}>Rollback</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-        {rollbackError && (
-          <p className="text-xs text-red-600 dark:text-red-400">{rollbackError}</p>
-        )}
+        {rollbackError && <p className="text-xs text-red-600 dark:text-red-400">{rollbackError}</p>}
       </div>
 
       {/* Restart */}
@@ -195,7 +198,11 @@ export function ServiceActions({ service, serviceId }: { service: Service; servi
         <AlertDialog>
           <AlertDialogTrigger
             render={
-              <Button variant="outline" size="sm" disabled={restartLoading}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={restartLoading}
+              >
                 {restartLoading ? (
                   <Spinner className="size-3" />
                 ) : (
@@ -214,15 +221,11 @@ export function ServiceActions({ service, serviceId }: { service: Service; servi
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={() => void executeRestart()}>
-                Restart
-              </AlertDialogAction>
+              <AlertDialogAction onClick={() => void executeRestart()}>Restart</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-        {restartError && (
-          <p className="text-xs text-red-600 dark:text-red-400">{restartError}</p>
-        )}
+        {restartError && <p className="text-xs text-red-600 dark:text-red-400">{restartError}</p>}
       </div>
     </div>
   );

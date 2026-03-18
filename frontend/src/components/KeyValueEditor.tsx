@@ -69,9 +69,7 @@ export function KeyValueEditor({
 
   async function save() {
     const ops: PatchOp[] = [];
-    const effectiveDraft = newKey.trim()
-      ? { ...draft, [newKey.trim()]: newValue }
-      : draft;
+    const effectiveDraft = newKey.trim() ? { ...draft, [newKey.trim()]: newValue } : draft;
 
     for (const key of Object.keys(entries)) {
       if (!(key in effectiveDraft)) {
@@ -101,15 +99,15 @@ export function KeyValueEditor({
     }
   }
 
-  const sortedEntries = Object.entries(entries).sort(([a], [b]) =>
-    a.localeCompare(b),
-  );
-  const draftEntries = Object.entries(draft).sort(([a], [b]) =>
-    a.localeCompare(b),
-  );
+  const sortedEntries = Object.entries(entries).sort(([a], [b]) => a.localeCompare(b));
+  const draftEntries = Object.entries(draft).sort(([a], [b]) => a.localeCompare(b));
 
   const controls = !editing ? (
-    <Button variant="outline" size="xs" onClick={openEdit}>
+    <Button
+      variant="outline"
+      size="xs"
+      onClick={openEdit}
+    >
       <Pencil className="size-3" />
       Edit
     </Button>
@@ -123,9 +121,7 @@ export function KeyValueEditor({
     >
       {!editing ? (
         sortedEntries.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No {title.toLowerCase()}.
-          </p>
+          <p className="text-sm text-muted-foreground">No {title.toLowerCase()}.</p>
         ) : (
           <SimpleTable
             columns={[keyLabel, valueLabel]}
@@ -145,18 +141,17 @@ export function KeyValueEditor({
             <table className="w-full min-w-max whitespace-nowrap">
               <thead className="sticky top-0 z-10 bg-background">
                 <tr className="border-b bg-muted/50">
-                  <th className="p-3 text-left text-sm font-medium">
-                    {keyLabel}
-                  </th>
-                  <th className="p-3 text-left text-sm font-medium">
-                    {valueLabel}
-                  </th>
+                  <th className="p-3 text-left text-sm font-medium">{keyLabel}</th>
+                  <th className="p-3 text-left text-sm font-medium">{valueLabel}</th>
                   <th className="p-3" />
                 </tr>
               </thead>
               <tbody>
                 {draftEntries.map(([key, value]) => (
-                  <tr key={key} className="border-b last:border-b-0">
+                  <tr
+                    key={key}
+                    className="border-b last:border-b-0"
+                  >
                     <td className="p-3 font-mono text-xs">{key}</td>
                     <td className="p-2">
                       <Input
@@ -219,11 +214,7 @@ export function KeyValueEditor({
               </tbody>
             </table>
           </div>
-          {saveError && (
-            <p className="text-xs text-red-600 dark:text-red-400">
-              {saveError}
-            </p>
-          )}
+          {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
           <div className="flex gap-2">
             <Button
               size="sm"
