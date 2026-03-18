@@ -1,10 +1,10 @@
-import CollapsibleSection from "../CollapsibleSection";
-import { Spinner } from "../Spinner";
 import { api } from "@/api/client";
 import type { ClusterCapacity } from "@/api/types";
+import CollapsibleSection from "@/components/CollapsibleSection";
+import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { SliderNumberField } from "@/components/ui/slider-number-field";
-import { formatBytes, formatCores } from "@/lib/format.ts";
+import { formatBytes, formatCores } from "@/lib/format";
 import { Pencil, X } from "lucide-react";
 import { useState } from "react";
 
@@ -28,24 +28,24 @@ export function ResourcesEditor({
 
   const typed = resources as ServiceResourceShape;
 
-  const [limitCpuCores, setLimitCpuCores] = useState("");
-  const [limitMemoryMegabytes, setLimitMemoryMegabytes] = useState("");
-  const [reservedCpuCores, setReservedCpuCores] = useState("");
-  const [reservedMemoryMegabytes, setReservedMemoryMegabytes] = useState("");
+  const [limitCpuCores, setLimitCpuCores] = useState<number | undefined>();
+  const [limitMemoryMegabytes, setLimitMemoryMegabytes] = useState<number | undefined>();
+  const [reservedCpuCores, setReservedCpuCores] = useState<number | undefined>();
+  const [reservedMemoryMegabytes, setReservedMemoryMegabytes] = useState<number | undefined>();
   const [capacity, setCapacity] = useState<ClusterCapacity | null>(null);
 
   function openEdit() {
-    setLimitCpuCores(typed.limits?.nanoCPUs != null ? String(typed.limits.nanoCPUs / 1e9) : "");
+    setLimitCpuCores(typed.limits?.nanoCPUs != null ? typed.limits.nanoCPUs / 1e9 : undefined);
     setLimitMemoryMegabytes(
-      typed.limits?.memoryBytes != null ? String(typed.limits.memoryBytes / (1024 * 1024)) : "",
+      typed.limits?.memoryBytes != null ? typed.limits.memoryBytes / (1024 * 1024) : undefined,
     );
     setReservedCpuCores(
-      typed.reservations?.nanoCPUs != null ? String(typed.reservations.nanoCPUs / 1e9) : "",
+      typed.reservations?.nanoCPUs != null ? typed.reservations.nanoCPUs / 1e9 : undefined,
     );
     setReservedMemoryMegabytes(
       typed.reservations?.memoryBytes != null
-        ? String(typed.reservations.memoryBytes / (1024 * 1024))
-        : "",
+        ? typed.reservations.memoryBytes / (1024 * 1024)
+        : undefined,
     );
     api
       .clusterCapacity()
@@ -62,24 +62,22 @@ export function ResourcesEditor({
 
   async function save() {
     const patch: ServiceResourceShape = {};
-    if (limitCpuCores || limitMemoryMegabytes) {
+    if (limitCpuCores !== undefined || limitMemoryMegabytes !== undefined) {
       patch.limits = {};
-      if (limitCpuCores) {
-        patch.limits.nanoCPUs = Math.round(parseFloat(limitCpuCores) * 1e9);
+      if (limitCpuCores !== undefined) {
+        patch.limits.nanoCPUs = Math.round(limitCpuCores * 1e9);
       }
-      if (limitMemoryMegabytes) {
-        patch.limits.memoryBytes = Math.round(parseFloat(limitMemoryMegabytes) * 1024 * 1024);
+      if (limitMemoryMegabytes !== undefined) {
+        patch.limits.memoryBytes = Math.round(limitMemoryMegabytes * 1024 * 1024);
       }
     }
-    if (reservedCpuCores || reservedMemoryMegabytes) {
+    if (reservedCpuCores !== undefined || reservedMemoryMegabytes !== undefined) {
       patch.reservations = {};
-      if (reservedCpuCores) {
-        patch.reservations.nanoCPUs = Math.round(parseFloat(reservedCpuCores) * 1e9);
+      if (reservedCpuCores !== undefined) {
+        patch.reservations.nanoCPUs = Math.round(reservedCpuCores * 1e9);
       }
-      if (reservedMemoryMegabytes) {
-        patch.reservations.memoryBytes = Math.round(
-          parseFloat(reservedMemoryMegabytes) * 1024 * 1024,
-        );
+      if (reservedMemoryMegabytes !== undefined) {
+        patch.reservations.memoryBytes = Math.round(reservedMemoryMegabytes * 1024 * 1024);
       }
     }
     setSaving(true);
@@ -156,18 +154,16 @@ export function ResourcesEditor({
               <h4 className="text-xs font-medium text-muted-foreground uppercase">Limits</h4>
               <SliderNumberField
                 label="CPU (cores)"
-                value={limitCpuCores ? parseFloat(limitCpuCores) : undefined}
-                onChange={(value) => setLimitCpuCores(value !== undefined ? String(value) : "")}
+                value={limitCpuCores}
+                onChange={setLimitCpuCores}
                 min={0}
                 max={capacity?.maxNodeCPU}
                 step={0.25}
               />
               <SliderNumberField
                 label="Memory (MB)"
-                value={limitMemoryMegabytes ? parseFloat(limitMemoryMegabytes) : undefined}
-                onChange={(value) =>
-                  setLimitMemoryMegabytes(value !== undefined ? String(value) : "")
-                }
+                value={limitMemoryMegabytes}
+                onChange={setLimitMemoryMegabytes}
                 min={0}
                 max={capacity ? capacity.maxNodeMemory / (1024 * 1024) : undefined}
                 step={16}
@@ -177,18 +173,16 @@ export function ResourcesEditor({
               <h4 className="text-xs font-medium text-muted-foreground uppercase">Reservations</h4>
               <SliderNumberField
                 label="CPU (cores)"
-                value={reservedCpuCores ? parseFloat(reservedCpuCores) : undefined}
-                onChange={(value) => setReservedCpuCores(value !== undefined ? String(value) : "")}
+                value={reservedCpuCores}
+                onChange={setReservedCpuCores}
                 min={0}
                 max={capacity?.maxNodeCPU}
                 step={0.25}
               />
               <SliderNumberField
                 label="Memory (MB)"
-                value={reservedMemoryMegabytes ? parseFloat(reservedMemoryMegabytes) : undefined}
-                onChange={(value) =>
-                  setReservedMemoryMegabytes(value !== undefined ? String(value) : "")
-                }
+                value={reservedMemoryMegabytes}
+                onChange={setReservedMemoryMegabytes}
                 min={0}
                 max={capacity ? capacity.maxNodeMemory / (1024 * 1024) : undefined}
                 step={16}

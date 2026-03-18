@@ -1,6 +1,6 @@
-import { api } from "../../api/client";
-import type { Service } from "../../api/types";
-import { Spinner } from "../Spinner";
+import { api } from "@/api/client";
+import type { Service } from "@/api/types";
+import { Spinner } from "@/components/Spinner";
 import {
   AlertDialog,
   AlertDialogAction,

@@ -10,7 +10,6 @@ interface SliderNumberFieldProps {
   max?: number;
   step?: number;
   label: string;
-  formatDisplay?: (value: number) => string;
 }
 
 export function SliderNumberField({

@@ -1,11 +1,11 @@
-import { api } from "../../api/client";
-import type { Service, Task } from "../../api/types";
-import InfoCard from "../InfoCard";
-import { Spinner } from "../Spinner";
-import { Button } from "../ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
-import { NumberField } from "@base-ui/react/number-field";
-import { Minus, Pencil, Plus } from "lucide-react";
+import { api } from "@/api/client";
+import type { Service, Task } from "@/api/types";
+import InfoCard from "@/components/InfoCard";
+import { Spinner } from "@/components/Spinner";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { SliderNumberField } from "@/components/ui/slider-number-field";
+import { Pencil } from "lucide-react";
 import { useState } from "react";
 
 function ReplicaDoughnut({ running, desired }: { running: number; desired: number }) {
@@ -76,7 +76,7 @@ function ReplicaDoughnut({ running, desired }: { running: number; desired: numbe
 
 export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[] }) {
   const [scaleOpen, setScaleOpen] = useState(false);
-  const [scaleValue, setScaleValue] = useState<number | null>(0);
+  const [scaleValue, setScaleValue] = useState<number | undefined>(0);
   const [scaleLoading, setScaleLoading] = useState(false);
   const [scaleError, setScaleError] = useState<string | null>(null);
 
@@ -110,7 +110,7 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
   }
 
   async function submitScale() {
-    if (scaleValue === null || scaleValue < 0) {
+    if (scaleValue === undefined || scaleValue < 0) {
       setScaleError("Enter a valid replica count");
       return;
     }
@@ -169,23 +169,13 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
           className="w-52"
           align="end"
         >
-          <p className="mb-2 text-xs font-medium text-muted-foreground">Scale replicas</p>
-          <NumberField.Root
+          <SliderNumberField
+            label="Scale replicas"
             value={scaleValue}
-            onValueChange={(value) => setScaleValue(value)}
+            onChange={setScaleValue}
             min={0}
             step={1}
-          >
-            <NumberField.Group className="mb-2 flex items-center rounded-md border">
-              <NumberField.Decrement className="flex size-8 items-center justify-center border-r text-muted-foreground hover:bg-accent disabled:opacity-50">
-                <Minus className="size-3" />
-              </NumberField.Decrement>
-              <NumberField.Input className="w-full bg-transparent px-2 py-1 text-center font-mono text-sm focus:outline-none" />
-              <NumberField.Increment className="flex size-8 items-center justify-center border-l text-muted-foreground hover:bg-accent disabled:opacity-50">
-                <Plus className="size-3" />
-              </NumberField.Increment>
-            </NumberField.Group>
-          </NumberField.Root>
+          />
           {scaleError && (
             <p className="mb-2 text-xs text-red-600 dark:text-red-400">{scaleError}</p>
           )}
