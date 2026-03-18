@@ -97,16 +97,9 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
   function handleOpenChange(open: boolean) {
     if (open) {
       setScaleValue(desired);
-      setScaleError(null);
-    } else {
-      setScaleError(null);
     }
-    setScaleOpen(open);
-  }
-
-  function cancelScale() {
-    setScaleOpen(false);
     setScaleError(null);
+    setScaleOpen(open);
   }
 
   async function submitScale() {
@@ -193,7 +186,7 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
               variant="outline"
               size="sm"
               className="flex-1"
-              onClick={cancelScale}
+              onClick={() => handleOpenChange(false)}
               disabled={scaleLoading}
             >
               Cancel

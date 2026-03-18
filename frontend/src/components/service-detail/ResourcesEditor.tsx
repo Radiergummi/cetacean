@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button";
 import { SliderNumberField } from "@/components/ui/slider-number-field";
 import { formatBytes, formatCores } from "@/lib/format";
 import { Pencil, X } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
-interface ServiceResourceShape {
+export interface ServiceResourceShape {
   limits?: { nanoCPUs?: number; memoryBytes?: number; pids?: number };
   reservations?: { nanoCPUs?: number; memoryBytes?: number };
 }
@@ -19,38 +19,44 @@ export function ResourcesEditor({
   onSaved,
 }: {
   serviceId: string;
-  resources: Record<string, unknown>;
+  resources: ServiceResourceShape;
   onSaved: (updated: Record<string, unknown>) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const typed = resources as ServiceResourceShape;
-
   const [limitCpuCores, setLimitCpuCores] = useState<number | undefined>();
   const [limitMemoryMegabytes, setLimitMemoryMegabytes] = useState<number | undefined>();
   const [reservedCpuCores, setReservedCpuCores] = useState<number | undefined>();
   const [reservedMemoryMegabytes, setReservedMemoryMegabytes] = useState<number | undefined>();
   const [capacity, setCapacity] = useState<ClusterCapacity | null>(null);
+  const capacityFetched = useRef(false);
 
   function openEdit() {
-    setLimitCpuCores(typed.limits?.nanoCPUs != null ? typed.limits.nanoCPUs / 1e9 : undefined);
+    setLimitCpuCores(
+      resources.limits?.nanoCPUs != null ? resources.limits.nanoCPUs / 1e9 : undefined,
+    );
     setLimitMemoryMegabytes(
-      typed.limits?.memoryBytes != null ? typed.limits.memoryBytes / (1024 * 1024) : undefined,
-    );
-    setReservedCpuCores(
-      typed.reservations?.nanoCPUs != null ? typed.reservations.nanoCPUs / 1e9 : undefined,
-    );
-    setReservedMemoryMegabytes(
-      typed.reservations?.memoryBytes != null
-        ? typed.reservations.memoryBytes / (1024 * 1024)
+      resources.limits?.memoryBytes != null
+        ? resources.limits.memoryBytes / (1024 * 1024)
         : undefined,
     );
-    api
-      .clusterCapacity()
-      .then(setCapacity)
-      .catch(() => {});
+    setReservedCpuCores(
+      resources.reservations?.nanoCPUs != null ? resources.reservations.nanoCPUs / 1e9 : undefined,
+    );
+    setReservedMemoryMegabytes(
+      resources.reservations?.memoryBytes != null
+        ? resources.reservations.memoryBytes / (1024 * 1024)
+        : undefined,
+    );
+    if (!capacityFetched.current) {
+      capacityFetched.current = true;
+      api
+        .clusterCapacity()
+        .then(setCapacity)
+        .catch(() => {});
+    }
     setSaveError(null);
     setEditing(true);
   }
@@ -94,10 +100,10 @@ export function ResourcesEditor({
   }
 
   const hasResources =
-    typed.limits?.nanoCPUs ||
-    typed.limits?.memoryBytes ||
-    typed.reservations?.nanoCPUs ||
-    typed.reservations?.memoryBytes;
+    resources.limits?.nanoCPUs ||
+    resources.limits?.memoryBytes ||
+    resources.reservations?.nanoCPUs ||
+    resources.reservations?.memoryBytes;
 
   const controls = !editing ? (
     <Button
@@ -121,28 +127,30 @@ export function ResourcesEditor({
           <p className="text-sm text-muted-foreground">No resource limits configured.</p>
         ) : (
           <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-            {typed.limits?.nanoCPUs != null && (
+            {resources.limits?.nanoCPUs != null && (
               <div>
                 <div className="text-xs text-muted-foreground">CPU Limit</div>
-                <div className="font-mono">{formatCores(typed.limits.nanoCPUs / 1e9)}</div>
+                <div className="font-mono">{formatCores(resources.limits.nanoCPUs / 1e9)}</div>
               </div>
             )}
-            {typed.limits?.memoryBytes != null && (
+            {resources.limits?.memoryBytes != null && (
               <div>
                 <div className="text-xs text-muted-foreground">Memory Limit</div>
-                <div className="font-mono">{formatBytes(typed.limits.memoryBytes)}</div>
+                <div className="font-mono">{formatBytes(resources.limits.memoryBytes)}</div>
               </div>
             )}
-            {typed.reservations?.nanoCPUs != null && (
+            {resources.reservations?.nanoCPUs != null && (
               <div>
                 <div className="text-xs text-muted-foreground">CPU Reserved</div>
-                <div className="font-mono">{formatCores(typed.reservations.nanoCPUs / 1e9)}</div>
+                <div className="font-mono">
+                  {formatCores(resources.reservations.nanoCPUs / 1e9)}
+                </div>
               </div>
             )}
-            {typed.reservations?.memoryBytes != null && (
+            {resources.reservations?.memoryBytes != null && (
               <div>
                 <div className="text-xs text-muted-foreground">Memory Reserved</div>
-                <div className="font-mono">{formatBytes(typed.reservations.memoryBytes)}</div>
+                <div className="font-mono">{formatBytes(resources.reservations.memoryBytes)}</div>
               </div>
             )}
           </div>

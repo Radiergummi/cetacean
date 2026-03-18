@@ -18,6 +18,7 @@ import {
   ReplicaCard,
   ResourcesEditor,
   ServiceActions,
+  type ServiceResourceShape,
 } from "../components/service-detail";
 import SimpleTable from "../components/SimpleTable";
 import TasksTable from "../components/TasksTable";
@@ -38,7 +39,7 @@ export default function ServiceDetail() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [envVars, setEnvVars] = useState<Record<string, string> | null>(null);
-  const [serviceResources, setServiceResources] = useState<Record<string, unknown> | null>(null);
+  const [serviceResources, setServiceResources] = useState<ServiceResourceShape | null>(null);
   const monitoring = useMonitoringStatus();
   const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
   const hasCadvisor = !!monitoring?.cadvisor?.targets;

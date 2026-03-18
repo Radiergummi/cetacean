@@ -42,25 +42,26 @@ export default function TaskDetail() {
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
 
-  const fetchData = useCallback(() => {
-    if (!id) {
-      return;
-    }
+  const fetchTask = useCallback(() => {
+    if (!id) return;
     api
       .task(id)
-      .then((t) => {
-        setTask(t);
-        api
-          .service(t.ServiceID)
-          .then((r) => setService(r.service))
-          .catch(() => {});
-      })
+      .then(setTask)
       .catch(() => setError(true));
   }, [id]);
 
-  useEffect(fetchData, [fetchData]);
+  useEffect(fetchTask, [fetchTask]);
+  useResourceStream(`/tasks/${id}`, fetchTask);
 
-  useResourceStream(`/tasks/${id}`, fetchData);
+  // Fetch service data once when we learn the ServiceID (stable for a task's lifetime)
+  const serviceId = task?.ServiceID;
+  useEffect(() => {
+    if (!serviceId) return;
+    api
+      .service(serviceId)
+      .then((r) => setService(r.service))
+      .catch(() => {});
+  }, [serviceId]);
 
   async function executeRemove() {
     if (!id) return;

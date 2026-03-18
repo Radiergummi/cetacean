@@ -15,8 +15,81 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import type { LucideIcon } from "lucide-react";
 import { ImageIcon, RefreshCw, RotateCcw } from "lucide-react";
 import { useState } from "react";
+
+function useAsyncAction() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function execute(action: () => Promise<unknown>, errorMessage: string) {
+    setLoading(true);
+    setError(null);
+    try {
+      await action();
+    } catch (thrown) {
+      setError(thrown instanceof Error ? thrown.message : errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return { loading, error, execute };
+}
+
+function ConfirmAction({
+  icon: Icon,
+  label,
+  title,
+  description,
+  disabled,
+  disabledTitle,
+  loading,
+  error,
+  onConfirm,
+}: {
+  icon: LucideIcon;
+  label: string;
+  title: string;
+  description: string;
+  disabled?: boolean;
+  disabledTitle?: string;
+  loading: boolean;
+  error: string | null;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <AlertDialog>
+        <AlertDialogTrigger
+          render={
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={disabled || loading}
+              title={disabled ? disabledTitle : undefined}
+            >
+              {loading ? <Spinner className="size-3" /> : <Icon className="size-3.5" />}
+              {label}
+            </Button>
+          }
+        />
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{title}</AlertDialogTitle>
+            <AlertDialogDescription>{description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={onConfirm}>{label}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+    </div>
+  );
+}
 
 export function ServiceActions({ service, serviceId }: { service: Service; serviceId: string }) {
   const currentImage = service.Spec.TaskTemplate.ContainerSpec.Image;
@@ -27,21 +100,16 @@ export function ServiceActions({ service, serviceId }: { service: Service; servi
   const [imageLoading, setImageLoading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
 
-  const [rollbackLoading, setRollbackLoading] = useState(false);
-  const [rollbackError, setRollbackError] = useState<string | null>(null);
-
-  const [restartLoading, setRestartLoading] = useState(false);
-  const [restartError, setRestartError] = useState<string | null>(null);
+  const rollback = useAsyncAction();
+  const restart = useAsyncAction();
 
   const canRollback = !!service.PreviousSpec;
 
   function handleImageOpenChange(open: boolean) {
     if (open) {
       setImageValue(imageWithoutDigest);
-      setImageError(null);
-    } else {
-      setImageError(null);
     }
+    setImageError(null);
     setImageOpen(open);
   }
 
@@ -63,32 +131,6 @@ export function ServiceActions({ service, serviceId }: { service: Service; servi
       setImageError(error instanceof Error ? error.message : "Failed to update image");
     } finally {
       setImageLoading(false);
-    }
-  }
-
-  async function executeRollback() {
-    setRollbackLoading(true);
-    setRollbackError(null);
-
-    try {
-      await api.rollbackService(serviceId);
-    } catch (error) {
-      setRollbackError(error instanceof Error ? error.message : "Failed to rollback");
-    } finally {
-      setRollbackLoading(false);
-    }
-  }
-
-  async function executeRestart() {
-    setRestartLoading(true);
-    setRestartError(null);
-
-    try {
-      await api.restartService(serviceId);
-    } catch (error) {
-      setRestartError(error instanceof Error ? error.message : "Failed to restart");
-    } finally {
-      setRestartLoading(false);
     }
   }
 
@@ -157,76 +199,31 @@ export function ServiceActions({ service, serviceId }: { service: Service; servi
         </PopoverContent>
       </Popover>
 
-      {/* Rollback */}
-      <div className="flex flex-col items-start gap-1">
-        <AlertDialog>
-          <AlertDialogTrigger
-            render={
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!canRollback || rollbackLoading}
-                title={canRollback ? "Rollback to previous spec" : "No previous spec available"}
-              >
-                {rollbackLoading ? (
-                  <Spinner className="size-3" />
-                ) : (
-                  <RotateCcw className="size-3.5" />
-                )}
-                Rollback
-              </Button>
-            }
-          />
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Rollback service?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will rollback the service to its previous specification.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={() => void executeRollback()}>Rollback</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-        {rollbackError && <p className="text-xs text-red-600 dark:text-red-400">{rollbackError}</p>}
-      </div>
+      <ConfirmAction
+        icon={RotateCcw}
+        label="Rollback"
+        title="Rollback service?"
+        description="This will rollback the service to its previous specification."
+        disabled={!canRollback}
+        disabledTitle="No previous spec available"
+        loading={rollback.loading}
+        error={rollback.error}
+        onConfirm={() =>
+          void rollback.execute(() => api.rollbackService(serviceId), "Failed to rollback")
+        }
+      />
 
-      {/* Restart */}
-      <div className="flex flex-col items-start gap-1">
-        <AlertDialog>
-          <AlertDialogTrigger
-            render={
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={restartLoading}
-              >
-                {restartLoading ? (
-                  <Spinner className="size-3" />
-                ) : (
-                  <RefreshCw className="size-3.5" />
-                )}
-                Restart
-              </Button>
-            }
-          />
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Restart service?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This triggers a rolling restart of all tasks.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={() => void executeRestart()}>Restart</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-        {restartError && <p className="text-xs text-red-600 dark:text-red-400">{restartError}</p>}
-      </div>
+      <ConfirmAction
+        icon={RefreshCw}
+        label="Restart"
+        title="Restart service?"
+        description="This triggers a rolling restart of all tasks."
+        loading={restart.loading}
+        error={restart.error}
+        onConfirm={() =>
+          void restart.execute(() => api.restartService(serviceId), "Failed to restart")
+        }
+      />
     </div>
   );
 }
