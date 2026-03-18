@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { SliderNumberField } from "@/components/ui/slider-number-field";
 import { formatBytes, formatCores } from "@/lib/format";
 import { getErrorMessage } from "@/lib/utils";
-import { Pencil, X } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { useState } from "react";
 
 export interface ServiceResourceShape {
@@ -164,6 +164,7 @@ export function ResourcesEditor({
                 min={0}
                 max={capacity?.maxNodeCPU}
                 step={0.25}
+                clearable
               />
               <SliderNumberField
                 label="Memory (MB)"
@@ -172,6 +173,7 @@ export function ResourcesEditor({
                 min={0}
                 max={capacity ? capacity.maxNodeMemory / (1024 * 1024) : undefined}
                 step={16}
+                clearable
               />
             </div>
             <div className="space-y-2 rounded-lg border p-3">
@@ -183,6 +185,7 @@ export function ResourcesEditor({
                 min={0}
                 max={capacity?.maxNodeCPU}
                 step={0.25}
+                clearable
               />
               <SliderNumberField
                 label="Memory (MB)"
@@ -191,6 +194,7 @@ export function ResourcesEditor({
                 min={0}
                 max={capacity ? capacity.maxNodeMemory / (1024 * 1024) : undefined}
                 step={16}
+                clearable
               />
             </div>
           </div>
@@ -210,7 +214,6 @@ export function ResourcesEditor({
               onClick={cancelEdit}
               disabled={saving}
             >
-              <X className="size-3" />
               Cancel
             </Button>
           </div>

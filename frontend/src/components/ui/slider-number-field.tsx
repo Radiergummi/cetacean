@@ -1,7 +1,8 @@
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { NumberField } from "@base-ui/react/number-field";
-import { Minus, Plus } from "lucide-react";
+import { Minus, Plus, X } from "lucide-react";
 import { useState } from "react";
 
 interface SliderNumberFieldProps {
@@ -11,6 +12,7 @@ interface SliderNumberFieldProps {
   max?: number;
   step?: number;
   label: string;
+  clearable?: boolean;
 }
 
 export function SliderNumberField({
@@ -20,6 +22,7 @@ export function SliderNumberField({
   max,
   step,
   label,
+  clearable,
 }: SliderNumberFieldProps) {
   // Track the slider value separately so that clearing the number input
   // (which sends undefined) doesn't snap the slider back to min.
@@ -39,9 +42,21 @@ export function SliderNumberField({
     setSliderValue(resolved);
   }
 
+  function clear() {
+    onChange(undefined);
+    setSliderValue(min);
+  }
+
   return (
     <div className="space-y-2">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <div className="flex items-center justify-between">
+        <Label className="text-xs text-muted-foreground">{label}</Label>
+        {clearable && value !== undefined && (
+          <Button variant="ghost" size="icon-xs" onClick={clear} title="Remove">
+            <X className="size-3" />
+          </Button>
+        )}
+      </div>
       <div className="flex items-center gap-3">
         <NumberField.Root
           value={value ?? null}
