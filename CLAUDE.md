@@ -149,6 +149,9 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 - **Always update `CHANGELOG.md`** when committing user-facing changes (features, fixes, security). Add entries under `[Unreleased]`. When cutting a release, move unreleased entries to a new version heading with the release date.
 - **Changelog entries must be user-facing and concise.** No implementation details, internal refactoring, pixel values, or code-level specifics. Write from the perspective of someone using the dashboard, not developing it. Consolidate related changes into a single entry (e.g. three doughnut chart tweaks → "Simplify disk usage chart"). If a user wouldn't notice or care about a change, don't list it.
 
+## Code Style
+- **No abbreviations in JavaScript/TypeScript code.** Use full words for identifiers — `formatNumber` not `fmtNum`, `formatUnit` not `fmtUnit`, `index` not `idx`. Abbreviations that are industry-standard terms (e.g., `URL`, `API`, `SSE`, `HTML`) are fine.
+
 ## Key Conventions
 - Most API endpoints are read-only (GET). Write operations use: PUT for idempotent updates (scale, image, availability), POST for non-idempotent actions (rollback, restart), PATCH for partial updates (env vars, labels, resources), DELETE for removal (tasks). All write endpoints go through `requireWrite` middleware (pass-through today, future RBAC hook). PATCH handlers validate Content-Type (`application/json-patch+json` or `application/merge-patch+json`) and return 415 for mismatches.
 - Uses Docker Engine API types directly (e.g., `swarm.Node`, `swarm.Service`) — no separate domain models
