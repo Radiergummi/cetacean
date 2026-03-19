@@ -259,6 +259,23 @@ export const api = {
     const params = new URLSearchParams({ query, step: String(step), range: String(range) });
     return `/-/metrics/query_range?${params}`;
   },
+  queryMetrics: (query: string, time?: string) => {
+    const params = new URLSearchParams({ query });
+    if (time) params.set("time", time);
+    return fetchJSON<PrometheusResponse>(`/metrics?${params}`);
+  },
+  queryMetricsRange: (query: string, start: string, end: string, step: string) => {
+    const params = new URLSearchParams({ query, start, end, step });
+    return fetchJSON<PrometheusResponse>(`/metrics?${params}`);
+  },
+  queryMetricsStreamURL: (query: string, step: number, range: number): string => {
+    const params = new URLSearchParams({
+      query,
+      step: String(step),
+      range: String(range),
+    });
+    return `/metrics?${params}`;
+  },
   diskUsage: () =>
     fetchJSON<CollectionResponse<DiskUsageSummary>>("/disk-usage").then((r) => r.items),
   clusterCapacity: () => fetchJSON<ClusterCapacity>("/cluster/capacity"),
