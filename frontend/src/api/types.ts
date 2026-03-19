@@ -485,6 +485,7 @@ export interface PatchOp {
 
 export interface PrometheusResponse {
   data: {
+    resultType: "vector" | "matrix" | "scalar" | "string";
     result: Array<{
       metric: Record<string, string>;
       value?: [number, string];
