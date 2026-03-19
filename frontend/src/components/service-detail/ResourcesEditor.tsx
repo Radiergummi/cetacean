@@ -12,8 +12,8 @@ const formatCpuTick = (cores: number) => formatNumber(cores, 2);
 const formatMemoryTick = (megabytes: number) => formatBytes(megabytes * 1024 * 1024);
 
 export interface ServiceResourceShape {
-  limits?: { nanoCPUs?: number; memoryBytes?: number; pids?: number };
-  reservations?: { nanoCPUs?: number; memoryBytes?: number };
+  Limits?: { NanoCPUs?: number; MemoryBytes?: number; Pids?: number };
+  Reservations?: { NanoCPUs?: number; MemoryBytes?: number };
 }
 
 export function ResourcesEditor({
@@ -47,19 +47,19 @@ export function ResourcesEditor({
   function openEdit() {
     setCpu({
       reservation:
-        resources.reservations?.nanoCPUs != null
-          ? resources.reservations.nanoCPUs / 1e9
+        resources.Reservations?.NanoCPUs != null
+          ? resources.Reservations.NanoCPUs / 1e9
           : undefined,
-      limit: resources.limits?.nanoCPUs != null ? resources.limits.nanoCPUs / 1e9 : undefined,
+      limit: resources.Limits?.NanoCPUs != null ? resources.Limits.NanoCPUs / 1e9 : undefined,
     });
     setMemory({
       reservation:
-        resources.reservations?.memoryBytes != null
-          ? resources.reservations.memoryBytes / (1024 * 1024)
+        resources.Reservations?.MemoryBytes != null
+          ? resources.Reservations.MemoryBytes / (1024 * 1024)
           : undefined,
       limit:
-        resources.limits?.memoryBytes != null
-          ? resources.limits.memoryBytes / (1024 * 1024)
+        resources.Limits?.MemoryBytes != null
+          ? resources.Limits.MemoryBytes / (1024 * 1024)
           : undefined,
     });
     api
@@ -78,17 +78,17 @@ export function ResourcesEditor({
   async function save() {
     const patch: ServiceResourceShape = {};
     if (cpu.limit !== undefined || memory.limit !== undefined) {
-      patch.limits = {};
-      if (cpu.limit !== undefined) patch.limits.nanoCPUs = Math.round(cpu.limit * 1e9);
+      patch.Limits = {};
+      if (cpu.limit !== undefined) patch.Limits.NanoCPUs = Math.round(cpu.limit * 1e9);
       if (memory.limit !== undefined)
-        patch.limits.memoryBytes = Math.round(memory.limit * 1024 * 1024);
+        patch.Limits.MemoryBytes = Math.round(memory.limit * 1024 * 1024);
     }
     if (cpu.reservation !== undefined || memory.reservation !== undefined) {
-      patch.reservations = {};
+      patch.Reservations = {};
       if (cpu.reservation !== undefined)
-        patch.reservations.nanoCPUs = Math.round(cpu.reservation * 1e9);
+        patch.Reservations.NanoCPUs = Math.round(cpu.reservation * 1e9);
       if (memory.reservation !== undefined)
-        patch.reservations.memoryBytes = Math.round(memory.reservation * 1024 * 1024);
+        patch.Reservations.MemoryBytes = Math.round(memory.reservation * 1024 * 1024);
     }
     setSaving(true);
     setSaveError(null);
@@ -104,10 +104,10 @@ export function ResourcesEditor({
   }
 
   const hasResources =
-    resources.limits?.nanoCPUs != null ||
-    resources.limits?.memoryBytes != null ||
-    resources.reservations?.nanoCPUs != null ||
-    resources.reservations?.memoryBytes != null;
+    resources.Limits?.NanoCPUs != null ||
+    resources.Limits?.MemoryBytes != null ||
+    resources.Reservations?.NanoCPUs != null ||
+    resources.Reservations?.MemoryBytes != null;
 
   if (!editing) {
     return (
@@ -117,30 +117,30 @@ export function ResourcesEditor({
             <p className="text-sm text-muted-foreground">No resource limits configured.</p>
           ) : (
             <div className="grid flex-1 grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-              {resources.limits?.nanoCPUs != null && (
+              {resources.Limits?.NanoCPUs != null && (
                 <div>
                   <div className="text-xs text-muted-foreground">CPU Limit</div>
-                  <div className="font-mono">{formatCores(resources.limits.nanoCPUs / 1e9)}</div>
+                  <div className="font-mono">{formatCores(resources.Limits.NanoCPUs / 1e9)}</div>
                 </div>
               )}
-              {resources.limits?.memoryBytes != null && (
+              {resources.Limits?.MemoryBytes != null && (
                 <div>
                   <div className="text-xs text-muted-foreground">Memory Limit</div>
-                  <div className="font-mono">{formatBytes(resources.limits.memoryBytes)}</div>
+                  <div className="font-mono">{formatBytes(resources.Limits.MemoryBytes)}</div>
                 </div>
               )}
-              {resources.reservations?.nanoCPUs != null && (
+              {resources.Reservations?.NanoCPUs != null && (
                 <div>
                   <div className="text-xs text-muted-foreground">CPU Reserved</div>
                   <div className="font-mono">
-                    {formatCores(resources.reservations.nanoCPUs / 1e9)}
+                    {formatCores(resources.Reservations.NanoCPUs / 1e9)}
                   </div>
                 </div>
               )}
-              {resources.reservations?.memoryBytes != null && (
+              {resources.Reservations?.MemoryBytes != null && (
                 <div>
                   <div className="text-xs text-muted-foreground">Memory Reserved</div>
-                  <div className="font-mono">{formatBytes(resources.reservations.memoryBytes)}</div>
+                  <div className="font-mono">{formatBytes(resources.Reservations.MemoryBytes)}</div>
                 </div>
               )}
             </div>
