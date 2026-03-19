@@ -1,13 +1,14 @@
 import { api } from "@/api/client";
 import type { PrometheusResponse } from "@/api/types";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import PageHeader from "@/components/PageHeader";
-import type { Segment } from "@/components/SegmentedControl";
-import SegmentedControl from "@/components/SegmentedControl";
 import MonitoringStatus from "@/components/metrics/MonitoringStatus";
 import { QueryInput } from "@/components/metrics/QueryInput";
 import QueryResultTable from "@/components/metrics/QueryResultTable";
 import TimeSeriesChart from "@/components/metrics/TimeSeriesChart";
+import { useQueryCompletion } from "@/components/metrics/useQueryCompletion";
+import PageHeader from "@/components/PageHeader";
+import type { Segment } from "@/components/SegmentedControl";
+import SegmentedControl from "@/components/SegmentedControl";
 import { useMonitoringStatus } from "@/hooks/useMonitoringStatus";
 import { getErrorMessage } from "@/lib/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -29,6 +30,7 @@ export default function MetricsConsole() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [activeQuery, setActiveQuery] = useState<string | null>(null);
   const monitoring = useMonitoringStatus();
+  const completion = useQueryCompletion(!!monitoring?.prometheusReachable);
   const hasAutoRun = useRef(false);
 
   const runQuery = useCallback(() => {
@@ -107,6 +109,7 @@ export default function MetricsConsole() {
           onChange={setInput}
           onRun={runQuery}
           loading={loading}
+          completion={completion}
         />
 
         {error && (
@@ -137,9 +140,7 @@ export default function MetricsConsole() {
         )}
 
         {result && (
-          <QueryResultTable
-            data={result as Parameters<typeof QueryResultTable>[0]["data"]}
-          />
+          <QueryResultTable data={result as Parameters<typeof QueryResultTable>[0]["data"]} />
         )}
       </div>
     </div>

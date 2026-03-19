@@ -279,6 +279,15 @@ export const api = {
   diskUsage: () =>
     fetchJSON<CollectionResponse<DiskUsageSummary>>("/disk-usage").then((r) => r.items),
   clusterCapacity: () => fetchJSON<ClusterCapacity>("/cluster/capacity"),
+  metricsLabels: (match?: string) => {
+    const params = new URLSearchParams();
+    if (match) params.set("match[]", match);
+    return fetchJSON<{ data: string[] }>(`/-/metrics/labels?${params}`).then((r) => r.data);
+  },
+  metricsLabelValues: (name: string) =>
+    fetchJSON<{ data: string[] }>(`/-/metrics/labels/${encodeURIComponent(name)}`).then(
+      (r) => r.data,
+    ),
   search: (q: string, limit?: number, signal?: AbortSignal) =>
     fetchJSON<SearchResponse>(
       `/search?q=${encodeURIComponent(q)}${limit !== undefined ? `&limit=${limit}` : ""}`,
