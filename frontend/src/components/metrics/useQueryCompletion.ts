@@ -227,73 +227,43 @@ export function useQueryCompletion(enabled: boolean): QueryCompletion {
     return () => clearTimeout(debounceRef.current);
   }, []);
 
-  const completeLabelNames = useCallback(
-    async (query: string, cursorPosition: number, metricName: string) => {
-      const cacheKey = metricName || "__all__";
-      let labels = labelCacheRef.current.get(cacheKey);
+  /**
+   * Fetches items from cache or API, then filters by prefix and sets suggestions.
+   */
+  const completeCached = useCallback(
+    async (
+      cache: Map<string, string[]>,
+      cacheKey: string,
+      fetcher: () => Promise<string[]>,
+      prefix: string,
+      suggestionType: Suggestion["type"],
+      exclude?: string,
+    ) => {
+      let items = cache.get(cacheKey);
 
-      if (!labels) {
+      if (!items) {
         setLoading(true);
 
         try {
-          const match = metricName ? `{__name__="${metricName}"}` : undefined;
-          labels = await api.metricsLabels(match);
-          labelCacheRef.current.set(cacheKey, labels);
+          items = await fetcher();
+          cache.set(cacheKey, items);
         } catch {
-          labels = [];
+          items = [];
         } finally {
           setLoading(false);
         }
       }
 
-      const { start } = getTokenBounds(query, cursorPosition);
-      const prefix = query.slice(start, cursorPosition).toLowerCase();
-
+      const lowerPrefix = prefix.toLowerCase();
       const matches: Suggestion[] = [];
 
-      for (const name of labels) {
-        if (name === "__name__") {
+      for (const item of items) {
+        if (item === exclude) {
           continue;
         }
 
-        if (prefix.length === 0 || name.toLowerCase().startsWith(prefix)) {
-          matches.push({ label: name, type: "label" });
-        }
-
-        if (matches.length >= maxSuggestions) {
-          break;
-        }
-      }
-
-      setSuggestions(matches);
-    },
-    [],
-  );
-
-  const completeLabelValues = useCallback(
-    async (query: string, cursorPosition: number, labelName: string) => {
-      let values = valueCacheRef.current.get(labelName);
-
-      if (!values) {
-        setLoading(true);
-
-        try {
-          values = await api.metricsLabelValues(labelName);
-          valueCacheRef.current.set(labelName, values);
-        } catch {
-          values = [];
-        } finally {
-          setLoading(false);
-        }
-      }
-
-      const prefix = getValuePrefix(query, cursorPosition).toLowerCase();
-
-      const matches: Suggestion[] = [];
-
-      for (const value of values) {
-        if (prefix.length === 0 || value.toLowerCase().startsWith(prefix)) {
-          matches.push({ label: value, type: "value" });
+        if (lowerPrefix.length === 0 || item.toLowerCase().startsWith(lowerPrefix)) {
+          matches.push({ label: item, type: suggestionType });
         }
 
         if (matches.length >= maxSuggestions) {
@@ -311,12 +281,34 @@ export function useQueryCompletion(enabled: boolean): QueryCompletion {
       const context = getCursorContext(query, cursorPosition);
 
       if (context.type === "label") {
-        completeLabelNames(query, cursorPosition, context.metricName);
+        const cacheKey = context.metricName || "__all__";
+        const match = context.metricName
+          ? `{__name__="${context.metricName}"}`
+          : undefined;
+        const { start } = getTokenBounds(query, cursorPosition);
+        const prefix = query.slice(start, cursorPosition);
+
+        completeCached(
+          labelCacheRef.current,
+          cacheKey,
+          () => api.metricsLabels(match),
+          prefix,
+          "label",
+          "__name__",
+        );
         return;
       }
 
       if (context.type === "value") {
-        completeLabelValues(query, cursorPosition, context.labelName);
+        const prefix = getValuePrefix(query, cursorPosition);
+
+        completeCached(
+          valueCacheRef.current,
+          context.labelName,
+          () => api.metricsLabelValues(context.labelName),
+          prefix,
+          "value",
+        );
         return;
       }
 
@@ -343,7 +335,7 @@ export function useQueryCompletion(enabled: boolean): QueryCompletion {
 
       setSuggestions(matches);
     },
-    [completeLabelNames, completeLabelValues],
+    [completeCached],
   );
 
   const complete = useCallback(
