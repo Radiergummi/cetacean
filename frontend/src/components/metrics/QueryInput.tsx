@@ -54,10 +54,11 @@ export function QueryInput({ value, onChange, onRun, loading, completion }: Prop
 
     textarea.style.height = "auto";
 
-    const lineHeight = parseInt(getComputedStyle(textarea).lineHeight, 10) || 20;
-    const paddingTop = parseInt(getComputedStyle(textarea).paddingTop, 10) || 0;
-    const paddingBottom = parseInt(getComputedStyle(textarea).paddingBottom, 10) || 0;
-    const minHeight = lineHeight * 1 + paddingTop + paddingBottom;
+    const style = getComputedStyle(textarea);
+    const lineHeight = parseInt(style.lineHeight, 10) || 20;
+    const paddingTop = parseInt(style.paddingTop, 10) || 0;
+    const paddingBottom = parseInt(style.paddingBottom, 10) || 0;
+    const minHeight = lineHeight + paddingTop + paddingBottom;
     const maxHeight = lineHeight * 5 + paddingTop + paddingBottom;
 
     textarea.style.height = `${Math.min(Math.max(textarea.scrollHeight, minHeight), maxHeight)}px`;

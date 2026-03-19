@@ -83,6 +83,34 @@ const promqlFunctions: Suggestion[] = [
 const minimumPrefixLength = 2;
 const maxSuggestions = 20;
 
+/**
+ * Filters and ranks suggestions: prefix matches first, then segment-prefix
+ * fuzzy matches. Returns at most `maxSuggestions` items.
+ */
+function filterSuggestions(
+  candidates: Suggestion[],
+  prefix: string,
+  minPrefix = minimumPrefixLength,
+): Suggestion[] {
+  if (prefix.length === 0) {
+    return candidates.slice(0, maxSuggestions);
+  }
+
+  const lower = prefix.toLowerCase();
+  const prefixMatches: Suggestion[] = [];
+  const fuzzyMatches: Suggestion[] = [];
+
+  for (const suggestion of candidates) {
+    if (suggestion.label.toLowerCase().startsWith(lower)) {
+      prefixMatches.push(suggestion);
+    } else if (lower.length >= minPrefix && segmentPrefixMatch(suggestion.label, lower)) {
+      fuzzyMatches.push(suggestion);
+    }
+  }
+
+  return [...prefixMatches, ...fuzzyMatches].slice(0, maxSuggestions);
+}
+
 export type CursorContext =
   | { type: "metric" }
   | { type: "label"; metricName: string }
@@ -288,23 +316,11 @@ export function useQueryCompletion(enabled: boolean): QueryCompletion {
         }
       }
 
-      const lowerPrefix = prefix.toLowerCase();
-      const prefixMatches: Suggestion[] = [];
-      const fuzzyMatches: Suggestion[] = [];
+      const candidates = items
+        .filter((item) => item !== exclude)
+        .map((item): Suggestion => ({ label: item, type: suggestionType }));
 
-      for (const item of items) {
-        if (item === exclude) {
-          continue;
-        }
-
-        if (lowerPrefix.length === 0 || item.toLowerCase().startsWith(lowerPrefix)) {
-          prefixMatches.push({ label: item, type: suggestionType });
-        } else if (lowerPrefix.length >= minimumPrefixLength && segmentPrefixMatch(item, lowerPrefix)) {
-          fuzzyMatches.push({ label: item, type: suggestionType });
-        }
-      }
-
-      setSuggestions([...prefixMatches, ...fuzzyMatches].slice(0, maxSuggestions));
+      setSuggestions(filterSuggestions(candidates, prefix, 0));
     },
     [],
   );
@@ -353,19 +369,7 @@ export function useQueryCompletion(enabled: boolean): QueryCompletion {
         return;
       }
 
-      const lowerPrefix = prefix.toLowerCase();
-      const prefixMatches: Suggestion[] = [];
-      const fuzzyMatches: Suggestion[] = [];
-
-      for (const suggestion of all) {
-        if (suggestion.label.toLowerCase().startsWith(lowerPrefix)) {
-          prefixMatches.push(suggestion);
-        } else if (segmentPrefixMatch(suggestion.label, lowerPrefix)) {
-          fuzzyMatches.push(suggestion);
-        }
-      }
-
-      setSuggestions([...prefixMatches, ...fuzzyMatches].slice(0, maxSuggestions));
+      setSuggestions(filterSuggestions(all, prefix));
     },
     [completeCached],
   );
