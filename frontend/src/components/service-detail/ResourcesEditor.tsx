@@ -3,7 +3,7 @@ import { api } from "@/api/client";
 import type { ClusterCapacity } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
-import { formatBytes, formatCores, formatMetricValue, formatNumber } from "@/lib/format";
+import { formatBytes, formatCores, formatNumber } from "@/lib/format";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil } from "lucide-react";
 import { useState } from "react";
@@ -122,8 +122,10 @@ export function ResourcesEditor({
 
   const hasAllocation =
     allocation?.cpuReserved != null ||
+    allocation?.cpuLimit != null ||
     allocation?.cpuActual != null ||
     allocation?.memReserved != null ||
+    allocation?.memLimit != null ||
     allocation?.memActual != null;
 
   if (!editing) {
@@ -153,28 +155,28 @@ export function ResourcesEditor({
                 Edit
               </Button>
             </div>
-            {hasAllocation ? (
+            {hasAllocation && allocation ? (
               <div className="space-y-3">
-                {(allocation!.cpuReserved != null ||
-                  allocation!.cpuActual != null ||
-                  allocation!.cpuLimit != null) && (
+                {(allocation.cpuReserved != null ||
+                  allocation.cpuActual != null ||
+                  allocation.cpuLimit != null) && (
                   <AllocationBar
                     label="CPU"
-                    reserved={allocation!.cpuReserved}
-                    actual={allocation!.cpuActual}
-                    limit={allocation!.cpuLimit}
-                    formatValue={(value) => formatMetricValue(value, "%")}
+                    reserved={allocation.cpuReserved}
+                    actual={allocation.cpuActual}
+                    limit={allocation.cpuLimit}
+                    formatValue={(value) => formatNumber(value, 1) + "%"}
                   />
                 )}
-                {(allocation!.memReserved != null ||
-                  allocation!.memActual != null ||
-                  allocation!.memLimit != null) && (
+                {(allocation.memReserved != null ||
+                  allocation.memActual != null ||
+                  allocation.memLimit != null) && (
                   <AllocationBar
                     label="Memory"
-                    reserved={allocation!.memReserved}
-                    actual={allocation!.memActual}
-                    limit={allocation!.memLimit}
-                    formatValue={(value) => formatBytes(value)}
+                    reserved={allocation.memReserved}
+                    actual={allocation.memActual}
+                    limit={allocation.memLimit}
+                    formatValue={formatBytes}
                   />
                 )}
               </div>

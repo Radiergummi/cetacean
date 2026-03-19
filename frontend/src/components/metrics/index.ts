@@ -10,4 +10,3 @@ export { default as CapacitySection } from "./CapacitySection";
 export { default as MonitoringStatus } from "./MonitoringStatus";
 export { default as TaskSparkline } from "./TaskSparkline";
 export { ChartSyncProvider, useChartSync } from "./ChartSyncProvider";
-export { default as ResourceAllocationChart } from "./ResourceAllocationChart";
