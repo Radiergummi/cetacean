@@ -18,16 +18,6 @@ const THUMB_CLASS =
 
 const DEAD_ZONE_PERCENT = 5;
 
-/** Map domain value to slider position. undefined → dead zone position. */
-function toPosition(value: number | undefined, deadZonePosition: number): number {
-  return value ?? deadZonePosition;
-}
-
-/** Map slider position back to domain value. Dead zone position → undefined. */
-function fromPosition(position: number, deadZonePosition: number): number | undefined {
-  return position === deadZonePosition ? undefined : position;
-}
-
 export function ResourceRangeSlider({
   label,
   reservation,
@@ -38,8 +28,8 @@ export function ResourceRangeSlider({
   formatLabel,
 }: ResourceRangeSliderProps) {
   const sliderMax = max + step;
-  const reservationPosition = toPosition(reservation, 0);
-  const limitPosition = toPosition(limit, sliderMax);
+  const reservationPosition = reservation ?? 0;
+  const limitPosition = limit ?? sliderMax;
 
   const ticks = useMemo(() => computeTicks(max, step, formatLabel), [max, step, formatLabel]);
 
@@ -52,8 +42,8 @@ export function ResourceRangeSlider({
 
   function handleSliderChange(positions: number[]) {
     onChange({
-      reservation: fromPosition(positions[0], 0),
-      limit: fromPosition(positions[1], sliderMax),
+      reservation: positions[0] === 0 ? undefined : positions[0],
+      limit: positions[1] >= sliderMax ? undefined : positions[1],
     });
   }
 
