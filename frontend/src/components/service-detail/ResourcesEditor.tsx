@@ -240,6 +240,7 @@ export function ResourcesEditor({
             onChange={setMemory}
             max={capacity.maxNodeMemory / (1024 * 1024)}
             step={16}
+            unit="MB"
             formatLabel={formatMemoryTick}
           />
         </div>

@@ -10,6 +10,7 @@ interface ResourceRangeSliderProps {
   onChange: (values: { reservation: number | undefined; limit: number | undefined }) => void;
   max: number;
   step: number;
+  unit?: string;
   formatLabel: (value: number) => string;
 }
 
@@ -25,6 +26,7 @@ export function ResourceRangeSlider({
   onChange,
   max,
   step,
+  unit,
   formatLabel,
 }: ResourceRangeSliderProps) {
   const sliderMax = max + step;
@@ -41,10 +43,11 @@ export function ResourceRangeSlider({
   const isLimitActive = limit !== undefined;
 
   function handleSliderChange(positions: number[]) {
-    onChange({
-      reservation: positions[0] === 0 ? undefined : positions[0],
-      limit: positions[1] >= sliderMax ? undefined : positions[1],
-    });
+    const reservation =
+      positions[0] <= step / 2 ? undefined : Math.round(positions[0] / step) * step;
+    const newLimit =
+      positions[1] >= max + step / 2 ? undefined : Math.round(positions[1] / step) * step;
+    onChange({ reservation, limit: newLimit });
   }
 
   function handleReservationInput(next: number | null) {
@@ -108,7 +111,6 @@ export function ResourceRangeSlider({
           onValueChange={handleSliderChange}
           min={0}
           max={sliderMax}
-          step={step}
           className="data-horizontal:w-full"
         >
           <SliderPrimitive.Control className="relative flex h-6 w-full touch-none items-center select-none">
@@ -150,6 +152,7 @@ export function ResourceRangeSlider({
             min={step}
             max={max}
             step={step}
+            unit={unit}
           />
         </div>
         <div className="flex items-center gap-1.5">
@@ -159,6 +162,7 @@ export function ResourceRangeSlider({
             min={step}
             max={max}
             step={step}
+            unit={unit}
           />
           <span className="text-[10px] tracking-wide text-muted-foreground uppercase">Limit</span>
         </div>
@@ -173,12 +177,14 @@ function CompactStepper({
   min,
   max,
   step,
+  unit,
 }: {
   value: number | undefined;
   onChange: (next: number | null) => void;
   min: number;
   max: number;
   step: number;
+  unit?: string;
 }) {
   if (value === undefined) {
     return (
@@ -188,23 +194,26 @@ function CompactStepper({
     );
   }
   return (
-    <NumberField.Root
-      value={value}
-      onValueChange={onChange}
-      min={min}
-      max={max}
-      step={step}
-    >
-      <NumberField.Group className="flex items-center rounded-md border">
-        <NumberField.Decrement className="flex size-6 items-center justify-center border-r text-muted-foreground hover:bg-accent disabled:opacity-50">
-          <Minus className="size-2.5" />
-        </NumberField.Decrement>
-        <NumberField.Input className="w-12 bg-transparent px-1 py-0.5 text-center font-mono text-xs focus:outline-none" />
-        <NumberField.Increment className="flex size-6 items-center justify-center border-l text-muted-foreground hover:bg-accent disabled:opacity-50">
-          <Plus className="size-2.5" />
-        </NumberField.Increment>
-      </NumberField.Group>
-    </NumberField.Root>
+    <div className="flex items-center gap-1">
+      <NumberField.Root
+        value={value}
+        onValueChange={onChange}
+        min={min}
+        max={max}
+        step={step}
+      >
+        <NumberField.Group className="flex items-center rounded-md border">
+          <NumberField.Decrement className="flex size-6 items-center justify-center border-r text-muted-foreground hover:bg-accent disabled:opacity-50">
+            <Minus className="size-2.5" />
+          </NumberField.Decrement>
+          <NumberField.Input className="w-12 bg-transparent px-1 py-0.5 text-center font-mono text-xs focus:outline-none" />
+          <NumberField.Increment className="flex size-6 items-center justify-center border-l text-muted-foreground hover:bg-accent disabled:opacity-50">
+            <Plus className="size-2.5" />
+          </NumberField.Increment>
+        </NumberField.Group>
+      </NumberField.Root>
+      {unit && <span className="text-[10px] text-muted-foreground">{unit}</span>}
+    </div>
   );
 }
 
