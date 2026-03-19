@@ -8,7 +8,7 @@ import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import { LogViewer } from "../components/log";
-import { MetricsPanel, ResourceAllocationChart, type Threshold } from "../components/metrics";
+import { MetricsPanel, type Threshold } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
 import {
@@ -283,19 +283,6 @@ export default function ServiceDetail() {
         </ErrorBoundary>
       )}
 
-      {(cpuReserved != null || cpuLimit != null || memReserved != null || memLimit != null) && (
-        <CollapsibleSection title="Resource Allocation">
-          <ResourceAllocationChart
-            cpuReserved={cpuReserved}
-            cpuLimit={cpuLimit}
-            cpuActual={cpuActual}
-            memReserved={memReserved}
-            memLimit={memLimit}
-            memActual={memActual}
-          />
-        </CollapsibleSection>
-      )}
-
       {/* Container configuration */}
       {hasContainerConfig && (
         <CollapsibleSection
@@ -542,6 +529,7 @@ export default function ServiceDetail() {
                 resources={serviceResources}
                 onSaved={setServiceResources}
                 pids={taskTemplate.Resources?.Limits?.Pids}
+                allocation={{ cpuReserved, cpuLimit, cpuActual, memReserved, memLimit, memActual }}
               />
             </div>
           )}

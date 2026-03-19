@@ -3,7 +3,7 @@ import { api } from "@/api/client";
 import type { ClusterCapacity } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
-import { formatBytes, formatCores, formatNumber } from "@/lib/format";
+import { formatBytes, formatCores, formatMetricValue, formatNumber } from "@/lib/format";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil } from "lucide-react";
 import { useState } from "react";
@@ -16,15 +16,26 @@ export interface ServiceResourceShape {
   Reservations?: { NanoCPUs?: number; MemoryBytes?: number };
 }
 
+interface AllocationData {
+  cpuReserved?: number;
+  cpuLimit?: number;
+  cpuActual?: number;
+  memReserved?: number;
+  memLimit?: number;
+  memActual?: number;
+}
+
 export function ResourcesEditor({
   serviceId,
   resources,
   pids,
+  allocation,
   onSaved,
 }: {
   serviceId: string;
   resources: ServiceResourceShape;
   pids?: number;
+  allocation?: AllocationData;
   onSaved: (updated: Record<string, unknown>) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -109,51 +120,98 @@ export function ResourcesEditor({
     resources.Reservations?.NanoCPUs != null ||
     resources.Reservations?.MemoryBytes != null;
 
+  const hasAllocation =
+    allocation?.cpuReserved != null ||
+    allocation?.cpuActual != null ||
+    allocation?.memReserved != null ||
+    allocation?.memActual != null;
+
   if (!editing) {
     return (
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          {!hasResources && pids == null ? (
+        {!hasResources && pids == null ? (
+          <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">No resource limits configured.</p>
-          ) : (
-            <div className="grid flex-1 grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-              {resources.Limits?.NanoCPUs != null && (
-                <div>
-                  <div className="text-xs text-muted-foreground">CPU Limit</div>
-                  <div className="font-mono">{formatCores(resources.Limits.NanoCPUs / 1e9)}</div>
-                </div>
-              )}
-              {resources.Limits?.MemoryBytes != null && (
-                <div>
-                  <div className="text-xs text-muted-foreground">Memory Limit</div>
-                  <div className="font-mono">{formatBytes(resources.Limits.MemoryBytes)}</div>
-                </div>
-              )}
-              {resources.Reservations?.NanoCPUs != null && (
-                <div>
-                  <div className="text-xs text-muted-foreground">CPU Reserved</div>
-                  <div className="font-mono">
-                    {formatCores(resources.Reservations.NanoCPUs / 1e9)}
-                  </div>
-                </div>
-              )}
-              {resources.Reservations?.MemoryBytes != null && (
-                <div>
-                  <div className="text-xs text-muted-foreground">Memory Reserved</div>
-                  <div className="font-mono">{formatBytes(resources.Reservations.MemoryBytes)}</div>
-                </div>
-              )}
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={openEdit}
+            >
+              <Pencil className="size-3" />
+              Edit
+            </Button>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-end">
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={openEdit}
+              >
+                <Pencil className="size-3" />
+                Edit
+              </Button>
             </div>
-          )}
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={openEdit}
-          >
-            <Pencil className="size-3" />
-            Edit
-          </Button>
-        </div>
+            {hasAllocation ? (
+              <div className="space-y-3">
+                {(allocation!.cpuReserved != null ||
+                  allocation!.cpuActual != null ||
+                  allocation!.cpuLimit != null) && (
+                  <AllocationBar
+                    label="CPU"
+                    reserved={allocation!.cpuReserved}
+                    actual={allocation!.cpuActual}
+                    limit={allocation!.cpuLimit}
+                    formatValue={(value) => formatMetricValue(value, "%")}
+                  />
+                )}
+                {(allocation!.memReserved != null ||
+                  allocation!.memActual != null ||
+                  allocation!.memLimit != null) && (
+                  <AllocationBar
+                    label="Memory"
+                    reserved={allocation!.memReserved}
+                    actual={allocation!.memActual}
+                    limit={allocation!.memLimit}
+                    formatValue={(value) => formatBytes(value)}
+                  />
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+                {resources.Limits?.NanoCPUs != null && (
+                  <div>
+                    <div className="text-xs text-muted-foreground">CPU Limit</div>
+                    <div className="font-mono">{formatCores(resources.Limits.NanoCPUs / 1e9)}</div>
+                  </div>
+                )}
+                {resources.Limits?.MemoryBytes != null && (
+                  <div>
+                    <div className="text-xs text-muted-foreground">Memory Limit</div>
+                    <div className="font-mono">{formatBytes(resources.Limits.MemoryBytes)}</div>
+                  </div>
+                )}
+                {resources.Reservations?.NanoCPUs != null && (
+                  <div>
+                    <div className="text-xs text-muted-foreground">CPU Reserved</div>
+                    <div className="font-mono">
+                      {formatCores(resources.Reservations.NanoCPUs / 1e9)}
+                    </div>
+                  </div>
+                )}
+                {resources.Reservations?.MemoryBytes != null && (
+                  <div>
+                    <div className="text-xs text-muted-foreground">Memory Reserved</div>
+                    <div className="font-mono">
+                      {formatBytes(resources.Reservations.MemoryBytes)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
         {pids != null && (
           <div className="flex items-center justify-between text-sm">
             <span className="font-medium">PID Limit</span>
@@ -211,6 +269,75 @@ export function ResourcesEditor({
           Cancel
         </Button>
       </footer>
+    </div>
+  );
+}
+
+function AllocationBar({
+  label,
+  reserved,
+  actual,
+  limit,
+  formatValue,
+}: {
+  label: string;
+  reserved?: number;
+  actual?: number;
+  limit?: number;
+  formatValue: (value: number) => string;
+}) {
+  const maxValue = Math.max(reserved ?? 0, actual ?? 0, limit ?? 0) * 1.15;
+  if (maxValue === 0) return null;
+
+  const reservedPercent = reserved != null ? (reserved / maxValue) * 100 : 0;
+  const actualPercent = actual != null ? (actual / maxValue) * 100 : 0;
+  const limitPercent = limit != null ? (limit / maxValue) * 100 : undefined;
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-medium">{label}</span>
+        <div className="flex gap-3 text-muted-foreground">
+          {reserved != null && (
+            <span>
+              Reserved: <span className="font-mono text-foreground">{formatValue(reserved)}</span>
+            </span>
+          )}
+          {actual != null && (
+            <span>
+              Actual: <span className="font-mono text-foreground">{formatValue(actual)}</span>
+            </span>
+          )}
+          {limit != null && (
+            <span>
+              Limit: <span className="font-mono text-foreground">{formatValue(limit)}</span>
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="relative h-2 rounded-full bg-muted">
+        {/* Reserved bar (faded) */}
+        {reservedPercent > 0 && (
+          <div
+            className="absolute inset-y-0 left-0 rounded-full bg-primary/30"
+            style={{ width: `${reservedPercent}%` }}
+          />
+        )}
+        {/* Actual bar (solid) */}
+        {actualPercent > 0 && (
+          <div
+            className="absolute inset-y-0 left-0 rounded-full bg-primary"
+            style={{ width: `${actualPercent}%` }}
+          />
+        )}
+        {/* Limit marker (dashed line) */}
+        {limitPercent != null && (
+          <div
+            className="absolute top-0 h-full w-0.5 bg-destructive"
+            style={{ left: `${limitPercent}%` }}
+          />
+        )}
+      </div>
     </div>
   );
 }
