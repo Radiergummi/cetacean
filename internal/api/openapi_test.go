@@ -85,8 +85,7 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte("<html></html>"))
 	})
-	promProxy := http.NotFoundHandler()
-	router := NewRouter(h, b, promProxy, noopSPA, specBytes, nil, false, &auth.NoneProvider{})
+	router := NewRouter(h, b, nil, noopSPA, specBytes, nil, false, &auth.NoneProvider{})
 
 	tests := []struct {
 		name       string

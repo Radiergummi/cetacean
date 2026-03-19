@@ -84,7 +84,7 @@ describe("api client", () => {
     mockFetch.mockReturnValue(jsonResponse({ status: "success" }));
     await api.metricsQuery("up", "1234");
     expect(mockFetch).toHaveBeenCalledWith(
-      "/-/metrics/query?query=up&time=1234",
+      "/metrics?query=up&time=1234",
       expect.objectContaining({ headers: { Accept: "application/json" } }),
     );
   });
@@ -93,7 +93,7 @@ describe("api client", () => {
     mockFetch.mockReturnValue(jsonResponse({ status: "success" }));
     await api.metricsQueryRange("up", "100", "200", "15s");
     expect(mockFetch).toHaveBeenCalledWith(
-      "/-/metrics/query_range?query=up&start=100&end=200&step=15s",
+      "/metrics?query=up&start=100&end=200&step=15s",
       expect.objectContaining({ headers: { Accept: "application/json" } }),
     );
   });
@@ -115,4 +115,6 @@ describe("api client", () => {
     const url = api.taskLogsStreamURL("t1");
     expect(url).toBe("/tasks/t1/logs");
   });
+
+
 });

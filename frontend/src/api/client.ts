@@ -250,19 +250,28 @@ export const api = {
   metricsQuery: (query: string, time?: string) => {
     const params = new URLSearchParams({ query });
     if (time) params.set("time", time);
-    return fetchJSON<PrometheusResponse>(`/-/metrics/query?${params}`);
+    return fetchJSON<PrometheusResponse>(`/metrics?${params}`);
   },
   metricsQueryRange: (query: string, start: string, end: string, step: string) => {
     const params = new URLSearchParams({ query, start, end, step });
-    return fetchJSON<PrometheusResponse>(`/-/metrics/query_range?${params}`);
+    return fetchJSON<PrometheusResponse>(`/metrics?${params}`);
   },
   metricsStreamURL: (query: string, step: number, range: number): string => {
     const params = new URLSearchParams({ query, step: String(step), range: String(range) });
-    return `/-/metrics/query_range?${params}`;
+    return `/metrics?${params}`;
   },
   diskUsage: () =>
     fetchJSON<CollectionResponse<DiskUsageSummary>>("/disk-usage").then((r) => r.items),
   clusterCapacity: () => fetchJSON<ClusterCapacity>("/cluster/capacity"),
+  metricsLabels: (match?: string) => {
+    const params = new URLSearchParams();
+    if (match) params.set("match[]", match);
+    return fetchJSON<{ data: string[] }>(`/-/metrics/labels?${params}`).then((r) => r.data);
+  },
+  metricsLabelValues: (name: string) =>
+    fetchJSON<{ data: string[] }>(`/-/metrics/labels/${encodeURIComponent(name)}`).then(
+      (r) => r.data,
+    ),
   search: (q: string, limit?: number, signal?: AbortSignal) =>
     fetchJSON<SearchResponse>(
       `/search?q=${encodeURIComponent(q)}${limit !== undefined ? `&limit=${limit}` : ""}`,

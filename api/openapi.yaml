@@ -134,25 +134,85 @@ paths:
               schema:
                 $ref: "#/components/schemas/MonitoringStatus"
 
-  /-/metrics/query_range:
+  /-/metrics/labels:
     get:
-      operationId: metricsQueryRange
+      operationId: getMetricsLabels
       tags: [Monitoring]
-      summary: Prometheus query_range (JSON or SSE stream)
+      summary: Prometheus label names
       description: |
-        Content-negotiated endpoint:
+        Proxied Prometheus label names endpoint. Returns all known label names,
+        optionally filtered by series selectors via `match[]`.
+      parameters:
+        - name: match[]
+          in: query
+          description: Series selector(s) to filter labels by
+          schema:
+            type: string
+        - name: start
+          in: query
+          schema:
+            type: string
+        - name: end
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Label names
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Prometheus labels response (proxied as-is)
+        "503":
+          description: Prometheus not configured
 
-        - **`application/json`** — proxied to Prometheus `query_range` endpoint (same as `/-/metrics/{path}`).
-        - **`text/event-stream`** — opens a streaming SSE connection that periodically
-          runs an instant query and pushes results.
+  /-/metrics/labels/{name}:
+    get:
+      operationId: getMetricsLabelValues
+      tags: [Monitoring]
+      summary: Prometheus label values
+      description: |
+        Proxied Prometheus label values endpoint. Returns all known values
+        for a given label name, optionally filtered by series selectors via `match[]`.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Label name
+          schema:
+            type: string
+        - name: match[]
+          in: query
+          description: Series selector(s) to filter values by
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Label values
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Prometheus label values response (proxied as-is)
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "503":
+          description: Prometheus not configured
 
-        **SSE event types:**
-        - `initial` — full range query result (Prometheus JSON), sent on connect.
-        - `point` — single instant query result (Prometheus JSON), sent every `step` seconds.
-        - `query_error` — `{"error": "...", "errorType": "server_error"}` on query failure.
+  /metrics:
+    get:
+      operationId: getMetrics
+      tags: [Monitoring]
+      summary: Prometheus query (content-negotiated)
+      description: |
+        Content-negotiated Prometheus query endpoint.
+        - `application/json`: proxied query result (instant or range based on parameters)
+        - `text/event-stream`: SSE stream of periodic instant query results
+        - `text/html`: metrics console SPA
 
-        SSE streams are limited to 64 concurrent connections (returns 429 when exceeded).
-        A keepalive comment is sent every 15 seconds.
+        Instant vs range is determined by presence of `start`+`end` parameters.
+        Returns 503 if Prometheus is not configured.
       parameters:
         - name: query
           in: query
@@ -160,77 +220,50 @@ paths:
           description: PromQL query expression
           schema:
             type: string
-        - name: step
+        - name: time
           in: query
-          description: Query step interval in seconds (default 15, min 5, max 300)
+          description: Evaluation timestamp (instant queries)
           schema:
-            type: integer
-            minimum: 5
-            maximum: 300
-            default: 15
-        - name: range
-          in: query
-          description: Time range in seconds for the initial range query (default 3600)
-          schema:
-            type: integer
-            default: 3600
+            type: string
         - name: start
           in: query
-          description: Range query start (Unix timestamp) — JSON proxy mode only
+          description: Range start timestamp (triggers range query)
           schema:
             type: string
         - name: end
           in: query
-          description: Range query end (Unix timestamp) — JSON proxy mode only
+          description: Range end timestamp (triggers range query)
+          schema:
+            type: string
+        - name: step
+          in: query
+          description: Query resolution step width (range queries and SSE)
+          schema:
+            type: string
+        - name: range
+          in: query
+          description: Lookback duration in seconds (SSE initial range query)
           schema:
             type: string
       responses:
         "200":
-          description: Query result (JSON) or SSE stream
+          description: Prometheus query result or SSE stream
           content:
             application/json:
               schema:
                 type: object
-                description: Proxied Prometheus query_range result
+                description: Prometheus query result (proxied as-is)
             text/event-stream:
               schema:
-                type: string
-                description: SSE stream with `initial`, `point`, and `query_error` events
+                type: object
+                description: |
+                  SSE stream with `initial` (full range) and `point` (single value) events
         "400":
           $ref: "#/components/responses/BadRequest"
         "429":
           $ref: "#/components/responses/TooManyRequests"
         "503":
           description: Prometheus not configured
-
-  /-/metrics/{path}:
-    get:
-      operationId: proxyPrometheus
-      tags: [Monitoring]
-      summary: Prometheus query proxy
-      description: |
-        Reverse proxy to Prometheus. Only allows the `/query` sub-path
-        with whitelisted query params. 10 MB response limit, 30 s timeout.
-        Returns 404 if Prometheus is not configured.
-
-        For `query_range`, use `/-/metrics/query_range` which also supports SSE streaming.
-      parameters:
-        - name: path
-          in: path
-          required: true
-          schema:
-            type: string
-            enum: [query]
-      responses:
-        "200":
-          description: Proxied Prometheus response
-          content:
-            application/json:
-              schema:
-                type: object
-                description: Prometheus query result (proxied as-is)
-        "404":
-          $ref: "#/components/responses/NotFound"
 
   # ── Authentication ──────────────────────────────────────────────────
 

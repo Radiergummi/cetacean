@@ -7,7 +7,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/auth"
 )
 
-func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Handler, openapiSpec []byte, scalarJS []byte, enablePprof bool, authProvider auth.Provider) http.Handler {
+func NewRouter(h *Handlers, b *Broadcaster, metricsProxy *PrometheusProxy, spa http.Handler, openapiSpec []byte, scalarJS []byte, enablePprof bool, authProvider auth.Provider) http.Handler {
 	mux := http.NewServeMux()
 
 	authProvider.RegisterRoutes(mux)
@@ -16,12 +16,14 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 	mux.HandleFunc("GET /-/health", h.HandleHealth)
 	mux.HandleFunc("GET /-/ready", h.HandleReady)
 	mux.HandleFunc("GET /-/metrics/status", h.HandleMonitoringStatus)
-	mux.HandleFunc("GET /-/metrics/query_range", contentNegotiatedWithSSE(
-		promProxy.ServeHTTP,
+	mux.HandleFunc("GET /-/metrics/labels", metricsProxy.HandleMetricsLabels)
+	mux.HandleFunc("GET /-/metrics/labels/{name}", metricsProxy.HandleMetricsLabelValues)
+	// Metrics (content-negotiated: JSON → proxy, SSE → stream, HTML → SPA)
+	mux.HandleFunc("GET /metrics", contentNegotiatedWithSSE(
+		metricsProxy.HandleMetrics,
 		h.HandleMetricsStream,
 		spa,
 	))
-	mux.Handle("GET /-/metrics/", promProxy)
 
 	// API documentation (content-negotiated)
 	mux.HandleFunc("GET /api", HandleAPIDoc(openapiSpec))

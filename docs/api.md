@@ -314,10 +314,10 @@ Events use the same format as `/events`. Stack streams include events for all me
 
 ### Metrics SSE
 
-The `/-/metrics/query_range` endpoint supports SSE for live-updating charts. Request `text/event-stream` to receive periodic metric updates instead of a one-shot JSON proxy response.
+The `/metrics` endpoint supports SSE for live-updating charts. Request `text/event-stream` to receive periodic metric updates instead of a one-shot JSON proxy response.
 
 ```bash
-curl -H "Accept: text/event-stream" "http://localhost:9000/-/metrics/query_range?query=up&step=15&range=3600"
+curl -H "Accept: text/event-stream" "http://localhost:9000/metrics?query=up&step=15&range=3600"
 ```
 
 | Event | Description |
@@ -346,8 +346,8 @@ No content negotiation. No discovery `Link` headers.
 | GET | `/-/health` | Health check. Returns version info. |
 | GET | `/-/ready` | Readiness probe. 503 until first sync completes. |
 | GET | `/-/metrics/status` | Monitoring auto-detection status (Prometheus, node-exporter, cAdvisor). |
-| GET | `/-/metrics/query` | Proxied Prometheus instant query. |
-| GET | `/-/metrics/query_range` | Proxied Prometheus range query. Supports [SSE for live updates](#metrics-sse). |
+| GET | `/-/metrics/labels` | Proxied Prometheus label names (optional `match[]` filter). |
+| GET | `/-/metrics/labels/{name}` | Proxied Prometheus label values for a given label name. |
 
 ```bash
 curl http://localhost:9000/-/health
@@ -355,6 +355,25 @@ curl http://localhost:9000/-/health
 
 curl http://localhost:9000/-/ready
 # {"status":"ready"}  (or 503 {"status":"not_ready"})
+```
+
+### Monitoring
+
+| Method | Path | Description | Parameters |
+|---|---|---|---|
+| GET | `/metrics` | Proxied Prometheus query (content-negotiated: JSON, SSE, or HTML console). Instant vs range determined by `start`+`end`. | `query` (required), `time`, `start`, `end`, `step`, `range` |
+
+Supports [SSE for live updates](#metrics-sse).
+
+```bash
+# Instant query
+curl "http://localhost:9000/metrics?query=up"
+
+# Range query
+curl "http://localhost:9000/metrics?query=up&start=1700000000&end=1700003600&step=15"
+
+# SSE stream
+curl -H "Accept: text/event-stream" "http://localhost:9000/metrics?query=up&step=15&range=3600"
 ```
 
 ### Cluster
@@ -609,7 +628,7 @@ There is no general rate limiting. The only limits are on concurrent streaming c
 |---|---|---|
 | SSE event clients (`/events` and per-resource streams) | 256 | `429` + `Retry-After: 5` |
 | Log stream connections | 128 | `429` + `Retry-After: 5` |
-| Metrics stream connections (`/-/metrics/query_range`) | 64 | `429` + `Retry-After: 5` |
+| Metrics stream connections (`/metrics` SSE) | 64 | `429` + `Retry-After: 5` |
 
 ## Self-Discovery
 

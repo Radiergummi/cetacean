@@ -173,13 +173,12 @@ func main() {
 
 	// API — pass ready channel so /-/ready reports sync status
 	var promClient *api.PromClient
-	var promProxy http.Handler
+	var metricsProxy *api.PrometheusProxy
 	if cfg.PrometheusURL != "" {
 		promClient = api.NewPromClient(cfg.PrometheusURL)
-		promProxy = api.NewPrometheusProxy(cfg.PrometheusURL)
+		metricsProxy = api.NewPrometheusProxy(cfg.PrometheusURL)
 		slog.Info("prometheus configured", "url", cfg.PrometheusURL)
 	} else {
-		promProxy = api.PrometheusNotConfiguredHandler()
 		slog.Warn("prometheus not configured, metrics disabled")
 	}
 	handlers := api.NewHandlers(stateCache, broadcaster, dockerClient, dockerClient, dockerClient, watcher.Ready(), promClient)
@@ -196,7 +195,7 @@ func main() {
 		slog.Warn("pprof endpoints enabled", "path", "/debug/pprof/")
 	}
 
-	router := api.NewRouter(handlers, broadcaster, promProxy, spa, openapiSpec, scalarJS, cfg.Pprof, authProvider)
+	router := api.NewRouter(handlers, broadcaster, metricsProxy, spa, openapiSpec, scalarJS, cfg.Pprof, authProvider)
 
 	var serverTLSConfig *tls.Config
 	if authCfg.Mode == "cert" {
@@ -218,7 +217,7 @@ func main() {
 
 	// tsnet mode: dual listeners (tailnet for app, regular for meta only)
 	if tsnetLn != nil {
-		serveDualListeners(ctx, cfg, tlsCfg, router, handlers, promProxy, tsnetLn)
+		serveDualListeners(ctx, cfg, tlsCfg, router, handlers, tsnetLn)
 		return
 	}
 
@@ -289,12 +288,11 @@ func runHealthcheck() int {
 // serveDualListeners runs two HTTP servers for tsnet mode:
 // - the full router on the tsnet listener (tailnet traffic)
 // - meta endpoints only on the regular listener (health checks from Docker)
-func serveDualListeners(ctx context.Context, cfg *config.Config, tlsCfg config.TLSConfig, router http.Handler, h *api.Handlers, promProxy http.Handler, tsnetLn net.Listener) {
+func serveDualListeners(ctx context.Context, cfg *config.Config, tlsCfg config.TLSConfig, router http.Handler, h *api.Handlers, tsnetLn net.Listener) {
 	metaMux := http.NewServeMux()
 	metaMux.HandleFunc("GET /-/health", h.HandleHealth)
 	metaMux.HandleFunc("GET /-/ready", h.HandleReady)
 	metaMux.HandleFunc("GET /-/metrics/status", h.HandleMonitoringStatus)
-	metaMux.Handle("GET /-/metrics/", promProxy)
 
 	metaServer := &http.Server{
 		Addr:        cfg.ListenAddr,
