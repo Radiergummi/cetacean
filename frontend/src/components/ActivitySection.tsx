@@ -3,7 +3,10 @@ import ActivityFeed from "./ActivityFeed";
 import CollapsibleSection from "./CollapsibleSection";
 
 export default function ActivitySection({ entries }: { entries: HistoryEntry[] }) {
-  if (entries.length === 0) return null;
+  if (entries.length === 0) {
+    return null;
+  }
+
   return (
     <CollapsibleSection title="Recent Activity">
       <ActivityFeed entries={entries} />

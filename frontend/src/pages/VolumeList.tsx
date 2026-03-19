@@ -31,7 +31,7 @@ export default function VolumeList() {
       [debouncedSearch, sortKey, sortDir],
     ),
     "volume",
-    (v: Volume) => v.Name,
+    ({ Name }: Volume) => Name,
   );
 
   const columns: Column<Volume>[] = [
@@ -43,7 +43,7 @@ export default function VolumeList() {
           dir={sortDir}
         />
       ),
-      cell: (v) => <ResourceName name={v.Name} />,
+      cell: ({ Name }) => <ResourceName name={Name} />,
       onHeaderClick: () => toggle("name"),
     },
     {
@@ -54,7 +54,7 @@ export default function VolumeList() {
           dir={sortDir}
         />
       ),
-      cell: (v) => v.Driver,
+      cell: ({ Driver }) => Driver,
       onHeaderClick: () => toggle("driver"),
     },
     {
@@ -65,7 +65,7 @@ export default function VolumeList() {
           dir={sortDir}
         />
       ),
-      cell: (v) => v.Scope,
+      cell: ({ Scope }) => Scope,
       onHeaderClick: () => toggle("scope"),
     },
   ];
@@ -104,8 +104,8 @@ export default function VolumeList() {
         <DataTable
           columns={columns}
           data={volumes}
-          keyFn={(v) => v.Name}
-          onRowClick={(v) => navigate(`/volumes/${v.Name}`)}
+          keyFn={({ Name }) => Name}
+          onRowClick={({ Name }) => navigate(`/volumes/${Name}`)}
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

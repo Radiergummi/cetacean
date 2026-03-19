@@ -3,9 +3,9 @@ import type { LogLine } from "./log-utils";
 import {
   formatTime,
   isJSON,
-  LEVEL_BAR,
-  LOG_ROW_HEIGHT_ESTIMATE,
-  LOG_VIRTUAL_THRESHOLD,
+  levelBar,
+  logRowHeightEstimate,
+  logVirtualThreshold,
   logLineKey,
 } from "./log-utils";
 import { LogMessage } from "./LogMessage";
@@ -82,7 +82,7 @@ function LogRow({
         className="align-stretch relative w-0.75 ps-0.75 data-pinnable:w-6"
       >
         <div
-          className={`min-h-full w-0.75 ${LEVEL_BAR[line.level]} absolute top-0 bottom-0 left-0`}
+          className={`min-h-full w-0.75 ${levelBar[line.level]} absolute top-0 bottom-0 left-0`}
         />
         {onTogglePin && (
           <button
@@ -166,7 +166,7 @@ export function LogTable({
 }: LogTableProps) {
   const isMobile = useMatchesBreakpoint("md", "below");
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
-  const useVirtual = filtered.length > LOG_VIRTUAL_THRESHOLD;
+  const useVirtual = filtered.length > logVirtualThreshold;
 
   const toggleExpanded = useCallback((index: number) => {
     setExpanded((prev) => {
@@ -198,7 +198,7 @@ export function LogTable({
               >
                 <td className="align-stretch relative w-6 ps-1.75">
                   <div
-                    className={`min-h-full w-0.75 ${LEVEL_BAR[line.level]} absolute top-0 bottom-0 left-0`}
+                    className={`min-h-full w-0.75 ${levelBar[line.level]} absolute top-0 bottom-0 left-0`}
                   />
                   <PinOff className="size-2.5 text-muted-foreground" />
                 </td>
@@ -312,7 +312,7 @@ function VirtualLogBody({
   const virtualizer = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => containerRef.current,
-    estimateSize: () => LOG_ROW_HEIGHT_ESTIMATE,
+    estimateSize: () => logRowHeightEstimate,
     overscan: 50,
   });
 

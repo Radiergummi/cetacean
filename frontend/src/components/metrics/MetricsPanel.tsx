@@ -12,24 +12,26 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 function formatRange(from: number, to: number): string {
-  const f = new Date(from * 1000);
-  const t = new Date(to * 1000);
-  const sameDay = f.toDateString() === t.toDateString();
+  const fromDate = new Date(from * 1000);
+  const toDate = new Date(to * 1000);
+  const sameDay = fromDate.toDateString() === toDate.toDateString();
   const dateFmt: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
   const timeFmt: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
+
   if (sameDay) {
-    return `${f.toLocaleDateString(undefined, dateFmt)} ${f.toLocaleTimeString(
+    return `${fromDate.toLocaleDateString(undefined, dateFmt)} ${fromDate.toLocaleTimeString(
       undefined,
       timeFmt,
-    )} – ${t.toLocaleTimeString(undefined, timeFmt)}`;
+    )} – ${toDate.toLocaleTimeString(undefined, timeFmt)}`;
   }
-  return `${f.toLocaleDateString(undefined, dateFmt)} ${f.toLocaleTimeString(
+
+  return `${fromDate.toLocaleDateString(undefined, dateFmt)} ${fromDate.toLocaleTimeString(
     undefined,
     timeFmt,
-  )} – ${t.toLocaleDateString(undefined, dateFmt)} ${t.toLocaleTimeString(undefined, timeFmt)}`;
+  )} – ${toDate.toLocaleDateString(undefined, dateFmt)} ${toDate.toLocaleTimeString(undefined, timeFmt)}`;
 }
 
-const QUICK_PRESETS = [
+const quickPresets = [
   { label: "Last 2h", seconds: 7200 },
   { label: "Last 12h", seconds: 43200 },
   { label: "Last 48h", seconds: 172800 },
@@ -65,17 +67,20 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
   const [params, setParams] = useSearchParams();
   const range = params.get("range") ?? "1h";
 
-  const setRange = (r: string) => {
+  const setRange = (value: string) => {
     setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (r === "1h") {
+      (previous) => {
+        const next = new URLSearchParams(previous);
+
+        if (value === "1h") {
           next.delete("range");
         } else {
-          next.set("range", r);
+          next.set("range", value);
         }
+
         next.delete("from");
         next.delete("to");
+
         return next;
       },
       { replace: true },
@@ -91,11 +96,13 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
   const setCustomRange = useCallback(
     (from: number, to: number) => {
       setParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
+        (previous) => {
+          const next = new URLSearchParams(previous);
+
           next.set("from", String(Math.floor(from)));
           next.set("to", String(Math.floor(to)));
           next.delete("range");
+
           return next;
         },
         { replace: true },
@@ -106,10 +113,12 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
 
   const clearCustomRange = useCallback(() => {
     setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
+      (previous) => {
+        const next = new URLSearchParams(previous);
+
         next.delete("from");
         next.delete("to");
+
         return next;
       },
       { replace: true },
@@ -123,11 +132,18 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
   const [drillStack, setDrillStack] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!drillStack) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setDrillStack(null);
+    if (!drillStack) {
+      return;
+    }
+
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setDrillStack(null);
+      }
     };
+
     document.addEventListener("keydown", handler);
+
     return () => document.removeEventListener("keydown", handler);
   }, [drillStack]);
 
@@ -147,16 +163,18 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
   );
 
   const handleCustomApply = (close: () => void) => {
-    const s = new Date(startInput).getTime() / 1000;
-    const e = new Date(endInput).getTime() / 1000;
-    if (!isNaN(s) && !isNaN(e) && s < e) {
-      setCustomRange(s, e);
+    const start = new Date(startInput).getTime() / 1000;
+    const end = new Date(endInput).getTime() / 1000;
+
+    if (!isNaN(start) && !isNaN(end) && start < end) {
+      setCustomRange(start, end);
       close();
     }
   };
 
   const handlePreset = (seconds: number, close: () => void) => {
     const now = Math.floor(Date.now() / 1000);
+
     setCustomRange(now - seconds, now);
     close();
   };
@@ -182,10 +200,11 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
           icon={stacked ? <AreaChart className="size-3.5" /> : <LineChart className="size-3.5" />}
         />
       )}
+
       <SegmentedControl
         segments={rangeSegments}
         value={isCustomRange ? ("" as string) : range}
-        onChange={(v) => setRange(v)}
+        onChange={(value) => setRange(value)}
         overflowIcon={<Calendar className="size-3" />}
         overflowActive={isCustomRange}
         overflowLabel={
@@ -205,7 +224,7 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
         overflowContent={(close) => (
           <div className="w-64 p-2">
             <div className="mb-3 grid grid-cols-2 gap-1.5">
-              {QUICK_PRESETS.map(({ label, seconds }) => (
+              {quickPresets.map(({ label, seconds }) => (
                 <button
                   key={label}
                   onClick={() => handlePreset(seconds, close)}
@@ -221,7 +240,7 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
                 <input
                   type="datetime-local"
                   value={startInput}
-                  onChange={(e) => setStartInput(e.target.value)}
+                  onChange={(event) => setStartInput(event.target.value)}
                   className="mt-0.5 w-full rounded-md border bg-card px-2 py-1 text-xs"
                 />
               </label>
@@ -230,7 +249,7 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
                 <input
                   type="datetime-local"
                   value={endInput}
-                  onChange={(e) => setEndInput(e.target.value)}
+                  onChange={(event) => setEndInput(event.target.value)}
                   className="mt-0.5 w-full rounded-md border bg-card px-2 py-1 text-xs"
                 />
               </label>
@@ -245,12 +264,12 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
         )}
       />
       <IconButton
-        onClick={() => setRefreshKey((k) => k + 1)}
+        onClick={() => setRefreshKey((key) => key + 1)}
         title="Refresh"
         icon={<RefreshCw className="size-3.5" />}
       />
       <IconButton
-        onClick={() => setStreaming((v) => !v)}
+        onClick={() => setStreaming((value) => !value)}
         title={streaming ? "Pause live streaming" : "Resume live streaming"}
         icon={streaming ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
         active={streaming}

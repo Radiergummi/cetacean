@@ -4,16 +4,16 @@ import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
 import DiskUsageSection from "../components/DiskUsageSection";
 import {
+  CapacitySection,
   MetricsPanel,
   MonitoringStatus,
-  CapacitySection,
   StackDrillDownChart,
 } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
-import { TrendingUp, TrendingDown } from "lucide-react";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { TrendingDown, TrendingUp } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 export default function ClusterOverview() {
@@ -26,10 +26,13 @@ export default function ClusterOverview() {
   const fetchSnapshot = useCallback(() => {
     api
       .cluster()
-      .then((s) => {
-        setSnapshot((prev) => {
-          if (prev) prevRef.current = prev;
-          return s;
+      .then((snapshot) => {
+        setSnapshot((previous) => {
+          if (previous) {
+            prevRef.current = previous;
+          }
+
+          return snapshot;
         });
       })
       .catch(() => {});
@@ -38,8 +41,8 @@ export default function ClusterOverview() {
   const fetchHistory = useCallback(() => {
     api
       .history({ limit: 25 })
-      .then((h) => {
-        setHistory(h);
+      .then((entry) => {
+        setHistory(entry);
         setHistoryLoading(false);
       })
       .catch(() => {
@@ -50,19 +53,25 @@ export default function ClusterOverview() {
   useEffect(() => {
     fetchSnapshot();
     fetchHistory();
+
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
     };
   }, [fetchSnapshot, fetchHistory]);
 
   useResourceStream(
     "/events",
     useCallback(() => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+
       debounceRef.current = setTimeout(() => {
         fetchSnapshot();
         fetchHistory();
-      }, 2000);
+      }, 2_000);
     }, [fetchSnapshot, fetchHistory]),
   );
 
@@ -74,9 +83,9 @@ export default function ClusterOverview() {
       <div>
         <PageHeader title="Cluster Overview" />
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
+          {Array.from({ length: 4 }).map((_, index) => (
             <div
-              key={i}
+              key={index}
               className="rounded-lg border bg-card p-6"
             >
               <div className="mb-2 h-4 w-20 rounded bg-muted" />

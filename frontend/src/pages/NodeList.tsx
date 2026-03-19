@@ -34,7 +34,7 @@ export default function NodeList() {
       [debouncedSearch, sortKey, sortDir],
     ),
     "node",
-    (n: Node) => n.ID,
+    ({ ID }: Node) => ID,
   );
   const [viewMode, setViewMode] = useViewMode("nodes");
   const navigate = useNavigate();
@@ -52,13 +52,13 @@ export default function NodeList() {
           dir={sortDir}
         />
       ),
-      cell: (node) => (
+      cell: ({ Description, ID }) => (
         <Link
-          to={`/nodes/${node.ID}`}
+          to={`/nodes/${ID}`}
           className="font-medium text-link hover:underline"
-          onClick={(e) => e.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
         >
-          {node.Description.Hostname || node.ID}
+          {Description.Hostname || ID}
         </Link>
       ),
       onHeaderClick: () => toggle("hostname"),
@@ -71,10 +71,10 @@ export default function NodeList() {
           dir={sortDir}
         />
       ),
-      cell: (node) => (
+      cell: ({ ManagerStatus, Spec }) => (
         <span className="flex items-center gap-1.5">
-          {node.Spec.Role}
-          {node.ManagerStatus?.Leader && (
+          {Spec.Role}
+          {ManagerStatus?.Leader && (
             <span className="text-[10px] font-semibold tracking-wider text-amber-500 uppercase">
               leader
             </span>
@@ -91,7 +91,7 @@ export default function NodeList() {
           dir={sortDir}
         />
       ),
-      cell: (node) => node.Spec.Availability,
+      cell: ({ Spec }) => Spec.Availability,
       onHeaderClick: () => toggle("availability"),
     },
     {
@@ -102,12 +102,12 @@ export default function NodeList() {
           dir={sortDir}
         />
       ),
-      cell: (node) => <TaskStatusBadge state={node.Status.State} />,
+      cell: ({ Status }) => <TaskStatusBadge state={Status.State} />,
       onHeaderClick: () => toggle("status"),
     },
     {
       header: "Address",
-      cell: (node) => <span className="tabular-nums">{node.Status.Addr}</span>,
+      cell: ({ Status }) => <span className="tabular-nums">{Status.Addr}</span>,
     },
   ];
 
@@ -115,32 +115,32 @@ export default function NodeList() {
     ? [
         {
           header: "CPU",
-          cell: (node) => {
-            const m = getForNode(node.Description.Hostname, node.Status.Addr);
+          cell: ({ Description, Status }) => {
+            const metrics = getForNode(Description.Hostname, Status.Addr);
             return (
               <span className="tabular-nums">
-                {m.cpu != null ? `${Math.round(m.cpu)}%` : "\u2014"}
+                {metrics.cpu != null ? `${Math.round(metrics.cpu)}%` : "\u2014"}
               </span>
             );
           },
         },
         {
           header: "Memory",
-          cell: (node) => {
-            const m = getForNode(node.Description.Hostname, node.Status.Addr);
+          cell: ({ Description, Status }) => {
+            const metrics = getForNode(Description.Hostname, Status.Addr);
             return (
               <span className="tabular-nums">
-                {m.memory != null ? `${Math.round(m.memory)}%` : "\u2014"}
+                {metrics.memory != null ? `${Math.round(metrics.memory)}%` : "\u2014"}
               </span>
             );
           },
         },
         {
           header: "CPU (1h)",
-          cell: (node) => {
-            const m = getForNode(node.Description.Hostname, node.Status.Addr);
-            if (m.cpuHistory.length > 1) {
-              return <Sparkline data={m.cpuHistory} />;
+          cell: ({ Description, Status }) => {
+            const metrics = getForNode(Description.Hostname, Status.Addr);
+            if (metrics.cpuHistory.length > 1) {
+              return <Sparkline data={metrics.cpuHistory} />;
             }
             return <span className="text-muted-foreground">{"\u2014"}</span>;
           },
@@ -153,24 +153,27 @@ export default function NodeList() {
     ...metricsColumns,
     {
       header: "Engine",
-      cell: (node) => node.Description.Engine.EngineVersion,
+      cell: ({ Description }) => Description.Engine.EngineVersion,
     },
   ];
 
-  if (loading)
+  if (loading) {
     return (
       <div>
         <PageHeader title="Nodes" />
         <SkeletonTable columns={7} />
       </div>
     );
-  if (error)
+  }
+
+  if (error) {
     return (
       <FetchError
         message={error.message}
         onRetry={retry}
       />
     );
+  }
 
   return (
     <div>
@@ -218,13 +221,14 @@ export default function NodeList() {
         <DataTable
           columns={columns}
           data={nodes}
-          keyFn={(node) => node.ID}
-          onRowClick={(node) => navigate(`/nodes/${node.ID}`)}
+          keyFn={({ ID }) => ID}
+          onRowClick={({ ID }) => navigate(`/nodes/${ID}`)}
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {nodes.map((node) => {
-            const m = getForNode(node.Description.Hostname, node.Status.Addr);
+            const metrics = getForNode(node.Description.Hostname, node.Status.Addr);
+
             return (
               <ResourceCard
                 key={node.ID}
@@ -241,17 +245,17 @@ export default function NodeList() {
                   <div className="flex items-center justify-center gap-4">
                     <ResourceGauge
                       label="CPU"
-                      value={m.cpu}
+                      value={metrics.cpu}
                       size="sm"
                     />
                     <ResourceGauge
                       label="Mem"
-                      value={m.memory}
+                      value={metrics.memory}
                       size="sm"
                     />
                     <ResourceGauge
                       label="Disk"
-                      value={m.disk}
+                      value={metrics.disk}
                       size="sm"
                     />
                   </div>

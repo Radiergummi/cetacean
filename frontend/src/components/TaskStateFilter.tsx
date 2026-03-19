@@ -3,9 +3,9 @@ import type { Segment } from "./SegmentedControl";
 import SegmentedControl from "./SegmentedControl";
 import { useEffect, useMemo } from "react";
 
-const ALL = "__all__";
+const all = "__all__" as const;
 
-const KNOWN_STATES = [
+const knownStates = [
   "running",
   "failed",
   "complete",
@@ -18,7 +18,7 @@ const KNOWN_STATES = [
   "remove",
   "orphaned",
   "pending",
-];
+] as const;
 
 export default function TaskStateFilter({
   tasks,
@@ -38,13 +38,14 @@ export default function TaskStateFilter({
       counts.set(State, (counts.get(State) || 0) + 1);
     }
 
-    const segments: Segment<string>[] = [{ value: ALL, label: "All", badge: tasks.length }];
+    const segments: Segment<string>[] = [{ value: all, label: "All", badge: tasks.length }];
     const enabled: Segment<string>[] = [];
     const disabled: Segment<string>[] = [];
 
-    for (const state of KNOWN_STATES) {
+    for (const state of knownStates) {
       const count = counts.get(state) ?? 0;
       const label = state.charAt(0).toUpperCase() + state.slice(1);
+
       if (count > 0) {
         enabled.push({ value: state, label, badge: count });
       } else {
@@ -57,7 +58,7 @@ export default function TaskStateFilter({
 
   // Reset filter if the selected state has no tasks
   useEffect(() => {
-    if (active && segments.find((s) => s.value === active)?.disabled) {
+    if (active && segments.find(({ value }) => value === active)?.disabled) {
       onChange(null);
     }
   }, [active, segments, onChange]);
@@ -65,8 +66,8 @@ export default function TaskStateFilter({
   return (
     <SegmentedControl
       segments={segments}
-      value={active ?? ALL}
-      onChange={(value) => onChange(value === ALL ? null : value)}
+      value={active ?? all}
+      onChange={(value) => onChange(value === all ? null : value)}
       max={3}
     />
   );

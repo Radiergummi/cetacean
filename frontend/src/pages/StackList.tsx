@@ -40,23 +40,26 @@ export default function StackList() {
   );
 
   const filtered = search
-    ? summaries.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()))
+    ? summaries.filter(({ name }) => name.toLowerCase().includes(search.toLowerCase()))
     : summaries;
 
-  if (loading)
+  if (loading) {
     return (
       <div>
         <PageHeader title="Stacks" />
         <SkeletonTable columns={6} />
       </div>
     );
-  if (error)
+  }
+
+  if (error) {
     return (
       <FetchError
         message={error.message}
         onRetry={load}
       />
     );
+  }
 
   return (
     <div>
@@ -84,14 +87,18 @@ export default function StackList() {
   );
 }
 
-function stackHealth(s: StackSummary): "healthy" | "warning" | "critical" {
-  const running = s.tasksByState["running"] ?? 0;
-  if (running < s.desiredTasks) {
+function stackHealth(stack: StackSummary): "healthy" | "warning" | "critical" {
+  const running = stack.tasksByState["running"] ?? 0;
+
+  if (running < stack.desiredTasks) {
     // Only critical if there are failed tasks AND we're not fully running
-    if ((s.tasksByState["failed"] ?? 0) > 0 || (s.tasksByState["rejected"] ?? 0) > 0)
+    if ((stack.tasksByState["failed"] ?? 0) > 0 || (stack.tasksByState["rejected"] ?? 0) > 0) {
       return "critical";
+    }
+
     return "warning";
   }
+
   return "healthy";
 }
 
@@ -99,13 +106,17 @@ function StackCard({ stack }: { stack: StackSummary }) {
   const health = stackHealth(stack);
   const running = stack.tasksByState["running"] ?? 0;
   const desired = stack.desiredTasks;
-  const pct = desired > 0 ? Math.min((running / desired) * 100, 100) : 0;
+  const percentage = desired > 0 ? Math.min((running / desired) * 100, 100) : 0;
 
   return (
     <Link
       to={`/stacks/${stack.name}`}
       data-health={health}
-      className="group block rounded-lg border p-4 transition-all hover:border-foreground/20 hover:shadow-sm data-[health=critical]:border-red-200 data-[health=critical]:bg-red-50/50 dark:data-[health=critical]:border-red-900 dark:data-[health=critical]:bg-red-950/20"
+      className={
+        "group block rounded-lg border p-4 transition-all hover:border-foreground/20 hover:shadow-sm " +
+        "data-[health=critical]:border-red-200 data-[health=critical]:bg-red-50/50 " +
+        "dark:data-[health=critical]:border-red-900 dark:data-[health=critical]:bg-red-950/20"
+      }
     >
       {/* Header */}
       <div className="mb-3 flex items-center gap-2">
@@ -129,9 +140,9 @@ function StackCard({ stack }: { stack: StackSummary }) {
         {desired > 0 ? (
           <div className="flex h-2 overflow-hidden rounded-full bg-muted">
             <div
-              data-complete={pct >= 100 || undefined}
+              data-complete={percentage >= 100 || undefined}
               className="bg-yellow-500 transition-all data-complete:bg-green-500"
-              style={{ width: `${pct}%` }}
+              style={{ width: `${percentage}%` }}
             />
           </div>
         ) : (
@@ -153,7 +164,7 @@ function StackCard({ stack }: { stack: StackSummary }) {
           label="CPU"
           used={stack.cpuUsagePercent}
           limit={stack.cpuLimitCores * 100}
-          format={(v) => formatPercentage(v, 0)}
+          format={(value) => formatPercentage(value, 0)}
         />
       )}
 
@@ -178,10 +189,10 @@ function ResourceBar({
   label: string;
   used: number;
   limit: number;
-  format: (v: number) => string;
+  format: (value: number) => string;
 }) {
-  const pct = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
-  const color = pct > 90 ? "bg-red-500" : pct > 70 ? "bg-yellow-500" : "bg-blue-500";
+  const percentage = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
+  const color = percentage > 90 ? "bg-red-500" : percentage > 70 ? "bg-yellow-500" : "bg-blue-500";
 
   return (
     <div className="mb-2">
@@ -194,7 +205,7 @@ function ResourceBar({
       <div className="h-1.5 overflow-hidden rounded-full bg-muted">
         <div
           className={`h-full rounded-full ${color} transition-all`}
-          style={{ width: `${pct}%` }}
+          style={{ width: `${percentage}%` }}
         />
       </div>
     </div>

@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { Slider as SliderPrimitive } from "@base-ui/react/slider";
-import * as React from "react";
+import { useMemo } from "react";
 
 function Slider({
   className,
@@ -10,7 +10,7 @@ function Slider({
   max = 100,
   ...props
 }: SliderPrimitive.Root.Props) {
-  const _values = React.useMemo(
+  const _values = useMemo(
     () => (Array.isArray(value) ? value : Array.isArray(defaultValue) ? defaultValue : [min, max]),
     [value, defaultValue, min, max],
   );

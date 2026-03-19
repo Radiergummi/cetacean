@@ -1,7 +1,7 @@
 import { api } from "../api/client";
 import type { HistoryEntry } from "../api/types";
 import { useResourceStream } from "./useResourceStream";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export function useDetailResource<T>(
   key: string | undefined,
@@ -14,28 +14,42 @@ export function useDetailResource<T>(
   const abortRef = useRef<AbortController | null>(null);
 
   const fetchData = useCallback(() => {
-    if (!key) return;
+    if (!key) {
+      return;
+    }
+
     abortRef.current?.abort();
+
     const controller = new AbortController();
     abortRef.current = controller;
+
     setError(false);
+
     fetchFn(key, controller.signal)
       .then((d) => {
-        if (!controller.signal.aborted) setData(d);
+        if (!controller.signal.aborted) {
+          setData(d);
+        }
       })
       .catch(() => {
-        if (!controller.signal.aborted) setError(true);
+        if (!controller.signal.aborted) {
+          setError(true);
+        }
       });
+
     api
       .history({ resourceId: key, limit: 10 }, controller.signal)
-      .then((h) => {
-        if (!controller.signal.aborted) setHistory(h);
+      .then((entry) => {
+        if (!controller.signal.aborted) {
+          setHistory(entry);
+        }
       })
       .catch(() => {});
   }, [key, fetchFn]);
 
   useEffect(() => {
     fetchData();
+
     return () => {
       abortRef.current?.abort();
     };

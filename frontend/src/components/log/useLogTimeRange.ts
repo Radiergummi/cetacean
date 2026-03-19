@@ -1,5 +1,5 @@
 import type { TimeRange } from "./log-utils";
-import { formatShortDate, LABEL_TO_RANGE_KEY, RANGE_DURATIONS } from "./log-utils";
+import { formatShortDate, labelToRangeKey, rangeDurations } from "./log-utils";
 import { useCallback, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -9,8 +9,8 @@ export function useLogTimeRange() {
   const [timeRange, setTimeRange] = useState<TimeRange>(() => {
     const rangeKey = params.get("logRange");
 
-    if (rangeKey && RANGE_DURATIONS[rangeKey]) {
-      const { label, ms: milliseconds } = RANGE_DURATIONS[rangeKey];
+    if (rangeKey && rangeDurations[rangeKey]) {
+      const { label, ms: milliseconds } = rangeDurations[rangeKey];
       return { since: new Date(Date.now() - milliseconds).toISOString(), label };
     }
 
@@ -42,7 +42,7 @@ export function useLogTimeRange() {
           updated.delete("logSince");
           updated.delete("logUntil");
 
-          const rangeKey = LABEL_TO_RANGE_KEY[range.label];
+          const rangeKey = labelToRangeKey[range.label];
           if (rangeKey) {
             updated.set("logRange", rangeKey);
           } else if (range.since || range.until) {

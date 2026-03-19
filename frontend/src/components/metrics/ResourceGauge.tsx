@@ -5,20 +5,21 @@ interface Props {
   size?: "sm" | "md";
 }
 
-const SIZES = {
+const sizes = {
   sm: { size: 56, stroke: 5, text: "text-xs", label: "text-[9px]" },
   md: { size: 96, stroke: 8, text: "text-lg", label: "text-xs" },
 };
 
-function colorForValue(v: number): string {
-  if (v >= 90) return "var(--chart-critical)";
-  if (v >= 75) return "var(--chart-warning)";
+function colorForValue(value: number): string {
+  if (value >= 90) return "var(--chart-critical)";
+  if (value >= 75) return "var(--chart-warning)";
+
   return "var(--chart-ok)";
 }
 
 export default function ResourceGauge({ label, value, subtitle, size = "md" }: Props) {
-  const s = SIZES[size];
-  const radius = (s.size - s.stroke) / 2;
+  const { label: sizeLabel, size: numericSize, stroke, text } = sizes[size];
+  const radius = (numericSize - stroke) / 2;
   const circumference = Math.PI * radius;
   const pct = value != null ? Math.max(0, Math.min(100, value)) : 0;
   const offset = circumference - (pct / 100) * circumference;
@@ -28,26 +29,26 @@ export default function ResourceGauge({ label, value, subtitle, size = "md" }: P
     <div className="flex flex-col items-center gap-0.5">
       <div
         className="relative"
-        style={{ width: s.size, height: s.size / 2 + s.stroke }}
+        style={{ width: numericSize, height: numericSize / 2 + stroke }}
       >
         <svg
-          width={s.size}
-          height={s.size / 2 + s.stroke}
-          viewBox={`0 0 ${s.size} ${s.size / 2 + s.stroke}`}
+          width={numericSize}
+          height={numericSize / 2 + stroke}
+          viewBox={`0 0 ${numericSize} ${numericSize / 2 + stroke}`}
         >
           <path
-            d={describeArc(s.size / 2, s.size / 2, radius)}
+            d={describeArc(numericSize / 2, numericSize / 2, radius)}
             fill="none"
             stroke="var(--color-muted)"
-            strokeWidth={s.stroke}
+            strokeWidth={stroke}
             strokeLinecap="round"
           />
           {value != null && (
             <path
-              d={describeArc(s.size / 2, s.size / 2, radius)}
+              d={describeArc(numericSize / 2, numericSize / 2, radius)}
               fill="none"
               stroke={color}
-              strokeWidth={s.stroke}
+              strokeWidth={stroke}
               strokeLinecap="round"
               strokeDasharray={circumference}
               strokeDashoffset={offset}
@@ -56,12 +57,12 @@ export default function ResourceGauge({ label, value, subtitle, size = "md" }: P
           )}
         </svg>
         <div className="absolute inset-0 flex items-end justify-center pb-0.5">
-          <span className={`${s.text} leading-none font-semibold tabular-nums`}>
+          <span className={`${text} leading-none font-semibold tabular-nums`}>
             {value != null ? `${Math.round(pct)}%` : "\u2014"}
           </span>
         </div>
       </div>
-      <span className={`${s.label} font-medium text-muted-foreground`}>{label}</span>
+      <span className={`${sizeLabel} font-medium text-muted-foreground`}>{label}</span>
       {subtitle && <span className="-mt-0.5 text-[10px] text-muted-foreground/70">{subtitle}</span>}
     </div>
   );

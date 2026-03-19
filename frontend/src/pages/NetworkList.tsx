@@ -31,7 +31,7 @@ export default function NetworkList() {
       [debouncedSearch, sortKey, sortDir],
     ),
     "network",
-    (n: Network) => n.Id,
+    ({ Id }: Network) => Id,
   );
 
   const columns: Column<Network>[] = [
@@ -43,7 +43,7 @@ export default function NetworkList() {
           dir={sortDir}
         />
       ),
-      cell: (n) => <ResourceName name={n.Name} />,
+      cell: ({ Name }) => <ResourceName name={Name} />,
       onHeaderClick: () => toggle("name"),
     },
     {
@@ -54,7 +54,7 @@ export default function NetworkList() {
           dir={sortDir}
         />
       ),
-      cell: (n) => n.Driver,
+      cell: ({ Driver }) => Driver,
       onHeaderClick: () => toggle("driver"),
     },
     {
@@ -65,30 +65,34 @@ export default function NetworkList() {
           dir={sortDir}
         />
       ),
-      cell: (n) => n.Scope,
+      cell: ({ Scope }) => Scope,
       onHeaderClick: () => toggle("scope"),
     },
   ];
   const [viewMode, setViewMode] = useViewMode("networks");
 
-  if (loading)
+  if (loading) {
     return (
       <div>
         <PageHeader title="Networks" />
         <SkeletonTable columns={3} />
       </div>
     );
-  if (error)
+  }
+
+  if (error) {
     return (
       <FetchError
         message={error.message}
         onRetry={retry}
       />
     );
+  }
 
   return (
     <div>
       <PageHeader title="Networks" />
+
       <ListToolbar
         search={search}
         onSearchChange={setSearch}
@@ -102,17 +106,17 @@ export default function NetworkList() {
         <DataTable
           columns={columns}
           data={networks}
-          keyFn={(n) => n.Id}
-          onRowClick={(n) => navigate(`/networks/${n.Id}`)}
+          keyFn={({ Id }) => Id}
+          onRowClick={({ Id }) => navigate(`/networks/${Id}`)}
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {networks.map((net) => (
+          {networks.map(({ Driver, Id, Name, Scope }) => (
             <ResourceCard
-              key={net.Id}
-              title={<ResourceName name={net.Name} />}
-              to={`/networks/${net.Id}`}
-              meta={[net.Driver, net.Scope]}
+              key={Id}
+              title={<ResourceName name={Name} />}
+              to={`/networks/${Id}`}
+              meta={[Driver, Scope]}
             />
           ))}
         </div>

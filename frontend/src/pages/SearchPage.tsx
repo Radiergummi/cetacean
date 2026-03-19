@@ -6,7 +6,7 @@ import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
 import { SearchInput } from "../components/search";
 import { useSearchParam } from "../hooks/useSearchParam";
-import { resourcePath, statusColor, TYPE_LABELS, TYPE_ORDER } from "../lib/searchConstants";
+import { resourcePath, statusColor, typeLabels, typeOrder } from "../lib/searchConstants";
 import { getErrorMessage } from "../lib/utils";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -91,7 +91,7 @@ export default function SearchPage() {
 
       {!loading && !error && data && data.total > 0 && (
         <ul className="flex flex-col gap-8">
-          {TYPE_ORDER.map((type) => {
+          {typeOrder.map((type) => {
             const items = data.results[type];
 
             if (!items || items.length === 0) {
@@ -106,7 +106,7 @@ export default function SearchPage() {
                 <section>
                   <header className="mb-2">
                     <h2 className="text-sm font-medium text-muted-foreground">
-                      <span>{TYPE_LABELS[type]}</span>
+                      <span>{typeLabels[type]}</span>
                       <span className="ml-2 inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
                         {items.length}
                       </span>

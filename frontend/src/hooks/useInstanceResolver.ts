@@ -1,6 +1,6 @@
 import { api } from "../api/client";
 import { useMonitoringStatus } from "./useMonitoringStatus";
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 /**
  * Resolves Docker Swarm node hostnames to Prometheus instance labels.
@@ -21,24 +21,32 @@ export function useInstanceResolver() {
   const fetch_ = useCallback(() => {
     api
       .metricsQuery("node_uname_info")
-      .then((resp) => {
+      .then((response) => {
         const map: Record<string, string> = {};
-        for (const r of resp.data.result) {
-          const nodename = r.metric.nodename;
-          const instance = r.metric.instance;
+
+        for (const result of response.data.result) {
+          const nodename = result.metric.nodename;
+          const instance = result.metric.instance;
+
           if (nodename && instance) {
             map[nodename] = instance;
           }
         }
+
         setByHostname(map);
       })
       .catch(() => {});
   }, []);
 
   useEffect(() => {
-    if (!hasPrometheus) return;
+    if (!hasPrometheus) {
+      return;
+    }
+
     fetch_();
-    const interval = setInterval(fetch_, 60000);
+
+    const interval = setInterval(fetch_, 60_000);
+
     return () => clearInterval(interval);
   }, [fetch_, hasPrometheus]);
 
@@ -49,18 +57,31 @@ export function useInstanceResolver() {
   const resolve = useCallback(
     (hostname: string): string | null => {
       // Exact match
-      if (byHostname[hostname]) return byHostname[hostname];
+      if (byHostname[hostname]) {
+        return byHostname[hostname];
+      }
+
       // Prefix match: "app-prod-whale-1.skate-forel.ts.net" → "app-prod-whale-1"
       const short = hostname.split(".")[0];
-      if (short && byHostname[short]) return byHostname[short];
+
+      if (short && byHostname[short]) {
+        return byHostname[short];
+      }
+
       // Reverse: check if any key is a prefix of the hostname
       for (const [name, instance] of Object.entries(byHostname)) {
-        if (hostname.startsWith(name)) return instance;
+        if (hostname.startsWith(name)) {
+          return instance;
+        }
       }
+
       return null;
     },
     [byHostname],
   );
 
-  return { resolve, hasData: Object.keys(byHostname).length > 0 };
+  return {
+    resolve,
+    hasData: Object.keys(byHostname).length > 0,
+  };
 }

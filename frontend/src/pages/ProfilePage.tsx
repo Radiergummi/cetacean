@@ -9,14 +9,18 @@ import { Navigate } from "react-router-dom";
 export default function ProfilePage() {
   const { identity, loading } = useAuth();
 
-  if (loading) return <LoadingDetail />;
-  if (!identity || identity.provider === "none")
+  if (loading) {
+    return <LoadingDetail />;
+  }
+
+  if (!identity || identity.provider === "none") {
     return (
       <Navigate
         to="/"
         replace
       />
     );
+  }
 
   const providerLabels: Record<string, string> = {
     oidc: "OpenID Connect",

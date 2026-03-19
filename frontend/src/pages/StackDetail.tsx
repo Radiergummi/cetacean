@@ -39,11 +39,11 @@ export default function StackDetail() {
     let cancelled = false;
 
     Promise.all(
-      stack.services.map((svc) =>
+      stack.services.map((service) =>
         api
-          .serviceTasks(svc.ID)
-          .then((tasks: Task[]) => [svc, tasks] as const)
-          .catch(() => [svc, []] as const),
+          .serviceTasks(service.ID)
+          .then((tasks: Task[]) => [service, tasks] as const)
+          .catch(() => [service, []] as const),
       ),
     ).then((results) => {
       if (cancelled) {
@@ -52,13 +52,14 @@ export default function StackDetail() {
 
       const counts: Record<string, { running: number; desired: number }> = {};
 
-      for (const [svc, tasks] of results) {
+      for (const [service, tasks] of results) {
         const desired =
-          svc.Spec.Mode.Replicated?.Replicas ??
-          (svc.Spec.Mode.Global
+          service.Spec.Mode.Replicated?.Replicas ??
+          (service.Spec.Mode.Global
             ? tasks.filter(({ Status: { State } }) => State === "running").length
             : 1);
-        counts[svc.ID] = {
+
+        counts[service.ID] = {
           running: tasks.filter(({ Status: { State } }) => State === "running").length,
           desired,
         };

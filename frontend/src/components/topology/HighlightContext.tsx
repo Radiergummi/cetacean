@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useMemo, useCallback, type ReactNode } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from "react";
 
 type HighlightState = {
   hoveredId: string | null;
@@ -24,11 +24,18 @@ export function HighlightProvider({
   const adjacency = useMemo(() => {
     const map = new Map<string, Set<string>>();
     for (const e of edges) {
-      if (!map.has(e.source)) map.set(e.source, new Set());
-      if (!map.has(e.target)) map.set(e.target, new Set());
+      if (!map.has(e.source)) {
+        map.set(e.source, new Set());
+      }
+
+      if (!map.has(e.target)) {
+        map.set(e.target, new Set());
+      }
+
       map.get(e.source)!.add(e.target);
       map.get(e.target)!.add(e.source);
     }
+
     return map;
   }, [edges]);
 

@@ -1,6 +1,6 @@
 import { AlertTriangle } from "lucide-react";
-import { Component } from "react";
 import type { ErrorInfo, ReactNode } from "react";
+import { Component } from "react";
 
 interface Props {
   children: ReactNode;
@@ -40,6 +40,7 @@ export default class ErrorBoundary extends Component<Props, State> {
           </div>
         );
       }
+
       return (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <AlertTriangle className="mb-4 size-12 text-red-500" />
@@ -54,6 +55,7 @@ export default class ErrorBoundary extends Component<Props, State> {
         </div>
       );
     }
+
     return this.props.children;
   }
 }

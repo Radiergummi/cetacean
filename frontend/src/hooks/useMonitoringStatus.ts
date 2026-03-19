@@ -1,8 +1,8 @@
 import { api } from "../api/client";
 import type { MonitoringStatus } from "../api/types";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 
-const TTL_MS = 60_000;
+const ttl = 60_000;
 
 let cached: MonitoringStatus | null = null;
 let cachedAt: number | null = null;
@@ -20,7 +20,7 @@ export function useMonitoringStatus(): MonitoringStatus | null {
   useEffect(() => {
     let cancelled = false;
 
-    if (cached != null && cachedAt != null && Date.now() - cachedAt < TTL_MS) {
+    if (cached != null && cachedAt != null && Date.now() - cachedAt < ttl) {
       setStatus(cached);
       return;
     }
@@ -28,22 +28,28 @@ export function useMonitoringStatus(): MonitoringStatus | null {
     if (!inflight) {
       inflight = api
         .monitoringStatus()
-        .then((s) => {
+        .then((status) => {
           inflight = null;
-          return s;
+
+          return status;
         })
         .catch(() => {
           inflight = null;
+
           return null as unknown as MonitoringStatus;
         });
     }
 
-    inflight.then((s) => {
-      if (cancelled) return;
-      if (s != null) {
-        cached = s;
+    inflight.then((status) => {
+      if (cancelled) {
+        return;
+      }
+
+      if (status != null) {
+        cached = status;
         cachedAt = Date.now();
-        setStatus(s);
+
+        setStatus(status);
       }
     });
 

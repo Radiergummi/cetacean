@@ -22,24 +22,24 @@ export default function SimpleTable<T>({
         {columns && columns.length > 0 && (
           <thead className="sticky top-0 z-10 bg-background">
             <tr className="border-b bg-muted/50">
-              {columns.map((col) => (
+              {columns.map((column) => (
                 <th
-                  key={col}
+                  key={column}
                   className="p-3 text-left text-sm font-medium"
                 >
-                  {col}
+                  {column}
                 </th>
               ))}
             </tr>
           </thead>
         )}
         <tbody>
-          {items.map((item, i) => (
+          {items.map((item, index) => (
             <tr
-              key={keyFn(item, i)}
+              key={keyFn(item, index)}
               className="border-b last:border-b-0"
             >
-              {renderRow(item, i)}
+              {renderRow(item, index)}
             </tr>
           ))}
         </tbody>

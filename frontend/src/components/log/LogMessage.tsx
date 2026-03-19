@@ -14,11 +14,12 @@ export function LogMessage({
   useRegex: boolean;
   prettyJson: boolean;
 }) {
-  const msg = line.message;
+  const message = line.message;
 
   // If searching, highlight matches
   if (search) {
-    const text = prettyJson && isJSON(msg) ? prettyJSON(msg) : msg;
+    const text = prettyJson && isJSON(message) ? prettyJSON(message) : message;
+
     return (
       <HighlightedText
         text={text}
@@ -30,23 +31,26 @@ export function LogMessage({
   }
 
   // Auto-format JSON when pretty-printing is enabled
-  if (isJSON(msg)) {
-    const text = prettyJson ? prettyJSON(msg) : msg;
+  if (isJSON(message)) {
+    const text = prettyJson ? prettyJSON(message) : message;
+
     return <span className="text-emerald-700 dark:text-emerald-300">{text}</span>;
   }
 
   // Color error-level lines
   if (line.level === "error") {
-    return <span className="text-red-600 dark:text-red-300">{msg}</span>;
-  }
-  if (line.level === "warn") {
-    return <span className="text-yellow-700 dark:text-yellow-300">{msg}</span>;
-  }
-  if (line.level === "debug") {
-    return <span className="text-muted-foreground">{msg}</span>;
+    return <span className="text-red-600 dark:text-red-300">{message}</span>;
   }
 
-  return <>{msg}</>;
+  if (line.level === "warn") {
+    return <span className="text-yellow-700 dark:text-yellow-300">{message}</span>;
+  }
+
+  if (line.level === "debug") {
+    return <span className="text-muted-foreground">{message}</span>;
+  }
+
+  return <>{message}</>;
 }
 
 export function HighlightedText({
@@ -61,19 +65,21 @@ export function HighlightedText({
   useRegex: boolean;
 }) {
   const pattern = useRegex ? search : search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  let re: RegExp;
+
+  let expression: RegExp;
+
   try {
-    re = new RegExp(`(${pattern})`, caseSensitive ? "g" : "gi");
+    expression = new RegExp(`(${pattern})`, caseSensitive ? "g" : "gi");
   } catch {
     return <>{text}</>;
   }
-  const parts = text.split(re);
+  const parts = text.split(expression);
 
   return (
     <>
       {parts.map((part, index) => {
-        const isMatch = re.test(part) && part.length > 0;
-        re.lastIndex = 0;
+        const isMatch = expression.test(part) && part.length > 0;
+        expression.lastIndex = 0;
         return isMatch ? (
           <mark
             key={index}

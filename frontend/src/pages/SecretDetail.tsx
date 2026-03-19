@@ -20,8 +20,13 @@ export default function SecretDetail() {
   const { id } = useParams<{ id: string }>();
   const { data, history, error } = useDetailResource(id, api.secret, `/secrets/${id}`);
 
-  if (error) return <FetchError message="Failed to load secret" />;
-  if (!data) return <LoadingDetail />;
+  if (error) {
+    return <FetchError message="Failed to load secret" />;
+  }
+
+  if (!data) {
+    return <LoadingDetail />;
+  }
 
   const secret = data.secret;
   const services = data.services ?? [];

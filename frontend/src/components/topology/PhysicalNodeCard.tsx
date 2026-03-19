@@ -20,8 +20,12 @@ export type PhysicalNodeData = {
 };
 
 function stateColor(running: number, total: number): string {
-  if (running === total) return "bg-green-500";
-  if (running > 0) return "bg-yellow-500";
+  if (running === total) {
+    return "bg-green-500";
+  }
+  if (running > 0) {
+    return "bg-yellow-500";
+  }
   return "bg-red-500";
 }
 

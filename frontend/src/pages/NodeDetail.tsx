@@ -43,7 +43,10 @@ function NodeAvailabilityControl({ nodeId, current }: { nodeId: string; current:
   const [drainPending, setDrainPending] = useState(false);
 
   function handleValueChange(value: string | null) {
-    if (value === null || value === current) return;
+    if (value === null || value === current) {
+      return;
+    }
+
     if (value === "drain" && current !== "drain") {
       setDrainPending(true);
     } else {

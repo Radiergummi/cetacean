@@ -15,14 +15,14 @@ export default function ServiceRefList({ services, label, emptyMessage }: Props)
     <CollapsibleSection title={label}>
       {services.length > 0 ? (
         <div className="flex flex-wrap gap-2">
-          {services.map((svc) => (
+          {services.map(({ id, name }) => (
             <Badge
-              key={svc.id}
+              key={id}
               variant="outline"
-              className="!h-auto !px-4 !py-2 !text-sm"
-              render={<Link to={`/services/${svc.id}`} />}
+              className="h-auto! px-4! py-2! text-sm!"
+              render={<Link to={`/services/${id}`} />}
             >
-              <ResourceName name={svc.name || svc.id.slice(0, 12)} />
+              <ResourceName name={name || id.slice(0, 12)} />
             </Badge>
           ))}
         </div>

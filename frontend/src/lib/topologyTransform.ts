@@ -1,29 +1,39 @@
 import type { NetworkTopology, PlacementTopology } from "../api/types";
 import { getChartColor } from "./chartColors";
-import type { Node, Edge } from "@xyflow/react";
+import type { Edge, Node } from "@xyflow/react";
 
 export function hashColor(id: string): string {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) {
-    h = (h * 31 + id.charCodeAt(i)) | 0;
+  let hash = 0;
+
+  for (let index = 0; index < id.length; index++) {
+    hash = (hash * 31 + id.charCodeAt(index)) | 0;
   }
-  return getChartColor(Math.abs(h));
+
+  return getChartColor(Math.abs(hash));
 }
 
 function stripStackPrefix(name: string, stack?: string): string {
   if (stack && name.startsWith(stack + "_")) {
     return name.slice(stack.length + 1);
   }
+
   return name;
 }
 
 /** Estimate rendered card height for ELK layout (matches ServiceCardNode CSS). */
 function estimateCardHeight(ports?: string[], updateStatus?: string): number {
   // base: border(4) + p-3(24) + name(20) + mb(4) + image(16) + mb(4) + replicas(16) + mb(4)
-  let h = 92;
-  if (ports && ports.length > 0) h += ports.length * 16;
-  if (updateStatus) h += 20;
-  return h;
+  let height = 92;
+
+  if (ports && ports.length > 0) {
+    height += ports.length * 16;
+  }
+
+  if (updateStatus) {
+    height += 20;
+  }
+
+  return height;
 }
 
 function byId(a: { id: string }, b: { id: string }): number {
@@ -34,36 +44,48 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
   const nodes: Node[] = [];
   const edges: Edge[] = [];
 
-  const networkMap = new Map(data.networks.map((n) => [n.id, n]));
-  const serviceMap = new Map(data.nodes.map((s) => [s.id, s]));
+  const networkMap = new Map(data.networks.map((node) => [node.id, node]));
+  const serviceMap = new Map(data.nodes.map((service) => [service.id, service]));
 
   // Collect unique stacks and assign colors
   const stacks = new Set<string>();
-  for (const svc of data.nodes) {
-    if (svc.stack) stacks.add(svc.stack);
+
+  for (const { stack } of data.nodes) {
+    if (stack) {
+      stacks.add(stack);
+    }
   }
 
   const stackColorMap = new Map<string, string>();
+
   for (const stack of stacks) {
     stackColorMap.set(stack, hashColor(stack));
   }
 
   // Normalize edge directions: smaller ID is always source (edges are symmetric
   // network connections, but stable direction is needed for deterministic layout).
-  const normalizedEdges = data.edges.map((e) =>
-    e.source <= e.target ? e : { ...e, source: e.target, target: e.source },
+  const normalizedEdges = data.edges.map((edge) =>
+    edge.source <= edge.target
+      ? edge
+      : {
+          ...edge,
+          source: edge.target,
+          target: edge.source,
+        },
   );
 
   // Build connected service set (services that have at least one edge)
   const connectedSources = new Set<string>();
   const connectedTargets = new Set<string>();
-  for (const edge of normalizedEdges) {
-    connectedSources.add(edge.source);
-    connectedTargets.add(edge.target);
+
+  for (const { source, target } of normalizedEdges) {
+    connectedSources.add(source);
+    connectedTargets.add(target);
   }
 
   // Create stack group nodes (sorted for deterministic layout)
   const sortedStacks = [...stacks].sort();
+
   for (const stack of sortedStacks) {
     nodes.push({
       id: `stack:${stack}`,
@@ -75,39 +97,46 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
 
   // Create service nodes (sorted by ID for deterministic layout)
   const sortedServices = [...data.nodes].sort(byId);
-  for (const svc of sortedServices) {
+
+  for (const { id, image, mode, name, ports, replicas, stack, updateStatus } of sortedServices) {
     const node: Node = {
-      id: svc.id,
+      id,
       type: "serviceCard",
       position: { x: 0, y: 0 },
       data: {
-        id: svc.id,
-        name: stripStackPrefix(svc.name, svc.stack),
-        mode: svc.mode,
-        image: svc.image,
-        replicas: svc.replicas,
-        ports: svc.ports,
-        updateStatus: svc.updateStatus,
-        stackColor: svc.stack ? stackColorMap.get(svc.stack) : undefined,
-        hasSourceEdge: connectedSources.has(svc.id),
-        hasTargetEdge: connectedTargets.has(svc.id),
-        _elkHeight: estimateCardHeight(svc.ports, svc.updateStatus),
+        id,
+        name: stripStackPrefix(name, stack),
+        mode,
+        image,
+        replicas,
+        ports,
+        updateStatus,
+        stackColor: stack ? stackColorMap.get(stack) : undefined,
+        hasSourceEdge: connectedSources.has(id),
+        hasTargetEdge: connectedTargets.has(id),
+        _elkHeight: estimateCardHeight(ports, updateStatus),
       },
     };
-    if (svc.stack) {
-      node.parentId = `stack:${svc.stack}`;
+
+    if (stack) {
+      node.parentId = `stack:${stack}`;
     }
+
     nodes.push(node);
   }
 
   // Deduplicate normalized edges: merge edges sharing the same source-target pair,
   // combining their network sets (the API may return both A→B and B→A).
   const edgeMap = new Map<string, { source: string; target: string; networks: Set<string> }>();
+
   for (const edge of normalizedEdges) {
     const key = `${edge.source}:${edge.target}`;
     const existing = edgeMap.get(key);
+
     if (existing) {
-      for (const netId of edge.networks) existing.networks.add(netId);
+      for (const netId of edge.networks) {
+        existing.networks.add(netId);
+      }
     } else {
       edgeMap.set(key, {
         source: edge.source,
@@ -125,6 +154,7 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
     const tgtSvc = serviceMap.get(edge.target);
     const networks = [...edge.networks].sort().map((netId) => {
       const net = networkMap.get(netId);
+
       return {
         id: netId,
         name: net?.name ?? netId,
@@ -138,12 +168,18 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
     // Collect non-default aliases per endpoint (exclude aliases matching the service name)
     const sourceAliases: string[] = [];
     const targetAliases: string[] = [];
+
     for (const netId of edge.networks) {
       for (const alias of srcSvc?.networkAliases?.[netId] ?? []) {
-        if (alias !== srcSvc?.name && !sourceAliases.includes(alias)) sourceAliases.push(alias);
+        if (alias !== srcSvc?.name && !sourceAliases.includes(alias)) {
+          sourceAliases.push(alias);
+        }
       }
+
       for (const alias of tgtSvc?.networkAliases?.[netId] ?? []) {
-        if (alias !== tgtSvc?.name && !targetAliases.includes(alias)) targetAliases.push(alias);
+        if (alias !== tgtSvc?.name && !targetAliases.includes(alias)) {
+          targetAliases.push(alias);
+        }
       }
     }
 
@@ -165,23 +201,26 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
 
 export function buildPhysicalFlow(data: PlacementTopology): { nodes: Node[] } {
   const nodes: Node[] = [];
-  const COLS = 3;
-  const CARD_H = 80; // card: p-2.5(20) + name(18) + mb-0.5(2) + image(16) + mb-1(4) + tasks(18) + border(2)
-  const CARD_GAP = 8; // gap-2 between grid items
-  const HEADER_H = 44; // header line(20) + mb-3(12) + container p-4 top(16) - overlap adjustment
-  const PAD = 24; // container p-4 bottom(16) + extra breathing room
-  const GAP = 24;
+  const columns = 3;
+  const cardHeight = 80; // card: p-2.5(20) + name(18) + mb-0.5(2) + image(16) + mb-1(4) + tasks(18) + border(2)
+  const cardGap = 8; // gap-2 between grid items
+  const headerHeight = 44; // header line(20) + mb-3(12) + container p-4 top(16) - overlap adjustment
+  const padding = 24; // container p-4 bottom(16) + extra breathing room
+  const gap = 24;
 
   const sortedClusterNodes = [...data.nodes].sort(byId);
   let y = 0;
-  for (const clusterNode of sortedClusterNodes) {
+
+  for (const { availability, hostname, id, role, state, tasks } of sortedClusterNodes) {
     // Aggregate tasks by service
     const serviceMap = new Map<
       string,
       { serviceName: string; image: string; running: number; total: number; states: string[] }
     >();
-    for (const task of clusterNode.tasks) {
+
+    for (const task of tasks) {
       let entry = serviceMap.get(task.serviceId);
+
       if (!entry) {
         entry = {
           serviceName: task.serviceName,
@@ -190,34 +229,40 @@ export function buildPhysicalFlow(data: PlacementTopology): { nodes: Node[] } {
           total: 0,
           states: [],
         };
+
         serviceMap.set(task.serviceId, entry);
       }
+
       entry.total++;
-      if (task.state === "running" || task.state === "complete") entry.running++;
+
+      if (task.state === "running" || task.state === "complete") {
+        entry.running++;
+      }
+
       entry.states.push(task.state);
     }
 
     const services = [...serviceMap.entries()]
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-      .map(([serviceId, s]) => ({ serviceId, ...s }));
+      .map(([serviceId, service]) => ({ serviceId, ...service }));
 
-    const rows = Math.max(1, Math.ceil(services.length / COLS));
-    const nodeHeight = HEADER_H + rows * CARD_H + Math.max(0, rows - 1) * CARD_GAP + PAD;
+    const rows = Math.max(1, Math.ceil(services.length / columns));
+    const nodeHeight = headerHeight + rows * cardHeight + Math.max(0, rows - 1) * cardGap + padding;
 
     nodes.push({
-      id: clusterNode.id,
+      id,
       type: "physicalNode",
       position: { x: 0, y },
       data: {
-        label: clusterNode.hostname,
-        role: clusterNode.role,
-        state: clusterNode.state,
-        availability: clusterNode.availability,
+        label: hostname,
+        role,
+        state,
+        availability,
         services,
       },
     });
 
-    y += nodeHeight + GAP;
+    y += nodeHeight + gap;
   }
 
   return { nodes };

@@ -9,7 +9,7 @@ interface SSEEvent {
 
 type SSEListener = (event: SSEEvent) => void;
 
-export const SSE_EVENT_TYPES = [
+export const sseEventTypes = [
   "node",
   "service",
   "task",
@@ -31,22 +31,23 @@ export function useResourceStream(path: string, listener: SSEListener) {
   listenerRef.current = listener;
 
   useEffect(() => {
-    const es = new EventSource(path);
+    const eventSource = new EventSource(path);
 
-    es.onopen = () => setConnected(true);
-    es.onerror = () => setConnected(false);
+    eventSource.onopen = () => setConnected(true);
+    eventSource.onerror = () => setConnected(false);
 
-    const handler = (e: MessageEvent) => {
+    const handler = (event: MessageEvent) => {
       try {
-        listenerRef.current(JSON.parse(e.data) as SSEEvent);
+        listenerRef.current(JSON.parse(event.data) as SSEEvent);
       } catch {
         // ignore malformed events
       }
     };
 
-    const batchHandler = (e: MessageEvent) => {
+    const batchHandler = (event: MessageEvent) => {
       try {
-        const events = JSON.parse(e.data) as SSEEvent[];
+        const events = JSON.parse(event.data) as SSEEvent[];
+
         for (const event of events) {
           listenerRef.current(event);
         }
@@ -55,12 +56,13 @@ export function useResourceStream(path: string, listener: SSEListener) {
       }
     };
 
-    for (const type of SSE_EVENT_TYPES) {
-      es.addEventListener(type, handler);
+    for (const type of sseEventTypes) {
+      eventSource.addEventListener(type, handler);
     }
-    es.addEventListener("batch", batchHandler);
 
-    return () => es.close();
+    eventSource.addEventListener("batch", batchHandler);
+
+    return () => eventSource.close();
   }, [path]);
 
   return { connected };

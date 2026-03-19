@@ -33,7 +33,7 @@ export default function TaskList() {
       [debouncedSearch, sortKey, sortDir],
     ),
     "task",
-    (t: Task) => t.ID,
+    ({ ID }: Task) => ID,
   );
 
   const monitoring = useMonitoringStatus();
@@ -43,13 +43,13 @@ export default function TaskList() {
   const columns: Column<Task>[] = [
     {
       header: "Service",
-      cell: (t) => (
+      cell: ({ ServiceID, ServiceName }) => (
         <Link
-          to={`/services/${t.ServiceID}`}
+          to={`/services/${ServiceID}`}
           className="font-medium text-link hover:underline"
-          onClick={(e) => e.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
         >
-          <ResourceName name={t.ServiceName || t.ServiceID.slice(0, 12)} />
+          <ResourceName name={ServiceName || ServiceID.slice(0, 12)} />
         </Link>
       ),
     },
@@ -61,18 +61,18 @@ export default function TaskList() {
           dir={sortDir}
         />
       ),
-      cell: (t) => <TaskStatusBadge state={t.Status.State} />,
+      cell: ({ Status }) => <TaskStatusBadge state={Status.State} />,
       onHeaderClick: () => toggle("state"),
     },
     ...(hasCadvisor
       ? [
           {
             header: "CPU",
-            cell: (t: Task) =>
-              t.Status.State === "running" ? (
+            cell: ({ ID, Status }: Task) =>
+              Status.State === "running" ? (
                 <TaskSparkline
-                  data={taskMetrics.get(t.ID)?.cpu}
-                  currentValue={taskMetrics.get(t.ID)?.currentCpu}
+                  data={taskMetrics.get(ID)?.cpu}
+                  currentValue={taskMetrics.get(ID)?.currentCpu}
                   type="cpu"
                 />
               ) : (
@@ -81,11 +81,11 @@ export default function TaskList() {
           },
           {
             header: "Memory",
-            cell: (t: Task) =>
-              t.Status.State === "running" ? (
+            cell: ({ ID, Status }: Task) =>
+              Status.State === "running" ? (
                 <TaskSparkline
-                  data={taskMetrics.get(t.ID)?.memory}
-                  currentValue={taskMetrics.get(t.ID)?.currentMemory}
+                  data={taskMetrics.get(ID)?.memory}
+                  currentValue={taskMetrics.get(ID)?.currentMemory}
                   type="memory"
                 />
               ) : (
@@ -96,7 +96,7 @@ export default function TaskList() {
       : []),
     {
       header: "Desired",
-      cell: (t) => t.DesiredState,
+      cell: ({ DesiredState }) => DesiredState,
     },
     {
       header: (
@@ -106,14 +106,14 @@ export default function TaskList() {
           dir={sortDir}
         />
       ),
-      cell: (t) =>
-        t.NodeID ? (
+      cell: ({ NodeHostname, NodeID }) =>
+        NodeID ? (
           <Link
-            to={`/nodes/${t.NodeID}`}
+            to={`/nodes/${NodeID}`}
             className="text-link hover:underline"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
           >
-            {t.NodeHostname || t.NodeID.slice(0, 12)}
+            {NodeHostname || NodeID.slice(0, 12)}
           </Link>
         ) : (
           "\u2014"
@@ -122,30 +122,33 @@ export default function TaskList() {
     },
     {
       header: "Slot",
-      cell: (t) => (t.Slot ? String(t.Slot) : "\u2014"),
+      cell: ({ Slot }) => (Slot ? String(Slot) : "\u2014"),
     },
     {
       header: "Image",
-      cell: (t) => (
-        <span className="font-mono text-xs">{t.Spec.ContainerSpec.Image.split("@")[0]}</span>
+      cell: ({ Spec }) => (
+        <span className="font-mono text-xs">{Spec.ContainerSpec.Image.split("@")[0]}</span>
       ),
     },
   ];
 
-  if (loading)
+  if (loading) {
     return (
       <div>
         <PageHeader title="Tasks" />
         <SkeletonTable columns={hasCadvisor ? 8 : 6} />
       </div>
     );
-  if (error)
+  }
+
+  if (error) {
     return (
       <FetchError
         message={error.message}
         onRetry={retry}
       />
     );
+  }
 
   return (
     <div>
@@ -161,8 +164,8 @@ export default function TaskList() {
         <DataTable
           columns={columns}
           data={tasks}
-          keyFn={(t) => t.ID}
-          onRowClick={(t) => navigate(`/tasks/${t.ID}`)}
+          keyFn={({ ID }) => ID}
+          onRowClick={({ ID }) => navigate(`/tasks/${ID}`)}
         />
       )}
     </div>

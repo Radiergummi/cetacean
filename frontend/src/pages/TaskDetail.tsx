@@ -42,7 +42,10 @@ export default function TaskDetail() {
   const remove = useAsyncAction();
 
   const fetchTask = useCallback(() => {
-    if (!id) return;
+    if (!id) {
+      return;
+    }
+
     api
       .task(id)
       .then(setTask)
@@ -55,15 +58,21 @@ export default function TaskDetail() {
   // Fetch service data once when we learn the ServiceID (stable for a task's lifetime)
   const serviceId = task?.ServiceID;
   useEffect(() => {
-    if (!serviceId) return;
+    if (!serviceId) {
+      return;
+    }
+
     api
       .service(serviceId)
-      .then((r) => setService(r.service))
+      .then(({ service }) => setService(service))
       .catch(() => {});
   }, [serviceId]);
 
   function executeRemove() {
-    if (!id) return;
+    if (!id) {
+      return;
+    }
+
     void remove.execute(async () => {
       await api.removeTask(id);
       navigate(task?.ServiceID ? `/services/${task.ServiceID}` : "/tasks");

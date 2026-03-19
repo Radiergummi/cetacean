@@ -25,6 +25,7 @@ export function DeploymentChanges({
           {stateLabel} {formatRelativeDate(timestamp)}
         </p>
       )}
+
       <div className="divide-y rounded-lg border">
         {changes.map(({ field, new: change, old }, index) => (
           <div

@@ -20,36 +20,48 @@ type NetworkEdgeData = {
 };
 
 /** Snap points so each segment is strictly horizontal or vertical */
-function snapToOrthogonal(pts: Array<{ x: number; y: number }>): Array<{ x: number; y: number }> {
-  if (pts.length < 2) return pts;
-  const result = [{ ...pts[0] }];
-  for (let i = 1; i < pts.length; i++) {
-    const prev = result[result.length - 1];
-    const curr = { ...pts[i] };
-    const dx = Math.abs(curr.x - prev.x);
-    const dy = Math.abs(curr.y - prev.y);
+function snapToOrthogonal(
+  points: Array<{ x: number; y: number }>,
+): Array<{ x: number; y: number }> {
+  if (points.length < 2) {
+    return points;
+  }
+
+  const result = [{ ...points[0] }];
+
+  for (let index = 1; index < points.length; index++) {
+    const previous = result[result.length - 1];
+    const current = { ...points[index] };
+    const dx = Math.abs(current.x - previous.x);
+    const dy = Math.abs(current.y - previous.y);
+
     if (dx >= dy) {
-      curr.y = prev.y;
+      current.y = previous.y;
     } else {
-      curr.x = prev.x;
+      current.x = previous.x;
     }
-    result.push(curr);
+
+    result.push(current);
   }
   return result;
 }
 
 /** Build an SVG path from orthogonal bend points with rounded corners */
 function buildOrthogonalPath(points: Array<{ x: number; y: number }>, radius = 6): string {
-  if (points.length < 2) return "";
+  if (points.length < 2) {
+    return "";
+  }
+
   if (points.length === 2) {
     return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
   }
 
   let d = `M ${points[0].x} ${points[0].y}`;
-  for (let i = 1; i < points.length - 1; i++) {
-    const prev = points[i - 1];
-    const curr = points[i];
-    const next = points[i + 1];
+
+  for (let index = 1; index < points.length - 1; index++) {
+    const prev = points[index - 1];
+    const curr = points[index];
+    const next = points[index + 1];
 
     const dPrev = Math.max(Math.abs(curr.x - prev.x), Math.abs(curr.y - prev.y));
     const dNext = Math.max(Math.abs(next.x - curr.x), Math.abs(next.y - curr.y));
@@ -68,8 +80,10 @@ function buildOrthogonalPath(points: Array<{ x: number; y: number }>, radius = 6
     d += ` L ${ax} ${ay}`;
     d += ` Q ${curr.x} ${curr.y} ${bx} ${by}`;
   }
+
   const last = points[points.length - 1];
   d += ` L ${last.x} ${last.y}`;
+
   return d;
 }
 
@@ -92,7 +106,7 @@ export default function NetworkEdge({
   const highlighted = hoveredId != null && (source === hoveredId || target === hoveredId);
   const dimmed = hoveredId != null && !highlighted;
 
-  const isStackNetwork = data.networks.some((n) => n.color != null);
+  const isStackNetwork = data.networks.some(({ color: colorCode }) => colorCode != null);
   const color = isStackNetwork
     ? data.networks.find((n) => n.color)!.color!
     : "var(--color-muted-foreground)";

@@ -47,7 +47,7 @@ export default function ServiceList() {
       [debouncedSearch, sortKey, sortDir],
     ),
     "service",
-    (s: ServiceListItem) => s.ID,
+    ({ ID }: ServiceListItem) => ID,
   );
   const [viewMode, setViewMode] = useViewMode("services");
   const navigate = useNavigate();
@@ -66,22 +66,22 @@ export default function ServiceList() {
           dir={sortDir}
         />
       ),
-      cell: (svc) => (
+      cell: ({ ID, Spec }) => (
         <Link
-          to={`/services/${svc.ID}`}
+          to={`/services/${ID}`}
           className="font-medium text-link hover:underline"
-          onClick={(e) => e.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
         >
-          <ResourceName name={svc.Spec.Name} />
+          <ResourceName name={Spec.Name} />
         </Link>
       ),
       onHeaderClick: () => toggle("name"),
     },
     {
       header: "Image",
-      cell: (svc) => (
+      cell: ({ Spec }) => (
         <span className="font-mono text-xs">
-          {svc.Spec.TaskTemplate.ContainerSpec.Image.split("@")[0]}
+          {Spec.TaskTemplate.ContainerSpec.Image.split("@")[0]}
         </span>
       ),
     },
@@ -93,29 +93,37 @@ export default function ServiceList() {
           dir={sortDir}
         />
       ),
-      cell: (svc) => (svc.Spec.Mode.Replicated ? "replicated" : "global"),
+      cell: ({ Spec }) => (Spec.Mode.Replicated ? "replicated" : "global"),
       onHeaderClick: () => toggle("mode"),
     },
     {
       header: "Ports",
-      cell: (svc) => {
-        const ports = svc.Endpoint?.Ports;
-        if (!ports || ports.length === 0) return null;
+      cell: ({ Endpoint }) => {
+        const ports = Endpoint?.Ports;
+
+        if (!ports || ports.length === 0) {
+          return null;
+        }
+
         return (
           <span className="font-mono text-xs text-muted-foreground">
-            {ports.map((p) => `${p.PublishedPort}/${p.Protocol}`).join(", ")}
+            {ports.map(({ Protocol, PublishedPort }) => `${PublishedPort}/${Protocol}`).join(", ")}
           </span>
         );
       },
     },
     {
       header: "Replicas",
-      cell: (svc) => {
-        const desired = svc.Spec.Mode.Replicated?.Replicas;
-        if (desired == null) return "\u2014";
+      cell: ({ RunningTasks, Spec }) => {
+        const desired = Spec.Mode.Replicated?.Replicas;
+
+        if (desired == null) {
+          return "\u2014";
+        }
+
         return (
           <ReplicaHealth
-            running={svc.RunningTasks}
+            running={RunningTasks}
             desired={desired}
           />
         );
@@ -123,24 +131,27 @@ export default function ServiceList() {
     },
     {
       header: "Status",
-      cell: (svc) => <ServiceStatusBadge service={svc} />,
+      cell: (service) => <ServiceStatusBadge service={service} />,
     },
   ];
 
-  if (loading)
+  if (loading) {
     return (
       <div>
         <PageHeader title="Services" />
         <SkeletonTable columns={6} />
       </div>
     );
-  if (error)
+  }
+
+  if (error) {
     return (
       <FetchError
         message={error.message}
         onRetry={retry}
       />
     );
+  }
 
   return (
     <div>
@@ -181,42 +192,43 @@ export default function ServiceList() {
         <DataTable
           columns={columns}
           data={services}
-          keyFn={(svc) => svc.ID}
-          onRowClick={(svc) => navigate(`/services/${svc.ID}`)}
+          keyFn={({ ID }) => ID}
+          onRowClick={({ ID }) => navigate(`/services/${ID}`)}
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {services.map((svc) => {
-            const desired = svc.Spec.Mode.Replicated?.Replicas;
+          {services.map((service) => {
+            const desired = service.Spec.Mode.Replicated?.Replicas;
+
             return (
               <ResourceCard
-                key={svc.ID}
-                title={<ResourceName name={svc.Spec.Name} />}
-                to={`/services/${svc.ID}`}
-                subtitle={svc.Spec.TaskTemplate.ContainerSpec.Image.split("@")[0]}
+                key={service.ID}
+                title={<ResourceName name={service.Spec.Name} />}
+                to={`/services/${service.ID}`}
+                subtitle={service.Spec.TaskTemplate.ContainerSpec.Image.split("@")[0]}
                 meta={
                   [
-                    svc.Spec.Mode.Replicated ? "replicated" : "global",
+                    service.Spec.Mode.Replicated ? "replicated" : "global",
                     desired != null && (
                       <ReplicaHealth
                         key="replicas"
-                        running={svc.RunningTasks}
+                        running={service.RunningTasks}
                         desired={desired}
                       />
                     ),
-                    svc.Endpoint?.Ports && svc.Endpoint.Ports.length > 0 && (
+                    service.Endpoint?.Ports && service.Endpoint.Ports.length > 0 && (
                       <span
                         key="ports"
                         className="font-mono text-xs"
                       >
-                        {svc.Endpoint.Ports.map((p) => `${p.PublishedPort}/${p.Protocol}`).join(
-                          ", ",
-                        )}
+                        {service.Endpoint.Ports.map(
+                          ({ Protocol, PublishedPort }) => `${PublishedPort}/${Protocol}`,
+                        ).join(", ")}
                       </span>
                     ),
                     <ServiceStatusBadge
                       key="status"
-                      service={svc}
+                      service={service}
                     />,
                   ].filter(Boolean) as React.ReactNode[]
                 }

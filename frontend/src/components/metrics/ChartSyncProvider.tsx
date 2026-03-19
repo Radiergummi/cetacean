@@ -1,4 +1,4 @@
-import { createContext, useContext, useRef, useCallback, useMemo, type ReactNode } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useMemo, useRef } from "react";
 
 type Listener = (timestamp: number) => void;
 type IsolationListener = (seriesLabel: string | null) => void;
@@ -16,9 +16,9 @@ const ChartSyncContext = createContext<ChartSyncApi | null>(null);
 export function ChartSyncProvider({ children }: { children: ReactNode }) {
   const listenersRef = useRef<Map<string, Listener>>(new Map());
   const isolationListenersRef = useRef<Map<string, IsolationListener>>(new Map());
-
   const subscribe = useCallback((chartId: string, listener: Listener) => {
     listenersRef.current.set(chartId, listener);
+
     return () => {
       listenersRef.current.delete(chartId);
     };
@@ -26,12 +26,15 @@ export function ChartSyncProvider({ children }: { children: ReactNode }) {
 
   const publish = useCallback((chartId: string, timestamp: number) => {
     for (const [id, listener] of listenersRef.current) {
-      if (id !== chartId) listener(timestamp);
+      if (id !== chartId) {
+        listener(timestamp);
+      }
     }
   }, []);
 
   const subscribeIsolation = useCallback((chartId: string, listener: IsolationListener) => {
     isolationListenersRef.current.set(chartId, listener);
+
     return () => {
       isolationListenersRef.current.delete(chartId);
     };
@@ -39,7 +42,9 @@ export function ChartSyncProvider({ children }: { children: ReactNode }) {
 
   const publishIsolation = useCallback((chartId: string, seriesLabel: string | null) => {
     for (const [id, listener] of isolationListenersRef.current) {
-      if (id !== chartId) listener(seriesLabel);
+      if (id !== chartId) {
+        listener(seriesLabel);
+      }
     }
   }, []);
 
@@ -57,8 +62,9 @@ export function ChartSyncProvider({ children }: { children: ReactNode }) {
 }
 
 export function useChartSync(): ChartSyncApi {
-  const ctx = useContext(ChartSyncContext);
-  if (!ctx) {
+  const context = useContext(ChartSyncContext);
+
+  if (!context) {
     return {
       subscribe: () => () => {},
       publish: () => {},
@@ -67,5 +73,6 @@ export function useChartSync(): ChartSyncApi {
       clear: () => {},
     };
   }
-  return ctx;
+
+  return context;
 }

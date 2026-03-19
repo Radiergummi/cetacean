@@ -24,14 +24,20 @@ export default function ConfigDetail() {
   const { id } = useParams<{ id: string }>();
   const { data, history, error } = useDetailResource(id, api.config, `/configs/${id}`);
 
-  if (error) return <FetchError message="Failed to load config" />;
-  if (!data) return <LoadingDetail />;
+  if (error) {
+    return <FetchError message="Failed to load config" />;
+  }
+
+  if (!data) {
+    return <LoadingDetail />;
+  }
 
   const config = data.config;
   const services = data.services ?? [];
   const name = config.Spec.Name || config.ID;
   const { entries: labelEntries, stack } = parseStackLabels(config.Spec.Labels);
   let decoded: string | null = null;
+
   if (config.Spec.Data) {
     try {
       decoded = atob(config.Spec.Data);

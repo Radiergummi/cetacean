@@ -1,3 +1,4 @@
+import InfoCard from "../InfoCard";
 import { api } from "@/api/client";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
@@ -7,7 +8,6 @@ import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { imageRegistryUrl } from "@/lib/imageUrl";
 import { Pencil } from "lucide-react";
 import { useState } from "react";
-import InfoCard from "../InfoCard";
 
 function registryFavicon(image: string): string | null {
   const namePart = image.split("@")[0].split(":")[0];
@@ -17,18 +17,23 @@ function registryFavicon(image: string): string | null {
   if (!first.includes(".") && !first.includes(":")) {
     return "https://hub.docker.com/favicon.ico";
   }
+
   if (first === "docker.io" || first === "registry-1.docker.io") {
     return "https://hub.docker.com/favicon.ico";
   }
+
   if (first === "ghcr.io") {
     return "https://github.com/favicon.ico";
   }
+
   if (first === "quay.io") {
     return "https://quay.io/static/img/quay_favicon.png";
   }
+
   if (first === "gcr.io" || first.endsWith(".gcr.io")) {
     return "https://cloud.google.com/favicon.ico";
   }
+
   return null;
 }
 
@@ -49,17 +54,22 @@ function ImageUpdatePopover({
     if (next) {
       setValue(imageWithoutDigest);
     }
+
     setValidationError(null);
     setOpen(next);
   }
 
   async function submit() {
     const trimmed = value.trim();
+
     if (!trimmed) {
       setValidationError("Enter an image name");
+
       return;
     }
+
     setValidationError(null);
+
     await update.execute(async () => {
       await api.updateServiceImage(serviceId, trimmed);
       setOpen(false);
@@ -67,15 +77,26 @@ function ImageUpdatePopover({
   }
 
   return (
-    <Popover open={open} onOpenChange={handleOpenChange} modal>
+    <Popover
+      open={open}
+      onOpenChange={handleOpenChange}
+      modal
+    >
       <PopoverTrigger
         render={
-          <Button variant="ghost" size="icon-xs" title="Update image">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            title="Update image"
+          >
             <Pencil className="size-3.5" />
           </Button>
         }
       />
-      <PopoverContent className="w-80" align="end">
+      <PopoverContent
+        className="w-80"
+        align="end"
+      >
         <p className="mb-1 text-xs font-medium text-muted-foreground">New image</p>
         <p
           className="mb-2 truncate font-mono text-xs text-muted-foreground"
@@ -171,7 +192,10 @@ export default function ContainerImage({
   const value = serviceId ? (
     <>
       {link}
-      <ImageUpdatePopover serviceId={serviceId} currentImage={image} />
+      <ImageUpdatePopover
+        serviceId={serviceId}
+        currentImage={image}
+      />
     </>
   ) : (
     link

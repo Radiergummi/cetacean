@@ -39,7 +39,9 @@ function StackLegend({
 
   useEffect(() => setOpen(!isMobile), [isMobile]);
 
-  if (stackColors.size === 0) return null;
+  if (stackColors.size === 0) {
+    return null;
+  }
 
   if (isMobile && !open) {
     return (
@@ -84,7 +86,9 @@ function StackLegend({
   );
 }
 
-/** Hook: run ELK layout async; only re-layout when graph structure changes */
+/**
+ * Hook: run ELK layout async; only re-layout when graph structure changes.
+ */
 function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
@@ -98,15 +102,16 @@ function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
 
   // Structural fingerprint: only changes when nodes/edges are added/removed
   const structureKey = useMemo(() => {
-    const nk = rawNodes
-      .map((n) => `${n.id}:${n.parentId ?? ""}`)
+    const nodeKey = rawNodes
+      .map(({ id, parentId }) => `${id}:${parentId ?? ""}`)
       .sort()
       .join(",");
-    const ek = rawEdges
-      .map((e) => `${e.source}>${e.target}`)
+    const edgeKey = rawEdges
+      .map(({ source, target }) => `${source}>${target}`)
       .sort()
       .join(",");
-    return `${nk}|${ek}`;
+
+    return `${nodeKey}|${edgeKey}`;
   }, [rawNodes, rawEdges]);
 
   // Full re-layout only when structure changes
@@ -126,12 +131,17 @@ function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
 
   // Patch node data in-place when only display data changes (replicas, status, etc.)
   useEffect(() => {
-    if (!ready) return;
-    const dataMap = new Map(rawNodes.map((n) => [n.id, n.data]));
-    setNodes((prev) =>
-      prev.map((n) => {
-        const d = dataMap.get(n.id);
-        return d && d !== n.data ? { ...n, data: d } : n;
+    if (!ready) {
+      return;
+    }
+
+    const dataMap = new Map(rawNodes.map(({ id, data }) => [id, data]));
+
+    setNodes((previous) =>
+      previous.map((node) => {
+        const data = dataMap.get(node.id);
+
+        return data && data !== node.data ? { ...node, data } : node;
       }),
     );
   }, [rawNodes, ready]);
@@ -145,8 +155,10 @@ function LogicalView({ data, isMobile }: { data: NetworkTopology; isMobile: bool
 
   const stackColors = useMemo(() => {
     const map = new Map<string, string>();
-    for (const svc of data.nodes) {
-      if (svc.stack && !map.has(svc.stack)) map.set(svc.stack, hashColor(svc.stack));
+    for (const node of data.nodes) {
+      if (node.stack && !map.has(node.stack)) {
+        map.set(node.stack, hashColor(node.stack));
+      }
     }
     return map;
   }, [data]);
@@ -160,7 +172,9 @@ function LogicalView({ data, isMobile }: { data: NetworkTopology; isMobile: bool
     );
   }
 
-  if (!ready) return null;
+  if (!ready) {
+    return null;
+  }
 
   return (
     <HighlightProvider edges={rawEdges}>
@@ -237,8 +251,8 @@ export default function Topology() {
       const [net, place] = await Promise.all([api.topologyNetworks(), api.topologyPlacement()]);
       setNetworkData(net);
       setPlacementData(place);
-    } catch (e) {
-      setError(getErrorMessage(e, "Failed to load topology"));
+    } catch (error) {
+      setError(getErrorMessage(error, "Failed to load topology"));
     } finally {
       setLoading(false);
       initialLoadRef.current = false;
@@ -251,7 +265,10 @@ export default function Topology() {
 
   const refetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const debouncedRefetch = useCallback(() => {
-    if (refetchTimerRef.current) clearTimeout(refetchTimerRef.current);
+    if (refetchTimerRef.current) {
+      clearTimeout(refetchTimerRef.current);
+    }
+
     refetchTimerRef.current = setTimeout(() => {
       refetchTimerRef.current = null;
       fetchData();
@@ -260,7 +277,9 @@ export default function Topology() {
 
   useEffect(() => {
     return () => {
-      if (refetchTimerRef.current) clearTimeout(refetchTimerRef.current);
+      if (refetchTimerRef.current) {
+        clearTimeout(refetchTimerRef.current);
+      }
     };
   }, []);
 

@@ -33,11 +33,11 @@ function reclaimableCell(reclaimable: number, total: number) {
     return "0 B";
   }
 
-  const pct = total > 0 ? Math.round((reclaimable / total) * 100) : 0;
+  const percentage = total > 0 ? Math.round((reclaimable / total) * 100) : 0;
 
   return (
     <>
-      {formatBytes(reclaimable)} <span className="ms-1">({pct}%)</span>
+      {formatBytes(reclaimable)} <span className="ms-1">({percentage}%)</span>
     </>
   );
 }

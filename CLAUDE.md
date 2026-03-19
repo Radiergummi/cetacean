@@ -151,6 +151,7 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 
 ## Code Style
 - **No abbreviations in JavaScript/TypeScript code.** Use full words for identifiers — `formatNumber` not `fmtNum`, `formatUnit` not `fmtUnit`, `index` not `idx`. Abbreviations that are industry-standard terms (e.g., `URL`, `API`, `SSE`, `HTML`) are fine.
+- **TSX/TS formatting:** Always brace single-statement `if` bodies (no braceless returns). Add blank lines around logical blocks — after `if` blocks, after variable declarations before logic, between `case` branches, and before `return` after logic. Use destructuring in callbacks (`({ value }) => value`, not `(s) => s.value`). Put JSX props on separate lines when there are 3+ props or long lines. Use camelCase for module-level constants (`knownStates`, not `KNOWN_STATES`), with `as const` where applicable. Use multi-line JSDoc (`/**\n *\n */`).
 
 ## Key Conventions
 - Most API endpoints are read-only (GET). Write operations use: PUT for idempotent updates (scale, image, availability), POST for non-idempotent actions (rollback, restart), PATCH for partial updates (env vars, labels, resources), DELETE for removal (tasks). All write endpoints go through `requireWrite` middleware (pass-through today, future RBAC hook). PATCH handlers validate Content-Type (`application/json-patch+json` or `application/merge-patch+json`) and return 415 for mismatches.

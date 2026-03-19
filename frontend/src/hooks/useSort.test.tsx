@@ -16,8 +16,8 @@ const items: Item[] = [
 ];
 
 const accessors = {
-  name: (i: Item) => i.name,
-  age: (i: Item) => i.age,
+  name: ({ name }: Item) => name,
+  age: ({ age }: Item) => age,
 };
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -33,20 +33,20 @@ describe("useSort", () => {
 
   it("sorts by default key ascending", () => {
     const { result } = renderHook(() => useSort(items, accessors, "name"), { wrapper });
-    expect(result.current.sorted.map((i) => i.name)).toEqual(["Alice", "Bob", "Charlie"]);
+    expect(result.current.sorted.map(({ name }) => name)).toEqual(["Alice", "Bob", "Charlie"]);
     expect(result.current.sortDir).toBe("asc");
   });
 
   it("sorts numerically", () => {
     const { result } = renderHook(() => useSort(items, accessors, "age"), { wrapper });
-    expect(result.current.sorted.map((i) => i.age)).toEqual([25, 30, 35]);
+    expect(result.current.sorted.map(({ age }) => age)).toEqual([25, 30, 35]);
   });
 
   it("toggles direction on same key", () => {
     const { result } = renderHook(() => useSort(items, accessors, "name"), { wrapper });
     act(() => result.current.toggle("name"));
     expect(result.current.sortDir).toBe("desc");
-    expect(result.current.sorted.map((i) => i.name)).toEqual(["Charlie", "Bob", "Alice"]);
+    expect(result.current.sorted.map(({ name }) => name)).toEqual(["Charlie", "Bob", "Alice"]);
   });
 
   it("switches key and resets to asc", () => {
@@ -55,7 +55,7 @@ describe("useSort", () => {
     act(() => result.current.toggle("age")); // switch to age, asc
     expect(result.current.sortKey).toBe("age");
     expect(result.current.sortDir).toBe("asc");
-    expect(result.current.sorted.map((i) => i.age)).toEqual([25, 30, 35]);
+    expect(result.current.sorted.map(({ age }) => age)).toEqual([25, 30, 35]);
   });
 
   it("handles undefined values", () => {

@@ -105,21 +105,23 @@ function seriesLabel(metric: Record<string, string> | undefined, fallback?: stri
 
 /** Parse a Prometheus range query response into chart-ready data. */
 function parseRangeResult(
-  resp: PrometheusResponse,
+  response: PrometheusResponse,
   title: string,
   colorOverride?: string,
 ): FetchedData | null {
-  if (!resp.data?.result?.length) {
+  if (!response.data?.result?.length) {
     return null;
   }
-  const result = resp.data.result;
-  const timestamps = result[0].values!.map((v) => Number(v[0]));
-  const labels = timestamps.map((ts) => new Date(ts * 1000).toLocaleTimeString());
-  const series = result.map((s, i) => ({
-    label: seriesLabel(s.metric, result.length === 1 ? title : undefined),
-    color: colorOverride ?? getChartColor(i),
-    data: s.values!.map((v) => Number(v[1])),
+
+  const result = response.data.result;
+  const timestamps = result[0].values!.map(([value]) => Number(value));
+  const labels = timestamps.map((timestamp) => new Date(timestamp * 1_000).toLocaleTimeString());
+  const series = result.map(({ metric, values }, index) => ({
+    label: seriesLabel(metric, result.length === 1 ? title : undefined),
+    color: colorOverride ?? getChartColor(index),
+    data: values!.map(([, value]) => Number(value)),
   }));
+
   return { labels, timestamps, series };
 }
 
@@ -135,15 +137,17 @@ function makeGradient(
   return grad;
 }
 
-const TOOLTIP_GAP = 20;
+const tooltipGap = 20;
 
-function tooltipLeft(tt: TooltipData, el: HTMLDivElement | null): number {
-  const w = el?.offsetWidth ?? 0;
-  const showLeft = tt.x > tt.chartWidth / 2;
+function tooltipLeft({ chartWidth, x }: TooltipData, element: HTMLDivElement | null): number {
+  const width = element?.offsetWidth ?? 0;
+  const showLeft = x > chartWidth / 2;
+
   if (showLeft) {
-    return tt.x - w - TOOLTIP_GAP;
+    return x - width - tooltipGap;
   }
-  return tt.x + TOOLTIP_GAP;
+
+  return x + tooltipGap;
 }
 
 interface FetchedData {
@@ -157,11 +161,12 @@ interface FetchedData {
 }
 
 /** Returns true if the series labels changed between two datasets. */
-function seriesChanged(prev: FetchedData | null, next: FetchedData): boolean {
-  if (!prev || prev.series.length !== next.series.length) {
+function seriesChanged(previous: FetchedData | null, next: FetchedData): boolean {
+  if (!previous || previous.series.length !== next.series.length) {
     return true;
   }
-  return prev.series.some((s, i) => s.label !== next.series[i].label);
+
+  return previous.series.some(({ label }, index) => label !== next.series[index].label);
 }
 
 export default function TimeSeriesChart({
@@ -216,8 +221,10 @@ export default function TimeSeriesChart({
     if (!controlled || isolatedLabel == null || !fetchedData) {
       return null;
     }
-    const idx = fetchedData.series.findIndex(({ label }) => label === isolatedLabel);
-    return idx >= 0 ? idx : null;
+
+    const index = fetchedData.series.findIndex(({ label }) => label === isolatedLabel);
+
+    return index >= 0 ? index : null;
   }, [controlled, isolatedLabel, fetchedData]);
   const isolatedIndex = controlled ? controlledIndex : localIsolatedIndex;
   const setIsolatedIndex = useCallback(
@@ -281,7 +288,6 @@ export default function TimeSeriesChart({
     const start = from ?? now - rangeSec;
     const end = to ?? now;
     const step = Math.max(Math.floor((end - start) / 300), 15);
-
     let cancelled = false;
 
     api
@@ -379,10 +385,10 @@ export default function TimeSeriesChart({
     const url = api.metricsStreamURL(query, step, rangeSec);
     const eventSource = new EventSource(url);
 
-    eventSource.addEventListener("initial", (e: MessageEvent) => {
+    eventSource.addEventListener("initial", (event: MessageEvent) => {
       try {
-        const resp = JSON.parse(e.data) as PrometheusResponse;
-        const parsed = parseRangeResult(resp, title, colorOverride);
+        const response = JSON.parse(event.data) as PrometheusResponse;
+        const parsed = parseRangeResult(response, title, colorOverride);
 
         if (!parsed) {
           return;
@@ -442,21 +448,22 @@ export default function TimeSeriesChart({
     };
 
     // Close SSE on tab hide; tab show triggers a re-run via sseKey
-    const visHandler = () => {
+    const visibilityHandler = () => {
       if (document.visibilityState === "hidden") {
         eventSource.close();
       } else {
         hasOpenedRef.current = false;
+
         fetchDataRef.current();
         setSSEKey((key) => key + 1);
       }
     };
 
-    document.addEventListener("visibilitychange", visHandler);
+    document.addEventListener("visibilitychange", visibilityHandler);
 
     return () => {
       eventSource.close();
-      document.removeEventListener("visibilitychange", visHandler);
+      document.removeEventListener("visibilitychange", visibilityHandler);
     };
   }, [query, range, from, to, streaming, title, colorOverride, sseKey]);
 
@@ -470,7 +477,7 @@ export default function TimeSeriesChart({
       datasets: fetchedData.series.map(({ color, data, label }, i) => {
         const dimmed = isolatedIndex != null && isolatedIndex !== i;
         const base = {
-          label: label,
+          label,
           pointRadius: 0,
           pointHoverRadius: dimmed ? 0 : 3,
           pointHoverBackgroundColor: color,

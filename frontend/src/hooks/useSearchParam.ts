@@ -23,18 +23,21 @@ export function useSearchParam(key: string): [string, string, (value: string) =>
   }, [urlValue]);
 
   const setValue = useCallback(
-    (v: string) => {
-      setInputValue(v);
+    (value: string) => {
+      setInputValue(value);
       clearTimeout(timerRef.current);
+
       timerRef.current = setTimeout(() => {
         setParams(
-          (prev) => {
-            const next = new URLSearchParams(prev);
-            if (v) {
-              next.set(key, v);
+          (previous) => {
+            const next = new URLSearchParams(previous);
+
+            if (value) {
+              next.set(key, value);
             } else {
               next.delete(key);
             }
+
             return next;
           },
           { replace: true },

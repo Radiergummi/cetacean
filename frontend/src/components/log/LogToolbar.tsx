@@ -1,5 +1,5 @@
 import type { TimeRange, Level } from "./log-utils";
-import { PRESETS, toLocalInput, formatShortDate } from "./log-utils";
+import { presets, toLocalInput, formatShortDate } from "./log-utils";
 import { X, Clock, ChevronDown } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 
@@ -74,7 +74,7 @@ export function TimeRangeSelector({
               Presets
             </div>
             <div className="flex flex-wrap gap-1">
-              {PRESETS.map((p) => (
+              {presets.map((p) => (
                 <button
                   key={p.label}
                   onClick={() => {

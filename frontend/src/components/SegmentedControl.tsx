@@ -72,6 +72,7 @@ export default function SegmentedControl<T extends string>({
         setOpen(false);
       }
     };
+
     document.addEventListener("mousedown", handler);
 
     return () => document.removeEventListener("mousedown", handler);

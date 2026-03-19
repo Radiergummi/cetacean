@@ -1,7 +1,8 @@
-const STACK_NAMESPACE_LABEL = "com.docker.stack.namespace";
+const stackNamespaceLabel = "com.docker.stack.namespace";
 
 export function parseStackLabels(labels: Record<string, string> | undefined) {
-  const entries = Object.entries(labels || {}).filter(([k]) => k !== STACK_NAMESPACE_LABEL);
-  const stack = labels?.[STACK_NAMESPACE_LABEL];
+  const entries = Object.entries(labels || {}).filter(([key]) => key !== stackNamespaceLabel);
+  const stack = labels?.[stackNamespaceLabel];
+
   return { entries, stack };
 }

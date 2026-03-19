@@ -1,5 +1,5 @@
 /** IBM Carbon / Bang Wong CVD-safe palette — fallback values matching CSS --chart-* vars. */
-export const CHART_COLORS = [
+export const chartColors = [
   "#648FFF", // Blue
   "#FFB000", // Gold
   "#DC267F", // Magenta
@@ -16,13 +16,21 @@ export const CHART_COLORS = [
 let resolvedColors: string[] | null = null;
 
 function resolveColors(): string[] {
-  if (resolvedColors) return resolvedColors;
-  if (typeof document === "undefined") return CHART_COLORS;
+  if (resolvedColors) {
+    return resolvedColors;
+  }
+
+  if (typeof document === "undefined") {
+    return chartColors;
+  }
+
   const style = getComputedStyle(document.documentElement);
-  resolvedColors = CHART_COLORS.map((fallback, i) => {
-    const val = style.getPropertyValue(`--chart-${i + 1}`).trim();
-    return val || fallback;
+  resolvedColors = chartColors.map((fallback, index) => {
+    const value = style.getPropertyValue(`--chart-${index + 1}`).trim();
+
+    return value || fallback;
   });
+
   return resolvedColors;
 }
 
@@ -32,6 +40,7 @@ function resolveColors(): string[] {
  */
 export function getChartColor(index: number): string {
   const colors = resolveColors();
+
   return colors[index % colors.length];
 }
 
@@ -45,11 +54,22 @@ const semanticCache = new Map<string, string>();
  */
 export function getSemanticChartColor(name: string): string {
   const cached = semanticCache.get(name);
-  if (cached) return cached;
-  if (typeof document === "undefined") return "";
+
+  if (cached) {
+    return cached;
+  }
+
+  if (typeof document === "undefined") {
+    return "";
+  }
+
   const value = getComputedStyle(document.documentElement)
     .getPropertyValue(`--chart-${name}`)
     .trim();
-  if (value) semanticCache.set(name, value);
+
+  if (value) {
+    semanticCache.set(name, value);
+  }
+
   return value;
 }

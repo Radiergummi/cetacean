@@ -32,7 +32,7 @@ export default function ConfigList() {
       [debouncedSearch, sortKey, sortDir],
     ),
     "config",
-    (c: Config) => c.ID,
+    ({ ID }: Config) => ID,
   );
 
   const columns: Column<Config>[] = [
@@ -44,7 +44,7 @@ export default function ConfigList() {
           dir={sortDir}
         />
       ),
-      cell: (c) => <ResourceName name={c.Spec.Name || c.ID} />,
+      cell: ({ ID, Spec: { Name } }) => <ResourceName name={Name || ID} />,
       onHeaderClick: () => toggle("name"),
     },
     {
@@ -55,7 +55,7 @@ export default function ConfigList() {
           dir={sortDir}
         />
       ),
-      cell: (c) => (c.CreatedAt ? <TimeAgo date={c.CreatedAt} /> : "\u2014"),
+      cell: ({ CreatedAt }) => (CreatedAt ? <TimeAgo date={CreatedAt} /> : "\u2014"),
       onHeaderClick: () => toggle("created"),
     },
     {
@@ -66,26 +66,30 @@ export default function ConfigList() {
           dir={sortDir}
         />
       ),
-      cell: (c) => (c.UpdatedAt ? <TimeAgo date={c.UpdatedAt} /> : "\u2014"),
+      cell: ({ UpdatedAt }) => (UpdatedAt ? <TimeAgo date={UpdatedAt} /> : "\u2014"),
       onHeaderClick: () => toggle("updated"),
     },
   ];
+
   const [viewMode, setViewMode] = useViewMode("configs");
 
-  if (loading)
+  if (loading) {
     return (
       <div>
         <PageHeader title="Configs" />
         <SkeletonTable columns={3} />
       </div>
     );
-  if (error)
+  }
+
+  if (error) {
     return (
       <FetchError
         message={error.message}
         onRetry={retry}
       />
     );
+  }
 
   return (
     <div>
@@ -93,30 +97,31 @@ export default function ConfigList() {
       <ListToolbar
         search={search}
         onSearchChange={setSearch}
-        placeholder="Search configs..."
+        placeholder="Search configs…"
         viewMode={viewMode}
         onViewModeChange={setViewMode}
       />
+
       {configs.length === 0 ? (
         <EmptyState message={search ? "No configs match your search" : "No configs found"} />
       ) : viewMode === "table" ? (
         <DataTable
           columns={columns}
           data={configs}
-          keyFn={(c) => c.ID}
-          onRowClick={(c) => navigate(`/configs/${c.ID}`)}
+          keyFn={({ ID }) => ID}
+          onRowClick={({ ID }) => navigate(`/configs/${ID}`)}
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {configs.map((cfg) => (
+          {configs.map(({ CreatedAt, ID, Spec: { Name }, UpdatedAt }) => (
             <ResourceCard
-              key={cfg.ID}
-              title={<ResourceName name={cfg.Spec.Name || cfg.ID} />}
-              to={`/configs/${cfg.ID}`}
+              key={ID}
+              title={<ResourceName name={Name || ID} />}
+              to={`/configs/${ID}`}
             >
               <div className="space-y-1 text-xs text-muted-foreground">
-                <div>Created: {cfg.CreatedAt ? <TimeAgo date={cfg.CreatedAt} /> : "\u2014"}</div>
-                <div>Updated: {cfg.UpdatedAt ? <TimeAgo date={cfg.UpdatedAt} /> : "\u2014"}</div>
+                <div>Created: {CreatedAt ? <TimeAgo date={CreatedAt} /> : "\u2014"}</div>
+                <div>Updated: {UpdatedAt ? <TimeAgo date={UpdatedAt} /> : "\u2014"}</div>
               </div>
             </ResourceCard>
           ))}

@@ -17,7 +17,7 @@ beforeEach(() => {
         listeners.push(cb);
       },
       removeEventListener: (_: string, cb: (e: { matches: boolean }) => void) => {
-        listeners = listeners.filter((l) => l !== cb);
+        listeners = listeners.filter((listener) => listener !== cb);
       },
     })),
   );

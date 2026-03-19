@@ -5,9 +5,9 @@ export function LoadingPage() {
       <div className="h-10 w-80 rounded bg-muted" />
       <div className="space-y-3">
         <div className="h-10 rounded bg-muted" />
-        {Array.from({ length: 5 }).map((_, i) => (
+        {Array.from({ length: 5 }).map((_, index) => (
           <div
-            key={i}
+            key={index}
             className="h-12 rounded bg-muted/60"
           />
         ))}
@@ -22,9 +22,9 @@ export function SkeletonTable({ columns, rows = 5 }: { columns: number; rows?: n
       <table className="w-full">
         <thead>
           <tr className="border-b bg-muted/50">
-            {Array.from({ length: columns }).map((_, i) => (
+            {Array.from({ length: columns }).map((_, index) => (
               <th
-                key={i}
+                key={index}
                 className="p-3"
               >
                 <div className="h-4 w-20 rounded bg-muted" />
@@ -33,18 +33,18 @@ export function SkeletonTable({ columns, rows = 5 }: { columns: number; rows?: n
           </tr>
         </thead>
         <tbody>
-          {Array.from({ length: rows }).map((_, i) => (
+          {Array.from({ length: rows }).map((_, rowIndex) => (
             <tr
-              key={i}
+              key={rowIndex}
               className="border-b last:border-b-0"
             >
-              {Array.from({ length: columns }).map((_, j) => (
+              {Array.from({ length: columns }).map((_, columnIndex) => (
                 <td
-                  key={j}
+                  key={columnIndex}
                   className="p-3"
                 >
                   <div
-                    data-first={j === 0 || undefined}
+                    data-first={columnIndex === 0 || undefined}
                     className="h-4 w-20 rounded bg-muted/60 data-first:w-32"
                   />
                 </td>
@@ -64,10 +64,11 @@ export function LoadingDetail() {
         <div className="mb-2 h-4 w-32 rounded bg-muted" />
         <div className="h-8 w-64 rounded bg-muted" />
       </div>
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {Array.from({ length: 4 }).map((_, i) => (
+        {Array.from({ length: 4 }).map((_, index) => (
           <div
-            key={i}
+            key={index}
             className="rounded-lg border p-4"
           >
             <div className="mb-2 h-3 w-16 rounded bg-muted" />

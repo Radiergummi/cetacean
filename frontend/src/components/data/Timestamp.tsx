@@ -11,7 +11,9 @@ export default function Timestamp({
   date?: string;
   relative?: boolean;
 }) {
-  if (!date) return null;
+  if (!date) {
+    return null;
+  }
 
   const value = relative ? <TimeAgo date={date} /> : formatDateTime(date);
 

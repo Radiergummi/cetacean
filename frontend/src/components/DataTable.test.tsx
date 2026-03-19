@@ -9,8 +9,8 @@ interface Item {
 }
 
 const columns: Column<Item>[] = [
-  { header: "ID", cell: (item) => item.id },
-  { header: "Name", cell: (item) => item.name },
+  { header: "ID", cell: ({ id }) => id },
+  { header: "Name", cell: ({ name }) => name },
 ];
 
 const data: Item[] = [
@@ -24,7 +24,7 @@ describe("DataTable", () => {
       <DataTable
         columns={columns}
         data={data}
-        keyFn={(i) => i.id}
+        keyFn={({ id }) => id}
       />,
     );
     expect(screen.getByText("ID")).toBeInTheDocument();
@@ -36,7 +36,7 @@ describe("DataTable", () => {
       <DataTable
         columns={columns}
         data={data}
-        keyFn={(i) => i.id}
+        keyFn={({ id }) => id}
       />,
     );
     expect(screen.getByText("Alpha")).toBeInTheDocument();
@@ -49,7 +49,7 @@ describe("DataTable", () => {
       <DataTable
         columns={columns}
         data={data}
-        keyFn={(i) => i.id}
+        keyFn={({ id }) => id}
         onRowClick={onClick}
       />,
     );
@@ -62,7 +62,7 @@ describe("DataTable", () => {
       <DataTable
         columns={columns}
         data={[]}
-        keyFn={(i) => i.id}
+        keyFn={({ id }) => id}
       />,
     );
     expect(container.querySelectorAll("tbody tr")).toHaveLength(0);

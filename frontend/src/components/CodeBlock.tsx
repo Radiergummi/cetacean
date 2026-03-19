@@ -19,12 +19,15 @@ function detectFormat(text: string): Format {
       // not valid JSON
     }
   }
-  if (/^\[[\w.-]+\]/m.test(trimmed) && /^\w[\w.-]*\s*=/m.test(trimmed)) {
+
+  if (/^\[[\w.-]+]/m.test(trimmed) && /^\w[\w.-]*\s*=/m.test(trimmed)) {
     return "toml";
   }
-  if (/^[\w][\w.-]*\s*:/m.test(trimmed)) {
+
+  if (/^\w[\w.-]*\s*:/m.test(trimmed)) {
     return "yaml";
   }
+
   return "plain";
 }
 

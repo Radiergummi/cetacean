@@ -1,6 +1,6 @@
 import type { PagedResponse } from "../api/types";
 import { useResourceStream } from "./useResourceStream";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const ssePathMap: Record<string, string> = {
   node: "/nodes",
@@ -30,23 +30,36 @@ export function useSwarmResource<T>(
 
   const load = useCallback(() => {
     abortRef.current?.abort();
+
     const controller = new AbortController();
     abortRef.current = controller;
+
     // Only show loading skeleton on initial load, not on search/sort refetches
-    if (!hasLoadedRef.current) setLoading(true);
+    if (!hasLoadedRef.current) {
+      setLoading(true);
+    }
+
     setError(null);
     fetchFn()
-      .then((resp) => {
-        if (controller.signal.aborted) return;
-        setData(resp.items);
-        setTotal(resp.total);
+      .then((response) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setData(response.items);
+        setTotal(response.total);
+
         hasLoadedRef.current = true;
       })
-      .catch((e) => {
-        if (!controller.signal.aborted) setError(e);
+      .catch((event) => {
+        if (!controller.signal.aborted) {
+          setError(event);
+        }
       })
       .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       });
   }, [fetchFn]);
 
@@ -65,24 +78,33 @@ export function useSwarmResource<T>(
     useCallback((event) => {
       if (event.type === "sync") {
         loadRef.current();
+
         return;
       }
+
       if (event.action === "remove") {
-        setData((prev) => prev.filter((item) => getIdRef.current(item) !== event.id));
-        setTotal((prev) => Math.max(0, prev - 1));
+        setData((previous) => previous.filter((item) => getIdRef.current(item) !== event.id));
+        setTotal((previous) => Math.max(0, previous - 1));
       } else if (event.resource) {
         const resource = event.resource as T;
         const isNew = dataRef.current.findIndex((item) => getIdRef.current(item) === event.id) < 0;
-        setData((prev) => {
-          const idx = prev.findIndex((item) => getIdRef.current(item) === event.id);
-          if (idx >= 0) {
-            const next = [...prev];
-            next[idx] = resource;
+
+        setData((previous) => {
+          const index = previous.findIndex((item) => getIdRef.current(item) === event.id);
+
+          if (index >= 0) {
+            const next = [...previous];
+            next[index] = resource;
+
             return next;
           }
-          return [...prev, resource];
+
+          return [...previous, resource];
         });
-        if (isNew) setTotal((t) => t + 1);
+
+        if (isNew) {
+          setTotal((t) => t + 1);
+        }
       }
     }, []),
   );

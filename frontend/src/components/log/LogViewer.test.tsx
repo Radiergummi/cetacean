@@ -27,10 +27,10 @@ function logResponse(
   lines: { message: string; timestamp?: string; stream?: string }[],
   hasMore = false,
 ) {
-  const mapped = lines.map((l) => ({
-    timestamp: l.timestamp ?? "",
-    message: l.message,
-    stream: (l.stream ?? "stdout") as "stdout" | "stderr",
+  const mapped = lines.map((line) => ({
+    timestamp: line.timestamp ?? "",
+    message: line.message,
+    stream: (line.stream ?? "stdout") as "stdout" | "stderr",
   }));
   return {
     lines: mapped,

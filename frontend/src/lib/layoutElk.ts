@@ -1,12 +1,12 @@
-import type { Node, Edge } from "@xyflow/react";
-import ELK, { type ElkNode, type ElkExtendedEdge } from "elkjs/lib/elk.bundled.js";
+import type { Edge, Node } from "@xyflow/react";
+import ELK, { type ElkExtendedEdge, type ElkNode } from "elkjs/lib/elk.bundled.js";
 
 const elk = new ELK();
 
-const NODE_WIDTH = 224; // matches w-56 (14rem) in ServiceCardNode
-const DEFAULT_NODE_HEIGHT = 120;
-const GROUP_PADDING = 20;
-const GROUP_HEADER = 36;
+const nodeWidth = 224; // matches w-56 (14rem) in ServiceCardNode
+const defaultNodeHeight = 120;
+const groupPadding = 20;
+const groupHeader = 36;
 
 const isGroup = (type?: string) => type === "stackGroup" || type === "nodeGroup";
 
@@ -19,6 +19,7 @@ export async function computeLayout(
   const leaves = nodes.filter((n) => !isGroup(n.type));
 
   const groupChildren = new Map<string, ElkNode[]>();
+
   for (const g of groups) {
     groupChildren.set(g.id, []);
   }
@@ -26,9 +27,10 @@ export async function computeLayout(
   for (const leaf of leaves) {
     const elkNode: ElkNode = {
       id: leaf.id,
-      width: NODE_WIDTH,
-      height: ((leaf.data as Record<string, unknown>)?._elkHeight as number) ?? DEFAULT_NODE_HEIGHT,
+      width: nodeWidth,
+      height: ((leaf.data as Record<string, unknown>)?._elkHeight as number) ?? defaultNodeHeight,
     };
+
     if (leaf.parentId && groupChildren.has(leaf.parentId)) {
       groupChildren.get(leaf.parentId)!.push(elkNode);
     }
@@ -40,7 +42,7 @@ export async function computeLayout(
     topLevelChildren.push({
       id: g.id,
       layoutOptions: {
-        "elk.padding": `[top=${GROUP_HEADER + GROUP_PADDING},left=${GROUP_PADDING},bottom=${GROUP_PADDING},right=${GROUP_PADDING}]`,
+        "elk.padding": `[top=${groupHeader + groupPadding},left=${groupPadding},bottom=${groupPadding},right=${groupPadding}]`,
         "elk.spacing.edgeNode": "20",
       },
       children: groupChildren.get(g.id) ?? [],
@@ -51,9 +53,8 @@ export async function computeLayout(
     if (!leaf.parentId) {
       topLevelChildren.push({
         id: leaf.id,
-        width: NODE_WIDTH,
-        height:
-          ((leaf.data as Record<string, unknown>)?._elkHeight as number) ?? DEFAULT_NODE_HEIGHT,
+        width: nodeWidth,
+        height: ((leaf.data as Record<string, unknown>)?._elkHeight as number) ?? defaultNodeHeight,
       });
     }
   }
@@ -61,9 +62,14 @@ export async function computeLayout(
   // Deduplicate edges for ELK (one per source-target pair)
   const elkEdges: ElkExtendedEdge[] = [];
   const seenPairs = new Set<string>();
+
   for (const edge of edges) {
     const pairKey = `${edge.source}:${edge.target}`;
-    if (seenPairs.has(pairKey)) continue;
+
+    if (seenPairs.has(pairKey)) {
+      continue;
+    }
+
     seenPairs.add(pairKey);
     elkEdges.push({
       id: pairKey,
@@ -97,12 +103,14 @@ export async function computeLayout(
   function extractPositions(elkNode: ElkNode, offsetX: number, offsetY: number) {
     const x = (elkNode.x ?? 0) + offsetX;
     const y = (elkNode.y ?? 0) + offsetY;
+
     positionMap.set(elkNode.id, {
       x,
       y,
       width: elkNode.width ?? 0,
       height: elkNode.height ?? 0,
     });
+
     if (elkNode.children) {
       for (const child of elkNode.children) {
         extractPositions(child, x, y);
@@ -122,10 +130,15 @@ export async function computeLayout(
 
   // Build container offset lookup from positionMap
   const containerOffsets = new Map<string, { x: number; y: number }>();
+
   containerOffsets.set("root", { x: 0, y: 0 });
+
   for (const g of groups) {
-    const pos = positionMap.get(g.id);
-    if (pos) containerOffsets.set(g.id, { x: pos.x, y: pos.y });
+    const position = positionMap.get(g.id);
+
+    if (position) {
+      containerOffsets.set(g.id, { x: position.x, y: position.y });
+    }
   }
 
   if (layouted.edges) {
@@ -133,55 +146,79 @@ export async function computeLayout(
       const container = (edge as unknown as { container?: string }).container ?? "root";
       const off = containerOffsets.get(container) ?? { x: 0, y: 0 };
       const points: Array<{ x: number; y: number }> = [];
+
       for (const section of edge.sections ?? []) {
         points.push({
           x: section.startPoint.x + off.x,
           y: section.startPoint.y + off.y,
         });
+
         if (section.bendPoints) {
           for (const bp of section.bendPoints) {
             points.push({ x: bp.x + off.x, y: bp.y + off.y });
           }
         }
+
         points.push({
           x: section.endPoint.x + off.x,
           y: section.endPoint.y + off.y,
         });
       }
+
       edgeBendPoints.set(edge.id, points);
     }
   }
 
   // Map to React Flow nodes
   const resultNodes = nodes.map((node) => {
-    const pos = positionMap.get(node.id);
-    if (!pos) return node;
+    const position = positionMap.get(node.id);
+
+    if (!position) {
+      return node;
+    }
 
     if (isGroup(node.type)) {
       return {
         ...node,
-        position: { x: pos.x, y: pos.y },
-        style: { width: pos.width, height: pos.height },
+        position: {
+          x: position.x,
+          y: position.y,
+        },
+        style: {
+          width: position.width,
+          height: position.height,
+        },
       };
     }
 
     if (node.parentId) {
-      const parentPos = positionMap.get(node.parentId);
-      if (parentPos) {
+      const parentPosition = positionMap.get(node.parentId);
+
+      if (parentPosition) {
         return {
           ...node,
-          position: { x: pos.x - parentPos.x, y: pos.y - parentPos.y },
+          position: {
+            x: position.x - parentPosition.x,
+            y: position.y - parentPosition.y,
+          },
         };
       }
     }
 
-    return { ...node, position: { x: pos.x, y: pos.y } };
+    return {
+      ...node,
+      position: {
+        x: position.x,
+        y: position.y,
+      },
+    };
   });
 
   // Map to React Flow edges, injecting ELK bend points
   const resultEdges = edges.map((edge) => {
     const pairKey = `${edge.source}:${edge.target}`;
     const points = edgeBendPoints.get(pairKey);
+
     return {
       ...edge,
       zIndex: 10,
@@ -192,5 +229,8 @@ export async function computeLayout(
     };
   });
 
-  return { nodes: resultNodes, edges: resultEdges };
+  return {
+    nodes: resultNodes,
+    edges: resultEdges,
+  };
 }

@@ -12,8 +12,8 @@ describe("computeLayout (ELK)", () => {
     const result = await computeLayout(nodes, edges);
 
     expect(result.nodes.length).toBe(2);
-    const posA = result.nodes.find((n) => n.id === "a")!.position;
-    const posB = result.nodes.find((n) => n.id === "b")!.position;
+    const posA = result.nodes.find(({ id }) => id === "a")!.position;
+    const posB = result.nodes.find(({ id }) => id === "b")!.position;
     expect(posA.x).toBeLessThan(posB.x);
   });
 
@@ -23,8 +23,8 @@ describe("computeLayout (ELK)", () => {
       { id: "child", position: { x: 0, y: 0 }, data: {}, parentId: "group" },
     ];
     const result = await computeLayout(nodes, []);
-    const group = result.nodes.find((n) => n.id === "group")!;
-    const child = result.nodes.find((n) => n.id === "child")!;
+    const group = result.nodes.find(({ id }) => id === "group")!;
+    const child = result.nodes.find(({ id }) => id === "child")!;
 
     expect(group.style).toBeDefined();
     expect((group.style as any).width).toBeGreaterThan(0);

@@ -6,16 +6,20 @@ function sectionKey(title: string) {
   return `section:${title.toLowerCase().replace(/\s+/g, "-")}`;
 }
 
-/** localStorage-backed open/closed state for a named section. */
+/**
+ * localStorage-backed open/closed state for a named section.
+ */
 export function useSectionCollapse(title: string, defaultOpen = true) {
   const [open, setOpen] = useState(() => {
     try {
       const stored = localStorage.getItem(sectionKey(title));
+
       return stored !== null ? stored === "1" : defaultOpen;
     } catch {
       return defaultOpen;
     }
   });
+
   const toggle = useCallback(() => {
     setOpen((prev) => {
       try {
@@ -23,6 +27,7 @@ export function useSectionCollapse(title: string, defaultOpen = true) {
       } catch {
         /* ignore */
       }
+
       return !prev;
     });
   }, [title]);
@@ -30,7 +35,9 @@ export function useSectionCollapse(title: string, defaultOpen = true) {
   return { open, toggle } as const;
 }
 
-/** Chevron toggle button used by CollapsibleSection and custom widget headers. */
+/**
+ * Chevron toggle button used by CollapsibleSection and custom widget headers.
+ */
 export function SectionToggle({
   title,
   open,
@@ -48,7 +55,8 @@ export function SectionToggle({
       onClick={onToggle}
       className={
         className ??
-        "flex cursor-pointer items-center gap-1.5 text-sm font-medium tracking-wider text-muted-foreground uppercase transition-colors hover:text-foreground"
+        "flex cursor-pointer items-center gap-1.5 text-sm font-medium tracking-wider text-muted-foreground uppercase " +
+          "transition-colors hover:text-foreground"
       }
     >
       <ChevronRight

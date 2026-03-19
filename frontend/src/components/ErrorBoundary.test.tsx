@@ -5,7 +5,10 @@ import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 let shouldThrow = false;
 
 function ThrowingComponent() {
-  if (shouldThrow) throw new Error("Test error");
+  if (shouldThrow) {
+    throw new Error("Test error");
+  }
+
   return <div>Content</div>;
 }
 

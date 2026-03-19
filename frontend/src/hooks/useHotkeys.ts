@@ -4,6 +4,7 @@ type HotkeyMap = Record<string, () => void>;
 
 function isEditing(event: KeyboardEvent): boolean {
   const target = event.target as HTMLElement;
+
   return (
     target.tagName === "INPUT" ||
     target.tagName === "TEXTAREA" ||
@@ -37,25 +38,30 @@ export function useHotkeys(hotkeys: HotkeyMap) {
       if (pendingRef.current) {
         const chord = `${pendingRef.current} ${key}`;
         pendingRef.current = null;
+
         if (timerRef.current) {
           clearTimeout(timerRef.current);
           timerRef.current = null;
         }
+
         if (map[chord]) {
           event.preventDefault();
           map[chord]();
+
           return;
         }
       }
 
       // Check for chord starters (keys that begin a multi-key sequence)
-      const isChordStarter = Object.keys(map).some((k) => k.startsWith(key + " "));
+      const isChordStarter = Object.keys(map).some((key) => key.startsWith(key + " "));
+
       if (isChordStarter) {
         event.preventDefault();
         pendingRef.current = key;
         timerRef.current = setTimeout(() => {
           pendingRef.current = null;
         }, 1000);
+
         return;
       }
 
@@ -67,9 +73,13 @@ export function useHotkeys(hotkeys: HotkeyMap) {
     }
 
     document.addEventListener("keydown", onKeyDown);
+
     return () => {
       document.removeEventListener("keydown", onKeyDown);
-      if (timerRef.current) clearTimeout(timerRef.current);
+
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
     };
   }, []);
 }

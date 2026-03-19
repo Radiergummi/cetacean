@@ -11,9 +11,11 @@ export function EnvEditor({
   envVars: Record<string, string>;
   onSaved: (updated: Record<string, string>) => void;
 }) {
-  async function handleSave(ops: PatchOp[]) {
-    const updated = await api.patchServiceEnv(serviceId, ops);
+  async function handleSave(operations: PatchOp[]) {
+    const updated = await api.patchServiceEnv(serviceId, operations);
+
     onSaved(updated);
+
     return updated;
   }
 

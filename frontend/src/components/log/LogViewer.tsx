@@ -45,11 +45,19 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
 
   const handlePin = useCallback((line: LogLine) => {
     const key = logLineKey(line);
-    setPinnedLines((prev) => {
-      const idx = prev.findIndex((l) => logLineKey(l) === key);
-      if (idx !== -1) return [...prev.slice(0, idx), ...prev.slice(idx + 1)];
-      if (prev.length >= 3) return prev;
-      return [...prev, line];
+
+    setPinnedLines((previous) => {
+      const idx = previous.findIndex((l) => logLineKey(l) === key);
+
+      if (idx !== -1) {
+        return [...previous.slice(0, idx), ...previous.slice(idx + 1)];
+      }
+
+      if (previous.length >= 3) {
+        return previous;
+      }
+
+      return [...previous, line];
     });
   }, []);
 
@@ -88,7 +96,9 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
         searchRef.current?.focus();
       }
     };
+
     document.addEventListener("keydown", handler);
+
     return () => document.removeEventListener("keydown", handler);
   }, [data.containerRef]);
 
@@ -110,6 +120,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
     const link = document.createElement("a");
     link.href = url;
     link.download = `logs-${logId.slice(0, 12)}.log`;
+
     link.click();
     URL.revokeObjectURL(url);
   }, [formatLogs, logId]);

@@ -9,23 +9,29 @@ export function useSort<T>(
   items: T[],
   accessors: Record<string, Accessor<T>>,
   defaultKey?: string,
-  defaultDir: SortDir = "asc",
+  defaultDirection: SortDir = "asc",
 ) {
-  const { sortKey, sortDir, toggle } = useSortParams(defaultKey, defaultDir);
+  const { sortKey, sortDir, toggle } = useSortParams(defaultKey, defaultDirection);
 
   const sorted = useMemo(() => {
-    if (!sortKey || !accessors[sortKey]) return items;
+    if (!sortKey || !accessors[sortKey]) {
+      return items;
+    }
+
     const get = accessors[sortKey];
+
     return [...items].sort((a, b) => {
       const av = get(a);
       const bv = get(b);
-      let cmp: number;
+      let tieBreaker: number;
+
       if (typeof av === "number" && typeof bv === "number") {
-        cmp = av - bv;
+        tieBreaker = av - bv;
       } else {
-        cmp = String(av ?? "").localeCompare(String(bv ?? ""));
+        tieBreaker = String(av ?? "").localeCompare(String(bv ?? ""));
       }
-      return sortDir === "asc" ? cmp : -cmp;
+
+      return sortDir === "asc" ? tieBreaker : -tieBreaker;
     });
   }, [items, sortKey, sortDir, accessors]);
 
@@ -43,9 +49,11 @@ export function useSortParams(defaultKey?: string, defaultDir: SortDir = "asc") 
   const toggle = useCallback(
     (key: string) => {
       const newDir = sortKey === key ? (sortDir === "asc" ? "desc" : "asc") : "asc";
+
       setParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
+        (previous) => {
+          const next = new URLSearchParams(previous);
+
           if (key === defaultKey && newDir === defaultDir) {
             next.delete("sort");
             next.delete("dir");

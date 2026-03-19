@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const BREAKPOINTS = {
+const breakpoints = {
   sm: 640,
   md: 768,
   lg: 1024,
@@ -8,23 +8,27 @@ const BREAKPOINTS = {
   "2xl": 1536,
 } as const;
 
-type Breakpoint = keyof typeof BREAKPOINTS;
+type Breakpoint = keyof typeof breakpoints;
 
 export function useMatchesBreakpoint(
   breakpoint: Breakpoint,
   direction: "above" | "below",
 ): boolean {
-  const px = BREAKPOINTS[breakpoint];
-  const query = direction === "below" ? `(max-width: ${px - 1}px)` : `(min-width: ${px}px)`;
+  const offset = breakpoints[breakpoint];
+  const query = direction === "below" ? `(max-width: ${offset - 1}px)` : `(min-width: ${offset}px)`;
 
   const [matches, setMatches] = useState(() => matchMedia(query).matches);
 
   useEffect(() => {
-    const mql = matchMedia(query);
-    setMatches(mql.matches);
-    const handler = (e: { matches: boolean }) => setMatches(e.matches);
-    mql.addEventListener("change", handler);
-    return () => mql.removeEventListener("change", handler);
+    const mediaQuery = matchMedia(query);
+
+    setMatches(mediaQuery.matches);
+
+    const handler = (event: { matches: boolean }) => setMatches(event.matches);
+
+    mediaQuery.addEventListener("change", handler);
+
+    return () => mediaQuery.removeEventListener("change", handler);
   }, [query]);
 
   return matches;

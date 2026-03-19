@@ -19,9 +19,14 @@ function sliderMax(
   step: number,
 ): number {
   const highestValue = Math.max(reservation ?? 0, limit ?? 0);
-  if (highestValue === 0) return nodeCapacity;
+
+  if (highestValue === 0) {
+    return nodeCapacity;
+  }
+
   // Show at least 2x the highest value, rounded up to the next step, capped at node capacity
   const desired = Math.ceil((highestValue * 2) / step) * step;
+
   return Math.min(Math.max(desired, step * 8), nodeCapacity);
 }
 
@@ -41,7 +46,7 @@ interface AllocationData {
 
 export function ResourcesEditor({
   serviceId,
-  resources,
+  resources: { Limits, Reservations },
   pids,
   allocation,
   onSaved,
@@ -71,21 +76,13 @@ export function ResourcesEditor({
 
   function openEdit() {
     setCpu({
-      reservation:
-        resources.Reservations?.NanoCPUs != null
-          ? resources.Reservations.NanoCPUs / 1e9
-          : undefined,
-      limit: resources.Limits?.NanoCPUs != null ? resources.Limits.NanoCPUs / 1e9 : undefined,
+      reservation: Reservations?.NanoCPUs != null ? Reservations.NanoCPUs / 1e9 : undefined,
+      limit: Limits?.NanoCPUs != null ? Limits.NanoCPUs / 1e9 : undefined,
     });
     setMemory({
       reservation:
-        resources.Reservations?.MemoryBytes != null
-          ? resources.Reservations.MemoryBytes / (1024 * 1024)
-          : undefined,
-      limit:
-        resources.Limits?.MemoryBytes != null
-          ? resources.Limits.MemoryBytes / (1024 * 1024)
-          : undefined,
+        Reservations?.MemoryBytes != null ? Reservations.MemoryBytes / (1024 * 1024) : undefined,
+      limit: Limits?.MemoryBytes != null ? Limits.MemoryBytes / (1024 * 1024) : undefined,
     });
     api
       .clusterCapacity()
@@ -102,37 +99,49 @@ export function ResourcesEditor({
 
   async function save() {
     const patch: ServiceResourceShape = {};
+
     if (cpu.limit !== undefined || memory.limit !== undefined) {
       patch.Limits = {};
-      if (cpu.limit !== undefined) patch.Limits.NanoCPUs = Math.round(cpu.limit * 1e9);
-      if (memory.limit !== undefined)
+
+      if (cpu.limit !== undefined) {
+        patch.Limits.NanoCPUs = Math.round(cpu.limit * 1e9);
+      }
+
+      if (memory.limit !== undefined) {
         patch.Limits.MemoryBytes = Math.round(memory.limit * 1024 * 1024);
+      }
     }
     if (cpu.reservation !== undefined || memory.reservation !== undefined) {
       patch.Reservations = {};
-      if (cpu.reservation !== undefined)
+
+      if (cpu.reservation !== undefined) {
         patch.Reservations.NanoCPUs = Math.round(cpu.reservation * 1e9);
-      if (memory.reservation !== undefined)
+      }
+
+      if (memory.reservation !== undefined) {
         patch.Reservations.MemoryBytes = Math.round(memory.reservation * 1024 * 1024);
+      }
     }
     setSaving(true);
     setSaveError(null);
+
     try {
       const updated = await api.patchServiceResources(serviceId, patch);
+
       onSaved(updated);
       setEditing(false);
-    } catch (err) {
-      setSaveError(getErrorMessage(err, "Save failed"));
+    } catch (error) {
+      setSaveError(getErrorMessage(error, "Save failed"));
     } finally {
       setSaving(false);
     }
   }
 
   const hasResources =
-    resources.Limits?.NanoCPUs != null ||
-    resources.Limits?.MemoryBytes != null ||
-    resources.Reservations?.NanoCPUs != null ||
-    resources.Reservations?.MemoryBytes != null;
+    Limits?.NanoCPUs != null ||
+    Limits?.MemoryBytes != null ||
+    Reservations?.NanoCPUs != null ||
+    Reservations?.MemoryBytes != null;
 
   // Only show allocation bars when actual usage data is available (requires Prometheus).
   // Without actual data, the text grid is a better fit.
@@ -192,32 +201,28 @@ export function ResourcesEditor({
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-                {resources.Limits?.NanoCPUs != null && (
+                {Limits?.NanoCPUs != null && (
                   <div>
                     <div className="text-xs text-muted-foreground">CPU Limit</div>
-                    <div className="font-mono">{formatCores(resources.Limits.NanoCPUs / 1e9)}</div>
+                    <div className="font-mono">{formatCores(Limits.NanoCPUs / 1e9)}</div>
                   </div>
                 )}
-                {resources.Limits?.MemoryBytes != null && (
+                {Limits?.MemoryBytes != null && (
                   <div>
                     <div className="text-xs text-muted-foreground">Memory Limit</div>
-                    <div className="font-mono">{formatBytes(resources.Limits.MemoryBytes)}</div>
+                    <div className="font-mono">{formatBytes(Limits.MemoryBytes)}</div>
                   </div>
                 )}
-                {resources.Reservations?.NanoCPUs != null && (
+                {Reservations?.NanoCPUs != null && (
                   <div>
                     <div className="text-xs text-muted-foreground">CPU Reserved</div>
-                    <div className="font-mono">
-                      {formatCores(resources.Reservations.NanoCPUs / 1e9)}
-                    </div>
+                    <div className="font-mono">{formatCores(Reservations.NanoCPUs / 1e9)}</div>
                   </div>
                 )}
-                {resources.Reservations?.MemoryBytes != null && (
+                {Reservations?.MemoryBytes != null && (
                   <div>
                     <div className="text-xs text-muted-foreground">Memory Reserved</div>
-                    <div className="font-mono">
-                      {formatBytes(resources.Reservations.MemoryBytes)}
-                    </div>
+                    <div className="font-mono">{formatBytes(Reservations.MemoryBytes)}</div>
                   </div>
                 )}
               </div>
@@ -305,7 +310,10 @@ function AllocationBar({
   formatValue: (value: number) => string;
 }) {
   const maxValue = Math.max(reserved ?? 0, actual ?? 0, limit ?? 0) * 1.15;
-  if (maxValue === 0) return null;
+
+  if (maxValue === 0) {
+    return null;
+  }
 
   const actualPercent = actual != null ? (actual / maxValue) * 100 : 0;
   const reservedPercent = reserved != null ? (reserved / maxValue) * 100 : undefined;
@@ -334,21 +342,18 @@ function AllocationBar({
         </div>
       </div>
       <div className="relative h-1.5 rounded-full bg-muted">
-        {/* Actual usage bar */}
         {actualPercent > 0 && (
           <div
             className="absolute inset-y-0 left-0 rounded-full bg-primary"
             style={{ width: `${actualPercent}%` }}
           />
         )}
-        {/* Reserved marker */}
         {reservedPercent != null && (
           <div
             className="absolute top-1/2 h-3 w-0.5 -translate-y-1/2 rounded-full bg-muted-foreground/60"
             style={{ left: `${reservedPercent}%` }}
           />
         )}
-        {/* Limit marker */}
         {limitPercent != null && (
           <div
             className="absolute top-1/2 h-3 w-0.5 -translate-y-1/2 rounded-full bg-destructive"

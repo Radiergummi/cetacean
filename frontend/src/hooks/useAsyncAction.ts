@@ -8,6 +8,7 @@ export function useAsyncAction() {
   async function execute(action: () => Promise<unknown>, errorMessage: string) {
     setLoading(true);
     setError(null);
+
     try {
       await action();
     } catch (thrown) {

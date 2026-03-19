@@ -15,14 +15,21 @@ export default function MonitoringStatus({ status, source }: Props) {
 
   // Fully healthy — nothing to show
   if (status.prometheusConfigured && status.prometheusReachable) {
-    const neOk = !status.nodeExporter || status.nodeExporter.targets >= status.nodeExporter.nodes;
-    const caOk = !status.cadvisor || status.cadvisor.targets >= status.cadvisor.nodes;
-    if (neOk && caOk) return null;
+    const nodeExporterRunning =
+      !status.nodeExporter || status.nodeExporter.targets >= status.nodeExporter.nodes;
+    const cAdvisorRunning = !status.cadvisor || status.cadvisor.targets >= status.cadvisor.nodes;
+
+    if (nodeExporterRunning && cAdvisorRunning) {
+      return null;
+    }
   }
 
   // State A: Nothing configured (dismissible)
   if (!status.prometheusConfigured) {
-    if (dismissed) return null;
+    if (dismissed) {
+      return null;
+    }
+
     return (
       <Banner
         icon={<BarChart3 className="size-5 shrink-0 text-blue-600 dark:text-blue-400" />}
@@ -69,6 +76,7 @@ export default function MonitoringStatus({ status, source }: Props) {
 
   if (source !== "cadvisor" && status.nodeExporter) {
     const { targets, nodes } = status.nodeExporter;
+
     if (targets === 0) {
       hints.push("node-exporter not detected — node metrics (CPU, memory, disk) unavailable.");
     } else if (targets < nodes) {
@@ -78,6 +86,7 @@ export default function MonitoringStatus({ status, source }: Props) {
 
   if (source !== "nodeExporter" && status.cadvisor) {
     const { targets, nodes } = status.cadvisor;
+
     if (targets === 0) {
       hints.push("cAdvisor not detected — container metrics (service CPU/memory) unavailable.");
     } else if (targets < nodes) {
@@ -85,7 +94,9 @@ export default function MonitoringStatus({ status, source }: Props) {
     }
   }
 
-  if (hints.length === 0) return null;
+  if (hints.length === 0) {
+    return null;
+  }
 
   return (
     <Banner
@@ -99,8 +110,8 @@ export default function MonitoringStatus({ status, source }: Props) {
         <strong>Monitoring partially configured</strong>
       </p>
       <ul className="mt-1 list-inside list-disc space-y-0.5 text-sm">
-        {hints.map((h) => (
-          <li key={h}>{h}</li>
+        {hints.map((hint) => (
+          <li key={hint}>{hint}</li>
         ))}
       </ul>
     </Banner>

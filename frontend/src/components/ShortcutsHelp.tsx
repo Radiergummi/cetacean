@@ -44,13 +44,15 @@ const groups: ShortcutGroup[] = [
 
 export default function ShortcutsHelp({ onClose }: { onClose: () => void }) {
   useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" || e.key === "?") {
-        e.preventDefault();
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" || event.key === "?") {
+        event.preventDefault();
         onClose();
       }
     }
+
     document.addEventListener("keydown", onKeyDown);
+
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
@@ -61,7 +63,7 @@ export default function ShortcutsHelp({ onClose }: { onClose: () => void }) {
     >
       <div
         className="mx-auto mt-[10vh] max-w-lg animate-[slide-down_150ms_ease-out] overflow-hidden rounded-lg border bg-popover shadow-lg"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b px-4 py-3">
           <h2 className="text-sm font-medium">Keyboard Shortcuts</h2>
@@ -70,22 +72,21 @@ export default function ShortcutsHelp({ onClose }: { onClose: () => void }) {
           </kbd>
         </div>
         <div className="max-h-[60vh] space-y-5 overflow-y-auto p-4">
-          {groups.map((group) => (
-            <div key={group.title}>
-              <h3 className="mb-2 text-xs font-medium text-muted-foreground uppercase">
-                {group.title}
-              </h3>
+          {groups.map(({ shortcuts, title }) => (
+            <div key={title}>
+              <h3 className="mb-2 text-xs font-medium text-muted-foreground uppercase">{title}</h3>
+
               <div className="space-y-1.5">
-                {group.shortcuts.map((shortcut) => (
+                {shortcuts.map(({ description, keys }) => (
                   <div
-                    key={shortcut.description}
+                    key={description}
                     className="flex items-center justify-between text-sm"
                   >
-                    <span className="text-muted-foreground">{shortcut.description}</span>
+                    <span className="text-muted-foreground">{description}</span>
                     <span className="flex items-center gap-1">
-                      {shortcut.keys.map((key, i) => (
-                        <span key={i}>
-                          {i > 0 && <span className="mx-0.5 text-xs text-muted-foreground" />}
+                      {keys.map((key, index) => (
+                        <span key={index}>
+                          {index > 0 && <span className="mx-0.5 text-xs text-muted-foreground" />}
                           <kbd className="inline-flex min-w-5 items-center justify-center rounded border bg-muted px-1.5 py-0.5 text-xs font-medium">
                             {key}
                           </kbd>

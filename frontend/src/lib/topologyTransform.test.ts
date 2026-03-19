@@ -23,13 +23,13 @@ describe("buildLogicalFlow", () => {
     };
     const { nodes, edges } = buildLogicalFlow(data);
 
-    const groups = nodes.filter((n) => n.type === "stackGroup");
-    const services = nodes.filter((n) => n.type === "serviceCard");
+    const groups = nodes.filter(({ type }) => type === "stackGroup");
+    const services = nodes.filter(({ type }) => type === "serviceCard");
     expect(groups.length).toBe(1);
     expect(groups[0].data.label).toBe("app");
     expect(services.length).toBe(3);
-    expect(services.filter((n) => n.parentId === "stack:app").length).toBe(2);
-    expect(services.find((n) => n.id === "s3")?.parentId).toBeUndefined();
+    expect(services.filter(({ parentId }) => parentId === "stack:app").length).toBe(2);
+    expect(services.find(({ id }) => id === "s3")?.parentId).toBeUndefined();
 
     // One edge with all networks collapsed
     expect(edges.length).toBe(1);
@@ -53,7 +53,7 @@ describe("buildLogicalFlow", () => {
     const { edges } = buildLogicalFlow(data);
     expect(edges.length).toBe(1);
     const names = (edges[0].data as { networks: Array<{ name: string }> }).networks
-      .map((n) => n.name)
+      .map(({ name }) => name)
       .sort();
     expect(names).toEqual(["backend", "frontend"]);
   });
@@ -91,7 +91,7 @@ describe("buildLogicalFlow", () => {
     const { edges } = buildLogicalFlow(data);
     expect(edges.length).toBe(1);
     const names = (edges[0].data as { networks: Array<{ name: string }> }).networks
-      .map((n) => n.name)
+      .map(({ name }) => name)
       .sort();
     expect(names).toEqual(["backend", "frontend"]);
   });
@@ -162,7 +162,7 @@ describe("buildPhysicalFlow", () => {
       services: { serviceId: string; running: number; total: number }[];
     };
     expect(n1Data.services.length).toBe(2);
-    const webSvc = n1Data.services.find((s) => s.serviceId === "svc1");
+    const webSvc = n1Data.services.find(({ serviceId }) => serviceId === "svc1");
     expect(webSvc!.running).toBe(2);
     expect(webSvc!.total).toBe(2);
 

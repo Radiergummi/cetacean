@@ -55,9 +55,9 @@ export default function ServiceDetail() {
 
     api
       .service(id)
-      .then((r) => {
-        setService(r.service);
-        setChanges(r.changes ?? []);
+      .then((response) => {
+        setService(response.service);
+        setChanges(response.changes ?? []);
       })
       .catch(() => setError(true));
     api
@@ -81,10 +81,11 @@ export default function ServiceDetail() {
   useEffect(() => {
     api
       .networks({ limit: 0 })
-      .then((res) => {
+      .then((result) => {
         const map: Record<string, string> = {};
-        for (const n of res.items) {
-          map[n.Id] = n.Name;
+
+        for (const network of result.items) {
+          map[network.Id] = network.Name;
         }
         setNetworkNames(map);
       })
@@ -192,7 +193,7 @@ export default function ServiceDetail() {
     containerSpec.Init != null ||
     containerSpec.ReadOnly;
 
-  const runningTasks = tasks?.filter((t) => t.Status?.State === "running").length ?? 0;
+  const runningTasks = tasks?.filter(({ Status }) => Status?.State === "running").length ?? 0;
   const resources = service?.Spec?.TaskTemplate?.Resources;
   const cpuReserved = resources?.Reservations?.NanoCPUs
     ? (resources.Reservations.NanoCPUs / 1e9) * 100 * runningTasks
@@ -402,7 +403,7 @@ export default function ServiceDetail() {
           <SimpleTable
             columns={["Type", "Source", "Target", "Read Only"]}
             items={containerSpec.Mounts}
-            keyFn={(_, i) => i}
+            keyFn={(_, index) => index}
             renderRow={({ ReadOnly, Source, Target, Type }) => (
               <>
                 <td className="p-3 text-sm">
@@ -439,7 +440,9 @@ export default function ServiceDetail() {
             items={taskTemplate.Networks}
             keyFn={({ Target }) => Target}
             renderRow={({ Aliases, Target }) => {
-              const vip = service.Endpoint?.VirtualIPs?.find((v) => v.NetworkID === Target);
+              const vip = service.Endpoint?.VirtualIPs?.find(
+                ({ NetworkID }) => NetworkID === Target,
+              );
               return (
                 <>
                   <td className="p-3 text-sm">

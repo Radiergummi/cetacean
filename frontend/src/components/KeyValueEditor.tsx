@@ -153,7 +153,7 @@ export function KeyValueEditor({
                 <tr className="border-b bg-muted/50">
                   <th className="py-3 ps-3 text-left text-sm font-medium">{keyLabel}</th>
                   <th className="py-3 ps-3 text-left text-sm font-medium">{valueLabel}</th>
-                  <th className="py-3 ps-3 w-12" />
+                  <th className="w-12 py-3 ps-3" />
                 </tr>
               </thead>
               <tbody>

@@ -1,6 +1,6 @@
 import ResourceName from "../ResourceName";
 import { useHighlight } from "./HighlightContext";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { Handle, type NodeProps, Position } from "@xyflow/react";
 import { useNavigate } from "react-router-dom";
 
 type ServiceCardData = {
@@ -68,26 +68,26 @@ export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCar
 
       {data.ports && data.ports.length > 0 && (
         <div className="space-y-0.5 text-xs text-muted-foreground">
-          {data.ports.map((p) => (
-            <div key={p}>{p}</div>
+          {data.ports.map((port) => (
+            <div key={port}>{port}</div>
           ))}
         </div>
       )}
 
-      {data.updateStatus && <div className="mt-1 text-xs text-yellow-500">Updating...</div>}
+      {data.updateStatus && <div className="mt-1 text-xs text-yellow-500">Updating…</div>}
 
       {data.hasTargetEdge && (
         <Handle
           type="target"
           position={Position.Left}
-          className="!h-0 !w-0 !border-0 !bg-transparent"
+          className="size-0! border-0! bg-transparent!"
         />
       )}
       {data.hasSourceEdge && (
         <Handle
           type="source"
           position={Position.Right}
-          className="!h-0 !w-0 !border-0 !bg-transparent"
+          className="size-0! border-0! bg-transparent!"
         />
       )}
     </div>

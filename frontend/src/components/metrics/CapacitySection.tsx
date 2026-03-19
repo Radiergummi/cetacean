@@ -1,13 +1,20 @@
-import { api, type ClusterSnapshot, type ClusterMetrics } from "../../api/client";
+import { api, type ClusterMetrics, type ClusterSnapshot } from "../../api/client";
 import { formatBytes, formatNumber, formatPercentage } from "../../lib/format";
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 function barColor(percent: number, isReservation: boolean): string {
   const high = isReservation ? 95 : 90;
   const mid = isReservation ? 80 : 70;
-  if (percent >= high) return "bg-red-500";
-  if (percent >= mid) return "bg-amber-500";
+
+  if (percent >= high) {
+    return "bg-red-500";
+  }
+
+  if (percent >= mid) {
+    return "bg-amber-500";
+  }
+
   return "bg-blue-500";
 }
 
@@ -49,19 +56,29 @@ function Bar({
   );
 }
 
-export default function CapacitySection({ snapshot }: { snapshot: ClusterSnapshot }) {
+export default function CapacitySection({
+  snapshot: { prometheusConfigured, reservedCPU, reservedMemory, totalCPU, totalMemory },
+}: {
+  snapshot: ClusterSnapshot;
+}) {
   const navigate = useNavigate();
   const [metrics, setMetrics] = useState<ClusterMetrics | null>(null);
   const goToNodes = useCallback(() => navigate("/nodes"), [navigate]);
 
   useEffect(() => {
-    if (!snapshot.prometheusConfigured) return;
+    if (!prometheusConfigured) {
+      return;
+    }
+
     let cancelled = false;
+
     const load = () => {
       api
         .clusterMetrics()
-        .then((m) => {
-          if (!cancelled) setMetrics(m);
+        .then((metrics) => {
+          if (!cancelled) {
+            setMetrics(metrics);
+          }
         })
         .catch(() => {});
     };
@@ -71,14 +88,14 @@ export default function CapacitySection({ snapshot }: { snapshot: ClusterSnapsho
       cancelled = true;
       clearInterval(interval);
     };
-  }, [snapshot.prometheusConfigured]);
+  }, [prometheusConfigured]);
 
-  if (snapshot.prometheusConfigured && !metrics) {
+  if (prometheusConfigured && !metrics) {
     return (
       <div className="space-y-3">
-        {[1, 2, 3].map((i) => (
+        {[1, 2, 3].map((index) => (
           <div
-            key={i}
+            key={index}
             className="rounded-lg border bg-card p-4"
           >
             <div className="mb-2 h-3 w-16 rounded bg-muted" />
@@ -90,7 +107,7 @@ export default function CapacitySection({ snapshot }: { snapshot: ClusterSnapsho
     );
   }
 
-  if (snapshot.prometheusConfigured && metrics) {
+  if (prometheusConfigured && metrics) {
     return (
       <div className="space-y-3">
         <Bar
@@ -118,24 +135,23 @@ export default function CapacitySection({ snapshot }: { snapshot: ClusterSnapsho
     );
   }
 
-  const cpuReservedCores = snapshot.reservedCPU / 1e9;
-  const cpuPct = snapshot.totalCPU > 0 ? (cpuReservedCores / snapshot.totalCPU) * 100 : 0;
-  const memPct =
-    snapshot.totalMemory > 0 ? (snapshot.reservedMemory / snapshot.totalMemory) * 100 : 0;
+  const cpuReservedCores = reservedCPU / 1e9;
+  const cpuPct = totalCPU > 0 ? (cpuReservedCores / totalCPU) * 100 : 0;
+  const memPct = totalMemory > 0 ? (reservedMemory / totalMemory) * 100 : 0;
 
   return (
     <div className="space-y-3">
       <Bar
         label="CPU"
         percent={cpuPct}
-        detail={`${formatNumber(cpuReservedCores, 1)} / ${snapshot.totalCPU} cores reserved`}
+        detail={`${formatNumber(cpuReservedCores, 1)} / ${totalCPU} cores reserved`}
         isReservation={true}
         onClick={goToNodes}
       />
       <Bar
         label="Memory"
         percent={memPct}
-        detail={`${formatBytes(snapshot.reservedMemory)} / ${formatBytes(snapshot.totalMemory)} reserved`}
+        detail={`${formatBytes(reservedMemory)} / ${formatBytes(totalMemory)} reserved`}
         isReservation={true}
         onClick={goToNodes}
       />

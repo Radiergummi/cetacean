@@ -12,6 +12,7 @@ export default function FetchError({ message, onRetry }: Props) {
       <div className="flex-1 text-sm text-red-800 dark:text-red-200">
         {message || "Failed to load data"}
       </div>
+
       {onRetry && (
         <button
           onClick={onRetry}

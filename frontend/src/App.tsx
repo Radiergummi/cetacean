@@ -6,7 +6,7 @@ import ShortcutTooltip from "./components/ShortcutTooltip";
 import ThemeToggle from "./components/ThemeToggle";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { useHotkeys } from "./hooks/useHotkeys";
-import { ConnectionProvider, SSE_EVENT_TYPES } from "./hooks/useResourceStream";
+import { ConnectionProvider, sseEventTypes } from "./hooks/useResourceStream";
 import { Menu, X } from "lucide-react";
 import type React from "react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
@@ -191,7 +191,7 @@ function ConnectionTracker({ children }: { children: React.ReactNode }) {
       setLastEventAt(now);
     };
 
-    for (const type of SSE_EVENT_TYPES) {
+    for (const type of sseEventTypes) {
       es.addEventListener(type, touch);
     }
     es.addEventListener("batch", touch);

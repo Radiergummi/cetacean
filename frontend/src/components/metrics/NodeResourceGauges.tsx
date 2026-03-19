@@ -1,7 +1,7 @@
 import { api } from "../../api/client";
 import { escapePromQL } from "../../lib/utils";
 import ResourceGauge from "./ResourceGauge";
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 interface GaugeDef {
   label: string;
@@ -12,27 +12,34 @@ function instanceFilter(instance?: string) {
   return instance ? `instance="${escapePromQL(instance)}"` : "";
 }
 
-const GAUGES: GaugeDef[] = [
+const gauges: GaugeDef[] = [
   {
     label: "CPU",
     query: (instance) => {
       const f = instanceFilter(instance);
+
       return `100 - (avg(rate(node_cpu_seconds_total{mode="idle"${f ? `,${f}` : ""}}[5m])) * 100)`;
     },
   },
   {
     label: "Memory",
     query: (instance) => {
-      const f = instanceFilter(instance);
-      const sel = f ? `{${f}}` : "";
-      return `(1 - node_memory_MemAvailable_bytes${sel} / node_memory_MemTotal_bytes${sel}) * 100`;
+      const filter = instanceFilter(instance);
+      const selection = filter ? `{${filter}}` : "";
+
+      return `(1 - node_memory_MemAvailable_bytes${selection} / node_memory_MemTotal_bytes${selection}) * 100`;
     },
   },
   {
     label: "Disk",
     query: (instance) => {
-      const f = instanceFilter(instance);
-      return `max((1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs"${f ? `,${f}` : ""}} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs"${f ? `,${f}` : ""}}) * 100)`;
+      const filter = instanceFilter(instance);
+
+      return `max((1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs"${
+        filter ? `,${filter}` : ""
+      }} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs"${
+        filter ? `,${filter}` : ""
+      }}) * 100)`;
     },
   },
 ];
@@ -43,16 +50,17 @@ interface Props {
 }
 
 export default function NodeResourceGauges({ instance }: Props) {
-  const [values, setValues] = useState<(number | null)[]>(GAUGES.map(() => null));
+  const [values, setValues] = useState<(number | null)[]>(gauges.map(() => null));
 
   const fetchAll = useCallback(() => {
     Promise.all(
-      GAUGES.map((g) =>
+      gauges.map((gauge) =>
         api
-          .metricsQuery(g.query(instance))
-          .then((resp) => {
-            const val = resp.data?.result?.[0]?.value?.[1];
-            return val != null ? Number(val) : null;
+          .metricsQuery(gauge.query(instance))
+          .then((response) => {
+            const value = response.data?.result?.[0]?.value?.[1];
+
+            return value != null ? Number(value) : null;
           })
           .catch(() => null),
       ),
@@ -61,17 +69,18 @@ export default function NodeResourceGauges({ instance }: Props) {
 
   useEffect(() => {
     fetchAll();
-    const interval = setInterval(fetchAll, 30000);
+    const interval = setInterval(fetchAll, 30_000);
+
     return () => clearInterval(interval);
   }, [fetchAll]);
 
   return (
     <div className="flex flex-wrap items-center justify-center gap-8 py-2">
-      {GAUGES.map((g, i) => (
+      {gauges.map(({ label }, index) => (
         <ResourceGauge
-          key={g.label}
-          label={g.label}
-          value={values[i]}
+          key={label}
+          label={label}
+          value={values[index]}
         />
       ))}
     </div>

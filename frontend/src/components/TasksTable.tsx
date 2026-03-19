@@ -20,7 +20,6 @@ interface TasksTableProps {
 
 export default function TasksTable({ tasks, variant, metrics }: TasksTableProps) {
   const [stateFilter, setStateFilter] = useState<string | null>(null);
-
   const filteredTasks = useMemo(() => {
     const filtered = stateFilter
       ? tasks.filter(({ Status: { State } }) => State === stateFilter)
@@ -42,11 +41,15 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
       orphaned: 12,
       remove: 13,
     };
-    const stateWeight = (s: string) => stateOrder[s] ?? 99;
+    const stateWeight = (state: string) => stateOrder[state] ?? 99;
 
     return [...filtered].sort((a, b) => {
-      const w = stateWeight(a.Status.State) - stateWeight(b.Status.State);
-      if (w !== 0) return w;
+      const weight = stateWeight(a.Status.State) - stateWeight(b.Status.State);
+
+      if (weight !== 0) {
+        return weight;
+      }
+
       return new Date(b.Status.Timestamp).getTime() - new Date(a.Status.Timestamp).getTime();
     });
   }, [tasks, stateFilter]);
@@ -82,8 +85,8 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
             </tr>
           </thead>
           <tbody>
-            {filteredTasks.map((task) => {
-              const {
+            {filteredTasks.map(
+              ({
                 DesiredState,
                 ID,
                 NodeHostname,
@@ -92,88 +95,90 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
                 ServiceName,
                 Slot,
                 Status: { ContainerStatus, Err, State, Timestamp },
-              } = task;
-              const exitCode = ContainerStatus?.ExitCode;
-              const errorMessage = Err || (exitCode && exitCode !== 0 ? `exit ${exitCode}` : "");
+              }) => {
+                const exitCode = ContainerStatus?.ExitCode;
+                const errorMessage = Err || (exitCode && exitCode !== 0 ? `exit ${exitCode}` : "");
 
-              return (
-                <tr
-                  key={ID}
-                  className="border-b last:border-b-0"
-                >
-                  {variant === "node" && (
-                    <td className="p-3 text-sm whitespace-nowrap">
-                      <Link
-                        to={`/services/${ServiceID}`}
-                        className="text-link hover:underline"
-                      >
-                        <ResourceName name={ServiceName || ServiceID.slice(0, 12)} />
-                      </Link>
-                    </td>
-                  )}
+                return (
+                  <tr
+                    key={ID}
+                    className="border-b last:border-b-0"
+                  >
+                    {variant === "node" && (
+                      <td className="p-3 text-sm whitespace-nowrap">
+                        <Link
+                          to={`/services/${ServiceID}`}
+                          className="text-link hover:underline"
+                        >
+                          <ResourceName name={ServiceName || ServiceID.slice(0, 12)} />
+                        </Link>
+                      </td>
+                    )}
 
-                  <td className="p-3 text-sm">
-                    <span className="inline-flex items-center gap-2">
-                      <span className={`size-2 shrink-0 rounded-full ${statusColor(State)}`} />
-                      <Link
-                        to={`/tasks/${ID}`}
-                        className="text-link hover:underline"
-                      >
-                        {variant === "node" && Slot ? `Replica #${Slot}` : ID.slice(0, 12)}
-                      </Link>
-                    </span>
-                  </td>
-
-                  <td className="p-3 text-sm">
-                    <TaskStatusBadge state={State} />
-                  </td>
-
-                  {metrics && (
                     <td className="p-3 text-sm">
-                      {State === "running" ? (
-                        <TaskSparkline
-                          data={metrics.get(ID)?.cpu}
-                          currentValue={metrics.get(ID)?.currentCpu}
-                          type="cpu"
-                        />
-                      ) : (
-                        "\u2014"
-                      )}
+                      <span className="inline-flex items-center gap-2">
+                        <span className={`size-2 shrink-0 rounded-full ${statusColor(State)}`} />
+                        <Link
+                          to={`/tasks/${ID}`}
+                          className="text-link hover:underline"
+                        >
+                          {variant === "node" && Slot ? `Replica #${Slot}` : ID.slice(0, 12)}
+                        </Link>
+                      </span>
                     </td>
-                  )}
-                  {metrics && (
-                    <td className="p-3 text-sm">
-                      {State === "running" ? (
-                        <TaskSparkline
-                          data={metrics.get(ID)?.memory}
-                          currentValue={metrics.get(ID)?.currentMemory}
-                          type="memory"
-                        />
-                      ) : (
-                        "\u2014"
-                      )}
-                    </td>
-                  )}
 
-                  {variant === "service" && (
                     <td className="p-3 text-sm">
-                      <Link
-                        to={`/nodes/${NodeID}`}
-                        className="text-link hover:underline"
-                      >
-                        {NodeHostname || NodeID.slice(0, 12)}
-                      </Link>
+                      <TaskStatusBadge state={State} />
                     </td>
-                  )}
 
-                  <td className="p-3 text-sm">{DesiredState}</td>
-                  <td className="p-3 text-sm text-red-600 dark:text-red-400">{errorMessage}</td>
-                  <td className="p-3 text-sm text-muted-foreground">
-                    {Timestamp ? <TimeAgo date={Timestamp} /> : "\u2014"}
-                  </td>
-                </tr>
-              );
-            })}
+                    {metrics && (
+                      <td className="p-3 text-sm">
+                        {State === "running" ? (
+                          <TaskSparkline
+                            data={metrics.get(ID)?.cpu}
+                            currentValue={metrics.get(ID)?.currentCpu}
+                            type="cpu"
+                          />
+                        ) : (
+                          "\u2014"
+                        )}
+                      </td>
+                    )}
+
+                    {metrics && (
+                      <td className="p-3 text-sm">
+                        {State === "running" ? (
+                          <TaskSparkline
+                            data={metrics.get(ID)?.memory}
+                            currentValue={metrics.get(ID)?.currentMemory}
+                            type="memory"
+                          />
+                        ) : (
+                          "\u2014"
+                        )}
+                      </td>
+                    )}
+
+                    {variant === "service" && (
+                      <td className="p-3 text-sm">
+                        <Link
+                          to={`/nodes/${NodeID}`}
+                          className="text-link hover:underline"
+                        >
+                          {NodeHostname || NodeID.slice(0, 12)}
+                        </Link>
+                      </td>
+                    )}
+
+                    <td className="p-3 text-sm">{DesiredState}</td>
+                    <td className="p-3 text-sm text-red-600 dark:text-red-400">{errorMessage}</td>
+                    <td className="p-3 text-sm text-muted-foreground">
+                      {Timestamp ? <TimeAgo date={Timestamp} /> : "\u2014"}
+                    </td>
+                  </tr>
+                );
+              },
+            )}
           </tbody>
         </table>
       </div>

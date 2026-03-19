@@ -1,19 +1,29 @@
 import { Monitor, Moon, Sun } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 
 type Theme = "light" | "dark" | "system";
 
 const CYCLE: Theme[] = ["light", "dark", "system"];
 
 function getInitialTheme(): Theme {
-  if (typeof window === "undefined") return "system";
+  if (typeof window === "undefined") {
+    return "system";
+  }
+
   const stored = localStorage.getItem("theme");
-  if (stored === "dark" || stored === "light" || stored === "system") return stored;
+
+  if (stored === "dark" || stored === "light" || stored === "system") {
+    return stored;
+  }
+
   return "system";
 }
 
 function resolveTheme(theme: Theme): "light" | "dark" {
-  if (theme !== "system") return theme;
+  if (theme !== "system") {
+    return theme;
+  }
+
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
@@ -30,11 +40,16 @@ export default function ThemeToggle() {
 
   // Listen for OS theme changes when in system mode
   useEffect(() => {
-    if (theme !== "system") return;
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = () => document.documentElement.classList.toggle("dark", mq.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
+    if (theme !== "system") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = () => document.documentElement.classList.toggle("dark", mediaQuery.matches);
+
+    mediaQuery.addEventListener("change", handler);
+
+    return () => mediaQuery.removeEventListener("change", handler);
   }, [theme]);
 
   const Icon = icons[theme];

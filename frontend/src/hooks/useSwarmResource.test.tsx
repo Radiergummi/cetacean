@@ -30,7 +30,7 @@ class MockEventSource {
   simulateEvent(type: string, data: unknown) {
     const handlers = this.listeners.get(type) || [];
     const event = new MessageEvent("message", { data: JSON.stringify(data) });
-    handlers.forEach((h) => h(event));
+    handlers.forEach((handler) => handler(event));
   }
 }
 
@@ -51,9 +51,12 @@ describe("useSwarmResource", () => {
     const items: Item[] = [{ ID: "1", Name: "svc1" }];
     const fetchFn = vi.fn().mockResolvedValue({ items, total: 1 });
 
-    const { result } = renderHook(() => useSwarmResource(fetchFn, "service", (i: Item) => i.ID), {
-      wrapper,
-    });
+    const { result } = renderHook(
+      () => useSwarmResource(fetchFn, "service", ({ ID }: Item) => ID),
+      {
+        wrapper,
+      },
+    );
 
     expect(result.current.loading).toBe(true);
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -65,9 +68,12 @@ describe("useSwarmResource", () => {
   it("handles fetch errors", async () => {
     const fetchFn = vi.fn().mockRejectedValue(new Error("fail"));
 
-    const { result } = renderHook(() => useSwarmResource(fetchFn, "service", (i: Item) => i.ID), {
-      wrapper,
-    });
+    const { result } = renderHook(
+      () => useSwarmResource(fetchFn, "service", ({ ID }: Item) => ID),
+      {
+        wrapper,
+      },
+    );
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.error).toBeInstanceOf(Error);
@@ -78,9 +84,12 @@ describe("useSwarmResource", () => {
     const items: Item[] = [{ ID: "1", Name: "old" }];
     const fetchFn = vi.fn().mockResolvedValue({ items, total: 1 });
 
-    const { result } = renderHook(() => useSwarmResource(fetchFn, "service", (i: Item) => i.ID), {
-      wrapper,
-    });
+    const { result } = renderHook(
+      () => useSwarmResource(fetchFn, "service", ({ ID }: Item) => ID),
+      {
+        wrapper,
+      },
+    );
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -100,9 +109,12 @@ describe("useSwarmResource", () => {
   it("adds new item on SSE event with unknown id", async () => {
     const fetchFn = vi.fn().mockResolvedValue({ items: [{ ID: "1", Name: "a" }], total: 1 });
 
-    const { result } = renderHook(() => useSwarmResource(fetchFn, "service", (i: Item) => i.ID), {
-      wrapper,
-    });
+    const { result } = renderHook(
+      () => useSwarmResource(fetchFn, "service", ({ ID }: Item) => ID),
+      {
+        wrapper,
+      },
+    );
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -129,9 +141,12 @@ describe("useSwarmResource", () => {
       total: 2,
     });
 
-    const { result } = renderHook(() => useSwarmResource(fetchFn, "service", (i: Item) => i.ID), {
-      wrapper,
-    });
+    const { result } = renderHook(
+      () => useSwarmResource(fetchFn, "service", ({ ID }: Item) => ID),
+      {
+        wrapper,
+      },
+    );
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -152,9 +167,12 @@ describe("useSwarmResource", () => {
       .mockRejectedValueOnce(new Error("fail"))
       .mockResolvedValueOnce({ items: [{ ID: "1", Name: "ok" }], total: 1 });
 
-    const { result } = renderHook(() => useSwarmResource(fetchFn, "service", (i: Item) => i.ID), {
-      wrapper,
-    });
+    const { result } = renderHook(
+      () => useSwarmResource(fetchFn, "service", ({ ID }: Item) => ID),
+      {
+        wrapper,
+      },
+    );
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.error).toBeInstanceOf(Error);

@@ -89,22 +89,25 @@ function VirtualBody<T>({
           />
         </tr>
       )}
-      {virtualItems.map((virtualRow) => {
-        const item = data[virtualRow.index];
+      {virtualItems.map(({ index }) => {
+        const item = data[index];
+
         return (
           <tr
             key={keyFn(item)}
             ref={virtualizer.measureElement}
-            data-index={virtualRow.index}
+            data-index={index}
             data-clickable={onRowClick ? "" : undefined}
-            data-selected={virtualRow.index === selectedIndex || undefined}
-            data-last={virtualRow.index === data.length - 1 || undefined}
-            className={`border-b data-clickable:cursor-pointer data-clickable:hover:bg-muted/50 data-last:border-b-0 data-selected:bg-accent data-selected:text-accent-foreground ${rowClassName?.(item) ?? ""}`}
+            data-selected={index === selectedIndex || undefined}
+            data-last={index === data.length - 1 || undefined}
+            className={`border-b data-clickable:cursor-pointer data-clickable:hover:bg-muted/50 data-last:border-b-0 data-selected:bg-accent data-selected:text-accent-foreground ${
+              rowClassName?.(item) ?? ""
+            }`}
             onClick={onRowClick ? () => onRowClick(item) : undefined}
           >
-            {columns.map((column, colIndex) => (
+            {columns.map((column, columnIndex) => (
               <td
-                key={colIndex}
+                key={columnIndex}
                 className={`p-3 text-sm whitespace-nowrap ${column.className ?? ""}`}
               >
                 {column.cell(item)}
@@ -140,31 +143,39 @@ export default function DataTable<T>({ columns, data, keyFn, rowClassName, onRow
 
   // Scroll selected plain row into view
   useEffect(() => {
-    if (useVirtual || selectedIndex < 0) return;
+    if (useVirtual || selectedIndex < 0) {
+      return;
+    }
+
     const row = scrollRef.current?.querySelector(`tbody tr:nth-child(${selectedIndex + 1})`);
     row?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex, useVirtual]);
 
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
-      if (!data.length) return;
+      if (!data.length) {
+        return;
+      }
 
       switch (event.key) {
         case "ArrowDown":
         case "j":
           event.preventDefault();
-          setSelectedIndex((i) => Math.min(i + 1, data.length - 1));
+          setSelectedIndex((index) => Math.min(index + 1, data.length - 1));
           break;
+
         case "ArrowUp":
         case "k":
           event.preventDefault();
-          setSelectedIndex((i) => Math.max(i - 1, 0));
+          setSelectedIndex((index) => Math.max(index - 1, 0));
           break;
+
         case "Enter":
           if (selectedIndex >= 0 && selectedIndex < data.length && onRowClick) {
             event.preventDefault();
             onRowClick(data[selectedIndex]);
           }
+
           break;
       }
     },
@@ -196,6 +207,7 @@ export default function DataTable<T>({ columns, data, keyFn, rowClassName, onRow
             ))}
           </tr>
         </thead>
+
         {useVirtual ? (
           <VirtualBody
             columns={columns}

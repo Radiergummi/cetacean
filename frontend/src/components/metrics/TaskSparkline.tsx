@@ -7,7 +7,7 @@ interface Props {
   type: "cpu" | "memory";
 }
 
-const CHART_CLASSES = {
+const chartClasses = {
   cpu: "text-chart-cpu",
   memory: "text-chart-memory",
 };
@@ -33,7 +33,7 @@ export default function TaskSparkline({ data, currentValue, type }: Props) {
     <span className="inline-flex items-center gap-1.5">
       <Sparkline
         data={data}
-        className={CHART_CLASSES[type]}
+        className={chartClasses[type]}
       />
       <span className="text-xs whitespace-nowrap tabular-nums">
         {formatValue(currentValue, type)}

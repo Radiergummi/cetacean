@@ -4,7 +4,10 @@ type Row = false | undefined | null | 0 | "" | [string, React.ReactNode];
 
 export default function KVTable({ rows }: { rows: Row[] }) {
   const valid = rows.filter((row): row is [string, React.ReactNode] => !!row && !!row[1]);
-  if (valid.length === 0) return null;
+
+  if (valid.length === 0) {
+    return null;
+  }
 
   return (
     <div className="overflow-x-auto rounded-lg border">

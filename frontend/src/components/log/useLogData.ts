@@ -2,7 +2,7 @@ import type { LogLine as ApiLogLine } from "../../api/client";
 import { api } from "../../api/client";
 import { getErrorMessage } from "../../lib/utils";
 import type { LogLine, TimeRange } from "./log-utils";
-import { MAX_LIVE_LINES, toLogLine } from "./log-utils";
+import { maxLiveLines, toLogLine } from "./log-utils";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface UseLogDataOptions {
@@ -115,7 +115,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
         const updated = current.concat(
           batch.map((line, index) => toLogLine(line, current.length + index)),
         );
-        return updated.length > MAX_LIVE_LINES ? updated.slice(-MAX_LIVE_LINES) : updated;
+        return updated.length > maxLiveLines ? updated.slice(-maxLiveLines) : updated;
       });
     };
 

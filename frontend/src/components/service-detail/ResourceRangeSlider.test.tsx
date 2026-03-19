@@ -64,8 +64,8 @@ describe("computeTicks", () => {
 
   it("produces intermediate ticks at whole cores", () => {
     const ticks = computeTicks(4, 0.25, identity);
-    const intermediates = ticks.filter((t) => !t.tall);
-    expect(intermediates.map((t) => t.value)).toEqual([1, 2, 3]);
+    const intermediates = ticks.filter(({ tall }) => !tall);
+    expect(intermediates.map(({ value }) => value)).toEqual([1, 2, 3]);
   });
 
   it("produces boundary ticks for memory", () => {
@@ -81,7 +81,7 @@ describe("computeTicks", () => {
   });
 
   it("uses formatLabel for tick labels", () => {
-    const ticks = computeTicks(4, 0.25, (v) => `${v} cores`);
+    const ticks = computeTicks(4, 0.25, (value) => `${value} cores`);
     expect(ticks[0].label).toBe("0.25 cores");
     expect(ticks[ticks.length - 1].label).toBe("4 cores");
   });

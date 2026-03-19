@@ -1,7 +1,7 @@
 import { api } from "../../api/client";
 import type { SearchResourceType, SearchResponse, SearchResult } from "../../api/types";
 import { getActions, matchAction, type PaletteAction, type PaletteStep } from "../../lib/actions";
-import { resourcePath, statusColor, TYPE_LABELS, TYPE_ORDER } from "../../lib/searchConstants";
+import { resourcePath, statusColor, typeLabels, typeOrder } from "../../lib/searchConstants";
 import { getErrorMessage } from "../../lib/utils";
 import ResourceName from "../ResourceName";
 import { Spinner } from "../Spinner";
@@ -15,7 +15,9 @@ function StateOrb({ state }: { state: string }) {
   if (state === "updating") {
     return <Spinner className="size-3 shrink-0 text-blue-500" />;
   }
+
   const color = statusColor(state);
+
   return (
     <span
       className={`inline-block size-2 shrink-0 rounded-full ${color}`}
@@ -31,7 +33,7 @@ interface FlatItem {
 
 function flattenResults(response: SearchResponse, filterType?: SearchResourceType): FlatItem[] {
   const items: FlatItem[] = [];
-  const types = filterType ? [filterType] : TYPE_ORDER;
+  const types = filterType ? [filterType] : typeOrder;
 
   for (const type of types) {
     const results = response.results[type];
@@ -65,22 +67,22 @@ function ActionBreadcrumbs({
   return (
     <div className="flex items-center gap-1 border-b px-3 py-1.5 text-xs text-muted-foreground">
       <span className="font-medium text-foreground">{action.label}</span>
-      {steps.map((step, i) => (
+      {steps.map(({ label, type }, index) => (
         <span
-          key={step.label}
+          key={label}
           className="flex items-center gap-1"
         >
           <ChevronRight className="size-3" />
-          {i < currentStep ? (
+          {index < currentStep ? (
             <span className="text-foreground">
-              {step.type === "resource"
-                ? ((actionArgs[i] as { name?: string })?.name ?? String(actionArgs[i]))
-                : String(actionArgs[i])}
+              {type === "resource"
+                ? ((actionArgs[index] as { name?: string })?.name ?? String(actionArgs[index]))
+                : String(actionArgs[index])}
             </span>
-          ) : i === currentStep ? (
-            <span className="font-medium text-primary">{step.label}</span>
+          ) : index === currentStep ? (
+            <span className="font-medium text-primary">{label}</span>
           ) : (
-            <span>{step.label}</span>
+            <span>{label}</span>
           )}
         </span>
       ))}
@@ -107,7 +109,10 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
 
   // Detect action match when not yet in action mode
   const actionMatch = useMemo(() => {
-    if (activeAction) return null;
+    if (activeAction) {
+      return null;
+    }
+
     return matchAction(query, actions);
   }, [query, actions, activeAction]);
 
@@ -129,13 +134,14 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   const actionSuggestionOffset = actionMatch && !activeAction ? 1 : 0;
   const totalItems = flat.length + actionSuggestionOffset;
 
-  const doSearch = useCallback((q: string) => {
+  const doSearch = useCallback((query: string) => {
     if (abortRef.current) {
       abortRef.current.abort();
     }
 
-    if (!q.trim()) {
+    if (!query.trim()) {
       setResponse(null);
+
       return;
     }
 
@@ -143,7 +149,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
     abortRef.current = controller;
 
     api
-      .search(q, undefined, controller.signal)
+      .search(query, undefined, controller.signal)
       .then((r) => {
         if (!controller.signal.aborted) {
           setResponse(r);
@@ -187,45 +193,65 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
 
   // Poll every 2s to refresh state/detail on existing results (no reorder/add/remove)
   useEffect(() => {
-    if (!hasResponse || !query.trim()) return;
+    if (!hasResponse || !query.trim()) {
+      return;
+    }
     const controller = new AbortController();
     const interval = setInterval(() => {
       api
         .search(query, undefined, controller.signal)
         .then((fresh) => {
-          if (controller.signal.aborted) return;
-          setResponse((prev) => {
-            if (!prev) return prev;
-            const updated = { ...prev, total: fresh.total, counts: fresh.counts };
-            const newResults: typeof prev.results = {};
-            for (const type of TYPE_ORDER) {
-              const prevItems = prev.results[type];
-              if (!prevItems) continue;
+          if (controller.signal.aborted) {
+            return;
+          }
+
+          setResponse((previous) => {
+            if (!previous) {
+              return previous;
+            }
+
+            const updated = { ...previous, total: fresh.total, counts: fresh.counts };
+            const newResults: typeof previous.results = {};
+
+            for (const type of typeOrder) {
+              const prevItems = previous.results[type];
+
+              if (!prevItems) {
+                continue;
+              }
+
               const freshItems = fresh.results[type];
+
               // Build lookup from fresh data
               const freshMap = new Map<string, { detail: string; state?: string }>();
+
               if (freshItems) {
                 for (const item of freshItems) {
                   freshMap.set(item.id, { detail: item.detail, state: item.state });
                 }
               }
+
               // Update in-place: same order, same items, just refresh mutable fields
               newResults[type] = prevItems.map((item) => {
                 const freshData = freshMap.get(item.id);
+
                 if (freshData) {
                   return { ...item, detail: freshData.detail, state: freshData.state };
                 }
+
                 return item;
               });
             }
+
             updated.results = newResults;
+
             return updated;
           });
         })
         .catch(() => {
           /* ignore */
         });
-    }, 2000);
+    }, 2_000);
     return () => {
       controller.abort();
       clearInterval(interval);
@@ -254,13 +280,18 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
     async (action: PaletteAction, args: unknown[]) => {
       if (action.destructive) {
         const confirmed = window.confirm(`Confirm: ${action.label}?`);
-        if (!confirmed) return;
+
+        if (!confirmed) {
+          return;
+        }
       }
 
       setActionLoading(true);
       setActionError(null);
+
       try {
         await action.execute(...args);
+
         onClose();
       } catch (err) {
         setActionError(getErrorMessage(err, String(err)));
@@ -273,13 +304,17 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
 
   const advanceStep = useCallback(
     (value: unknown) => {
-      if (!activeAction) return;
+      if (!activeAction) {
+        return;
+      }
+
       const newArgs = [...actionArgs, value];
+
       setActionArgs(newArgs);
 
       if (actionStep + 1 >= activeAction.steps.length) {
         // All steps done, execute
-        executeAction(activeAction, newArgs);
+        void executeAction(activeAction, newArgs);
       } else {
         setActionStep(actionStep + 1);
         setQuery("");
@@ -291,7 +326,10 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   );
 
   const goBackStep = useCallback(() => {
-    if (!activeAction) return;
+    if (!activeAction) {
+      return;
+    }
+
     if (actionStep === 0) {
       // Exit action mode
       setActiveAction(null);
@@ -340,10 +378,17 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
           (currentStep.type === "number" || currentStep.type === "text")
         ) {
           const val = currentStep.type === "number" ? Number(query) : query;
-          if (currentStep.type === "number" && (isNaN(val as number) || query.trim() === ""))
+
+          if (currentStep.type === "number" && (isNaN(val as number) || query.trim() === "")) {
             return;
-          if (currentStep.type === "text" && query.trim() === "") return;
+          }
+
+          if (currentStep.type === "text" && query.trim() === "") {
+            return;
+          }
+
           advanceStep(val);
+
           return;
         }
 
@@ -355,11 +400,13 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
 
         // Regular result
         const flatIndex = highlightIndex - actionSuggestionOffset;
+
         if (flat[flatIndex]) {
           selectItem(flat[flatIndex]);
         }
       } else if (event.key === "Escape") {
         event.preventDefault();
+
         if (activeAction) {
           goBackStep();
         } else {
@@ -391,16 +438,17 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   const placeholder =
     activeAction && currentStep
       ? currentStep.type === "resource"
-        ? `Search for a ${currentStep.label}...`
-        : (currentStep.placeholder ?? `Enter ${currentStep.label.toLowerCase()}...`)
-      : "Search resources...";
+        ? `Search for a ${currentStep.label}…`
+        : (currentStep.placeholder ?? `Enter ${currentStep.label.toLowerCase()}…`)
+      : "Search resources…";
 
   // Group items by type for rendering with section headers
   const groups: { type: SearchResourceType; items: { index: number; result: SearchResult }[] }[] =
     [];
   let idx = actionSuggestionOffset;
 
-  const typesToRender = resourceFilter ? [resourceFilter] : TYPE_ORDER;
+  const typesToRender = resourceFilter ? [resourceFilter] : typeOrder;
+
   for (const type of typesToRender) {
     const results = response?.results[type];
 
@@ -425,7 +473,6 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
         onClick={(event) => event.stopPropagation()}
         onKeyDown={onKeyDown}
       >
-        {/* Action breadcrumbs */}
         {activeAction && (
           <ActionBreadcrumbs
             action={activeAction}
@@ -435,7 +482,6 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
           />
         )}
 
-        {/* Search / input */}
         <div className="flex items-center gap-2 border-b px-3 py-2.5">
           <Search className="size-4 shrink-0 text-muted-foreground" />
           <input
@@ -449,16 +495,13 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
           {actionLoading && <Spinner className="size-4 shrink-0" />}
         </div>
 
-        {/* Error banner */}
         {actionError && (
           <div className="border-b bg-destructive/10 px-3 py-2 text-xs text-destructive">
             {actionError}
           </div>
         )}
 
-        {/* Results area */}
         <div className="max-h-72 overflow-y-auto">
-          {/* Action suggestion */}
           {actionMatch && !activeAction && (
             <button
               data-active={highlightIndex === 0 || undefined}
@@ -487,7 +530,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
                   <li key={type}>
                     <section>
                       <header className="px-3 py-1.5 text-xs font-medium text-muted-foreground uppercase">
-                        <span>{TYPE_LABELS[type]}</span>
+                        <span>{typeLabels[type]}</span>
                       </header>
 
                       {items.map(({ index, result }) => (
@@ -516,7 +559,6 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
             </>
           )}
 
-          {/* Number/text step hint */}
           {activeAction &&
             currentStep &&
             (currentStep.type === "number" || currentStep.type === "text") && (
@@ -534,7 +576,6 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
             )}
         </div>
 
-        {/* Footer */}
         {!activeAction && hasQuery && response && (
           <div className="flex items-center justify-between border-t px-3 py-2 text-xs text-muted-foreground">
             <span>

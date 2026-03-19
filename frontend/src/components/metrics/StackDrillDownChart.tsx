@@ -1,7 +1,7 @@
 import { useMetricsPanelContext } from "./MetricsPanelContext";
-import TimeSeriesChart from "./TimeSeriesChart";
 import type { Threshold } from "./TimeSeriesChart";
-import { useState, useCallback, useRef } from "react";
+import TimeSeriesChart from "./TimeSeriesChart";
+import { useCallback, useRef, useState } from "react";
 
 interface Props {
   title: string;
@@ -64,7 +64,9 @@ export default function StackDrillDownChart({
   const prevQueryRef = useRef(query);
   if (prevQueryRef.current !== query) {
     prevQueryRef.current = query;
-    if (isolatedLabel != null) setIsolatedLabel(null);
+    if (isolatedLabel != null) {
+      setIsolatedLabel(null);
+    }
   }
 
   const chartTitle = drillStack ? `${title} (${drillStack})` : title;
@@ -95,26 +97,29 @@ export default function StackDrillDownChart({
         >
           {showLegend ? "Hide legend" : "Show legend"}
         </button>
+
         {showLegend && seriesInfo.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
-            {seriesInfo.map((s, i) => {
-              const dimmed = isolatedLabel != null && isolatedLabel !== s.label;
-              const faded = i >= 10 && !showAll;
+            {seriesInfo.map(({ color, label }, index) => {
+              const dimmed = isolatedLabel != null && isolatedLabel !== label;
+              const faded = index >= 10 && !showAll;
+
               return (
                 <button
-                  key={s.label}
-                  onClick={() => setIsolatedLabel(isolatedLabel === s.label ? null : s.label)}
+                  key={label}
+                  onClick={() => setIsolatedLabel(isolatedLabel === label ? null : label)}
                   className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground"
                   style={{ opacity: dimmed || faded ? 0.3 : 1 }}
                 >
                   <span
                     className="h-2 w-2 shrink-0 rounded-full"
-                    style={{ background: s.color }}
+                    style={{ background: color }}
                   />
-                  {s.label}
+                  {label}
                 </button>
               );
             })}
+
             {!drillStack && (
               <button
                 onClick={() => setShowAll((v) => !v)}

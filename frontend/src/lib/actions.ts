@@ -111,11 +111,16 @@ export function matchAction(
   actions: PaletteAction[],
 ): { action: PaletteAction; remainder: string } | null {
   const lower = input.toLowerCase().trim();
-  if (!lower) return null;
+
+  if (!lower) {
+    return null;
+  }
+
   for (const action of actions) {
     for (const keyword of action.keywords) {
       if (lower.startsWith(keyword)) {
         const remainder = lower.slice(keyword.length).trim();
+
         return { action, remainder };
       }
     }

@@ -13,11 +13,11 @@ export interface TimeRange {
   label: string;
 }
 
-export const MAX_LIVE_LINES = 10_000;
-export const LOG_ROW_HEIGHT_ESTIMATE = 20;
-export const LOG_VIRTUAL_THRESHOLD = 200;
+export const maxLiveLines = 10_000;
+export const logRowHeightEstimate = 20;
+export const logVirtualThreshold = 200;
 
-export const PRESETS: { label: string; getValue: () => TimeRange }[] = [
+export const presets: { label: string; getValue: () => TimeRange }[] = [
   { label: "All", getValue: () => ({ label: "All" }) },
   {
     label: "Last 5m",
@@ -63,7 +63,7 @@ export const PRESETS: { label: string; getValue: () => TimeRange }[] = [
   },
 ];
 
-export const RANGE_DURATIONS: Record<string, { label: string; ms: number }> = {
+export const rangeDurations: Record<string, { label: string; ms: number }> = {
   "5m": { label: "Last 5m", ms: 5 * 60_000 },
   "15m": { label: "Last 15m", ms: 15 * 60_000 },
   "1h": { label: "Last 1h", ms: 60 * 60_000 },
@@ -72,11 +72,11 @@ export const RANGE_DURATIONS: Record<string, { label: string; ms: number }> = {
   "7d": { label: "Last 7d", ms: 7 * 24 * 60 * 60_000 },
 };
 
-export const LABEL_TO_RANGE_KEY: Record<string, string> = Object.fromEntries(
-  Object.entries(RANGE_DURATIONS).map(([k, v]) => [v.label, k]),
+export const labelToRangeKey: Record<string, string> = Object.fromEntries(
+  Object.entries(rangeDurations).map(([key, value]) => [value.label, key]),
 );
 
-export const LEVEL_BAR: Record<Level, string> = {
+export const levelBar: Record<Level, string> = {
   error: "bg-red-400",
   warn: "bg-yellow-500",
   info: "bg-blue-300",
@@ -86,6 +86,7 @@ export const LEVEL_BAR: Record<Level, string> = {
 
 export function classifyLevel(value: string): Level | null {
   const v = value.toUpperCase();
+
   if (
     v === "ERROR" ||
     v === "ERRO" ||
@@ -93,54 +94,100 @@ export function classifyLevel(value: string): Level | null {
     v === "PANIC" ||
     v === "CRIT" ||
     v === "CRITICAL"
-  )
+  ) {
     return "error";
-  if (v === "WARN" || v === "WARNING") return "warn";
-  if (v === "DEBUG" || v === "DEBG" || v === "TRACE") return "debug";
-  if (v === "INFO") return "info";
+  }
+
+  if (v === "WARN" || v === "WARNING") {
+    return "warn";
+  }
+
+  if (v === "DEBUG" || v === "DEBG" || v === "TRACE") {
+    return "debug";
+  }
+
+  if (v === "INFO") {
+    return "info";
+  }
+
   return null;
 }
 
-export const LEVEL_KEYS = ["level", "severity", "lvl", "loglevel", "log_level", "LEVEL"];
+export const levelKeys = ["level", "severity", "lvl", "loglevel", "log_level", "LEVEL"];
 
-export function detectLevelFromJSON(msg: string): Level | null {
+export function detectLevelFromJSON(message: string): Level | null {
   try {
-    const obj = JSON.parse(msg);
-    if (typeof obj !== "object" || obj === null) return null;
-    for (const key of LEVEL_KEYS) {
-      const val = obj[key];
+    const parsedData = JSON.parse(message);
+
+    if (typeof parsedData !== "object" || parsedData === null) {
+      return null;
+    }
+
+    for (const key of levelKeys) {
+      const val = parsedData[key];
+
       if (typeof val === "string") {
         const level = classifyLevel(val);
-        if (level) return level;
+
+        if (level) {
+          return level;
+        }
       }
     }
     // Also check numeric slog-style levels (slog: DEBUG=-4, INFO=0, WARN=4, ERROR=8)
-    const numVal = obj.level ?? obj.severity;
-    if (typeof numVal === "number") {
-      if (numVal >= 8) return "error";
-      if (numVal >= 4) return "warn";
-      if (numVal < 0) return "debug";
+    const numericValue = parsedData.level ?? parsedData.severity;
+
+    if (typeof numericValue === "number") {
+      if (numericValue >= 8) {
+        return "error";
+      }
+
+      if (numericValue >= 4) {
+        return "warn";
+      }
+
+      if (numericValue < 0) {
+        return "debug";
+      }
+
       return "info";
     }
   } catch {
     // not JSON
   }
+
   return null;
 }
 
-export function detectLevel(msg: string): Level {
+export function detectLevel(message: string): Level {
   // Try structured JSON first
-  if (msg.length > 0 && msg[0] === "{") {
-    const level = detectLevelFromJSON(msg);
-    if (level) return level;
+  if (message.length > 0 && message[0] === "{") {
+    const level = detectLevelFromJSON(message);
+
+    if (level) {
+      return level;
+    }
   }
 
   // Fall back to regex on prefix
-  const prefix = msg.slice(0, 200).toUpperCase();
-  if (/\b(ERROR|ERRO|FATAL|PANIC|CRIT(ICAL)?)\b/.test(prefix)) return "error";
-  if (/\b(WARN(ING)?)\b/.test(prefix)) return "warn";
-  if (/\b(DEBUG|DEBG|TRACE)\b/.test(prefix)) return "debug";
-  if (/\bINFO\b/.test(prefix)) return "info";
+  const prefix = message.slice(0, 200).toUpperCase();
+
+  if (/\b(ERROR|ERRO|FATAL|PANIC|CRIT(ICAL)?)\b/.test(prefix)) {
+    return "error";
+  }
+
+  if (/\b(WARN(ING)?)\b/.test(prefix)) {
+    return "warn";
+  }
+
+  if (/\b(DEBUG|DEBG|TRACE)\b/.test(prefix)) {
+    return "debug";
+  }
+
+  if (/\bINFO\b/.test(prefix)) {
+    return "info";
+  }
+
   return "default";
 }
 
@@ -148,46 +195,55 @@ export function toLogLine(api: ApiLogLine, index: number): LogLine {
   return { ...api, index, level: detectLevel(api.message) };
 }
 
-export function formatTime(ts: string): string {
-  if (!ts) return "";
+export function formatTime(timestamp: string): string {
+  if (!timestamp) {
+    return "";
+  }
+
   try {
-    return new Date(ts).toLocaleTimeString(undefined, {
+    return new Date(timestamp).toLocaleTimeString(undefined, {
       hour12: false,
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
     });
   } catch {
-    return ts;
+    return timestamp;
   }
 }
 
-export function isJSON(s: string): boolean {
-  const t = s.trim();
-  return (t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]"));
+export function isJSON(string: string): boolean {
+  const trimmed = string.trim();
+
+  return (
+    (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+    (trimmed.startsWith("[") && trimmed.endsWith("]"))
+  );
 }
 
-export function prettyJSON(s: string): string {
+export function prettyJSON(string: string): string {
   try {
-    return JSON.stringify(JSON.parse(s), null, 2);
+    return JSON.stringify(JSON.parse(string), null, 2);
   } catch {
-    return s;
+    return string;
   }
 }
 
 // Format an ISO string to datetime-local input value (YYYY-MM-DDTHH:mm)
-export function toLocalInput(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+export function toLocalInput(isoString: string): string {
+  const date = new Date(isoString);
+  const pad = (number: number) => String(number).padStart(2, "0");
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-export function logLineKey(line: LogLine): string {
-  return `${line.timestamp}\x00${line.attrs?.taskId ?? ""}\x00${line.message}`;
+export function logLineKey({ attrs, message, timestamp }: LogLine): string {
+  return `${timestamp}\x00${attrs?.taskId ?? ""}\x00${message}`;
 }
 
-export function formatShortDate(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+export function formatShortDate(isoString: string): string {
+  const date = new Date(isoString);
+  const pad = (number: number) => String(number).padStart(2, "0");
+
+  return `${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }

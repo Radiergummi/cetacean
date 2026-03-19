@@ -91,7 +91,7 @@ describe("ConfigList", () => {
       expect(screen.getByText("app-config")).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByPlaceholderText("Search configs..."), {
+    fireEvent.change(screen.getByPlaceholderText("Search configs\u2026"), {
       target: { value: "db" },
     });
 

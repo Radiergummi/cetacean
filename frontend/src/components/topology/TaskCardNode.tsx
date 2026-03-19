@@ -1,5 +1,5 @@
 import { statusColor } from "../../lib/statusColor";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { Handle, type NodeProps, Position } from "@xyflow/react";
 
 type TaskCardData = {
   id: string;
