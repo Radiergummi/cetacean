@@ -53,20 +53,25 @@ export function SliderNumberField({
         variant="outline"
         size="sm"
         onClick={() => onChange(step ?? 1)}
-        className="w-full justify-start text-muted-foreground"
+        className="justify-start text-muted-foreground"
       >
         <Plus className="size-3" />
-        Set {label.toLowerCase()}
+        Add {label}
       </Button>
     );
   }
 
   return (
-    <div className="space-y-2">
+    <div className="flex w-full flex-col gap-2">
       <div className="flex items-center justify-between">
         <Label className="text-xs text-muted-foreground">{label}</Label>
         {clearable && (
-          <Button variant="ghost" size="icon-xs" onClick={clear} title="Remove">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={clear}
+            title="Remove"
+          >
             <X className="size-3" />
           </Button>
         )}

@@ -92,13 +92,14 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
   }
 
   const desired = replicated.Replicas ?? 0;
-  const running = tasks.filter((t) => t.Status.State === "running").length;
+  const running = tasks.filter(({ Status: { State } }) => State === "running").length;
   const healthy = running >= desired;
 
   function handleOpenChange(open: boolean) {
     if (open) {
       setScaleValue(desired);
     }
+
     setScaleValidationError(null);
     setScaleOpen(open);
   }
@@ -106,8 +107,10 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
   async function submitScale() {
     if (scaleValue === undefined || scaleValue < 0) {
       setScaleValidationError("Enter a valid replica count");
+
       return;
     }
+
     setScaleValidationError(null);
     await scale.execute(async () => {
       await api.scaleService(service.ID, scaleValue);
@@ -126,17 +129,6 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
         <div className="mt-1 text-xs text-red-600 dark:text-red-400">
           {desired - running} replica{desired - running !== 1 ? "s" : ""} not running
         </div>
-      )}
-    </>
-  );
-
-  const scaleControl = (
-    <div className="flex items-center gap-2">
-      {desired > 0 && (
-        <ReplicaDoughnut
-          running={running}
-          desired={desired}
-        />
       )}
       <Popover
         open={scaleOpen}
@@ -192,6 +184,17 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
           </div>
         </PopoverContent>
       </Popover>
+    </>
+  );
+
+  const scaleControl = (
+    <div className="flex items-center gap-2">
+      {desired > 0 && (
+        <ReplicaDoughnut
+          running={running}
+          desired={desired}
+        />
+      )}
     </div>
   );
 
