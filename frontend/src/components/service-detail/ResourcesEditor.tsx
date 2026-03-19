@@ -3,7 +3,7 @@ import { api } from "@/api/client";
 import type { ClusterCapacity } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
-import { formatBytes, formatCores, formatNumber } from "@/lib/format";
+import { formatBytes, formatCores, formatNumber, formatPercentage } from "@/lib/format";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil } from "lucide-react";
 import { useState } from "react";
@@ -165,7 +165,7 @@ export function ResourcesEditor({
                     reserved={allocation.cpuReserved}
                     actual={allocation.cpuActual}
                     limit={allocation.cpuLimit}
-                    formatValue={(value) => formatNumber(value, 1) + "%"}
+                    formatValue={formatPercentage}
                   />
                 )}
                 {(allocation.memReserved != null ||
