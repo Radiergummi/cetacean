@@ -2023,3 +2023,49 @@ func TestHandleListTasks_NilContainerSpec(t *testing.T) {
 		t.Errorf("expected 2 tasks, got %d", resp.Total)
 	}
 }
+
+func TestSegmentPrefixMatch(t *testing.T) {
+	tests := []struct {
+		query, target string
+		want          bool
+	}{
+		// Exact prefix
+		{"go_gc", "go_gc_cleanups_total", true},
+		// Abbreviated segments with underscores
+		{"ggclext", "go_gc_cleanups_executed_cleanups_total", true},
+		// Skipping segments
+		{"gotot", "go_gc_cleanups_executed_cleanups_total", true},
+		// Single char per segment
+		{"ggt", "go_gc_total", true},
+		// Out of order — should fail
+		{"tg", "go_total", false},
+		// Characters not in any segment
+		{"gx", "go_gc_total", false},
+		// Exact match
+		{"up", "up", true},
+		// Hyphen-separated names (Docker convention)
+		{"mws", "my-web-server", true},
+		{"monpro", "monitoring-prometheus", true},
+		// Mixed separators
+		{"swn", "stack_web-node", true},
+		// Empty query matches everything
+		{"", "anything", true},
+		// Backtracking required (greedy would fail)
+		{"gcl", "go_gc_cleanups", true},
+		// Multi-char prefix across segments
+		{"contcpu", "container_cpu_usage_seconds_total", true},
+		// Substring that's not a segment prefix
+		{"lean", "go_gc_cleanups", false},
+		// Query longer than target
+		{"abcdef", "ab_cd", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%s_in_%s", tt.query, tt.target), func(t *testing.T) {
+			got := segmentPrefixMatch(tt.target, tt.query)
+			if got != tt.want {
+				t.Errorf("segmentPrefixMatch(%q, %q) = %v, want %v", tt.target, tt.query, got, tt.want)
+			}
+		})
+	}
+}

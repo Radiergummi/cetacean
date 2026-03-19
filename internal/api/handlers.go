@@ -175,9 +175,83 @@ func searchFilter[T any](items []T, query string, name func(T) string) []T {
 }
 
 // containsFold reports whether s contains substr using case-insensitive
-// comparison. substr must already be lowercased.
+// comparison, or whether the query matches segment prefixes of s.
+// substr must already be lowercased.
 func containsFold(s, substrLower string) bool {
-	return strings.Contains(strings.ToLower(s), substrLower)
+	lower := strings.ToLower(s)
+
+	if strings.Contains(lower, substrLower) {
+		return true
+	}
+
+	return segmentPrefixMatch(lower, substrLower)
+}
+
+// segmentPrefixMatch checks if query matches target using segment-prefix
+// matching. The target is split by '_' and '-' into segments, and each group
+// of query characters must match the prefix of a segment, in order, with
+// segments skippable. Uses memoized backtracking for ambiguous boundaries.
+func segmentPrefixMatch(targetLower, queryLower string) bool {
+	if len(queryLower) == 0 {
+		return true
+	}
+
+	// Strip separators from query (user may type "go_gc" meaning "go" + "gc")
+	query := strings.NewReplacer("_", "", "-", "").Replace(queryLower)
+	if len(query) == 0 {
+		return true
+	}
+
+	// Split target into segments on _ and -
+	segments := strings.FieldsFunc(targetLower, func(r rune) bool {
+		return r == '_' || r == '-'
+	})
+
+	if len(segments) == 0 {
+		return false
+	}
+
+	type key struct{ qi, si int }
+	memo := map[key]bool{}
+
+	var match func(qi, si int) bool
+	match = func(qi, si int) bool {
+		if qi >= len(query) {
+			return true
+		}
+
+		if si >= len(segments) {
+			return false
+		}
+
+		k := key{qi, si}
+		if v, ok := memo[k]; ok {
+			return v
+		}
+
+		result := false
+		for s := si; s < len(segments) && !result; s++ {
+			seg := segments[s]
+
+			// Find how many query chars match this segment's prefix
+			maxMatch := 0
+			for maxMatch < len(seg) && qi+maxMatch < len(query) && query[qi+maxMatch] == seg[maxMatch] {
+				maxMatch++
+			}
+
+			// Try all valid match lengths (longest first)
+			for take := maxMatch; take >= 1 && !result; take-- {
+				if match(qi+take, s+1) {
+					result = true
+				}
+			}
+		}
+
+		memo[k] = result
+		return result
+	}
+
+	return match(0, 0)
 }
 
 const maxFilterLen = 512

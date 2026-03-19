@@ -152,8 +152,8 @@ export function segmentPrefixMatch(query: string, target: string): boolean {
     return true;
   }
 
-  const segments = target.toLowerCase().split("_");
-  const q = query.toLowerCase().replace(/_/g, "");
+  const segments = target.toLowerCase().split(/[_-]/);
+  const q = query.toLowerCase().replace(/[_-]/g, "");
 
   const memo = new Map<number, boolean>();
 
