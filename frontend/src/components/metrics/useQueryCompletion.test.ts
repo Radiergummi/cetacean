@@ -69,56 +69,59 @@ describe("getCursorContext", () => {
 
 describe("segmentPrefixMatch", () => {
   it("matches full prefix", () => {
-    expect(segmentPrefixMatch("go_gc", "go_gc_cleanups_total")).toBe(true);
+    expect(segmentPrefixMatch("go_gc_cleanups_total", "go_gc")).toBe(true);
   });
 
   it("matches abbreviated segments", () => {
-    expect(segmentPrefixMatch("ggclext", "go_gc_cleanups_executed_cleanups_total")).toBe(true);
+    expect(segmentPrefixMatch("go_gc_cleanups_executed_cleanups_total", "ggclext")).toBe(true);
   });
 
   it("matches skipping segments", () => {
-    expect(segmentPrefixMatch("gotot", "go_gc_cleanups_executed_cleanups_total")).toBe(true);
+    expect(segmentPrefixMatch("go_gc_cleanups_executed_cleanups_total", "gotot")).toBe(true);
   });
 
   it("matches single character per segment", () => {
-    expect(segmentPrefixMatch("ggt", "go_gc_total")).toBe(true);
+    expect(segmentPrefixMatch("go_gc_total", "ggt")).toBe(true);
   });
 
   it("rejects when characters are out of order", () => {
-    expect(segmentPrefixMatch("tg", "go_total")).toBe(false);
+    expect(segmentPrefixMatch("go_total", "tg")).toBe(false);
   });
 
   it("rejects when query has characters not in any segment", () => {
-    expect(segmentPrefixMatch("gx", "go_gc_total")).toBe(false);
+    expect(segmentPrefixMatch("go_gc_total", "gx")).toBe(false);
   });
 
-  it("matches exact metric name", () => {
-    expect(segmentPrefixMatch("up", "up")).toBe(true);
+  it("skips single-segment targets (covered by startsWith)", () => {
+    expect(segmentPrefixMatch("up", "up")).toBe(false);
   });
 
   it("is case-insensitive", () => {
-    expect(segmentPrefixMatch("GoGc", "go_gc_total")).toBe(true);
+    expect(segmentPrefixMatch("go_gc_total", "GoGc")).toBe(true);
   });
 
   it("handles underscores in query as segment separators", () => {
-    expect(segmentPrefixMatch("go_tot", "go_gc_cleanups_total")).toBe(true);
+    expect(segmentPrefixMatch("go_gc_cleanups_total", "go_tot")).toBe(true);
   });
 
   it("handles empty query", () => {
-    expect(segmentPrefixMatch("", "anything")).toBe(true);
+    expect(segmentPrefixMatch("anything", "")).toBe(true);
   });
 
   it("requires backtracking — greedy fails on this", () => {
-    // Greedy would consume 'c' from "gc", but it needs to start "cleanups"
-    expect(segmentPrefixMatch("gcl", "go_gc_cleanups")).toBe(true);
+    expect(segmentPrefixMatch("go_gc_cleanups", "gcl")).toBe(true);
   });
 
-  it("matches function names without underscores", () => {
-    expect(segmentPrefixMatch("hist", "histogram_quantile")).toBe(true);
+  it("matches function names with underscores", () => {
+    expect(segmentPrefixMatch("histogram_quantile", "histq")).toBe(true);
   });
 
   it("matches multi-char prefixes across segments", () => {
-    expect(segmentPrefixMatch("contcpu", "container_cpu_usage_seconds_total")).toBe(true);
+    expect(segmentPrefixMatch("container_cpu_usage_seconds_total", "contcpu")).toBe(true);
+  });
+
+  it("matches hyphen-separated names", () => {
+    expect(segmentPrefixMatch("my-web-server", "mws")).toBe(true);
   });
 });
 

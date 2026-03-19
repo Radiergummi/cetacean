@@ -2041,8 +2041,8 @@ func TestSegmentPrefixMatch(t *testing.T) {
 		{"tg", "go_total", false},
 		// Characters not in any segment
 		{"gx", "go_gc_total", false},
-		// Exact match
-		{"up", "up", true},
+		// Single-segment targets are skipped (covered by substring match)
+		{"up", "up", false},
 		// Hyphen-separated names (Docker convention)
 		{"mws", "my-web-server", true},
 		{"monpro", "monitoring-prometheus", true},

@@ -138,8 +138,8 @@ export function getCursorContext(query: string, cursor: number): CursorContext {
 
 /**
  * Checks if `query` matches `target` using segment-prefix matching.
- * Splits the target by `_` into segments, then tries to consume all query
- * characters by matching them against prefixes of segments in order.
+ * Splits the target by `_` and `-` into segments, then tries to consume all
+ * query characters by matching them against prefixes of segments in order.
  * Segments can be skipped; uses backtracking when greedy matching fails.
  *
  * Examples against "go_gc_cleanups_executed_cleanups_total":
@@ -147,13 +147,18 @@ export function getCursorContext(query: string, cursor: number): CursorContext {
  * - "gotot" matches (go→go, tot→total)
  * - "contcpu" matches "container_cpu_usage_seconds_total"
  */
-export function segmentPrefixMatch(query: string, target: string): boolean {
+export function segmentPrefixMatch(target: string, query: string): boolean {
   if (query.length === 0) {
     return true;
   }
 
   const segments = target.toLowerCase().split(/[_-]/);
   const q = query.toLowerCase().replace(/[_-]/g, "");
+
+  // Single-segment targets are already covered by startsWith in the caller
+  if (segments.length <= 1) {
+    return false;
+  }
 
   const memo = new Map<number, boolean>();
 
@@ -294,7 +299,7 @@ export function useQueryCompletion(enabled: boolean): QueryCompletion {
 
         if (lowerPrefix.length === 0 || item.toLowerCase().startsWith(lowerPrefix)) {
           prefixMatches.push({ label: item, type: suggestionType });
-        } else if (lowerPrefix.length >= minimumPrefixLength && segmentPrefixMatch(lowerPrefix, item)) {
+        } else if (lowerPrefix.length >= minimumPrefixLength && segmentPrefixMatch(item, lowerPrefix)) {
           fuzzyMatches.push({ label: item, type: suggestionType });
         }
       }
@@ -355,7 +360,7 @@ export function useQueryCompletion(enabled: boolean): QueryCompletion {
       for (const suggestion of all) {
         if (suggestion.label.toLowerCase().startsWith(lowerPrefix)) {
           prefixMatches.push(suggestion);
-        } else if (segmentPrefixMatch(lowerPrefix, suggestion.label)) {
+        } else if (segmentPrefixMatch(suggestion.label, lowerPrefix)) {
           fuzzyMatches.push(suggestion);
         }
       }

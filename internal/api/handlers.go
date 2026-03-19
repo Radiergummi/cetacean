@@ -187,27 +187,31 @@ func containsFold(s, substrLower string) bool {
 	return segmentPrefixMatch(lower, substrLower)
 }
 
+var separatorReplacer = strings.NewReplacer("_", "", "-", "")
+
+func isSeparator(r rune) bool { return r == '_' || r == '-' }
+
 // segmentPrefixMatch checks if query matches target using segment-prefix
 // matching. The target is split by '_' and '-' into segments, and each group
 // of query characters must match the prefix of a segment, in order, with
 // segments skippable. Uses memoized backtracking for ambiguous boundaries.
+//
+// Both arguments must already be lowercased.
 func segmentPrefixMatch(targetLower, queryLower string) bool {
 	if len(queryLower) == 0 {
 		return true
 	}
 
 	// Strip separators from query (user may type "go_gc" meaning "go" + "gc")
-	query := strings.NewReplacer("_", "", "-", "").Replace(queryLower)
+	query := separatorReplacer.Replace(queryLower)
 	if len(query) == 0 {
 		return true
 	}
 
-	// Split target into segments on _ and -
-	segments := strings.FieldsFunc(targetLower, func(r rune) bool {
-		return r == '_' || r == '-'
-	})
+	segments := strings.FieldsFunc(targetLower, isSeparator)
 
-	if len(segments) == 0 {
+	// Single-segment targets are already covered by substring match in containsFold
+	if len(segments) <= 1 {
 		return false
 	}
 
@@ -232,14 +236,12 @@ func segmentPrefixMatch(targetLower, queryLower string) bool {
 		result := false
 		for s := si; s < len(segments) && !result; s++ {
 			seg := segments[s]
-
-			// Find how many query chars match this segment's prefix
 			maxMatch := 0
+
 			for maxMatch < len(seg) && qi+maxMatch < len(query) && query[qi+maxMatch] == seg[maxMatch] {
 				maxMatch++
 			}
 
-			// Try all valid match lengths (longest first)
 			for take := maxMatch; take >= 1 && !result; take-- {
 				if match(qi+take, s+1) {
 					result = true
