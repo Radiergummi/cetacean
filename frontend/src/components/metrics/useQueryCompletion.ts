@@ -137,6 +137,74 @@ export function getCursorContext(query: string, cursor: number): CursorContext {
 }
 
 /**
+ * Checks if `query` matches `target` using segment-prefix matching.
+ * Splits the target by `_` into segments, then tries to consume all query
+ * characters by matching them against prefixes of segments in order.
+ * Segments can be skipped; uses backtracking when greedy matching fails.
+ *
+ * Examples against "go_gc_cleanups_executed_cleanups_total":
+ * - "ggclext" matches (g→go, g→gc, cl→cleanups, ex→executed, t→total)
+ * - "gotot" matches (go→go, tot→total)
+ * - "contcpu" matches "container_cpu_usage_seconds_total"
+ */
+export function segmentPrefixMatch(query: string, target: string): boolean {
+  if (query.length === 0) {
+    return true;
+  }
+
+  const segments = target.toLowerCase().split("_");
+  const q = query.toLowerCase().replace(/_/g, "");
+
+  const memo = new Map<number, boolean>();
+
+  function match(queryIndex: number, segmentIndex: number): boolean {
+    if (queryIndex >= q.length) {
+      return true;
+    }
+
+    if (segmentIndex >= segments.length) {
+      return false;
+    }
+
+    const key = queryIndex * segments.length + segmentIndex;
+    const cached = memo.get(key);
+
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    let result = false;
+
+    for (let s = segmentIndex; s < segments.length && !result; s++) {
+      const segment = segments[s];
+
+      // Find how many query chars match this segment's prefix
+      let maxMatch = 0;
+
+      while (
+        maxMatch < segment.length &&
+        queryIndex + maxMatch < q.length &&
+        q[queryIndex + maxMatch] === segment[maxMatch]
+      ) {
+        maxMatch++;
+      }
+
+      // Try all valid match lengths (1..maxMatch), not just greedy
+      for (let take = maxMatch; take >= 1 && !result; take--) {
+        if (match(queryIndex + take, s + 1)) {
+          result = true;
+        }
+      }
+    }
+
+    memo.set(key, result);
+    return result;
+  }
+
+  return match(0, 0);
+}
+
+/**
  * Extracts the current token boundaries at the cursor position.
  */
 export function getTokenBounds(text: string, cursor: number): { start: number; end: number } {
@@ -216,7 +284,8 @@ export function useQueryCompletion(enabled: boolean): QueryCompletion {
       }
 
       const lowerPrefix = prefix.toLowerCase();
-      const matches: Suggestion[] = [];
+      const prefixMatches: Suggestion[] = [];
+      const fuzzyMatches: Suggestion[] = [];
 
       for (const item of items) {
         if (item === exclude) {
@@ -224,15 +293,13 @@ export function useQueryCompletion(enabled: boolean): QueryCompletion {
         }
 
         if (lowerPrefix.length === 0 || item.toLowerCase().startsWith(lowerPrefix)) {
-          matches.push({ label: item, type: suggestionType });
-        }
-
-        if (matches.length >= maxSuggestions) {
-          break;
+          prefixMatches.push({ label: item, type: suggestionType });
+        } else if (lowerPrefix.length >= minimumPrefixLength && segmentPrefixMatch(lowerPrefix, item)) {
+          fuzzyMatches.push({ label: item, type: suggestionType });
         }
       }
 
-      setSuggestions(matches);
+      setSuggestions([...prefixMatches, ...fuzzyMatches].slice(0, maxSuggestions));
     },
     [],
   );
@@ -282,19 +349,18 @@ export function useQueryCompletion(enabled: boolean): QueryCompletion {
       }
 
       const lowerPrefix = prefix.toLowerCase();
-      const matches: Suggestion[] = [];
+      const prefixMatches: Suggestion[] = [];
+      const fuzzyMatches: Suggestion[] = [];
 
       for (const suggestion of all) {
         if (suggestion.label.toLowerCase().startsWith(lowerPrefix)) {
-          matches.push(suggestion);
-        }
-
-        if (matches.length >= maxSuggestions) {
-          break;
+          prefixMatches.push(suggestion);
+        } else if (segmentPrefixMatch(lowerPrefix, suggestion.label)) {
+          fuzzyMatches.push(suggestion);
         }
       }
 
-      setSuggestions(matches);
+      setSuggestions([...prefixMatches, ...fuzzyMatches].slice(0, maxSuggestions));
     },
     [completeCached],
   );

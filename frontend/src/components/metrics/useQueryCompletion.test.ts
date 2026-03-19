@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getCursorContext, getTokenBounds } from "./useQueryCompletion";
+import { getCursorContext, getTokenBounds, segmentPrefixMatch } from "./useQueryCompletion";
 
 describe("getCursorContext", () => {
   it("returns metric context outside braces", () => {
@@ -64,6 +64,61 @@ describe("getCursorContext", () => {
 
   it("returns label context with empty metric name for bare braces", () => {
     expect(getCursorContext("{", 1)).toEqual({ type: "label", metricName: "" });
+  });
+});
+
+describe("segmentPrefixMatch", () => {
+  it("matches full prefix", () => {
+    expect(segmentPrefixMatch("go_gc", "go_gc_cleanups_total")).toBe(true);
+  });
+
+  it("matches abbreviated segments", () => {
+    expect(segmentPrefixMatch("ggclext", "go_gc_cleanups_executed_cleanups_total")).toBe(true);
+  });
+
+  it("matches skipping segments", () => {
+    expect(segmentPrefixMatch("gotot", "go_gc_cleanups_executed_cleanups_total")).toBe(true);
+  });
+
+  it("matches single character per segment", () => {
+    expect(segmentPrefixMatch("ggt", "go_gc_total")).toBe(true);
+  });
+
+  it("rejects when characters are out of order", () => {
+    expect(segmentPrefixMatch("tg", "go_total")).toBe(false);
+  });
+
+  it("rejects when query has characters not in any segment", () => {
+    expect(segmentPrefixMatch("gx", "go_gc_total")).toBe(false);
+  });
+
+  it("matches exact metric name", () => {
+    expect(segmentPrefixMatch("up", "up")).toBe(true);
+  });
+
+  it("is case-insensitive", () => {
+    expect(segmentPrefixMatch("GoGc", "go_gc_total")).toBe(true);
+  });
+
+  it("handles underscores in query as segment separators", () => {
+    expect(segmentPrefixMatch("go_tot", "go_gc_cleanups_total")).toBe(true);
+  });
+
+  it("handles empty query", () => {
+    expect(segmentPrefixMatch("", "anything")).toBe(true);
+  });
+
+  it("requires backtracking — greedy fails on this", () => {
+    // Greedy would consume 'c' from "gc", but it needs to start "cleanups"
+    expect(segmentPrefixMatch("gcl", "go_gc_cleanups")).toBe(true);
+  });
+
+  it("matches function names without underscores", () => {
+    expect(segmentPrefixMatch("hist", "histogram_quantile")).toBe(true);
+  });
+
+  it("matches multi-char prefixes across segments", () => {
+    expect(segmentPrefixMatch("contcpu", "container_cpu_usage_seconds_total")).toBe(true);
   });
 });
 
