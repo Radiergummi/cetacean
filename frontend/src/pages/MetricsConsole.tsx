@@ -55,7 +55,7 @@ export default function MetricsConsole() {
     setRefreshKey((key) => key + 1);
 
     api
-      .queryMetrics(query)
+      .metricsQuery(query)
       .then((response) => {
         setResult(response.data);
       })
