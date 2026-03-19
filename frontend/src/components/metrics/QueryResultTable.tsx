@@ -1,20 +1,8 @@
+import type { PrometheusResponse } from "@/api/types";
 import SimpleTable from "@/components/SimpleTable";
 
-interface VectorResult {
-  metric: Record<string, string>;
-  value: [number, string];
-}
-
-interface MatrixResult {
-  metric: Record<string, string>;
-  values: [number, string][];
-}
-
 interface Props {
-  data: {
-    resultType: "vector" | "matrix" | "scalar" | "string";
-    result: VectorResult[] | MatrixResult[];
-  };
+  data: PrometheusResponse["data"];
 }
 
 interface NormalizedRow {
@@ -24,26 +12,17 @@ interface NormalizedRow {
 }
 
 function normalizeRows(data: Props["data"]): NormalizedRow[] {
-  if (data.resultType === "vector") {
-    return (data.result as VectorResult[]).map(({ metric, value }) => ({
-      metric,
-      value: value[1],
-      timestamp: value[0],
-    }));
-  }
+  return data.result
+    .map(({ metric, value, values }) => {
+      const point = value ?? values?.[values.length - 1];
 
-  if (data.resultType === "matrix") {
-    return (data.result as MatrixResult[]).map(({ metric, values }) => {
-      const last = values[values.length - 1] ?? [0, ""];
-      return {
-        metric,
-        value: last[1],
-        timestamp: last[0],
-      };
-    });
-  }
+      if (!point) {
+        return null;
+      }
 
-  return [];
+      return { metric, value: point[1], timestamp: point[0] };
+    })
+    .filter((row): row is NormalizedRow => row !== null);
 }
 
 function LabelBadges({ metric }: { metric: Record<string, string> }) {
@@ -92,7 +71,7 @@ export default function QueryResultTable({ data }: Props) {
     <SimpleTable
       columns={["Metric", "Labels", "Value", "Timestamp"]}
       items={rows}
-      keyFn={(row, index) => `${JSON.stringify(row.metric)}-${index}`}
+      keyFn={(_, index) => index}
       renderRow={(row) => (
         <>
           <td className="p-3 text-sm font-mono">

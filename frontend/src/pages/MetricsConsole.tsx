@@ -139,9 +139,7 @@ export default function MetricsConsole() {
           </>
         )}
 
-        {result && (
-          <QueryResultTable data={result as Parameters<typeof QueryResultTable>[0]["data"]} />
-        )}
+        {result && <QueryResultTable data={result} />}
       </div>
     </div>
   );
