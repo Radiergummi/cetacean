@@ -1,22 +1,15 @@
 import { getTokenBounds } from "./useQueryCompletion";
-import type { Suggestion } from "./useQueryCompletion";
+import type { QueryCompletion, Suggestion } from "./useQueryCompletion";
 import { Spinner } from "@/components/Spinner";
 import { Play } from "lucide-react";
 import { useRef, useEffect, useState, useCallback } from "react";
-
-interface CompletionProps {
-  suggestions: Suggestion[];
-  loading: boolean;
-  complete: (query: string, cursorPosition: number) => void;
-  clear: () => void;
-}
 
 interface Props {
   value: string;
   onChange: (value: string) => void;
   onRun: () => void;
   loading: boolean;
-  completion?: CompletionProps;
+  completion?: QueryCompletion;
 }
 
 const typeBadgeStyles: Record<Suggestion["type"], string> = {

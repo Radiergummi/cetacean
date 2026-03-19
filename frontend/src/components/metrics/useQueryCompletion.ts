@@ -7,116 +7,77 @@ export interface Suggestion {
   detail?: string;
 }
 
-interface QueryCompletion {
+export interface QueryCompletion {
   suggestions: Suggestion[];
   loading: boolean;
   complete: (query: string, cursorPosition: number) => void;
   clear: () => void;
 }
 
+function fn(label: string, detail: string): Suggestion {
+  return { label, type: "function", detail };
+}
+
 /**
  * Static list of PromQL functions and aggregation operators.
  */
 const promqlFunctions: Suggestion[] = [
-  { label: "abs", type: "function", detail: "abs(v instant-vector)" },
-  { label: "absent", type: "function", detail: "absent(v instant-vector)" },
-  { label: "avg_over_time", type: "function", detail: "avg_over_time(v range-vector)" },
-  { label: "ceil", type: "function", detail: "ceil(v instant-vector)" },
-  { label: "changes", type: "function", detail: "changes(v range-vector)" },
-  { label: "clamp", type: "function", detail: "clamp(v instant-vector, min, max scalar)" },
-  { label: "count_over_time", type: "function", detail: "count_over_time(v range-vector)" },
-  { label: "delta", type: "function", detail: "delta(v range-vector)" },
-  { label: "deriv", type: "function", detail: "deriv(v range-vector)" },
-  { label: "exp", type: "function", detail: "exp(v instant-vector)" },
-  { label: "floor", type: "function", detail: "floor(v instant-vector)" },
-  {
-    label: "histogram_quantile",
-    type: "function",
-    detail: "histogram_quantile(phi scalar, b instant-vector)",
-  },
-  { label: "idelta", type: "function", detail: "idelta(v range-vector)" },
-  { label: "increase", type: "function", detail: "increase(v range-vector)" },
-  { label: "irate", type: "function", detail: "irate(v range-vector)" },
-  {
-    label: "label_join",
-    type: "function",
-    detail: "label_join(v instant-vector, dst, sep, ...src)",
-  },
-  {
-    label: "label_replace",
-    type: "function",
-    detail: "label_replace(v instant-vector, dst, replacement, src, regex)",
-  },
-  { label: "ln", type: "function", detail: "ln(v instant-vector)" },
-  { label: "log2", type: "function", detail: "log2(v instant-vector)" },
-  { label: "log10", type: "function", detail: "log10(v instant-vector)" },
-  { label: "max_over_time", type: "function", detail: "max_over_time(v range-vector)" },
-  { label: "min_over_time", type: "function", detail: "min_over_time(v range-vector)" },
-  {
-    label: "predict_linear",
-    type: "function",
-    detail: "predict_linear(v range-vector, t scalar)",
-  },
-  { label: "rate", type: "function", detail: "rate(v range-vector)" },
-  { label: "resets", type: "function", detail: "resets(v range-vector)" },
-  { label: "round", type: "function", detail: "round(v instant-vector, to_nearest scalar)" },
-  { label: "scalar", type: "function", detail: "scalar(v instant-vector)" },
-  { label: "sort", type: "function", detail: "sort(v instant-vector)" },
-  { label: "sort_desc", type: "function", detail: "sort_desc(v instant-vector)" },
-  { label: "sqrt", type: "function", detail: "sqrt(v instant-vector)" },
-  { label: "stddev_over_time", type: "function", detail: "stddev_over_time(v range-vector)" },
-  { label: "sum_over_time", type: "function", detail: "sum_over_time(v range-vector)" },
-  { label: "time", type: "function", detail: "time()" },
-  { label: "timestamp", type: "function", detail: "timestamp(v instant-vector)" },
-  { label: "vector", type: "function", detail: "vector(s scalar)" },
-  { label: "year", type: "function", detail: "year(v=vector(time()) instant-vector)" },
-  { label: "month", type: "function", detail: "month(v=vector(time()) instant-vector)" },
-  {
-    label: "day_of_month",
-    type: "function",
-    detail: "day_of_month(v=vector(time()) instant-vector)",
-  },
-  {
-    label: "day_of_week",
-    type: "function",
-    detail: "day_of_week(v=vector(time()) instant-vector)",
-  },
-  {
-    label: "day_of_year",
-    type: "function",
-    detail: "day_of_year(v=vector(time()) instant-vector)",
-  },
-  {
-    label: "days_in_month",
-    type: "function",
-    detail: "days_in_month(v=vector(time()) instant-vector)",
-  },
-  { label: "hour", type: "function", detail: "hour(v=vector(time()) instant-vector)" },
-  { label: "minute", type: "function", detail: "minute(v=vector(time()) instant-vector)" },
-  { label: "avg", type: "function", detail: "avg(v instant-vector) [aggregation]" },
-  { label: "count", type: "function", detail: "count(v instant-vector) [aggregation]" },
-  { label: "group", type: "function", detail: "group(v instant-vector) [aggregation]" },
-  { label: "max", type: "function", detail: "max(v instant-vector) [aggregation]" },
-  { label: "min", type: "function", detail: "min(v instant-vector) [aggregation]" },
-  { label: "stddev", type: "function", detail: "stddev(v instant-vector) [aggregation]" },
-  { label: "stdvar", type: "function", detail: "stdvar(v instant-vector) [aggregation]" },
-  { label: "sum", type: "function", detail: "sum(v instant-vector) [aggregation]" },
-  { label: "topk", type: "function", detail: "topk(k scalar, v instant-vector) [aggregation]" },
-  {
-    label: "bottomk",
-    type: "function",
-    detail: "bottomk(k scalar, v instant-vector) [aggregation]",
-  },
-  {
-    label: "count_values",
-    type: "function",
-    detail: 'count_values("label", v instant-vector) [aggregation]',
-  },
-  {
-    label: "quantile",
-    type: "function",
-    detail: "quantile(phi scalar, v instant-vector) [aggregation]",
-  },
+  fn("abs", "abs(v instant-vector)"),
+  fn("absent", "absent(v instant-vector)"),
+  fn("avg_over_time", "avg_over_time(v range-vector)"),
+  fn("ceil", "ceil(v instant-vector)"),
+  fn("changes", "changes(v range-vector)"),
+  fn("clamp", "clamp(v instant-vector, min, max scalar)"),
+  fn("count_over_time", "count_over_time(v range-vector)"),
+  fn("delta", "delta(v range-vector)"),
+  fn("deriv", "deriv(v range-vector)"),
+  fn("exp", "exp(v instant-vector)"),
+  fn("floor", "floor(v instant-vector)"),
+  fn("histogram_quantile", "histogram_quantile(phi scalar, b instant-vector)"),
+  fn("idelta", "idelta(v range-vector)"),
+  fn("increase", "increase(v range-vector)"),
+  fn("irate", "irate(v range-vector)"),
+  fn("label_join", "label_join(v instant-vector, dst, sep, ...src)"),
+  fn("label_replace", "label_replace(v instant-vector, dst, replacement, src, regex)"),
+  fn("ln", "ln(v instant-vector)"),
+  fn("log2", "log2(v instant-vector)"),
+  fn("log10", "log10(v instant-vector)"),
+  fn("max_over_time", "max_over_time(v range-vector)"),
+  fn("min_over_time", "min_over_time(v range-vector)"),
+  fn("predict_linear", "predict_linear(v range-vector, t scalar)"),
+  fn("rate", "rate(v range-vector)"),
+  fn("resets", "resets(v range-vector)"),
+  fn("round", "round(v instant-vector, to_nearest scalar)"),
+  fn("scalar", "scalar(v instant-vector)"),
+  fn("sort", "sort(v instant-vector)"),
+  fn("sort_desc", "sort_desc(v instant-vector)"),
+  fn("sqrt", "sqrt(v instant-vector)"),
+  fn("stddev_over_time", "stddev_over_time(v range-vector)"),
+  fn("sum_over_time", "sum_over_time(v range-vector)"),
+  fn("time", "time()"),
+  fn("timestamp", "timestamp(v instant-vector)"),
+  fn("vector", "vector(s scalar)"),
+  fn("year", "year(v instant-vector)"),
+  fn("month", "month(v instant-vector)"),
+  fn("day_of_month", "day_of_month(v instant-vector)"),
+  fn("day_of_week", "day_of_week(v instant-vector)"),
+  fn("day_of_year", "day_of_year(v instant-vector)"),
+  fn("days_in_month", "days_in_month(v instant-vector)"),
+  fn("hour", "hour(v instant-vector)"),
+  fn("minute", "minute(v instant-vector)"),
+  // Aggregation operators
+  fn("avg", "avg(v instant-vector)"),
+  fn("count", "count(v instant-vector)"),
+  fn("group", "group(v instant-vector)"),
+  fn("max", "max(v instant-vector)"),
+  fn("min", "min(v instant-vector)"),
+  fn("stddev", "stddev(v instant-vector)"),
+  fn("stdvar", "stdvar(v instant-vector)"),
+  fn("sum", "sum(v instant-vector)"),
+  fn("topk", "topk(k scalar, v instant-vector)"),
+  fn("bottomk", "bottomk(k scalar, v instant-vector)"),
+  fn("count_values", 'count_values("label", v instant-vector)'),
+  fn("quantile", "quantile(phi scalar, v instant-vector)"),
 ];
 
 const minimumPrefixLength = 2;
