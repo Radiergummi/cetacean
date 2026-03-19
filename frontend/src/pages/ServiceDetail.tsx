@@ -29,7 +29,7 @@ import { getSemanticChartColor } from "../lib/chartColors";
 import { formatDuration, formatRelativeDate } from "../lib/format";
 import { escapePromQL } from "../lib/utils";
 import { ArrowRight, Globe, Shuffle } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 export default function ServiceDetail() {
@@ -48,34 +48,36 @@ export default function ServiceDetail() {
   const [cpuActual, setCpuActual] = useState<number | undefined>();
   const [memActual, setMemActual] = useState<number | undefined>();
 
+  const abortRef = useRef<AbortController | null>(null);
+
   const fetchData = useCallback(() => {
     if (!id) {
       return;
     }
 
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const { signal } = controller;
+
     api
-      .service(id)
+      .service(id, signal)
       .then((response) => {
         setService(response.service);
         setChanges(response.changes ?? []);
       })
-      .catch(() => setError(true));
+      .catch(() => {
+        if (!signal.aborted) {
+          setError(true);
+        }
+      });
+    api.serviceTasks(id, signal).then(setTasks).catch(() => {});
     api
-      .serviceTasks(id)
-      .then(setTasks)
-      .catch(() => {});
-    api
-      .history({ resourceId: id, limit: 10 })
+      .history({ resourceId: id, limit: 10 }, signal)
       .then(setHistory)
       .catch(() => {});
-    api
-      .serviceEnv(id)
-      .then(setEnvVars)
-      .catch(() => {});
-    api
-      .serviceResources(id)
-      .then(setServiceResources)
-      .catch(() => {});
+    api.serviceEnv(id, signal).then(setEnvVars).catch(() => {});
+    api.serviceResources(id, signal).then(setServiceResources).catch(() => {});
   }, [id]);
 
   useEffect(() => {
@@ -92,7 +94,10 @@ export default function ServiceDetail() {
       .catch(() => {});
   }, []);
 
-  useEffect(fetchData, [fetchData]);
+  useEffect(() => {
+    fetchData();
+    return () => abortRef.current?.abort();
+  }, [fetchData]);
 
   useResourceStream(`/services/${id}`, fetchData);
 

@@ -22,7 +22,7 @@ import {
 } from "chart.js";
 import zoomPlugin from "chartjs-plugin-zoom";
 import { AreaChart, BarChart3, LineChart, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Line } from "react-chartjs-2";
 
 ChartJS.register(
@@ -244,7 +244,7 @@ export default function TimeSeriesChart({
   const justZoomedRef = useRef(false);
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const chartId = useMemo(() => `tsc-${Math.random().toString(36).slice(2, 8)}`, []);
+  const chartId = useId();
   const sync = useChartSync();
   const syncTimestampRef = useRef<number | null>(null);
   const syncIndexRef = useRef<number | null>(null);

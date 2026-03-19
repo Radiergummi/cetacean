@@ -33,7 +33,14 @@ const maxLogSSEConns = 128
 var activeLogSSEConns atomic.Int64
 
 type DockerLogStreamer interface {
-	Logs(ctx context.Context, kind docker.LogKind, id string, tail string, follow bool, since, until string) (io.ReadCloser, error)
+	Logs(
+		ctx context.Context,
+		kind docker.LogKind,
+		id string,
+		tail string,
+		follow bool,
+		since, until string,
+	) (io.ReadCloser, error)
 }
 
 type DockerSystemClient interface {
@@ -48,28 +55,53 @@ type DockerWriteClient interface {
 	UpdateServiceImage(ctx context.Context, id string, image string) (swarm.Service, error)
 	RollbackService(ctx context.Context, id string) (swarm.Service, error)
 	RestartService(ctx context.Context, id string) (swarm.Service, error)
-	UpdateNodeAvailability(ctx context.Context, id string, availability swarm.NodeAvailability) (swarm.Node, error)
+	UpdateNodeAvailability(
+		ctx context.Context,
+		id string,
+		availability swarm.NodeAvailability,
+	) (swarm.Node, error)
 	RemoveTask(ctx context.Context, id string) error
 	UpdateServiceEnv(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
 	UpdateNodeLabels(ctx context.Context, id string, labels map[string]string) (swarm.Node, error)
-	UpdateServiceResources(ctx context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error)
+	UpdateServiceResources(
+		ctx context.Context,
+		id string,
+		resources *swarm.ResourceRequirements,
+	) (swarm.Service, error)
 }
 
 type Handlers struct {
-	cache         *cache.Cache
-	broadcaster   *Broadcaster
-	dockerClient  DockerLogStreamer
-	systemClient  DockerSystemClient
-	writeClient   DockerWriteClient
-	ready         <-chan struct{}
-	promClient    *PromClient
-	localNodeMu   sync.Mutex
-	localNodeID   string
-	localNodeDone bool
+	cache               *cache.Cache
+	broadcaster         *Broadcaster
+	dockerClient        DockerLogStreamer
+	systemClient        DockerSystemClient
+	writeClient         DockerWriteClient
+	ready               <-chan struct{}
+	promClient          *PromClient
+	localNodeMu         sync.Mutex
+	localNodeID         string
+	localNodeDone       bool
+	localNodeRetryAfter *time.Time
 }
 
-func NewHandlers(c *cache.Cache, b *Broadcaster, dc DockerLogStreamer, sc DockerSystemClient, wc DockerWriteClient, ready <-chan struct{}, promClient *PromClient) *Handlers {
-	return &Handlers{cache: c, broadcaster: b, dockerClient: dc, systemClient: sc, writeClient: wc, ready: ready, promClient: promClient}
+func NewHandlers(
+	c *cache.Cache,
+	b *Broadcaster,
+	dc DockerLogStreamer,
+	sc DockerSystemClient,
+	wc DockerWriteClient,
+	ready <-chan struct{},
+	promClient *PromClient,
+) *Handlers {
+	return &Handlers{
+		cache:        c,
+		broadcaster:  b,
+		dockerClient: dc,
+		systemClient: sc,
+		writeClient:  wc,
+		ready:        ready,
+		promClient:   promClient,
+	}
 }
 
 func (h *Handlers) streamList(w http.ResponseWriter, r *http.Request, typ string) {
@@ -143,41 +175,20 @@ func searchFilter[T any](items []T, query string, name func(T) string) []T {
 }
 
 // containsFold reports whether s contains substr using case-insensitive
-// comparison. substr must already be lowercased. Zero allocations.
+// comparison. substr must already be lowercased.
 func containsFold(s, substrLower string) bool {
-	if len(substrLower) == 0 {
-		return true
-	}
-	if len(substrLower) > len(s) {
-		return false
-	}
-	for i := 0; i <= len(s)-len(substrLower); i++ {
-		if toLower(s[i]) == substrLower[0] {
-			match := true
-			for j := 1; j < len(substrLower); j++ {
-				if toLower(s[i+j]) != substrLower[j] {
-					match = false
-					break
-				}
-			}
-			if match {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func toLower(c byte) byte {
-	if c >= 'A' && c <= 'Z' {
-		return c + 32
-	}
-	return c
+	return strings.Contains(strings.ToLower(s), substrLower)
 }
 
 const maxFilterLen = 512
 
-func exprFilter[T any](items []T, expr string, env func(T, map[string]any) map[string]any, w http.ResponseWriter, r *http.Request) ([]T, bool) {
+func exprFilter[T any](
+	items []T,
+	expr string,
+	env func(T, map[string]any) map[string]any,
+	w http.ResponseWriter,
+	r *http.Request,
+) ([]T, bool) {
 	if expr == "" {
 		return items, true
 	}
@@ -227,15 +238,25 @@ func (h *Handlers) getLocalNodeID() string {
 	if h.localNodeDone {
 		return h.localNodeID
 	}
+
+	// Avoid hammering Docker API on every request when it's failing:
+	// back off for 30s after a failed attempt.
+	if h.localNodeRetryAfter != nil && time.Now().Before(*h.localNodeRetryAfter) {
+		return h.localNodeID
+	}
+
 	if h.systemClient != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		id, err := h.systemClient.LocalNodeID(ctx)
 		if err != nil {
 			slog.Warn("failed to get local node ID", "error", err)
+			retryAt := time.Now().Add(30 * time.Second)
+			h.localNodeRetryAfter = &retryAt
 		} else if id != "" {
 			h.localNodeID = id
 			h.localNodeDone = true
+			h.localNodeRetryAfter = nil
 		}
 	}
 	return h.localNodeID
@@ -309,8 +330,10 @@ func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) 
 	// CPU utilization
 	go func() {
 		defer wg.Done()
-		results, err := h.promClient.InstantQuery(ctx,
-			`sum(rate(node_cpu_seconds_total{mode!="idle"}[5m])) / sum(rate(node_cpu_seconds_total[5m])) * 100`)
+		results, err := h.promClient.InstantQuery(
+			ctx,
+			`sum(rate(node_cpu_seconds_total{mode!="idle"}[5m])) / sum(rate(node_cpu_seconds_total[5m])) * 100`,
+		)
 		if err != nil {
 			slog.Warn("cluster metrics: CPU query failed", "error", err)
 			return
@@ -358,7 +381,10 @@ func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) 
 		dwg.Add(2)
 		go func() {
 			defer dwg.Done()
-			r, err := h.promClient.InstantQuery(ctx, `sum(node_filesystem_size_bytes{mountpoint="/"})`)
+			r, err := h.promClient.InstantQuery(
+				ctx,
+				`sum(node_filesystem_size_bytes{mountpoint="/"})`,
+			)
 			if err == nil && len(r) > 0 {
 				pmu.Lock()
 				p.total = r[0].Value
@@ -367,7 +393,10 @@ func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) 
 		}()
 		go func() {
 			defer dwg.Done()
-			r, err := h.promClient.InstantQuery(ctx, `sum(node_filesystem_avail_bytes{mountpoint="/"})`)
+			r, err := h.promClient.InstantQuery(
+				ctx,
+				`sum(node_filesystem_avail_bytes{mountpoint="/"})`,
+			)
 			if err == nil && len(r) > 0 {
 				pmu.Lock()
 				p.avail = r[0].Value
@@ -617,7 +646,11 @@ func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 	nodes := h.cache.ListNodes()
-	nodes = searchFilter(nodes, r.URL.Query().Get("search"), func(n swarm.Node) string { return n.Description.Hostname })
+	nodes = searchFilter(
+		nodes,
+		r.URL.Query().Get("search"),
+		func(n swarm.Node) string { return n.Description.Hostname },
+	)
 	var ok bool
 	if nodes, ok = exprFilter(nodes, r.URL.Query().Get("filter"), filter.NodeEnv, w, r); !ok {
 		return
@@ -666,9 +699,19 @@ type ServiceListItem struct {
 
 func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 	services := h.cache.ListServices()
-	services = searchFilter(services, r.URL.Query().Get("search"), func(s swarm.Service) string { return s.Spec.Name })
+	services = searchFilter(
+		services,
+		r.URL.Query().Get("search"),
+		func(s swarm.Service) string { return s.Spec.Name },
+	)
 	var ok bool
-	if services, ok = exprFilter(services, r.URL.Query().Get("filter"), filter.ServiceEnv, w, r); !ok {
+	if services, ok = exprFilter(
+		services,
+		r.URL.Query().Get("filter"),
+		filter.ServiceEnv,
+		w,
+		r,
+	); !ok {
 		return
 	}
 	p := parsePagination(r)
@@ -729,9 +772,13 @@ func (h *Handlers) HandleServiceLogs(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("service %q not found", id))
 		return
 	}
-	h.serveLogs(w, r, func(ctx context.Context, tail string, follow bool, since, until string) (LogStream, error) {
-		return h.dockerClient.Logs(ctx, docker.ServiceLog, id, tail, follow, since, until)
-	})
+	h.serveLogs(
+		w,
+		r,
+		func(ctx context.Context, tail string, follow bool, since, until string) (LogStream, error) {
+			return h.dockerClient.Logs(ctx, docker.ServiceLog, id, tail, follow, since, until)
+		},
+	)
 }
 
 // --- Tasks ---
@@ -794,7 +841,11 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 	})
 	paged := applyPagination(tasks, p)
 	writePaginationLinks(w, r, paged.Total, paged.Limit, paged.Offset)
-	writeJSONWithETag(w, r, NewCollectionResponse(h.enrichTasks(paged.Items), paged.Total, paged.Limit, paged.Offset))
+	writeJSONWithETag(
+		w,
+		r,
+		NewCollectionResponse(h.enrichTasks(paged.Items), paged.Total, paged.Limit, paged.Offset),
+	)
 }
 
 func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
@@ -819,9 +870,13 @@ func (h *Handlers) HandleTaskLogs(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("task %q not found", id))
 		return
 	}
-	h.serveLogs(w, r, func(ctx context.Context, tail string, follow bool, since, until string) (LogStream, error) {
-		return h.dockerClient.Logs(ctx, docker.TaskLog, id, tail, follow, since, until)
-	})
+	h.serveLogs(
+		w,
+		r,
+		func(ctx context.Context, tail string, follow bool, since, until string) (LogStream, error) {
+			return h.dockerClient.Logs(ctx, docker.TaskLog, id, tail, follow, since, until)
+		},
+	)
 }
 
 // LogStream is an alias for the io.ReadCloser returned by Docker log APIs.
@@ -859,22 +914,42 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	until := q.Get("before")
 	streamFilter := q.Get("stream") // "", "stdout", or "stderr"
 	if streamFilter != "" && streamFilter != "stdout" && streamFilter != "stderr" {
-		writeProblem(w, r, http.StatusBadRequest, `invalid "stream" parameter: must be "stdout" or "stderr"`)
+		writeProblem(
+			w,
+			r,
+			http.StatusBadRequest,
+			`invalid "stream" parameter: must be "stdout" or "stderr"`,
+		)
 		return
 	}
 
 	if !validLogTimestamp(since) {
-		writeProblem(w, r, http.StatusBadRequest, `invalid "after" parameter: must be RFC3339 timestamp or Go duration`)
+		writeProblem(
+			w,
+			r,
+			http.StatusBadRequest,
+			`invalid "after" parameter: must be RFC3339 timestamp or Go duration`,
+		)
 		return
 	}
 	if !validLogTimestamp(until) {
-		writeProblem(w, r, http.StatusBadRequest, `invalid "before" parameter: must be RFC3339 timestamp or Go duration`)
+		writeProblem(
+			w,
+			r,
+			http.StatusBadRequest,
+			`invalid "before" parameter: must be RFC3339 timestamp or Go duration`,
+		)
 		return
 	}
 
 	if ContentTypeFromContext(r.Context()) == ContentTypeSSE {
 		if until != "" {
-			writeProblem(w, r, http.StatusBadRequest, `"before" parameter is not supported for SSE log streams`)
+			writeProblem(
+				w,
+				r,
+				http.StatusBadRequest,
+				`"before" parameter is not supported for SSE log streams`,
+			)
 			return
 		}
 		h.serveLogsSSE(w, r, fetch, since, streamFilter)
@@ -971,7 +1046,12 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	writeJSON(w, resp)
 }
 
-func (h *Handlers) serveLogsSSE(w http.ResponseWriter, r *http.Request, fetch logFetcher, since, streamFilter string) {
+func (h *Handlers) serveLogsSSE(
+	w http.ResponseWriter,
+	r *http.Request,
+	fetch logFetcher,
+	since, streamFilter string,
+) {
 	for {
 		cur := activeLogSSEConns.Load()
 		if cur >= maxLogSSEConns {
@@ -1074,7 +1154,11 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
 	stacks := h.cache.ListStacks()
-	stacks = searchFilter(stacks, r.URL.Query().Get("search"), func(s cache.Stack) string { return s.Name })
+	stacks = searchFilter(
+		stacks,
+		r.URL.Query().Get("search"),
+		func(s cache.Stack) string { return s.Name },
+	)
 	var ok bool
 	if stacks, ok = exprFilter(stacks, r.URL.Query().Get("filter"), filter.StackEnv, w, r); !ok {
 		return
@@ -1119,8 +1203,10 @@ func (h *Handlers) HandleStackSummary(w http.ResponseWriter, r *http.Request) {
 		}()
 		go func() {
 			defer wg.Done()
-			cpuByStack = h.queryStackMetric(ctx,
-				`sum by (`+stackNamespaceLabel+`)(rate(container_cpu_usage_seconds_total[5m])) * 100`)
+			cpuByStack = h.queryStackMetric(
+				ctx,
+				`sum by (`+stackNamespaceLabel+`)(rate(container_cpu_usage_seconds_total[5m])) * 100`,
+			)
 		}()
 		wg.Wait()
 
@@ -1168,7 +1254,11 @@ func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 	configs := h.cache.ListConfigs()
-	configs = searchFilter(configs, r.URL.Query().Get("search"), func(c swarm.Config) string { return c.Spec.Name })
+	configs = searchFilter(
+		configs,
+		r.URL.Query().Get("search"),
+		func(c swarm.Config) string { return c.Spec.Name },
+	)
 	var ok bool
 	if configs, ok = exprFilter(configs, r.URL.Query().Get("filter"), filter.ConfigEnv, w, r); !ok {
 		return
@@ -1206,7 +1296,11 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 	for i := range secrets {
 		secrets[i].Spec.Data = nil
 	}
-	secrets = searchFilter(secrets, r.URL.Query().Get("search"), func(s swarm.Secret) string { return s.Spec.Name })
+	secrets = searchFilter(
+		secrets,
+		r.URL.Query().Get("search"),
+		func(s swarm.Secret) string { return s.Spec.Name },
+	)
 	var ok bool
 	if secrets, ok = exprFilter(secrets, r.URL.Query().Get("filter"), filter.SecretEnv, w, r); !ok {
 		return
@@ -1239,9 +1333,19 @@ func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 	networks := h.cache.ListNetworks()
-	networks = searchFilter(networks, r.URL.Query().Get("search"), func(n network.Summary) string { return n.Name })
+	networks = searchFilter(
+		networks,
+		r.URL.Query().Get("search"),
+		func(n network.Summary) string { return n.Name },
+	)
 	var ok bool
-	if networks, ok = exprFilter(networks, r.URL.Query().Get("filter"), filter.NetworkEnv, w, r); !ok {
+	if networks, ok = exprFilter(
+		networks,
+		r.URL.Query().Get("filter"),
+		filter.NetworkEnv,
+		w,
+		r,
+	); !ok {
 		return
 	}
 	p := parsePagination(r)
@@ -1272,7 +1376,11 @@ func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 	volumes := h.cache.ListVolumes()
-	volumes = searchFilter(volumes, r.URL.Query().Get("search"), func(v volume.Volume) string { return v.Name })
+	volumes = searchFilter(
+		volumes,
+		r.URL.Query().Get("search"),
+		func(v volume.Volume) string { return v.Name },
+	)
 	var ok bool
 	if volumes, ok = exprFilter(volumes, r.URL.Query().Get("filter"), filter.VolumeEnv, w, r); !ok {
 		return
@@ -1402,7 +1510,10 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 					} else if running < desired {
 						state = "pending"
 					}
-					matches = append(matches, searchResult{ID: s.ID, Name: s.Spec.Name, Detail: detail, State: state})
+					matches = append(
+						matches,
+						searchResult{ID: s.ID, Name: s.Spec.Name, Detail: detail, State: state},
+					)
 				}
 			}
 		}

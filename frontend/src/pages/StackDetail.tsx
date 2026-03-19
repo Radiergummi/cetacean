@@ -36,17 +36,17 @@ export default function StackDetail() {
       return;
     }
 
-    let cancelled = false;
+    const controller = new AbortController();
 
     Promise.all(
       stack.services.map((service) =>
         api
-          .serviceTasks(service.ID)
+          .serviceTasks(service.ID, controller.signal)
           .then((tasks: Task[]) => [service, tasks] as const)
           .catch(() => [service, []] as const),
       ),
     ).then((results) => {
-      if (cancelled) {
+      if (controller.signal.aborted) {
         return;
       }
 
@@ -67,9 +67,7 @@ export default function StackDetail() {
       setTaskCounts(counts);
     });
 
-    return () => {
-      cancelled = true;
-    };
+    return () => controller.abort();
   }, [stack]);
 
   if (error) {

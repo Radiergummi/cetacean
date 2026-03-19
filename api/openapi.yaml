@@ -134,22 +134,93 @@ paths:
               schema:
                 $ref: "#/components/schemas/MonitoringStatus"
 
+  /-/metrics/query_range:
+    get:
+      operationId: metricsQueryRange
+      tags: [Monitoring]
+      summary: Prometheus query_range (JSON or SSE stream)
+      description: |
+        Content-negotiated endpoint:
+
+        - **`application/json`** — proxied to Prometheus `query_range` endpoint (same as `/-/metrics/{path}`).
+        - **`text/event-stream`** — opens a streaming SSE connection that periodically
+          runs an instant query and pushes results.
+
+        **SSE event types:**
+        - `initial` — full range query result (Prometheus JSON), sent on connect.
+        - `point` — single instant query result (Prometheus JSON), sent every `step` seconds.
+        - `query_error` — `{"error": "...", "errorType": "server_error"}` on query failure.
+
+        SSE streams are limited to 64 concurrent connections (returns 429 when exceeded).
+        A keepalive comment is sent every 15 seconds.
+      parameters:
+        - name: query
+          in: query
+          required: true
+          description: PromQL query expression
+          schema:
+            type: string
+        - name: step
+          in: query
+          description: Query step interval in seconds (default 15, min 5, max 300)
+          schema:
+            type: integer
+            minimum: 5
+            maximum: 300
+            default: 15
+        - name: range
+          in: query
+          description: Time range in seconds for the initial range query (default 3600)
+          schema:
+            type: integer
+            default: 3600
+        - name: start
+          in: query
+          description: Range query start (Unix timestamp) — JSON proxy mode only
+          schema:
+            type: string
+        - name: end
+          in: query
+          description: Range query end (Unix timestamp) — JSON proxy mode only
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Query result (JSON) or SSE stream
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Proxied Prometheus query_range result
+            text/event-stream:
+              schema:
+                type: string
+                description: SSE stream with `initial`, `point`, and `query_error` events
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          description: Prometheus not configured
+
   /-/metrics/{path}:
     get:
       operationId: proxyPrometheus
       tags: [Monitoring]
       summary: Prometheus query proxy
       description: |
-        Reverse proxy to Prometheus. Only allows `/query` and `/query_range` sub-paths
+        Reverse proxy to Prometheus. Only allows the `/query` sub-path
         with whitelisted query params. 10 MB response limit, 30 s timeout.
         Returns 404 if Prometheus is not configured.
+
+        For `query_range`, use `/-/metrics/query_range` which also supports SSE streaming.
       parameters:
         - name: path
           in: path
           required: true
           schema:
             type: string
-            enum: [query, query_range]
+            enum: [query]
       responses:
         "200":
           description: Proxied Prometheus response
@@ -162,6 +233,32 @@ paths:
           $ref: "#/components/responses/NotFound"
 
   # ── Authentication ──────────────────────────────────────────────────
+
+  /profile:
+    get:
+      operationId: getProfile
+      tags: [Authentication]
+      summary: Current user profile
+      description: |
+        Content-negotiated identity endpoint. Returns the authenticated user's
+        identity as JSON (with ETag), or serves the SPA for browser requests.
+
+        Unlike `/auth/whoami`, this endpoint is content-negotiated and includes
+        `Cache-Control: no-store`.
+      responses:
+        "200":
+          description: Authenticated user identity
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Identity"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "401":
+          description: Not authenticated
 
   /auth/whoami:
     get:
@@ -1001,6 +1098,20 @@ paths:
           $ref: "#/components/responses/NotModified"
         "404":
           $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: removeTask
+      tags: [Tasks]
+      summary: Force-remove a task
+      description: |
+        Forces removal of a task (equivalent to `docker rm -f` on the underlying container).
+        Only works on tasks whose containers are still accessible on the node.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "204":
+          description: Task removed
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /tasks/{id}/logs:
     get:
@@ -1034,22 +1145,6 @@ paths:
           $ref: "#/components/responses/NotFound"
         "429":
           $ref: "#/components/responses/TooManyRequests"
-
-  /tasks/{id}/remove:
-    delete:
-      operationId: removeTask
-      tags: [Tasks]
-      summary: Force-remove a task
-      description: |
-        Forces removal of a task (equivalent to `docker rm -f` on the underlying container).
-        Only works on tasks whose containers are still accessible on the node.
-      parameters:
-        - $ref: "#/components/parameters/resourceId"
-      responses:
-        "204":
-          description: Task removed
-        "404":
-          $ref: "#/components/responses/NotFound"
 
   # ── History ──────────────────────────────────────────────────────────
 

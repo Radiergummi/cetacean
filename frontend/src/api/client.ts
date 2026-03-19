@@ -193,10 +193,11 @@ export const api = {
   clusterMetrics: () => fetchJSON<ClusterMetrics>("/cluster/metrics"),
   monitoringStatus: () => fetchJSON<MonitoringStatus>("/-/metrics/status"),
   nodes: (params?: ListParams) => fetchJSON<PagedResponse<Node>>(buildListURL("/nodes", params)),
-  node: (id: string) => fetchJSON<{ node: Node }>(`/nodes/${id}`).then((r) => r.node),
+  node: (id: string, signal?: AbortSignal) =>
+    fetchJSON<{ node: Node }>(`/nodes/${id}`, signal).then((r) => r.node),
   services: (params?: ListParams) =>
     fetchJSON<PagedResponse<ServiceListItem>>(buildListURL("/services", params)),
-  service: (id: string) => fetchJSON<ServiceDetail>(`/services/${id}`),
+  service: (id: string, signal?: AbortSignal) => fetchJSON<ServiceDetail>(`/services/${id}`, signal),
   tasks: (params?: ListParams) => fetchJSON<PagedResponse<Task>>(buildListURL("/tasks", params)),
   stacks: (params?: ListParams) => fetchJSON<PagedResponse<Stack>>(buildListURL("/stacks", params)),
   stacksSummary: () =>
@@ -220,8 +221,8 @@ export const api = {
   task: (id: string) => fetchJSON<{ task: Task }>(`/tasks/${id}`).then((r) => r.task),
   taskLogs: (id: string, opts?: LogOpts) =>
     fetchJSON<LogResponse>(`/tasks/${id}/logs?${buildLogParams(opts)}`, opts?.signal),
-  serviceTasks: (id: string) =>
-    fetchJSON<CollectionResponse<Task>>(`/services/${id}/tasks`).then((r) => r.items),
+  serviceTasks: (id: string, signal?: AbortSignal) =>
+    fetchJSON<CollectionResponse<Task>>(`/services/${id}/tasks`, signal).then((r) => r.items),
   serviceLogs: (id: string, opts?: LogOpts) =>
     fetchJSON<LogResponse>(`/services/${id}/logs?${buildLogParams(opts)}`, opts?.signal),
   serviceLogsStreamURL: (id: string, opts?: { after?: string; stream?: string }) =>
@@ -244,8 +245,8 @@ export const api = {
   },
   topologyNetworks: () => fetchJSON<NetworkTopology>("/topology/networks"),
   topologyPlacement: () => fetchJSON<PlacementTopology>("/topology/placement"),
-  nodeTasks: (id: string) =>
-    fetchJSON<CollectionResponse<Task>>(`/nodes/${id}/tasks`).then((r) => r.items),
+  nodeTasks: (id: string, signal?: AbortSignal) =>
+    fetchJSON<CollectionResponse<Task>>(`/nodes/${id}/tasks`, signal).then((r) => r.items),
   metricsQuery: (query: string, time?: string) => {
     const params = new URLSearchParams({ query });
     if (time) params.set("time", time);

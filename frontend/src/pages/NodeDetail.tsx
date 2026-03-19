@@ -35,7 +35,7 @@ import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { formatBytes, formatNumber } from "../lib/format";
 import { escapePromQL } from "../lib/utils";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 
 function NodeAvailabilityControl({ nodeId, current }: { nodeId: string; current: string }) {
@@ -116,30 +116,38 @@ export default function NodeDetail() {
   const { resolve } = useInstanceResolver();
   const [error, setError] = useState(false);
 
+  const abortRef = useRef<AbortController | null>(null);
+
   const fetchData = useCallback(() => {
     if (!id) {
       return;
     }
 
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const { signal } = controller;
+
     api
-      .node(id)
+      .node(id, signal)
       .then(setNode)
-      .catch(() => setError(true));
+      .catch(() => {
+        if (!signal.aborted) {
+          setError(true);
+        }
+      });
+    api.nodeTasks(id, signal).then(setTasks).catch(() => {});
     api
-      .nodeTasks(id)
-      .then(setTasks)
-      .catch(() => {});
-    api
-      .history({ resourceId: id, limit: 10 })
+      .history({ resourceId: id, limit: 10 }, signal)
       .then(setHistory)
       .catch(() => {});
-    api
-      .nodeLabels(id)
-      .then(setNodeLabels)
-      .catch(() => {});
+    api.nodeLabels(id, signal).then(setNodeLabels).catch(() => {});
   }, [id]);
 
-  useEffect(fetchData, [fetchData]);
+  useEffect(() => {
+    fetchData();
+    return () => abortRef.current?.abort();
+  }, [fetchData]);
 
   useResourceStream(`/nodes/${id}`, fetchData);
 

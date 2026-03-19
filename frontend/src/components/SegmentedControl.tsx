@@ -67,15 +67,25 @@ export default function SegmentedControl<T extends string>({
       return;
     }
 
-    const handler = (event: MouseEvent) => {
+    const handleClick = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setOpen(false);
       }
     };
 
-    document.addEventListener("mousedown", handler);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
 
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, [open]);
 
   const visible = segments.slice(0, max);
@@ -105,6 +115,8 @@ export default function SegmentedControl<T extends string>({
           <button
             onClick={() => setOpen((o) => !o)}
             aria-current={isActive || undefined}
+            aria-haspopup="menu"
+            aria-expanded={open}
             className="inline-flex cursor-pointer items-center gap-1 rounded-sm px-2 py-1 text-sm text-muted-foreground transition hover:text-foreground aria-current:bg-primary aria-current:text-primary-foreground aria-current:shadow-sm"
           >
             {overflowLabel ?? (activeOverflow ? <span>{activeOverflow.label}</span> : undefined)}
@@ -112,19 +124,23 @@ export default function SegmentedControl<T extends string>({
           </button>
 
           {open && (
-            <div className="absolute top-full right-0 z-50 mt-1 min-w-36 rounded-md border bg-popover p-1 shadow-md">
+            <div
+              role="menu"
+              className="absolute top-full right-0 z-50 mt-1 min-w-36 rounded-md border bg-popover p-1 shadow-md"
+            >
               {overflowContent
                 ? overflowContent(close)
                 : overflow.map(({ badge, disabled, label, value: segmentValue }) => (
                     <button
                       key={segmentValue}
+                      role="menuitemradio"
                       disabled={disabled}
-                      aria-selected={value === segmentValue || undefined}
+                      aria-checked={value === segmentValue}
                       onClick={() => {
                         onChange(segmentValue);
                         setOpen(false);
                       }}
-                      className="flex w-full items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-sm text-popover-foreground hover:bg-accent hover:text-accent-foreground disabled:cursor-default disabled:text-muted-foreground/40 disabled:hover:bg-transparent aria-selected:bg-accent aria-selected:text-accent-foreground"
+                      className="flex w-full items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-sm text-popover-foreground hover:bg-accent hover:text-accent-foreground disabled:cursor-default disabled:text-muted-foreground/40 disabled:hover:bg-transparent aria-checked:bg-accent aria-checked:text-accent-foreground"
                     >
                       <span>{label}</span>
                       {badge != null && (

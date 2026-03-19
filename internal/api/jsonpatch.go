@@ -1,6 +1,10 @@
 package api
 
-import "fmt"
+import (
+	"fmt"
+
+	json "github.com/goccy/go-json"
+)
 
 // PatchOp represents a single RFC 6902 JSON Patch operation.
 type PatchOp struct {
@@ -72,5 +76,29 @@ func applyJSONPatch(m map[string]string, ops []PatchOp) (map[string]string, erro
 			return nil, fmt.Errorf("operation %d: unknown operation %q", i, op.Op)
 		}
 	}
+	return result, nil
+}
+
+// applyMergePatchStringMap applies RFC 7396 JSON Merge Patch to a flat string map.
+// Keys with null values are deleted; keys with string values are set/overwritten.
+func applyMergePatchStringMap(m map[string]string, body []byte) (map[string]string, error) {
+	var patch map[string]*string
+	if err := json.Unmarshal(body, &patch); err != nil {
+		return nil, fmt.Errorf("invalid JSON: %w", err)
+	}
+
+	result := make(map[string]string, len(m))
+	for k, v := range m {
+		result[k] = v
+	}
+
+	for k, v := range patch {
+		if v == nil {
+			delete(result, k)
+		} else {
+			result[k] = *v
+		}
+	}
+
 	return result, nil
 }

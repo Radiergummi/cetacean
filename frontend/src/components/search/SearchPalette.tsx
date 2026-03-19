@@ -106,6 +106,10 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   const [actionArgs, setActionArgs] = useState<unknown[]>([]);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    action: PaletteAction;
+    args: unknown[];
+  } | null>(null);
 
   // Detect action match when not yet in action mode
   const actionMatch = useMemo(() => {
@@ -276,16 +280,8 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
     setHighlightIndex(0);
   }, []);
 
-  const executeAction = useCallback(
+  const doExecute = useCallback(
     async (action: PaletteAction, args: unknown[]) => {
-      if (action.destructive) {
-        const confirmed = window.confirm(`Confirm: ${action.label}?`);
-
-        if (!confirmed) {
-          return;
-        }
-      }
-
       setActionLoading(true);
       setActionError(null);
 
@@ -300,6 +296,18 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
       }
     },
     [onClose],
+  );
+
+  const executeAction = useCallback(
+    (action: PaletteAction, args: unknown[]) => {
+      if (action.destructive) {
+        setPendingConfirm({ action, args });
+        return;
+      }
+
+      void doExecute(action, args);
+    },
+    [doExecute],
   );
 
   const advanceStep = useCallback(
@@ -469,6 +477,9 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Search"
         className="mx-4 mt-[5vh] max-w-lg animate-[slide-down_150ms_ease-out] rounded-lg border bg-popover shadow-lg md:mx-auto md:mt-[15vh]"
         onClick={(event) => event.stopPropagation()}
         onKeyDown={onKeyDown}
@@ -498,6 +509,32 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
         {actionError && (
           <div className="border-b bg-destructive/10 px-3 py-2 text-xs text-destructive">
             {actionError}
+          </div>
+        )}
+
+        {pendingConfirm && (
+          <div className="flex items-center justify-between border-b bg-destructive/5 px-3 py-2.5">
+            <span className="text-sm text-foreground">
+              Confirm: {pendingConfirm.action.label}?
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPendingConfirm(null)}
+                className="rounded-md px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const { action, args } = pendingConfirm;
+                  setPendingConfirm(null);
+                  void doExecute(action, args);
+                }}
+                className="rounded-md bg-destructive px-2.5 py-1 text-xs font-medium text-destructive-foreground hover:bg-destructive/90"
+              >
+                Confirm
+              </button>
+            </div>
           </div>
         )}
 
@@ -574,6 +611,14 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
                 )}
               </div>
             )}
+        </div>
+
+        <div
+          className="sr-only"
+          aria-live="polite"
+          role="status"
+        >
+          {response && hasQuery ? `${response.total} result${response.total !== 1 ? "s" : ""}` : ""}
         </div>
 
         {!activeAction && hasQuery && response && (

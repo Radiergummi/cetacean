@@ -30,4 +30,5 @@ COPY --from=backend /app/cetacean /usr/local/bin/cetacean
 EXPOSE 9000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
 CMD ["cetacean", "healthcheck"]
+USER 65534:65534
 ENTRYPOINT ["cetacean"]

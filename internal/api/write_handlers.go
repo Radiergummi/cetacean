@@ -266,14 +266,18 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json-patch+json") {
-		writeProblem(w, r, http.StatusUnsupportedMediaType, "Content-Type must be application/json-patch+json")
+	ct := r.Header.Get("Content-Type")
+	isJSONPatch := strings.HasPrefix(ct, "application/json-patch+json")
+	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")
+
+	if !isJSONPatch && !isMergePatch {
+		writeProblem(w, r, http.StatusUnsupportedMediaType, "Content-Type must be application/json-patch+json or application/merge-patch+json")
 		return
 	}
 
-	var ops []PatchOp
-	if err := json.NewDecoder(r.Body).Decode(&ops); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
 		return
 	}
 
@@ -289,7 +293,18 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 	}
 	current := envSliceToMap(env)
 
-	updated, err := applyJSONPatch(current, ops)
+	var updated map[string]string
+	if isJSONPatch {
+		var ops []PatchOp
+		if err := json.Unmarshal(body, &ops); err != nil {
+			writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+			return
+		}
+		updated, err = applyJSONPatch(current, ops)
+	} else {
+		updated, err = applyMergePatchStringMap(current, body)
+	}
+
 	if err != nil {
 		writePatchError(w, r, err)
 		return
@@ -330,14 +345,18 @@ func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request)
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json-patch+json") {
-		writeProblem(w, r, http.StatusUnsupportedMediaType, "Content-Type must be application/json-patch+json")
+	ct := r.Header.Get("Content-Type")
+	isJSONPatch := strings.HasPrefix(ct, "application/json-patch+json")
+	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")
+
+	if !isJSONPatch && !isMergePatch {
+		writeProblem(w, r, http.StatusUnsupportedMediaType, "Content-Type must be application/json-patch+json or application/merge-patch+json")
 		return
 	}
 
-	var ops []PatchOp
-	if err := json.NewDecoder(r.Body).Decode(&ops); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
 		return
 	}
 
@@ -352,7 +371,18 @@ func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request)
 		current = map[string]string{}
 	}
 
-	updated, err := applyJSONPatch(current, ops)
+	var updated map[string]string
+	if isJSONPatch {
+		var ops []PatchOp
+		if err := json.Unmarshal(body, &ops); err != nil {
+			writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+			return
+		}
+		updated, err = applyJSONPatch(current, ops)
+	} else {
+		updated, err = applyMergePatchStringMap(current, body)
+	}
+
 	if err != nil {
 		writePatchError(w, r, err)
 		return
@@ -417,7 +447,10 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 		return
 	}
 	var baseMap map[string]any
-	json.Unmarshal(base, &baseMap)
+	if err := json.Unmarshal(base, &baseMap); err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to unmarshal current resources")
+		return
+	}
 
 	// Read the patch
 	patchBytes, err := io.ReadAll(r.Body)

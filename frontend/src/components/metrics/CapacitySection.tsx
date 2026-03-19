@@ -32,10 +32,11 @@ function Bar({
   onClick?: () => void;
 }) {
   const clamped = Math.min(100, Math.max(0, percent));
+  const Component = onClick ? "button" : "div";
   return (
-    <div
-      data-clickable={onClick ? "" : undefined}
-      className="rounded-lg border bg-card p-4 data-clickable:cursor-pointer data-clickable:transition-colors data-clickable:hover:border-foreground/20"
+    <Component
+      type={onClick ? "button" : undefined}
+      className={`rounded-lg border bg-card p-4 text-left${onClick ? " cursor-pointer transition-colors hover:border-foreground/20" : ""}`}
       onClick={onClick}
     >
       <div className="mb-2 flex justify-between text-xs text-muted-foreground">
@@ -52,7 +53,7 @@ function Bar({
         />
       </div>
       <div className="mt-1.5 text-xs text-muted-foreground">{detail}</div>
-    </div>
+    </Component>
   );
 }
 

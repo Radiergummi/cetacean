@@ -81,8 +81,8 @@ export function TimeRangeSelector({
                     onChange(p.getValue());
                     setOpen(false);
                   }}
-                  aria-selected={value.label === p.label || undefined}
-                  className="rounded-md bg-muted px-2 py-1 text-xs text-foreground hover:bg-muted/80 aria-selected:bg-primary aria-selected:text-primary-foreground"
+                  aria-pressed={value.label === p.label}
+                  className="rounded-md bg-muted px-2 py-1 text-xs text-foreground hover:bg-muted/80 aria-pressed:bg-primary aria-pressed:text-primary-foreground"
                 >
                   {p.label}
                 </button>

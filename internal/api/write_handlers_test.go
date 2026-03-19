@@ -622,6 +622,33 @@ func TestHandlePatchServiceEnv_NotFound(t *testing.T) {
 	}
 }
 
+func TestHandlePatchServiceEnv_MergePatch(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(serviceWithEnv("svc1", []string{"FOO=bar", "OLD=remove"}))
+
+	wc := &mockWriteClient{
+		updateServiceEnvFn: func(_ context.Context, id string, env map[string]string) (swarm.Service, error) {
+			envSlice := make([]string, 0, len(env))
+			for k, v := range env {
+				envSlice = append(envSlice, k+"="+v)
+			}
+			return serviceWithEnv(id, envSlice), nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+
+	body := `{"NEW":"val","OLD":null}`
+	req := httptest.NewRequest("PATCH", "/services/svc1/env", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceEnv(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestHandleGetNodeLabels(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{
@@ -693,6 +720,32 @@ func TestHandlePatchNodeLabels_WrongContentType(t *testing.T) {
 
 	if w.Code != http.StatusUnsupportedMediaType {
 		t.Errorf("status=%d, want 415", w.Code)
+	}
+}
+
+func TestHandlePatchNodeLabels_MergePatch(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{
+		ID:   "node1",
+		Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: map[string]string{"existing": "value", "remove": "me"}}},
+	})
+
+	wc := &mockWriteClient{
+		updateNodeLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Node, error) {
+			return swarm.Node{ID: id, Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: labels}}}, nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+
+	body := `{"new":"label","remove":null}`
+	req := httptest.NewRequest("PATCH", "/nodes/node1/labels", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.SetPathValue("id", "node1")
+	w := httptest.NewRecorder()
+	h.HandlePatchNodeLabels(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
 	}
 }
 

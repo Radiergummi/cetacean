@@ -53,6 +53,7 @@ export function SectionToggle({
     <button
       type="button"
       onClick={onToggle}
+      aria-expanded={open}
       className={
         className ??
         "flex cursor-pointer items-center gap-1.5 text-sm font-medium tracking-wider text-muted-foreground uppercase " +

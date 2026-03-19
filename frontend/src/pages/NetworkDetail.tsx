@@ -113,10 +113,15 @@ function IPAMPanel({ network }: { network: Network }) {
 
 export default function NetworkDetail() {
   const { id } = useParams<{ id: string }>();
-  const { data, history, error } = useDetailResource(id, api.network, `/networks/${id}`);
+  const { data, history, error, retry } = useDetailResource(id, api.network, `/networks/${id}`);
 
   if (error) {
-    return <FetchError message="Failed to load network" />;
+    return (
+      <FetchError
+        message={error.message || "Failed to load network"}
+        onRetry={retry}
+      />
+    );
   }
   if (!data) {
     return <LoadingDetail />;

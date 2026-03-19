@@ -34,6 +34,7 @@ function PlainBody<T>({
           key={keyFn(item)}
           data-clickable={onRowClick ? "" : undefined}
           data-selected={index === selectedIndex || undefined}
+          aria-selected={onRowClick ? index === selectedIndex : undefined}
           className={`border-b last:border-b-0 data-clickable:cursor-pointer data-clickable:hover:bg-muted/50 data-selected:bg-accent data-selected:text-accent-foreground ${
             rowClassName?.(item) ?? ""
           }`}
@@ -99,6 +100,7 @@ function VirtualBody<T>({
             data-index={index}
             data-clickable={onRowClick ? "" : undefined}
             data-selected={index === selectedIndex || undefined}
+            aria-selected={onRowClick ? index === selectedIndex : undefined}
             data-last={index === data.length - 1 || undefined}
             className={`border-b data-clickable:cursor-pointer data-clickable:hover:bg-muted/50 data-last:border-b-0 data-selected:bg-accent data-selected:text-accent-foreground ${
               rowClassName?.(item) ?? ""

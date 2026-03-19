@@ -130,6 +130,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
 
     eventSource.onerror = () => {
       eventSource.close();
+      setLive(false);
     };
 
     return () => {

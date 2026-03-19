@@ -46,6 +46,8 @@ export default function ConnectionStatus() {
   return (
     <div
       className="flex items-center gap-1.5"
+      role="status"
+      aria-live="polite"
       title={connected ? `Connected${ago ? ` · last event ${ago}` : ""}` : "Reconnecting…"}
     >
       <div

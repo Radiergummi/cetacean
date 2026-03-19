@@ -1,4 +1,13 @@
 .git
 .idea
+.github
+.worktrees
+.claude
 frontend/node_modules
 frontend/dist
+cetacean
+docs
+*.md
+Makefile
+compose*.yaml
+todo.md

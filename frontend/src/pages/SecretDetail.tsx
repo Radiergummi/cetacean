@@ -18,10 +18,15 @@ import { useParams } from "react-router-dom";
 
 export default function SecretDetail() {
   const { id } = useParams<{ id: string }>();
-  const { data, history, error } = useDetailResource(id, api.secret, `/secrets/${id}`);
+  const { data, history, error, retry } = useDetailResource(id, api.secret, `/secrets/${id}`);
 
   if (error) {
-    return <FetchError message="Failed to load secret" />;
+    return (
+      <FetchError
+        message={error.message || "Failed to load secret"}
+        onRetry={retry}
+      />
+    );
   }
 
   if (!data) {

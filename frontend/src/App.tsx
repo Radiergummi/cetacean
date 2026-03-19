@@ -7,6 +7,7 @@ import ThemeToggle from "./components/ThemeToggle";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { ConnectionProvider, sseEventTypes } from "./hooks/useResourceStream";
+import { LoadingDetail } from "./components/LoadingSkeleton";
 import { Menu, X } from "lucide-react";
 import type React from "react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
@@ -207,7 +208,7 @@ export default function App() {
       <AuthProvider>
         <ConnectionTracker>
           <Layout>
-            <Suspense>
+            <Suspense fallback={<LoadingDetail />}>
               <Routes>
                 <Route
                   path="/"

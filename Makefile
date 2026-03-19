@@ -12,7 +12,7 @@ fmt:
 
 ## Check formatting without modifying files
 fmt-check:
-	gofmt -l . | grep -v frontend/ | diff /dev/null -
+	golangci-lint fmt --diff ./... 2>&1 | diff /dev/null -
 	cd frontend && npx oxfmt --check .
 
 ## Build everything

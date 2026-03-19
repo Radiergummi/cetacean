@@ -10,7 +10,7 @@ export function useDetailResource<T>(
 ) {
   const [data, setData] = useState<T | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const fetchData = useCallback(() => {
@@ -23,7 +23,7 @@ export function useDetailResource<T>(
     const controller = new AbortController();
     abortRef.current = controller;
 
-    setError(false);
+    setError(null);
 
     fetchFn(key, controller.signal)
       .then((d) => {
@@ -31,9 +31,9 @@ export function useDetailResource<T>(
           setData(d);
         }
       })
-      .catch(() => {
+      .catch((thrown) => {
         if (!controller.signal.aborted) {
-          setError(true);
+          setError(thrown instanceof Error ? thrown : new Error(String(thrown)));
         }
       });
 
@@ -57,5 +57,5 @@ export function useDetailResource<T>(
 
   useResourceStream(ssePath, fetchData);
 
-  return { data, history, error };
+  return { data, history, error, retry: fetchData };
 }
