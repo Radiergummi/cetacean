@@ -158,3 +158,56 @@ func TestMetricsProxyHandler_NilProxy(t *testing.T) {
 		t.Fatalf("expected 503, got %d", w.Code)
 	}
 }
+
+func TestMetricsProxyHandler_Labels(t *testing.T) {
+	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/labels" {
+			t.Errorf("expected /api/v1/labels, got %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"success","data":["__name__","instance","job"]}`))
+	}))
+	defer prom.Close()
+
+	proxy := NewPrometheusProxy(prom.URL)
+	req := httptest.NewRequest("GET", "/-/metrics/labels", nil)
+	w := httptest.NewRecorder()
+	proxy.HandleMetricsLabels(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestMetricsProxyHandler_LabelValues(t *testing.T) {
+	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/label/job/values" {
+			t.Errorf("expected /api/v1/label/job/values, got %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"success","data":["prometheus","node-exporter"]}`))
+	}))
+	defer prom.Close()
+
+	proxy := NewPrometheusProxy(prom.URL)
+	req := httptest.NewRequest("GET", "/-/metrics/labels/job", nil)
+	req.SetPathValue("name", "job")
+	w := httptest.NewRecorder()
+	proxy.HandleMetricsLabelValues(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestMetricsProxyHandler_LabelValues_NilProxy(t *testing.T) {
+	var proxy *PrometheusProxy
+	req := httptest.NewRequest("GET", "/-/metrics/labels/job", nil)
+	req.SetPathValue("name", "job")
+	w := httptest.NewRecorder()
+	proxy.HandleMetricsLabelValues(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("status=%d, want 503", w.Code)
+	}
+}

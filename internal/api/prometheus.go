@@ -85,6 +85,42 @@ func (p *PrometheusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p.proxyTo(w, r, "/api/v1"+path, allowed)
 }
 
+// HandleMetricsLabels proxies to /api/v1/labels with optional match[] param.
+func (p *PrometheusProxy) HandleMetricsLabels(w http.ResponseWriter, r *http.Request) {
+	if p == nil {
+		writeProblem(w, r, http.StatusServiceUnavailable, "prometheus not configured")
+		return
+	}
+	allowed := url.Values{}
+	for _, m := range r.URL.Query()["match[]"] {
+		allowed.Add("match[]", m)
+	}
+	for _, key := range []string{"start", "end"} {
+		if v := r.URL.Query().Get(key); v != "" {
+			allowed.Set(key, v)
+		}
+	}
+	p.proxyTo(w, r, "/api/v1/labels", allowed)
+}
+
+// HandleMetricsLabelValues proxies to /api/v1/label/{name}/values.
+func (p *PrometheusProxy) HandleMetricsLabelValues(w http.ResponseWriter, r *http.Request) {
+	if p == nil {
+		writeProblem(w, r, http.StatusServiceUnavailable, "prometheus not configured")
+		return
+	}
+	name := r.PathValue("name")
+	if name == "" {
+		writeProblem(w, r, http.StatusBadRequest, "missing label name")
+		return
+	}
+	allowed := url.Values{}
+	for _, m := range r.URL.Query()["match[]"] {
+		allowed.Add("match[]", m)
+	}
+	p.proxyTo(w, r, "/api/v1/label/"+url.PathEscape(name)+"/values", allowed)
+}
+
 // HandleMetrics is a content-negotiated handler that proxies Prometheus queries.
 // It routes instant vs range queries by the presence of start+end params.
 func (p *PrometheusProxy) HandleMetrics(w http.ResponseWriter, r *http.Request) {

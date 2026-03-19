@@ -16,6 +16,8 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, metricsProxy
 	mux.HandleFunc("GET /-/health", h.HandleHealth)
 	mux.HandleFunc("GET /-/ready", h.HandleReady)
 	mux.HandleFunc("GET /-/metrics/status", h.HandleMonitoringStatus)
+	mux.HandleFunc("GET /-/metrics/labels", metricsProxy.HandleMetricsLabels)
+	mux.HandleFunc("GET /-/metrics/labels/{name}", metricsProxy.HandleMetricsLabelValues)
 	mux.HandleFunc("GET /-/metrics/query_range", contentNegotiatedWithSSE(
 		promProxy.ServeHTTP,
 		h.HandleMetricsStream,
