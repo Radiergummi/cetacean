@@ -120,13 +120,9 @@ export function ResourcesEditor({
     resources.Reservations?.NanoCPUs != null ||
     resources.Reservations?.MemoryBytes != null;
 
-  const hasAllocation =
-    allocation?.cpuReserved != null ||
-    allocation?.cpuLimit != null ||
-    allocation?.cpuActual != null ||
-    allocation?.memReserved != null ||
-    allocation?.memLimit != null ||
-    allocation?.memActual != null;
+  // Only show allocation bars when actual usage data is available (requires Prometheus).
+  // Without actual data, the text grid is a better fit.
+  const hasActualUsage = allocation?.cpuActual != null || allocation?.memActual != null;
 
   if (!editing) {
     return (
@@ -155,7 +151,7 @@ export function ResourcesEditor({
                 Edit
               </Button>
             </div>
-            {hasAllocation && allocation ? (
+            {hasActualUsage && allocation ? (
               <div className="space-y-3">
                 {(allocation.cpuReserved != null ||
                   allocation.cpuActual != null ||
@@ -291,8 +287,8 @@ function AllocationBar({
   const maxValue = Math.max(reserved ?? 0, actual ?? 0, limit ?? 0) * 1.15;
   if (maxValue === 0) return null;
 
-  const reservedPercent = reserved != null ? (reserved / maxValue) * 100 : 0;
   const actualPercent = actual != null ? (actual / maxValue) * 100 : 0;
+  const reservedPercent = reserved != null ? (reserved / maxValue) * 100 : undefined;
   const limitPercent = limit != null ? (limit / maxValue) * 100 : undefined;
 
   return (
@@ -300,42 +296,42 @@ function AllocationBar({
       <div className="flex items-center justify-between text-xs">
         <span className="font-medium">{label}</span>
         <div className="flex gap-3 text-muted-foreground">
-          {reserved != null && (
-            <span>
-              Reserved: <span className="font-mono text-foreground">{formatValue(reserved)}</span>
-            </span>
-          )}
           {actual != null && (
             <span>
-              Actual: <span className="font-mono text-foreground">{formatValue(actual)}</span>
+              <span className="font-mono text-foreground">{formatValue(actual)}</span>
+            </span>
+          )}
+          {reserved != null && (
+            <span>
+              Rsv: <span className="font-mono text-foreground">{formatValue(reserved)}</span>
             </span>
           )}
           {limit != null && (
             <span>
-              Limit: <span className="font-mono text-foreground">{formatValue(limit)}</span>
+              Lim: <span className="font-mono text-foreground">{formatValue(limit)}</span>
             </span>
           )}
         </div>
       </div>
-      <div className="relative h-2 rounded-full bg-muted">
-        {/* Reserved bar (faded) */}
-        {reservedPercent > 0 && (
-          <div
-            className="absolute inset-y-0 left-0 rounded-full bg-primary/30"
-            style={{ width: `${reservedPercent}%` }}
-          />
-        )}
-        {/* Actual bar (solid) */}
+      <div className="relative h-1.5 rounded-full bg-muted">
+        {/* Actual usage bar */}
         {actualPercent > 0 && (
           <div
             className="absolute inset-y-0 left-0 rounded-full bg-primary"
             style={{ width: `${actualPercent}%` }}
           />
         )}
-        {/* Limit marker (dashed line) */}
+        {/* Reserved marker */}
+        {reservedPercent != null && (
+          <div
+            className="absolute top-1/2 h-3 w-0.5 -translate-y-1/2 rounded-full bg-muted-foreground/60"
+            style={{ left: `${reservedPercent}%` }}
+          />
+        )}
+        {/* Limit marker */}
         {limitPercent != null && (
           <div
-            className="absolute top-0 h-full w-0.5 bg-destructive"
+            className="absolute top-1/2 h-3 w-0.5 -translate-y-1/2 rounded-full bg-destructive"
             style={{ left: `${limitPercent}%` }}
           />
         )}
