@@ -174,9 +174,11 @@ func main() {
 	// API — pass ready channel so /-/ready reports sync status
 	var promClient *api.PromClient
 	var promProxy http.Handler
+	var metricsProxy *api.PrometheusProxy
 	if cfg.PrometheusURL != "" {
 		promClient = api.NewPromClient(cfg.PrometheusURL)
-		promProxy = api.NewPrometheusProxy(cfg.PrometheusURL)
+		metricsProxy = api.NewPrometheusProxy(cfg.PrometheusURL)
+		promProxy = metricsProxy
 		slog.Info("prometheus configured", "url", cfg.PrometheusURL)
 	} else {
 		promProxy = api.PrometheusNotConfiguredHandler()
@@ -196,7 +198,7 @@ func main() {
 		slog.Warn("pprof endpoints enabled", "path", "/debug/pprof/")
 	}
 
-	router := api.NewRouter(handlers, broadcaster, promProxy, spa, openapiSpec, scalarJS, cfg.Pprof, authProvider)
+	router := api.NewRouter(handlers, broadcaster, promProxy, metricsProxy, spa, openapiSpec, scalarJS, cfg.Pprof, authProvider)
 
 	var serverTLSConfig *tls.Config
 	if authCfg.Mode == "cert" {

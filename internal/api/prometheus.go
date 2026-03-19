@@ -37,35 +37,22 @@ func PrometheusNotConfiguredHandler() http.Handler {
 	})
 }
 
-func (p *PrometheusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Map /-/metrics/query → /api/v1/query
-	// Map /-/metrics/query_range → /api/v1/query_range
-	path := strings.TrimPrefix(r.URL.Path, "/-/metrics")
-	if !allowedPrometheusPaths[path] {
-		writeProblem(w, r, http.StatusForbidden, "forbidden prometheus endpoint")
-		return
-	}
-
-	// Only forward expected Prometheus query parameters.
-	allowed := url.Values{}
-	for _, key := range []string{"query", "time", "timeout", "start", "end", "step"} {
-		if v := r.URL.Query().Get(key); v != "" {
-			allowed.Set(key, v)
-		}
-	}
-	targetURL := p.baseURL + "/api/v1" + path
-	if encoded := allowed.Encode(); encoded != "" {
+// proxyTo sends a proxied request to the given Prometheus API path with the given params.
+// Does not read r.URL.Path — the caller determines the target path.
+func (p *PrometheusProxy) proxyTo(w http.ResponseWriter, r *http.Request, promPath string, params url.Values) {
+	targetURL := p.baseURL + promPath
+	if encoded := params.Encode(); encoded != "" {
 		targetURL += "?" + encoded
 	}
 
-	req, err := http.NewRequestWithContext(r.Context(), "GET", targetURL, nil)
+	outReq, err := http.NewRequestWithContext(r.Context(), "GET", targetURL, nil)
 	if err != nil {
 		slog.Error("failed to create prometheus request", "error", err)
 		writeProblem(w, r, http.StatusInternalServerError, "failed to create prometheus request")
 		return
 	}
 
-	resp, err := p.client.Do(req)
+	resp, err := p.client.Do(outReq)
 	if err != nil {
 		slog.Error("prometheus unreachable", "url", p.baseURL, "error", err)
 		writeProblem(w, r, http.StatusBadGateway, "prometheus unreachable")
@@ -79,4 +66,51 @@ func (p *PrometheusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if _, err := io.Copy(w, io.LimitReader(resp.Body, maxPrometheusResponseBytes)); err != nil {
 		slog.Warn("prometheus proxy copy error", "error", err)
 	}
+}
+
+func (p *PrometheusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/-/metrics")
+	if !allowedPrometheusPaths[path] {
+		writeProblem(w, r, http.StatusForbidden, "forbidden prometheus endpoint")
+		return
+	}
+
+	allowed := url.Values{}
+	for _, key := range []string{"query", "time", "timeout", "start", "end", "step"} {
+		if v := r.URL.Query().Get(key); v != "" {
+			allowed.Set(key, v)
+		}
+	}
+
+	p.proxyTo(w, r, "/api/v1"+path, allowed)
+}
+
+// HandleMetrics is a content-negotiated handler that proxies Prometheus queries.
+// It routes instant vs range queries by the presence of start+end params.
+func (p *PrometheusProxy) HandleMetrics(w http.ResponseWriter, r *http.Request) {
+	if p == nil {
+		writeProblem(w, r, http.StatusServiceUnavailable, "prometheus not configured")
+		return
+	}
+
+	q := r.URL.Query()
+	query := q.Get("query")
+	if query == "" {
+		writeProblem(w, r, http.StatusBadRequest, "missing required parameter: query")
+		return
+	}
+
+	promPath := "/api/v1/query"
+	if q.Get("start") != "" && q.Get("end") != "" {
+		promPath = "/api/v1/query_range"
+	}
+
+	allowed := url.Values{}
+	for _, key := range []string{"query", "time", "timeout", "start", "end", "step"} {
+		if v := q.Get(key); v != "" {
+			allowed.Set(key, v)
+		}
+	}
+
+	p.proxyTo(w, r, promPath, allowed)
 }

@@ -7,7 +7,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/auth"
 )
 
-func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Handler, openapiSpec []byte, scalarJS []byte, enablePprof bool, authProvider auth.Provider) http.Handler {
+func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, metricsProxy *PrometheusProxy, spa http.Handler, openapiSpec []byte, scalarJS []byte, enablePprof bool, authProvider auth.Provider) http.Handler {
 	mux := http.NewServeMux()
 
 	authProvider.RegisterRoutes(mux)
@@ -22,6 +22,13 @@ func NewRouter(h *Handlers, b *Broadcaster, promProxy http.Handler, spa http.Han
 		spa,
 	))
 	mux.Handle("GET /-/metrics/", promProxy)
+
+	// Metrics (content-negotiated: JSON → proxy, SSE → stream, HTML → SPA)
+	mux.HandleFunc("GET /metrics", contentNegotiatedWithSSE(
+		metricsProxy.HandleMetrics,
+		h.HandleMetricsStream,
+		spa,
+	))
 
 	// API documentation (content-negotiated)
 	mux.HandleFunc("GET /api", HandleAPIDoc(openapiSpec))
