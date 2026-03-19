@@ -122,6 +122,59 @@ const promqlFunctions: Suggestion[] = [
 const minimumPrefixLength = 2;
 const maxSuggestions = 20;
 
+export type CursorContext =
+  | { type: "metric" }
+  | { type: "label"; metricName: string }
+  | { type: "value"; metricName: string; labelName: string };
+
+/**
+ * Determines what type of completion is needed based on cursor position.
+ * Detects whether the cursor is inside PromQL `{}` braces and whether
+ * a label name or label value is being typed.
+ */
+export function getCursorContext(query: string, cursor: number): CursorContext {
+  // Find the nearest unmatched { before cursor
+  let braceDepth = 0;
+  let bracePosition = -1;
+
+  for (let i = cursor - 1; i >= 0; i--) {
+    if (query[i] === "}") {
+      braceDepth++;
+    }
+
+    if (query[i] === "{") {
+      if (braceDepth === 0) {
+        bracePosition = i;
+        break;
+      }
+
+      braceDepth--;
+    }
+  }
+
+  if (bracePosition === -1) {
+    return { type: "metric" };
+  }
+
+  // Extract metric name before {
+  const beforeBrace = query.slice(0, bracePosition);
+  const metricMatch = beforeBrace.match(/([a-zA-Z_:][a-zA-Z0-9_:]*)$/);
+  const metricName = metricMatch?.[1] ?? "";
+
+  // Scan the content between { and cursor to find context
+  const insideBraces = query.slice(bracePosition + 1, cursor);
+
+  // After =" means we're typing a label value
+  const valueMatch = insideBraces.match(/(\w+)\s*=~?\s*"[^"]*$/);
+
+  if (valueMatch) {
+    return { type: "value", metricName, labelName: valueMatch[1] };
+  }
+
+  // Otherwise we're typing a label name
+  return { type: "label", metricName };
+}
+
 /**
  * Extracts the current token boundaries at the cursor position.
  */
@@ -142,25 +195,24 @@ export function getTokenBounds(text: string, cursor: number): { start: number; e
 }
 
 /**
- * Checks if the cursor is inside a label matcher block ({...}).
+ * Extracts the prefix being typed inside a quoted label value.
+ * Scans backward from cursor to the opening `"`.
  */
-function isInsideBraces(query: string, cursor: number): boolean {
-  let depth = 0;
-
-  for (let i = 0; i < cursor; i++) {
-    if (query[i] === "{") {
-      depth++;
-    } else if (query[i] === "}") {
-      depth--;
+function getValuePrefix(query: string, cursor: number): string {
+  for (let i = cursor - 1; i >= 0; i--) {
+    if (query[i] === '"') {
+      return query.slice(i + 1, cursor);
     }
   }
 
-  return depth > 0;
+  return "";
 }
 
 /**
- * Provides PromQL autocompletion for metric names and functions.
+ * Provides PromQL autocompletion for metric names, functions,
+ * label names, and label values.
  * Metric names are fetched once from Prometheus on first use and cached.
+ * Label names and values are fetched on demand and cached per key.
  */
 export function useQueryCompletion(enabled: boolean): QueryCompletion {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -168,40 +220,131 @@ export function useQueryCompletion(enabled: boolean): QueryCompletion {
   const allSuggestionsRef = useRef<Suggestion[] | null>(null);
   const fetchingRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const labelCacheRef = useRef<Map<string, string[]>>(new Map());
+  const valueCacheRef = useRef<Map<string, string[]>>(new Map());
 
   useEffect(() => {
     return () => clearTimeout(debounceRef.current);
   }, []);
 
-  const doComplete = useCallback((query: string, cursorPosition: number, all: Suggestion[]) => {
-    if (isInsideBraces(query, cursorPosition)) {
-      setSuggestions([]);
-      return;
-    }
+  const completeLabelNames = useCallback(
+    async (query: string, cursorPosition: number, metricName: string) => {
+      const cacheKey = metricName || "__all__";
+      let labels = labelCacheRef.current.get(cacheKey);
 
-    const { start } = getTokenBounds(query, cursorPosition);
-    const prefix = query.slice(start, cursorPosition);
+      if (!labels) {
+        setLoading(true);
 
-    if (prefix.length < minimumPrefixLength) {
-      setSuggestions([]);
-      return;
-    }
-
-    const lowerPrefix = prefix.toLowerCase();
-    const matches: Suggestion[] = [];
-
-    for (const suggestion of all) {
-      if (suggestion.label.toLowerCase().startsWith(lowerPrefix)) {
-        matches.push(suggestion);
+        try {
+          const match = metricName ? `{__name__="${metricName}"}` : undefined;
+          labels = await api.metricsLabels(match);
+          labelCacheRef.current.set(cacheKey, labels);
+        } catch {
+          labels = [];
+        } finally {
+          setLoading(false);
+        }
       }
 
-      if (matches.length >= maxSuggestions) {
-        break;
-      }
-    }
+      const { start } = getTokenBounds(query, cursorPosition);
+      const prefix = query.slice(start, cursorPosition).toLowerCase();
 
-    setSuggestions(matches);
-  }, []);
+      const matches: Suggestion[] = [];
+
+      for (const name of labels) {
+        if (name === "__name__") {
+          continue;
+        }
+
+        if (prefix.length === 0 || name.toLowerCase().startsWith(prefix)) {
+          matches.push({ label: name, type: "label" });
+        }
+
+        if (matches.length >= maxSuggestions) {
+          break;
+        }
+      }
+
+      setSuggestions(matches);
+    },
+    [],
+  );
+
+  const completeLabelValues = useCallback(
+    async (query: string, cursorPosition: number, labelName: string) => {
+      let values = valueCacheRef.current.get(labelName);
+
+      if (!values) {
+        setLoading(true);
+
+        try {
+          values = await api.metricsLabelValues(labelName);
+          valueCacheRef.current.set(labelName, values);
+        } catch {
+          values = [];
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      const prefix = getValuePrefix(query, cursorPosition).toLowerCase();
+
+      const matches: Suggestion[] = [];
+
+      for (const value of values) {
+        if (prefix.length === 0 || value.toLowerCase().startsWith(prefix)) {
+          matches.push({ label: value, type: "value" });
+        }
+
+        if (matches.length >= maxSuggestions) {
+          break;
+        }
+      }
+
+      setSuggestions(matches);
+    },
+    [],
+  );
+
+  const doComplete = useCallback(
+    (query: string, cursorPosition: number, all: Suggestion[]) => {
+      const context = getCursorContext(query, cursorPosition);
+
+      if (context.type === "label") {
+        completeLabelNames(query, cursorPosition, context.metricName);
+        return;
+      }
+
+      if (context.type === "value") {
+        completeLabelValues(query, cursorPosition, context.labelName);
+        return;
+      }
+
+      const { start } = getTokenBounds(query, cursorPosition);
+      const prefix = query.slice(start, cursorPosition);
+
+      if (prefix.length < minimumPrefixLength) {
+        setSuggestions([]);
+        return;
+      }
+
+      const lowerPrefix = prefix.toLowerCase();
+      const matches: Suggestion[] = [];
+
+      for (const suggestion of all) {
+        if (suggestion.label.toLowerCase().startsWith(lowerPrefix)) {
+          matches.push(suggestion);
+        }
+
+        if (matches.length >= maxSuggestions) {
+          break;
+        }
+      }
+
+      setSuggestions(matches);
+    },
+    [completeLabelNames, completeLabelValues],
+  );
 
   const complete = useCallback(
     (query: string, cursorPosition: number) => {

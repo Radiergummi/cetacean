@@ -54,6 +54,7 @@ export function QueryInput({ value, onChange, onRun, loading, completion }: Prop
 
   /**
    * Replaces the current token with the selected suggestion and updates the textarea.
+   * For label values, replaces the text inside the quotes rather than the token bounds.
    */
   const selectSuggestion = useCallback(
     (suggestion: Suggestion) => {
@@ -64,6 +65,32 @@ export function QueryInput({ value, onChange, onRun, loading, completion }: Prop
       }
 
       const cursor = textarea.selectionStart;
+
+      if (suggestion.type === "value") {
+        // Find the opening quote before cursor
+        let quoteStart = cursor - 1;
+
+        while (quoteStart >= 0 && value[quoteStart] !== '"') {
+          quoteStart--;
+        }
+
+        // Replace content between the opening quote and cursor
+        const replaceStart = quoteStart + 1;
+        const newValue = value.slice(0, replaceStart) + suggestion.label + value.slice(cursor);
+
+        onChange(newValue);
+        completion?.clear();
+
+        const newCursor = replaceStart + suggestion.label.length;
+
+        requestAnimationFrame(() => {
+          textarea.focus();
+          textarea.setSelectionRange(newCursor, newCursor);
+        });
+
+        return;
+      }
+
       const { start, end } = getTokenBounds(value, cursor);
       const newValue = value.slice(0, start) + suggestion.label + value.slice(end);
 
@@ -184,13 +211,27 @@ export function QueryInput({ value, onChange, onRun, loading, completion }: Prop
               >
                 <span className="flex-1 truncate font-mono">{suggestion.label}</span>
 
-                {suggestion.type === "function" ? (
+                {suggestion.type === "function" && (
                   <span className="shrink-0 rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
                     fn
                   </span>
-                ) : (
+                )}
+
+                {suggestion.type === "metric" && (
                   <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                     metric
+                  </span>
+                )}
+
+                {suggestion.type === "label" && (
+                  <span className="shrink-0 rounded bg-purple-500/10 px-1.5 py-0.5 text-[10px] font-medium text-purple-600 dark:text-purple-400">
+                    label
+                  </span>
+                )}
+
+                {suggestion.type === "value" && (
+                  <span className="shrink-0 rounded bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium text-green-600 dark:text-green-400">
+                    value
                   </span>
                 )}
 
