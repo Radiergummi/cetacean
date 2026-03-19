@@ -83,8 +83,9 @@ Cetacean proxies Prometheus queries through its own API so the browser never tal
 
 | Path | Maps to | Description |
 |---|---|---|
-| `GET /-/metrics/query` | `/api/v1/query` | Instant query |
-| `GET /-/metrics/query_range` | `/api/v1/query_range` | Range query |
+| `GET /metrics` | `/api/v1/query` or `/api/v1/query_range` | Instant or range query (determined by `start`+`end` params). Content-negotiated: JSON, SSE, or HTML console. |
+| `GET /-/metrics/labels` | `/api/v1/labels` | Label names (optional `match[]` filter) |
+| `GET /-/metrics/labels/{name}` | `/api/v1/label/{name}/values` | Label values |
 
 **Allowed parameters:** `query`, `time`, `timeout`, `start`, `end`, `step`
 

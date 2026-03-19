@@ -24,19 +24,6 @@ func NewPrometheusProxy(baseURL string) *PrometheusProxy {
 // maxPrometheusResponseBytes limits proxy response size to 10MB.
 const maxPrometheusResponseBytes = 10 << 20
 
-var allowedPrometheusPaths = map[string]bool{
-	"/query":       true,
-	"/query_range": true,
-}
-
-// PrometheusNotConfiguredHandler returns a handler that responds with 503
-// when Prometheus is not configured.
-func PrometheusNotConfiguredHandler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeProblem(w, r, http.StatusServiceUnavailable, "prometheus not configured")
-	})
-}
-
 // proxyTo sends a proxied request to the given Prometheus API path with the given params.
 // Does not read r.URL.Path — the caller determines the target path.
 func (p *PrometheusProxy) proxyTo(w http.ResponseWriter, r *http.Request, promPath string, params url.Values) {
@@ -66,23 +53,6 @@ func (p *PrometheusProxy) proxyTo(w http.ResponseWriter, r *http.Request, promPa
 	if _, err := io.Copy(w, io.LimitReader(resp.Body, maxPrometheusResponseBytes)); err != nil {
 		slog.Warn("prometheus proxy copy error", "error", err)
 	}
-}
-
-func (p *PrometheusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/-/metrics")
-	if !allowedPrometheusPaths[path] {
-		writeProblem(w, r, http.StatusForbidden, "forbidden prometheus endpoint")
-		return
-	}
-
-	allowed := url.Values{}
-	for _, key := range []string{"query", "time", "timeout", "start", "end", "step"} {
-		if v := r.URL.Query().Get(key); v != "" {
-			allowed.Set(key, v)
-		}
-	}
-
-	p.proxyTo(w, r, "/api/v1"+path, allowed)
 }
 
 // HandleMetricsLabels proxies to /api/v1/labels with optional match[] param.
