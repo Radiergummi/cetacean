@@ -11,6 +11,20 @@ import { useState } from "react";
 const formatCpuTick = (cores: number) => formatNumber(cores, 2);
 const formatMemoryTick = (megabytes: number) => formatBytes(megabytes * 1024 * 1024);
 
+/** Compute a slider max that keeps current values visible while capping at node capacity. */
+function sliderMax(
+  reservation: number | undefined,
+  limit: number | undefined,
+  nodeCapacity: number,
+  step: number,
+): number {
+  const highestValue = Math.max(reservation ?? 0, limit ?? 0);
+  if (highestValue === 0) return nodeCapacity;
+  // Show at least 2x the highest value, rounded up to the next step, capped at node capacity
+  const desired = Math.ceil((highestValue * 2) / step) * step;
+  return Math.min(Math.max(desired, step * 8), nodeCapacity);
+}
+
 export interface ServiceResourceShape {
   Limits?: { NanoCPUs?: number; MemoryBytes?: number; Pids?: number };
   Reservations?: { NanoCPUs?: number; MemoryBytes?: number };
@@ -229,7 +243,7 @@ export function ResourcesEditor({
             reservation={cpu.reservation}
             limit={cpu.limit}
             onChange={setCpu}
-            max={capacity.maxNodeCPU}
+            max={sliderMax(cpu.reservation, cpu.limit, capacity.maxNodeCPU, 0.25)}
             step={0.25}
             formatLabel={formatCpuTick}
           />
@@ -238,7 +252,12 @@ export function ResourcesEditor({
             reservation={memory.reservation}
             limit={memory.limit}
             onChange={setMemory}
-            max={capacity.maxNodeMemory / (1024 * 1024)}
+            max={sliderMax(
+              memory.reservation,
+              memory.limit,
+              capacity.maxNodeMemory / (1024 * 1024),
+              16,
+            )}
             step={16}
             unit="MB"
             formatLabel={formatMemoryTick}

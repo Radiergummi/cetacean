@@ -111,6 +111,7 @@ export function ResourceRangeSlider({
           onValueChange={handleSliderChange}
           min={0}
           max={sliderMax}
+          step={sliderMax / 1000}
           className="data-horizontal:w-full"
         >
           <SliderPrimitive.Control className="relative flex h-6 w-full touch-none items-center select-none">
