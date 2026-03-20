@@ -87,6 +87,10 @@ paths:
                     type: string
                   buildDate:
                     type: string
+                  operationsLevel:
+                    type: integer
+                    description: Configured write operations level (0=read-only, 1=operational, 2=impactful)
+                    example: 1
 
   /-/ready:
     get:

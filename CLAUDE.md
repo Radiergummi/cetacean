@@ -62,6 +62,7 @@ docker stack deploy -c compose.monitoring.yaml monitoring  # Deploy standalone m
 | `CETACEAN_LOG_LEVEL` | `info` | No |
 | `CETACEAN_SSE_BATCH_INTERVAL` | `100ms` | No |
 | `CETACEAN_PPROF` | `false` | No (enable pprof endpoints at `/debug/pprof/`) |
+| `CETACEAN_OPERATIONS_LEVEL` | `1` | No (0=read-only, 1=operational, 2=impactful) |
 | `CETACEAN_AUTH_MODE` | `none` | No (`none`, `oidc`, `tailscale`, `cert`, `headers`) |
 | `CETACEAN_AUTH_OIDC_ISSUER` | — | Yes (if OIDC mode) |
 | `CETACEAN_AUTH_OIDC_CLIENT_ID` | — | Yes (if OIDC mode) |

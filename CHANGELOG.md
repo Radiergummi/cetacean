@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Operations level setting to restrict write operations by danger tier
 - Scale, update image, rollback, and restart actions on the service detail page
 - Drain, activate, and pause node availability controls on the node detail page
 - Force Remove button on task detail page to kill a task and its backing container

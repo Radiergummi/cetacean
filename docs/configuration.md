@@ -17,6 +17,7 @@ Supported `_FILE` variants: `CETACEAN_AUTH_OIDC_CLIENT_SECRET_FILE`, `CETACEAN_A
 | `-log-level`      | `CETACEAN_LOG_LEVEL`          | `logging.level`             | `info`                        | `debug`, `info`, `warn`, `error`               |
 | `-log-format`     | `CETACEAN_LOG_FORMAT`         | `logging.format`            | `json`                        | `json` or `text`                               |
 | `-pprof`          | `CETACEAN_PPROF`              | `server.pprof`              | `false`                       | Expose Go pprof endpoints at `/debug/pprof/`   |
+| _—_               | `CETACEAN_OPERATIONS_LEVEL`   | `server.operations_level`   | `1`                           | Write operation tier: 0=read-only, 1=operational, 2=impactful |
 | _—_               | `CETACEAN_SSE_BATCH_INTERVAL` | `server.sse.batch_interval` | `100ms`                       | SSE event batching window (Go duration)        |
 | _—_               | `CETACEAN_SNAPSHOT`           | `storage.snapshot`          | `true`                        | Enable disk persistence of swarm state         |
 | _—_               | `CETACEAN_DATA_DIR`           | `storage.data_dir`          | `./data`                      | Directory for snapshot file                    |
@@ -92,6 +93,7 @@ The file uses nested TOML tables. Every field is optional -- omit what you don't
 [server]
 listen_addr = ":9000"
 pprof = false
+operations_level = 1
 
 [server.sse]
 batch_interval = "100ms"
@@ -242,6 +244,20 @@ services:
 ```
 
 For monitoring, see the [separate monitoring stack](monitoring.md).
+
+## Operations Level
+
+The `operations_level` setting controls which write operations are available. Use this to restrict Cetacean to a read-only dashboard or limit it to safe operational actions:
+
+| Level | Name | Operations |
+|-------|------|-----------|
+| 0 | Read-only | All write endpoints disabled |
+| 1 | Operational | Scale, image update, rollback, restart, env/labels/resources/healthcheck patches |
+| 2 | Impactful | Everything in level 1, plus: node availability, node labels, service mode/endpoint mode, task removal |
+
+The default is `1`. Set to `0` for a purely read-only dashboard. Requests to endpoints above the configured level receive a `403 Forbidden` response.
+
+The current level is exposed in the health endpoint (`GET /-/health`) as `operationsLevel`, which the frontend uses to hide disabled action buttons.
 
 ## Profiling
 
