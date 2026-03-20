@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { HistoryEntry, Service, SpecChange, Task } from "../api/types";
+import type { Healthcheck, HistoryEntry, Service, SpecChange, Task } from "../api/types";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
 import { ContainerImage, KVTable, MetadataGrid, ResourceLink, Timestamp } from "../components/data";
@@ -16,6 +16,7 @@ import {
   DeploymentChanges,
   EndpointModeEditor,
   EnvEditor,
+  HealthcheckEditor,
   PlacementPanel,
   ReplicaCard,
   ResourcesEditor,
@@ -23,8 +24,8 @@ import {
   type ServiceResourceShape,
 } from "../components/service-detail";
 import SimpleTable from "../components/SimpleTable";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
 import TasksTable from "../components/TasksTable";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
@@ -45,6 +46,7 @@ export default function ServiceDetail() {
   const [envVars, setEnvVars] = useState<Record<string, string> | null>(null);
   const [serviceResources, setServiceResources] = useState<ServiceResourceShape | null>(null);
   const [serviceLabels, setServiceLabels] = useState<Record<string, string> | null>(null);
+  const [healthcheck, setHealthcheck] = useState<Healthcheck | null | undefined>(undefined);
   const monitoring = useMonitoringStatus();
   const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
   const hasCadvisor = !!monitoring?.cadvisor?.targets;
@@ -95,6 +97,10 @@ export default function ServiceDetail() {
     api
       .serviceLabels(id, signal)
       .then(setServiceLabels)
+      .catch(() => {});
+    api
+      .serviceHealthcheck(id, signal)
+      .then(setHealthcheck)
       .catch(() => {});
   }, [id]);
 
@@ -394,33 +400,12 @@ export default function ServiceDetail() {
       )}
 
       {/* Healthcheck */}
-      {containerSpec.Healthcheck && (
-        <CollapsibleSection
-          title="Healthcheck"
-          defaultOpen={false}
-        >
-          <KVTable
-            rows={[
-              containerSpec.Healthcheck.Test && ["Test", containerSpec.Healthcheck.Test.join(" ")],
-              containerSpec.Healthcheck.Interval != null && [
-                "Interval",
-                formatDuration(containerSpec.Healthcheck.Interval),
-              ],
-              containerSpec.Healthcheck.Timeout != null && [
-                "Timeout",
-                formatDuration(containerSpec.Healthcheck.Timeout),
-              ],
-              containerSpec.Healthcheck.Retries != null && [
-                "Retries",
-                String(containerSpec.Healthcheck.Retries),
-              ],
-              containerSpec.Healthcheck.StartPeriod != null && [
-                "Start Period",
-                formatDuration(containerSpec.Healthcheck.StartPeriod),
-              ],
-            ]}
-          />
-        </CollapsibleSection>
+      {healthcheck !== undefined && (
+        <HealthcheckEditor
+          serviceId={id!}
+          healthcheck={healthcheck}
+          onSaved={setHealthcheck}
+        />
       )}
 
       {/* Labels */}
@@ -699,7 +684,10 @@ export default function ServiceDetail() {
 
       {history.length > 0 && (
         <CollapsibleSection title="Recent Activity">
-          <ActivityFeed entries={history} hideType />
+          <ActivityFeed
+            entries={history}
+            hideType
+          />
         </CollapsibleSection>
       )}
 
@@ -753,11 +741,7 @@ function ServiceStatusCard({ service }: { service: Service }) {
           {msg && label !== "Stable" && (
             <Tooltip>
               <TooltipTrigger
-                render={
-                  <span className="truncate text-xs text-muted-foreground">
-                    {msg}
-                  </span>
-                }
+                render={<span className="truncate text-xs text-muted-foreground">{msg}</span>}
               />
               <TooltipContent>{msg}</TooltipContent>
             </Tooltip>
