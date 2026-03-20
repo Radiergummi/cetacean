@@ -8,7 +8,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/errdefs"
 
@@ -28,6 +30,7 @@ type mockWriteClient struct {
 	updateServiceResourcesFn   func(ctx context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error)
 	updateServiceModeFn            func(ctx context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error)
 	updateServiceEndpointModeFn    func(ctx context.Context, id string, mode swarm.ResolutionMode) (swarm.Service, error)
+	updateServiceHealthcheckFn     func(ctx context.Context, id string, hc *container.HealthConfig) (swarm.Service, error)
 }
 
 func (m *mockWriteClient) ScaleService(ctx context.Context, id string, replicas uint64) (swarm.Service, error) {
@@ -110,6 +113,13 @@ func (m *mockWriteClient) UpdateServiceEndpointMode(ctx context.Context, id stri
 func (m *mockWriteClient) UpdateServiceMode(ctx context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error) {
 	if m.updateServiceModeFn != nil {
 		return m.updateServiceModeFn(ctx, id, mode)
+	}
+	return swarm.Service{}, fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) UpdateServiceHealthcheck(ctx context.Context, id string, hc *container.HealthConfig) (swarm.Service, error) {
+	if m.updateServiceHealthcheckFn != nil {
+		return m.updateServiceHealthcheckFn(ctx, id, hc)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
@@ -996,5 +1006,171 @@ func TestHandlePatchServiceResources_WrongContentType(t *testing.T) {
 
 	if w.Code != http.StatusUnsupportedMediaType {
 		t.Errorf("status=%d, want 415", w.Code)
+	}
+}
+
+func serviceWithHealthcheck(id string, hc *container.HealthConfig) swarm.Service {
+	svc := replicatedService(id)
+	svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{
+		Healthcheck: hc,
+	}
+	return svc
+}
+
+func TestHandleGetServiceHealthcheck(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(serviceWithHealthcheck("svc1", &container.HealthConfig{
+		Test:     []string{"CMD", "curl", "-f", "http://localhost/"},
+		Interval: 10 * time.Second,
+		Timeout:  5 * time.Second,
+		Retries:  3,
+	}))
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+
+	req := httptest.NewRequest("GET", "/services/svc1/healthcheck", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetServiceHealthcheck(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+
+	if resp["@type"] != "ServiceHealthcheck" {
+		t.Errorf("@type=%v, want ServiceHealthcheck", resp["@type"])
+	}
+}
+
+func TestHandleGetServiceHealthcheck_Nil(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(replicatedService("svc1"))
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+
+	req := httptest.NewRequest("GET", "/services/svc1/healthcheck", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetServiceHealthcheck(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+
+	if resp["@type"] != "ServiceHealthcheck" {
+		t.Errorf("@type=%v, want ServiceHealthcheck", resp["@type"])
+	}
+}
+
+func TestHandlePutServiceHealthcheck(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(replicatedService("svc1"))
+
+	wc := &mockWriteClient{
+		updateServiceHealthcheckFn: func(_ context.Context, id string, hc *container.HealthConfig) (swarm.Service, error) {
+			return serviceWithHealthcheck(id, hc), nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+
+	body := `{"Test":["CMD","curl","-f","http://localhost/"],"Interval":10000000000,"Timeout":5000000000,"Retries":3}`
+	req := httptest.NewRequest("PUT", "/services/svc1/healthcheck", strings.NewReader(body))
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePutServiceHealthcheck(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+
+	if resp["@type"] != "ServiceHealthcheck" {
+		t.Errorf("@type=%v, want ServiceHealthcheck", resp["@type"])
+	}
+}
+
+func TestHandlePutServiceHealthcheck_Disable(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(replicatedService("svc1"))
+
+	var captured *container.HealthConfig
+	wc := &mockWriteClient{
+		updateServiceHealthcheckFn: func(_ context.Context, id string, hc *container.HealthConfig) (swarm.Service, error) {
+			captured = hc
+			return serviceWithHealthcheck(id, hc), nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+
+	body := `{"Test":["NONE"]}`
+	req := httptest.NewRequest("PUT", "/services/svc1/healthcheck", strings.NewReader(body))
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePutServiceHealthcheck(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+
+	if captured == nil {
+		t.Fatal("expected healthcheck to be captured")
+	}
+
+	if len(captured.Test) == 0 || captured.Test[0] != "NONE" {
+		t.Errorf("Test[0]=%v, want NONE", captured.Test)
+	}
+}
+
+func TestHandlePatchServiceHealthcheck_Merge(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(serviceWithHealthcheck("svc1", &container.HealthConfig{
+		Test:     []string{"CMD", "curl", "-f", "http://localhost/"},
+		Interval: 10 * time.Second,
+		Timeout:  3 * time.Second,
+		Retries:  3,
+	}))
+
+	var captured *container.HealthConfig
+	wc := &mockWriteClient{
+		updateServiceHealthcheckFn: func(_ context.Context, id string, hc *container.HealthConfig) (swarm.Service, error) {
+			captured = hc
+			return serviceWithHealthcheck(id, hc), nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+
+	body := `{"Timeout":5000000000}`
+	req := httptest.NewRequest("PATCH", "/services/svc1/healthcheck", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceHealthcheck(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+
+	if captured == nil {
+		t.Fatal("expected healthcheck to be captured")
+	}
+
+	if captured.Timeout != 5*time.Second {
+		t.Errorf("Timeout=%v, want 5s", captured.Timeout)
+	}
+
+	if len(captured.Test) == 0 || captured.Test[0] != "CMD" {
+		t.Errorf("Test=%v, want [CMD curl -f http://localhost/]", captured.Test)
 	}
 }

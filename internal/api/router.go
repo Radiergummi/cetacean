@@ -71,6 +71,9 @@ func NewRouter(h *Handlers, b *Broadcaster, metricsProxy *PrometheusProxy, spa h
 	mux.Handle("PATCH /services/{id}/labels", requireWrite(h.HandlePatchServiceLabels))
 	mux.HandleFunc("GET /services/{id}/resources", contentNegotiated(h.HandleGetServiceResources, spa))
 	mux.Handle("PATCH /services/{id}/resources", requireWrite(h.HandlePatchServiceResources))
+	mux.HandleFunc("GET /services/{id}/healthcheck", contentNegotiated(h.HandleGetServiceHealthcheck, spa))
+	mux.Handle("PUT /services/{id}/healthcheck", requireWrite(h.HandlePutServiceHealthcheck))
+	mux.Handle("PATCH /services/{id}/healthcheck", requireWrite(h.HandlePatchServiceHealthcheck))
 
 	// Tasks
 	mux.HandleFunc("GET /tasks", contentNegotiatedWithSSE(h.HandleListTasks, func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, "task") }, spa))

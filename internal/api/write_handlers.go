@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/errdefs"
 	json "github.com/goccy/go-json"
@@ -678,4 +679,133 @@ func mergePatch(base, patch map[string]any) {
 			base[k] = v
 		}
 	}
+}
+
+func (h *Handlers) HandleGetServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	var hc *container.HealthConfig
+	if svc.Spec.TaskTemplate.ContainerSpec != nil {
+		hc = svc.Spec.TaskTemplate.ContainerSpec.Healthcheck
+	}
+
+	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/healthcheck", "ServiceHealthcheck", map[string]any{
+		"healthcheck": hc,
+	}))
+}
+
+func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
+
+	var hc container.HealthConfig
+	if err := json.NewDecoder(r.Body).Decode(&hc); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	_, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	slog.Info("updating service healthcheck", "service", id)
+
+	updated, err := h.writeClient.UpdateServiceHealthcheck(r.Context(), id, &hc)
+	if err != nil {
+		writeDockerError(w, r, err, "service")
+		return
+	}
+
+	var resultHC *container.HealthConfig
+	if updated.Spec.TaskTemplate.ContainerSpec != nil {
+		resultHC = updated.Spec.TaskTemplate.ContainerSpec.Healthcheck
+	}
+
+	writeJSON(w, NewDetailResponse("/services/"+id+"/healthcheck", "ServiceHealthcheck", map[string]any{
+		"healthcheck": resultHC,
+	}))
+}
+
+func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
+
+	ct := r.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/merge-patch+json") {
+		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		return
+	}
+
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	current := &container.HealthConfig{}
+	if svc.Spec.TaskTemplate.ContainerSpec != nil && svc.Spec.TaskTemplate.ContainerSpec.Healthcheck != nil {
+		current = svc.Spec.TaskTemplate.ContainerSpec.Healthcheck
+	}
+
+	base, err := json.Marshal(current)
+	if err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal current healthcheck")
+		return
+	}
+
+	var baseMap map[string]any
+	if err := json.Unmarshal(base, &baseMap); err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to unmarshal current healthcheck")
+		return
+	}
+
+	patchBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
+		return
+	}
+
+	var patchMap map[string]any
+	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	mergePatch(baseMap, patchMap)
+
+	merged, err := json.Marshal(baseMap)
+	if err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal merged healthcheck")
+		return
+	}
+
+	var result container.HealthConfig
+	if err := json.Unmarshal(merged, &result); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid healthcheck specification")
+		return
+	}
+
+	slog.Info("updating service healthcheck", "service", id)
+
+	updated, err := h.writeClient.UpdateServiceHealthcheck(r.Context(), id, &result)
+	if err != nil {
+		writeDockerError(w, r, err, "service")
+		return
+	}
+
+	var resultHC *container.HealthConfig
+	if updated.Spec.TaskTemplate.ContainerSpec != nil {
+		resultHC = updated.Spec.TaskTemplate.ContainerSpec.Healthcheck
+	}
+
+	writeJSON(w, NewDetailResponse("/services/"+id+"/healthcheck", "ServiceHealthcheck", map[string]any{
+		"healthcheck": resultHC,
+	}))
 }
