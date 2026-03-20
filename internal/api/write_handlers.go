@@ -937,6 +937,95 @@ func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http
 	}))
 }
 
+func (h *Handlers) HandleGetServiceRollbackPolicy(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+	policy := svc.Spec.RollbackConfig
+	if policy == nil {
+		policy = &swarm.UpdateConfig{}
+	}
+	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/rollback-policy", "ServiceRollbackPolicy", map[string]any{
+		"rollbackPolicy": policy,
+	}))
+}
+
+func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	ct := r.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/merge-patch+json") {
+		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		return
+	}
+
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	current := svc.Spec.RollbackConfig
+	if current == nil {
+		current = &swarm.UpdateConfig{}
+	}
+
+	base, err := json.Marshal(current)
+	if err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal current rollback policy")
+		return
+	}
+	var baseMap map[string]any
+	if err := json.Unmarshal(base, &baseMap); err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to unmarshal current rollback policy")
+		return
+	}
+
+	patchBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
+		return
+	}
+	var patchMap map[string]any
+	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	mergePatch(baseMap, patchMap)
+
+	merged, err := json.Marshal(baseMap)
+	if err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal merged rollback policy")
+		return
+	}
+	var result swarm.UpdateConfig
+	if err := json.Unmarshal(merged, &result); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid rollback policy specification")
+		return
+	}
+
+	slog.Info("updating service rollback policy", "service", id)
+
+	updated, err := h.writeClient.UpdateServiceRollbackPolicy(r.Context(), id, &result)
+	if err != nil {
+		writeDockerError(w, r, err, "service")
+		return
+	}
+
+	resultPolicy := updated.Spec.RollbackConfig
+	if resultPolicy == nil {
+		resultPolicy = &swarm.UpdateConfig{}
+	}
+	writeJSON(w, NewDetailResponse("/services/"+id+"/rollback-policy", "ServiceRollbackPolicy", map[string]any{
+		"rollbackPolicy": resultPolicy,
+	}))
+}
+
 func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit

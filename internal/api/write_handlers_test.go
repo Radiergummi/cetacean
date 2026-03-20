@@ -1543,3 +1543,65 @@ func TestHandlePatchServiceUpdatePolicy_WrongContentType(t *testing.T) {
 		t.Errorf("status=%d, want 415", w.Code)
 	}
 }
+
+func TestHandleGetServiceRollbackPolicy(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			RollbackConfig: &swarm.UpdateConfig{
+				Parallelism: 1,
+				Order:       "stop-first",
+			},
+		},
+	})
+
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	req := httptest.NewRequest("GET", "/services/svc1/rollback-policy", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetServiceRollbackPolicy(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+}
+
+func TestHandlePatchServiceRollbackPolicy_InvalidBody(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+	req := httptest.NewRequest("PATCH", "/services/svc1/rollback-policy", strings.NewReader(`not json`))
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceRollbackPolicy(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status=%d, want 400", w.Code)
+	}
+}
+
+func TestHandlePatchServiceRollbackPolicy(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	mock := &mockWriteClient{
+		updateServiceRollbackPolicyFn: func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error) {
+			return swarm.Service{ID: "svc1", Spec: swarm.ServiceSpec{RollbackConfig: policy}}, nil
+		},
+	}
+
+	h := NewHandlers(c, nil, nil, nil, mock, closedReady(), nil, config.OpsImpactful)
+	body := strings.NewReader(`{"FailureAction":"continue"}`)
+	req := httptest.NewRequest("PATCH", "/services/svc1/rollback-policy", body)
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceRollbackPolicy(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status=%d, want 200", w.Code)
+	}
+}
