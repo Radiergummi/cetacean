@@ -1,11 +1,17 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	json "github.com/goccy/go-json"
+
+	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 func TestRequireLevel_Allowed(t *testing.T) {
@@ -88,5 +94,63 @@ func TestRequireLevel_ExactMatch(t *testing.T) {
 
 	if !called {
 		t.Error("inner handler should be called when level exactly matches")
+	}
+}
+
+func TestRequireLevel_Integration_ScaleBlockedAtLevel0(t *testing.T) {
+	c := cache.New(nil)
+	replicas := uint64(1)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Mode: swarm.ServiceMode{
+				Replicated: &swarm.ReplicatedService{Replicas: &replicas},
+			},
+		},
+	})
+
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, 0)
+	handler := requireLevel(1, 0)(h.HandleScaleService)
+
+	body := strings.NewReader(`{"replicas": 3}`)
+	req := httptest.NewRequest("PUT", "/services/svc1/scale", body)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("status=%d, want 403 in read-only mode", w.Code)
+	}
+}
+
+func TestRequireLevel_Integration_ScaleAllowedAtLevel1(t *testing.T) {
+	c := cache.New(nil)
+	replicas := uint64(1)
+	svc := swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Mode: swarm.ServiceMode{
+				Replicated: &swarm.ReplicatedService{Replicas: &replicas},
+			},
+		},
+	}
+	c.SetService(svc)
+
+	mock := &mockWriteClient{
+		scaleServiceFn: func(ctx context.Context, id string, replicas uint64) (swarm.Service, error) {
+			return svc, nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, mock, closedReady(), nil, 1)
+	handler := requireLevel(1, 1)(h.HandleScaleService)
+
+	body := strings.NewReader(`{"replicas": 3}`)
+	req := httptest.NewRequest("PUT", "/services/svc1/scale", body)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status=%d, want 200", w.Code)
 	}
 }
