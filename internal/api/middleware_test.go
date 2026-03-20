@@ -258,14 +258,14 @@ func TestRequestIDFrom_Empty(t *testing.T) {
 
 func TestNewRouter_Smoke(t *testing.T) {
 	c := cache.New(nil)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, 2)
 	b := NewBroadcaster(0)
 	defer b.Close()
 	prom := NewPrometheusProxy("http://localhost:9090")
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}
 	spa := NewSPAHandler(fs.FS(fsys))
 
-	router := NewRouter(h, b, prom, spa, []byte("openapi: '3.1.0'"), nil, false, &auth.NoneProvider{})
+	router := NewRouter(h, b, prom, spa, []byte("openapi: '3.1.0'"), nil, false, &auth.NoneProvider{}, 2)
 	if router == nil {
 		t.Fatal("NewRouter returned nil")
 	}

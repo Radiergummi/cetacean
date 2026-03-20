@@ -95,6 +95,7 @@ type Handlers struct {
 	writeClient         DockerWriteClient
 	ready               <-chan struct{}
 	promClient          *PromClient
+	operationsLevel     int
 	localNodeMu         sync.Mutex
 	localNodeID         string
 	localNodeDone       bool
@@ -109,15 +110,17 @@ func NewHandlers(
 	wc DockerWriteClient,
 	ready <-chan struct{},
 	promClient *PromClient,
+	operationsLevel int,
 ) *Handlers {
 	return &Handlers{
-		cache:        c,
-		broadcaster:  b,
-		dockerClient: dc,
-		systemClient: sc,
-		writeClient:  wc,
-		ready:        ready,
-		promClient:   promClient,
+		cache:           c,
+		broadcaster:     b,
+		dockerClient:    dc,
+		systemClient:    sc,
+		writeClient:     wc,
+		ready:           ready,
+		promClient:      promClient,
+		operationsLevel: operationsLevel,
 	}
 }
 
@@ -139,11 +142,12 @@ func (h *Handlers) isReady() bool {
 }
 
 func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, map[string]string{
-		"status":    "ok",
-		"version":   version.Version,
-		"commit":    version.Commit,
-		"buildDate": version.Date,
+	writeJSON(w, map[string]any{
+		"status":          "ok",
+		"version":         version.Version,
+		"commit":          version.Commit,
+		"buildDate":       version.Date,
+		"operationsLevel": h.operationsLevel,
 	})
 }
 

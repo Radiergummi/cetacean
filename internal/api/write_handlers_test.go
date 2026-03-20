@@ -147,7 +147,7 @@ func TestHandleScaleService_OK(t *testing.T) {
 			return svc, nil
 		},
 	}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `{"replicas":3}`
 	req := httptest.NewRequest("PUT", "/services/svc1/scale", strings.NewReader(body))
@@ -170,7 +170,7 @@ func TestHandleScaleService_OK(t *testing.T) {
 func TestHandleScaleService_NotFound(t *testing.T) {
 	c := cache.New(nil)
 	wc := &mockWriteClient{}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `{"replicas":2}`
 	req := httptest.NewRequest("PUT", "/services/missing/scale", strings.NewReader(body))
@@ -194,7 +194,7 @@ func TestHandleScaleService_GlobalMode(t *testing.T) {
 		},
 	})
 	wc := &mockWriteClient{}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `{"replicas":2}`
 	req := httptest.NewRequest("PUT", "/services/svcglobal/scale", strings.NewReader(body))
@@ -223,7 +223,7 @@ func TestHandleScaleService_Conflict(t *testing.T) {
 		},
 	}
 
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 	body := `{"replicas": 5}`
 	req := httptest.NewRequest("PUT", "/services/svc1/scale", strings.NewReader(body))
 	req.SetPathValue("id", "svc1")
@@ -238,7 +238,7 @@ func TestHandleScaleService_Conflict(t *testing.T) {
 func TestHandleScaleService_InvalidBody(t *testing.T) {
 	c := cache.New(nil)
 	wc := &mockWriteClient{}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	req := httptest.NewRequest("PUT", "/services/svc1/scale", strings.NewReader("not json"))
 	req.SetPathValue("id", "svc1")
@@ -262,7 +262,7 @@ func TestHandleUpdateServiceMode_ToGlobal(t *testing.T) {
 			}, nil
 		},
 	}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `{"mode":"global"}`
 	req := httptest.NewRequest("PUT", "/services/svc1/mode", strings.NewReader(body))
@@ -290,7 +290,7 @@ func TestHandleUpdateServiceMode_ToReplicated(t *testing.T) {
 			}, nil
 		},
 	}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `{"mode":"replicated","replicas":3}`
 	req := httptest.NewRequest("PUT", "/services/svc1/mode", strings.NewReader(body))
@@ -311,7 +311,7 @@ func TestHandleUpdateServiceMode_ReplicatedWithoutCount(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `{"mode":"replicated"}`
 	req := httptest.NewRequest("PUT", "/services/svc1/mode", strings.NewReader(body))
@@ -329,7 +329,7 @@ func TestHandleUpdateServiceMode_InvalidMode(t *testing.T) {
 	c.SetService(replicatedService("svc1"))
 
 	wc := &mockWriteClient{}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `{"mode":"invalid"}`
 	req := httptest.NewRequest("PUT", "/services/svc1/mode", strings.NewReader(body))
@@ -345,7 +345,7 @@ func TestHandleUpdateServiceMode_InvalidMode(t *testing.T) {
 func TestHandleUpdateServiceMode_NotFound(t *testing.T) {
 	c := cache.New(nil)
 	wc := &mockWriteClient{}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `{"mode":"global"}`
 	req := httptest.NewRequest("PUT", "/services/missing/mode", strings.NewReader(body))
@@ -369,7 +369,7 @@ func TestHandleUpdateServiceEndpointMode_OK(t *testing.T) {
 			return svc, nil
 		},
 	}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `{"mode":"dnsrr"}`
 	req := httptest.NewRequest("PUT", "/services/svc1/endpoint-mode", strings.NewReader(body))
@@ -387,7 +387,7 @@ func TestHandleUpdateServiceEndpointMode_InvalidMode(t *testing.T) {
 	c.SetService(replicatedService("svc1"))
 
 	wc := &mockWriteClient{}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `{"mode":"invalid"}`
 	req := httptest.NewRequest("PUT", "/services/svc1/endpoint-mode", strings.NewReader(body))
@@ -411,7 +411,7 @@ func TestHandleUpdateServiceImage_OK(t *testing.T) {
 			return svc, nil
 		},
 	}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `{"image":"nginx:latest"}`
 	req := httptest.NewRequest("PUT", "/services/svc1/image", strings.NewReader(body))
@@ -434,7 +434,7 @@ func TestHandleUpdateServiceImage_OK(t *testing.T) {
 func TestHandleUpdateServiceImage_NotFound(t *testing.T) {
 	c := cache.New(nil)
 	wc := &mockWriteClient{}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `{"image":"nginx:latest"}`
 	req := httptest.NewRequest("PUT", "/services/missing/image", strings.NewReader(body))
@@ -451,7 +451,7 @@ func TestHandleUpdateServiceImage_EmptyImage(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(replicatedService("svc1"))
 	wc := &mockWriteClient{}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `{"image":""}`
 	req := httptest.NewRequest("PUT", "/services/svc1/image", strings.NewReader(body))
@@ -480,7 +480,7 @@ func TestHandleRollbackService_OK(t *testing.T) {
 			return replicatedService(id), nil
 		},
 	}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	req := httptest.NewRequest("POST", "/services/svc1/rollback", nil)
 	req.SetPathValue("id", "svc1")
@@ -502,7 +502,7 @@ func TestHandleRollbackService_OK(t *testing.T) {
 func TestHandleRollbackService_NotFound(t *testing.T) {
 	c := cache.New(nil)
 	wc := &mockWriteClient{}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	req := httptest.NewRequest("POST", "/services/missing/rollback", nil)
 	req.SetPathValue("id", "missing")
@@ -518,7 +518,7 @@ func TestHandleRollbackService_NoPreviousSpec(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(replicatedService("svc1"))
 	wc := &mockWriteClient{}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	req := httptest.NewRequest("POST", "/services/svc1/rollback", nil)
 	req.SetPathValue("id", "svc1")
@@ -539,7 +539,7 @@ func TestHandleRestartService_OK(t *testing.T) {
 			return replicatedService(id), nil
 		},
 	}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	req := httptest.NewRequest("POST", "/services/svc1/restart", nil)
 	req.SetPathValue("id", "svc1")
@@ -561,7 +561,7 @@ func TestHandleRestartService_OK(t *testing.T) {
 func TestHandleRestartService_NotFound(t *testing.T) {
 	c := cache.New(nil)
 	wc := &mockWriteClient{}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	req := httptest.NewRequest("POST", "/services/missing/restart", nil)
 	req.SetPathValue("id", "missing")
@@ -582,7 +582,7 @@ func TestHandleUpdateNodeAvailability_OK(t *testing.T) {
 			return swarm.Node{ID: id, Spec: swarm.NodeSpec{Availability: availability}}, nil
 		},
 	}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `{"availability":"drain"}`
 	req := httptest.NewRequest("PUT", "/nodes/node1/availability", strings.NewReader(body))
@@ -605,7 +605,7 @@ func TestHandleUpdateNodeAvailability_OK(t *testing.T) {
 func TestHandleUpdateNodeAvailability_NotFound(t *testing.T) {
 	c := cache.New(nil)
 	wc := &mockWriteClient{}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `{"availability":"drain"}`
 	req := httptest.NewRequest("PUT", "/nodes/missing/availability", strings.NewReader(body))
@@ -622,7 +622,7 @@ func TestHandleUpdateNodeAvailability_InvalidAvailability(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{ID: "node1"})
 	wc := &mockWriteClient{}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `{"availability":"invalid"}`
 	req := httptest.NewRequest("PUT", "/nodes/node1/availability", strings.NewReader(body))
@@ -644,7 +644,7 @@ func TestHandleRemoveTask_OK(t *testing.T) {
 			return nil
 		},
 	}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	req := httptest.NewRequest("DELETE", "/tasks/task1", nil)
 	req.SetPathValue("id", "task1")
@@ -659,7 +659,7 @@ func TestHandleRemoveTask_OK(t *testing.T) {
 func TestHandleRemoveTask_NotFoundInCache(t *testing.T) {
 	c := cache.New(nil)
 	wc := &mockWriteClient{}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	req := httptest.NewRequest("DELETE", "/tasks/missing", nil)
 	req.SetPathValue("id", "missing")
@@ -680,7 +680,7 @@ func TestHandleRemoveTask_NoContainer(t *testing.T) {
 			return errdefs.NotFound(fmt.Errorf("task has no running container"))
 		},
 	}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	req := httptest.NewRequest("DELETE", "/tasks/task1", nil)
 	req.SetPathValue("id", "task1")
@@ -701,7 +701,7 @@ func serviceWithEnv(id string, env []string) swarm.Service {
 func TestHandleGetServiceEnv(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(serviceWithEnv("svc1", []string{"FOO=bar", "BAZ=qux"}))
-	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, 2)
 
 	req := httptest.NewRequest("GET", "/services/svc1/env", nil)
 	req.SetPathValue("id", "svc1")
@@ -743,7 +743,7 @@ func TestHandlePatchServiceEnv_Add(t *testing.T) {
 			return serviceWithEnv(id, envSlice), nil
 		},
 	}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `[{"op":"add","path":"/NEW","value":"val"}]`
 	req := httptest.NewRequest("PATCH", "/services/svc1/env", strings.NewReader(body))
@@ -760,7 +760,7 @@ func TestHandlePatchServiceEnv_Add(t *testing.T) {
 func TestHandlePatchServiceEnv_WrongContentType(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(serviceWithEnv("svc1", nil))
-	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, 2)
 
 	req := httptest.NewRequest("PATCH", "/services/svc1/env", strings.NewReader(`[]`))
 	req.Header.Set("Content-Type", "application/json")
@@ -776,7 +776,7 @@ func TestHandlePatchServiceEnv_WrongContentType(t *testing.T) {
 func TestHandlePatchServiceEnv_TestFailed(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(serviceWithEnv("svc1", []string{"FOO=bar"}))
-	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, 2)
 
 	body := `[{"op":"test","path":"/FOO","value":"wrong"}]`
 	req := httptest.NewRequest("PATCH", "/services/svc1/env", strings.NewReader(body))
@@ -792,7 +792,7 @@ func TestHandlePatchServiceEnv_TestFailed(t *testing.T) {
 
 func TestHandlePatchServiceEnv_NotFound(t *testing.T) {
 	c := cache.New(nil)
-	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, 2)
 
 	body := `[{"op":"add","path":"/K","value":"v"}]`
 	req := httptest.NewRequest("PATCH", "/services/missing/env", strings.NewReader(body))
@@ -819,7 +819,7 @@ func TestHandlePatchServiceEnv_MergePatch(t *testing.T) {
 			return serviceWithEnv(id, envSlice), nil
 		},
 	}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `{"NEW":"val","OLD":null}`
 	req := httptest.NewRequest("PATCH", "/services/svc1/env", strings.NewReader(body))
@@ -839,7 +839,7 @@ func TestHandleGetNodeLabels(t *testing.T) {
 		ID:   "node1",
 		Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: map[string]string{"region": "us-east"}}},
 	})
-	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, 2)
 
 	req := httptest.NewRequest("GET", "/nodes/node1/labels", nil)
 	req.SetPathValue("id", "node1")
@@ -877,7 +877,7 @@ func TestHandlePatchNodeLabels_Add(t *testing.T) {
 			return swarm.Node{ID: id, Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: labels}}}, nil
 		},
 	}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `[{"op":"add","path":"/new","value":"label"}]`
 	req := httptest.NewRequest("PATCH", "/nodes/node1/labels", strings.NewReader(body))
@@ -894,7 +894,7 @@ func TestHandlePatchNodeLabels_Add(t *testing.T) {
 func TestHandlePatchNodeLabels_WrongContentType(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{ID: "node1"})
-	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, 2)
 
 	req := httptest.NewRequest("PATCH", "/nodes/node1/labels", strings.NewReader(`[]`))
 	req.Header.Set("Content-Type", "application/json")
@@ -919,7 +919,7 @@ func TestHandlePatchNodeLabels_MergePatch(t *testing.T) {
 			return swarm.Node{ID: id, Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: labels}}}, nil
 		},
 	}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `{"new":"label","remove":null}`
 	req := httptest.NewRequest("PATCH", "/nodes/node1/labels", strings.NewReader(body))
@@ -940,7 +940,7 @@ func TestHandleGetServiceResources(t *testing.T) {
 		Limits: &swarm.Limit{NanoCPUs: 1000000000},
 	}
 	c.SetService(svc)
-	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, 2)
 
 	req := httptest.NewRequest("GET", "/services/svc1/resources", nil)
 	req.SetPathValue("id", "svc1")
@@ -979,7 +979,7 @@ func TestHandlePatchServiceResources_Merge(t *testing.T) {
 			return s, nil
 		},
 	}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `{"Limits":{"NanoCPUs":500000000}}`
 	req := httptest.NewRequest("PATCH", "/services/svc1/resources", strings.NewReader(body))
@@ -996,7 +996,7 @@ func TestHandlePatchServiceResources_Merge(t *testing.T) {
 func TestHandlePatchServiceResources_WrongContentType(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(replicatedService("svc1"))
-	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, 2)
 
 	req := httptest.NewRequest("PATCH", "/services/svc1/resources", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -1025,7 +1025,7 @@ func TestHandleGetServiceHealthcheck(t *testing.T) {
 		Timeout:  5 * time.Second,
 		Retries:  3,
 	}))
-	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, 2)
 
 	req := httptest.NewRequest("GET", "/services/svc1/healthcheck", nil)
 	req.SetPathValue("id", "svc1")
@@ -1049,7 +1049,7 @@ func TestHandleGetServiceHealthcheck(t *testing.T) {
 func TestHandleGetServiceHealthcheck_Nil(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(replicatedService("svc1"))
-	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, 2)
 
 	req := httptest.NewRequest("GET", "/services/svc1/healthcheck", nil)
 	req.SetPathValue("id", "svc1")
@@ -1079,7 +1079,7 @@ func TestHandlePutServiceHealthcheck(t *testing.T) {
 			return serviceWithHealthcheck(id, hc), nil
 		},
 	}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `{"Test":["CMD","curl","-f","http://localhost/"],"Interval":10000000000,"Timeout":5000000000,"Retries":3}`
 	req := httptest.NewRequest("PUT", "/services/svc1/healthcheck", strings.NewReader(body))
@@ -1112,7 +1112,7 @@ func TestHandlePutServiceHealthcheck_Disable(t *testing.T) {
 			return serviceWithHealthcheck(id, hc), nil
 		},
 	}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `{"Test":["NONE"]}`
 	req := httptest.NewRequest("PUT", "/services/svc1/healthcheck", strings.NewReader(body))
@@ -1149,7 +1149,7 @@ func TestHandlePatchServiceHealthcheck_Merge(t *testing.T) {
 			return serviceWithHealthcheck(id, hc), nil
 		},
 	}
-	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, 2)
 
 	body := `{"Timeout":5000000000}`
 	req := httptest.NewRequest("PATCH", "/services/svc1/healthcheck", strings.NewReader(body))
@@ -1179,7 +1179,7 @@ func TestHandlePatchServiceHealthcheck_WrongContentType(t *testing.T) {
 	c := cache.New(nil)
 	svc := replicatedService("svc1")
 	c.SetService(svc)
-	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, 2)
 
 	req := httptest.NewRequest("PATCH", "/services/svc1/healthcheck", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -1194,7 +1194,7 @@ func TestHandlePatchServiceHealthcheck_WrongContentType(t *testing.T) {
 
 func TestHandlePutServiceHealthcheck_NotFound(t *testing.T) {
 	c := cache.New(nil)
-	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, 2)
 
 	body := `{"Test":["CMD-SHELL","curl http://localhost/"]}`
 	req := httptest.NewRequest("PUT", "/services/nonexistent/healthcheck", strings.NewReader(body))

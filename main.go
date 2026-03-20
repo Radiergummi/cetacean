@@ -181,7 +181,8 @@ func main() {
 	} else {
 		slog.Warn("prometheus not configured, metrics disabled")
 	}
-	handlers := api.NewHandlers(stateCache, broadcaster, dockerClient, dockerClient, dockerClient, watcher.Ready(), promClient)
+	slog.Info("operations level", "level", cfg.OperationsLevel)
+	handlers := api.NewHandlers(stateCache, broadcaster, dockerClient, dockerClient, dockerClient, watcher.Ready(), promClient, cfg.OperationsLevel)
 
 	// SPA
 	distFS, err := fs.Sub(frontendDist, "frontend/dist")
@@ -195,7 +196,7 @@ func main() {
 		slog.Warn("pprof endpoints enabled", "path", "/debug/pprof/")
 	}
 
-	router := api.NewRouter(handlers, broadcaster, metricsProxy, spa, openapiSpec, scalarJS, cfg.Pprof, authProvider)
+	router := api.NewRouter(handlers, broadcaster, metricsProxy, spa, openapiSpec, scalarJS, cfg.Pprof, authProvider, cfg.OperationsLevel)
 
 	var serverTLSConfig *tls.Config
 	if authCfg.Mode == "cert" {

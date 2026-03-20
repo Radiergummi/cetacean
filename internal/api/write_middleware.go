@@ -24,9 +24,3 @@ func requireLevel(required, configured int) func(http.HandlerFunc) http.Handler 
 		})
 	}
 }
-
-// requireWrite is a temporary shim that will be removed in Task 4
-// when the router is updated to use requireLevel directly.
-func requireWrite(next http.HandlerFunc) http.Handler {
-	return requireLevel(1, 1)(next)
-}

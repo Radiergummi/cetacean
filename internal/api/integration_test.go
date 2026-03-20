@@ -32,14 +32,14 @@ func setupIntegrationRouter(t *testing.T) http.Handler {
 	})
 
 	b := NewBroadcaster(100 * time.Millisecond)
-	h := NewHandlers(c, b, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, b, nil, nil, nil, closedReady(), nil, 2)
 	spa := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte("<html>SPA</html>")) //nolint:errcheck
 	})
 
 	specBytes, _ := os.ReadFile("../../api/openapi.yaml")
-	return NewRouter(h, b, nil, spa, specBytes, []byte("/* scalar */"), false, &auth.NoneProvider{})
+	return NewRouter(h, b, nil, spa, specBytes, []byte("/* scalar */"), false, &auth.NoneProvider{}, 2)
 }
 
 func TestContentNegotiationIntegration(t *testing.T) {
@@ -203,7 +203,7 @@ func TestContentNegotiationIntegration(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("status=%d, want 200", w.Code)
 		}
-		var body map[string]string
+		var body map[string]any
 		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 			t.Fatalf("failed to decode JSON: %v", err)
 		}

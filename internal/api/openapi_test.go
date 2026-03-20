@@ -78,14 +78,14 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 		Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
 	})
 
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, 2)
 	b := NewBroadcaster(0)
 	defer b.Close()
 	noopSPA := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte("<html></html>"))
 	})
-	router := NewRouter(h, b, nil, noopSPA, specBytes, nil, false, &auth.NoneProvider{})
+	router := NewRouter(h, b, nil, noopSPA, specBytes, nil, false, &auth.NoneProvider{}, 2)
 
 	tests := []struct {
 		name       string
