@@ -2,6 +2,7 @@ export { DeploymentChanges } from "./DeploymentChanges";
 export { EndpointModeEditor } from "./EndpointModeEditor";
 export { EnvEditor } from "./EnvEditor";
 export { HealthcheckEditor } from "./HealthcheckEditor";
+export { LogDriverEditor } from "./LogDriverEditor";
 export { PlacementEditor } from "./PlacementEditor";
 export { PortsEditor } from "./PortsEditor";
 export { PlacementPanel } from "./PlacementPanel";
