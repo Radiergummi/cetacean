@@ -1,6 +1,7 @@
 import { api } from "@/api/client";
 import type { PatchOp } from "@/api/types";
 import { KeyValueEditor } from "@/components/KeyValueEditor";
+import { handleCopyWithTemplates, renderSwarmTemplate } from "@/lib/swarmTemplates";
 
 export function EnvEditor({
   serviceId,
@@ -28,6 +29,8 @@ export function EnvEditor({
       keyPlaceholder="NEW_VAR"
       valuePlaceholder="value"
       onSave={handleSave}
+      renderValue={renderSwarmTemplate}
+      onCopyValue={handleCopyWithTemplates}
     />
   );
 }

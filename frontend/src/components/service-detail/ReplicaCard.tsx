@@ -4,6 +4,7 @@ import InfoCard from "@/components/InfoCard";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SliderNumberField } from "@/components/ui/slider-number-field";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { cn } from "@/lib/utils";
@@ -132,17 +133,23 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
       onOpenChange={handleOpenChange}
       modal
     >
-      <PopoverTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            title="Edit service mode"
-          >
-            <Pencil className="size-3.5" />
-          </Button>
-        }
-      />
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <PopoverTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                >
+                  <Pencil className="size-3.5" />
+                </Button>
+              }
+            />
+          }
+        />
+        <TooltipContent>Edit service mode</TooltipContent>
+      </Tooltip>
       <PopoverContent
         className="w-72"
         align="end"

@@ -13,6 +13,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import type { LucideIcon } from "lucide-react";
 import { RefreshCw, RotateCcw } from "lucide-react";
@@ -38,22 +39,32 @@ function ConfirmAction({
   error: string | null;
   onConfirm: () => void;
 }) {
+  const trigger = (
+    <AlertDialogTrigger
+      render={
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={disabled || loading}
+        >
+          {loading ? <Spinner className="size-3" /> : <Icon className="size-3.5" />}
+          {label}
+        </Button>
+      }
+    />
+  );
+
   return (
     <div className="flex flex-col items-start gap-1">
       <AlertDialog>
-        <AlertDialogTrigger
-          render={
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={disabled || loading}
-              title={disabled ? disabledTitle : undefined}
-            >
-              {loading ? <Spinner className="size-3" /> : <Icon className="size-3.5" />}
-              {label}
-            </Button>
-          }
-        />
+        {disabled && disabledTitle ? (
+          <Tooltip>
+            <TooltipTrigger render={trigger} />
+            <TooltipContent>{disabledTitle}</TooltipContent>
+          </Tooltip>
+        ) : (
+          trigger
+        )}
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{title}</AlertDialogTitle>

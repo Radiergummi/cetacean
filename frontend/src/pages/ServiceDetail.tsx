@@ -23,12 +23,14 @@ import {
   type ServiceResourceShape,
 } from "../components/service-detail";
 import SimpleTable from "../components/SimpleTable";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
 import TasksTable from "../components/TasksTable";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
 import { formatDuration, formatRelativeDate } from "../lib/format";
+import { handleCopyWithTemplates, renderSwarmTemplate } from "../lib/swarmTemplates";
 import { escapePromQL } from "../lib/utils";
 import { ArrowRight } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -311,55 +313,59 @@ export default function ServiceDetail() {
           title="Container Configuration"
           defaultOpen={false}
         >
-          <KVTable
-            rows={[
-              containerSpec.Command && [
-                "Command",
-                containerSpec.Command.join(" "),
-                "The command to run inside the container, overriding the image's default entrypoint.",
-              ],
-              containerSpec.Args && [
-                "Args",
-                containerSpec.Args.join(" "),
-                "Arguments passed to the container's entrypoint command.",
-              ],
-              containerSpec.User && [
-                "User",
-                containerSpec.User,
-                "The user (UID or name) the container process runs as.",
-              ],
-              containerSpec.Dir && [
-                "Working Dir",
-                containerSpec.Dir,
-                "The working directory inside the container where commands are executed.",
-              ],
-              containerSpec.Hostname && [
-                "Hostname",
-                containerSpec.Hostname,
-                "The hostname set inside the container.",
-              ],
-              containerSpec.StopSignal && [
-                "Stop Signal",
-                containerSpec.StopSignal,
-                "The signal sent to the container process to request a graceful shutdown.",
-              ],
-              containerSpec.StopGracePeriod != null && [
-                "Stop Grace Period",
-                formatDuration(containerSpec.StopGracePeriod),
-                "How long to wait for graceful shutdown before force-killing the container.",
-              ],
-              containerSpec.Init != null && [
-                "Init",
-                containerSpec.Init ? "yes" : "no",
-                "Runs an init process (tini) as PID 1 to reap zombie processes.",
-              ],
-              containerSpec.ReadOnly && [
-                "Read Only Root FS",
-                "yes",
-                "The container's root filesystem is mounted read-only. Writes are only possible to volumes.",
-              ],
-            ]}
-          />
+          {/* onCopy rewrites template badge labels to raw {{...}} strings */}
+          <div onCopy={handleCopyWithTemplates}>
+            <KVTable
+              rows={[
+                containerSpec.Command && [
+                  "Command",
+                  containerSpec.Command.join(" "),
+                  "The command to run inside the container, overriding the image's default entrypoint.",
+                ],
+                containerSpec.Args && [
+                  "Args",
+                  containerSpec.Args.join(" "),
+                  "Arguments passed to the container's entrypoint command.",
+                ],
+                containerSpec.User && [
+                  "User",
+                  containerSpec.User,
+                  "The user (UID or name) the container process runs as.",
+                ],
+                containerSpec.Dir && [
+                  "Working Dir",
+                  containerSpec.Dir,
+                  "The working directory inside the container where commands are executed.",
+                ],
+                containerSpec.Hostname && [
+                  "Hostname",
+                  renderSwarmTemplate(containerSpec.Hostname),
+                  "The hostname set inside the container.",
+                  containerSpec.Hostname,
+                ],
+                containerSpec.StopSignal && [
+                  "Stop Signal",
+                  containerSpec.StopSignal,
+                  "The signal sent to the container process to request a graceful shutdown.",
+                ],
+                containerSpec.StopGracePeriod != null && [
+                  "Stop Grace Period",
+                  formatDuration(containerSpec.StopGracePeriod),
+                  "How long to wait for graceful shutdown before force-killing the container.",
+                ],
+                containerSpec.Init != null && [
+                  "Init",
+                  containerSpec.Init ? "yes" : "no",
+                  "Runs an init process (tini) as PID 1 to reap zombie processes.",
+                ],
+                containerSpec.ReadOnly && [
+                  "Read Only Root FS",
+                  "yes",
+                  "The container's root filesystem is mounted read-only. Writes are only possible to volumes.",
+                ],
+              ]}
+            />
+          </div>
         </CollapsibleSection>
       )}
 
@@ -469,32 +475,35 @@ export default function ServiceDetail() {
           title="Mounts"
           defaultOpen={false}
         >
-          <SimpleTable
-            columns={["Type", "Source", "Target", "Read Only"]}
-            items={containerSpec.Mounts}
-            keyFn={(_, index) => index}
-            renderRow={({ ReadOnly, Source, Target, Type }) => (
-              <>
-                <td className="p-3 text-sm">
-                  <MountTypeBadge type={Type} />
-                </td>
-                <td className="p-3 font-mono text-xs">
-                  {Type === "volume" && Source ? (
-                    <Link
-                      to={`/volumes/${Source}`}
-                      className="text-link hover:underline"
-                    >
-                      <ResourceName name={Source} />
-                    </Link>
-                  ) : (
-                    Source || "\u2014"
-                  )}
-                </td>
-                <td className="p-3 font-mono text-xs">{Target}</td>
-                <td className="p-3 text-sm">{ReadOnly ? "yes" : "no"}</td>
-              </>
-            )}
-          />
+          {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+          <div onCopy={handleCopyWithTemplates}>
+            <SimpleTable
+              columns={["Type", "Source", "Target", "Read Only"]}
+              items={containerSpec.Mounts}
+              keyFn={(_, index) => index}
+              renderRow={({ ReadOnly, Source, Target, Type }) => (
+                <>
+                  <td className="p-3 text-sm">
+                    <MountTypeBadge type={Type} />
+                  </td>
+                  <td className="p-3 font-mono text-xs">
+                    {Type === "volume" && Source ? (
+                      <Link
+                        to={`/volumes/${Source}`}
+                        className="text-link hover:underline"
+                      >
+                        <ResourceName name={Source} />
+                      </Link>
+                    ) : (
+                      (Source && renderSwarmTemplate(Source)) || "\u2014"
+                    )}
+                  </td>
+                  <td className="p-3 font-mono text-xs">{renderSwarmTemplate(Target)}</td>
+                  <td className="p-3 text-sm">{ReadOnly ? "yes" : "no"}</td>
+                </>
+              )}
+            />
+          </div>
         </CollapsibleSection>
       )}
 
@@ -742,12 +751,16 @@ function ServiceStatusCard({ service }: { service: Service }) {
           </span>
           {ts && <span className="text-xs text-muted-foreground">{formatRelativeDate(ts)}</span>}
           {msg && label !== "Stable" && (
-            <span
-              className="truncate text-xs text-muted-foreground"
-              title={msg}
-            >
-              {msg}
-            </span>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span className="truncate text-xs text-muted-foreground">
+                    {msg}
+                  </span>
+                }
+              />
+              <TooltipContent>{msg}</TooltipContent>
+            </Tooltip>
           )}
         </div>
       }

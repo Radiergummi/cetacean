@@ -1,3 +1,4 @@
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Service } from "../../api/types";
 
 export type PlacementShape = NonNullable<Service["Spec"]["TaskTemplate"]["Placement"]>;
@@ -110,15 +111,25 @@ export function PlacementPanel({ placement }: { placement: PlacementShape }) {
         <div className="flex flex-wrap gap-2">
           {constraints.map((constraint) => {
             const humanized = humanizeConstraint(constraint);
-            return (
+            const pill = (
               <span
                 key={constraint}
                 data-exclude={humanized?.exclude || undefined}
                 className="inline-flex items-center rounded-lg border px-3 py-2 text-sm data-exclude:border-red-200 data-exclude:bg-red-50 data-exclude:text-red-800 dark:data-exclude:border-red-800 dark:data-exclude:bg-red-950/30 dark:data-exclude:text-red-300"
-                title={constraint}
               >
                 {humanized?.label ?? constraint}
               </span>
+            );
+
+            if (!humanized) {
+              return pill;
+            }
+
+            return (
+              <Tooltip key={constraint}>
+                <TooltipTrigger render={pill} />
+                <TooltipContent className="font-mono">{constraint}</TooltipContent>
+              </Tooltip>
             );
           })}
         </div>
