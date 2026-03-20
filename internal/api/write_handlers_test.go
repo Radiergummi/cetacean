@@ -1353,3 +1353,115 @@ func TestHandlePutServicePlacement_NotFound(t *testing.T) {
 		t.Errorf("status=%d, want 404", w.Code)
 	}
 }
+
+func TestHandleGetServicePorts(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			EndpointSpec: &swarm.EndpointSpec{
+				Ports: []swarm.PortConfig{
+					{Protocol: "tcp", TargetPort: 80, PublishedPort: 8080, PublishMode: swarm.PortConfigPublishModeIngress},
+				},
+			},
+		},
+	})
+
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	req := httptest.NewRequest("GET", "/services/svc1/ports", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetServicePorts(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+}
+
+func TestHandleGetServicePorts_NilEndpointSpec(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	req := httptest.NewRequest("GET", "/services/svc1/ports", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetServicePorts(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	ports := resp["ports"].([]any)
+	if len(ports) != 0 {
+		t.Errorf("expected empty ports, got %v", ports)
+	}
+}
+
+func TestHandlePatchServicePorts(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	updated := swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			EndpointSpec: &swarm.EndpointSpec{
+				Ports: []swarm.PortConfig{
+					{Protocol: "tcp", TargetPort: 80, PublishedPort: 9090},
+				},
+			},
+		},
+	}
+	mock := &mockWriteClient{
+		updateServicePortsFn: func(ctx context.Context, id string, ports []swarm.PortConfig) (swarm.Service, error) {
+			return updated, nil
+		},
+	}
+
+	h := NewHandlers(c, nil, nil, nil, mock, closedReady(), nil, config.OpsImpactful)
+	body := strings.NewReader(`{"ports":[{"Protocol":"tcp","TargetPort":80,"PublishedPort":9090}]}`)
+	req := httptest.NewRequest("PATCH", "/services/svc1/ports", body)
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServicePorts(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status=%d, want 200", w.Code)
+	}
+}
+
+func TestHandlePatchServicePorts_InvalidBody(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+	body := strings.NewReader(`not json`)
+	req := httptest.NewRequest("PATCH", "/services/svc1/ports", body)
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServicePorts(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status=%d, want 400", w.Code)
+	}
+}
+
+func TestHandlePatchServicePorts_WrongContentType(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+	body := strings.NewReader(`{}`)
+	req := httptest.NewRequest("PATCH", "/services/svc1/ports", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServicePorts(w, req)
+
+	if w.Code != http.StatusUnsupportedMediaType {
+		t.Errorf("status=%d, want 415", w.Code)
+	}
+}

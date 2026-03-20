@@ -681,6 +681,69 @@ func mergePatch(base, patch map[string]any) {
 	}
 }
 
+func (h *Handlers) HandleGetServicePorts(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+	var ports []swarm.PortConfig
+	if svc.Spec.EndpointSpec != nil {
+		ports = svc.Spec.EndpointSpec.Ports
+	}
+	if ports == nil {
+		ports = []swarm.PortConfig{}
+	}
+	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/ports", "ServicePorts", map[string]any{
+		"ports": ports,
+	}))
+}
+
+func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	ct := r.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/merge-patch+json") {
+		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		return
+	}
+
+	_, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	var patch struct {
+		Ports []swarm.PortConfig `json:"ports"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	slog.Info("updating service ports", "service", id)
+
+	updated, err := h.writeClient.UpdateServicePorts(r.Context(), id, patch.Ports)
+	if err != nil {
+		writeDockerError(w, r, err, "service")
+		return
+	}
+
+	var resultPorts []swarm.PortConfig
+	if updated.Spec.EndpointSpec != nil {
+		resultPorts = updated.Spec.EndpointSpec.Ports
+	}
+	if resultPorts == nil {
+		resultPorts = []swarm.PortConfig{}
+	}
+	writeJSON(w, NewDetailResponse("/services/"+id+"/ports", "ServicePorts", map[string]any{
+		"ports": resultPorts,
+	}))
+}
+
 func (h *Handlers) HandleGetServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
