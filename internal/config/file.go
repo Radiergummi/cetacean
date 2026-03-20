@@ -20,9 +20,10 @@ type fileConfig struct {
 }
 
 type fileServer struct {
-	ListenAddr *string  `toml:"listen_addr"`
-	Pprof      *bool    `toml:"pprof"`
-	SSE        *fileSSE `toml:"sse"`
+	ListenAddr      *string  `toml:"listen_addr"`
+	Pprof           *bool    `toml:"pprof"`
+	SSE             *fileSSE `toml:"sse"`
+	OperationsLevel *int     `toml:"operations_level"`
 }
 
 type fileSSE struct {

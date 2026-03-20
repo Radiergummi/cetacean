@@ -16,6 +16,7 @@ type Config struct {
 	Snapshot         bool          // CETACEAN_SNAPSHOT, default true
 	SSEBatchInterval time.Duration // CETACEAN_SSE_BATCH_INTERVAL, default 100ms
 	Pprof            bool          // CETACEAN_PPROF, default false
+	OperationsLevel  int           // CETACEAN_OPERATIONS_LEVEL, 0=read-only, 1=operational, 2=impactful
 }
 
 // Load merges configuration from flags, environment variables, a TOML
@@ -37,11 +38,13 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		fLogFormat  *string
 		fDataDir    *string
 		fSnapshot   *bool
+		fOpsLevel   *int
 	)
 	if fc != nil {
 		if fc.Server != nil {
 			fListen = fc.Server.ListenAddr
 			fPprof = fc.Server.Pprof
+			fOpsLevel = fc.Server.OperationsLevel
 			if fc.Server.SSE != nil {
 				fSSEBatch = fc.Server.SSE.BatchInterval
 			}
@@ -67,6 +70,11 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		return nil, err
 	}
 
+	opsLevel, err := resolveInt(nil, "CETACEAN_OPERATIONS_LEVEL", fOpsLevel, 1, 0, 2)
+	if err != nil {
+		return nil, err
+	}
+
 	cfg := &Config{
 		DockerHost:       resolve(flags.DockerHost, "CETACEAN_DOCKER_HOST", fDockerHost, "unix:///var/run/docker.sock"),
 		PrometheusURL:    resolve(flags.PrometheusURL, "CETACEAN_PROMETHEUS_URL", fPromURL, ""),
@@ -77,6 +85,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		Snapshot:         resolveBool(nil, "CETACEAN_SNAPSHOT", fSnapshot, true),
 		SSEBatchInterval: batchInterval,
 		Pprof:            resolveBool(flags.Pprof, "CETACEAN_PPROF", fPprof, false),
+		OperationsLevel:  opsLevel,
 	}
 
 	return cfg, nil

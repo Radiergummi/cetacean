@@ -180,6 +180,18 @@ func TestLoad_FullPrecedence(t *testing.T) {
 	}
 }
 
+func TestLoad_OperationsLevel_Default(t *testing.T) {
+	t.Setenv("CETACEAN_OPERATIONS_LEVEL", "")
+
+	cfg, err := Load(nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.OperationsLevel != 1 {
+		t.Errorf("OperationsLevel=%d, want 1", cfg.OperationsLevel)
+	}
+}
+
 func TestLoad_FileConfig(t *testing.T) {
 	t.Setenv("CETACEAN_DOCKER_HOST", "")
 	t.Setenv("CETACEAN_PROMETHEUS_URL", "")
