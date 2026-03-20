@@ -3,6 +3,7 @@ import { api } from "@/api/client";
 import type { ClusterCapacity } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
+import { useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { formatBytes, formatCores, formatNumber, formatPercentage } from "@/lib/format";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil } from "lucide-react";
@@ -57,6 +58,9 @@ export function ResourcesEditor({
   allocation?: AllocationData;
   onSaved: (updated: Record<string, unknown>) => void;
 }) {
+  const { level } = useOperationsLevel();
+  const canEdit = level >= 1;
+
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -157,6 +161,8 @@ export function ResourcesEditor({
           variant="outline"
           size="xs"
           onClick={openEdit}
+          disabled={!canEdit}
+          title={canEdit ? undefined : "Editing disabled by server configuration"}
         >
           <Pencil className="size-3" />
           Edit

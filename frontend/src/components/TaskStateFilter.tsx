@@ -4,6 +4,30 @@ import SegmentedControl from "./SegmentedControl";
 import { useEffect, useMemo } from "react";
 
 const all = "__all__" as const;
+const active = "__active__" as const;
+
+const terminalStates = new Set([
+  "shutdown",
+  "complete",
+  "failed",
+  "rejected",
+  "remove",
+  "orphaned",
+]);
+
+/**
+ * Returns true for tasks worth seeing by default: anything still in-flight or
+ * abnormal. Hides only the normal completed lifecycle (desired=shutdown + terminal state).
+ */
+export function isActiveTask({
+  DesiredState,
+  Status: { State },
+}: {
+  DesiredState: string;
+  Status: { State: string };
+}): boolean {
+  return !(DesiredState === "shutdown" && terminalStates.has(State));
+}
 
 const knownStates = [
   "running",
@@ -22,7 +46,7 @@ const knownStates = [
 
 export default function TaskStateFilter({
   tasks,
-  active,
+  active: activeFilter,
   onChange,
 }: {
   tasks: Task[];
@@ -38,7 +62,11 @@ export default function TaskStateFilter({
       counts.set(State, (counts.get(State) || 0) + 1);
     }
 
-    const segments: Segment<string>[] = [{ value: all, label: "All", badge: tasks.length }];
+    const activeCount = tasks.filter(isActiveTask).length;
+    const segments: Segment<string>[] = [
+      { value: active, label: "Active", badge: activeCount },
+      { value: all, label: "All", badge: tasks.length },
+    ];
     const enabled: Segment<string>[] = [];
     const disabled: Segment<string>[] = [];
 
@@ -58,16 +86,16 @@ export default function TaskStateFilter({
 
   // Reset filter if the selected state has no tasks
   useEffect(() => {
-    if (active && segments.find(({ value }) => value === active)?.disabled) {
+    if (activeFilter && segments.find(({ value }) => value === activeFilter)?.disabled) {
       onChange(null);
     }
-  }, [active, segments, onChange]);
+  }, [activeFilter, segments, onChange]);
 
   return (
     <SegmentedControl
       segments={segments}
-      value={active ?? all}
-      onChange={(value) => onChange(value === all ? null : value)}
+      value={activeFilter ?? active}
+      onChange={(value) => onChange(value === active ? null : value)}
       max={3}
     />
   );

@@ -5,6 +5,7 @@ import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
 import { SliderNumberField } from "@/components/ui/slider-number-field";
+import { useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { formatDuration } from "@/lib/format";
 import { joinCommand, parseCommand } from "@/lib/parseCommand";
 import { cn, getErrorMessage } from "@/lib/utils";
@@ -132,6 +133,9 @@ export function HealthcheckEditor({
   healthcheck: Healthcheck | null;
   onSaved: (updated: Healthcheck | null) => void;
 }) {
+  const { level } = useOperationsLevel();
+  const canEdit = level >= 1;
+
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -174,6 +178,8 @@ export function HealthcheckEditor({
     <Button
       variant="outline"
       size="xs"
+      disabled={!canEdit}
+      title={canEdit ? undefined : "Editing disabled by server configuration"}
       onClick={(event: React.MouseEvent) => {
         event.stopPropagation();
         openEdit();
@@ -360,7 +366,9 @@ function EditMode({
               type="text"
               value={form.command}
               onChange={(event) => updateForm({ command: event.target.value })}
-              placeholder={form.useShell ? "curl -f http://localhost/ || exit 1" : "/bin/healthcheck"}
+              placeholder={
+                form.useShell ? "curl -f http://localhost/ || exit 1" : "/bin/healthcheck"
+              }
               className="h-8 w-full rounded-md border bg-background px-2 font-mono text-sm outline-none focus:ring-1 focus:ring-ring"
             />
             {!form.useShell && (
@@ -371,6 +379,7 @@ function EditMode({
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             <SliderNumberField
               label="Interval (s)"
+              tooltip="Time between running the healthcheck. Leave empty for the Docker default (30s)."
               value={form.interval}
               onChange={(interval) => updateForm({ interval })}
               min={0}
@@ -378,6 +387,7 @@ function EditMode({
             />
             <SliderNumberField
               label="Timeout (s)"
+              tooltip="Maximum time a single check can run before it is considered failed. Leave empty for the Docker default (30s)."
               value={form.timeout}
               onChange={(timeout) => updateForm({ timeout })}
               min={0}
@@ -385,6 +395,7 @@ function EditMode({
             />
             <SliderNumberField
               label="Start Period (s)"
+              tooltip="Grace period after container start during which failures do not count towards the retry limit. Leave empty for the Docker default (0s)."
               value={form.startPeriod}
               onChange={(startPeriod) => updateForm({ startPeriod })}
               min={0}
@@ -392,6 +403,7 @@ function EditMode({
             />
             <SliderNumberField
               label="Start Interval (s)"
+              tooltip="Interval between checks during the start period. Leave empty for the Docker default (5s)."
               value={form.startInterval}
               onChange={(startInterval) => updateForm({ startInterval })}
               min={0}
@@ -399,6 +411,7 @@ function EditMode({
             />
             <SliderNumberField
               label="Retries"
+              tooltip="Number of consecutive failures needed to mark the container as unhealthy. Leave empty for the Docker default (3)."
               value={form.retries}
               onChange={(retries) => updateForm({ retries })}
               min={0}

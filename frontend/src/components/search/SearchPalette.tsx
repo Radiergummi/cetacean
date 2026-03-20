@@ -75,11 +75,19 @@ function ActionBreadcrumbs({
           <ChevronRight className="size-3" />
           {index < currentStep ? (
             <span className="text-foreground">
-              {type === "resource"
-                ? resourceType === "service"
-                  ? <ResourceName name={(actionArgs[index] as { name?: string })?.name ?? String(actionArgs[index])} />
-                  : ((actionArgs[index] as { name?: string })?.name ?? String(actionArgs[index]))
-                : String(actionArgs[index])}
+              {type === "resource" ? (
+                resourceType === "service" ? (
+                  <ResourceName
+                    name={
+                      (actionArgs[index] as { name?: string })?.name ?? String(actionArgs[index])
+                    }
+                  />
+                ) : (
+                  ((actionArgs[index] as { name?: string })?.name ?? String(actionArgs[index]))
+                )
+              ) : (
+                String(actionArgs[index])
+              )}
             </span>
           ) : index === currentStep ? (
             <span className="font-medium text-primary">{label}</span>

@@ -1,21 +1,49 @@
 import { api } from "../api/client";
 import type { StackSummary } from "../api/types";
+import DataTable, { type Column } from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
+import ListToolbar from "../components/ListToolbar";
 import { SkeletonTable } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
-import { SearchInput } from "../components/search";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useSearchParam } from "../hooks/useSearchParam";
+import { useViewMode } from "../hooks/useViewMode";
 import { formatBytes, formatPercentage } from "../lib/format";
 import { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+
+function HealthDot({ health }: { health: "healthy" | "warning" | "critical" }) {
+  return (
+    <span
+      data-health={health}
+      className="inline-block size-2.5 shrink-0 rounded-full bg-yellow-500 data-[health=critical]:bg-red-500 data-[health=healthy]:bg-green-500"
+    />
+  );
+}
+
+function TaskHealth({ stack }: { stack: StackSummary }) {
+  const running = stack.tasksByState["running"] ?? 0;
+  const desired = stack.desiredTasks;
+  const healthy = running >= desired && desired > 0;
+
+  return (
+    <span
+      data-healthy={healthy || undefined}
+      className="font-medium text-red-600 tabular-nums data-healthy:text-green-600 dark:text-red-400 dark:data-healthy:text-green-400"
+    >
+      {running}/{desired}
+    </span>
+  );
+}
 
 export default function StackList() {
   const [search, , setSearch] = useSearchParam("q");
   const [summaries, setSummaries] = useState<StackSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [viewMode, setViewMode] = useViewMode("stacks");
+  const navigate = useNavigate();
 
   const load = useCallback(() => {
     api
@@ -43,11 +71,48 @@ export default function StackList() {
     ? summaries.filter(({ name }) => name.toLowerCase().includes(search.toLowerCase()))
     : summaries;
 
+  const columns: Column<StackSummary>[] = [
+    {
+      header: "Name",
+      cell: (stack) => (
+        <span className="flex items-center gap-2">
+          <HealthDot health={stackHealth(stack)} />
+          <Link
+            to={`/stacks/${stack.name}`}
+            className="font-medium text-link hover:underline"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {stack.name}
+          </Link>
+        </span>
+      ),
+    },
+    {
+      header: "Tasks",
+      cell: (stack) => <TaskHealth stack={stack} />,
+    },
+    {
+      header: "Services",
+      cell: ({ serviceCount }) => serviceCount,
+    },
+    {
+      header: "Status",
+      cell: ({ updatingServices }) =>
+        updatingServices > 0 ? (
+          <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+            Updating {updatingServices}
+          </span>
+        ) : (
+          <span className="text-sm font-medium text-green-600 dark:text-green-400">Stable</span>
+        ),
+    },
+  ];
+
   if (loading) {
     return (
       <div>
         <PageHeader title="Stacks" />
-        <SkeletonTable columns={6} />
+        <SkeletonTable columns={4} />
       </div>
     );
   }
@@ -64,15 +129,22 @@ export default function StackList() {
   return (
     <div>
       <PageHeader title="Stacks" />
-      <div className="mb-4">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="Search stacks…"
-        />
-      </div>
+      <ListToolbar
+        search={search}
+        onSearchChange={setSearch}
+        placeholder="Search stacks…"
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+      />
       {filtered.length === 0 ? (
         <EmptyState message={search ? "No stacks match your search" : "No stacks found"} />
+      ) : viewMode === "table" ? (
+        <DataTable
+          columns={columns}
+          data={filtered}
+          keyFn={({ name }) => name}
+          onRowClick={({ name }) => navigate(`/stacks/${name}`)}
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((stack) => (
@@ -169,12 +241,35 @@ function StackCard({ stack }: { stack: StackSummary }) {
       )}
 
       {/* Resource counts footer */}
-      <div className="mt-3 flex gap-3 border-t pt-3 text-[10px] text-muted-foreground">
-        <span>{stack.serviceCount} svc</span>
-        {stack.configCount > 0 && <span>{stack.configCount} cfg</span>}
-        {stack.secretCount > 0 && <span>{stack.secretCount} sec</span>}
-        {stack.networkCount > 0 && <span>{stack.networkCount} net</span>}
-        {stack.volumeCount > 0 && <span>{stack.volumeCount} vol</span>}
+      <div className="mt-3 flex flex-wrap gap-1.5 border-t pt-3">
+        <CountPill
+          count={stack.serviceCount}
+          label="services"
+        />
+        {stack.configCount > 0 && (
+          <CountPill
+            count={stack.configCount}
+            label="configs"
+          />
+        )}
+        {stack.secretCount > 0 && (
+          <CountPill
+            count={stack.secretCount}
+            label="secrets"
+          />
+        )}
+        {stack.networkCount > 0 && (
+          <CountPill
+            count={stack.networkCount}
+            label="networks"
+          />
+        )}
+        {stack.volumeCount > 0 && (
+          <CountPill
+            count={stack.volumeCount}
+            label="volumes"
+          />
+        )}
       </div>
     </Link>
   );
@@ -209,5 +304,13 @@ function ResourceBar({
         />
       </div>
     </div>
+  );
+}
+
+function CountPill({ count, label }: { count: number; label: string }) {
+  return (
+    <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground tabular-nums">
+      {count} {count === 1 ? label.replace(/s$/, "") : label}
+    </span>
   );
 }

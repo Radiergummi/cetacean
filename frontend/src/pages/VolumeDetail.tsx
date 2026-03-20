@@ -94,7 +94,10 @@ export default function VolumeDetail() {
         emptyMessage="No services using this volume."
       />
 
-      <ActivitySection entries={history} hideType />
+      <ActivitySection
+        entries={history}
+        hideType
+      />
     </div>
   );
 }

@@ -3,11 +3,7 @@ import { describe, it, expect } from "vitest";
 
 describe("parseCommand", () => {
   it("splits simple command", () => {
-    expect(parseCommand("curl -f http://localhost/")).toEqual([
-      "curl",
-      "-f",
-      "http://localhost/",
-    ]);
+    expect(parseCommand("curl -f http://localhost/")).toEqual(["curl", "-f", "http://localhost/"]);
   });
 
   it("handles double quotes", () => {
@@ -31,10 +27,7 @@ describe("parseCommand", () => {
   });
 
   it("preserves escaped quotes", () => {
-    expect(parseCommand('echo "say \\"hello\\""')).toEqual([
-      "echo",
-      'say "hello"',
-    ]);
+    expect(parseCommand('echo "say \\"hello\\""')).toEqual(["echo", 'say "hello"']);
   });
 
   it("handles mixed quotes", () => {
@@ -48,9 +41,7 @@ describe("parseCommand", () => {
 
 describe("joinCommand", () => {
   it("joins simple args", () => {
-    expect(joinCommand(["curl", "-f", "http://localhost/"])).toBe(
-      "curl -f http://localhost/",
-    );
+    expect(joinCommand(["curl", "-f", "http://localhost/"])).toBe("curl -f http://localhost/");
   });
 
   it("quotes args with spaces", () => {

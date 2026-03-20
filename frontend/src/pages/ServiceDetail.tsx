@@ -1,5 +1,12 @@
 import { api } from "../api/client";
-import type { Healthcheck, HistoryEntry, Service, SpecChange, Task } from "../api/types";
+import type {
+  Healthcheck,
+  HistoryEntry,
+  PortConfig,
+  Service,
+  SpecChange,
+  Task,
+} from "../api/types";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
 import { ContainerImage, KVTable, MetadataGrid, ResourceLink, Timestamp } from "../components/data";
@@ -17,7 +24,10 @@ import {
   EndpointModeEditor,
   EnvEditor,
   HealthcheckEditor,
-  PlacementPanel,
+  LogDriverEditor,
+  PlacementEditor,
+  PolicyEditor,
+  PortsEditor,
   ReplicaCard,
   ResourcesEditor,
   ServiceActions,
@@ -27,13 +37,13 @@ import SimpleTable from "../components/SimpleTable";
 import TasksTable from "../components/TasksTable";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { useOperationsLevel } from "../hooks/useOperationsLevel";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
 import { formatDuration, formatRelativeDate } from "../lib/format";
 import { handleCopyWithTemplates, renderSwarmTemplate } from "../lib/swarmTemplates";
 import { escapePromQL } from "../lib/utils";
-import { ArrowRight } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -47,7 +57,9 @@ export default function ServiceDetail() {
   const [serviceResources, setServiceResources] = useState<ServiceResourceShape | null>(null);
   const [serviceLabels, setServiceLabels] = useState<Record<string, string> | null>(null);
   const [healthcheck, setHealthcheck] = useState<Healthcheck | null | undefined>(undefined);
+  const [specPorts, setSpecPorts] = useState<PortConfig[] | null>(null);
   const monitoring = useMonitoringStatus();
+  const { level: operationsLevel } = useOperationsLevel();
   const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
   const hasCadvisor = !!monitoring?.cadvisor?.targets;
   const [error, setError] = useState(false);
@@ -101,6 +113,10 @@ export default function ServiceDetail() {
     api
       .serviceHealthcheck(id, signal)
       .then(setHealthcheck)
+      .catch(() => {});
+    api
+      .servicePorts(id, signal)
+      .then(setSpecPorts)
       .catch(() => {});
   }, [id]);
 
@@ -207,7 +223,6 @@ export default function ServiceDetail() {
   const containerSpec = service.Spec.TaskTemplate.ContainerSpec;
   const taskTemplate = service.Spec.TaskTemplate;
   const labels = service.Spec.Labels;
-
 
   const hasContainerConfig =
     containerSpec.Command ||
@@ -389,6 +404,8 @@ export default function ServiceDetail() {
           entries={serviceLabels}
           keyPlaceholder="key"
           valuePlaceholder="value"
+          editDisabled={operationsLevel < 1}
+          editDisabledTitle="Editing disabled by server configuration"
           onSave={async (ops) => {
             const updated = await api.patchServiceLabels(id!, ops);
             setServiceLabels(updated);
@@ -406,31 +423,15 @@ export default function ServiceDetail() {
         />
       )}
 
-
       {/* Ports */}
-      {service.Endpoint?.Ports && service.Endpoint.Ports.length > 0 && (
-        <CollapsibleSection
-          title="Ports"
-          defaultOpen={false}
-        >
-          <div className="flex flex-wrap gap-2">
-            {service.Endpoint.Ports.map(
-              ({ Protocol, PublishMode, PublishedPort, TargetPort }, index) => (
-                <span
-                  key={index}
-                  className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 font-mono text-sm"
-                >
-                  <span className="font-semibold">{PublishedPort}</span>
-                  <ArrowRight className="size-3 text-muted-foreground" />
-                  <span>
-                    {TargetPort}/{Protocol}
-                  </span>
-                  <span className="text-xs text-muted-foreground">({PublishMode})</span>
-                </span>
-              ),
-            )}
-          </div>
-        </CollapsibleSection>
+      {specPorts !== null && (
+        <div className="flex flex-col gap-3 rounded-lg border p-3">
+          <PortsEditor
+            serviceId={id!}
+            ports={specPorts}
+            onSaved={setSpecPorts}
+          />
+        </div>
       )}
 
       {/* Mounts */}
@@ -576,15 +577,13 @@ export default function ServiceDetail() {
             </div>
           )}
 
-          {taskTemplate.Placement && (
-            <div className="flex flex-col gap-3 rounded-lg border p-3">
-              <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                Placement
-              </h3>
-
-              <PlacementPanel placement={taskTemplate.Placement} />
-            </div>
-          )}
+          <div className="flex flex-col gap-3 rounded-lg border p-3">
+            <PlacementEditor
+              serviceId={id!}
+              placement={taskTemplate.Placement ?? null}
+              onSaved={fetchData}
+            />
+          </div>
 
           {taskTemplate.RestartPolicy && (
             <div className="flex flex-col gap-3 rounded-lg border p-3">
@@ -614,41 +613,31 @@ export default function ServiceDetail() {
             </div>
           )}
 
-          {taskTemplate.LogDriver && (
-            <div className="flex flex-col gap-3 rounded-lg border p-3">
-              <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                Log Driver
-              </h3>
-              <KVTable
-                rows={[
-                  ["Driver", taskTemplate.LogDriver.Name],
-                  ...(taskTemplate.LogDriver.Options
-                    ? Object.entries(taskTemplate.LogDriver.Options).map(
-                        ([key, value]) => [key, value] as [string, string],
-                      )
-                    : []),
-                ]}
-              />
-            </div>
-          )}
+          <div className="flex flex-col gap-3 rounded-lg border p-3">
+            <LogDriverEditor
+              serviceId={id!}
+              logDriver={taskTemplate.LogDriver ?? null}
+              onSaved={fetchData}
+            />
+          </div>
 
-          {service.Spec.UpdateConfig && (
-            <div className="flex flex-col gap-3 rounded-lg border p-3">
-              <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                Update Config
-              </h3>
-              <KVTable rows={updateConfigRows(service.Spec.UpdateConfig)} />
-            </div>
-          )}
+          <div className="flex flex-col gap-3 rounded-lg border p-3">
+            <PolicyEditor
+              type="update"
+              serviceId={id!}
+              policy={service.Spec.UpdateConfig ?? null}
+              onSaved={fetchData}
+            />
+          </div>
 
-          {service.Spec.RollbackConfig && (
-            <div className="flex flex-col gap-3 rounded-lg border p-3">
-              <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                Rollback Config
-              </h3>
-              <KVTable rows={updateConfigRows(service.Spec.RollbackConfig)} />
-            </div>
-          )}
+          <div className="flex flex-col gap-3 rounded-lg border p-3">
+            <PolicyEditor
+              type="rollback"
+              serviceId={id!}
+              policy={service.Spec.RollbackConfig ?? null}
+              onSaved={fetchData}
+            />
+          </div>
 
           {service.Spec.EndpointSpec?.Mode && (
             <div className="flex flex-col gap-3 rounded-lg border p-3">
@@ -729,26 +718,6 @@ function ServiceStatusCard({ service }: { service: Service }) {
       }
     />
   );
-}
-
-type UpdateConfigShape = NonNullable<Service["Spec"]["UpdateConfig"]>;
-
-function updateConfigRows({
-  Delay,
-  FailureAction,
-  MaxFailureRatio,
-  Monitor,
-  Order,
-  Parallelism,
-}: UpdateConfigShape) {
-  return [
-    ["Parallelism", String(Parallelism)] as [string, string],
-    Delay != null && (["Delay", formatDuration(Delay)] as [string, string]),
-    FailureAction && (["Failure Action", FailureAction] as [string, string]),
-    Monitor != null && (["Monitor", formatDuration(Monitor)] as [string, string]),
-    MaxFailureRatio != null && (["Max Failure Ratio", String(MaxFailureRatio)] as [string, string]),
-    Order && (["Order", Order] as [string, string]),
-  ];
 }
 
 function MountTypeBadge({ type }: { type: string }) {

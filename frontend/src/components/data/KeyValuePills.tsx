@@ -10,7 +10,10 @@ export default function KeyValuePills({
   onCopy?: React.ClipboardEventHandler;
 }) {
   return (
-    <ul className="flex flex-wrap gap-2" onCopy={onCopy}>
+    <ul
+      className="flex flex-wrap gap-2"
+      onCopy={onCopy}
+    >
       {entries.map(([key, value]) => (
         <li
           key={key}

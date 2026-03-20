@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { NumberField } from "@base-ui/react/number-field";
@@ -12,6 +13,7 @@ interface SliderNumberFieldProps {
   max?: number;
   step?: number;
   label: string;
+  tooltip?: string;
   clearable?: boolean;
 }
 
@@ -22,6 +24,7 @@ export function SliderNumberField({
   max,
   step,
   label,
+  tooltip,
   clearable,
 }: SliderNumberFieldProps) {
   // Track the slider value separately so that clearing the number input
@@ -64,7 +67,10 @@ export function SliderNumberField({
   return (
     <div className="flex w-full flex-col gap-2">
       <div className="flex items-center justify-between">
-        <Label className="text-xs text-muted-foreground">{label}</Label>
+        <Label className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+          {label}
+          {tooltip && <HelpTooltip text={tooltip} />}
+        </Label>
         {clearable && (
           <Button
             variant="ghost"

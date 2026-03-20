@@ -1,6 +1,5 @@
 import { CopyButton } from "@/components/ui/copy-button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Info } from "lucide-react";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 import type React from "react";
 
 type Row =
@@ -15,11 +14,12 @@ type Row =
 
 export default function KVTable({ rows }: { rows: Row[] }) {
   const valid = rows.filter(
-    (row): row is
+    (
+      row,
+    ): row is
       | [string, React.ReactNode]
       | [string, React.ReactNode, string]
-      | [string, React.ReactNode, string | undefined, string] =>
-      !!row && !!row[1],
+      | [string, React.ReactNode, string | undefined, string] => !!row && !!row[1],
   );
 
   if (valid.length === 0) {
@@ -41,20 +41,18 @@ export default function KVTable({ rows }: { rows: Row[] }) {
                 <td className="min-w-1/3 p-3 text-sm font-medium text-muted-foreground">
                   <span className="inline-flex items-center gap-1.5">
                     {key}
-                    {tooltip && (
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={<Info className="size-3.5 text-muted-foreground/50" />}
-                        />
-                        <TooltipContent>{tooltip}</TooltipContent>
-                      </Tooltip>
-                    )}
+                    {tooltip && <HelpTooltip text={tooltip} />}
                   </span>
                 </td>
                 <td className="p-3 font-mono text-xs break-all">
                   <span className="flex items-center gap-2">
                     <span className="min-w-0">{value}</span>
-                    {copyable && <CopyButton text={copyable} className="ml-auto" />}
+                    {copyable && (
+                      <CopyButton
+                        text={copyable}
+                        className="ml-auto"
+                      />
+                    )}
                   </span>
                 </td>
               </tr>

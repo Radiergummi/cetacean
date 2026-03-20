@@ -20,6 +20,8 @@ interface KeyValueEditorProps {
   defaultOpen?: boolean;
   renderValue?: (value: string) => React.ReactNode;
   onCopyValue?: React.ClipboardEventHandler;
+  editDisabled?: boolean;
+  editDisabledTitle?: string;
 }
 
 export function KeyValueEditor({
@@ -33,6 +35,8 @@ export function KeyValueEditor({
   defaultOpen = false,
   renderValue,
   onCopyValue,
+  editDisabled = false,
+  editDisabledTitle,
 }: KeyValueEditorProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Record<string, string>>({});
@@ -122,6 +126,8 @@ export function KeyValueEditor({
       variant="outline"
       size="xs"
       onClick={openEdit}
+      disabled={editDisabled}
+      title={editDisabled ? editDisabledTitle : undefined}
     >
       <Pencil className="size-3" />
       Edit
@@ -138,7 +144,11 @@ export function KeyValueEditor({
         sortedEntries.length === 0 ? (
           <p className="text-sm text-muted-foreground">No {title.toLowerCase()}.</p>
         ) : (
-          <KeyValuePills entries={sortedEntries} renderValue={renderValue} onCopy={onCopyValue} />
+          <KeyValuePills
+            entries={sortedEntries}
+            renderValue={renderValue}
+            onCopy={onCopyValue}
+          />
         )
       ) : (
         <div className="flex flex-col gap-3">
