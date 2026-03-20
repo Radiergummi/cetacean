@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
 import { formatDuration } from "@/lib/format";
 import { joinCommand, parseCommand } from "@/lib/parseCommand";
-import { getErrorMessage } from "@/lib/utils";
+import { cn, getErrorMessage } from "@/lib/utils";
 import { Pencil } from "lucide-react";
 import { useState } from "react";
 
@@ -280,10 +280,12 @@ function ToggleButton({
   label,
   pressed,
   onToggle,
+  className,
 }: {
   label: string;
   pressed: boolean;
   onToggle: (value: boolean) => void;
+  className?: string;
 }) {
   return (
     <button
@@ -291,7 +293,7 @@ function ToggleButton({
       role="switch"
       aria-checked={pressed}
       onClick={() => onToggle(!pressed)}
-      className="inline-flex items-center gap-2 text-sm"
+      className={cn("inline-flex items-center gap-2 text-sm", className)}
     >
       <span
         data-on={pressed || undefined}
@@ -351,22 +353,35 @@ function EditMode({
 }) {
   return (
     <div className="space-y-4">
-      <ToggleButton
-        label="Enabled"
-        pressed={form.enabled}
-        onToggle={(enabled) => updateForm({ enabled })}
-      />
+      <div className="flex items-center gap-4">
+        <ToggleButton
+          label="Enabled"
+          pressed={form.enabled}
+          onToggle={(enabled) => updateForm({ enabled })}
+        />
 
-      {form.enabled && (
-        <>
+        {form.enabled && (
           <ToggleButton
             label="Use Shell"
             pressed={form.useShell}
             onToggle={(useShell) => updateForm({ useShell })}
+            className="ms-auto sm:hidden"
           />
+        )}
+      </div>
 
+      {form.enabled && (
+        <>
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">Command</label>
+            <div className="flex items-center">
+              <label className="text-xs text-muted-foreground">Command</label>
+              <ToggleButton
+                label="Use Shell"
+                pressed={form.useShell}
+                onToggle={(useShell) => updateForm({ useShell })}
+                className="ms-auto hidden sm:inline-flex"
+              />
+            </div>
             <input
               type="text"
               value={form.command}
