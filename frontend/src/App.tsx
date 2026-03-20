@@ -1,5 +1,6 @@
 import ConnectionStatus from "./components/ConnectionStatus";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { LoadingDetail } from "./components/LoadingSkeleton";
 import { GlobalSearch, type GlobalSearchHandle } from "./components/search";
 import ShortcutsHelp from "./components/ShortcutsHelp";
 import ShortcutTooltip from "./components/ShortcutTooltip";
@@ -7,8 +8,7 @@ import ThemeToggle from "./components/ThemeToggle";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { ConnectionProvider, sseEventTypes } from "./hooks/useResourceStream";
-import { LoadingDetail } from "./components/LoadingSkeleton";
-import { Menu, X } from "lucide-react";
+import { Keyboard, Menu, X } from "lucide-react";
 import type React from "react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { BrowserRouter, Link, Route, Routes, useLocation, useNavigate } from "react-router-dom";
@@ -42,6 +42,12 @@ function Layout({ children }: { children: React.ReactNode }) {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const navigate = useNavigate();
   const searchRef = useRef<GlobalSearchHandle>(null);
+
+  useEffect(() => {
+    const handler = () => setShortcutsOpen(true);
+    window.addEventListener("cetacean:show-shortcuts", handler);
+    return () => window.removeEventListener("cetacean:show-shortcuts", handler);
+  }, []);
 
   useHotkeys({
     "?": useCallback(() => setShortcutsOpen((o) => !o), []),
@@ -91,6 +97,15 @@ function Layout({ children }: { children: React.ReactNode }) {
               <div className="lg:absolute lg:left-1/2 lg:-translate-x-1/2">
                 <GlobalSearch ref={searchRef} />
               </div>
+              <ShortcutTooltip keys={["?"]}>
+                <button
+                  className="inline-flex size-8 items-center justify-center rounded-md transition hover:bg-muted"
+                  onClick={() => setShortcutsOpen(true)}
+                  aria-label="Keyboard shortcuts"
+                >
+                  <Keyboard className="size-4" />
+                </button>
+              </ShortcutTooltip>
               <ThemeToggle />
               <UserBadge />
 

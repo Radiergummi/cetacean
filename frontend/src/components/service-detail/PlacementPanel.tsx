@@ -97,7 +97,11 @@ export function PlacementPanel({ placement }: { placement: PlacementShape }) {
   const hasContent = constraints.length > 0 || placement.MaxReplicas || preferences.length > 0;
 
   if (!hasContent) {
-    return <p className="text-sm text-muted-foreground">No placement constraints.</p>;
+    return (
+      <div className="flex items-center justify-center rounded-md bg-muted/75 p-3 text-muted-foreground">
+        <p className="text-sm text-muted-foreground">No placement constraints.</p>
+      </div>
+    );
   }
 
   return (

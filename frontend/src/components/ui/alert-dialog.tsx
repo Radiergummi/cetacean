@@ -139,10 +139,11 @@ function AlertDialogDescription({
   );
 }
 
-function AlertDialogAction({ className, ...props }: ComponentProps<typeof Button>) {
+function AlertDialogAction({ className, variant, ...props }: ComponentProps<typeof Button>) {
   return (
     <Button
       data-slot="alert-dialog-action"
+      variant={variant}
       className={cn(className)}
       {...props}
     />

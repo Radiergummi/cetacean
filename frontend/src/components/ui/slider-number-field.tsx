@@ -76,20 +76,21 @@ export function SliderNumberField({
           </Button>
         )}
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-3">
         <NumberField.Root
           value={value ?? null}
           onValueChange={handleNumberChange}
           min={min}
           max={max}
           step={step}
+          className="min-w-0 flex-1"
         >
-          <NumberField.Group className="flex items-center rounded-md border">
-            <NumberField.Decrement className="flex size-8 items-center justify-center border-r text-muted-foreground hover:bg-accent disabled:opacity-50">
+          <NumberField.Group className="flex w-full items-center overflow-hidden rounded-md border">
+            <NumberField.Decrement className="flex size-8 shrink-0 items-center justify-center border-r text-muted-foreground hover:bg-accent disabled:opacity-50">
               <Minus className="size-3" />
             </NumberField.Decrement>
-            <NumberField.Input className="w-20 bg-transparent px-2 py-1 text-center font-mono text-sm focus:outline-none" />
-            <NumberField.Increment className="flex size-8 items-center justify-center border-l text-muted-foreground hover:bg-accent disabled:opacity-50">
+            <NumberField.Input className="min-w-0 flex-1 bg-transparent px-2 py-1 text-center font-mono text-sm focus:outline-none" />
+            <NumberField.Increment className="flex size-8 shrink-0 items-center justify-center border-l text-muted-foreground hover:bg-accent disabled:opacity-50">
               <Plus className="size-3" />
             </NumberField.Increment>
           </NumberField.Group>

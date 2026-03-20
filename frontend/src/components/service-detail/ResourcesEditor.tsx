@@ -147,33 +147,32 @@ export function ResourcesEditor({
   // Without actual data, the text grid is a better fit.
   const hasActualUsage = allocation?.cpuActual != null || allocation?.memActual != null;
 
+  const header = (
+    <div className="flex items-center justify-between">
+      <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+        Resources
+      </h3>
+      {!editing && (
+        <Button
+          variant="outline"
+          size="xs"
+          onClick={openEdit}
+        >
+          <Pencil className="size-3" />
+          Edit
+        </Button>
+      )}
+    </div>
+  );
+
   if (!editing) {
     return (
       <div className="space-y-3">
+        {header}
         {!hasResources && pids == null ? (
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">No resource limits configured.</p>
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={openEdit}
-            >
-              <Pencil className="size-3" />
-              Edit
-            </Button>
-          </div>
+          <p className="text-sm text-muted-foreground">No resource limits configured.</p>
         ) : (
           <>
-            <div className="flex items-center justify-end">
-              <Button
-                variant="outline"
-                size="xs"
-                onClick={openEdit}
-              >
-                <Pencil className="size-3" />
-                Edit
-              </Button>
-            </div>
             {hasActualUsage && allocation ? (
               <div className="space-y-3">
                 {(allocation.cpuReserved != null ||
@@ -241,6 +240,7 @@ export function ResourcesEditor({
 
   return (
     <div className="space-y-3">
+      {header}
       {capacity ? (
         <div className="space-y-3">
           <ResourceRangeSlider

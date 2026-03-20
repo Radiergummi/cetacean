@@ -98,12 +98,6 @@ function ImageUpdatePopover({
         align="end"
       >
         <p className="mb-1 text-xs font-medium text-muted-foreground">New image</p>
-        <p
-          className="mb-2 truncate font-mono text-xs text-muted-foreground"
-          title={currentImage}
-        >
-          Current: {imageWithoutDigest}
-        </p>
         <Input
           value={value}
           onChange={(event) => setValue(event.target.value)}

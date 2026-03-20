@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
 import { getCursorContext, getTokenBounds, segmentPrefixMatch } from "./useQueryCompletion";
+import { describe, it, expect } from "vitest";
 
 describe("getCursorContext", () => {
   it("returns metric context outside braces", () => {

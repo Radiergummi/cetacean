@@ -6,6 +6,7 @@ import { ContainerImage, KVTable, MetadataGrid, ResourceLink, Timestamp } from "
 import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
+import { KeyValueEditor } from "../components/KeyValueEditor";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import { LogViewer } from "../components/log";
 import { MetricsPanel, type Threshold } from "../components/metrics";
@@ -13,6 +14,7 @@ import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
 import {
   DeploymentChanges,
+  EndpointModeEditor,
   EnvEditor,
   PlacementPanel,
   ReplicaCard,
@@ -28,7 +30,7 @@ import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
 import { formatDuration, formatRelativeDate } from "../lib/format";
 import { escapePromQL } from "../lib/utils";
-import { ArrowRight, Globe, Shuffle } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -40,6 +42,7 @@ export default function ServiceDetail() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [envVars, setEnvVars] = useState<Record<string, string> | null>(null);
   const [serviceResources, setServiceResources] = useState<ServiceResourceShape | null>(null);
+  const [serviceLabels, setServiceLabels] = useState<Record<string, string> | null>(null);
   const monitoring = useMonitoringStatus();
   const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
   const hasCadvisor = !!monitoring?.cadvisor?.targets;
@@ -71,13 +74,26 @@ export default function ServiceDetail() {
           setError(true);
         }
       });
-    api.serviceTasks(id, signal).then(setTasks).catch(() => {});
+    api
+      .serviceTasks(id, signal)
+      .then(setTasks)
+      .catch(() => {});
     api
       .history({ resourceId: id, limit: 10 }, signal)
       .then(setHistory)
       .catch(() => {});
-    api.serviceEnv(id, signal).then(setEnvVars).catch(() => {});
-    api.serviceResources(id, signal).then(setServiceResources).catch(() => {});
+    api
+      .serviceEnv(id, signal)
+      .then(setEnvVars)
+      .catch(() => {});
+    api
+      .serviceResources(id, signal)
+      .then(setServiceResources)
+      .catch(() => {});
+    api
+      .serviceLabels(id, signal)
+      .then(setServiceLabels)
+      .catch(() => {});
   }, [id]);
 
   useEffect(() => {
@@ -297,18 +313,51 @@ export default function ServiceDetail() {
         >
           <KVTable
             rows={[
-              containerSpec.Command && ["Command", containerSpec.Command.join(" ")],
-              containerSpec.Args && ["Args", containerSpec.Args.join(" ")],
-              containerSpec.User && ["User", containerSpec.User],
-              containerSpec.Dir && ["Working Dir", containerSpec.Dir],
-              containerSpec.Hostname && ["Hostname", containerSpec.Hostname],
-              containerSpec.StopSignal && ["Stop Signal", containerSpec.StopSignal],
+              containerSpec.Command && [
+                "Command",
+                containerSpec.Command.join(" "),
+                "The command to run inside the container, overriding the image's default entrypoint.",
+              ],
+              containerSpec.Args && [
+                "Args",
+                containerSpec.Args.join(" "),
+                "Arguments passed to the container's entrypoint command.",
+              ],
+              containerSpec.User && [
+                "User",
+                containerSpec.User,
+                "The user (UID or name) the container process runs as.",
+              ],
+              containerSpec.Dir && [
+                "Working Dir",
+                containerSpec.Dir,
+                "The working directory inside the container where commands are executed.",
+              ],
+              containerSpec.Hostname && [
+                "Hostname",
+                containerSpec.Hostname,
+                "The hostname set inside the container.",
+              ],
+              containerSpec.StopSignal && [
+                "Stop Signal",
+                containerSpec.StopSignal,
+                "The signal sent to the container process to request a graceful shutdown.",
+              ],
               containerSpec.StopGracePeriod != null && [
                 "Stop Grace Period",
                 formatDuration(containerSpec.StopGracePeriod),
+                "How long to wait for graceful shutdown before force-killing the container.",
               ],
-              containerSpec.Init != null && ["Init", containerSpec.Init ? "yes" : "no"],
-              containerSpec.ReadOnly && ["Read Only Root FS", "yes"],
+              containerSpec.Init != null && [
+                "Init",
+                containerSpec.Init ? "yes" : "no",
+                "Runs an init process (tini) as PID 1 to reap zombie processes.",
+              ],
+              containerSpec.ReadOnly && [
+                "Read Only Root FS",
+                "yes",
+                "The container's root filesystem is mounted read-only. Writes are only possible to volumes.",
+              ],
             ]}
           />
         </CollapsibleSection>
@@ -320,6 +369,21 @@ export default function ServiceDetail() {
           serviceId={id!}
           envVars={envVars}
           onSaved={setEnvVars}
+        />
+      )}
+
+      {/* Labels */}
+      {serviceLabels !== null && (
+        <KeyValueEditor
+          title="Labels"
+          entries={serviceLabels}
+          keyPlaceholder="key"
+          valuePlaceholder="value"
+          onSave={async (ops) => {
+            const updated = await api.patchServiceLabels(id!, ops);
+            setServiceLabels(updated);
+            return updated;
+          }}
         />
       )}
 
@@ -529,9 +593,6 @@ export default function ServiceDetail() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {serviceResources !== null && (
             <div className="flex flex-col gap-3 rounded-lg border p-4">
-              <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                Resources
-              </h3>
               <ResourcesEditor
                 serviceId={id!}
                 resources={serviceResources}
@@ -618,21 +679,10 @@ export default function ServiceDetail() {
 
           {service.Spec.EndpointSpec?.Mode && (
             <div className="flex flex-col gap-3 rounded-lg border p-4">
-              <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                Endpoint Mode
-              </h3>
-
-              <div className="flex items-center gap-2 text-sm">
-                {service.Spec.EndpointSpec.Mode === "vip" ? (
-                  <>
-                    <Globe className="h-4 w-4 text-muted-foreground" /> VIP (Virtual IP)
-                  </>
-                ) : (
-                  <>
-                    <Shuffle className="h-4 w-4 text-muted-foreground" /> DNS-RR (DNS Round Robin)
-                  </>
-                )}
-              </div>
+              <EndpointModeEditor
+                serviceId={id!}
+                currentMode={service.Spec.EndpointSpec.Mode as "vip" | "dnsrr"}
+              />
             </div>
           )}
         </div>

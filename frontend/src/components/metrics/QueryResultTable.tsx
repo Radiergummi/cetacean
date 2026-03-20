@@ -29,7 +29,7 @@ function LabelBadges({ metric }: { metric: Record<string, string> }) {
   const entries = Object.entries(metric).filter(([key]) => key !== "__name__");
 
   if (entries.length === 0) {
-    return <span className="text-muted-foreground text-xs">—</span>;
+    return <span className="text-xs text-muted-foreground">—</span>;
   }
 
   return (
@@ -60,11 +60,7 @@ export default function QueryResultTable({ data }: Props) {
   const rows = normalizeRows(data);
 
   if (rows.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground py-4 text-center">
-        No results
-      </p>
-    );
+    return <p className="py-4 text-center text-sm text-muted-foreground">No results</p>;
   }
 
   return (
@@ -74,13 +70,11 @@ export default function QueryResultTable({ data }: Props) {
       keyFn={(_, index) => index}
       renderRow={(row) => (
         <>
-          <td className="p-3 text-sm font-mono">
-            {row.metric["__name__"] ?? "—"}
-          </td>
+          <td className="p-3 font-mono text-sm">{row.metric["__name__"] ?? "—"}</td>
           <td className="p-3">
             <LabelBadges metric={row.metric} />
           </td>
-          <td className="p-3 text-sm font-mono">{row.value}</td>
+          <td className="p-3 font-mono text-sm">{row.value}</td>
           <td className="p-3 text-sm text-muted-foreground">
             {new Date(row.timestamp * 1000).toLocaleString()}
           </td>

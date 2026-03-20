@@ -103,6 +103,15 @@ export function getActions(): PaletteAction[] {
         await api.removeTask(task.id);
       },
     },
+    {
+      id: "shortcuts",
+      label: "Keyboard Shortcuts",
+      keywords: ["shortcuts", "hotkeys", "keys", "keyboard"],
+      steps: [],
+      execute: async () => {
+        window.dispatchEvent(new CustomEvent("cetacean:show-shortcuts"));
+      },
+    },
   ];
 }
 
@@ -122,6 +131,10 @@ export function matchAction(
         const remainder = lower.slice(keyword.length).trim();
 
         return { action, remainder };
+      }
+
+      if (keyword.startsWith(lower)) {
+        return { action, remainder: "" };
       }
     }
   }

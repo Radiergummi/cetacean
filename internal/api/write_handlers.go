@@ -40,6 +40,11 @@ func writePatchError(w http.ResponseWriter, r *http.Request, err error) {
 	writeProblem(w, r, http.StatusBadRequest, err.Error())
 }
 
+type updateModeRequest struct {
+	Mode     string  `json:"mode"`
+	Replicas *uint64 `json:"replicas,omitempty"`
+}
+
 type updateImageRequest struct {
 	Image string `json:"image"`
 }
@@ -83,6 +88,94 @@ func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
 	// Use writeJSON (not writeJSONWithETag) for mutation responses:
 	// ETag + If-None-Match → 304 is only valid for safe methods (GET/HEAD)
 	// per RFC 9110 Section 13.1.1.
+	writeJSON(w, NewDetailResponse("/services/"+id, "Service", map[string]any{
+		"service": updated,
+	}))
+}
+
+func (h *Handlers) HandleUpdateServiceMode(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
+
+	var req updateModeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	var mode swarm.ServiceMode
+	switch req.Mode {
+	case "replicated":
+		if req.Replicas == nil {
+			writeProblem(w, r, http.StatusBadRequest, "replicas is required when switching to replicated mode")
+			return
+		}
+		mode.Replicated = &swarm.ReplicatedService{Replicas: req.Replicas}
+	case "global":
+		mode.Global = &swarm.GlobalService{}
+	default:
+		writeProblem(w, r, http.StatusBadRequest, "mode must be one of: replicated, global")
+		return
+	}
+
+	_, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	slog.Info("updating service mode", "service", id, "mode", req.Mode)
+
+	updated, err := h.writeClient.UpdateServiceMode(r.Context(), id, mode)
+	if err != nil {
+		writeDockerError(w, r, err, "service")
+		return
+	}
+
+	writeJSON(w, NewDetailResponse("/services/"+id, "Service", map[string]any{
+		"service": updated,
+	}))
+}
+
+type updateEndpointModeRequest struct {
+	Mode string `json:"mode"`
+}
+
+func (h *Handlers) HandleUpdateServiceEndpointMode(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	var req updateEndpointModeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	var mode swarm.ResolutionMode
+	switch req.Mode {
+	case "vip":
+		mode = swarm.ResolutionModeVIP
+	case "dnsrr":
+		mode = swarm.ResolutionModeDNSRR
+	default:
+		writeProblem(w, r, http.StatusBadRequest, "mode must be one of: vip, dnsrr")
+		return
+	}
+
+	_, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	slog.Info("updating service endpoint mode", "service", id, "mode", req.Mode)
+
+	updated, err := h.writeClient.UpdateServiceEndpointMode(r.Context(), id, mode)
+	if err != nil {
+		writeDockerError(w, r, err, "service")
+		return
+	}
+
 	writeJSON(w, NewDetailResponse("/services/"+id, "Service", map[string]any{
 		"service": updated,
 	}))
@@ -393,6 +486,84 @@ func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request)
 	result, err := h.writeClient.UpdateNodeLabels(r.Context(), id, updated)
 	if err != nil {
 		writeDockerError(w, r, err, "node")
+		return
+	}
+
+	labels := result.Spec.Labels
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	writeJSON(w, labels)
+}
+
+func (h *Handlers) HandleGetServiceLabels(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+	labels := svc.Spec.Labels
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/labels", "ServiceLabels", map[string]any{
+		"labels": labels,
+	}))
+}
+
+func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
+
+	ct := r.Header.Get("Content-Type")
+	isJSONPatch := strings.HasPrefix(ct, "application/json-patch+json")
+	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")
+
+	if !isJSONPatch && !isMergePatch {
+		writeProblem(w, r, http.StatusUnsupportedMediaType, "Content-Type must be application/json-patch+json or application/merge-patch+json")
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
+		return
+	}
+
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	current := svc.Spec.Labels
+	if current == nil {
+		current = map[string]string{}
+	}
+
+	var updated map[string]string
+	if isJSONPatch {
+		var ops []PatchOp
+		if err := json.Unmarshal(body, &ops); err != nil {
+			writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+			return
+		}
+		updated, err = applyJSONPatch(current, ops)
+	} else {
+		updated, err = applyMergePatchStringMap(current, body)
+	}
+
+	if err != nil {
+		writePatchError(w, r, err)
+		return
+	}
+
+	slog.Info("patching service labels", "service", id)
+
+	result, err := h.writeClient.UpdateServiceLabels(r.Context(), id, updated)
+	if err != nil {
+		writeDockerError(w, r, err, "service")
 		return
 	}
 

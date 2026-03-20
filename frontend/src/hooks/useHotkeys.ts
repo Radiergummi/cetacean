@@ -53,7 +53,7 @@ export function useHotkeys(hotkeys: HotkeyMap) {
       }
 
       // Check for chord starters (keys that begin a multi-key sequence)
-      const isChordStarter = Object.keys(map).some((key) => key.startsWith(key + " "));
+      const isChordStarter = Object.keys(map).some((combo) => combo.startsWith(key + " "));
 
       if (isChordStarter) {
         event.preventDefault();

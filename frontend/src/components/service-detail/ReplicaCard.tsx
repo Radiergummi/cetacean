@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SliderNumberField } from "@/components/ui/slider-number-field";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
-import { Pencil } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Copy, Globe, Pencil } from "lucide-react";
 import { useState } from "react";
 
 function ReplicaDoughnut({ running, desired }: { running: number; desired: number }) {
@@ -75,47 +76,209 @@ function ReplicaDoughnut({ running, desired }: { running: number; desired: numbe
   );
 }
 
+type Mode = "replicated" | "global";
+
 export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[] }) {
-  const [scaleOpen, setScaleOpen] = useState(false);
-  const [scaleValue, setScaleValue] = useState<number | undefined>();
-  const [scaleValidationError, setScaleValidationError] = useState<string | null>(null);
-  const scale = useAsyncAction();
+  const currentMode: Mode = service.Spec.Mode.Replicated ? "replicated" : "global";
+  const currentReplicas = service.Spec.Mode.Replicated?.Replicas ?? 0;
 
-  const replicated = service.Spec.Mode.Replicated;
-  if (!replicated) {
-    return (
-      <InfoCard
-        label="Mode"
-        value="global"
-      />
-    );
-  }
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<Mode>(currentMode);
+  const [replicas, setReplicas] = useState<number | undefined>(currentReplicas);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const action = useAsyncAction();
 
-  const desired = replicated.Replicas ?? 0;
-  const running = tasks.filter(({ Status: { State } }) => State === "running").length;
-  const healthy = running >= desired;
-
-  function handleOpenChange(open: boolean) {
-    if (open) {
-      setScaleValue(desired);
+  function handleOpenChange(nextOpen: boolean) {
+    if (nextOpen) {
+      setMode(currentMode);
+      setReplicas(currentReplicas || 1);
     }
 
-    setScaleValidationError(null);
-    setScaleOpen(open);
+    setValidationError(null);
+    setOpen(nextOpen);
   }
 
-  async function submitScale() {
-    if (scaleValue === undefined || scaleValue < 0) {
-      setScaleValidationError("Enter a valid replica count");
+  async function submit() {
+    const modeChanged = mode !== currentMode;
+
+    if (mode === "replicated" && (replicas === undefined || replicas < 0)) {
+      setValidationError("Enter a valid replica count");
 
       return;
     }
 
-    setScaleValidationError(null);
-    await scale.execute(async () => {
-      await api.scaleService(service.ID, scaleValue);
-      setScaleOpen(false);
-    }, "Failed to scale");
+    setValidationError(null);
+    await action.execute(async () => {
+      if (modeChanged) {
+        await api.updateServiceMode(service.ID, mode, mode === "replicated" ? replicas : undefined);
+      } else if (mode === "replicated") {
+        await api.scaleService(service.ID, replicas!);
+      }
+
+      setOpen(false);
+    }, "Failed to update service");
+  }
+
+  const isGlobal = currentMode === "global";
+  const running = tasks.filter(({ Status: { State } }) => State === "running").length;
+  const desired = isGlobal
+    ? tasks.filter(({ DesiredState }) => DesiredState === "running").length
+    : currentReplicas;
+  const healthy = running >= desired;
+
+  const editPopover = (
+    <Popover
+      open={open}
+      onOpenChange={handleOpenChange}
+      modal
+    >
+      <PopoverTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            title="Edit service mode"
+          >
+            <Pencil className="size-3.5" />
+          </Button>
+        }
+      />
+      <PopoverContent
+        className="w-72"
+        align="end"
+      >
+        <div className="mb-3 flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => setMode("global")}
+            disabled={action.loading}
+            className={cn(
+              "flex items-start gap-3 rounded-lg border p-3 text-left transition-colors",
+              mode === "global"
+                ? "border-primary bg-primary/5 ring-1 ring-primary"
+                : "border-border hover:border-muted-foreground/40",
+              action.loading && "pointer-events-none opacity-50",
+            )}
+          >
+            <Globe className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+
+            <div className="flex-1">
+              <div className="text-sm font-medium">Global</div>
+              <div className="text-xs text-muted-foreground">
+                One task will run on every node in the swarm.
+              </div>
+            </div>
+
+            <div
+              className={cn(
+                "mt-0.5 size-4 shrink-0 rounded-full border-2 transition-colors",
+                mode === "global" ? "border-primary bg-primary" : "border-muted-foreground/40",
+              )}
+            >
+              {mode === "global" && (
+                <div className="flex size-full items-center justify-center">
+                  <div className="size-1.5 rounded-full bg-primary-foreground" />
+                </div>
+              )}
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMode("replicated")}
+            disabled={action.loading}
+            className={cn(
+              "flex items-start gap-3 rounded-lg border p-3 text-left transition-colors",
+              mode === "replicated"
+                ? "border-primary bg-primary/5 ring-1 ring-primary"
+                : "border-border hover:border-muted-foreground/40",
+              action.loading && "pointer-events-none opacity-50",
+            )}
+          >
+            <Copy className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+
+            <div className="flex-1">
+              <div className="text-sm font-medium">Replicated</div>
+              <div className="text-xs text-muted-foreground">
+                Run a specified number of tasks across the swarm.
+              </div>
+            </div>
+
+            <div
+              className={cn(
+                "mt-0.5 size-4 shrink-0 rounded-full border-2 transition-colors",
+                mode === "replicated" ? "border-primary bg-primary" : "border-muted-foreground/40",
+              )}
+            >
+              {mode === "replicated" && (
+                <div className="flex size-full items-center justify-center">
+                  <div className="size-1.5 rounded-full bg-primary-foreground" />
+                </div>
+              )}
+            </div>
+          </button>
+        </div>
+
+        {mode === "replicated" && (
+          <SliderNumberField
+            label="Replicas"
+            value={replicas}
+            onChange={setReplicas}
+            min={0}
+            step={1}
+          />
+        )}
+
+        {(validationError || action.error) && (
+          <p className="mb-2 text-xs text-red-600 dark:text-red-400">
+            {validationError || action.error}
+          </p>
+        )}
+
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            className="flex-1"
+            onClick={() => void submit()}
+            disabled={action.loading}
+          >
+            {action.loading && <Spinner className="size-3" />}
+            Apply
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1"
+            onClick={() => handleOpenChange(false)}
+            disabled={action.loading}
+          >
+            Cancel
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+
+  if (isGlobal) {
+    return (
+      <InfoCard
+        label="Mode"
+        value={
+          <>
+            <span className="capitalize">global</span>
+            {editPopover}
+          </>
+        }
+        right={
+          desired > 0 ? (
+            <ReplicaDoughnut
+              running={running}
+              desired={desired}
+            />
+          ) : undefined
+        }
+      />
+    );
   }
 
   const value = (
@@ -130,79 +293,22 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
           {desired - running} replica{desired - running !== 1 ? "s" : ""} not running
         </div>
       )}
-      <Popover
-        open={scaleOpen}
-        onOpenChange={handleOpenChange}
-        modal
-      >
-        <PopoverTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              title="Scale service"
-            >
-              <Pencil className="size-3.5" />
-            </Button>
-          }
-        />
-        <PopoverContent
-          className="w-52"
-          align="end"
-        >
-          <SliderNumberField
-            label="Scale replicas"
-            value={scaleValue}
-            onChange={setScaleValue}
-            min={0}
-            step={1}
-          />
-          {(scaleValidationError || scale.error) && (
-            <p className="mb-2 text-xs text-red-600 dark:text-red-400">
-              {scaleValidationError || scale.error}
-            </p>
-          )}
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              className="flex-1"
-              onClick={() => void submitScale()}
-              disabled={scale.loading}
-            >
-              {scale.loading && <Spinner className="size-3" />}
-              Scale
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-1"
-              onClick={() => handleOpenChange(false)}
-              disabled={scale.loading}
-            >
-              Cancel
-            </Button>
-          </div>
-        </PopoverContent>
-      </Popover>
+      {editPopover}
     </>
-  );
-
-  const scaleControl = (
-    <div className="flex items-center gap-2">
-      {desired > 0 && (
-        <ReplicaDoughnut
-          running={running}
-          desired={desired}
-        />
-      )}
-    </div>
   );
 
   return (
     <InfoCard
       label="Replicas"
       value={value}
-      right={scaleControl}
+      right={
+        desired > 0 ? (
+          <ReplicaDoughnut
+            running={running}
+            desired={desired}
+          />
+        ) : undefined
+      }
     />
   );
 }

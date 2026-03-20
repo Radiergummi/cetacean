@@ -8,27 +8,12 @@ import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
 import { KeyValueEditor } from "../components/KeyValueEditor";
 import { LoadingDetail } from "../components/LoadingSkeleton";
-import { MetricsPanel, NodeResourceGauges } from "../components/metrics";
+import { MetricsPanel } from "../components/metrics";
+import ResourceGauge from "../components/metrics/ResourceGauge";
+import { AvailabilityEditor, EngineCard, OsCard, StatusCard } from "../components/node-detail";
 import PageHeader from "../components/PageHeader";
 import TasksTable from "../components/TasksTable";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "../components/ui/alert-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../components/ui/select";
-import { useAsyncAction } from "../hooks/useAsyncAction";
+import { useGaugeValue } from "../hooks/useGaugeValue";
 import { useInstanceResolver } from "../hooks/useInstanceResolver";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
@@ -37,71 +22,6 @@ import { formatBytes, formatNumber } from "../lib/format";
 import { escapePromQL } from "../lib/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-
-function NodeAvailabilityControl({ nodeId, current }: { nodeId: string; current: string }) {
-  const { loading, error, execute } = useAsyncAction();
-  const [drainPending, setDrainPending] = useState(false);
-
-  function handleValueChange(value: string | null) {
-    if (value === null || value === current) {
-      return;
-    }
-
-    if (value === "drain" && current !== "drain") {
-      setDrainPending(true);
-    } else {
-      void execute(
-        () => api.updateNodeAvailability(nodeId, value as "active" | "pause"),
-        "Failed to update availability",
-      );
-    }
-  }
-
-  function confirmDrain() {
-    setDrainPending(false);
-    void execute(
-      () => api.updateNodeAvailability(nodeId, "drain"),
-      "Failed to update availability",
-    );
-  }
-
-  return (
-    <div className="flex flex-col items-start gap-1">
-      <Select
-        value={current}
-        onValueChange={handleValueChange}
-        disabled={loading}
-      >
-        <SelectTrigger className="w-32">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="active">Active</SelectItem>
-          <SelectItem value="drain">Drain</SelectItem>
-          <SelectItem value="pause">Pause</SelectItem>
-        </SelectContent>
-      </Select>
-      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
-      <AlertDialog
-        open={drainPending}
-        onOpenChange={setDrainPending}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Drain this node?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Draining this node will reschedule all running tasks to other nodes.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDrain}>Drain</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
-  );
-}
 
 export default function NodeDetail() {
   const { id } = useParams<{ id: string }>();
@@ -136,12 +56,18 @@ export default function NodeDetail() {
           setError(true);
         }
       });
-    api.nodeTasks(id, signal).then(setTasks).catch(() => {});
+    api
+      .nodeTasks(id, signal)
+      .then(setTasks)
+      .catch(() => {});
     api
       .history({ resourceId: id, limit: 10 }, signal)
       .then(setHistory)
       .catch(() => {});
-    api.nodeLabels(id, signal).then(setNodeLabels).catch(() => {});
+    api
+      .nodeLabels(id, signal)
+      .then(setNodeLabels)
+      .catch(() => {});
   }, [id]);
 
   useEffect(() => {
@@ -152,9 +78,31 @@ export default function NodeDetail() {
   useResourceStream(`/nodes/${id}`, fetchData);
 
   const nodeId = node?.ID || "";
+  const hostname = node?.Description?.Hostname || "";
+  const instance = resolve(hostname) || "";
+  const instanceFilter = instance
+    ? `instance="${escapePromQL(instance)}"`
+    : node?.Status?.Addr
+      ? `instance=~"${escapePromQL(node.Status.Addr)}:.*"`
+      : "";
+
   const taskMetrics = useTaskMetrics(
     nodeId ? `container_label_com_docker_swarm_node_id="${escapePromQL(nodeId)}"` : "",
     hasCadvisor && !!nodeId,
+  );
+
+  const gaugeEnabled = !!hasPrometheus && !!instanceFilter;
+  const cpuGauge = useGaugeValue(
+    `100 - (avg(rate(node_cpu_seconds_total{mode="idle",${instanceFilter}}[5m])) * 100)`,
+    gaugeEnabled,
+  );
+  const memoryGauge = useGaugeValue(
+    `(1 - node_memory_MemAvailable_bytes{${instanceFilter}} / node_memory_MemTotal_bytes{${instanceFilter}}) * 100`,
+    gaugeEnabled,
+  );
+  const diskGauge = useGaugeValue(
+    `max((1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs",${instanceFilter}} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs",${instanceFilter}}) * 100)`,
+    gaugeEnabled,
   );
 
   if (error) {
@@ -164,12 +112,6 @@ export default function NodeDetail() {
   if (!node) {
     return <LoadingDetail />;
   }
-
-  const hostname = node.Description.Hostname || "";
-  const instance = resolve(hostname) || "";
-  const instanceFilter = instance
-    ? `instance="${escapePromQL(instance)}"`
-    : `instance=~"${escapePromQL(node.Status.Addr)}:.*"`;
 
   return (
     <div className="flex flex-col gap-6">
@@ -181,64 +123,81 @@ export default function NodeDetail() {
         ]}
       />
 
-      {hasPrometheus && (
-        <div className="rounded-lg border bg-card p-4">
-          <ErrorBoundary inline>
-            <NodeResourceGauges instance={instance || undefined} />
-          </ErrorBoundary>
-        </div>
-      )}
-
       <MetadataGrid>
         <InfoCard
           label="Role"
-          value={node.Spec.Role}
+          value={
+            <>
+              <span className="capitalize">{node.Spec.Role}</span>
+              {node.ManagerStatus?.Leader && (
+                <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary">
+                  Leader
+                </span>
+              )}
+            </>
+          }
         />
-        <InfoCard
-          label="Status"
-          value={node.Status.State}
+        <StatusCard state={node.Status.State} />
+        <AvailabilityEditor
+          nodeId={node.ID}
+          current={node.Spec.Availability}
         />
-        <div className="rounded-lg border bg-card p-4">
-          <div className="mb-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
-            Availability
-          </div>
-          <NodeAvailabilityControl
-            nodeId={node.ID}
-            current={node.Spec.Availability}
-          />
-        </div>
-        <InfoCard
-          label="Engine"
-          value={node.Description.Engine.EngineVersion}
-        />
-        <InfoCard
-          label="OS"
-          value={`${node.Description.Platform.OS} ${node.Description.Platform.Architecture}`}
+        <EngineCard version={node.Description.Engine.EngineVersion} />
+        <OsCard
+          os={node.Description.Platform.OS}
+          architecture={node.Description.Platform.Architecture}
         />
         <InfoCard
           label="Address"
-          value={node.Status.Addr || ""}
+          value={
+            <span className="inline-flex items-center">
+              {node.Status.Addr || "\u2014"}
+              {node.ManagerStatus?.Addr && (
+                <span className="text-muted-foreground">
+                  :{node.ManagerStatus.Addr.split(":").pop()}
+                </span>
+              )}
+            </span>
+          }
         />
         <InfoCard
           label="CPUs"
           value={formatNumber(node.Description.Resources.NanoCPUs / 1_000_000_000)}
+          right={
+            cpuGauge != null ? (
+              <ResourceGauge
+                label=""
+                value={cpuGauge}
+                size="sm"
+              />
+            ) : undefined
+          }
         />
         <InfoCard
           label="Memory"
           value={formatBytes(node.Description.Resources.MemoryBytes)}
+          right={
+            memoryGauge != null ? (
+              <ResourceGauge
+                label=""
+                value={memoryGauge}
+                size="sm"
+              />
+            ) : undefined
+          }
         />
-
-        {node.ManagerStatus && (
-          <>
-            <InfoCard
-              label="Manager"
-              value={node.ManagerStatus.Leader ? "Leader" : "Reachable"}
-            />
-            <InfoCard
-              label="Manager Address"
-              value={node.ManagerStatus.Addr}
-            />
-          </>
+        {diskGauge != null && (
+          <InfoCard
+            label="Disk"
+            value={`${Math.round(diskGauge)}%`}
+            right={
+              <ResourceGauge
+                label=""
+                value={diskGauge}
+                size="sm"
+              />
+            }
+          />
         )}
       </MetadataGrid>
 
@@ -261,10 +220,6 @@ export default function NodeDetail() {
         variant="node"
         metrics={hasCadvisor ? taskMetrics : undefined}
       />
-
-      <DiskUsageSection nodeId={node.ID} />
-
-      <ActivitySection entries={history} />
 
       {hasPrometheus && (
         <ErrorBoundary inline>
@@ -295,6 +250,10 @@ export default function NodeDetail() {
           />
         </ErrorBoundary>
       )}
+
+      <DiskUsageSection nodeId={node.ID} />
+
+      <ActivitySection entries={history} />
     </div>
   );
 }

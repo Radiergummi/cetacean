@@ -1,6 +1,6 @@
 import type { PatchOp } from "@/api/types";
 import CollapsibleSection from "@/components/CollapsibleSection";
-import SimpleTable from "@/components/SimpleTable";
+import KeyValuePills from "@/components/data/KeyValuePills";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -133,17 +133,7 @@ export function KeyValueEditor({
         sortedEntries.length === 0 ? (
           <p className="text-sm text-muted-foreground">No {title.toLowerCase()}.</p>
         ) : (
-          <SimpleTable
-            columns={[keyLabel, valueLabel]}
-            items={sortedEntries}
-            keyFn={([key]) => key}
-            renderRow={([key, value]) => (
-              <>
-                <td className="py-3 ps-3 font-mono text-xs">{key}</td>
-                <td className="py-3 ps-3 font-mono text-xs break-all">{value}</td>
-              </>
-            )}
-          />
+          <KeyValuePills entries={sortedEntries} />
         )
       ) : (
         <div className="flex flex-col gap-3">

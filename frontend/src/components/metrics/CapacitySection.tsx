@@ -93,7 +93,7 @@ export default function CapacitySection({
 
   if (prometheusConfigured && !metrics) {
     return (
-      <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {[1, 2, 3].map((index) => (
           <div
             key={index}
@@ -110,7 +110,7 @@ export default function CapacitySection({
 
   if (prometheusConfigured && metrics) {
     return (
-      <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Bar
           label="CPU"
           percent={metrics.cpu.percent}
@@ -141,7 +141,7 @@ export default function CapacitySection({
   const memPct = totalMemory > 0 ? (reservedMemory / totalMemory) * 100 : 0;
 
   return (
-    <div className="space-y-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <Bar
         label="CPU"
         percent={cpuPct}

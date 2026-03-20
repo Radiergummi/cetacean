@@ -1,4 +1,5 @@
 export { DeploymentChanges } from "./DeploymentChanges";
+export { EndpointModeEditor } from "./EndpointModeEditor";
 export { EnvEditor } from "./EnvEditor";
 export { PlacementPanel } from "./PlacementPanel";
 export type { PlacementShape } from "./PlacementPanel";

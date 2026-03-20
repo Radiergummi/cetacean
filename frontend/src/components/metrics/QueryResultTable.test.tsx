@@ -1,6 +1,6 @@
+import QueryResultTable from "./QueryResultTable";
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
-import QueryResultTable from "./QueryResultTable";
 
 describe("QueryResultTable", () => {
   it("renders metric name, labels, and value", () => {

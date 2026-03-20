@@ -115,6 +115,4 @@ describe("api client", () => {
     const url = api.taskLogsStreamURL("t1");
     expect(url).toBe("/tasks/t1/logs");
   });
-
-
 });

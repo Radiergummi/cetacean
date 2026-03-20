@@ -197,7 +197,8 @@ export const api = {
     fetchJSON<{ node: Node }>(`/nodes/${id}`, signal).then((r) => r.node),
   services: (params?: ListParams) =>
     fetchJSON<PagedResponse<ServiceListItem>>(buildListURL("/services", params)),
-  service: (id: string, signal?: AbortSignal) => fetchJSON<ServiceDetail>(`/services/${id}`, signal),
+  service: (id: string, signal?: AbortSignal) =>
+    fetchJSON<ServiceDetail>(`/services/${id}`, signal),
   tasks: (params?: ListParams) => fetchJSON<PagedResponse<Task>>(buildListURL("/tasks", params)),
   stacks: (params?: ListParams) => fetchJSON<PagedResponse<Stack>>(buildListURL("/stacks", params)),
   stacksSummary: () =>
@@ -263,6 +264,8 @@ export const api = {
   diskUsage: () =>
     fetchJSON<CollectionResponse<DiskUsageSummary>>("/disk-usage").then((r) => r.items),
   clusterCapacity: () => fetchJSON<ClusterCapacity>("/cluster/capacity"),
+  dockerLatestVersion: () =>
+    fetchJSON<{ version: string; url: string }>("/-/docker-latest-version"),
   metricsLabels: (match?: string) => {
     const params = new URLSearchParams();
     if (match) params.set("match[]", match);
@@ -279,6 +282,10 @@ export const api = {
     ),
   scaleService: (id: string, replicas: number) =>
     put<ServiceDetail>(`/services/${id}/scale`, { replicas }),
+  updateServiceMode: (id: string, mode: "replicated" | "global", replicas?: number) =>
+    put<ServiceDetail>(`/services/${id}/mode`, { mode, replicas }),
+  updateServiceEndpointMode: (id: string, mode: "vip" | "dnsrr") =>
+    put<ServiceDetail>(`/services/${id}/endpoint-mode`, { mode }),
   updateServiceImage: (id: string, image: string) =>
     put<ServiceDetail>(`/services/${id}/image`, { image }),
   rollbackService: (id: string) => post<ServiceDetail>(`/services/${id}/rollback`),
@@ -294,6 +301,10 @@ export const api = {
     fetchJSON<{ labels: Record<string, string> }>(`/nodes/${id}/labels`, signal).then(
       (r) => r.labels,
     ),
+  serviceLabels: (id: string, signal?: AbortSignal) =>
+    fetchJSON<{ labels: Record<string, string> }>(`/services/${id}/labels`, signal).then(
+      (r) => r.labels,
+    ),
   serviceResources: (id: string, signal?: AbortSignal) =>
     fetchJSON<{ resources: Record<string, unknown> }>(`/services/${id}/resources`, signal).then(
       (r) => r.resources,
@@ -304,6 +315,8 @@ export const api = {
     patch<Record<string, string>>(`/services/${id}/env`, ops, "application/json-patch+json"),
   patchNodeLabels: (id: string, ops: PatchOp[]) =>
     patch<Record<string, string>>(`/nodes/${id}/labels`, ops, "application/json-patch+json"),
+  patchServiceLabels: (id: string, ops: PatchOp[]) =>
+    patch<Record<string, string>>(`/services/${id}/labels`, ops, "application/json-patch+json"),
   patchServiceResources: (id: string, partial: unknown) =>
     patch<Record<string, unknown>>(
       `/services/${id}/resources`,

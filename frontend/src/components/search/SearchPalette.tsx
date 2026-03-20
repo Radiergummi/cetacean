@@ -67,7 +67,7 @@ function ActionBreadcrumbs({
   return (
     <div className="flex items-center gap-1 border-b px-3 py-1.5 text-xs text-muted-foreground">
       <span className="font-medium text-foreground">{action.label}</span>
-      {steps.map(({ label, type }, index) => (
+      {steps.map(({ label, type, resourceType }, index) => (
         <span
           key={label}
           className="flex items-center gap-1"
@@ -76,7 +76,9 @@ function ActionBreadcrumbs({
           {index < currentStep ? (
             <span className="text-foreground">
               {type === "resource"
-                ? ((actionArgs[index] as { name?: string })?.name ?? String(actionArgs[index]))
+                ? resourceType === "service"
+                  ? <ResourceName name={(actionArgs[index] as { name?: string })?.name ?? String(actionArgs[index])} />
+                  : ((actionArgs[index] as { name?: string })?.name ?? String(actionArgs[index]))
                 : String(actionArgs[index])}
             </span>
           ) : index === currentStep ? (
@@ -270,15 +272,24 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
     [navigate, onClose],
   );
 
-  const activateAction = useCallback((action: PaletteAction) => {
-    setActiveAction(action);
-    setActionStep(0);
-    setActionArgs([]);
-    setActionError(null);
-    setQuery("");
-    setResponse(null);
-    setHighlightIndex(0);
-  }, []);
+  const activateAction = useCallback(
+    (action: PaletteAction) => {
+      if (action.steps.length === 0) {
+        void action.execute();
+        onClose();
+        return;
+      }
+
+      setActiveAction(action);
+      setActionStep(0);
+      setActionArgs([]);
+      setActionError(null);
+      setQuery("");
+      setResponse(null);
+      setHighlightIndex(0);
+    },
+    [onClose],
+  );
 
   const doExecute = useCallback(
     async (action: PaletteAction, args: unknown[]) => {
@@ -514,9 +525,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
 
         {pendingConfirm && (
           <div className="flex items-center justify-between border-b bg-destructive/5 px-3 py-2.5">
-            <span className="text-sm text-foreground">
-              Confirm: {pendingConfirm.action.label}?
-            </span>
+            <span className="text-sm text-foreground">Confirm: {pendingConfirm.action.label}?</span>
             <div className="flex gap-2">
               <button
                 onClick={() => setPendingConfirm(null)}
@@ -530,7 +539,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
                   setPendingConfirm(null);
                   void doExecute(action, args);
                 }}
-                className="rounded-md bg-destructive px-2.5 py-1 text-xs font-medium text-destructive-foreground hover:bg-destructive/90"
+                className="text-destructive-foreground rounded-md bg-destructive px-2.5 py-1 text-xs font-medium hover:bg-destructive/90"
               >
                 Confirm
               </button>
@@ -548,9 +557,6 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
             >
               <Zap className="size-4 shrink-0 text-amber-500" />
               <span>{actionMatch.action.label}</span>
-              {actionMatch.action.destructive && (
-                <span className="text-xs text-destructive">(destructive)</span>
-              )}
             </button>
           )}
 

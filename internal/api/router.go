@@ -16,6 +16,7 @@ func NewRouter(h *Handlers, b *Broadcaster, metricsProxy *PrometheusProxy, spa h
 	mux.HandleFunc("GET /-/health", h.HandleHealth)
 	mux.HandleFunc("GET /-/ready", h.HandleReady)
 	mux.HandleFunc("GET /-/metrics/status", h.HandleMonitoringStatus)
+	mux.HandleFunc("GET /-/docker-latest-version", HandleDockerLatestVersion)
 	mux.HandleFunc("GET /-/metrics/labels", metricsProxy.HandleMetricsLabels)
 	mux.HandleFunc("GET /-/metrics/labels/{name}", metricsProxy.HandleMetricsLabelValues)
 	// Metrics (content-negotiated: JSON → proxy, SSE → stream, HTML → SPA)
@@ -59,11 +60,15 @@ func NewRouter(h *Handlers, b *Broadcaster, metricsProxy *PrometheusProxy, spa h
 
 	// Service write operations
 	mux.Handle("PUT /services/{id}/scale", requireWrite(h.HandleScaleService))
+	mux.Handle("PUT /services/{id}/mode", requireWrite(h.HandleUpdateServiceMode))
+	mux.Handle("PUT /services/{id}/endpoint-mode", requireWrite(h.HandleUpdateServiceEndpointMode))
 	mux.Handle("PUT /services/{id}/image", requireWrite(h.HandleUpdateServiceImage))
 	mux.Handle("POST /services/{id}/rollback", requireWrite(h.HandleRollbackService))
 	mux.Handle("POST /services/{id}/restart", requireWrite(h.HandleRestartService))
 	mux.HandleFunc("GET /services/{id}/env", contentNegotiated(h.HandleGetServiceEnv, spa))
 	mux.Handle("PATCH /services/{id}/env", requireWrite(h.HandlePatchServiceEnv))
+	mux.HandleFunc("GET /services/{id}/labels", contentNegotiated(h.HandleGetServiceLabels, spa))
+	mux.Handle("PATCH /services/{id}/labels", requireWrite(h.HandlePatchServiceLabels))
 	mux.HandleFunc("GET /services/{id}/resources", contentNegotiated(h.HandleGetServiceResources, spa))
 	mux.Handle("PATCH /services/{id}/resources", requireWrite(h.HandlePatchServiceResources))
 

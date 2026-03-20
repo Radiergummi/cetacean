@@ -39,7 +39,7 @@ export default function TaskDetail() {
   const [task, setTask] = useState<Task | null>(null);
   const [service, setService] = useState<Service | null>(null);
   const [error, setError] = useState(false);
-  const remove = useAsyncAction();
+  const removal = useAsyncAction();
 
   const fetchTask = useCallback(() => {
     if (!id) {
@@ -73,7 +73,7 @@ export default function TaskDetail() {
       return;
     }
 
-    void remove.execute(async () => {
+    void removal.execute(async () => {
       await api.removeTask(id);
       navigate(task?.ServiceID ? `/services/${task.ServiceID}` : "/tasks");
     }, "Failed to remove task");
@@ -121,7 +121,7 @@ export default function TaskDetail() {
                     variant="destructive"
                     size="sm"
                   >
-                    {remove.loading ? (
+                    {removal.loading ? (
                       <Spinner className="size-3" />
                     ) : (
                       <Trash2 className="size-3.5" />
@@ -142,15 +142,16 @@ export default function TaskDetail() {
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={() => void executeRemove()}
-                    className="text-destructive-foreground bg-destructive hover:bg-destructive/90"
+                    variant="destructive"
                   >
                     Remove
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-            {remove.error && (
-              <p className="text-xs text-red-600 dark:text-red-400">{remove.error}</p>
+
+            {removal.error && (
+              <p className="text-xs text-red-600 dark:text-red-400">{removal.error}</p>
             )}
           </>
         }

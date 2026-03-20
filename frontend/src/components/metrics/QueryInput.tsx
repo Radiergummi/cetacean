@@ -28,7 +28,9 @@ const typeBadgeLabels: Record<Suggestion["type"], string> = {
 
 function TypeBadge({ type }: { type: Suggestion["type"] }) {
   return (
-    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${typeBadgeStyles[type]}`}>
+    <span
+      className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${typeBadgeStyles[type]}`}
+    >
       {typeBadgeLabels[type]}
     </span>
   );

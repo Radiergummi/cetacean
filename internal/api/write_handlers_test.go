@@ -24,7 +24,10 @@ type mockWriteClient struct {
 	removeTaskFn               func(ctx context.Context, id string) error
 	updateServiceEnvFn         func(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
 	updateNodeLabelsFn         func(ctx context.Context, id string, labels map[string]string) (swarm.Node, error)
+	updateServiceLabelsFn      func(ctx context.Context, id string, labels map[string]string) (swarm.Service, error)
 	updateServiceResourcesFn   func(ctx context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error)
+	updateServiceModeFn            func(ctx context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error)
+	updateServiceEndpointModeFn    func(ctx context.Context, id string, mode swarm.ResolutionMode) (swarm.Service, error)
 }
 
 func (m *mockWriteClient) ScaleService(ctx context.Context, id string, replicas uint64) (swarm.Service, error) {
@@ -83,9 +86,30 @@ func (m *mockWriteClient) UpdateNodeLabels(ctx context.Context, id string, label
 	return swarm.Node{}, fmt.Errorf("not implemented")
 }
 
+func (m *mockWriteClient) UpdateServiceLabels(ctx context.Context, id string, labels map[string]string) (swarm.Service, error) {
+	if m.updateServiceLabelsFn != nil {
+		return m.updateServiceLabelsFn(ctx, id, labels)
+	}
+	return swarm.Service{}, fmt.Errorf("not implemented")
+}
+
 func (m *mockWriteClient) UpdateServiceResources(ctx context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error) {
 	if m.updateServiceResourcesFn != nil {
 		return m.updateServiceResourcesFn(ctx, id, resources)
+	}
+	return swarm.Service{}, fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) UpdateServiceEndpointMode(ctx context.Context, id string, mode swarm.ResolutionMode) (swarm.Service, error) {
+	if m.updateServiceEndpointModeFn != nil {
+		return m.updateServiceEndpointModeFn(ctx, id, mode)
+	}
+	return swarm.Service{}, fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) UpdateServiceMode(ctx context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error) {
+	if m.updateServiceModeFn != nil {
+		return m.updateServiceModeFn(ctx, id, mode)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
@@ -210,6 +234,156 @@ func TestHandleScaleService_InvalidBody(t *testing.T) {
 	req.SetPathValue("id", "svc1")
 	w := httptest.NewRecorder()
 	h.HandleScaleService(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status=%d, want 400", w.Code)
+	}
+}
+
+func TestHandleUpdateServiceMode_ToGlobal(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(replicatedService("svc1"))
+
+	wc := &mockWriteClient{
+		updateServiceModeFn: func(_ context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error) {
+			return swarm.Service{
+				ID:   id,
+				Spec: swarm.ServiceSpec{Mode: mode},
+			}, nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+
+	body := `{"mode":"global"}`
+	req := httptest.NewRequest("PUT", "/services/svc1/mode", strings.NewReader(body))
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleUpdateServiceMode(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleUpdateServiceMode_ToReplicated(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Mode: swarm.ServiceMode{Global: &swarm.GlobalService{}}},
+	})
+
+	wc := &mockWriteClient{
+		updateServiceModeFn: func(_ context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error) {
+			return swarm.Service{
+				ID:   id,
+				Spec: swarm.ServiceSpec{Mode: mode},
+			}, nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+
+	body := `{"mode":"replicated","replicas":3}`
+	req := httptest.NewRequest("PUT", "/services/svc1/mode", strings.NewReader(body))
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleUpdateServiceMode(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleUpdateServiceMode_ReplicatedWithoutCount(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Mode: swarm.ServiceMode{Global: &swarm.GlobalService{}}},
+	})
+
+	wc := &mockWriteClient{}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+
+	body := `{"mode":"replicated"}`
+	req := httptest.NewRequest("PUT", "/services/svc1/mode", strings.NewReader(body))
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleUpdateServiceMode(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status=%d, want 400", w.Code)
+	}
+}
+
+func TestHandleUpdateServiceMode_InvalidMode(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(replicatedService("svc1"))
+
+	wc := &mockWriteClient{}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+
+	body := `{"mode":"invalid"}`
+	req := httptest.NewRequest("PUT", "/services/svc1/mode", strings.NewReader(body))
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleUpdateServiceMode(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status=%d, want 400", w.Code)
+	}
+}
+
+func TestHandleUpdateServiceMode_NotFound(t *testing.T) {
+	c := cache.New(nil)
+	wc := &mockWriteClient{}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+
+	body := `{"mode":"global"}`
+	req := httptest.NewRequest("PUT", "/services/missing/mode", strings.NewReader(body))
+	req.SetPathValue("id", "missing")
+	w := httptest.NewRecorder()
+	h.HandleUpdateServiceMode(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestHandleUpdateServiceEndpointMode_OK(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(replicatedService("svc1"))
+
+	wc := &mockWriteClient{
+		updateServiceEndpointModeFn: func(_ context.Context, id string, mode swarm.ResolutionMode) (swarm.Service, error) {
+			svc := replicatedService(id)
+			svc.Spec.EndpointSpec = &swarm.EndpointSpec{Mode: mode}
+			return svc, nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+
+	body := `{"mode":"dnsrr"}`
+	req := httptest.NewRequest("PUT", "/services/svc1/endpoint-mode", strings.NewReader(body))
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleUpdateServiceEndpointMode(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleUpdateServiceEndpointMode_InvalidMode(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(replicatedService("svc1"))
+
+	wc := &mockWriteClient{}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil)
+
+	body := `{"mode":"invalid"}`
+	req := httptest.NewRequest("PUT", "/services/svc1/endpoint-mode", strings.NewReader(body))
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleUpdateServiceEndpointMode(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("status=%d, want 400", w.Code)

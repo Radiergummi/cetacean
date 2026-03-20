@@ -331,9 +331,7 @@ export function useQueryCompletion(enabled: boolean): QueryCompletion {
 
       if (context.type === "label") {
         const cacheKey = context.metricName || "__all__";
-        const match = context.metricName
-          ? `{__name__="${context.metricName}"}`
-          : undefined;
+        const match = context.metricName ? `{__name__="${context.metricName}"}` : undefined;
         const { start } = getTokenBounds(query, cursorPosition);
         const prefix = query.slice(start, cursorPosition);
 
