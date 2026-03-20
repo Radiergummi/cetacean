@@ -189,7 +189,7 @@ export function HealthcheckEditor({
       defaultOpen={!disabled}
       controls={controls}
     >
-      <div className="rounded-lg border p-4">
+      <div className="rounded-lg border p-3">
         {editing ? (
           <EditMode
             form={form}

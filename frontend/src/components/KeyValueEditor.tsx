@@ -213,7 +213,7 @@ export function KeyValueEditor({
 
             {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
 
-            <footer className="flex items-center gap-2 border-t p-2">
+            <footer className="flex items-center gap-2 border-t p-3">
               <Button
                 variant="outline"
                 size="sm"

@@ -586,7 +586,7 @@ export default function ServiceDetail() {
       >
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {serviceResources !== null && (
-            <div className="flex flex-col gap-3 rounded-lg border p-4">
+            <div className="flex flex-col gap-3 rounded-lg border p-3">
               <ResourcesEditor
                 serviceId={id!}
                 resources={serviceResources}
@@ -598,7 +598,7 @@ export default function ServiceDetail() {
           )}
 
           {taskTemplate.Placement && (
-            <div className="flex flex-col gap-3 rounded-lg border p-4">
+            <div className="flex flex-col gap-3 rounded-lg border p-3">
               <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 Placement
               </h3>
@@ -608,7 +608,7 @@ export default function ServiceDetail() {
           )}
 
           {taskTemplate.RestartPolicy && (
-            <div className="flex flex-col gap-3 rounded-lg border p-4">
+            <div className="flex flex-col gap-3 rounded-lg border p-3">
               <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 Restart Policy
               </h3>
@@ -636,7 +636,7 @@ export default function ServiceDetail() {
           )}
 
           {taskTemplate.LogDriver && (
-            <div className="flex flex-col gap-3 rounded-lg border p-4">
+            <div className="flex flex-col gap-3 rounded-lg border p-3">
               <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 Log Driver
               </h3>
@@ -654,7 +654,7 @@ export default function ServiceDetail() {
           )}
 
           {service.Spec.UpdateConfig && (
-            <div className="flex flex-col gap-3 rounded-lg border p-4">
+            <div className="flex flex-col gap-3 rounded-lg border p-3">
               <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 Update Config
               </h3>
@@ -663,7 +663,7 @@ export default function ServiceDetail() {
           )}
 
           {service.Spec.RollbackConfig && (
-            <div className="flex flex-col gap-3 rounded-lg border p-4">
+            <div className="flex flex-col gap-3 rounded-lg border p-3">
               <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 Rollback Config
               </h3>
@@ -672,7 +672,7 @@ export default function ServiceDetail() {
           )}
 
           {service.Spec.EndpointSpec?.Mode && (
-            <div className="flex flex-col gap-3 rounded-lg border p-4">
+            <div className="flex flex-col gap-3 rounded-lg border p-3">
               <EndpointModeEditor
                 serviceId={id!}
                 currentMode={service.Spec.EndpointSpec.Mode as "vip" | "dnsrr"}
