@@ -26,7 +26,7 @@ interface FormState {
 }
 
 function nanosToSeconds(nanos: number | undefined): number {
-  return nanos ? nanos / 1e9 : 0;
+  return nanos != null ? nanos / 1e9 : 0;
 }
 
 function policyToForm(policy: UpdateConfig | null): FormState {
@@ -106,10 +106,10 @@ export function PolicyEditor({ type, serviceId, policy, onSaved }: PolicyEditorP
     const rows = [
       ["Parallelism", String(policy?.Parallelism ?? 1)],
       policy?.Delay != null && ["Delay", formatDuration(policy.Delay)],
-      policy?.FailureAction && ["Failure Action", policy.FailureAction],
+      policy?.FailureAction != null && ["Failure Action", policy.FailureAction],
       policy?.Monitor != null && ["Monitor", formatDuration(policy.Monitor)],
       policy?.MaxFailureRatio != null && ["Max Failure Ratio", formatRatio(policy.MaxFailureRatio)],
-      policy?.Order && ["Order", policy.Order],
+      policy?.Order != null && ["Order", policy.Order],
     ].filter(Boolean) as [string, string][];
 
     return (
