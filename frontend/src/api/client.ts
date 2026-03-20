@@ -29,6 +29,10 @@ import type {
   ClusterCapacity,
   PatchOp,
   Healthcheck,
+  Placement,
+  PortConfig,
+  UpdateConfig,
+  LogDriver,
 } from "./types";
 
 const headers = { Accept: "application/json" };
@@ -330,4 +334,40 @@ export const api = {
     ),
   putServiceHealthcheck: (id: string, healthcheck: Healthcheck) =>
     put<{ healthcheck: Healthcheck }>(`/services/${id}/healthcheck`, healthcheck),
+
+  servicePorts: (id: string, signal?: AbortSignal) =>
+    fetchJSON<{ ports: PortConfig[] }>(`/services/${id}/ports`, signal).then(
+      (r) => r.ports,
+    ),
+
+  putServicePlacement: (id: string, placement: Placement) =>
+    put<{ placement: Placement }>(`/services/${id}/placement`, placement),
+
+  patchServicePorts: (id: string, ports: PortConfig[]) =>
+    patch<{ ports: PortConfig[] }>(
+      `/services/${id}/ports`,
+      { ports },
+      "application/merge-patch+json",
+    ),
+
+  patchServiceUpdatePolicy: (id: string, partial: Record<string, unknown>) =>
+    patch<{ updatePolicy: UpdateConfig }>(
+      `/services/${id}/update-policy`,
+      partial,
+      "application/merge-patch+json",
+    ),
+
+  patchServiceRollbackPolicy: (id: string, partial: Record<string, unknown>) =>
+    patch<{ rollbackPolicy: UpdateConfig }>(
+      `/services/${id}/rollback-policy`,
+      partial,
+      "application/merge-patch+json",
+    ),
+
+  patchServiceLogDriver: (id: string, partial: Record<string, unknown>) =>
+    patch<{ logDriver: LogDriver }>(
+      `/services/${id}/log-driver`,
+      partial,
+      "application/merge-patch+json",
+    ),
 };
