@@ -3,24 +3,21 @@ package api
 import (
 	"net/http"
 	"strconv"
+
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
 // requireLevel returns middleware that blocks requests when the configured
 // operations level is below the required level for this endpoint.
-//
-// Levels:
-//   - 0: read-only (all writes blocked)
-//   - 1: operational (scale, restart, rollback, image update, env/labels/resources/healthcheck patches)
-//   - 2: impactful (node availability/labels, service mode/endpoint-mode, task removal)
-func requireLevel(required, configured int) func(http.HandlerFunc) http.Handler {
+func requireLevel(required, configured config.OperationsLevel) func(http.HandlerFunc) http.Handler {
 	return func(next http.HandlerFunc) http.Handler {
 		if configured >= required {
 			return next
 		}
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			writeProblem(w, r, http.StatusForbidden,
-				"this operation requires operations level "+strconv.Itoa(required)+
-					", but the server is configured at level "+strconv.Itoa(configured))
+				"this operation requires operations level "+strconv.Itoa(int(required))+
+					", but the server is configured at level "+strconv.Itoa(int(configured)))
 		})
 	}
 }

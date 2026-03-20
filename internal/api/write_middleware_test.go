@@ -12,6 +12,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
 func TestRequireLevel_Allowed(t *testing.T) {
@@ -21,7 +22,7 @@ func TestRequireLevel_Allowed(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := requireLevel(1, 2)(inner)
+	handler := requireLevel(config.OpsOperational, config.OpsImpactful)(inner)
 	req := httptest.NewRequest("PUT", "/services/abc/scale", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -40,7 +41,7 @@ func TestRequireLevel_Denied(t *testing.T) {
 		called = true
 	})
 
-	handler := requireLevel(2, 1)(inner)
+	handler := requireLevel(config.OpsImpactful, config.OpsOperational)(inner)
 	req := httptest.NewRequest("PUT", "/nodes/abc/availability", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -67,7 +68,7 @@ func TestRequireLevel_ReadOnly(t *testing.T) {
 		called = true
 	})
 
-	handler := requireLevel(1, 0)(inner)
+	handler := requireLevel(config.OpsOperational, config.OpsReadOnly)(inner)
 	req := httptest.NewRequest("PUT", "/services/abc/scale", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -87,7 +88,7 @@ func TestRequireLevel_ExactMatch(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := requireLevel(2, 2)(inner)
+	handler := requireLevel(config.OpsImpactful, config.OpsImpactful)(inner)
 	req := httptest.NewRequest("PUT", "/nodes/abc/availability", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -109,8 +110,8 @@ func TestRequireLevel_Integration_ScaleBlockedAtLevel0(t *testing.T) {
 		},
 	})
 
-	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, 0)
-	handler := requireLevel(1, 0)(h.HandleScaleService)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsReadOnly)
+	handler := requireLevel(config.OpsOperational, config.OpsReadOnly)(h.HandleScaleService)
 
 	body := strings.NewReader(`{"replicas": 3}`)
 	req := httptest.NewRequest("PUT", "/services/svc1/scale", body)
@@ -141,8 +142,8 @@ func TestRequireLevel_Integration_ScaleAllowedAtLevel1(t *testing.T) {
 			return svc, nil
 		},
 	}
-	h := NewHandlers(c, nil, nil, nil, mock, closedReady(), nil, 1)
-	handler := requireLevel(1, 1)(h.HandleScaleService)
+	h := NewHandlers(c, nil, nil, nil, mock, closedReady(), nil, config.OpsOperational)
+	handler := requireLevel(config.OpsOperational, config.OpsOperational)(h.HandleScaleService)
 
 	body := strings.NewReader(`{"replicas": 3}`)
 	req := httptest.NewRequest("PUT", "/services/svc1/scale", body)

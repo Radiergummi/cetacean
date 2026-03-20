@@ -5,13 +5,14 @@ import (
 	"net/http/pprof"
 
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
 func NewRouter(h *Handlers, b *Broadcaster, metricsProxy *PrometheusProxy, spa http.Handler, openapiSpec []byte, scalarJS []byte, enablePprof bool, authProvider auth.Provider) http.Handler {
 	mux := http.NewServeMux()
 
-	tier1 := requireLevel(1, h.operationsLevel)
-	tier2 := requireLevel(2, h.operationsLevel)
+	tier1 := requireLevel(config.OpsOperational, h.operationsLevel)
+	tier2 := requireLevel(config.OpsImpactful, h.operationsLevel)
 
 	authProvider.RegisterRoutes(mux)
 

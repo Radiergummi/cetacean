@@ -6,17 +6,33 @@ import (
 	"time"
 )
 
+// OperationsLevel controls which write operations are available.
+type OperationsLevel int
+
+const (
+	// OpsReadOnly disables all write operations.
+	OpsReadOnly OperationsLevel = 0
+
+	// OpsOperational allows routine actions: scale, image update, rollback,
+	// restart, and env/labels/resources/healthcheck patches.
+	OpsOperational OperationsLevel = 1
+
+	// OpsImpactful allows all operations including node availability/labels,
+	// service mode/endpoint-mode changes, and task removal.
+	OpsImpactful OperationsLevel = 2
+)
+
 type Config struct {
 	DockerHost       string
 	PrometheusURL    string
 	ListenAddr       string
-	LogLevel         string        // "debug", "info", "warn", "error"
-	LogFormat        string        // "json", "text"
-	DataDir          string        // CETACEAN_DATA_DIR, default "./data"
-	Snapshot         bool          // CETACEAN_SNAPSHOT, default true
-	SSEBatchInterval time.Duration // CETACEAN_SSE_BATCH_INTERVAL, default 100ms
-	Pprof            bool          // CETACEAN_PPROF, default false
-	OperationsLevel  int           // CETACEAN_OPERATIONS_LEVEL, 0=read-only, 1=operational, 2=impactful
+	LogLevel         string          // "debug", "info", "warn", "error"
+	LogFormat        string          // "json", "text"
+	DataDir          string          // CETACEAN_DATA_DIR, default "./data"
+	Snapshot         bool            // CETACEAN_SNAPSHOT, default true
+	SSEBatchInterval time.Duration   // CETACEAN_SSE_BATCH_INTERVAL, default 100ms
+	Pprof            bool            // CETACEAN_PPROF, default false
+	OperationsLevel  OperationsLevel // CETACEAN_OPERATIONS_LEVEL
 }
 
 // Load merges configuration from flags, environment variables, a TOML
@@ -70,7 +86,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		return nil, err
 	}
 
-	opsLevel, err := resolveInt(nil, "CETACEAN_OPERATIONS_LEVEL", fOpsLevel, 1, 0, 2)
+	opsLevel, err := resolveInt(nil, "CETACEAN_OPERATIONS_LEVEL", fOpsLevel, int(OpsOperational), int(OpsReadOnly), int(OpsImpactful))
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +101,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		Snapshot:         resolveBool(nil, "CETACEAN_SNAPSHOT", fSnapshot, true),
 		SSEBatchInterval: batchInterval,
 		Pprof:            resolveBool(flags.Pprof, "CETACEAN_PPROF", fPprof, false),
-		OperationsLevel:  opsLevel,
+		OperationsLevel:  OperationsLevel(opsLevel),
 	}
 
 	return cfg, nil

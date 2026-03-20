@@ -187,8 +187,8 @@ func TestLoad_OperationsLevel_Default(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.OperationsLevel != 1 {
-		t.Errorf("OperationsLevel=%d, want 1", cfg.OperationsLevel)
+	if cfg.OperationsLevel != OpsOperational {
+		t.Errorf("OperationsLevel=%d, want %d", cfg.OperationsLevel, OpsOperational)
 	}
 }
 
@@ -199,15 +199,15 @@ func TestLoad_OperationsLevel_EnvOverride(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.OperationsLevel != 0 {
-		t.Errorf("OperationsLevel=%d, want 0", cfg.OperationsLevel)
+	if cfg.OperationsLevel != OpsReadOnly {
+		t.Errorf("OperationsLevel=%d, want %d", cfg.OperationsLevel, OpsReadOnly)
 	}
 }
 
 func TestLoad_OperationsLevel_FileOverride(t *testing.T) {
 	t.Setenv("CETACEAN_OPERATIONS_LEVEL", "")
 
-	level := 2
+	level := int(OpsImpactful)
 	fc := &fileConfig{
 		Server: &fileServer{OperationsLevel: &level},
 	}
@@ -216,8 +216,8 @@ func TestLoad_OperationsLevel_FileOverride(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.OperationsLevel != 2 {
-		t.Errorf("OperationsLevel=%d, want 2", cfg.OperationsLevel)
+	if cfg.OperationsLevel != OpsImpactful {
+		t.Errorf("OperationsLevel=%d, want %d", cfg.OperationsLevel, OpsImpactful)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
 func TestRequestLogger(t *testing.T) {
@@ -258,7 +259,7 @@ func TestRequestIDFrom_Empty(t *testing.T) {
 
 func TestNewRouter_Smoke(t *testing.T) {
 	c := cache.New(nil)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, 2)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 	b := NewBroadcaster(0)
 	defer b.Close()
 	prom := NewPrometheusProxy("http://localhost:9090")

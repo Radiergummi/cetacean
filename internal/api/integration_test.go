@@ -14,6 +14,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
 func setupIntegrationRouter(t *testing.T) http.Handler {
@@ -32,7 +33,7 @@ func setupIntegrationRouter(t *testing.T) http.Handler {
 	})
 
 	b := NewBroadcaster(100 * time.Millisecond)
-	h := NewHandlers(c, b, nil, nil, nil, closedReady(), nil, 2)
+	h := NewHandlers(c, b, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 	spa := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte("<html>SPA</html>")) //nolint:errcheck

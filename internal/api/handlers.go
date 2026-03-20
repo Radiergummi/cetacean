@@ -22,6 +22,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/filter"
 	"github.com/radiergummi/cetacean/internal/version"
@@ -95,7 +96,7 @@ type Handlers struct {
 	writeClient         DockerWriteClient
 	ready               <-chan struct{}
 	promClient          *PromClient
-	operationsLevel     int
+	operationsLevel     config.OperationsLevel
 	localNodeMu         sync.Mutex
 	localNodeID         string
 	localNodeDone       bool
@@ -110,7 +111,7 @@ func NewHandlers(
 	wc DockerWriteClient,
 	ready <-chan struct{},
 	promClient *PromClient,
-	operationsLevel int,
+	operationsLevel config.OperationsLevel,
 ) *Handlers {
 	return &Handlers{
 		cache:           c,
