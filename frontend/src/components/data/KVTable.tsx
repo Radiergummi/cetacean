@@ -1,7 +1,7 @@
+import { CopyButton } from "@/components/ui/copy-button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Check, Copy, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import type React from "react";
-import { useState } from "react";
 
 type Row =
   | false
@@ -12,30 +12,6 @@ type Row =
   | [string, React.ReactNode]
   | [string, React.ReactNode, string]
   | [string, React.ReactNode, string | undefined, string];
-
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-
-  function handleCopy() {
-    navigator.clipboard.writeText(text).then(
-      () => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      },
-      () => {},
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      className="ml-auto shrink-0 cursor-pointer rounded p-1 text-muted-foreground/50 hover:text-muted-foreground"
-    >
-      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-    </button>
-  );
-}
 
 export default function KVTable({ rows }: { rows: Row[] }) {
   const valid = rows.filter(
@@ -78,7 +54,7 @@ export default function KVTable({ rows }: { rows: Row[] }) {
                 <td className="p-3 font-mono text-xs break-all">
                   <span className="flex items-center gap-2">
                     <span className="min-w-0">{value}</span>
-                    {copyable && <CopyButton text={copyable} />}
+                    {copyable && <CopyButton text={copyable} className="ml-auto" />}
                   </span>
                 </td>
               </tr>

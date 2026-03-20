@@ -3,34 +3,41 @@ import type { Healthcheck } from "@/api/types";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
+import { CopyButton } from "@/components/ui/copy-button";
 import { formatDuration } from "@/lib/format";
 import { joinCommand, parseCommand } from "@/lib/parseCommand";
 import { getErrorMessage } from "@/lib/utils";
-import { Check, Copy, Pencil } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { useState } from "react";
 
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
+interface FormState {
+  enabled: boolean;
+  useShell: boolean;
+  command: string;
+  interval: string;
+  timeout: string;
+  startPeriod: string;
+  startInterval: string;
+  retries: string;
+}
 
-  function handleCopy() {
-    navigator.clipboard.writeText(text).then(
-      () => {
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 2000);
-      },
-      () => {},
-    );
+const emptyForm: FormState = {
+  enabled: true,
+  useShell: true,
+  command: "",
+  interval: "",
+  timeout: "",
+  startPeriod: "",
+  startInterval: "",
+  retries: "",
+};
+
+function nanosToField(nanoseconds: number | undefined): string {
+  if (!nanoseconds) {
+    return "";
   }
 
-  return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      className="shrink-0 cursor-pointer rounded p-1 text-muted-foreground/50 hover:text-muted-foreground"
-    >
-      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-    </button>
-  );
+  return String(nanoseconds / 1e9);
 }
 
 function formatHealthcheckDuration(nanoseconds: number | undefined): string {
@@ -73,6 +80,48 @@ function isDisabled(healthcheck: Healthcheck | null): boolean {
   return healthcheck.Test?.[0] === "NONE";
 }
 
+function formFromHealthcheck(healthcheck: Healthcheck | null): FormState {
+  const disabled = isDisabled(healthcheck);
+
+  if (disabled || !healthcheck) {
+    return { ...emptyForm, enabled: false };
+  }
+
+  const extracted = extractCommand(healthcheck.Test);
+
+  return {
+    enabled: true,
+    useShell: extracted.shell,
+    command: extracted.command,
+    interval: nanosToField(healthcheck.Interval),
+    timeout: nanosToField(healthcheck.Timeout),
+    startPeriod: nanosToField(healthcheck.StartPeriod),
+    startInterval: nanosToField(healthcheck.StartInterval),
+    retries: healthcheck.Retries ? String(healthcheck.Retries) : "",
+  };
+}
+
+function formToHealthcheck(form: FormState): Healthcheck {
+  let test: string[];
+
+  if (!form.enabled) {
+    test = ["NONE"];
+  } else if (form.useShell) {
+    test = ["CMD-SHELL", form.command];
+  } else {
+    test = ["CMD", ...parseCommand(form.command)];
+  }
+
+  return {
+    Test: test,
+    Interval: form.interval ? parseFloat(form.interval) * 1e9 : 0,
+    Timeout: form.timeout ? parseFloat(form.timeout) * 1e9 : 0,
+    StartPeriod: form.startPeriod ? parseFloat(form.startPeriod) * 1e9 : 0,
+    StartInterval: form.startInterval ? parseFloat(form.startInterval) * 1e9 : 0,
+    Retries: form.retries ? parseInt(form.retries, 10) : 0,
+  };
+}
+
 export function HealthcheckEditor({
   serviceId,
   healthcheck,
@@ -85,40 +134,14 @@ export function HealthcheckEditor({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [form, setForm] = useState<FormState>(emptyForm);
 
-  // Edit mode state
-  const [enabled, setEnabled] = useState(true);
-  const [useShell, setUseShell] = useState(true);
-  const [command, setCommand] = useState("");
-  const [intervalValue, setIntervalValue] = useState("");
-  const [timeoutValue, setTimeoutValue] = useState("");
-  const [startPeriod, setStartPeriod] = useState("");
-  const [startInterval, setStartInterval] = useState("");
-  const [retries, setRetries] = useState("");
+  function updateForm(partial: Partial<FormState>) {
+    setForm((previous) => ({ ...previous, ...partial }));
+  }
 
   function openEdit() {
-    const disabled = isDisabled(healthcheck);
-    setEnabled(!disabled);
-
-    if (!disabled && healthcheck) {
-      const extracted = extractCommand(healthcheck.Test);
-      setUseShell(extracted.shell);
-      setCommand(extracted.command);
-      setInterval(healthcheck.Interval ? String(healthcheck.Interval / 1e9) : "");
-      setTimeout(healthcheck.Timeout ? String(healthcheck.Timeout / 1e9) : "");
-      setStartPeriod(healthcheck.StartPeriod ? String(healthcheck.StartPeriod / 1e9) : "");
-      setStartInterval(healthcheck.StartInterval ? String(healthcheck.StartInterval / 1e9) : "");
-      setRetries(healthcheck.Retries ? String(healthcheck.Retries) : "");
-    } else {
-      setUseShell(true);
-      setCommand("");
-      setInterval("");
-      setTimeout("");
-      setStartPeriod("");
-      setStartInterval("");
-      setRetries("");
-    }
-
+    setForm(formFromHealthcheck(healthcheck));
     setSaveError(null);
     setEditing(true);
   }
@@ -133,26 +156,7 @@ export function HealthcheckEditor({
     setSaveError(null);
 
     try {
-      let test: string[];
-
-      if (!enabled) {
-        test = ["NONE"];
-      } else if (useShell) {
-        test = ["CMD-SHELL", command];
-      } else {
-        test = ["CMD", ...parseCommand(command)];
-      }
-
-      const config: Healthcheck = {
-        Test: test,
-        Interval: intervalValue ? parseFloat(intervalValue) * 1e9 : 0,
-        Timeout: timeoutValue ? parseFloat(timeoutValue) * 1e9 : 0,
-        StartPeriod: startPeriod ? parseFloat(startPeriod) * 1e9 : 0,
-        StartInterval: startInterval ? parseFloat(startInterval) * 1e9 : 0,
-        Retries: retries ? parseInt(retries, 10) : 0,
-      };
-
-      const result = await api.putServiceHealthcheck(serviceId, config);
+      const result = await api.putServiceHealthcheck(serviceId, formToHealthcheck(form));
       onSaved(result.healthcheck);
       setEditing(false);
     } catch (error) {
@@ -187,22 +191,8 @@ export function HealthcheckEditor({
     >
       {editing ? (
         <EditMode
-          enabled={enabled}
-          setEnabled={setEnabled}
-          useShell={useShell}
-          setUseShell={setUseShell}
-          command={command}
-          setCommand={setCommand}
-          interval={intervalValue}
-          setInterval={setIntervalValue}
-          timeout={timeoutValue}
-          setTimeout={setTimeoutValue}
-          startPeriod={startPeriod}
-          setStartPeriod={setStartPeriod}
-          startInterval={startInterval}
-          setStartInterval={setStartInterval}
-          retries={retries}
-          setRetries={setRetries}
+          form={form}
+          updateForm={updateForm}
           saving={saving}
           saveError={saveError}
           onSave={() => void save()}
@@ -343,43 +333,15 @@ function DurationInput({
 }
 
 function EditMode({
-  enabled,
-  setEnabled,
-  useShell,
-  setUseShell,
-  command,
-  setCommand,
-  interval,
-  setInterval,
-  timeout,
-  setTimeout,
-  startPeriod,
-  setStartPeriod,
-  startInterval,
-  setStartInterval,
-  retries,
-  setRetries,
+  form,
+  updateForm,
   saving,
   saveError,
   onSave,
   onCancel,
 }: {
-  enabled: boolean;
-  setEnabled: (value: boolean) => void;
-  useShell: boolean;
-  setUseShell: (value: boolean) => void;
-  command: string;
-  setCommand: (value: string) => void;
-  interval: string;
-  setInterval: (value: string) => void;
-  timeout: string;
-  setTimeout: (value: string) => void;
-  startPeriod: string;
-  setStartPeriod: (value: string) => void;
-  startInterval: string;
-  setStartInterval: (value: string) => void;
-  retries: string;
-  setRetries: (value: string) => void;
+  form: FormState;
+  updateForm: (partial: Partial<FormState>) => void;
   saving: boolean;
   saveError: string | null;
   onSave: () => void;
@@ -389,28 +351,28 @@ function EditMode({
     <div className="space-y-4">
       <ToggleButton
         label="Enabled"
-        pressed={enabled}
-        onToggle={setEnabled}
+        pressed={form.enabled}
+        onToggle={(enabled) => updateForm({ enabled })}
       />
 
-      {enabled && (
+      {form.enabled && (
         <>
           <ToggleButton
             label="Use Shell"
-            pressed={useShell}
-            onToggle={setUseShell}
+            pressed={form.useShell}
+            onToggle={(useShell) => updateForm({ useShell })}
           />
 
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Command</label>
             <input
               type="text"
-              value={command}
-              onChange={(event) => setCommand(event.target.value)}
-              placeholder={useShell ? "curl -f http://localhost/ || exit 1" : "/bin/healthcheck"}
+              value={form.command}
+              onChange={(event) => updateForm({ command: event.target.value })}
+              placeholder={form.useShell ? "curl -f http://localhost/ || exit 1" : "/bin/healthcheck"}
               className="h-8 w-full rounded-md border bg-background px-2 font-mono text-sm outline-none focus:ring-1 focus:ring-ring"
             />
-            {!useShell && (
+            {!form.useShell && (
               <p className="text-xs text-muted-foreground">Executed directly, not via shell</p>
             )}
           </div>
@@ -418,23 +380,23 @@ function EditMode({
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <DurationInput
               label="Interval"
-              value={interval}
-              onChange={setInterval}
+              value={form.interval}
+              onChange={(interval) => updateForm({ interval })}
             />
             <DurationInput
               label="Timeout"
-              value={timeout}
-              onChange={setTimeout}
+              value={form.timeout}
+              onChange={(timeout) => updateForm({ timeout })}
             />
             <DurationInput
               label="Start Period"
-              value={startPeriod}
-              onChange={setStartPeriod}
+              value={form.startPeriod}
+              onChange={(startPeriod) => updateForm({ startPeriod })}
             />
             <DurationInput
               label="Start Interval"
-              value={startInterval}
-              onChange={setStartInterval}
+              value={form.startInterval}
+              onChange={(startInterval) => updateForm({ startInterval })}
             />
           </div>
 
@@ -444,8 +406,8 @@ function EditMode({
               type="number"
               min="0"
               step="1"
-              value={retries}
-              onChange={(event) => setRetries(event.target.value)}
+              value={form.retries}
+              onChange={(event) => updateForm({ retries: event.target.value })}
               placeholder="default"
               className="h-8 w-24 rounded-md border bg-background px-2 font-mono text-sm outline-none focus:ring-1 focus:ring-ring"
             />

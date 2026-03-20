@@ -1174,3 +1174,35 @@ func TestHandlePatchServiceHealthcheck_Merge(t *testing.T) {
 		t.Errorf("Test=%v, want [CMD curl -f http://localhost/]", captured.Test)
 	}
 }
+
+func TestHandlePatchServiceHealthcheck_WrongContentType(t *testing.T) {
+	c := cache.New(nil)
+	svc := replicatedService("svc1")
+	c.SetService(svc)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+
+	req := httptest.NewRequest("PATCH", "/services/svc1/healthcheck", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceHealthcheck(w, req)
+
+	if w.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("status=%d, want 415; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandlePutServiceHealthcheck_NotFound(t *testing.T) {
+	c := cache.New(nil)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil)
+
+	body := `{"Test":["CMD-SHELL","curl http://localhost/"]}`
+	req := httptest.NewRequest("PUT", "/services/nonexistent/healthcheck", strings.NewReader(body))
+	req.SetPathValue("id", "nonexistent")
+	w := httptest.NewRecorder()
+	h.HandlePutServiceHealthcheck(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status=%d, want 404; body: %s", w.Code, w.Body.String())
+	}
+}
