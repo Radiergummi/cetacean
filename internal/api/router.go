@@ -98,6 +98,7 @@ func NewRouter(h *Handlers, b *Broadcaster, metricsProxy *PrometheusProxy, spa h
 	// Service log driver
 	mux.HandleFunc("GET /services/{id}/log-driver", contentNegotiated(h.HandleGetServiceLogDriver, spa))
 	mux.Handle("PATCH /services/{id}/log-driver", tier1(h.HandlePatchServiceLogDriver))
+	mux.Handle("DELETE /services/{id}", tier2(h.HandleRemoveService))
 
 	// Tasks
 	mux.HandleFunc("GET /tasks", contentNegotiatedWithSSE(h.HandleListTasks, func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, "task") }, spa))

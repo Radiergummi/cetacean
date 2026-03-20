@@ -307,6 +307,26 @@ func (h *Handlers) HandleRemoveTask(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *Handlers) HandleRemoveService(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	_, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	slog.Info("removing service", "service", id)
+
+	err := h.writeClient.RemoveService(r.Context(), id)
+	if err != nil {
+		writeDockerError(w, r, err, "service")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *Handlers) HandleRestartService(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
@@ -330,11 +350,14 @@ func (h *Handlers) HandleRestartService(w http.ResponseWriter, r *http.Request) 
 }
 
 // envSliceToMap converts a slice of KEY=VALUE strings to a map.
+// Bare-key entries (KEY without =) are preserved with an empty string value.
 func envSliceToMap(env []string) map[string]string {
 	m := make(map[string]string, len(env))
 	for _, e := range env {
 		if k, v, ok := strings.Cut(e, "="); ok {
 			m[k] = v
+		} else {
+			m[e] = ""
 		}
 	}
 	return m

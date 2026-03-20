@@ -25,6 +25,7 @@ type mockWriteClient struct {
 	restartServiceFn           func(ctx context.Context, id string) (swarm.Service, error)
 	updateNodeAvailabilityFn   func(ctx context.Context, id string, availability swarm.NodeAvailability) (swarm.Node, error)
 	removeTaskFn               func(ctx context.Context, id string) error
+	removeServiceFn            func(ctx context.Context, id string) error
 	updateServiceEnvFn         func(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
 	updateNodeLabelsFn         func(ctx context.Context, id string, labels map[string]string) (swarm.Node, error)
 	updateServiceLabelsFn      func(ctx context.Context, id string, labels map[string]string) (swarm.Service, error)
@@ -163,6 +164,13 @@ func (m *mockWriteClient) UpdateServiceLogDriver(ctx context.Context, id string,
 		return m.updateServiceLogDriverFn(ctx, id, driver)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) RemoveService(ctx context.Context, id string) error {
+	if m.removeServiceFn != nil {
+		return m.removeServiceFn(ctx, id)
+	}
+	return fmt.Errorf("not implemented")
 }
 
 func replicatedService(id string) swarm.Service {
@@ -730,6 +738,63 @@ func TestHandleRemoveTask_NoContainer(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestHandleRemoveService_OK(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(replicatedService("svc1"))
+
+	wc := &mockWriteClient{
+		removeServiceFn: func(_ context.Context, id string) error {
+			return nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/services/svc1", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleRemoveService(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status=%d, want 204; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleRemoveService_NotFound(t *testing.T) {
+	c := cache.New(nil)
+	wc := &mockWriteClient{}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/services/missing", nil)
+	req.SetPathValue("id", "missing")
+	w := httptest.NewRecorder()
+	h.HandleRemoveService(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestHandleRemoveService_DockerError(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(replicatedService("svc1"))
+
+	wc := &mockWriteClient{
+		removeServiceFn: func(_ context.Context, id string) error {
+			return fmt.Errorf("engine error")
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/services/svc1", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleRemoveService(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("status=%d, want 500", w.Code)
 	}
 }
 

@@ -389,6 +389,10 @@ func (c *Client) RemoveTask(ctx context.Context, id string) error {
 	return c.docker.ContainerRemove(ctx, task.Status.ContainerStatus.ContainerID, container.RemoveOptions{Force: true})
 }
 
+func (c *Client) RemoveService(ctx context.Context, id string) error {
+	return c.docker.ServiceRemove(ctx, id)
+}
+
 func (c *Client) UpdateServiceEnv(ctx context.Context, id string, env map[string]string) (swarm.Service, error) {
 	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
 	if err != nil {
