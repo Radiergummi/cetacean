@@ -13,12 +13,12 @@ const (
 	// OpsReadOnly disables all write operations.
 	OpsReadOnly OperationsLevel = 0
 
-	// OpsOperational allows routine actions: scale, image update, rollback,
-	// restart, and env/labels/resources/healthcheck patches.
+	// OpsOperational allows routine service actions: scale, image update,
+	// rollback, restart, and service env/labels/resources/healthcheck patches.
 	OpsOperational OperationsLevel = 1
 
 	// OpsImpactful allows all operations including node availability/labels,
-	// service mode/endpoint-mode changes, and task removal.
+	// service mode/endpoint mode changes, and task removal.
 	OpsImpactful OperationsLevel = 2
 )
 

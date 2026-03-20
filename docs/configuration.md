@@ -252,8 +252,8 @@ The `operations_level` setting controls which write operations are available. Us
 | Level | Name | Operations |
 |-------|------|-----------|
 | 0 | Read-only | All write endpoints disabled |
-| 1 | Operational | Scale, image update, rollback, restart, env/labels/resources/healthcheck patches |
-| 2 | Impactful | Everything in level 1, plus: node availability, node labels, service mode/endpoint mode, task removal |
+| 1 | Operational | Scale, image update, rollback, restart, service env/labels/resources/healthcheck patches |
+| 2 | Impactful | Everything in level 1, plus: node availability, node labels, service mode, service endpoint mode, task removal |
 
 The default is `1`. Set to `0` for a purely read-only dashboard. Requests to endpoints above the configured level receive a `403 Forbidden` response.
 
