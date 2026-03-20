@@ -7,11 +7,11 @@ import (
 	"github.com/radiergummi/cetacean/internal/auth"
 )
 
-func NewRouter(h *Handlers, b *Broadcaster, metricsProxy *PrometheusProxy, spa http.Handler, openapiSpec []byte, scalarJS []byte, enablePprof bool, authProvider auth.Provider, operationsLevel int) http.Handler {
+func NewRouter(h *Handlers, b *Broadcaster, metricsProxy *PrometheusProxy, spa http.Handler, openapiSpec []byte, scalarJS []byte, enablePprof bool, authProvider auth.Provider) http.Handler {
 	mux := http.NewServeMux()
 
-	tier1 := requireLevel(1, operationsLevel)
-	tier2 := requireLevel(2, operationsLevel)
+	tier1 := requireLevel(1, h.operationsLevel)
+	tier2 := requireLevel(2, h.operationsLevel)
 
 	authProvider.RegisterRoutes(mux)
 

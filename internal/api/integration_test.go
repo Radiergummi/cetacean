@@ -39,7 +39,7 @@ func setupIntegrationRouter(t *testing.T) http.Handler {
 	})
 
 	specBytes, _ := os.ReadFile("../../api/openapi.yaml")
-	return NewRouter(h, b, nil, spa, specBytes, []byte("/* scalar */"), false, &auth.NoneProvider{}, 2)
+	return NewRouter(h, b, nil, spa, specBytes, []byte("/* scalar */"), false, &auth.NoneProvider{})
 }
 
 func TestContentNegotiationIntegration(t *testing.T) {

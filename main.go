@@ -196,7 +196,7 @@ func main() {
 		slog.Warn("pprof endpoints enabled", "path", "/debug/pprof/")
 	}
 
-	router := api.NewRouter(handlers, broadcaster, metricsProxy, spa, openapiSpec, scalarJS, cfg.Pprof, authProvider, cfg.OperationsLevel)
+	router := api.NewRouter(handlers, broadcaster, metricsProxy, spa, openapiSpec, scalarJS, cfg.Pprof, authProvider)
 
 	var serverTLSConfig *tls.Config
 	if authCfg.Mode == "cert" {

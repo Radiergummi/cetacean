@@ -106,11 +106,11 @@ func resolveInt(flag *int, envKey string, file *int, def, min, max int) (int, er
 	var source string
 	switch envVal := os.Getenv(envKey); {
 	case flag != nil:
-		return clampInt(*flag, min, max, "flag")
+		return checkIntRange(*flag, min, max, "flag")
 	case envVal != "":
 		raw, source = envVal, envKey
 	case file != nil:
-		return clampInt(*file, min, max, "config file")
+		return checkIntRange(*file, min, max, "config file")
 	default:
 		return def, nil
 	}
@@ -119,10 +119,10 @@ func resolveInt(flag *int, envKey string, file *int, def, min, max int) (int, er
 	if err != nil {
 		return 0, fmt.Errorf("invalid integer from %s %q: %w", source, raw, err)
 	}
-	return clampInt(v, min, max, source)
+	return checkIntRange(v, min, max, source)
 }
 
-func clampInt(v, min, max int, source string) (int, error) {
+func checkIntRange(v, min, max int, source string) (int, error) {
 	if v < min || v > max {
 		return 0, fmt.Errorf("value %d from %s out of range [%d, %d]", v, source, min, max)
 	}

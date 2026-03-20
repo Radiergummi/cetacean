@@ -265,7 +265,7 @@ func TestNewRouter_Smoke(t *testing.T) {
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}
 	spa := NewSPAHandler(fs.FS(fsys))
 
-	router := NewRouter(h, b, prom, spa, []byte("openapi: '3.1.0'"), nil, false, &auth.NoneProvider{}, 2)
+	router := NewRouter(h, b, prom, spa, []byte("openapi: '3.1.0'"), nil, false, &auth.NoneProvider{})
 	if router == nil {
 		t.Fatal("NewRouter returned nil")
 	}
