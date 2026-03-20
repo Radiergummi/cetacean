@@ -4,6 +4,7 @@ import CollapsibleSection from "@/components/CollapsibleSection";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
+import { SliderNumberField } from "@/components/ui/slider-number-field";
 import { formatDuration } from "@/lib/format";
 import { joinCommand, parseCommand } from "@/lib/parseCommand";
 import { cn, getErrorMessage } from "@/lib/utils";
@@ -14,30 +15,30 @@ interface FormState {
   enabled: boolean;
   useShell: boolean;
   command: string;
-  interval: string;
-  timeout: string;
-  startPeriod: string;
-  startInterval: string;
-  retries: string;
+  interval: number | undefined;
+  timeout: number | undefined;
+  startPeriod: number | undefined;
+  startInterval: number | undefined;
+  retries: number | undefined;
 }
 
 const emptyForm: FormState = {
   enabled: true,
   useShell: true,
   command: "",
-  interval: "",
-  timeout: "",
-  startPeriod: "",
-  startInterval: "",
-  retries: "",
+  interval: undefined,
+  timeout: undefined,
+  startPeriod: undefined,
+  startInterval: undefined,
+  retries: undefined,
 };
 
-function nanosToField(nanoseconds: number | undefined): string {
+function nanosToSeconds(nanoseconds: number | undefined): number | undefined {
   if (!nanoseconds) {
-    return "";
+    return undefined;
   }
 
-  return String(nanoseconds / 1e9);
+  return nanoseconds / 1e9;
 }
 
 function formatHealthcheckDuration(nanoseconds: number | undefined): string {
@@ -93,11 +94,11 @@ function formFromHealthcheck(healthcheck: Healthcheck | null): FormState {
     enabled: true,
     useShell: extracted.shell,
     command: extracted.command,
-    interval: nanosToField(healthcheck.Interval),
-    timeout: nanosToField(healthcheck.Timeout),
-    startPeriod: nanosToField(healthcheck.StartPeriod),
-    startInterval: nanosToField(healthcheck.StartInterval),
-    retries: healthcheck.Retries ? String(healthcheck.Retries) : "",
+    interval: nanosToSeconds(healthcheck.Interval),
+    timeout: nanosToSeconds(healthcheck.Timeout),
+    startPeriod: nanosToSeconds(healthcheck.StartPeriod),
+    startInterval: nanosToSeconds(healthcheck.StartInterval),
+    retries: healthcheck.Retries || undefined,
   };
 }
 
@@ -114,11 +115,11 @@ function formToHealthcheck(form: FormState): Healthcheck {
 
   return {
     Test: test,
-    Interval: form.interval ? parseFloat(form.interval) * 1e9 : 0,
-    Timeout: form.timeout ? parseFloat(form.timeout) * 1e9 : 0,
-    StartPeriod: form.startPeriod ? parseFloat(form.startPeriod) * 1e9 : 0,
-    StartInterval: form.startInterval ? parseFloat(form.startInterval) * 1e9 : 0,
-    Retries: form.retries ? parseInt(form.retries, 10) : 0,
+    Interval: form.interval != null ? form.interval * 1e9 : 0,
+    Timeout: form.timeout != null ? form.timeout * 1e9 : 0,
+    StartPeriod: form.startPeriod != null ? form.startPeriod * 1e9 : 0,
+    StartInterval: form.startInterval != null ? form.startInterval * 1e9 : 0,
+    Retries: form.retries ?? 0,
   };
 }
 
@@ -309,33 +310,6 @@ function ToggleButton({
   );
 }
 
-function DurationInput({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="text-xs text-muted-foreground">
-        {label} <span className="text-muted-foreground/60">(s)</span>
-      </label>
-      <input
-        type="number"
-        min="0"
-        step="any"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder="default"
-        className="h-8 rounded-md border bg-background px-2 font-mono text-sm outline-none focus:ring-1 focus:ring-ring"
-      />
-    </div>
-  );
-}
-
 function EditMode({
   form,
   updateForm,
@@ -395,40 +369,43 @@ function EditMode({
           </div>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <DurationInput
-              label="Interval"
+            <SliderNumberField
+              label="Interval (s)"
               value={form.interval}
               onChange={(interval) => updateForm({ interval })}
+              min={0}
+              step={0.1}
             />
-            <DurationInput
-              label="Timeout"
+            <SliderNumberField
+              label="Timeout (s)"
               value={form.timeout}
               onChange={(timeout) => updateForm({ timeout })}
+              min={0}
+              step={0.1}
             />
-            <DurationInput
-              label="Start Period"
+            <SliderNumberField
+              label="Start Period (s)"
               value={form.startPeriod}
               onChange={(startPeriod) => updateForm({ startPeriod })}
+              min={0}
+              step={0.1}
             />
-            <DurationInput
-              label="Start Interval"
+            <SliderNumberField
+              label="Start Interval (s)"
               value={form.startInterval}
               onChange={(startInterval) => updateForm({ startInterval })}
+              min={0}
+              step={0.1}
             />
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">Retries</label>
-            <input
-              type="number"
-              min="0"
-              step="1"
-              value={form.retries}
-              onChange={(event) => updateForm({ retries: event.target.value })}
-              placeholder="default"
-              className="h-8 w-24 rounded-md border bg-background px-2 font-mono text-sm outline-none focus:ring-1 focus:ring-ring"
-            />
-          </div>
+          <SliderNumberField
+            label="Retries"
+            value={form.retries}
+            onChange={(retries) => updateForm({ retries })}
+            min={0}
+            step={1}
+          />
         </>
       )}
 
