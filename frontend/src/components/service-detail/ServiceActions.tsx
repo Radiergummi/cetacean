@@ -16,8 +16,10 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useOperationsLevel } from "@/hooks/useOperationsLevel";
+import { stackNamespaceLabel } from "@/lib/parseStackLabels";
 import type { LucideIcon } from "lucide-react";
-import { RefreshCw, RotateCcw } from "lucide-react";
+import { RefreshCw, RotateCcw, Trash2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 function ConfirmAction({
   icon: Icon,
@@ -28,6 +30,7 @@ function ConfirmAction({
   disabledTitle,
   loading,
   error,
+  variant = "default",
   onConfirm,
 }: {
   icon: LucideIcon;
@@ -38,6 +41,7 @@ function ConfirmAction({
   disabledTitle?: string;
   loading: boolean;
   error: string | null;
+  variant?: "default" | "destructive";
   onConfirm: () => void;
 }) {
   const trigger = (
@@ -73,7 +77,7 @@ function ConfirmAction({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={onConfirm}>{label}</AlertDialogAction>
+            <AlertDialogAction variant={variant} onClick={onConfirm}>{label}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -83,11 +87,14 @@ function ConfirmAction({
 }
 
 export function ServiceActions({ service, serviceId }: { service: Service; serviceId: string }) {
-  const { level } = useOperationsLevel();
-  const canWrite = level >= 1;
+  const { level, loading: levelLoading } = useOperationsLevel();
+  const canWrite = !levelLoading && level >= 1;
+  const canImpact = !levelLoading && level >= 2;
 
+  const navigate = useNavigate();
   const rollback = useAsyncAction();
   const restart = useAsyncAction();
+  const remove = useAsyncAction();
 
   const canRollback = canWrite && !!service.PreviousSpec;
 
@@ -120,6 +127,25 @@ export function ServiceActions({ service, serviceId }: { service: Service; servi
         error={restart.error}
         onConfirm={() =>
           void restart.execute(() => api.restartService(serviceId), "Failed to restart")
+        }
+      />
+
+      <ConfirmAction
+        icon={Trash2}
+        label="Remove"
+        title="Remove service?"
+        description="This will permanently remove the service and all its tasks. This action cannot be undone."
+        disabled={!canImpact}
+        disabledTitle="Editing disabled by server configuration"
+        loading={remove.loading}
+        error={remove.error}
+        variant="destructive"
+        onConfirm={() =>
+          void remove.execute(async () => {
+            await api.removeService(serviceId);
+            const stackName = service.Spec?.Labels?.[stackNamespaceLabel];
+            navigate(stackName ? `/stacks/${stackName}` : "/services", { replace: true });
+          }, "Failed to remove service")
         }
       />
     </div>

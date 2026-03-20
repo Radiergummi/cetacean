@@ -298,6 +298,7 @@ export const api = {
   updateNodeAvailability: (id: string, availability: "active" | "drain" | "pause") =>
     put<{ node: Node }>(`/nodes/${id}/availability`, { availability }),
   removeTask: (id: string) => del(`/tasks/${id}`),
+  removeService: (id: string) => del(`/services/${id}`),
 
   // Tier 2: sub-resource GETs
   serviceEnv: (id: string, signal?: AbortSignal) =>
@@ -337,6 +338,9 @@ export const api = {
 
   servicePorts: (id: string, signal?: AbortSignal) =>
     fetchJSON<{ ports: PortConfig[] }>(`/services/${id}/ports`, signal).then((r) => r.ports),
+
+  servicePlacement: (id: string) =>
+    fetchJSON<{ placement: Placement }>(`/services/${id}/placement`).then((r) => r.placement),
 
   putServicePlacement: (id: string, placement: Placement) =>
     put<{ placement: Placement }>(`/services/${id}/placement`, placement),
