@@ -50,7 +50,12 @@ func main() {
 		os.Exit(0)
 	}
 
-	fc, err := config.LoadFile(flags.Config)
+	configPath := flags.Config
+	if configPath == "" {
+		configPath = config.DiscoverConfigFile()
+	}
+
+	fc, err := config.LoadFile(configPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
 		os.Exit(1)
@@ -71,6 +76,10 @@ func main() {
 		logHandler = slog.NewJSONHandler(os.Stdout, opts)
 	}
 	slog.SetDefault(slog.New(logHandler))
+
+	if configPath != "" {
+		slog.Info("loaded config file", "path", configPath)
+	}
 
 	authCfg, err := config.LoadAuth(flags, fc)
 	if err != nil {

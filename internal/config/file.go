@@ -3,9 +3,46 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/BurntSushi/toml"
 )
+
+const configFileName = "cetacean.toml"
+
+// DiscoverConfigFile searches standard locations for a config file and
+// returns the path to the first one found. Returns "" if none exists.
+//
+// Search order:
+//  1. ./cetacean.toml (working directory)
+//  2. $XDG_CONFIG_HOME/cetacean/cetacean.toml (or ~/.config/cetacean/cetacean.toml)
+//  3. $HOME/.cetacean.toml
+//  4. /etc/cetacean/cetacean.toml
+func DiscoverConfigFile() string {
+	candidates := []string{
+		configFileName,
+	}
+
+	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+		candidates = append(candidates, filepath.Join(xdg, "cetacean", configFileName))
+	} else if home, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates, filepath.Join(home, ".config", "cetacean", configFileName))
+	}
+
+	if home, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates, filepath.Join(home, ".cetacean.toml"))
+	}
+
+	candidates = append(candidates, filepath.Join("/etc", "cetacean", configFileName))
+
+	for _, path := range candidates {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+
+	return ""
+}
 
 // fileConfig mirrors the TOML schema. Pointer fields distinguish
 // "not set" (nil) from "set to zero value".

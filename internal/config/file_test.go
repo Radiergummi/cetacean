@@ -184,6 +184,61 @@ trusted_proxies = "10.0.0.0/8"
 	}
 }
 
+func TestDiscoverConfigFile_WorkingDir(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cetacean.toml")
+	if err := os.WriteFile(path, []byte("[server]\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	original, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(original)
+
+	got := DiscoverConfigFile()
+	if got != "cetacean.toml" {
+		t.Errorf("got %q, want %q", got, "cetacean.toml")
+	}
+}
+
+func TestDiscoverConfigFile_XDGConfigHome(t *testing.T) {
+	dir := t.TempDir()
+	xdgDir := filepath.Join(dir, "cetacean")
+	os.MkdirAll(xdgDir, 0755)
+	if err := os.WriteFile(filepath.Join(xdgDir, "cetacean.toml"), []byte("[server]\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("XDG_CONFIG_HOME", dir)
+
+	// Run from a dir with no config file
+	empty := t.TempDir()
+	original, _ := os.Getwd()
+	os.Chdir(empty)
+	defer os.Chdir(original)
+
+	got := DiscoverConfigFile()
+	want := filepath.Join(xdgDir, "cetacean.toml")
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestDiscoverConfigFile_None(t *testing.T) {
+	dir := t.TempDir()
+	original, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(original)
+
+	// Clear env to prevent XDG/HOME discovery
+	t.Setenv("XDG_CONFIG_HOME", dir) // points to temp dir with no cetacean subdir
+
+	got := DiscoverConfigFile()
+	if got != "" {
+		t.Errorf("got %q, want empty string", got)
+	}
+}
+
 func TestLoadFile_PartialConfig(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "partial.toml")
