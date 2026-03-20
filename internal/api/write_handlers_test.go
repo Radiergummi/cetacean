@@ -1247,3 +1247,109 @@ func TestHandlePutServiceHealthcheck_NotFound(t *testing.T) {
 		t.Fatalf("status=%d, want 404; body: %s", w.Code, w.Body.String())
 	}
 }
+
+func TestHandleGetServicePlacement(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			TaskTemplate: swarm.TaskSpec{
+				Placement: &swarm.Placement{
+					Constraints: []string{"node.role==manager"},
+				},
+			},
+		},
+	})
+
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	req := httptest.NewRequest("GET", "/services/svc1/placement", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetServicePlacement(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	placement := resp["placement"].(map[string]any)
+	constraints := placement["Constraints"].([]any)
+	if len(constraints) != 1 || constraints[0] != "node.role==manager" {
+		t.Errorf("unexpected placement: %v", resp)
+	}
+}
+
+func TestHandleGetServicePlacement_NotFound(t *testing.T) {
+	c := cache.New(nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	req := httptest.NewRequest("GET", "/services/missing/placement", nil)
+	req.SetPathValue("id", "missing")
+	w := httptest.NewRecorder()
+	h.HandleGetServicePlacement(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestHandlePutServicePlacement(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	updated := swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			TaskTemplate: swarm.TaskSpec{
+				Placement: &swarm.Placement{
+					Constraints: []string{"node.role==worker"},
+				},
+			},
+		},
+	}
+	mock := &mockWriteClient{
+		updateServicePlacementFn: func(ctx context.Context, id string, placement *swarm.Placement) (swarm.Service, error) {
+			return updated, nil
+		},
+	}
+
+	h := NewHandlers(c, nil, nil, nil, mock, closedReady(), nil, config.OpsImpactful)
+	body := strings.NewReader(`{"Constraints":["node.role==worker"]}`)
+	req := httptest.NewRequest("PUT", "/services/svc1/placement", body)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePutServicePlacement(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status=%d, want 200", w.Code)
+	}
+}
+
+func TestHandlePutServicePlacement_InvalidBody(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+	body := strings.NewReader(`not json`)
+	req := httptest.NewRequest("PUT", "/services/svc1/placement", body)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePutServicePlacement(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status=%d, want 400", w.Code)
+	}
+}
+
+func TestHandlePutServicePlacement_NotFound(t *testing.T) {
+	c := cache.New(nil)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+	body := strings.NewReader(`{"Constraints":[]}`)
+	req := httptest.NewRequest("PUT", "/services/missing/placement", body)
+	req.SetPathValue("id", "missing")
+	w := httptest.NewRecorder()
+	h.HandlePutServicePlacement(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want 404", w.Code)
+	}
+}

@@ -733,6 +733,58 @@ func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Re
 	}))
 }
 
+func (h *Handlers) HandleGetServicePlacement(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	placement := svc.Spec.TaskTemplate.Placement
+	if placement == nil {
+		placement = &swarm.Placement{}
+	}
+
+	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/placement", "ServicePlacement", map[string]any{
+		"placement": placement,
+	}))
+}
+
+func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
+
+	_, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	var placement swarm.Placement
+	if err := json.NewDecoder(r.Body).Decode(&placement); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	slog.Info("updating service placement", "service", id)
+
+	updated, err := h.writeClient.UpdateServicePlacement(r.Context(), id, &placement)
+	if err != nil {
+		writeDockerError(w, r, err, "service")
+		return
+	}
+
+	resultPlacement := updated.Spec.TaskTemplate.Placement
+	if resultPlacement == nil {
+		resultPlacement = &swarm.Placement{}
+	}
+
+	writeJSON(w, NewDetailResponse("/services/"+id+"/placement", "ServicePlacement", map[string]any{
+		"placement": resultPlacement,
+	}))
+}
+
 func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
