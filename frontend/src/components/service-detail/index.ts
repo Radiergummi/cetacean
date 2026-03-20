@@ -3,6 +3,7 @@ export { EndpointModeEditor } from "./EndpointModeEditor";
 export { EnvEditor } from "./EnvEditor";
 export { HealthcheckEditor } from "./HealthcheckEditor";
 export { PlacementEditor } from "./PlacementEditor";
+export { PortsEditor } from "./PortsEditor";
 export { PlacementPanel } from "./PlacementPanel";
 export type { PlacementShape } from "./PlacementPanel";
 export { ReplicaCard } from "./ReplicaCard";
