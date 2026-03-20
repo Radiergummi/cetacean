@@ -189,24 +189,26 @@ export function HealthcheckEditor({
       defaultOpen={!disabled}
       controls={controls}
     >
-      {editing ? (
-        <EditMode
-          form={form}
-          updateForm={updateForm}
-          saving={saving}
-          saveError={saveError}
-          onSave={() => void save()}
-          onCancel={cancelEdit}
-        />
-      ) : disabled ? (
-        <p className="text-sm text-muted-foreground">No healthcheck configured</p>
-      ) : (
-        <DisplayMode
-          healthcheck={healthcheck!}
-          shell={extracted!.shell}
-          command={extracted!.command}
-        />
-      )}
+      <div className="rounded-lg border p-4">
+        {editing ? (
+          <EditMode
+            form={form}
+            updateForm={updateForm}
+            saving={saving}
+            saveError={saveError}
+            onSave={() => void save()}
+            onCancel={cancelEdit}
+          />
+        ) : disabled ? (
+          <p className="text-sm text-muted-foreground">No healthcheck configured</p>
+        ) : (
+          <DisplayMode
+            healthcheck={healthcheck!}
+            shell={extracted!.shell}
+            command={extracted!.command}
+          />
+        )}
+      </div>
     </CollapsibleSection>
   );
 }

@@ -608,7 +608,7 @@ export default function ServiceDetail() {
           )}
 
           {taskTemplate.RestartPolicy && (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-3 rounded-lg border p-4">
               <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 Restart Policy
               </h3>
@@ -636,7 +636,7 @@ export default function ServiceDetail() {
           )}
 
           {taskTemplate.LogDriver && (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-3 rounded-lg border p-4">
               <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 Log Driver
               </h3>
@@ -654,7 +654,7 @@ export default function ServiceDetail() {
           )}
 
           {service.Spec.UpdateConfig && (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-3 rounded-lg border p-4">
               <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 Update Config
               </h3>
@@ -663,7 +663,7 @@ export default function ServiceDetail() {
           )}
 
           {service.Spec.RollbackConfig && (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-3 rounded-lg border p-4">
               <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 Rollback Config
               </h3>
