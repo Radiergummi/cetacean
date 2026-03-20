@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
@@ -78,6 +79,11 @@ type DockerWriteClient interface {
 		ctx context.Context,
 		id string,
 		mode swarm.ResolutionMode,
+	) (swarm.Service, error)
+	UpdateServiceHealthcheck(
+		ctx context.Context,
+		id string,
+		hc *container.HealthConfig,
 	) (swarm.Service, error)
 }
 

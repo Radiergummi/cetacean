@@ -436,6 +436,19 @@ func (c *Client) UpdateServiceLabels(ctx context.Context, id string, labels map[
 	return c.InspectService(ctx, id)
 }
 
+func (c *Client) UpdateServiceHealthcheck(ctx context.Context, id string, hc *container.HealthConfig) (swarm.Service, error) {
+	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	svc.Spec.TaskTemplate.ContainerSpec.Healthcheck = hc
+	_, err = c.docker.ServiceUpdate(ctx, svc.ID, svc.Version, svc.Spec, swarm.ServiceUpdateOptions{})
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	return c.InspectService(ctx, id)
+}
+
 func (c *Client) UpdateServiceEndpointMode(ctx context.Context, id string, mode swarm.ResolutionMode) (swarm.Service, error) {
 	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
 	if err != nil {
