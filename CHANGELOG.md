@@ -14,15 +14,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Last deployment diff on service detail page showing what changed in the most recent service update
 - Inline environment variable editor on service detail page (add, edit, remove variables)
 - Inline node label editor on node detail page (add, edit, remove labels)
+- Inline service label editor on service detail page
 - Service resource limits editor on service detail page (CPU and memory limits/reservations)
+- Service mode switching (replicated/global) and endpoint mode editing (VIP/DNS-RR)
 - Write actions accessible via the command palette (Cmd+K)
 - Cluster capacity API endpoint for resource slider bounds
+- PromQL metrics query console with autocompletion for metric names, functions, and label values
+- Segment-prefix fuzzy matching in global search and PromQL autocompletion
+- Copy-to-clipboard buttons on container configuration and healthcheck values
+- Docker Swarm template expressions (e.g. `{{.Node.Hostname}}`) rendered as human-readable badges
+- Resizable log viewer (drag bottom edge, double-click to reset)
+- Fullscreen log viewer via browser Fullscreen API
 
 ### Improved
 - All mutation forms use polished shadcn/ui components (popovers, confirmation dialogs, styled dropdowns)
 - Resource limits editor shows sliders with cluster-aware bounds and accepts memory in megabytes
 - Scale replica input has increment/decrement buttons
 - Destructive actions use styled confirmation dialogs instead of browser-native confirms
+- Native title attributes replaced with proper tooltips across service detail page
+- Activity feed on detail pages no longer shows redundant resource type badge
+- Activity feed uses stack-prefix rendering for resource names
 
 ### Fixed
 - Log viewer appearing empty on service and task detail pages until user interaction
