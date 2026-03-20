@@ -1465,3 +1465,81 @@ func TestHandlePatchServicePorts_WrongContentType(t *testing.T) {
 		t.Errorf("status=%d, want 415", w.Code)
 	}
 }
+
+func TestHandleGetServiceUpdatePolicy(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			UpdateConfig: &swarm.UpdateConfig{
+				Parallelism: 2,
+				Order:       "start-first",
+			},
+		},
+	})
+
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	req := httptest.NewRequest("GET", "/services/svc1/update-policy", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetServiceUpdatePolicy(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+}
+
+func TestHandlePatchServiceUpdatePolicy(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	mock := &mockWriteClient{
+		updateServiceUpdatePolicyFn: func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error) {
+			return swarm.Service{ID: "svc1", Spec: swarm.ServiceSpec{UpdateConfig: policy}}, nil
+		},
+	}
+
+	h := NewHandlers(c, nil, nil, nil, mock, closedReady(), nil, config.OpsImpactful)
+	body := strings.NewReader(`{"Order":"start-first"}`)
+	req := httptest.NewRequest("PATCH", "/services/svc1/update-policy", body)
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceUpdatePolicy(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status=%d, want 200", w.Code)
+	}
+}
+
+func TestHandlePatchServiceUpdatePolicy_InvalidBody(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+	req := httptest.NewRequest("PATCH", "/services/svc1/update-policy", strings.NewReader(`not json`))
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceUpdatePolicy(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status=%d, want 400", w.Code)
+	}
+}
+
+func TestHandlePatchServiceUpdatePolicy_WrongContentType(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+	req := httptest.NewRequest("PATCH", "/services/svc1/update-policy", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceUpdatePolicy(w, req)
+
+	if w.Code != http.StatusUnsupportedMediaType {
+		t.Errorf("status=%d, want 415", w.Code)
+	}
+}

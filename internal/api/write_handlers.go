@@ -848,6 +848,95 @@ func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Requ
 	}))
 }
 
+func (h *Handlers) HandleGetServiceUpdatePolicy(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+	policy := svc.Spec.UpdateConfig
+	if policy == nil {
+		policy = &swarm.UpdateConfig{}
+	}
+	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/update-policy", "ServiceUpdatePolicy", map[string]any{
+		"updatePolicy": policy,
+	}))
+}
+
+func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	ct := r.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/merge-patch+json") {
+		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		return
+	}
+
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	current := svc.Spec.UpdateConfig
+	if current == nil {
+		current = &swarm.UpdateConfig{}
+	}
+
+	base, err := json.Marshal(current)
+	if err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal current update policy")
+		return
+	}
+	var baseMap map[string]any
+	if err := json.Unmarshal(base, &baseMap); err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to unmarshal current update policy")
+		return
+	}
+
+	patchBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
+		return
+	}
+	var patchMap map[string]any
+	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	mergePatch(baseMap, patchMap)
+
+	merged, err := json.Marshal(baseMap)
+	if err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal merged update policy")
+		return
+	}
+	var result swarm.UpdateConfig
+	if err := json.Unmarshal(merged, &result); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid update policy specification")
+		return
+	}
+
+	slog.Info("updating service update policy", "service", id)
+
+	updated, err := h.writeClient.UpdateServiceUpdatePolicy(r.Context(), id, &result)
+	if err != nil {
+		writeDockerError(w, r, err, "service")
+		return
+	}
+
+	resultPolicy := updated.Spec.UpdateConfig
+	if resultPolicy == nil {
+		resultPolicy = &swarm.UpdateConfig{}
+	}
+	writeJSON(w, NewDetailResponse("/services/"+id+"/update-policy", "ServiceUpdatePolicy", map[string]any{
+		"updatePolicy": resultPolicy,
+	}))
+}
+
 func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
