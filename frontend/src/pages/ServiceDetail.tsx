@@ -207,9 +207,7 @@ export default function ServiceDetail() {
   const containerSpec = service.Spec.TaskTemplate.ContainerSpec;
   const taskTemplate = service.Spec.TaskTemplate;
   const labels = service.Spec.Labels;
-  const nonStackLabels = Object.entries(labels).filter(
-    ([key]) => !key.startsWith("com.docker.stack."),
-  );
+
 
   const hasContainerConfig =
     containerSpec.Command ||
@@ -408,25 +406,6 @@ export default function ServiceDetail() {
         />
       )}
 
-      {/* Labels */}
-      {nonStackLabels.length > 0 && (
-        <CollapsibleSection
-          title="Labels"
-          defaultOpen={false}
-        >
-          <div className="flex flex-wrap gap-2">
-            {nonStackLabels.map(([key, value]) => (
-              <span
-                key={key}
-                className="inline-flex items-center rounded-md border px-2 py-0.5 font-mono text-xs"
-              >
-                <span className="text-muted-foreground">{key}=</span>
-                {value}
-              </span>
-            ))}
-          </div>
-        </CollapsibleSection>
-      )}
 
       {/* Ports */}
       {service.Endpoint?.Ports && service.Endpoint.Ports.length > 0 && (
