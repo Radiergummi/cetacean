@@ -79,6 +79,26 @@ func NewRouter(h *Handlers, b *Broadcaster, metricsProxy *PrometheusProxy, spa h
 	mux.Handle("PUT /services/{id}/healthcheck", tier1(h.HandlePutServiceHealthcheck))
 	mux.Handle("PATCH /services/{id}/healthcheck", tier1(h.HandlePatchServiceHealthcheck))
 
+	// Service placement
+	mux.HandleFunc("GET /services/{id}/placement", contentNegotiated(h.HandleGetServicePlacement, spa))
+	mux.Handle("PUT /services/{id}/placement", tier1(h.HandlePutServicePlacement))
+
+	// Service ports
+	mux.HandleFunc("GET /services/{id}/ports", contentNegotiated(h.HandleGetServicePorts, spa))
+	mux.Handle("PATCH /services/{id}/ports", tier1(h.HandlePatchServicePorts))
+
+	// Service update policy
+	mux.HandleFunc("GET /services/{id}/update-policy", contentNegotiated(h.HandleGetServiceUpdatePolicy, spa))
+	mux.Handle("PATCH /services/{id}/update-policy", tier1(h.HandlePatchServiceUpdatePolicy))
+
+	// Service rollback policy
+	mux.HandleFunc("GET /services/{id}/rollback-policy", contentNegotiated(h.HandleGetServiceRollbackPolicy, spa))
+	mux.Handle("PATCH /services/{id}/rollback-policy", tier1(h.HandlePatchServiceRollbackPolicy))
+
+	// Service log driver
+	mux.HandleFunc("GET /services/{id}/log-driver", contentNegotiated(h.HandleGetServiceLogDriver, spa))
+	mux.Handle("PATCH /services/{id}/log-driver", tier1(h.HandlePatchServiceLogDriver))
+
 	// Tasks
 	mux.HandleFunc("GET /tasks", contentNegotiatedWithSSE(h.HandleListTasks, func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, "task") }, spa))
 	mux.HandleFunc("GET /tasks/{id}", contentNegotiatedWithSSE(h.HandleGetTask, func(w http.ResponseWriter, r *http.Request) { h.streamResource(w, r, "task", r.PathValue("id")) }, spa))
