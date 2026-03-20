@@ -28,6 +28,7 @@ import type {
   PrometheusResponse,
   ClusterCapacity,
   PatchOp,
+  Healthcheck,
 } from "./types";
 
 const headers = { Accept: "application/json" };
@@ -309,6 +310,10 @@ export const api = {
     fetchJSON<{ resources: Record<string, unknown> }>(`/services/${id}/resources`, signal).then(
       (r) => r.resources,
     ),
+  serviceHealthcheck: (id: string, signal?: AbortSignal) =>
+    fetchJSON<{ healthcheck: Healthcheck | null }>(`/services/${id}/healthcheck`, signal).then(
+      (r) => r.healthcheck,
+    ),
 
   // Tier 2: sub-resource PATCHes
   patchServiceEnv: (id: string, ops: PatchOp[]) =>
@@ -323,4 +328,6 @@ export const api = {
       partial,
       "application/merge-patch+json",
     ),
+  putServiceHealthcheck: (id: string, healthcheck: Healthcheck) =>
+    put<{ healthcheck: Healthcheck }>(`/services/${id}/healthcheck`, healthcheck),
 };

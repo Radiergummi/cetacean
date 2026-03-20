@@ -50,6 +50,7 @@ export interface Service {
           Timeout?: number;
           Retries?: number;
           StartPeriod?: number;
+          StartInterval?: number;
         };
         Configs?: Array<{
           ConfigID: string;
@@ -493,3 +494,7 @@ export interface PrometheusResponse {
     }>;
   };
 }
+
+export type Healthcheck = NonNullable<
+  Service["Spec"]["TaskTemplate"]["ContainerSpec"]["Healthcheck"]
+>;
