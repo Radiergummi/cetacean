@@ -1026,6 +1026,87 @@ func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *ht
 	}))
 }
 
+func (h *Handlers) HandleGetServiceLogDriver(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/log-driver", "ServiceLogDriver", map[string]any{
+		"logDriver": svc.Spec.TaskTemplate.LogDriver,
+	}))
+}
+
+func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	ct := r.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/merge-patch+json") {
+		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		return
+	}
+
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	current := svc.Spec.TaskTemplate.LogDriver
+	if current == nil {
+		current = &swarm.Driver{}
+	}
+
+	base, err := json.Marshal(current)
+	if err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal current log driver")
+		return
+	}
+	var baseMap map[string]any
+	if err := json.Unmarshal(base, &baseMap); err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to unmarshal current log driver")
+		return
+	}
+
+	patchBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
+		return
+	}
+	var patchMap map[string]any
+	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	mergePatch(baseMap, patchMap)
+
+	merged, err := json.Marshal(baseMap)
+	if err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal merged log driver")
+		return
+	}
+	var result swarm.Driver
+	if err := json.Unmarshal(merged, &result); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid log driver specification")
+		return
+	}
+
+	slog.Info("updating service log driver", "service", id)
+
+	updated, err := h.writeClient.UpdateServiceLogDriver(r.Context(), id, &result)
+	if err != nil {
+		writeDockerError(w, r, err, "service")
+		return
+	}
+
+	writeJSON(w, NewDetailResponse("/services/"+id+"/log-driver", "ServiceLogDriver", map[string]any{
+		"logDriver": updated.Spec.TaskTemplate.LogDriver,
+	}))
+}
+
 func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit

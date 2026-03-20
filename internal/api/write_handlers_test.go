@@ -1605,3 +1605,100 @@ func TestHandlePatchServiceRollbackPolicy(t *testing.T) {
 		t.Errorf("status=%d, want 200", w.Code)
 	}
 }
+
+func TestHandleGetServiceLogDriver(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			TaskTemplate: swarm.TaskSpec{
+				LogDriver: &swarm.Driver{
+					Name:    "json-file",
+					Options: map[string]string{"max-size": "10m"},
+				},
+			},
+		},
+	})
+
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	req := httptest.NewRequest("GET", "/services/svc1/log-driver", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetServiceLogDriver(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+}
+
+func TestHandleGetServiceLogDriver_Nil(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	req := httptest.NewRequest("GET", "/services/svc1/log-driver", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetServiceLogDriver(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["logDriver"] != nil {
+		t.Errorf("expected null logDriver, got %v", resp["logDriver"])
+	}
+}
+
+func TestHandlePatchServiceLogDriver(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			TaskTemplate: swarm.TaskSpec{
+				LogDriver: &swarm.Driver{
+					Name:    "json-file",
+					Options: map[string]string{"max-size": "10m"},
+				},
+			},
+		},
+	})
+
+	mock := &mockWriteClient{
+		updateServiceLogDriverFn: func(ctx context.Context, id string, driver *swarm.Driver) (swarm.Service, error) {
+			return swarm.Service{
+				ID:   "svc1",
+				Spec: swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{LogDriver: driver}},
+			}, nil
+		},
+	}
+
+	h := NewHandlers(c, nil, nil, nil, mock, closedReady(), nil, config.OpsImpactful)
+	body := strings.NewReader(`{"Options":{"max-size":"20m"}}`)
+	req := httptest.NewRequest("PATCH", "/services/svc1/log-driver", body)
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceLogDriver(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status=%d, want 200", w.Code)
+	}
+}
+
+func TestHandlePatchServiceLogDriver_InvalidBody(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1", Spec: swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{LogDriver: &swarm.Driver{Name: "json-file"}}}})
+
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+	req := httptest.NewRequest("PATCH", "/services/svc1/log-driver", strings.NewReader(`not json`))
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceLogDriver(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status=%d, want 400", w.Code)
+	}
+}
