@@ -699,7 +699,7 @@ export default function ServiceDetail() {
 
       {history.length > 0 && (
         <CollapsibleSection title="Recent Activity">
-          <ActivityFeed entries={history} />
+          <ActivityFeed entries={history} hideType />
         </CollapsibleSection>
       )}
 

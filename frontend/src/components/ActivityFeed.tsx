@@ -1,14 +1,16 @@
 import type { HistoryEntry } from "../api/types";
 import { resourcePath } from "../lib/searchConstants";
+import ResourceName from "./ResourceName";
 import TimeAgo from "./TimeAgo";
 import { Link } from "react-router-dom";
 
 interface ActivityFeedProps {
   entries: HistoryEntry[];
   loading?: boolean;
+  hideType?: boolean;
 }
 
-export default function ActivityFeed({ entries, loading }: ActivityFeedProps) {
+export default function ActivityFeed({ entries, loading, hideType }: ActivityFeedProps) {
   if (loading) {
     return (
       <div className="space-y-3">
@@ -45,9 +47,11 @@ export default function ActivityFeed({ entries, loading }: ActivityFeedProps) {
           </span>
 
           <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">
-            <span className="rounded border px-1.5 py-0.5 text-xs text-muted-foreground">
-              {type}
-            </span>
+            {!hideType && (
+              <span className="rounded border px-1.5 py-0.5 text-xs text-muted-foreground">
+                {type}
+              </span>
+            )}
             {(() => {
               const path = resourcePath(type, resourceId, name);
               return path && action !== "remove" ? (
@@ -55,10 +59,12 @@ export default function ActivityFeed({ entries, loading }: ActivityFeedProps) {
                   to={path}
                   className="truncate font-medium hover:underline"
                 >
-                  {name}
+                  <ResourceName name={name} />
                 </Link>
               ) : (
-                <span className="truncate font-medium">{name}</span>
+                <span className="truncate font-medium">
+                  <ResourceName name={name} />
+                </span>
               );
             })()}
             <span className="text-muted-foreground">{action}d</span>

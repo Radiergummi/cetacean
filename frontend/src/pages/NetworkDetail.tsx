@@ -189,7 +189,7 @@ export default function NetworkDetail() {
         emptyMessage="No services using this network."
       />
 
-      <ActivitySection entries={history} />
+      <ActivitySection entries={history} hideType />
     </div>
   );
 }

@@ -81,7 +81,7 @@ export default function SecretDetail() {
         emptyMessage="No services using this secret."
       />
 
-      <ActivitySection entries={history} />
+      <ActivitySection entries={history} hideType />
     </div>
   );
 }

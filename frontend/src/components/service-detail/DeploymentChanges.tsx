@@ -1,5 +1,6 @@
 import type { Service, SpecChange } from "@/api/types.ts";
 import { formatRelativeDate } from "@/lib/format.ts";
+import { handleCopyWithTemplates, renderSwarmTemplate } from "@/lib/swarmTemplates";
 import { ArrowRight } from "lucide-react";
 
 export function DeploymentChanges({
@@ -26,7 +27,7 @@ export function DeploymentChanges({
         </p>
       )}
 
-      <div className="divide-y rounded-lg border">
+      <div className="divide-y rounded-lg border" onCopy={handleCopyWithTemplates}>
         {changes.map(({ field, new: change, old }, index) => (
           <div
             key={index}
@@ -36,17 +37,21 @@ export function DeploymentChanges({
             {old && change ? (
               <>
                 <span className="font-mono text-xs text-red-600 line-through dark:text-red-400">
-                  {old}
+                  {renderSwarmTemplate(old)}
                 </span>
                 <ArrowRight className="size-3 shrink-0 text-muted-foreground" />
                 <span className="font-mono text-xs text-green-600 dark:text-green-400">
-                  {change}
+                  {renderSwarmTemplate(change)}
                 </span>
               </>
             ) : old ? (
-              <span className="font-mono text-xs text-red-600 dark:text-red-400">{old}</span>
+              <span className="font-mono text-xs text-red-600 dark:text-red-400">
+                {renderSwarmTemplate(old)}
+              </span>
             ) : (
-              <span className="font-mono text-xs text-green-600 dark:text-green-400">{change}</span>
+              <span className="font-mono text-xs text-green-600 dark:text-green-400">
+                {renderSwarmTemplate(change ?? "")}
+              </span>
             )}
           </div>
         ))}
