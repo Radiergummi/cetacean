@@ -3,6 +3,7 @@ import type { Healthcheck } from "@/api/types";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
+import { formatDuration } from "@/lib/format";
 import { joinCommand, parseCommand } from "@/lib/parseCommand";
 import { getErrorMessage } from "@/lib/utils";
 import { Check, Copy, Pencil } from "lucide-react";
@@ -15,7 +16,7 @@ function CopyButton({ text }: { text: string }) {
     navigator.clipboard.writeText(text).then(
       () => {
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        window.setTimeout(() => setCopied(false), 2000);
       },
       () => {},
     );
@@ -32,20 +33,16 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-/**
- * Format nanoseconds as a human-readable seconds string.
- * Returns "default" for zero/undefined values.
- */
-function formatNanoseconds(nanoseconds: number | undefined): string {
-  if (!nanoseconds) {
+function formatHealthcheckDuration(nanoseconds: number | undefined): string {
+  if (nanoseconds == null || nanoseconds === 0) {
     return "default";
   }
 
-  return `${nanoseconds / 1e9}s`;
+  return formatDuration(nanoseconds);
 }
 
 function formatRetries(retries: number | undefined): string {
-  if (!retries) {
+  if (retries == null || retries === 0) {
     return "default";
   }
 
@@ -93,8 +90,8 @@ export function HealthcheckEditor({
   const [enabled, setEnabled] = useState(true);
   const [useShell, setUseShell] = useState(true);
   const [command, setCommand] = useState("");
-  const [interval, setInterval] = useState("");
-  const [timeout, setTimeout] = useState("");
+  const [intervalValue, setIntervalValue] = useState("");
+  const [timeoutValue, setTimeoutValue] = useState("");
   const [startPeriod, setStartPeriod] = useState("");
   const [startInterval, setStartInterval] = useState("");
   const [retries, setRetries] = useState("");
@@ -148,8 +145,8 @@ export function HealthcheckEditor({
 
       const config: Healthcheck = {
         Test: test,
-        Interval: interval ? parseFloat(interval) * 1e9 : 0,
-        Timeout: timeout ? parseFloat(timeout) * 1e9 : 0,
+        Interval: intervalValue ? parseFloat(intervalValue) * 1e9 : 0,
+        Timeout: timeoutValue ? parseFloat(timeoutValue) * 1e9 : 0,
         StartPeriod: startPeriod ? parseFloat(startPeriod) * 1e9 : 0,
         StartInterval: startInterval ? parseFloat(startInterval) * 1e9 : 0,
         Retries: retries ? parseInt(retries, 10) : 0,
@@ -196,10 +193,10 @@ export function HealthcheckEditor({
           setUseShell={setUseShell}
           command={command}
           setCommand={setCommand}
-          interval={interval}
-          setInterval={setInterval}
-          timeout={timeout}
-          setTimeout={setTimeout}
+          interval={intervalValue}
+          setInterval={setIntervalValue}
+          timeout={timeoutValue}
+          setTimeout={setTimeoutValue}
           startPeriod={startPeriod}
           setStartPeriod={setStartPeriod}
           startInterval={startInterval}
@@ -253,20 +250,20 @@ function DisplayMode({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard
           label="Interval"
-          value={formatNanoseconds(healthcheck.Interval)}
+          value={formatHealthcheckDuration(healthcheck.Interval)}
         />
         <StatCard
           label="Timeout"
-          value={formatNanoseconds(healthcheck.Timeout)}
+          value={formatHealthcheckDuration(healthcheck.Timeout)}
         />
         <StatCard
           label="Start Period"
-          value={formatNanoseconds(healthcheck.StartPeriod)}
+          value={formatHealthcheckDuration(healthcheck.StartPeriod)}
         />
         {!!healthcheck.StartInterval && (
           <StatCard
             label="Start Interval"
-            value={formatNanoseconds(healthcheck.StartInterval)}
+            value={formatHealthcheckDuration(healthcheck.StartInterval)}
           />
         )}
         <StatCard

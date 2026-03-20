@@ -54,6 +54,12 @@ export function parseCommand(input: string): string[] {
  */
 export function joinCommand(args: string[]): string {
   return args
-    .map((arg) => (arg.includes(" ") ? `"${arg}"` : arg))
+    .map((arg) => {
+      if (!arg.includes(" ") && !arg.includes('"')) {
+        return arg;
+      }
+
+      return `"${arg.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    })
     .join(" ");
 }

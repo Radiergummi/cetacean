@@ -441,6 +441,9 @@ func (c *Client) UpdateServiceHealthcheck(ctx context.Context, id string, hc *co
 	if err != nil {
 		return swarm.Service{}, err
 	}
+	if svc.Spec.TaskTemplate.ContainerSpec == nil {
+		return swarm.Service{}, errdefs.InvalidParameter(fmt.Errorf("service has no container spec"))
+	}
 	svc.Spec.TaskTemplate.ContainerSpec.Healthcheck = hc
 	_, err = c.docker.ServiceUpdate(ctx, svc.ID, svc.Version, svc.Spec, swarm.ServiceUpdateOptions{})
 	if err != nil {

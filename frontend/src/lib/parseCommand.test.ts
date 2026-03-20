@@ -62,4 +62,13 @@ describe("joinCommand", () => {
   it("returns empty string for empty array", () => {
     expect(joinCommand([])).toBe("");
   });
+
+  it("escapes inner double quotes", () => {
+    expect(joinCommand(["echo", 'say "hello"'])).toBe('echo "say \\"hello\\""');
+  });
+
+  it("round-trips through parseCommand", () => {
+    const args = ["/bin/sh", "-c", 'echo "hello world"'];
+    expect(parseCommand(joinCommand(args))).toEqual(args);
+  });
 });

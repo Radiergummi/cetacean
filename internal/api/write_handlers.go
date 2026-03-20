@@ -703,15 +703,15 @@ func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Re
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	var hc container.HealthConfig
-	if err := json.NewDecoder(r.Body).Decode(&hc); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
-		return
-	}
-
 	_, ok := h.cache.GetService(id)
 	if !ok {
 		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	var hc container.HealthConfig
+	if err := json.NewDecoder(r.Body).Decode(&hc); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
