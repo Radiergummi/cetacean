@@ -31,25 +31,25 @@ export function DeploymentChanges({
         {changes.map(({ field, new: change, old }, index) => (
           <div
             key={index}
-            className="flex items-center gap-2 px-3 py-2 text-sm"
+            className="flex items-center gap-2 overflow-hidden px-3 py-2 text-sm"
           >
             <span className="min-w-40 shrink-0 font-medium">{field}</span>
             {old && change ? (
               <>
-                <span className="font-mono text-xs text-red-600 line-through dark:text-red-400">
+                <span className="truncate font-mono text-xs text-red-600 line-through dark:text-red-400" title={old}>
                   {renderSwarmTemplate(old)}
                 </span>
                 <ArrowRight className="size-3 shrink-0 text-muted-foreground" />
-                <span className="font-mono text-xs text-green-600 dark:text-green-400">
+                <span className="truncate font-mono text-xs text-green-600 dark:text-green-400" title={change}>
                   {renderSwarmTemplate(change)}
                 </span>
               </>
             ) : old ? (
-              <span className="font-mono text-xs text-red-600 dark:text-red-400">
+              <span className="truncate font-mono text-xs text-red-600 dark:text-red-400" title={old}>
                 {renderSwarmTemplate(old)}
               </span>
             ) : (
-              <span className="font-mono text-xs text-green-600 dark:text-green-400">
+              <span className="truncate font-mono text-xs text-green-600 dark:text-green-400" title={change ?? ""}>
                 {renderSwarmTemplate(change ?? "")}
               </span>
             )}

@@ -3,27 +3,32 @@
 Cetacean is configured through CLI flags, environment variables, or a TOML config file. When the same setting is
 specified in multiple places, the precedence order is: **flag > env var > config file > default**.
 
-Sensitive settings (secrets, keys) also accept a `_FILE` suffix on their env var: set `CETACEAN_AUTH_OIDC_CLIENT_SECRET_FILE=/run/secrets/oidc_secret` and Cetacean reads the secret from that file at startup. This is the standard pattern for Docker Swarm secrets. The `_FILE` variant has lower precedence than the direct env var. Trailing newlines are trimmed.
+Sensitive settings (secrets, keys) also accept a `_FILE` suffix on their env var: set
+`CETACEAN_AUTH_OIDC_CLIENT_SECRET_FILE=/run/secrets/oidc_secret` and Cetacean reads the secret from that file at
+startup. This is the standard pattern for Docker Swarm secrets. The `_FILE` variant has lower precedence than the direct
+env var. Trailing newlines are trimmed.
 
-Supported `_FILE` variants: `CETACEAN_AUTH_OIDC_CLIENT_SECRET_FILE`, `CETACEAN_AUTH_OIDC_SESSION_KEY_FILE`, `CETACEAN_AUTH_TAILSCALE_AUTHKEY_FILE`, `CETACEAN_AUTH_HEADERS_SECRET_VALUE_FILE`.
+Supported `_FILE` variants: `CETACEAN_AUTH_OIDC_CLIENT_SECRET_FILE`, `CETACEAN_AUTH_OIDC_SESSION_KEY_FILE`,
+`CETACEAN_AUTH_TAILSCALE_AUTHKEY_FILE`, `CETACEAN_AUTH_HEADERS_SECRET_VALUE_FILE`.
 
 ## General Settings
 
-| Flag              | Env var                       | Config file key             | Default                       | Description                                    |
-|-------------------|-------------------------------|-----------------------------|-------------------------------|------------------------------------------------|
-| `-listen`         | `CETACEAN_LISTEN_ADDR`        | `server.listen_addr`        | `:9000`                       | HTTP server bind address                       |
-| `-docker-host`    | `CETACEAN_DOCKER_HOST`        | `docker.host`               | `unix:///var/run/docker.sock` | Docker socket URI                              |
-| `-prometheus-url` | `CETACEAN_PROMETHEUS_URL`     | `prometheus.url`            | _—_                           | Prometheus base URL. Unset = metrics disabled. |
-| `-log-level`      | `CETACEAN_LOG_LEVEL`          | `logging.level`             | `info`                        | `debug`, `info`, `warn`, `error`               |
-| `-log-format`     | `CETACEAN_LOG_FORMAT`         | `logging.format`            | `json`                        | `json` or `text`                               |
-| `-pprof`          | `CETACEAN_PPROF`              | `server.pprof`              | `false`                       | Expose Go pprof endpoints at `/debug/pprof/`   |
-| _—_               | `CETACEAN_SSE_BATCH_INTERVAL` | `server.sse.batch_interval` | `100ms`                       | SSE event batching window (Go duration)        |
-| _—_               | `CETACEAN_SNAPSHOT`           | `storage.snapshot`          | `true`                        | Enable disk persistence of swarm state         |
-| _—_               | `CETACEAN_DATA_DIR`           | `storage.data_dir`          | `./data`                      | Directory for snapshot file                    |
-| `-tls-cert`       | `CETACEAN_TLS_CERT`           | `tls.cert`                  | _—_                           | Server certificate path (PEM)                  |
-| `-tls-key`        | `CETACEAN_TLS_KEY`            | `tls.key`                   | _—_                           | Server private key path (PEM)                  |
-| `-config`         | `CETACEAN_CONFIG`             | _—_                         | _—_                           | Path to TOML config file                       |
-| `-version`        | _—_                           | _—_                         | _—_                           | Print version and exit                         |
+| Flag              | Env var                       | Config file key             | Default                       | Description                                                   |
+|-------------------|-------------------------------|-----------------------------|-------------------------------|---------------------------------------------------------------|
+| `-listen`         | `CETACEAN_LISTEN_ADDR`        | `server.listen_addr`        | `:9000`                       | HTTP server bind address                                      |
+| `-docker-host`    | `CETACEAN_DOCKER_HOST`        | `docker.host`               | `unix:///var/run/docker.sock` | Docker socket URI                                             |
+| `-prometheus-url` | `CETACEAN_PROMETHEUS_URL`     | `prometheus.url`            | _—_                           | Prometheus base URL. Unset = metrics disabled.                |
+| `-log-level`      | `CETACEAN_LOG_LEVEL`          | `logging.level`             | `info`                        | `debug`, `info`, `warn`, `error`                              |
+| `-log-format`     | `CETACEAN_LOG_FORMAT`         | `logging.format`            | `json`                        | `json` or `text`                                              |
+| `-pprof`          | `CETACEAN_PPROF`              | `server.pprof`              | `false`                       | Expose Go pprof endpoints at `/debug/pprof/`                  |
+| _—_               | `CETACEAN_OPERATIONS_LEVEL`   | `server.operations_level`   | `1`                           | Write operation tier: 0=read-only, 1=operational, 2=impactful |
+| _—_               | `CETACEAN_SSE_BATCH_INTERVAL` | `server.sse.batch_interval` | `100ms`                       | SSE event batching window (Go duration)                       |
+| _—_               | `CETACEAN_SNAPSHOT`           | `storage.snapshot`          | `true`                        | Enable disk persistence of swarm state                        |
+| _—_               | `CETACEAN_DATA_DIR`           | `storage.data_dir`          | `./data`                      | Directory for snapshot file                                   |
+| `-tls-cert`       | `CETACEAN_TLS_CERT`           | `tls.cert`                  | _—_                           | Server certificate path (PEM)                                 |
+| `-tls-key`        | `CETACEAN_TLS_KEY`            | `tls.key`                   | _—_                           | Server private key path (PEM)                                 |
+| `-config`         | `CETACEAN_CONFIG`             | _—_                         | _—_                           | Path to TOML config file                                      |
+| `-version`        | _—_                           | _—_                         | _—_                           | Print version and exit                                        |
 
 TLS cert and key must be set together or not at all. Required for `cert` auth mode (mTLS), optional otherwise.
 
@@ -86,12 +91,15 @@ Pass a TOML file via `-config` or `CETACEAN_CONFIG`:
 cetacean -config /etc/cetacean/config.toml
 ```
 
-The file uses nested TOML tables. Every field is optional -- omit what you don't need:
+The file uses nested TOML tables. Every field is optional, so you can omit what you don't need. Omitting a key means
+_use the default,_ which is different from setting it to its zero value. For example, omitting `snapshot` defaults to
+`true`, while `snapshot = false` explicitly disables it.
 
 ```toml
 [server]
 listen_addr = ":9000"
 pprof = false
+operations_level = 1
 
 [server.sse]
 batch_interval = "100ms"
@@ -144,10 +152,6 @@ session_key = ""                       # hex-encoded 32 bytes; random if empty
 # secret_value = "my-secret"
 # trusted_proxies = "10.0.0.0/8,192.168.1.1"
 ```
-
-Every field is optional -- omit what you don't need. Omitting a key means "use the default," which is different from
-setting it to its zero value. For example, omitting `snapshot` defaults to `true`, while `snapshot = false` explicitly
-disables it.
 
 Only the active auth mode's section matters. You can leave the others commented out or absent entirely.
 
@@ -242,6 +246,47 @@ services:
 ```
 
 For monitoring, see the [separate monitoring stack](monitoring.md).
+
+## Operations Level
+
+The `operations_level` setting controls which write operations are available. Use this to restrict Cetacean to a
+read-only dashboard or limit it to safe operational actions. The default is `1`. Requests to endpoints above the
+configured level receive a `403 Forbidden` response.
+
+The current level is exposed in the health endpoint (`GET /-/health`) as `operationsLevel`, which the frontend uses to
+hide disabled action buttons.
+
+### Level 0 — Read-only
+
+All write endpoints are disabled. Cetacean operates as a pure observability dashboard.
+
+### Level 1 — Operational
+
+Routine service management actions:
+
+- **Scale service** — `PUT /services/{id}/scale`
+- **Update service image** — `PUT /services/{id}/image`
+- **Rollback service** — `POST /services/{id}/rollback`
+- **Restart service** — `POST /services/{id}/restart`
+- **Patch service environment variables** — `PATCH /services/{id}/env`
+- **Patch service labels** — `PATCH /services/{id}/labels`
+- **Patch service resources** — `PATCH /services/{id}/resources`
+- **Update service healthcheck** — `PUT /services/{id}/healthcheck`, `PATCH /services/{id}/healthcheck`
+- **Update service placement** — `PUT /services/{id}/placement`
+- **Patch service ports** — `PATCH /services/{id}/ports`
+- **Patch service update policy** — `PATCH /services/{id}/update-policy`
+- **Patch service rollback policy** — `PATCH /services/{id}/rollback-policy`
+- **Patch service log driver** — `PATCH /services/{id}/log-driver`
+
+### Level 2 — Impactful
+
+Everything in level 1, plus actions that affect scheduling, topology, or destroy running work:
+
+- **Change node availability** (active/drain/pause) — `PUT /nodes/{id}/availability`
+- **Patch node labels** — `PATCH /nodes/{id}/labels`
+- **Change service mode** (replicated/global) — `PUT /services/{id}/mode`
+- **Change service endpoint mode** (vip/dnsrr) — `PUT /services/{id}/endpoint-mode`
+- **Remove task** (force-kill a running container) — `DELETE /tasks/{id}`
 
 ## Profiling
 

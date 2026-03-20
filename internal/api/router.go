@@ -5,10 +5,14 @@ import (
 	"net/http/pprof"
 
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
 func NewRouter(h *Handlers, b *Broadcaster, metricsProxy *PrometheusProxy, spa http.Handler, openapiSpec []byte, scalarJS []byte, enablePprof bool, authProvider auth.Provider) http.Handler {
 	mux := http.NewServeMux()
+
+	tier1 := requireLevel(config.OpsOperational, h.operationsLevel)
+	tier2 := requireLevel(config.OpsImpactful, h.operationsLevel)
 
 	authProvider.RegisterRoutes(mux)
 
@@ -54,32 +58,52 @@ func NewRouter(h *Handlers, b *Broadcaster, metricsProxy *PrometheusProxy, spa h
 	mux.HandleFunc("GET /services/{id}/logs", contentNegotiatedWithSSE(h.HandleServiceLogs, h.HandleServiceLogs, spa))
 
 	// Node write operations
-	mux.Handle("PUT /nodes/{id}/availability", requireWrite(h.HandleUpdateNodeAvailability))
+	mux.Handle("PUT /nodes/{id}/availability", tier2(h.HandleUpdateNodeAvailability))
 	mux.HandleFunc("GET /nodes/{id}/labels", contentNegotiated(h.HandleGetNodeLabels, spa))
-	mux.Handle("PATCH /nodes/{id}/labels", requireWrite(h.HandlePatchNodeLabels))
+	mux.Handle("PATCH /nodes/{id}/labels", tier2(h.HandlePatchNodeLabels))
 
 	// Service write operations
-	mux.Handle("PUT /services/{id}/scale", requireWrite(h.HandleScaleService))
-	mux.Handle("PUT /services/{id}/mode", requireWrite(h.HandleUpdateServiceMode))
-	mux.Handle("PUT /services/{id}/endpoint-mode", requireWrite(h.HandleUpdateServiceEndpointMode))
-	mux.Handle("PUT /services/{id}/image", requireWrite(h.HandleUpdateServiceImage))
-	mux.Handle("POST /services/{id}/rollback", requireWrite(h.HandleRollbackService))
-	mux.Handle("POST /services/{id}/restart", requireWrite(h.HandleRestartService))
+	mux.Handle("PUT /services/{id}/scale", tier1(h.HandleScaleService))
+	mux.Handle("PUT /services/{id}/mode", tier2(h.HandleUpdateServiceMode))
+	mux.Handle("PUT /services/{id}/endpoint-mode", tier2(h.HandleUpdateServiceEndpointMode))
+	mux.Handle("PUT /services/{id}/image", tier1(h.HandleUpdateServiceImage))
+	mux.Handle("POST /services/{id}/rollback", tier1(h.HandleRollbackService))
+	mux.Handle("POST /services/{id}/restart", tier1(h.HandleRestartService))
 	mux.HandleFunc("GET /services/{id}/env", contentNegotiated(h.HandleGetServiceEnv, spa))
-	mux.Handle("PATCH /services/{id}/env", requireWrite(h.HandlePatchServiceEnv))
+	mux.Handle("PATCH /services/{id}/env", tier1(h.HandlePatchServiceEnv))
 	mux.HandleFunc("GET /services/{id}/labels", contentNegotiated(h.HandleGetServiceLabels, spa))
-	mux.Handle("PATCH /services/{id}/labels", requireWrite(h.HandlePatchServiceLabels))
+	mux.Handle("PATCH /services/{id}/labels", tier1(h.HandlePatchServiceLabels))
 	mux.HandleFunc("GET /services/{id}/resources", contentNegotiated(h.HandleGetServiceResources, spa))
-	mux.Handle("PATCH /services/{id}/resources", requireWrite(h.HandlePatchServiceResources))
+	mux.Handle("PATCH /services/{id}/resources", tier1(h.HandlePatchServiceResources))
 	mux.HandleFunc("GET /services/{id}/healthcheck", contentNegotiated(h.HandleGetServiceHealthcheck, spa))
-	mux.Handle("PUT /services/{id}/healthcheck", requireWrite(h.HandlePutServiceHealthcheck))
-	mux.Handle("PATCH /services/{id}/healthcheck", requireWrite(h.HandlePatchServiceHealthcheck))
+	mux.Handle("PUT /services/{id}/healthcheck", tier1(h.HandlePutServiceHealthcheck))
+	mux.Handle("PATCH /services/{id}/healthcheck", tier1(h.HandlePatchServiceHealthcheck))
+
+	// Service placement
+	mux.HandleFunc("GET /services/{id}/placement", contentNegotiated(h.HandleGetServicePlacement, spa))
+	mux.Handle("PUT /services/{id}/placement", tier1(h.HandlePutServicePlacement))
+
+	// Service ports
+	mux.HandleFunc("GET /services/{id}/ports", contentNegotiated(h.HandleGetServicePorts, spa))
+	mux.Handle("PATCH /services/{id}/ports", tier1(h.HandlePatchServicePorts))
+
+	// Service update policy
+	mux.HandleFunc("GET /services/{id}/update-policy", contentNegotiated(h.HandleGetServiceUpdatePolicy, spa))
+	mux.Handle("PATCH /services/{id}/update-policy", tier1(h.HandlePatchServiceUpdatePolicy))
+
+	// Service rollback policy
+	mux.HandleFunc("GET /services/{id}/rollback-policy", contentNegotiated(h.HandleGetServiceRollbackPolicy, spa))
+	mux.Handle("PATCH /services/{id}/rollback-policy", tier1(h.HandlePatchServiceRollbackPolicy))
+
+	// Service log driver
+	mux.HandleFunc("GET /services/{id}/log-driver", contentNegotiated(h.HandleGetServiceLogDriver, spa))
+	mux.Handle("PATCH /services/{id}/log-driver", tier1(h.HandlePatchServiceLogDriver))
 
 	// Tasks
 	mux.HandleFunc("GET /tasks", contentNegotiatedWithSSE(h.HandleListTasks, func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, "task") }, spa))
 	mux.HandleFunc("GET /tasks/{id}", contentNegotiatedWithSSE(h.HandleGetTask, func(w http.ResponseWriter, r *http.Request) { h.streamResource(w, r, "task", r.PathValue("id")) }, spa))
 	mux.HandleFunc("GET /tasks/{id}/logs", contentNegotiatedWithSSE(h.HandleTaskLogs, h.HandleTaskLogs, spa))
-	mux.Handle("DELETE /tasks/{id}", requireWrite(h.HandleRemoveTask))
+	mux.Handle("DELETE /tasks/{id}", tier2(h.HandleRemoveTask))
 
 	// History
 	mux.HandleFunc("GET /history", contentNegotiated(h.HandleHistory, spa))

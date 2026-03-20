@@ -22,6 +22,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/filter"
 	"github.com/radiergummi/cetacean/internal/version"
@@ -85,6 +86,31 @@ type DockerWriteClient interface {
 		id string,
 		hc *container.HealthConfig,
 	) (swarm.Service, error)
+	UpdateServicePlacement(
+		ctx context.Context,
+		id string,
+		placement *swarm.Placement,
+	) (swarm.Service, error)
+	UpdateServicePorts(
+		ctx context.Context,
+		id string,
+		ports []swarm.PortConfig,
+	) (swarm.Service, error)
+	UpdateServiceUpdatePolicy(
+		ctx context.Context,
+		id string,
+		policy *swarm.UpdateConfig,
+	) (swarm.Service, error)
+	UpdateServiceRollbackPolicy(
+		ctx context.Context,
+		id string,
+		policy *swarm.UpdateConfig,
+	) (swarm.Service, error)
+	UpdateServiceLogDriver(
+		ctx context.Context,
+		id string,
+		driver *swarm.Driver,
+	) (swarm.Service, error)
 }
 
 type Handlers struct {
@@ -95,6 +121,7 @@ type Handlers struct {
 	writeClient         DockerWriteClient
 	ready               <-chan struct{}
 	promClient          *PromClient
+	operationsLevel     config.OperationsLevel
 	localNodeMu         sync.Mutex
 	localNodeID         string
 	localNodeDone       bool
@@ -109,15 +136,17 @@ func NewHandlers(
 	wc DockerWriteClient,
 	ready <-chan struct{},
 	promClient *PromClient,
+	operationsLevel config.OperationsLevel,
 ) *Handlers {
 	return &Handlers{
-		cache:        c,
-		broadcaster:  b,
-		dockerClient: dc,
-		systemClient: sc,
-		writeClient:  wc,
-		ready:        ready,
-		promClient:   promClient,
+		cache:           c,
+		broadcaster:     b,
+		dockerClient:    dc,
+		systemClient:    sc,
+		writeClient:     wc,
+		ready:           ready,
+		promClient:      promClient,
+		operationsLevel: operationsLevel,
 	}
 }
 
@@ -139,11 +168,12 @@ func (h *Handlers) isReady() bool {
 }
 
 func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, map[string]string{
-		"status":    "ok",
-		"version":   version.Version,
-		"commit":    version.Commit,
-		"buildDate": version.Date,
+	writeJSON(w, map[string]any{
+		"status":          "ok",
+		"version":         version.Version,
+		"commit":          version.Commit,
+		"buildDate":       version.Date,
+		"operationsLevel": h.operationsLevel,
 	})
 }
 

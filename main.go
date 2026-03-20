@@ -50,7 +50,12 @@ func main() {
 		os.Exit(0)
 	}
 
-	fc, err := config.LoadFile(flags.Config)
+	configPath := flags.Config
+	if configPath == "" {
+		configPath = config.DiscoverConfigFile()
+	}
+
+	fc, err := config.LoadFile(configPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
 		os.Exit(1)
@@ -71,6 +76,10 @@ func main() {
 		logHandler = slog.NewJSONHandler(os.Stdout, opts)
 	}
 	slog.SetDefault(slog.New(logHandler))
+
+	if configPath != "" {
+		slog.Info("loaded config file", "path", configPath)
+	}
 
 	authCfg, err := config.LoadAuth(flags, fc)
 	if err != nil {
@@ -181,7 +190,8 @@ func main() {
 	} else {
 		slog.Warn("prometheus not configured, metrics disabled")
 	}
-	handlers := api.NewHandlers(stateCache, broadcaster, dockerClient, dockerClient, dockerClient, watcher.Ready(), promClient)
+	slog.Info("operations level", "level", cfg.OperationsLevel)
+	handlers := api.NewHandlers(stateCache, broadcaster, dockerClient, dockerClient, dockerClient, watcher.Ready(), promClient, cfg.OperationsLevel)
 
 	// SPA
 	distFS, err := fs.Sub(frontendDist, "frontend/dist")

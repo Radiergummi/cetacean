@@ -681,6 +681,69 @@ func mergePatch(base, patch map[string]any) {
 	}
 }
 
+func (h *Handlers) HandleGetServicePorts(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+	var ports []swarm.PortConfig
+	if svc.Spec.EndpointSpec != nil {
+		ports = svc.Spec.EndpointSpec.Ports
+	}
+	if ports == nil {
+		ports = []swarm.PortConfig{}
+	}
+	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/ports", "ServicePorts", map[string]any{
+		"ports": ports,
+	}))
+}
+
+func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	ct := r.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/merge-patch+json") {
+		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		return
+	}
+
+	_, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	var patch struct {
+		Ports []swarm.PortConfig `json:"ports"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	slog.Info("updating service ports", "service", id)
+
+	updated, err := h.writeClient.UpdateServicePorts(r.Context(), id, patch.Ports)
+	if err != nil {
+		writeDockerError(w, r, err, "service")
+		return
+	}
+
+	var resultPorts []swarm.PortConfig
+	if updated.Spec.EndpointSpec != nil {
+		resultPorts = updated.Spec.EndpointSpec.Ports
+	}
+	if resultPorts == nil {
+		resultPorts = []swarm.PortConfig{}
+	}
+	writeJSON(w, NewDetailResponse("/services/"+id+"/ports", "ServicePorts", map[string]any{
+		"ports": resultPorts,
+	}))
+}
+
 func (h *Handlers) HandleGetServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
@@ -730,6 +793,317 @@ func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Re
 
 	writeJSON(w, NewDetailResponse("/services/"+id+"/healthcheck", "ServiceHealthcheck", map[string]any{
 		"healthcheck": resultHC,
+	}))
+}
+
+func (h *Handlers) HandleGetServicePlacement(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	placement := svc.Spec.TaskTemplate.Placement
+	if placement == nil {
+		placement = &swarm.Placement{}
+	}
+
+	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/placement", "ServicePlacement", map[string]any{
+		"placement": placement,
+	}))
+}
+
+func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
+
+	_, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	var placement swarm.Placement
+	if err := json.NewDecoder(r.Body).Decode(&placement); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	slog.Info("updating service placement", "service", id)
+
+	updated, err := h.writeClient.UpdateServicePlacement(r.Context(), id, &placement)
+	if err != nil {
+		writeDockerError(w, r, err, "service")
+		return
+	}
+
+	resultPlacement := updated.Spec.TaskTemplate.Placement
+	if resultPlacement == nil {
+		resultPlacement = &swarm.Placement{}
+	}
+
+	writeJSON(w, NewDetailResponse("/services/"+id+"/placement", "ServicePlacement", map[string]any{
+		"placement": resultPlacement,
+	}))
+}
+
+func (h *Handlers) HandleGetServiceUpdatePolicy(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+	policy := svc.Spec.UpdateConfig
+	if policy == nil {
+		policy = &swarm.UpdateConfig{}
+	}
+	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/update-policy", "ServiceUpdatePolicy", map[string]any{
+		"updatePolicy": policy,
+	}))
+}
+
+func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	ct := r.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/merge-patch+json") {
+		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		return
+	}
+
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	current := svc.Spec.UpdateConfig
+	if current == nil {
+		current = &swarm.UpdateConfig{}
+	}
+
+	base, err := json.Marshal(current)
+	if err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal current update policy")
+		return
+	}
+	var baseMap map[string]any
+	if err := json.Unmarshal(base, &baseMap); err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to unmarshal current update policy")
+		return
+	}
+
+	patchBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
+		return
+	}
+	var patchMap map[string]any
+	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	mergePatch(baseMap, patchMap)
+
+	merged, err := json.Marshal(baseMap)
+	if err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal merged update policy")
+		return
+	}
+	var result swarm.UpdateConfig
+	if err := json.Unmarshal(merged, &result); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid update policy specification")
+		return
+	}
+
+	slog.Info("updating service update policy", "service", id)
+
+	updated, err := h.writeClient.UpdateServiceUpdatePolicy(r.Context(), id, &result)
+	if err != nil {
+		writeDockerError(w, r, err, "service")
+		return
+	}
+
+	resultPolicy := updated.Spec.UpdateConfig
+	if resultPolicy == nil {
+		resultPolicy = &swarm.UpdateConfig{}
+	}
+	writeJSON(w, NewDetailResponse("/services/"+id+"/update-policy", "ServiceUpdatePolicy", map[string]any{
+		"updatePolicy": resultPolicy,
+	}))
+}
+
+func (h *Handlers) HandleGetServiceRollbackPolicy(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+	policy := svc.Spec.RollbackConfig
+	if policy == nil {
+		policy = &swarm.UpdateConfig{}
+	}
+	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/rollback-policy", "ServiceRollbackPolicy", map[string]any{
+		"rollbackPolicy": policy,
+	}))
+}
+
+func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	ct := r.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/merge-patch+json") {
+		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		return
+	}
+
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	current := svc.Spec.RollbackConfig
+	if current == nil {
+		current = &swarm.UpdateConfig{}
+	}
+
+	base, err := json.Marshal(current)
+	if err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal current rollback policy")
+		return
+	}
+	var baseMap map[string]any
+	if err := json.Unmarshal(base, &baseMap); err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to unmarshal current rollback policy")
+		return
+	}
+
+	patchBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
+		return
+	}
+	var patchMap map[string]any
+	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	mergePatch(baseMap, patchMap)
+
+	merged, err := json.Marshal(baseMap)
+	if err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal merged rollback policy")
+		return
+	}
+	var result swarm.UpdateConfig
+	if err := json.Unmarshal(merged, &result); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid rollback policy specification")
+		return
+	}
+
+	slog.Info("updating service rollback policy", "service", id)
+
+	updated, err := h.writeClient.UpdateServiceRollbackPolicy(r.Context(), id, &result)
+	if err != nil {
+		writeDockerError(w, r, err, "service")
+		return
+	}
+
+	resultPolicy := updated.Spec.RollbackConfig
+	if resultPolicy == nil {
+		resultPolicy = &swarm.UpdateConfig{}
+	}
+	writeJSON(w, NewDetailResponse("/services/"+id+"/rollback-policy", "ServiceRollbackPolicy", map[string]any{
+		"rollbackPolicy": resultPolicy,
+	}))
+}
+
+func (h *Handlers) HandleGetServiceLogDriver(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/log-driver", "ServiceLogDriver", map[string]any{
+		"logDriver": svc.Spec.TaskTemplate.LogDriver,
+	}))
+}
+
+func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	ct := r.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/merge-patch+json") {
+		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		return
+	}
+
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	current := svc.Spec.TaskTemplate.LogDriver
+	if current == nil {
+		current = &swarm.Driver{}
+	}
+
+	base, err := json.Marshal(current)
+	if err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal current log driver")
+		return
+	}
+	var baseMap map[string]any
+	if err := json.Unmarshal(base, &baseMap); err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to unmarshal current log driver")
+		return
+	}
+
+	patchBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
+		return
+	}
+	var patchMap map[string]any
+	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	mergePatch(baseMap, patchMap)
+
+	merged, err := json.Marshal(baseMap)
+	if err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal merged log driver")
+		return
+	}
+	var result swarm.Driver
+	if err := json.Unmarshal(merged, &result); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid log driver specification")
+		return
+	}
+
+	slog.Info("updating service log driver", "service", id)
+
+	updated, err := h.writeClient.UpdateServiceLogDriver(r.Context(), id, &result)
+	if err != nil {
+		writeDockerError(w, r, err, "service")
+		return
+	}
+
+	writeJSON(w, NewDetailResponse("/services/"+id+"/log-driver", "ServiceLogDriver", map[string]any{
+		"logDriver": updated.Spec.TaskTemplate.LogDriver,
 	}))
 }
 

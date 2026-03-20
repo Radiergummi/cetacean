@@ -180,6 +180,74 @@ func TestLoad_FullPrecedence(t *testing.T) {
 	}
 }
 
+func TestLoad_OperationsLevel_Default(t *testing.T) {
+	t.Setenv("CETACEAN_OPERATIONS_LEVEL", "")
+
+	cfg, err := Load(nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.OperationsLevel != OpsOperational {
+		t.Errorf("OperationsLevel=%d, want %d", cfg.OperationsLevel, OpsOperational)
+	}
+}
+
+func TestLoad_OperationsLevel_EnvOverride(t *testing.T) {
+	t.Setenv("CETACEAN_OPERATIONS_LEVEL", "0")
+
+	cfg, err := Load(nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.OperationsLevel != OpsReadOnly {
+		t.Errorf("OperationsLevel=%d, want %d", cfg.OperationsLevel, OpsReadOnly)
+	}
+}
+
+func TestLoad_OperationsLevel_FileOverride(t *testing.T) {
+	t.Setenv("CETACEAN_OPERATIONS_LEVEL", "")
+
+	level := int(OpsImpactful)
+	fc := &fileConfig{
+		Server: &fileServer{OperationsLevel: &level},
+	}
+
+	cfg, err := Load(fc, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.OperationsLevel != OpsImpactful {
+		t.Errorf("OperationsLevel=%d, want %d", cfg.OperationsLevel, OpsImpactful)
+	}
+}
+
+func TestLoad_OperationsLevel_OutOfRange(t *testing.T) {
+	t.Setenv("CETACEAN_OPERATIONS_LEVEL", "5")
+
+	_, err := Load(nil, nil)
+	if err == nil {
+		t.Fatal("expected error for out-of-range value")
+	}
+}
+
+func TestLoad_OperationsLevel_Negative(t *testing.T) {
+	t.Setenv("CETACEAN_OPERATIONS_LEVEL", "-1")
+
+	_, err := Load(nil, nil)
+	if err == nil {
+		t.Fatal("expected error for negative value")
+	}
+}
+
+func TestLoad_OperationsLevel_Invalid(t *testing.T) {
+	t.Setenv("CETACEAN_OPERATIONS_LEVEL", "banana")
+
+	_, err := Load(nil, nil)
+	if err == nil {
+		t.Fatal("expected error for non-integer value")
+	}
+}
+
 func TestLoad_FileConfig(t *testing.T) {
 	t.Setenv("CETACEAN_DOCKER_HOST", "")
 	t.Setenv("CETACEAN_PROMETHEUS_URL", "")

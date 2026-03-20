@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -95,4 +96,35 @@ func resolveDuration(flag *string, envKey string, file *string, def time.Duratio
 		return 0, fmt.Errorf("invalid duration from %s %q: must be positive", source, raw)
 	}
 	return d, nil
+}
+
+// resolveInt returns the first set value in precedence order:
+// flag > env > file > hardcoded default. Returns an error if any
+// explicitly set value is not a valid integer or is out of [min, max].
+func resolveInt(flag *int, envKey string, file *int, def, min, max int) (int, error) {
+	var raw string
+	var source string
+	switch envVal := os.Getenv(envKey); {
+	case flag != nil:
+		return checkIntRange(*flag, min, max, "flag")
+	case envVal != "":
+		raw, source = envVal, envKey
+	case file != nil:
+		return checkIntRange(*file, min, max, "config file")
+	default:
+		return def, nil
+	}
+
+	v, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid integer from %s %q: %w", source, raw, err)
+	}
+	return checkIntRange(v, min, max, source)
+}
+
+func checkIntRange(v, min, max int, source string) (int, error) {
+	if v < min || v > max {
+		return 0, fmt.Errorf("value %d from %s out of range [%d, %d]", v, source, min, max)
+	}
+	return v, nil
 }

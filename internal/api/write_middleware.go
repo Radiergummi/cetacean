@@ -1,11 +1,23 @@
 package api
 
-import "net/http"
+import (
+	"net/http"
+	"strconv"
 
-// requireWrite is a middleware placeholder for future RBAC on write operations.
-// Today it is a pass-through: the auth middleware upstream already rejects
-// unauthenticated requests before handlers run. This middleware will check
-// identity.Groups against allowed roles once authorization is implemented.
-func requireWrite(next http.HandlerFunc) http.Handler {
-	return next
+	"github.com/radiergummi/cetacean/internal/config"
+)
+
+// requireLevel returns middleware that blocks requests when the configured
+// operations level is below the required level for this endpoint.
+func requireLevel(required, configured config.OperationsLevel) func(http.HandlerFunc) http.Handler {
+	return func(next http.HandlerFunc) http.Handler {
+		if configured >= required {
+			return next
+		}
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			writeProblem(w, r, http.StatusForbidden,
+				"this operation requires operations level "+strconv.Itoa(int(required))+
+					", but the server is configured at level "+strconv.Itoa(int(configured)))
+		})
+	}
 }

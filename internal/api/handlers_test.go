@@ -14,6 +14,7 @@ import (
 	"github.com/docker/docker/api/types/volume"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
 func closedReady() <-chan struct{} {
@@ -23,19 +24,19 @@ func closedReady() <-chan struct{} {
 }
 
 func TestHandleHealth(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 	req := httptest.NewRequest("GET", "/-/health", nil)
 	w := httptest.NewRecorder()
 	h.HandleHealth(w, req)
 	if w.Code != http.StatusOK {
 		t.Errorf("status=%d, want 200", w.Code)
 	}
-	var body map[string]string
+	var body map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"status", "version", "commit", "buildDate"} {
-		if body[key] == "" {
+	for _, key := range []string{"status", "version", "commit", "buildDate", "operationsLevel"} {
+		if _, ok := body[key]; !ok {
 			t.Errorf("missing key %q in health response", key)
 		}
 	}
@@ -43,7 +44,7 @@ func TestHandleHealth(t *testing.T) {
 
 func TestHandleReady_NotReady(t *testing.T) {
 	ch := make(chan struct{}) // not closed = not ready
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, ch, nil)
+	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, ch, nil, config.OpsImpactful)
 	req := httptest.NewRequest("GET", "/-/ready", nil)
 	w := httptest.NewRecorder()
 	h.HandleReady(w, req)
@@ -53,7 +54,7 @@ func TestHandleReady_NotReady(t *testing.T) {
 }
 
 func TestHandleReady_Ready(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 	req := httptest.NewRequest("GET", "/-/ready", nil)
 	w := httptest.NewRecorder()
 	h.HandleReady(w, req)
@@ -66,7 +67,7 @@ func TestHandleCluster(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{ID: "n1"})
 	c.SetService(swarm.Service{ID: "s1"})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/cluster", nil)
 	w := httptest.NewRecorder()
@@ -91,7 +92,7 @@ func TestHandleCluster(t *testing.T) {
 
 func TestHandleClusterMetrics_NoPrometheus(t *testing.T) {
 	c := cache.New(nil)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/cluster/metrics", nil)
 	w := httptest.NewRecorder()
@@ -122,7 +123,7 @@ func TestHandleClusterCapacity(t *testing.T) {
 			},
 		},
 	})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/cluster/capacity", nil)
 	w := httptest.NewRecorder()
@@ -177,7 +178,7 @@ func TestHandleClusterMetrics_WithPrometheus(t *testing.T) {
 			Resources: swarm.Resources{NanoCPUs: 4_000_000_000, MemoryBytes: 64_000_000_000},
 		},
 	})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), NewPromClient(prom.URL))
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), NewPromClient(prom.URL), config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/cluster/metrics", nil)
 	w := httptest.NewRecorder()
@@ -211,7 +212,7 @@ func TestHandleClusterMetrics_WithPrometheus(t *testing.T) {
 }
 
 func TestHandleMonitoringStatus_NoPrometheus(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/-/metrics/status", nil)
 	w := httptest.NewRecorder()
@@ -258,7 +259,7 @@ func TestHandleMonitoringStatus_WithPrometheus(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{ID: "n1", Status: swarm.NodeStatus{State: swarm.NodeStateReady}})
 	c.SetNode(swarm.Node{ID: "n2", Status: swarm.NodeStatus{State: swarm.NodeStateReady}})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), NewPromClient(prom.URL))
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), NewPromClient(prom.URL), config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/-/metrics/status", nil)
 	w := httptest.NewRecorder()
@@ -300,7 +301,7 @@ func TestHandleMonitoringStatus_WithPrometheus(t *testing.T) {
 
 func TestHandleMonitoringStatus_PrometheusUnreachable(t *testing.T) {
 	// Point to a URL that will refuse connections
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), NewPromClient("http://127.0.0.1:19999"))
+	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), NewPromClient("http://127.0.0.1:19999"), config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/-/metrics/status", nil)
 	w := httptest.NewRecorder()
@@ -332,7 +333,7 @@ func TestHandleListNodes(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{ID: "n1"})
 	c.SetNode(swarm.Node{ID: "n2"})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/nodes", nil)
 	w := httptest.NewRecorder()
@@ -355,7 +356,7 @@ func TestHandleListNodes(t *testing.T) {
 func TestHandleGetNode_Found(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{ID: "n1"})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/nodes/n1", nil)
 	req.SetPathValue("id", "n1")
@@ -369,7 +370,7 @@ func TestHandleGetNode_Found(t *testing.T) {
 
 func TestHandleGetNode_NotFound(t *testing.T) {
 	c := cache.New(nil)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/nodes/missing", nil)
 	req.SetPathValue("id", "missing")
@@ -388,7 +389,7 @@ func TestHandleServiceTasks(t *testing.T) {
 	t2 := swarm.Task{ID: "t2", ServiceID: "svc2"}
 	c.SetTask(t1)
 	c.SetTask(t2)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/services/svc1/tasks", nil)
 	req.SetPathValue("id", "svc1")
@@ -420,7 +421,7 @@ func TestHandleNodeTasks(t *testing.T) {
 	t2 := swarm.Task{ID: "t2", NodeID: "node2"}
 	c.SetTask(t1)
 	c.SetTask(t2)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/nodes/node1/tasks", nil)
 	req.SetPathValue("id", "node1")
@@ -451,7 +452,7 @@ func TestHandleListServices_Paginated(t *testing.T) {
 		svc.Spec.Name = name
 		c.SetService(svc)
 	}
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/services?limit=2&sort=name", nil)
 	w := httptest.NewRecorder()
@@ -486,7 +487,7 @@ func TestHandleListServices_RunningTasks(t *testing.T) {
 	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
 	c.SetTask(swarm.Task{ID: "t2", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
 	c.SetTask(swarm.Task{ID: "t3", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateFailed}})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/services", nil)
 	w := httptest.NewRecorder()
@@ -510,7 +511,7 @@ func TestHandleListNodes_Paginated(t *testing.T) {
 	n2.Description.Hostname = "alpha"
 	c.SetNode(n1)
 	c.SetNode(n2)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/nodes?limit=1&sort=hostname", nil)
 	w := httptest.NewRecorder()
@@ -541,7 +542,7 @@ func TestHandleListServices_Search(t *testing.T) {
 	svc2.Spec.Name = "api-backend"
 	c.SetService(svc1)
 	c.SetService(svc2)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/services?search=web", nil)
 	w := httptest.NewRecorder()
@@ -566,7 +567,7 @@ func TestHandleHistory(t *testing.T) {
 	c.SetService(swarm.Service{ID: "s1", Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "nginx"}}})
 	c.SetService(swarm.Service{ID: "s2", Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "redis"}}})
 
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 	req := httptest.NewRequest("GET", "/history?type=service", nil)
 	w := httptest.NewRecorder()
 	h.HandleHistory(w, req)
@@ -587,7 +588,7 @@ func TestHandleHistory_FilterByResource(t *testing.T) {
 	c.SetService(swarm.Service{ID: "s1", Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "nginx"}}})
 	c.SetNode(swarm.Node{ID: "n1", Description: swarm.NodeDescription{Hostname: "worker-01"}})
 
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 	req := httptest.NewRequest("GET", "/history?resourceId=s1", nil)
 	w := httptest.NewRecorder()
 	h.HandleHistory(w, req)
@@ -604,7 +605,7 @@ func TestHandleGetService_Found(t *testing.T) {
 	svc := swarm.Service{ID: "svc1"}
 	svc.Spec.Name = "nginx"
 	c.SetService(svc)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/services/svc1", nil)
 	req.SetPathValue("id", "svc1")
@@ -617,7 +618,7 @@ func TestHandleGetService_Found(t *testing.T) {
 }
 
 func TestHandleGetService_NotFound(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/services/missing", nil)
 	req.SetPathValue("id", "missing")
@@ -632,7 +633,7 @@ func TestHandleGetService_NotFound(t *testing.T) {
 func TestHandleGetTask_Found(t *testing.T) {
 	c := cache.New(nil)
 	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1"})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/tasks/t1", nil)
 	req.SetPathValue("id", "t1")
@@ -645,7 +646,7 @@ func TestHandleGetTask_Found(t *testing.T) {
 }
 
 func TestHandleGetTask_NotFound(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/tasks/missing", nil)
 	req.SetPathValue("id", "missing")
@@ -661,7 +662,7 @@ func TestHandleListTasks(t *testing.T) {
 	c := cache.New(nil)
 	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
 	c.SetTask(swarm.Task{ID: "t2", ServiceID: "svc2", Status: swarm.TaskStatus{State: swarm.TaskStateFailed}})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/tasks?sort=state", nil)
 	w := httptest.NewRecorder()
@@ -678,7 +679,7 @@ func TestHandleListTasks(t *testing.T) {
 }
 
 func TestHandleServiceTasks_NotFound(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/services/missing/tasks", nil)
 	req.SetPathValue("id", "missing")
@@ -691,7 +692,7 @@ func TestHandleServiceTasks_NotFound(t *testing.T) {
 }
 
 func TestHandleNodeTasks_NotFound(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/nodes/missing/tasks", nil)
 	req.SetPathValue("id", "missing")
@@ -709,7 +710,7 @@ func TestHandleListStacks(t *testing.T) {
 	svc.Spec.Name = "web"
 	svc.Spec.Labels = map[string]string{"com.docker.stack.namespace": "mystack"}
 	c.SetService(svc)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/stacks", nil)
 	w := httptest.NewRecorder()
@@ -736,7 +737,7 @@ func TestHandleListStacks_SortByName(t *testing.T) {
 		svc.Spec.Labels = map[string]string{"com.docker.stack.namespace": name}
 		c.SetService(svc)
 	}
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/stacks?sort=name", nil)
 	w := httptest.NewRecorder()
@@ -753,7 +754,7 @@ func TestHandleListConfigs_SortByName(t *testing.T) {
 	c := cache.New(nil)
 	c.SetConfig(swarm.Config{ID: "c1", Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "zebra"}}})
 	c.SetConfig(swarm.Config{ID: "c2", Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "alpha"}}})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/configs?sort=name", nil)
 	w := httptest.NewRecorder()
@@ -770,7 +771,7 @@ func TestHandleListSecrets_SortByName(t *testing.T) {
 	c := cache.New(nil)
 	c.SetSecret(swarm.Secret{ID: "s1", Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "zebra"}}})
 	c.SetSecret(swarm.Secret{ID: "s2", Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "alpha"}}})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/secrets?sort=name", nil)
 	w := httptest.NewRecorder()
@@ -787,7 +788,7 @@ func TestHandleListNetworks_SortByName(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNetwork(network.Summary{ID: "n1", Name: "zebra"})
 	c.SetNetwork(network.Summary{ID: "n2", Name: "alpha"})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/networks?sort=name", nil)
 	w := httptest.NewRecorder()
@@ -804,7 +805,7 @@ func TestHandleListVolumes_SortByName(t *testing.T) {
 	c := cache.New(nil)
 	c.SetVolume(volume.Volume{Name: "zebra"})
 	c.SetVolume(volume.Volume{Name: "alpha"})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/volumes?sort=name", nil)
 	w := httptest.NewRecorder()
@@ -827,7 +828,7 @@ func TestHandleListStacks_Search(t *testing.T) {
 	svc2.Spec.Labels = map[string]string{"com.docker.stack.namespace": "backend"}
 	c.SetService(svc1)
 	c.SetService(svc2)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/stacks?search=front", nil)
 	w := httptest.NewRecorder()
@@ -846,7 +847,7 @@ func TestHandleGetStack_Found(t *testing.T) {
 	svc.Spec.Name = "web"
 	svc.Spec.Labels = map[string]string{"com.docker.stack.namespace": "mystack"}
 	c.SetService(svc)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/stacks/mystack", nil)
 	req.SetPathValue("name", "mystack")
@@ -872,7 +873,7 @@ func TestHandleGetStack_Found(t *testing.T) {
 }
 
 func TestHandleGetStack_NotFound(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/stacks/missing", nil)
 	req.SetPathValue("name", "missing")
@@ -888,7 +889,7 @@ func TestHandleListConfigs(t *testing.T) {
 	c := cache.New(nil)
 	c.SetConfig(swarm.Config{ID: "c1", Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "app-config"}}})
 	c.SetConfig(swarm.Config{ID: "c2", Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "db-config"}}})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/configs?search=app", nil)
 	w := httptest.NewRecorder()
@@ -908,7 +909,7 @@ func TestHandleListSecrets(t *testing.T) {
 	c := cache.New(nil)
 	c.SetSecret(swarm.Secret{ID: "s1", Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "tls-cert"}}})
 	c.SetSecret(swarm.Secret{ID: "s2", Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "api-key"}}})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/secrets?search=tls", nil)
 	w := httptest.NewRecorder()
@@ -928,7 +929,7 @@ func TestHandleListNetworks(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNetwork(network.Summary{ID: "n1", Name: "web_overlay", Driver: "overlay"})
 	c.SetNetwork(network.Summary{ID: "n2", Name: "db_bridge", Driver: "bridge"})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/networks?search=web", nil)
 	w := httptest.NewRecorder()
@@ -948,7 +949,7 @@ func TestHandleListVolumes(t *testing.T) {
 	c := cache.New(nil)
 	c.SetVolume(volume.Volume{Name: "data-vol", Driver: "local"})
 	c.SetVolume(volume.Volume{Name: "cache-vol", Driver: "local"})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/volumes?search=data", nil)
 	w := httptest.NewRecorder()
@@ -965,7 +966,7 @@ func TestHandleListVolumes(t *testing.T) {
 }
 
 func TestHandleTaskLogs_NotFound(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/tasks/missing/logs", nil)
 	req.SetPathValue("id", "missing")
@@ -980,7 +981,7 @@ func TestHandleTaskLogs_NotFound(t *testing.T) {
 func TestHandleHistory_InvalidLimit(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{ID: "s1", Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "nginx"}}})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	// invalid limit should fall back to default (50)
 	req := httptest.NewRequest("GET", "/history?limit=abc", nil)
@@ -999,7 +1000,7 @@ func TestHandleHistory_CustomLimit(t *testing.T) {
 		svc.Spec.Name = "svc-" + string(rune('a'+i))
 		c.SetService(svc)
 	}
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/history?limit=2", nil)
 	w := httptest.NewRecorder()
@@ -1020,7 +1021,7 @@ func TestHandleListNodes_SortByRole(t *testing.T) {
 	n2.Description.Hostname = "manager"
 	c.SetNode(n1)
 	c.SetNode(n2)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/nodes?sort=role", nil)
 	w := httptest.NewRecorder()
@@ -1043,7 +1044,7 @@ func TestHandleListNodes_SortByStatus(t *testing.T) {
 	n2 := swarm.Node{ID: "n2", Status: swarm.NodeStatus{State: swarm.NodeStateDown}}
 	c.SetNode(n1)
 	c.SetNode(n2)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/nodes?sort=status", nil)
 	w := httptest.NewRecorder()
@@ -1062,7 +1063,7 @@ func TestHandleListNodes_SortByAvailability(t *testing.T) {
 	n2 := swarm.Node{ID: "n2", Spec: swarm.NodeSpec{Availability: swarm.NodeAvailabilityActive}}
 	c.SetNode(n1)
 	c.SetNode(n2)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/nodes?sort=availability", nil)
 	w := httptest.NewRecorder()
@@ -1087,7 +1088,7 @@ func TestHandleListServices_SortByMode(t *testing.T) {
 	}}
 	c.SetService(svc1)
 	c.SetService(svc2)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/services?sort=mode", nil)
 	w := httptest.NewRecorder()
@@ -1108,7 +1109,7 @@ func TestHandleListTasks_SortByService(t *testing.T) {
 	c := cache.New(nil)
 	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc-b"})
 	c.SetTask(swarm.Task{ID: "t2", ServiceID: "svc-a"})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/tasks?sort=service", nil)
 	w := httptest.NewRecorder()
@@ -1125,7 +1126,7 @@ func TestHandleListTasks_SortByNode(t *testing.T) {
 	c := cache.New(nil)
 	c.SetTask(swarm.Task{ID: "t1", NodeID: "node-b"})
 	c.SetTask(swarm.Task{ID: "t2", NodeID: "node-a"})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/tasks?sort=node", nil)
 	w := httptest.NewRecorder()
@@ -1142,7 +1143,7 @@ func TestHandleListNetworks_SortByDriver(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNetwork(network.Summary{ID: "n1", Name: "net1", Driver: "overlay"})
 	c.SetNetwork(network.Summary{ID: "n2", Name: "net2", Driver: "bridge"})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/networks?sort=driver", nil)
 	w := httptest.NewRecorder()
@@ -1159,7 +1160,7 @@ func TestHandleListVolumes_SortByDriver(t *testing.T) {
 	c := cache.New(nil)
 	c.SetVolume(volume.Volume{Name: "vol1", Driver: "nfs"})
 	c.SetVolume(volume.Volume{Name: "vol2", Driver: "local"})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/volumes?sort=driver", nil)
 	w := httptest.NewRecorder()
@@ -1190,7 +1191,7 @@ func TestHandleListNodes_Filter(t *testing.T) {
 	n2.Description.Hostname = "worker-01"
 	c.SetNode(n1)
 	c.SetNode(n2)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	w := httptest.NewRecorder()
 	h.HandleListNodes(w, filterReq("/nodes", `role == "manager"`))
@@ -1213,7 +1214,7 @@ func TestHandleListTasks_Filter(t *testing.T) {
 	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
 	c.SetTask(swarm.Task{ID: "t2", ServiceID: "svc2", Status: swarm.TaskStatus{State: swarm.TaskStateFailed}})
 	c.SetTask(swarm.Task{ID: "t3", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateFailed}})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	w := httptest.NewRecorder()
 	h.HandleListTasks(w, filterReq("/tasks", `state == "failed" && service == "svc1"`))
@@ -1243,7 +1244,7 @@ func TestHandleListServices_Filter(t *testing.T) {
 	}}
 	c.SetService(svc1)
 	c.SetService(svc2)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	w := httptest.NewRecorder()
 	h.HandleListServices(w, filterReq("/services", `image contains "nginx"`))
@@ -1262,7 +1263,7 @@ func TestHandleListNetworks_Filter(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNetwork(network.Summary{ID: "n1", Name: "web_overlay", Driver: "overlay"})
 	c.SetNetwork(network.Summary{ID: "n2", Name: "db_bridge", Driver: "bridge"})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	w := httptest.NewRecorder()
 	h.HandleListNetworks(w, filterReq("/networks", `driver == "overlay"`))
@@ -1275,7 +1276,7 @@ func TestHandleListNetworks_Filter(t *testing.T) {
 }
 
 func TestHandleList_FilterInvalid(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	w := httptest.NewRecorder()
 	h.HandleListNodes(w, filterReq("/nodes", "invalid ==="))
@@ -1286,7 +1287,7 @@ func TestHandleList_FilterInvalid(t *testing.T) {
 }
 
 func TestHandleList_FilterTooLong(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 	long := strings.Repeat("a", 513)
 
 	w := httptest.NewRecorder()
@@ -1300,7 +1301,7 @@ func TestHandleList_FilterTooLong(t *testing.T) {
 func TestHandleList_FilterEmpty(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{ID: "n1"})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	// Empty filter should return all items
 	w := httptest.NewRecorder()
@@ -1316,7 +1317,7 @@ func TestHandleList_FilterEmpty(t *testing.T) {
 func TestHandleList_FilterNoMatch(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{ID: "n1", Spec: swarm.NodeSpec{Role: swarm.NodeRoleWorker}})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	w := httptest.NewRecorder()
 	h.HandleListNodes(w, filterReq("/nodes", `role == "manager"`))
@@ -1335,7 +1336,7 @@ func TestHandleListVolumes_Filter(t *testing.T) {
 	c := cache.New(nil)
 	c.SetVolume(volume.Volume{Name: "data-vol", Driver: "local"})
 	c.SetVolume(volume.Volume{Name: "cache-vol", Driver: "nfs"})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	w := httptest.NewRecorder()
 	h.HandleListVolumes(w, filterReq("/volumes", `driver == "nfs"`))
@@ -1354,7 +1355,7 @@ func TestHandleListConfigs_Filter(t *testing.T) {
 	c := cache.New(nil)
 	c.SetConfig(swarm.Config{ID: "c1", Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "app-config"}}})
 	c.SetConfig(swarm.Config{ID: "c2", Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "db-config"}}})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	w := httptest.NewRecorder()
 	h.HandleListConfigs(w, filterReq("/configs", `name contains "app"`))
@@ -1370,7 +1371,7 @@ func TestHandleListSecrets_Filter(t *testing.T) {
 	c := cache.New(nil)
 	c.SetSecret(swarm.Secret{ID: "s1", Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "tls-cert"}}})
 	c.SetSecret(swarm.Secret{ID: "s2", Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "api-key"}}})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	w := httptest.NewRecorder()
 	h.HandleListSecrets(w, filterReq("/secrets", `name startsWith "tls"`))
@@ -1392,7 +1393,7 @@ func TestHandleListStacks_Filter(t *testing.T) {
 	svc2.Spec.Labels = map[string]string{"com.docker.stack.namespace": "backend"}
 	c.SetService(svc1)
 	c.SetService(svc2)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	w := httptest.NewRecorder()
 	h.HandleListStacks(w, filterReq("/stacks", `services > 0`))
@@ -1411,7 +1412,7 @@ func TestHandleList_FilterWithSearchAndPagination(t *testing.T) {
 		n.Description.Hostname = name
 		c.SetNode(n)
 	}
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	// search narrows to "web-*", filter narrows to just one, pagination limits
 	req := filterReq("/nodes", `name endsWith "-prod"`)
@@ -1436,7 +1437,7 @@ func TestHandleList_FilterWithSearchAndPagination(t *testing.T) {
 func TestHandleList_FilterMissingField(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{ID: "n1", Spec: swarm.NodeSpec{Role: swarm.NodeRoleWorker}})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	// expr treats missing env keys as nil, so this evaluates to false (no match)
 	w := httptest.NewRecorder()
@@ -1460,7 +1461,7 @@ func TestHandleListNodes_Search(t *testing.T) {
 	n2.Description.Hostname = "manager-01"
 	c.SetNode(n1)
 	c.SetNode(n2)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/nodes?search=worker", nil)
 	w := httptest.NewRecorder()
@@ -1509,7 +1510,7 @@ func TestHandleStackSummary(t *testing.T) {
 	}))
 	defer prom.Close()
 
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), NewPromClient(prom.URL))
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), NewPromClient(prom.URL), config.OpsImpactful)
 	req := httptest.NewRequest("GET", "/stacks/summary", nil)
 	w := httptest.NewRecorder()
 	h.HandleStackSummary(w, req)
@@ -1553,7 +1554,7 @@ func TestHandleStackSummary_PrometheusDown(t *testing.T) {
 	})
 	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
 
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), NewPromClient("http://127.0.0.1:1"))
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), NewPromClient("http://127.0.0.1:1"), config.OpsImpactful)
 	req := httptest.NewRequest("GET", "/stacks/summary", nil)
 	w := httptest.NewRecorder()
 	h.HandleStackSummary(w, req)
@@ -1579,7 +1580,7 @@ func TestHandleGetSecret_DataIsRedacted(t *testing.T) {
 	sec.Spec.Name = "my-secret"
 	sec.Spec.Data = []byte("super-secret")
 	c.SetSecret(sec)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/secrets/sec1", nil)
 	req.SetPathValue("id", "sec1")
@@ -1612,7 +1613,7 @@ func TestHandleListSecrets_DataIsRedacted(t *testing.T) {
 	sec.Spec.Name = "my-secret"
 	sec.Spec.Data = []byte("super-secret")
 	c.SetSecret(sec)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/secrets", nil)
 	w := httptest.NewRecorder()
@@ -1651,7 +1652,7 @@ func TestHandleGetConfig_Found(t *testing.T) {
 		Configs: []*swarm.ConfigReference{{ConfigID: "cfg1", ConfigName: "app-config"}},
 	}
 	c.SetService(svc)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/configs/cfg1", nil)
 	req.SetPathValue("id", "cfg1")
@@ -1683,7 +1684,7 @@ func TestHandleGetConfig_Found(t *testing.T) {
 }
 
 func TestHandleGetConfig_NotFound(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/configs/missing", nil)
 	req.SetPathValue("id", "missing")
@@ -1707,7 +1708,7 @@ func TestHandleGetSecret_Found(t *testing.T) {
 		Secrets: []*swarm.SecretReference{{SecretID: "sec1", SecretName: "tls-cert"}},
 	}
 	c.SetService(svc)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/secrets/sec1", nil)
 	req.SetPathValue("id", "sec1")
@@ -1739,7 +1740,7 @@ func TestHandleGetSecret_Found(t *testing.T) {
 }
 
 func TestHandleGetSecret_NotFound(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/secrets/missing", nil)
 	req.SetPathValue("id", "missing")
@@ -1759,7 +1760,7 @@ func TestHandleGetNetwork_Found(t *testing.T) {
 	svc.Spec.Name = "web"
 	svc.Spec.TaskTemplate.Networks = []swarm.NetworkAttachmentConfig{{Target: "net1"}}
 	c.SetService(svc)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/networks/net1", nil)
 	req.SetPathValue("id", "net1")
@@ -1791,7 +1792,7 @@ func TestHandleGetNetwork_Found(t *testing.T) {
 }
 
 func TestHandleGetNetwork_NotFound(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/networks/missing", nil)
 	req.SetPathValue("id", "missing")
@@ -1813,7 +1814,7 @@ func TestHandleGetVolume_Found(t *testing.T) {
 		Mounts: []mount.Mount{{Type: mount.TypeVolume, Source: "data-vol"}},
 	}
 	c.SetService(svc)
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/volumes/data-vol", nil)
 	req.SetPathValue("name", "data-vol")
@@ -1845,7 +1846,7 @@ func TestHandleGetVolume_Found(t *testing.T) {
 }
 
 func TestHandleGetVolume_NotFound(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/volumes/missing", nil)
 	req.SetPathValue("name", "missing")
@@ -1882,7 +1883,7 @@ func TestHandleSearch(t *testing.T) {
 		Status:      swarm.NodeStatus{State: swarm.NodeStateReady},
 	})
 
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 	req := httptest.NewRequest("GET", "/search?q=nginx", nil)
 	w := httptest.NewRecorder()
 	h.HandleSearch(w, req)
@@ -1927,7 +1928,7 @@ func TestHandleSearch_MatchesLabels(t *testing.T) {
 		Labels: map[string]string{"team": "nginx-platform"},
 	})
 
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 	req := httptest.NewRequest("GET", "/search?q=nginx", nil)
 	w := httptest.NewRecorder()
 	h.HandleSearch(w, req)
@@ -1952,7 +1953,7 @@ func TestHandleSearch_MatchesLabels(t *testing.T) {
 }
 
 func TestHandleSearch_EmptyQuery(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 	req := httptest.NewRequest("GET", "/search", nil)
 	w := httptest.NewRecorder()
 	h.HandleSearch(w, req)
@@ -1974,7 +1975,7 @@ func TestHandleSearch_CapsAtThreePerType(t *testing.T) {
 		})
 	}
 
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 	req := httptest.NewRequest("GET", "/search?q=web", nil)
 	w := httptest.NewRecorder()
 	h.HandleSearch(w, req)
@@ -2006,7 +2007,7 @@ func TestHandleListTasks_NilContainerSpec(t *testing.T) {
 	// Task with nil ContainerSpec should not cause a panic
 	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", Spec: swarm.TaskSpec{ContainerSpec: nil}})
 	c.SetTask(swarm.Task{ID: "t2", ServiceID: "svc2", Spec: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{Image: "nginx"}}})
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil)
+	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/tasks", nil)
 	w := httptest.NewRecorder()
