@@ -16,6 +16,7 @@ import TasksTable from "../components/TasksTable";
 import { useGaugeValue } from "../hooks/useGaugeValue";
 import { useInstanceResolver } from "../hooks/useInstanceResolver";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { useOperationsLevel } from "../hooks/useOperationsLevel";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { formatBytes, formatNumber } from "../lib/format";
@@ -31,6 +32,7 @@ export default function NodeDetail() {
   const [nodeLabels, setNodeLabels] = useState<Record<string, string> | null>(null);
 
   const monitoring = useMonitoringStatus();
+  const { level: operationsLevel } = useOperationsLevel();
   const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
   const hasCadvisor = !!monitoring?.cadvisor?.targets;
   const { resolve } = useInstanceResolver();
@@ -207,6 +209,8 @@ export default function NodeDetail() {
           entries={nodeLabels}
           keyPlaceholder="key"
           valuePlaceholder="value"
+          editDisabled={operationsLevel < 2}
+          editDisabledTitle="Editing disabled by server configuration"
           onSave={async (ops) => {
             const updated = await api.patchNodeLabels(node.ID, ops);
             setNodeLabels(updated);

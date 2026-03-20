@@ -100,6 +100,7 @@ export default function TaskDetail() {
   const taskLabel = task.Slot
     ? `${serviceName} Replica #${task.Slot}`
     : `Task ${task.ID.slice(0, 12)}`;
+  const taskIdShort = task.ID.slice(0, 12);
   const exitCode = task.Status.ContainerStatus?.ExitCode;
   const containerId = task.Status.ContainerStatus?.ContainerID;
 
@@ -110,7 +111,13 @@ export default function TaskDetail() {
         breadcrumbs={[
           { label: "Services", to: "/services" },
           { label: serviceName, to: `/services/${task.ServiceID}` },
-          { label: task.Slot ? `Replica #${task.Slot}` : task.ID.slice(0, 12) },
+          {
+            label: task.Slot ? (
+              `Replica #${task.Slot}`
+            ) : (
+              <span className="font-mono">{taskIdShort}</span>
+            ),
+          },
         ]}
         actions={
           <>

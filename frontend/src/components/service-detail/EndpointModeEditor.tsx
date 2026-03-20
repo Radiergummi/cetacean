@@ -2,6 +2,7 @@ import { api } from "@/api/client";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { cn } from "@/lib/utils";
 import { Globe, Pencil, Shuffle } from "lucide-react";
 import { useState } from "react";
@@ -61,6 +62,9 @@ export function EndpointModeEditor({
   serviceId: string;
   currentMode: EndpointMode;
 }) {
+  const { level } = useOperationsLevel();
+  const canEdit = level >= 2;
+
   const [editing, setEditing] = useState(false);
   const [mode, setMode] = useState<EndpointMode>(currentMode);
   const action = useAsyncAction();
@@ -94,6 +98,8 @@ export function EndpointModeEditor({
             variant="outline"
             size="xs"
             onClick={openEdit}
+            disabled={!canEdit}
+            title={canEdit ? undefined : "Editing disabled by server configuration"}
           >
             <Pencil className="size-3" />
             Edit

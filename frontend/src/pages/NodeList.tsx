@@ -75,8 +75,8 @@ export default function NodeList() {
         <span className="flex items-center gap-1.5">
           {Spec.Role}
           {ManagerStatus?.Leader && (
-            <span className="text-[10px] font-semibold tracking-wider text-amber-500 uppercase">
-              leader
+            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary">
+              Leader
             </span>
           )}
         </span>
@@ -236,7 +236,14 @@ export default function NodeList() {
                 to={`/nodes/${node.ID}`}
                 badge={<TaskStatusBadge state={node.Status.State} />}
                 meta={[
-                  node.ManagerStatus?.Leader ? "leader" : node.Spec.Role,
+                  node.ManagerStatus?.Leader ? (
+                    <span className="flex items-center gap-1.5">
+                      {node.Spec.Role}
+                      <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary">
+                        Leader
+                      </span>
+                    </span>
+                  ) : node.Spec.Role,
                   node.Spec.Availability,
                   `v${node.Description.Engine.EngineVersion}`,
                 ]}

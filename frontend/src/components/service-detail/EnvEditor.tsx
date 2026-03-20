@@ -1,6 +1,7 @@
 import { api } from "@/api/client";
 import type { PatchOp } from "@/api/types";
 import { KeyValueEditor } from "@/components/KeyValueEditor";
+import { useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { handleCopyWithTemplates, renderSwarmTemplate } from "@/lib/swarmTemplates";
 
 export function EnvEditor({
@@ -12,6 +13,9 @@ export function EnvEditor({
   envVars: Record<string, string>;
   onSaved: (updated: Record<string, string>) => void;
 }) {
+  const { level } = useOperationsLevel();
+  const canEdit = level >= 1;
+
   async function handleSave(operations: PatchOp[]) {
     const updated = await api.patchServiceEnv(serviceId, operations);
 
@@ -31,6 +35,8 @@ export function EnvEditor({
       onSave={handleSave}
       renderValue={renderSwarmTemplate}
       onCopyValue={handleCopyWithTemplates}
+      editDisabled={!canEdit}
+      editDisabledTitle="Editing disabled by server configuration"
     />
   );
 }

@@ -6,17 +6,17 @@ import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
 import ListToolbar from "../components/ListToolbar";
 import { SkeletonTable } from "../components/LoadingSkeleton";
-import { MetricsPanel } from "../components/metrics";
+import { MetricsPanel, TaskSparkline } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import ResourceCard from "../components/ResourceCard";
 import ResourceName from "../components/ResourceName";
 import SortIndicator from "../components/SortIndicator";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { useServiceMetrics } from "../hooks/useServiceMetrics";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useViewMode } from "../hooks/useViewMode";
-import type React from "react";
 import { useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -30,6 +30,18 @@ function ReplicaHealth({ running, desired }: { running: number; desired: number 
     >
       {running}/{desired}
     </span>
+  );
+}
+
+function HealthDot({ running, desired }: { running: number; desired: number }) {
+  const healthy = running >= desired && desired > 0;
+
+  return (
+    <span
+      data-healthy={healthy || undefined}
+      className="inline-block size-2.5 shrink-0 rounded-full bg-red-500 data-healthy:bg-green-500"
+      aria-label={healthy ? "Healthy" : "Unhealthy"}
+    />
   );
 }
 
@@ -56,8 +68,9 @@ export default function ServiceList() {
     monitoring?.prometheusConfigured &&
     monitoring?.prometheusReachable &&
     !!monitoring?.cadvisor?.targets;
+  const { getForService } = useServiceMetrics();
 
-  const columns: Column<ServiceListItem>[] = [
+  const baseColumns: Column<ServiceListItem>[] = [
     {
       header: (
         <SortIndicator
@@ -135,6 +148,39 @@ export default function ServiceList() {
     },
   ];
 
+  const metricsColumns: Column<ServiceListItem>[] = hasCadvisor
+    ? [
+        {
+          header: "CPU (1h)",
+          cell: ({ Spec }) => {
+            const metrics = getForService(Spec.Name);
+            return (
+              <TaskSparkline
+                data={metrics.cpuHistory}
+                currentValue={metrics.cpu}
+                type="cpu"
+              />
+            );
+          },
+        },
+        {
+          header: "Memory (1h)",
+          cell: ({ Spec }) => {
+            const metrics = getForService(Spec.Name);
+            return (
+              <TaskSparkline
+                data={metrics.memoryHistory}
+                currentValue={metrics.memory}
+                type="memory"
+              />
+            );
+          },
+        },
+      ]
+    : [];
+
+  const columns: Column<ServiceListItem>[] = [...baseColumns, ...metricsColumns];
+
   if (loading) {
     return (
       <div>
@@ -203,35 +249,34 @@ export default function ServiceList() {
             return (
               <ResourceCard
                 key={service.ID}
-                title={<ResourceName name={service.Spec.Name} />}
-                to={`/services/${service.ID}`}
-                subtitle={service.Spec.TaskTemplate.ContainerSpec.Image.split("@")[0]}
-                meta={
-                  [
-                    service.Spec.Mode.Replicated ? "replicated" : "global",
-                    desired != null && (
-                      <ReplicaHealth
-                        key="replicas"
-                        running={service.RunningTasks}
-                        desired={desired}
-                      />
-                    ),
-                    service.Endpoint?.Ports && service.Endpoint.Ports.length > 0 && (
-                      <span
-                        key="ports"
-                        className="font-mono text-xs"
-                      >
-                        {service.Endpoint.Ports.map(
-                          ({ Protocol, PublishedPort }) => `${PublishedPort}/${Protocol}`,
-                        ).join(", ")}
-                      </span>
-                    ),
-                    <ServiceStatusBadge
-                      key="status"
-                      service={service}
-                    />,
-                  ].filter(Boolean) as React.ReactNode[]
+                title={
+                  <span className="flex items-center gap-2">
+                    <HealthDot
+                      running={service.RunningTasks}
+                      desired={desired ?? service.RunningTasks}
+                    />
+                    <ResourceName name={service.Spec.Name} />
+                  </span>
                 }
+                to={`/services/${service.ID}`}
+                badge={<ServiceStatusBadge service={service} />}
+                subtitle={service.Spec.TaskTemplate.ContainerSpec.Image.split("@")[0]}
+                meta={[
+                  desired != null ? (
+                    <ReplicaHealth
+                      key="replicas"
+                      running={service.RunningTasks}
+                      desired={desired}
+                    />
+                  ) : (
+                    <span
+                      key="mode"
+                      className="rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+                    >
+                      global
+                    </span>
+                  ),
+                ]}
               />
             );
           })}

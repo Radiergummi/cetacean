@@ -4,7 +4,7 @@ import { statusColor } from "../lib/statusColor";
 import CollapsibleSection from "./CollapsibleSection";
 import { TaskSparkline } from "./metrics";
 import ResourceName from "./ResourceName";
-import TaskStateFilter from "./TaskStateFilter";
+import TaskStateFilter, { isActiveTask } from "./TaskStateFilter";
 import TaskStatusBadge from "./TaskStatusBadge";
 import TimeAgo from "./TimeAgo";
 import { useMemo, useState } from "react";
@@ -21,9 +21,11 @@ interface TasksTableProps {
 export default function TasksTable({ tasks, variant, metrics }: TasksTableProps) {
   const [stateFilter, setStateFilter] = useState<string | null>(null);
   const filteredTasks = useMemo(() => {
-    const filtered = stateFilter
-      ? tasks.filter(({ Status: { State } }) => State === stateFilter)
-      : tasks;
+    const filtered = stateFilter === "__all__"
+      ? tasks
+      : stateFilter
+        ? tasks.filter(({ Status: { State } }) => State === stateFilter)
+        : tasks.filter(isActiveTask);
 
     const stateOrder: Record<string, number> = {
       new: 0,
@@ -79,6 +81,7 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
               {metrics && <th className="p-3 text-left text-sm font-medium">CPU</th>}
               {metrics && <th className="p-3 text-left text-sm font-medium">Memory</th>}
               {variant === "service" && <th className="p-3 text-left text-sm font-medium">Node</th>}
+              <th className="p-3 text-left text-sm font-medium">Image</th>
               <th className="p-3 text-left text-sm font-medium">Desired</th>
               <th className="p-3 text-left text-sm font-medium">Error</th>
               <th className="p-3 text-left text-sm font-medium">Timestamp</th>
@@ -94,6 +97,7 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
                 ServiceID,
                 ServiceName,
                 Slot,
+                Spec: { ContainerSpec: { Image } },
                 Status: { ContainerStatus, Err, State, Timestamp },
               }) => {
                 const exitCode = ContainerStatus?.ExitCode;
@@ -122,7 +126,11 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
                           to={`/tasks/${ID}`}
                           className="text-link hover:underline"
                         >
-                          {variant === "node" && Slot ? `Replica #${Slot}` : ID.slice(0, 12)}
+                          {variant === "node" && Slot ? (
+                            `Replica #${Slot}`
+                          ) : (
+                            <span className="font-mono">{ID.slice(0, 12)}</span>
+                          )}
                         </Link>
                       </span>
                     </td>
@@ -170,6 +178,9 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
                       </td>
                     )}
 
+                    <td className="p-3 text-sm">
+                      <span className="font-mono text-xs">{Image.split("@")[0]}</span>
+                    </td>
                     <td className="p-3 text-sm">{DesiredState}</td>
                     <td className="p-3 text-sm text-red-600 dark:text-red-400">{errorMessage}</td>
                     <td className="p-3 text-sm text-muted-foreground">

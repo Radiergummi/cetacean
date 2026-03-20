@@ -30,6 +30,7 @@ import SimpleTable from "../components/SimpleTable";
 import TasksTable from "../components/TasksTable";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { useOperationsLevel } from "../hooks/useOperationsLevel";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
@@ -51,6 +52,7 @@ export default function ServiceDetail() {
   const [healthcheck, setHealthcheck] = useState<Healthcheck | null | undefined>(undefined);
   const [specPorts, setSpecPorts] = useState<PortConfig[] | null>(null);
   const monitoring = useMonitoringStatus();
+  const { level: operationsLevel } = useOperationsLevel();
   const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
   const hasCadvisor = !!monitoring?.cadvisor?.targets;
   const [error, setError] = useState(false);
@@ -396,6 +398,8 @@ export default function ServiceDetail() {
           entries={serviceLabels}
           keyPlaceholder="key"
           valuePlaceholder="value"
+          editDisabled={operationsLevel < 1}
+          editDisabledTitle="Editing disabled by server configuration"
           onSave={async (ops) => {
             const updated = await api.patchServiceLabels(id!, ops);
             setServiceLabels(updated);

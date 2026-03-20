@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { useOperationsLevel } from "@/hooks/useOperationsLevel";
 import type { LucideIcon } from "lucide-react";
 import { RefreshCw, RotateCcw } from "lucide-react";
 
@@ -82,10 +83,13 @@ function ConfirmAction({
 }
 
 export function ServiceActions({ service, serviceId }: { service: Service; serviceId: string }) {
+  const { level } = useOperationsLevel();
+  const canWrite = level >= 1;
+
   const rollback = useAsyncAction();
   const restart = useAsyncAction();
 
-  const canRollback = !!service.PreviousSpec;
+  const canRollback = canWrite && !!service.PreviousSpec;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -95,7 +99,7 @@ export function ServiceActions({ service, serviceId }: { service: Service; servi
         title="Rollback service?"
         description="This will rollback the service to its previous specification."
         disabled={!canRollback}
-        disabledTitle="No previous spec available"
+        disabledTitle={!canWrite ? "Editing disabled by server configuration" : "No previous spec available"}
         loading={rollback.loading}
         error={rollback.error}
         onConfirm={() =>
@@ -108,6 +112,8 @@ export function ServiceActions({ service, serviceId }: { service: Service; servi
         label="Restart"
         title="Restart service?"
         description="This triggers a rolling restart of all tasks."
+        disabled={!canWrite}
+        disabledTitle="Editing disabled by server configuration"
         loading={restart.loading}
         error={restart.error}
         onConfirm={() =>
