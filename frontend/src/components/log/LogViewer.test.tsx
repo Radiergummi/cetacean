@@ -121,7 +121,7 @@ describe("LogViewer", () => {
       expect(screen.getByText("line one")).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByPlaceholderText("Filter logs..."), {
+    fireEvent.change(screen.getByPlaceholderText("Filter logs…"), {
       target: { value: "two" },
     });
 
@@ -138,7 +138,7 @@ describe("LogViewer", () => {
 
     await waitFor(() => expect(screen.getByText(/foo bar/)).toBeInTheDocument());
 
-    const input = screen.getByPlaceholderText("Filter logs...");
+    const input = screen.getByPlaceholderText("Filter logs…");
     fireEvent.change(input, { target: { value: "foo" } });
 
     // Should show match count starting at 1/2
@@ -165,7 +165,7 @@ describe("LogViewer", () => {
       expect(screen.getByText("line one")).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByPlaceholderText("Filter logs..."), {
+    fireEvent.change(screen.getByPlaceholderText("Filter logs…"), {
       target: { value: "nonexistent" },
     });
 

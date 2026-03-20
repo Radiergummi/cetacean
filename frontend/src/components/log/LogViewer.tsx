@@ -1,22 +1,22 @@
 import { SectionToggle, useSectionCollapse } from "../CollapsibleSection";
-import { Spinner } from "../Spinner";
 import type { LogLine } from "./log-utils";
 import { logLineKey } from "./log-utils";
+import { LogEmptyState } from "./LogEmptyState";
+import { LogOverlays } from "./LogOverlays";
+import { LogSearch } from "./LogSearch";
 import { LogTable } from "./LogTable";
 import { LevelFilter, StreamFilterToggle, TimeRangeSelector, ToolbarButton } from "./LogToolbar";
 import { useLogData } from "./useLogData";
 import { useLogFilter } from "./useLogFilter";
 import { useLogTimeRange } from "./useLogTimeRange";
 import {
-  AlertTriangle,
-  ArrowDown,
-  ArrowUp,
   Copy,
   Download,
-  FileText,
+  GripHorizontal,
+  Maximize,
+  Minimize,
   Play,
   RefreshCw,
-  Search,
   Square,
   Trash2,
   WrapText,
@@ -24,6 +24,9 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+const defaultHeight = 400;
+const minHeight = 150;
 
 interface Props {
   serviceId?: string;
@@ -39,6 +42,9 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
   const [wrapLines, setWrapLines] = useState(() => matchMedia("(max-width: 767px)").matches);
   const [streamFilter, setStreamFilter] = useState<"all" | "stdout" | "stderr">("all");
   const [pinnedLines, setPinnedLines] = useState<LogLine[]>([]);
+  const [height, setHeight] = useState(defaultHeight);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const pinnedKeys = useMemo(() => new Set(pinnedLines.map(logLineKey)), [pinnedLines]);
@@ -84,23 +90,53 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
     [isTask, data.lines],
   );
 
-  // Keyboard shortcut: Ctrl+F to focus search
+  // Sync fullscreen state with browser
   useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if (
-        (event.metaKey || event.ctrlKey) &&
-        event.key === "f" &&
-        data.containerRef.current?.contains(document.activeElement)
-      ) {
-        event.preventDefault();
-        searchRef.current?.focus();
+    function handleChange() {
+      setIsFullscreen(document.fullscreenElement === containerRef.current);
+    }
+
+    document.addEventListener("fullscreenchange", handleChange);
+
+    return () => document.removeEventListener("fullscreenchange", handleChange);
+  }, []);
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    } else {
+      void containerRef.current?.requestFullscreen();
+    }
+  }
+
+  // Resize handle drag — auto-scrolls the page to keep the handle under the cursor
+  const handleResizeStart = useCallback(
+    (event: React.PointerEvent) => {
+      event.preventDefault();
+      const startY = event.clientY;
+      const startHeight = height;
+      const startScroll = window.scrollY;
+      const pointerId = event.pointerId;
+      const target = event.currentTarget as HTMLElement;
+      target.setPointerCapture(pointerId);
+
+      function onMove(moveEvent: PointerEvent) {
+        const delta = moveEvent.clientY - startY + (window.scrollY - startScroll);
+        setHeight(Math.max(minHeight, startHeight + delta));
+        target.scrollIntoView({ block: "nearest" });
       }
-    };
 
-    document.addEventListener("keydown", handler);
+      function onUp() {
+        target.releasePointerCapture(pointerId);
+        target.removeEventListener("pointermove", onMove);
+        target.removeEventListener("pointerup", onUp);
+      }
 
-    return () => document.removeEventListener("keydown", handler);
-  }, [data.containerRef]);
+      target.addEventListener("pointermove", onMove);
+      target.addEventListener("pointerup", onUp);
+    },
+    [height],
+  );
 
   const formatLogs = useCallback(
     () =>
@@ -138,199 +174,164 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
     return <div className="flex min-h-8 items-center">{toggle}</div>;
   }
 
+  const hasContent = !data.loading && !data.error && data.lines.length > 0 && filtered.length > 0;
+
+  const toolbar = (
+    <nav
+      role="toolbar"
+      className={
+        isFullscreen
+          ? "flex min-h-10 flex-wrap items-center gap-1.5 border-b bg-background p-3"
+          : "flex min-h-8 flex-wrap items-center gap-1.5 mb-2"
+      }
+    >
+      {!isFullscreen && toggle}
+
+      {data.live && (
+        <span className="me-2 flex items-center gap-1.5 text-xs text-green-500 opacity-100 transition starting:opacity-0">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-500" />
+          Live
+        </span>
+      )}
+
+      <TimeRangeSelector
+        value={timeRange}
+        onChange={(range) => {
+          updateTimeRange(range);
+
+          if (data.live) {
+            data.stopLive();
+          }
+        }}
+      />
+
+      <ToolbarButton
+        onClick={data.fetchLogs}
+        title="Refresh"
+        icon={<RefreshCw className="size-3.5" />}
+      />
+      <ToolbarButton
+        onClick={data.toggleLive}
+        title={data.live ? "Stop live" : "Live tail"}
+        icon={data.live ? <Square className="size-3.5" /> : <Play className="size-3.5" />}
+        active={data.live}
+      />
+      <ToolbarButton
+        onClick={() => setWrapLines(!wrapLines)}
+        title="Toggle wrap"
+        icon={<WrapText className="size-3.5" />}
+        active={wrapLines}
+      />
+
+      <div className="mx-0.5 hidden h-5 w-px bg-border md:block" />
+
+      <StreamFilterToggle
+        value={streamFilter}
+        onChange={setStreamFilter}
+      />
+      <LevelFilter
+        value={levelFilter}
+        onChange={setLevelFilter}
+      />
+
+      <div className="mx-0.5 hidden h-5 w-px bg-border md:block" />
+
+      <ToolbarButton
+        onClick={copyLogs}
+        title="Copy"
+        icon={<Copy className="size-3.5" />}
+      />
+      <ToolbarButton
+        onClick={downloadLogs}
+        title="Download"
+        icon={<Download className="size-3.5" />}
+      />
+
+      <div className="mx-0.5 hidden h-5 w-px bg-border md:block" />
+
+      <LogSearch
+        search={search}
+        setSearch={setSearch}
+        caseSensitive={caseSensitive}
+        setCaseSensitive={setCaseSensitive}
+        useRegex={useRegex}
+        setUseRegex={setUseRegex}
+        matchIndex={matchIndex}
+        setMatchIndex={setMatchIndex}
+        matchCount={filtered.length}
+        searchRef={searchRef}
+        logContainerRef={data.containerRef}
+      />
+
+      {/* Clear */}
+      <ToolbarButton
+        onClick={() => {
+          data.setLines([]);
+          setPinnedLines([]);
+        }}
+        title="Clear logs"
+        icon={<Trash2 className="size-3.5" />}
+      />
+
+      {!isFullscreen && (
+        <ToolbarButton
+          onClick={toggleFullscreen}
+          title="Fullscreen"
+          className="ms-auto"
+          icon={<Maximize className="size-3.5" />}
+        />
+      )}
+
+      {taskFilter && (
+        <button
+          onClick={() => setTaskFilter(null)}
+          className="flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2 py-1.5 text-xs text-primary hover:bg-primary/20"
+          title="Clear task filter"
+        >
+          <span className="font-mono">{taskFilter.slice(0, 8)}</span>
+          <X className="size-3" />
+        </button>
+      )}
+
+      {isFullscreen && (
+        <ToolbarButton
+          onClick={toggleFullscreen}
+          title="Exit Fullscreen"
+          className="ms-auto"
+          icon={<Minimize className="size-3.5" />}
+        />
+      )}
+    </nav>
+  );
+
   return (
     <div
+      ref={containerRef}
       id="logs"
-      className="flex flex-col gap-2"
+      className={
+        isFullscreen
+          ? "flex h-full flex-col bg-background"
+          : "flex flex-col gap-1"
+      }
     >
-      <nav
-        role="toolbar"
-        className="flex min-h-8 flex-wrap items-center gap-1.5"
-      >
-        {toggle}
+      {toolbar}
 
-        {data.live && (
-          <span className="me-2 flex items-center gap-1.5 text-xs text-green-500 opacity-100 transition starting:opacity-0">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-500" />
-            Live
-          </span>
-        )}
-
-        <TimeRangeSelector
-          value={timeRange}
-          onChange={(range) => {
-            updateTimeRange(range);
-
-            if (data.live) {
-              data.stopLive();
-            }
-          }}
+      {!hasContent ? (
+        <LogEmptyState
+          loading={data.loading}
+          error={data.error}
+          hasLines={data.lines.length > 0}
+          hasFiltered={filtered.length > 0}
+          onRetry={data.fetchLogs}
+          className={
+            isFullscreen
+              ? "flex flex-1 items-center justify-center bg-muted/30 dark:bg-gray-950"
+              : "flex items-center justify-center rounded-lg border bg-muted/30 dark:border-gray-800 dark:bg-gray-950"
+          }
+          style={isFullscreen ? undefined : { height }}
         />
-
-        <ToolbarButton
-          onClick={data.fetchLogs}
-          title="Refresh"
-          icon={<RefreshCw className="size-3.5" />}
-        />
-        <ToolbarButton
-          onClick={data.toggleLive}
-          title={data.live ? "Stop live" : "Live tail"}
-          icon={data.live ? <Square className="size-3.5" /> : <Play className="size-3.5" />}
-          active={data.live}
-        />
-        <ToolbarButton
-          onClick={() => setWrapLines(!wrapLines)}
-          title="Toggle wrap"
-          icon={<WrapText className="size-3.5" />}
-          active={wrapLines}
-        />
-
-        <div className="mx-0.5 hidden h-5 w-px bg-border md:block" />
-
-        <StreamFilterToggle
-          value={streamFilter}
-          onChange={setStreamFilter}
-        />
-        <LevelFilter
-          value={levelFilter}
-          onChange={setLevelFilter}
-        />
-
-        <div className="mx-0.5 hidden h-5 w-px bg-border md:block" />
-
-        <ToolbarButton
-          onClick={copyLogs}
-          title="Copy"
-          icon={<Copy className="size-3.5" />}
-        />
-        <ToolbarButton
-          onClick={downloadLogs}
-          title="Download"
-          icon={<Download className="size-3.5" />}
-        />
-
-        <div className="mx-0.5 hidden h-5 w-px bg-border md:block" />
-
-        {/* Search */}
-        <div className="relative flex items-center">
-          <Search className="pointer-events-none absolute left-2 size-3.5 text-muted-foreground" />
-          <input
-            ref={searchRef}
-            type="text"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Filter logs..."
-            className="h-8 w-56 max-w-full rounded-md border bg-background pr-16 pl-7 font-mono text-xs"
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                setSearch("");
-                return;
-              }
-              if (event.key === "Enter" && search && filtered.length > 0) {
-                event.preventDefault();
-                if (event.shiftKey) {
-                  setMatchIndex((current) => (current - 1 + filtered.length) % filtered.length);
-                } else {
-                  setMatchIndex((current) => (current + 1) % filtered.length);
-                }
-              }
-            }}
-          />
-          <div className="absolute right-1.5 flex items-center gap-0.5">
-            <button
-              onClick={() => setCaseSensitive(!caseSensitive)}
-              aria-pressed={caseSensitive}
-              className="rounded px-1 py-0.5 font-mono text-[10px] font-bold text-muted-foreground hover:text-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground"
-              title="Case sensitive"
-            >
-              Aa
-            </button>
-            <button
-              onClick={() => setUseRegex(!useRegex)}
-              aria-pressed={useRegex}
-              className="rounded px-1 py-0.5 font-mono text-[10px] font-bold text-muted-foreground hover:text-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground"
-              title="Regex"
-            >
-              .*
-            </button>
-            {search && (
-              <button
-                onClick={() => setSearch("")}
-                className="p-0.5 text-muted-foreground hover:text-foreground"
-              >
-                <X className="size-3" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {search && (
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {filtered.length > 0 ? `${matchIndex + 1}/${filtered.length}` : "0/0"}
-          </span>
-        )}
-
-        {/* Clear */}
-        <ToolbarButton
-          onClick={() => {
-            data.setLines([]);
-            setPinnedLines([]);
-          }}
-          title="Clear logs"
-          icon={<Trash2 className="size-3.5" />}
-        />
-
-        {taskFilter && (
-          <button
-            onClick={() => setTaskFilter(null)}
-            className="flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2 py-1.5 text-xs text-primary hover:bg-primary/20"
-            title="Clear task filter"
-          >
-            <span className="font-mono">{taskFilter.slice(0, 8)}</span>
-            <X className="size-3" />
-          </button>
-        )}
-      </nav>
-
-      {/* Log area */}
-      {data.loading ? (
-        <div className="flex h-100 items-center justify-center rounded-lg border bg-muted/30 dark:border-gray-800 dark:bg-gray-950">
-          <div className="flex flex-col items-center gap-3 text-muted-foreground">
-            <Spinner className="size-6" />
-            <p className="text-sm">Loading logs…</p>
-          </div>
-        </div>
-      ) : data.error ? (
-        <div className="flex h-100 items-center justify-center rounded-lg border bg-muted/30 dark:border-gray-800 dark:bg-gray-950">
-          <div className="flex flex-col items-center gap-3 text-center">
-            <AlertTriangle className="size-6 text-red-500 dark:text-red-400" />
-            <div>
-              <p className="mb-1 text-sm font-medium text-red-600 dark:text-red-400">
-                Failed to load logs
-              </p>
-              <p className="mb-3 text-xs text-muted-foreground">{data.error}</p>
-            </div>
-            <button
-              onClick={data.fetchLogs}
-              className="rounded-md border px-4 py-1.5 text-sm hover:bg-muted"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      ) : data.lines.length === 0 ? (
-        <div className="flex h-100 items-center justify-center rounded-lg border bg-muted/30 dark:border-gray-800 dark:bg-gray-950">
-          <div className="flex flex-col items-center gap-3 text-muted-foreground">
-            <FileText className="size-6" />
-            <p className="text-sm">No logs yet — the container hasn't produced any output</p>
-          </div>
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="flex h-100 items-center justify-center rounded-lg border bg-muted/30 dark:border-gray-800 dark:bg-gray-950">
-          <p className="text-sm text-muted-foreground">No matching log lines</p>
-        </div>
       ) : (
-        <div className="relative">
+        <div className={isFullscreen ? "relative flex min-h-0 flex-1 flex-col" : "relative"}>
           <LogTable
             containerRef={data.containerRef}
             handleScroll={data.handleScroll}
@@ -347,42 +348,33 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
             pinnedKeys={pinnedKeys}
             pinnedLines={pinnedLines}
             onTogglePin={handlePin}
+            height={height}
+            fillHeight={isFullscreen}
           />
 
-          {data.atTop && data.hasOlderLogs && (
-            <button
-              onClick={data.loadOlder}
-              disabled={data.loadingOlder}
-              data-pinned={pinnedLines.length || undefined}
-              className="absolute top-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs text-foreground shadow-lg transition-colors hover:bg-muted data-[pinned='1']:top-8 data-[pinned='2']:top-13 data-[pinned='3']:top-18"
-            >
-              {data.loadingOlder ? <Spinner className="size-3" /> : <ArrowUp className="size-3" />}
-              Load older
-            </button>
-          )}
+          <LogOverlays
+            atTop={data.atTop}
+            hasOlderLogs={data.hasOlderLogs}
+            loadOlder={data.loadOlder}
+            loadingOlder={data.loadingOlder}
+            pinnedCount={pinnedLines.length}
+            following={data.following}
+            setFollowing={data.setFollowing}
+            live={data.live}
+            hasNewerLogs={data.hasNewerLogs}
+            loadNewer={data.loadNewer}
+            loadingNewer={data.loadingNewer}
+          />
+        </div>
+      )}
 
-          {!data.following ? (
-            <button
-              onClick={() => data.setFollowing(true)}
-              className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs text-foreground shadow-lg transition-colors hover:bg-muted"
-            >
-              <ArrowDown className="size-3" />
-              Jump to bottom
-            </button>
-          ) : !data.live && data.hasNewerLogs ? (
-            <button
-              onClick={data.loadNewer}
-              disabled={data.loadingNewer}
-              className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs text-foreground shadow-lg transition-colors hover:bg-muted"
-            >
-              Load newer
-              {data.loadingNewer ? (
-                <Spinner className="size-3" />
-              ) : (
-                <ArrowDown className="size-3" />
-              )}
-            </button>
-          ) : null}
+      {!isFullscreen && (
+        <div
+          onPointerDown={handleResizeStart}
+          onDoubleClick={() => setHeight(defaultHeight)}
+          className="group flex h-2.5 cursor-row-resize items-center justify-center rounded-xs bg-muted/60 hover:bg-muted"
+        >
+          <GripHorizontal className="size-2.5 text-muted-foreground/50 group-hover:text-muted-foreground" />
         </div>
       )}
     </div>

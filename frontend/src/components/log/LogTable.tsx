@@ -29,6 +29,8 @@ export interface LogTableProps {
   pinnedKeys?: Set<string>;
   pinnedLines?: LogLine[];
   onTogglePin?: (line: LogLine) => void;
+  height?: number;
+  fillHeight?: boolean;
 }
 
 function LogRow({
@@ -163,6 +165,8 @@ export function LogTable({
   pinnedKeys,
   pinnedLines,
   onTogglePin,
+  height,
+  fillHeight,
 }: LogTableProps) {
   const isMobile = useMatchesBreakpoint("md", "below");
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
@@ -185,7 +189,11 @@ export function LogTable({
       ref={containerRef}
       onScroll={handleScroll}
       id="log-panel"
-      className="h-100 overflow-auto rounded-lg border bg-muted/30 dark:border-gray-800 dark:bg-gray-950"
+      className={fillHeight
+        ? "flex-1 overflow-auto bg-muted/30 dark:bg-gray-950"
+        : "overflow-auto rounded-lg border bg-muted/30 dark:border-gray-800 dark:bg-gray-950"
+      }
+      style={!fillHeight ? { height: height ?? 400 } : undefined}
     >
       <table className="w-full border-collapse font-mono text-xs leading-5">
         {pinnedLines && pinnedLines.length > 0 && (
