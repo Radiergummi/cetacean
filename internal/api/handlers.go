@@ -86,6 +86,31 @@ type DockerWriteClient interface {
 		id string,
 		hc *container.HealthConfig,
 	) (swarm.Service, error)
+	UpdateServicePlacement(
+		ctx context.Context,
+		id string,
+		placement *swarm.Placement,
+	) (swarm.Service, error)
+	UpdateServicePorts(
+		ctx context.Context,
+		id string,
+		ports []swarm.PortConfig,
+	) (swarm.Service, error)
+	UpdateServiceUpdatePolicy(
+		ctx context.Context,
+		id string,
+		policy *swarm.UpdateConfig,
+	) (swarm.Service, error)
+	UpdateServiceRollbackPolicy(
+		ctx context.Context,
+		id string,
+		policy *swarm.UpdateConfig,
+	) (swarm.Service, error)
+	UpdateServiceLogDriver(
+		ctx context.Context,
+		id string,
+		driver *swarm.Driver,
+	) (swarm.Service, error)
 }
 
 type Handlers struct {

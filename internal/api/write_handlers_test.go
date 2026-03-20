@@ -32,6 +32,11 @@ type mockWriteClient struct {
 	updateServiceModeFn            func(ctx context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error)
 	updateServiceEndpointModeFn    func(ctx context.Context, id string, mode swarm.ResolutionMode) (swarm.Service, error)
 	updateServiceHealthcheckFn     func(ctx context.Context, id string, hc *container.HealthConfig) (swarm.Service, error)
+	updateServicePlacementFn      func(ctx context.Context, id string, placement *swarm.Placement) (swarm.Service, error)
+	updateServicePortsFn          func(ctx context.Context, id string, ports []swarm.PortConfig) (swarm.Service, error)
+	updateServiceUpdatePolicyFn   func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error)
+	updateServiceRollbackPolicyFn func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error)
+	updateServiceLogDriverFn      func(ctx context.Context, id string, driver *swarm.Driver) (swarm.Service, error)
 }
 
 func (m *mockWriteClient) ScaleService(ctx context.Context, id string, replicas uint64) (swarm.Service, error) {
@@ -121,6 +126,41 @@ func (m *mockWriteClient) UpdateServiceMode(ctx context.Context, id string, mode
 func (m *mockWriteClient) UpdateServiceHealthcheck(ctx context.Context, id string, hc *container.HealthConfig) (swarm.Service, error) {
 	if m.updateServiceHealthcheckFn != nil {
 		return m.updateServiceHealthcheckFn(ctx, id, hc)
+	}
+	return swarm.Service{}, fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) UpdateServicePlacement(ctx context.Context, id string, placement *swarm.Placement) (swarm.Service, error) {
+	if m.updateServicePlacementFn != nil {
+		return m.updateServicePlacementFn(ctx, id, placement)
+	}
+	return swarm.Service{}, fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) UpdateServicePorts(ctx context.Context, id string, ports []swarm.PortConfig) (swarm.Service, error) {
+	if m.updateServicePortsFn != nil {
+		return m.updateServicePortsFn(ctx, id, ports)
+	}
+	return swarm.Service{}, fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) UpdateServiceUpdatePolicy(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error) {
+	if m.updateServiceUpdatePolicyFn != nil {
+		return m.updateServiceUpdatePolicyFn(ctx, id, policy)
+	}
+	return swarm.Service{}, fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) UpdateServiceRollbackPolicy(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error) {
+	if m.updateServiceRollbackPolicyFn != nil {
+		return m.updateServiceRollbackPolicyFn(ctx, id, policy)
+	}
+	return swarm.Service{}, fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) UpdateServiceLogDriver(ctx context.Context, id string, driver *swarm.Driver) (swarm.Service, error) {
+	if m.updateServiceLogDriverFn != nil {
+		return m.updateServiceLogDriverFn(ctx, id, driver)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
