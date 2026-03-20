@@ -230,6 +230,15 @@ func TestLoad_OperationsLevel_OutOfRange(t *testing.T) {
 	}
 }
 
+func TestLoad_OperationsLevel_Negative(t *testing.T) {
+	t.Setenv("CETACEAN_OPERATIONS_LEVEL", "-1")
+
+	_, err := Load(nil, nil)
+	if err == nil {
+		t.Fatal("expected error for negative value")
+	}
+}
+
 func TestLoad_OperationsLevel_Invalid(t *testing.T) {
 	t.Setenv("CETACEAN_OPERATIONS_LEVEL", "banana")
 

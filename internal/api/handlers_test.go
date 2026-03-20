@@ -34,13 +34,10 @@ func TestHandleHealth(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"status", "version", "commit", "buildDate"} {
-		if body[key] == "" {
+	for _, key := range []string{"status", "version", "commit", "buildDate", "operationsLevel"} {
+		if _, ok := body[key]; !ok {
 			t.Errorf("missing key %q in health response", key)
 		}
-	}
-	if _, ok := body["operationsLevel"]; !ok {
-		t.Error("missing key \"operationsLevel\" in health response")
 	}
 }
 
