@@ -193,7 +193,7 @@ Add the five new methods to the `DockerWriteClient` interface in `handlers.go` a
 
 ### JSON-LD context
 
-Update `internal/api/context.go` to include the new `@type` values: `ServicePlacement`, `ServicePorts`, `ServiceUpdatePolicy`, `ServiceRollbackPolicy`, `ServiceLogDriver`.
+No changes needed — the context document uses `@vocab: "urn:cetacean:"` which automatically namespaces all `@type` values.
 
 ### Test pattern
 
