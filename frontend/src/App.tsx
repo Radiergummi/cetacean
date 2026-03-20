@@ -6,6 +6,7 @@ import ShortcutsHelp from "./components/ShortcutsHelp";
 import ShortcutTooltip from "./components/ShortcutTooltip";
 import ThemeToggle from "./components/ThemeToggle";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
+import { OperationsLevelProvider } from "./hooks/useOperationsLevel";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { ConnectionProvider, sseEventTypes } from "./hooks/useResourceStream";
 import { Keyboard, Menu, X } from "lucide-react";
@@ -224,8 +225,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <ConnectionTracker>
-          <Layout>
+        <OperationsLevelProvider>
+          <ConnectionTracker>
+            <Layout>
             <Suspense fallback={<LoadingDetail />}>
               <Routes>
                 <Route
@@ -322,8 +324,9 @@ export default function App() {
                 />
               </Routes>
             </Suspense>
-          </Layout>
-        </ConnectionTracker>
+            </Layout>
+          </ConnectionTracker>
+        </OperationsLevelProvider>
       </AuthProvider>
     </BrowserRouter>
   );
