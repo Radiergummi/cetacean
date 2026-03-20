@@ -182,7 +182,7 @@ export default function ServiceList() {
       <ListToolbar
         search={search}
         onSearchChange={setSearch}
-        placeholder="Search services..."
+        placeholder="Search services…"
         viewMode={viewMode}
         onViewModeChange={setViewMode}
       />

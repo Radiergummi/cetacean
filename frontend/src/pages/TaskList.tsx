@@ -156,7 +156,7 @@ export default function TaskList() {
       <ListToolbar
         search={search}
         onSearchChange={setSearch}
-        placeholder="Search tasks..."
+        placeholder="Search tasks…"
       />
       {tasks.length === 0 ? (
         <EmptyState message={search ? "No tasks match your search" : "No tasks found"} />

@@ -94,7 +94,7 @@ export default function VolumeList() {
       <ListToolbar
         search={search}
         onSearchChange={setSearch}
-        placeholder="Search volumes..."
+        placeholder="Search volumes…"
         viewMode={viewMode}
         onViewModeChange={setViewMode}
       />

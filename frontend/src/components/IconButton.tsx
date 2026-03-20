@@ -1,3 +1,4 @@
+import {cn} from "@/lib/utils.ts";
 import type React from "react";
 
 export function IconButton({
@@ -5,11 +6,13 @@ export function IconButton({
   title,
   icon,
   active,
+  className,
 }: {
   onClick: () => void;
   title: string;
   icon: React.ReactNode;
   active?: boolean;
+  className?: string;
 }) {
   return (
     <button
@@ -17,7 +20,10 @@ export function IconButton({
       onClick={onClick}
       title={title}
       aria-pressed={active || undefined}
-      className="flex size-8 cursor-pointer items-center justify-center rounded-md border border-border bg-background hover:bg-muted aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground"
+      className={cn(
+        "flex size-8 cursor-pointer items-center justify-center rounded-md border border-border bg-background hover:bg-muted aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground",
+        className,
+      )}
     >
       {icon}
     </button>

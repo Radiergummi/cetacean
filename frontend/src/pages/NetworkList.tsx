@@ -96,7 +96,7 @@ export default function NetworkList() {
       <ListToolbar
         search={search}
         onSearchChange={setSearch}
-        placeholder="Search networks..."
+        placeholder="Search networks…"
         viewMode={viewMode}
         onViewModeChange={setViewMode}
       />

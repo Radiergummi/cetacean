@@ -68,7 +68,7 @@ export default function StackList() {
         <SearchInput
           value={search}
           onChange={setSearch}
-          placeholder="Search stacks..."
+          placeholder="Search stacks…"
         />
       </div>
       {filtered.length === 0 ? (

@@ -101,7 +101,7 @@ describe("ServiceList", () => {
       expect(screen.getByText("web-frontend")).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByPlaceholderText("Search services..."), {
+    fireEvent.change(screen.getByPlaceholderText("Search services…"), {
       target: { value: "api" },
     });
 

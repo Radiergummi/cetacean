@@ -119,7 +119,7 @@ describe("NodeList", () => {
       expect(screen.getByText("node-alpha")).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByPlaceholderText("Search nodes..."), {
+    fireEvent.change(screen.getByPlaceholderText("Search nodes…"), {
       target: { value: "beta" },
     });
 
@@ -158,7 +158,7 @@ describe("NodeList", () => {
       expect(screen.getByText("node-alpha")).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByPlaceholderText("Search nodes..."), {
+    fireEvent.change(screen.getByPlaceholderText("Search nodes…"), {
       target: { value: "nonexistent" },
     });
 

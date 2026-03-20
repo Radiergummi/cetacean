@@ -91,7 +91,7 @@ describe("StackList", () => {
       expect(screen.getByText("monitoring")).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByPlaceholderText("Search stacks..."), {
+    fireEvent.change(screen.getByPlaceholderText("Search stacks…"), {
       target: { value: "app" },
     });
 

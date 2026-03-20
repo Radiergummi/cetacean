@@ -211,7 +211,7 @@ export default function NodeList() {
       <ListToolbar
         search={search}
         onSearchChange={setSearch}
-        placeholder="Search nodes..."
+        placeholder="Search nodes…"
         viewMode={viewMode}
         onViewModeChange={setViewMode}
       />
