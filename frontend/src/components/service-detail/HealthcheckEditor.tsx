@@ -399,13 +399,15 @@ function EditMode({
             />
           </div>
 
-          <SliderNumberField
-            label="Retries"
-            value={form.retries}
-            onChange={(retries) => updateForm({ retries })}
-            min={0}
-            step={1}
-          />
+          <div className="w-48">
+            <SliderNumberField
+              label="Retries"
+              value={form.retries}
+              onChange={(retries) => updateForm({ retries })}
+              min={0}
+              step={1}
+            />
+          </div>
         </>
       )}
 
