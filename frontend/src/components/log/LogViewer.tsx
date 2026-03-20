@@ -277,7 +277,6 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
         <ToolbarButton
           onClick={toggleFullscreen}
           title="Fullscreen"
-          className="ms-auto"
           icon={<Maximize className="size-3.5" />}
         />
       )}
