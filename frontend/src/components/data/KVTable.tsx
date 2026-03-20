@@ -14,11 +14,12 @@ type Row =
 
 export default function KVTable({ rows }: { rows: Row[] }) {
   const valid = rows.filter(
-    (row): row is
+    (
+      row,
+    ): row is
       | [string, React.ReactNode]
       | [string, React.ReactNode, string]
-      | [string, React.ReactNode, string | undefined, string] =>
-      !!row && !!row[1],
+      | [string, React.ReactNode, string | undefined, string] => !!row && !!row[1],
   );
 
   if (valid.length === 0) {
@@ -46,7 +47,12 @@ export default function KVTable({ rows }: { rows: Row[] }) {
                 <td className="p-3 font-mono text-xs break-all">
                   <span className="flex items-center gap-2">
                     <span className="min-w-0">{value}</span>
-                    {copyable && <CopyButton text={copyable} className="ml-auto" />}
+                    {copyable && (
+                      <CopyButton
+                        text={copyable}
+                        className="ml-auto"
+                      />
+                    )}
                   </span>
                 </td>
               </tr>

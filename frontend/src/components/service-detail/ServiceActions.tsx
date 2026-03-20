@@ -99,7 +99,9 @@ export function ServiceActions({ service, serviceId }: { service: Service; servi
         title="Rollback service?"
         description="This will rollback the service to its previous specification."
         disabled={!canRollback}
-        disabledTitle={!canWrite ? "Editing disabled by server configuration" : "No previous spec available"}
+        disabledTitle={
+          !canWrite ? "Editing disabled by server configuration" : "No previous spec available"
+        }
         loading={rollback.loading}
         error={rollback.error}
         onConfirm={() =>

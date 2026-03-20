@@ -5,9 +5,9 @@ import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
 import { SliderNumberField } from "@/components/ui/slider-number-field";
+import { useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { formatDuration } from "@/lib/format";
 import { joinCommand, parseCommand } from "@/lib/parseCommand";
-import { useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { Pencil } from "lucide-react";
 import { useState } from "react";
@@ -366,7 +366,9 @@ function EditMode({
               type="text"
               value={form.command}
               onChange={(event) => updateForm({ command: event.target.value })}
-              placeholder={form.useShell ? "curl -f http://localhost/ || exit 1" : "/bin/healthcheck"}
+              placeholder={
+                form.useShell ? "curl -f http://localhost/ || exit 1" : "/bin/healthcheck"
+              }
               className="h-8 w-full rounded-md border bg-background px-2 font-mono text-sm outline-none focus:ring-1 focus:ring-ring"
             />
             {!form.useShell && (

@@ -121,7 +121,10 @@ export function PortsEditor({ serviceId, ports, onSaved }: PortsEditorProps) {
 
       <div className="space-y-3">
         {draft.map((port, index) => (
-          <div key={index} className="relative rounded-lg border p-3">
+          <div
+            key={index}
+            className="relative rounded-lg border p-3"
+          >
             <Button
               variant="outline"
               size="xs"
@@ -167,7 +170,9 @@ export function PortsEditor({ serviceId, ports, onSaved }: PortsEditorProps) {
                   min={1}
                   max={65535}
                   value={port.TargetPort || ""}
-                  onChange={(event) => updatePort(index, "TargetPort", Number(event.target.value) || 0)}
+                  onChange={(event) =>
+                    updatePort(index, "TargetPort", Number(event.target.value) || 0)
+                  }
                   placeholder="80"
                 />
               </div>
@@ -180,7 +185,9 @@ export function PortsEditor({ serviceId, ports, onSaved }: PortsEditorProps) {
                   min={0}
                   max={65535}
                   value={port.PublishedPort || ""}
-                  onChange={(event) => updatePort(index, "PublishedPort", Number(event.target.value) || 0)}
+                  onChange={(event) =>
+                    updatePort(index, "PublishedPort", Number(event.target.value) || 0)
+                  }
                   placeholder="Auto-assign"
                 />
               </div>
@@ -189,7 +196,11 @@ export function PortsEditor({ serviceId, ports, onSaved }: PortsEditorProps) {
         ))}
       </div>
 
-      <Button variant="outline" size="sm" onClick={addPort}>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={addPort}
+      >
         <Plus className="size-3" />
         Add port
       </Button>
@@ -197,12 +208,21 @@ export function PortsEditor({ serviceId, ports, onSaved }: PortsEditorProps) {
       {saveError && <p className="text-xs text-red-600">{saveError}</p>}
 
       <div className="flex gap-2">
-        <Button size="sm" onClick={save} disabled={saving}>
+        <Button
+          size="sm"
+          onClick={save}
+          disabled={saving}
+        >
           {saving && <Spinner className="size-3" />}
           Save
         </Button>
 
-        <Button variant="outline" size="sm" onClick={cancelEdit} disabled={saving}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={cancelEdit}
+          disabled={saving}
+        >
           Cancel
         </Button>
       </div>

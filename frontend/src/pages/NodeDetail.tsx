@@ -257,7 +257,10 @@ export default function NodeDetail() {
 
       <DiskUsageSection nodeId={node.ID} />
 
-      <ActivitySection entries={history} hideType />
+      <ActivitySection
+        entries={history}
+        hideType
+      />
     </div>
   );
 }

@@ -27,11 +27,7 @@ export function LogDriverEditor({ serviceId, logDriver, onSaved }: LogDriverEdit
 
   function openEdit() {
     setDriverName(logDriver?.Name ?? "");
-    setOptions(
-      logDriver?.Options
-        ? Object.entries(logDriver.Options)
-        : [],
-    );
+    setOptions(logDriver?.Options ? Object.entries(logDriver.Options) : []);
     setSaveError(null);
     setEditing(true);
   }
@@ -152,7 +148,10 @@ export function LogDriverEditor({ serviceId, logDriver, onSaved }: LogDriverEdit
         <label className="text-xs font-medium text-muted-foreground">Options</label>
 
         {options.map(([key, value], index) => (
-          <div key={index} className="flex items-center gap-2">
+          <div
+            key={index}
+            className="flex items-center gap-2"
+          >
             <Input
               value={key}
               onChange={(event) => updateOption(index, 0, event.target.value)}
@@ -167,13 +166,21 @@ export function LogDriverEditor({ serviceId, logDriver, onSaved }: LogDriverEdit
               className="font-mono text-sm"
             />
 
-            <Button variant="outline" size="xs" onClick={() => removeOption(index)}>
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={() => removeOption(index)}
+            >
               <Trash2 className="size-3" />
             </Button>
           </div>
         ))}
 
-        <Button variant="outline" size="sm" onClick={addOption}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={addOption}
+        >
           <Plus className="size-3" />
           Add option
         </Button>
@@ -182,12 +189,21 @@ export function LogDriverEditor({ serviceId, logDriver, onSaved }: LogDriverEdit
       {saveError && <p className="text-xs text-red-600">{saveError}</p>}
 
       <div className="flex gap-2">
-        <Button size="sm" onClick={save} disabled={saving}>
+        <Button
+          size="sm"
+          onClick={save}
+          disabled={saving}
+        >
           {saving && <Spinner className="size-3" />}
           Save
         </Button>
 
-        <Button variant="outline" size="sm" onClick={cancelEdit} disabled={saving}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={cancelEdit}
+          disabled={saving}
+        >
           Cancel
         </Button>
       </div>

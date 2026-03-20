@@ -336,9 +336,7 @@ export const api = {
     put<{ healthcheck: Healthcheck }>(`/services/${id}/healthcheck`, healthcheck),
 
   servicePorts: (id: string, signal?: AbortSignal) =>
-    fetchJSON<{ ports: PortConfig[] }>(`/services/${id}/ports`, signal).then(
-      (r) => r.ports,
-    ),
+    fetchJSON<{ ports: PortConfig[] }>(`/services/${id}/ports`, signal).then((r) => r.ports),
 
   putServicePlacement: (id: string, placement: Placement) =>
     put<{ placement: Placement }>(`/services/${id}/placement`, placement),

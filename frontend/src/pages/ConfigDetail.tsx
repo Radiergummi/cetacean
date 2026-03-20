@@ -109,7 +109,10 @@ export default function ConfigDetail() {
         emptyMessage="No services using this config."
       />
 
-      <ActivitySection entries={history} hideType />
+      <ActivitySection
+        entries={history}
+        hideType
+      />
     </div>
   );
 }

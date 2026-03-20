@@ -21,11 +21,12 @@ interface TasksTableProps {
 export default function TasksTable({ tasks, variant, metrics }: TasksTableProps) {
   const [stateFilter, setStateFilter] = useState<string | null>(null);
   const filteredTasks = useMemo(() => {
-    const filtered = stateFilter === "__all__"
-      ? tasks
-      : stateFilter
-        ? tasks.filter(({ Status: { State } }) => State === stateFilter)
-        : tasks.filter(isActiveTask);
+    const filtered =
+      stateFilter === "__all__"
+        ? tasks
+        : stateFilter
+          ? tasks.filter(({ Status: { State } }) => State === stateFilter)
+          : tasks.filter(isActiveTask);
 
     const stateOrder: Record<string, number> = {
       new: 0,
@@ -97,7 +98,9 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
                 ServiceID,
                 ServiceName,
                 Slot,
-                Spec: { ContainerSpec: { Image } },
+                Spec: {
+                  ContainerSpec: { Image },
+                },
                 Status: { ContainerStatus, Err, State, Timestamp },
               }) => {
                 const exitCode = ContainerStatus?.ExitCode;

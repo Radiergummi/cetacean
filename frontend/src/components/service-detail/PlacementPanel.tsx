@@ -1,5 +1,5 @@
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Service } from "../../api/types";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export type PlacementShape = NonNullable<Service["Spec"]["TaskTemplate"]["Placement"]>;
 

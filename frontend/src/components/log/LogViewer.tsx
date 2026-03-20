@@ -182,7 +182,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
       className={
         isFullscreen
           ? "flex min-h-10 flex-wrap items-center gap-1.5 border-b bg-background p-3"
-          : "flex min-h-8 flex-wrap items-center gap-1.5 mb-2"
+          : "mb-2 flex min-h-8 flex-wrap items-center gap-1.5"
       }
     >
       {!isFullscreen && toggle}
@@ -307,11 +307,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
     <div
       ref={containerRef}
       id="logs"
-      className={
-        isFullscreen
-          ? "flex h-full flex-col bg-background"
-          : "flex flex-col gap-1"
-      }
+      className={isFullscreen ? "flex h-full flex-col bg-background" : "flex flex-col gap-1"}
     >
       {toolbar}
 

@@ -144,7 +144,11 @@ export function KeyValueEditor({
         sortedEntries.length === 0 ? (
           <p className="text-sm text-muted-foreground">No {title.toLowerCase()}.</p>
         ) : (
-          <KeyValuePills entries={sortedEntries} renderValue={renderValue} onCopy={onCopyValue} />
+          <KeyValuePills
+            entries={sortedEntries}
+            renderValue={renderValue}
+            onCopy={onCopyValue}
+          />
         )
       ) : (
         <div className="flex flex-col gap-3">

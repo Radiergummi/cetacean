@@ -15,7 +15,10 @@ export default function ActivitySection({
 
   return (
     <CollapsibleSection title="Recent Activity">
-      <ActivityFeed entries={entries} hideType={hideType} />
+      <ActivityFeed
+        entries={entries}
+        hideType={hideType}
+      />
     </CollapsibleSection>
   );
 }

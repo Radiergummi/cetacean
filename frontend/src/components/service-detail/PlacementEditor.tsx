@@ -109,7 +109,10 @@ export function PlacementEditor({ serviceId, placement, onSaved }: PlacementEdit
         <label className="text-sm font-medium">Constraints</label>
 
         {constraints.map((constraint, index) => (
-          <div key={index} className="flex items-center gap-2">
+          <div
+            key={index}
+            className="flex items-center gap-2"
+          >
             <Input
               value={constraint}
               onChange={(event) => updateConstraint(index, event.target.value)}
@@ -127,7 +130,11 @@ export function PlacementEditor({ serviceId, placement, onSaved }: PlacementEdit
           </div>
         ))}
 
-        <Button variant="outline" size="sm" onClick={addConstraint}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={addConstraint}
+        >
           <Plus className="size-3" />
           Add constraint
         </Button>
@@ -149,12 +156,21 @@ export function PlacementEditor({ serviceId, placement, onSaved }: PlacementEdit
       {saveError && <p className="text-xs text-red-600">{saveError}</p>}
 
       <div className="flex gap-2">
-        <Button size="sm" onClick={save} disabled={saving}>
+        <Button
+          size="sm"
+          onClick={save}
+          disabled={saving}
+        >
           {saving && <Spinner className="size-3" />}
           Save
         </Button>
 
-        <Button variant="outline" size="sm" onClick={cancelEdit} disabled={saving}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={cancelEdit}
+          disabled={saving}
+        >
           Cancel
         </Button>
       </div>

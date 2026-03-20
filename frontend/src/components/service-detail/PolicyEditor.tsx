@@ -134,7 +134,10 @@ export function PolicyEditor({ type, serviceId, policy, onSaved }: PolicyEditorP
         {rows.length > 0 ? (
           <div className="space-y-1">
             {rows.map(([label, value]) => (
-              <div key={label} className="flex justify-between text-sm">
+              <div
+                key={label}
+                className="flex justify-between text-sm"
+              >
                 <span className="text-muted-foreground">{label}</span>
                 <span className="font-mono">{value}</span>
               </div>
@@ -173,7 +176,9 @@ export function PolicyEditor({ type, serviceId, policy, onSaved }: PolicyEditorP
             min={0}
             step={0.1}
             value={form.delaySeconds || ""}
-            onChange={(event) => setForm({ ...form, delaySeconds: Number(event.target.value) || 0 })}
+            onChange={(event) =>
+              setForm({ ...form, delaySeconds: Number(event.target.value) || 0 })
+            }
           />
         </div>
 
@@ -215,7 +220,10 @@ export function PolicyEditor({ type, serviceId, policy, onSaved }: PolicyEditorP
             className="flex h-8 w-full rounded-md border border-input bg-transparent px-3 text-sm"
           >
             {failureActions.map((action) => (
-              <option key={action} value={action}>
+              <option
+                key={action}
+                value={action}
+              >
                 {action}
               </option>
             ))}
@@ -239,12 +247,21 @@ export function PolicyEditor({ type, serviceId, policy, onSaved }: PolicyEditorP
       {saveError && <p className="text-xs text-red-600">{saveError}</p>}
 
       <div className="flex gap-2">
-        <Button size="sm" onClick={save} disabled={saving}>
+        <Button
+          size="sm"
+          onClick={save}
+          disabled={saving}
+        >
           {saving && <Spinner className="size-3" />}
           Save
         </Button>
 
-        <Button variant="outline" size="sm" onClick={cancelEdit} disabled={saving}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={cancelEdit}
+          disabled={saving}
+        >
           Cancel
         </Button>
       </div>

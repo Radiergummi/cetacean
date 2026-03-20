@@ -242,11 +242,34 @@ function StackCard({ stack }: { stack: StackSummary }) {
 
       {/* Resource counts footer */}
       <div className="mt-3 flex flex-wrap gap-1.5 border-t pt-3">
-        <CountPill count={stack.serviceCount} label="services" />
-        {stack.configCount > 0 && <CountPill count={stack.configCount} label="configs" />}
-        {stack.secretCount > 0 && <CountPill count={stack.secretCount} label="secrets" />}
-        {stack.networkCount > 0 && <CountPill count={stack.networkCount} label="networks" />}
-        {stack.volumeCount > 0 && <CountPill count={stack.volumeCount} label="volumes" />}
+        <CountPill
+          count={stack.serviceCount}
+          label="services"
+        />
+        {stack.configCount > 0 && (
+          <CountPill
+            count={stack.configCount}
+            label="configs"
+          />
+        )}
+        {stack.secretCount > 0 && (
+          <CountPill
+            count={stack.secretCount}
+            label="secrets"
+          />
+        )}
+        {stack.networkCount > 0 && (
+          <CountPill
+            count={stack.networkCount}
+            label="networks"
+          />
+        )}
+        {stack.volumeCount > 0 && (
+          <CountPill
+            count={stack.volumeCount}
+            label="volumes"
+          />
+        )}
       </div>
     </Link>
   );
@@ -286,7 +309,7 @@ function ResourceBar({
 
 function CountPill({ count, label }: { count: number; label: string }) {
   return (
-    <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground">
+    <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground tabular-nums">
       {count} {count === 1 ? label.replace(/s$/, "") : label}
     </span>
   );

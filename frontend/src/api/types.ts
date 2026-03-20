@@ -500,7 +500,6 @@ export type Healthcheck = NonNullable<
 >;
 
 export type Placement = NonNullable<Service["Spec"]["TaskTemplate"]["Placement"]>;
-export type PlacementPreference = NonNullable<Placement["Preferences"]>[number];
 export type PortConfig = NonNullable<NonNullable<Service["Spec"]["EndpointSpec"]>["Ports"]>[number];
 export type UpdateConfig = NonNullable<Service["Spec"]["UpdateConfig"]>;
 export type LogDriver = NonNullable<Service["Spec"]["TaskTemplate"]["LogDriver"]>;

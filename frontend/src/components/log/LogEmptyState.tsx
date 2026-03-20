@@ -23,7 +23,10 @@ export function LogEmptyState({
 }: LogEmptyStateProps) {
   if (loading) {
     return (
-      <div className={className} style={style}>
+      <div
+        className={className}
+        style={style}
+      >
         <div className="flex flex-col items-center gap-3 text-muted-foreground">
           <Spinner className="size-6" />
           <p className="text-sm">Loading logs…</p>
@@ -34,7 +37,10 @@ export function LogEmptyState({
 
   if (error) {
     return (
-      <div className={className} style={style}>
+      <div
+        className={className}
+        style={style}
+      >
         <div className="flex flex-col items-center gap-3 text-center">
           <AlertTriangle className="size-6 text-red-500 dark:text-red-400" />
           <div>
@@ -56,7 +62,10 @@ export function LogEmptyState({
 
   if (!hasLines) {
     return (
-      <div className={className} style={style}>
+      <div
+        className={className}
+        style={style}
+      >
         <div className="flex flex-col items-center gap-3 text-muted-foreground">
           <FileText className="size-6" />
           <p className="text-sm">No logs yet — the container hasn't produced any output</p>
@@ -67,7 +76,10 @@ export function LogEmptyState({
 
   if (!hasFiltered) {
     return (
-      <div className={className} style={style}>
+      <div
+        className={className}
+        style={style}
+      >
         <p className="text-sm text-muted-foreground">No matching log lines</p>
       </div>
     );

@@ -189,9 +189,10 @@ export function LogTable({
       ref={containerRef}
       onScroll={handleScroll}
       id="log-panel"
-      className={fillHeight
-        ? "flex-1 overflow-auto bg-muted/30 dark:bg-gray-950"
-        : "overflow-auto rounded-lg border bg-muted/30 dark:border-gray-800 dark:bg-gray-950"
+      className={
+        fillHeight
+          ? "flex-1 overflow-auto bg-muted/30 dark:bg-gray-950"
+          : "overflow-auto rounded-lg border bg-muted/30 dark:border-gray-800 dark:bg-gray-950"
       }
       style={!fillHeight ? { height: height ?? 400 } : undefined}
     >

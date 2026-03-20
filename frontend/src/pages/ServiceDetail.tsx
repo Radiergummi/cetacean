@@ -1,5 +1,12 @@
 import { api } from "../api/client";
-import type { Healthcheck, HistoryEntry, PortConfig, Service, SpecChange, Task } from "../api/types";
+import type {
+  Healthcheck,
+  HistoryEntry,
+  PortConfig,
+  Service,
+  SpecChange,
+  Task,
+} from "../api/types";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
 import { ContainerImage, KVTable, MetadataGrid, ResourceLink, Timestamp } from "../components/data";
@@ -217,7 +224,6 @@ export default function ServiceDetail() {
   const taskTemplate = service.Spec.TaskTemplate;
   const labels = service.Spec.Labels;
 
-
   const hasContainerConfig =
     containerSpec.Command ||
     containerSpec.Args ||
@@ -417,11 +423,14 @@ export default function ServiceDetail() {
         />
       )}
 
-
       {/* Ports */}
       {specPorts !== null && (
         <div className="flex flex-col gap-3 rounded-lg border p-3">
-          <PortsEditor serviceId={id!} ports={specPorts} onSaved={setSpecPorts} />
+          <PortsEditor
+            serviceId={id!}
+            ports={specPorts}
+            onSaved={setSpecPorts}
+          />
         </div>
       )}
 

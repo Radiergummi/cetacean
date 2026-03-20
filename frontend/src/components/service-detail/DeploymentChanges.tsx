@@ -27,7 +27,10 @@ export function DeploymentChanges({
         </p>
       )}
 
-      <div className="divide-y rounded-lg border" onCopy={handleCopyWithTemplates}>
+      <div
+        className="divide-y rounded-lg border"
+        onCopy={handleCopyWithTemplates}
+      >
         {changes.map(({ field, new: change, old }, index) => (
           <div
             key={index}
@@ -36,20 +39,32 @@ export function DeploymentChanges({
             <span className="min-w-40 shrink-0 font-medium">{field}</span>
             {old && change ? (
               <>
-                <span className="truncate font-mono text-xs text-red-600 line-through dark:text-red-400" title={old}>
+                <span
+                  className="truncate font-mono text-xs text-red-600 line-through dark:text-red-400"
+                  title={old}
+                >
                   {renderSwarmTemplate(old)}
                 </span>
                 <ArrowRight className="size-3 shrink-0 text-muted-foreground" />
-                <span className="truncate font-mono text-xs text-green-600 dark:text-green-400" title={change}>
+                <span
+                  className="truncate font-mono text-xs text-green-600 dark:text-green-400"
+                  title={change}
+                >
                   {renderSwarmTemplate(change)}
                 </span>
               </>
             ) : old ? (
-              <span className="truncate font-mono text-xs text-red-600 dark:text-red-400" title={old}>
+              <span
+                className="truncate font-mono text-xs text-red-600 dark:text-red-400"
+                title={old}
+              >
                 {renderSwarmTemplate(old)}
               </span>
             ) : (
-              <span className="truncate font-mono text-xs text-green-600 dark:text-green-400" title={change ?? ""}>
+              <span
+                className="truncate font-mono text-xs text-green-600 dark:text-green-400"
+                title={change ?? ""}
+              >
                 {renderSwarmTemplate(change ?? "")}
               </span>
             )}

@@ -19,7 +19,13 @@ const terminalStates = new Set([
  * Returns true for tasks worth seeing by default: anything still in-flight or
  * abnormal. Hides only the normal completed lifecycle (desired=shutdown + terminal state).
  */
-export function isActiveTask({ DesiredState, Status: { State } }: { DesiredState: string; Status: { State: string } }): boolean {
+export function isActiveTask({
+  DesiredState,
+  Status: { State },
+}: {
+  DesiredState: string;
+  Status: { State: string };
+}): boolean {
   return !(DesiredState === "shutdown" && terminalStates.has(State));
 }
 
