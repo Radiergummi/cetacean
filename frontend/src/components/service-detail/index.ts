@@ -5,6 +5,7 @@ export { HealthcheckEditor } from "./HealthcheckEditor";
 export { PlacementEditor } from "./PlacementEditor";
 export { PortsEditor } from "./PortsEditor";
 export { PlacementPanel } from "./PlacementPanel";
+export { PolicyEditor } from "./PolicyEditor";
 export type { PlacementShape } from "./PlacementPanel";
 export { ReplicaCard } from "./ReplicaCard";
 export { ResourcesEditor } from "./ResourcesEditor";
