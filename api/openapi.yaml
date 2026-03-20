@@ -1054,6 +1054,242 @@ paths:
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
+  /services/{id}/placement:
+    get:
+      operationId: getServicePlacement
+      tags: [Services]
+      summary: Get service placement constraints
+      description: Returns the placement constraints and preferences for the service.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Placement constraints and preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServicePlacement"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: putServicePlacement
+      tags: [Services]
+      summary: Update service placement constraints
+      description: Replaces the placement constraints and preferences for the service.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServicePlacement"
+      responses:
+        "200":
+          description: Updated placement constraints and preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServicePlacement"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /services/{id}/ports:
+    get:
+      operationId: getServicePorts
+      tags: [Services]
+      summary: Get service port bindings
+      description: Returns the published port configurations for the service.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Port bindings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServicePorts"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: patchServicePorts
+      tags: [Services]
+      summary: Patch service port bindings
+      description: |
+        Applies a JSON Merge Patch (RFC 7396) to the service port bindings.
+        Requires `Content-Type: application/merge-patch+json`.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/ServicePorts"
+      responses:
+        "200":
+          description: Updated port bindings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServicePorts"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+
+  /services/{id}/update-policy:
+    get:
+      operationId: getServiceUpdatePolicy
+      tags: [Services]
+      summary: Get service update policy
+      description: Returns the rolling update configuration for the service.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Update policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceUpdatePolicy"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: patchServiceUpdatePolicy
+      tags: [Services]
+      summary: Patch service update policy
+      description: |
+        Applies a JSON Merge Patch (RFC 7396) to the service update policy.
+        Requires `Content-Type: application/merge-patch+json`.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/ServiceUpdatePolicy"
+      responses:
+        "200":
+          description: Updated update policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceUpdatePolicy"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+
+  /services/{id}/rollback-policy:
+    get:
+      operationId: getServiceRollbackPolicy
+      tags: [Services]
+      summary: Get service rollback policy
+      description: Returns the rollback configuration for the service.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Rollback policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceRollbackPolicy"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: patchServiceRollbackPolicy
+      tags: [Services]
+      summary: Patch service rollback policy
+      description: |
+        Applies a JSON Merge Patch (RFC 7396) to the service rollback policy.
+        Requires `Content-Type: application/merge-patch+json`.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/ServiceRollbackPolicy"
+      responses:
+        "200":
+          description: Updated rollback policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceRollbackPolicy"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+
+  /services/{id}/log-driver:
+    get:
+      operationId: getServiceLogDriver
+      tags: [Services]
+      summary: Get service log driver
+      description: Returns the log driver name and options configured for the service.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Log driver configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceLogDriver"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: patchServiceLogDriver
+      tags: [Services]
+      summary: Patch service log driver
+      description: |
+        Applies a JSON Merge Patch (RFC 7396) to the service log driver configuration.
+        Requires `Content-Type: application/merge-patch+json`.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/ServiceLogDriver"
+      responses:
+        "200":
+          description: Updated log driver configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceLogDriver"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+
   # ── Tasks ────────────────────────────────────────────────────────────
 
   /tasks:
@@ -2683,3 +2919,126 @@ components:
           format: int64
           description: Memory reservation in bytes (null to unset)
           nullable: true
+
+    ServicePlacement:
+      type: object
+      description: Placement constraints and preferences for a service
+      properties:
+        placement:
+          type: object
+          description: Docker swarm placement configuration
+          properties:
+            Constraints:
+              type: array
+              items:
+                type: string
+              description: Placement constraint expressions (e.g. "node.role == manager")
+            Preferences:
+              type: array
+              description: Placement preference strategies
+              items:
+                type: object
+            MaxReplicas:
+              type: integer
+              format: int64
+              description: Maximum replicas per node (0 = unlimited)
+            Platforms:
+              type: array
+              description: Target platforms
+              items:
+                type: object
+
+    ServicePorts:
+      type: object
+      description: Published port configurations for a service
+      properties:
+        ports:
+          type: array
+          items:
+            type: object
+            description: Docker swarm PortConfig
+            properties:
+              Protocol:
+                type: string
+                enum: [tcp, udp, sctp]
+              TargetPort:
+                type: integer
+                format: int64
+              PublishedPort:
+                type: integer
+                format: int64
+              PublishMode:
+                type: string
+                enum: [ingress, host]
+
+    ServiceUpdatePolicy:
+      type: object
+      description: Rolling update configuration for a service
+      properties:
+        parallelism:
+          type: integer
+          format: int64
+          description: Number of tasks to update simultaneously
+        delay:
+          type: integer
+          format: int64
+          description: Delay between updates in nanoseconds
+        failureAction:
+          type: string
+          enum: [continue, pause, rollback]
+        monitor:
+          type: integer
+          format: int64
+          description: Duration after each task update to monitor for failure (nanoseconds)
+        maxFailureRatio:
+          type: number
+          format: float
+          description: Fraction of tasks that may fail during an update
+        order:
+          type: string
+          enum: [stop-first, start-first]
+
+    ServiceRollbackPolicy:
+      type: object
+      description: Rollback configuration for a service
+      properties:
+        parallelism:
+          type: integer
+          format: int64
+          description: Number of tasks to roll back simultaneously
+        delay:
+          type: integer
+          format: int64
+          description: Delay between rollback steps in nanoseconds
+        failureAction:
+          type: string
+          enum: [continue, pause]
+        monitor:
+          type: integer
+          format: int64
+          description: Duration after each task rollback to monitor for failure (nanoseconds)
+        maxFailureRatio:
+          type: number
+          format: float
+          description: Fraction of tasks that may fail during a rollback
+        order:
+          type: string
+          enum: [stop-first, start-first]
+
+    ServiceLogDriver:
+      type: object
+      description: Log driver configuration for a service
+      properties:
+        logDriver:
+          type: object
+          description: Docker driver configuration
+          nullable: true
+          properties:
+            Name:
+              type: string
+              description: Log driver name (e.g. "json-file", "syslog", "none")
+            Options:
+              type: object
+              additionalProperties:
+                type: string
+              description: Log driver options

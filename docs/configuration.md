@@ -272,6 +272,11 @@ Routine service management actions:
 - **Patch service labels** — `PATCH /services/{id}/labels`
 - **Patch service resources** — `PATCH /services/{id}/resources`
 - **Update service healthcheck** — `PUT /services/{id}/healthcheck`, `PATCH /services/{id}/healthcheck`
+- **Update service placement** — `PUT /services/{id}/placement`
+- **Patch service ports** — `PATCH /services/{id}/ports`
+- **Patch service update policy** — `PATCH /services/{id}/update-policy`
+- **Patch service rollback policy** — `PATCH /services/{id}/rollback-policy`
+- **Patch service log driver** — `PATCH /services/{id}/log-driver`
 
 ### Level 2 — Impactful
 

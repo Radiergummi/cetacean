@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Docker Swarm template expressions (e.g. `{{.Node.Hostname}}`) rendered as human-readable badges
 - Resizable log viewer (drag bottom edge, double-click to reset)
 - Fullscreen log viewer via browser Fullscreen API
+- Service placement, ports, update/rollback policy, and log driver read and write endpoints
 
 ### Improved
 - All mutation forms use polished shadcn/ui components (popovers, confirmation dialogs, styled dropdowns)

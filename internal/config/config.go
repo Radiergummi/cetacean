@@ -14,7 +14,8 @@ const (
 	OpsReadOnly OperationsLevel = 0
 
 	// OpsOperational allows routine service actions: scale, image update,
-	// rollback, restart, and service env/labels/resources/healthcheck patches.
+	// rollback, restart, and service env/labels/resources/healthcheck/placement/
+	// ports/update-policy/rollback-policy/log-driver patches.
 	OpsOperational OperationsLevel = 1
 
 	// OpsImpactful allows all operations including node availability/labels,
