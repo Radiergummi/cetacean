@@ -368,7 +368,7 @@ function EditMode({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             <SliderNumberField
               label="Interval (s)"
               value={form.interval}
@@ -397,9 +397,6 @@ function EditMode({
               min={0}
               step={0.1}
             />
-          </div>
-
-          <div className="w-48">
             <SliderNumberField
               label="Retries"
               value={form.retries}
