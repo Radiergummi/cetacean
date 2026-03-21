@@ -5,7 +5,7 @@ All notable changes to Cetacean will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.7.0] - 2026-03-21
 
 ### Added
 - Operations level setting to restrict write operations by danger tier
