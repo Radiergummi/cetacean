@@ -302,6 +302,11 @@ export const api = {
   updateNodeRole: (id: string, role: "worker" | "manager") =>
     put<{ node: Node }>(`/nodes/${id}/role`, { role }),
   removeNode: (id: string) => del(`/nodes/${id}`),
+  removeStack: (name: string) =>
+    mutationFetch<{
+      removed: { services: number; networks: number; configs: number; secrets: number };
+      errors?: { type: string; id: string; error: string }[];
+    }>(`/stacks/${name}`, "DELETE"),
 
   // Tier 2: sub-resource GETs
   serviceEnv: (id: string, signal?: AbortSignal) =>
