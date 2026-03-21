@@ -10,7 +10,7 @@ import { useState } from "react";
 
 interface RoleEditorProps {
   nodeId: string;
-  currentRole: string;
+  currentRole: "worker" | "manager";
   isLeader: boolean;
   managerCount: number;
 }
@@ -51,7 +51,7 @@ export function RoleEditor({ nodeId, currentRole, isLeader, managerCount }: Role
     }
 
     await action.execute(async () => {
-      await api.updateNodeRole(nodeId, value as "worker" | "manager");
+      await api.updateNodeRole(nodeId, value);
       setOpen(false);
     }, "Failed to update role");
   }

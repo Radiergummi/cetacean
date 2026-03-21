@@ -311,7 +311,7 @@ export const api = {
       (r) => r.labels,
     ),
   nodeRole: (id: string, signal?: AbortSignal) =>
-    fetchJSON<{ role: string; isLeader: boolean; managerCount: number }>(
+    fetchJSON<{ role: "worker" | "manager"; isLeader: boolean; managerCount: number }>(
       `/nodes/${id}/role`,
       signal,
     ),

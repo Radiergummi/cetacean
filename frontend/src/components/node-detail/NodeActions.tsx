@@ -20,7 +20,7 @@ import { Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-export function NodeActions({ node, nodeId }: { node: Node; nodeId: string }) {
+export function NodeActions({ node }: { node: Node }) {
   const { level, loading: levelLoading } = useOperationsLevel();
   const canImpact = !levelLoading && level >= opsLevel.impactful;
   const navigate = useNavigate();
@@ -63,16 +63,14 @@ export function NodeActions({ node, nodeId }: { node: Node; nodeId: string }) {
 
   return (
     <div className="flex flex-col items-start gap-1">
-      <div className="flex flex-wrap items-center gap-2">
-        {!isDown ? (
-          <Tooltip>
-            <TooltipTrigger render={trigger} />
-            <TooltipContent>Node must be in down state to remove</TooltipContent>
-          </Tooltip>
-        ) : (
-          trigger
-        )}
-      </div>
+      {!isDown ? (
+        <Tooltip>
+          <TooltipTrigger render={trigger} />
+          <TooltipContent>Node must be in down state to remove</TooltipContent>
+        </Tooltip>
+      ) : (
+        trigger
+      )}
 
       {remove.error && <p className="text-xs text-red-600 dark:text-red-400">{remove.error}</p>}
 
@@ -111,7 +109,7 @@ export function NodeActions({ node, nodeId }: { node: Node; nodeId: string }) {
               disabled={!canRemove || remove.loading}
               onClick={() =>
                 void remove.execute(async () => {
-                  await api.removeNode(nodeId);
+                  await api.removeNode(node.ID);
                   navigate("/nodes", { replace: true });
                 }, "Failed to remove node")
               }

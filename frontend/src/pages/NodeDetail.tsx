@@ -39,7 +39,7 @@ export default function NodeDetail() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [nodeLabels, setNodeLabels] = useState<Record<string, string> | null>(null);
   const [nodeRole, setNodeRole] = useState<{
-    role: string;
+    role: "worker" | "manager";
     isLeader: boolean;
     managerCount: number;
   } | null>(null);
@@ -142,10 +142,7 @@ export default function NodeDetail() {
         ]}
       />
 
-      <NodeActions
-        node={node}
-        nodeId={node.ID}
-      />
+      <NodeActions node={node} />
 
       <MetadataGrid>
         {nodeRole ? (
