@@ -461,6 +461,18 @@ func (c *Client) RemoveService(ctx context.Context, id string) error {
 	return c.docker.ServiceRemove(ctx, id)
 }
 
+func (c *Client) RemoveNetwork(ctx context.Context, id string) error {
+	return c.docker.NetworkRemove(ctx, id)
+}
+
+func (c *Client) RemoveConfig(ctx context.Context, id string) error {
+	return c.docker.ConfigRemove(ctx, id)
+}
+
+func (c *Client) RemoveSecret(ctx context.Context, id string) error {
+	return c.docker.SecretRemove(ctx, id)
+}
+
 func (c *Client) UpdateServiceEnv(
 	ctx context.Context,
 	id string,
