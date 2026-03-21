@@ -870,10 +870,10 @@ func realisticServiceEvent() cache.Event {
 							{ConfigID: "cfg-1", ConfigName: "mystack_nginx.conf"},
 						},
 						Secrets: []*swarm.SecretReference{
-							{
+							{ //nolint:gosec // test data, not real credentials
 								SecretID:   "sec-1",
 								SecretName: "mystack_tls_cert",
-							}, //nolint:gosec // test data
+							},
 						},
 					},
 					Networks: []swarm.NetworkAttachmentConfig{

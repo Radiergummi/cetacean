@@ -36,6 +36,7 @@ func DiscoverConfigFile() string {
 	candidates = append(candidates, filepath.Join("/etc", "cetacean", configFileName))
 
 	for _, path := range candidates {
+		//nolint:gosec // paths are from well-known config locations, not user input
 		if _, err := os.Stat(path); err == nil {
 			return path
 		}

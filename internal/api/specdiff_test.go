@@ -20,7 +20,7 @@ func TestDiffServiceSpecs_Identical(t *testing.T) {
 		TaskTemplate: swarm.TaskSpec{
 			ContainerSpec: &swarm.ContainerSpec{Image: "nginx:1.24"},
 		},
-		Mode: swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: ptr(uint64(3))}},
+		Mode: swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: new(uint64(3))}},
 	}
 	if changes := DiffServiceSpecs(spec, spec); len(changes) != 0 {
 		t.Fatalf("expected no changes, got %v", changes)
@@ -46,13 +46,13 @@ func TestDiffServiceSpecs_ReplicaChange(t *testing.T) {
 	prev := &swarm.ServiceSpec{
 		TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{Image: "nginx"}},
 		Mode: swarm.ServiceMode{
-			Replicated: &swarm.ReplicatedService{Replicas: ptr(uint64(3))},
+			Replicated: &swarm.ReplicatedService{Replicas: new(uint64(3))},
 		},
 	}
 	curr := &swarm.ServiceSpec{
 		TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{Image: "nginx"}},
 		Mode: swarm.ServiceMode{
-			Replicated: &swarm.ReplicatedService{Replicas: ptr(uint64(5))},
+			Replicated: &swarm.ReplicatedService{Replicas: new(uint64(5))},
 		},
 	}
 	changes := DiffServiceSpecs(prev, curr)
@@ -205,5 +205,3 @@ func assertHasField(t *testing.T, changes []SpecChange, field string) {
 	}
 	t.Errorf("expected change with field %q not found in %v", field, changes)
 }
-
-func ptr[T any](v T) *T { return &v }

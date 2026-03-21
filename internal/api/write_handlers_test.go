@@ -1411,7 +1411,9 @@ func TestHandleGetServicePlacement(t *testing.T) {
 		t.Fatalf("status=%d, want 200", w.Code)
 	}
 	var resp map[string]any
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
 	placement := resp["placement"].(map[string]any)
 	constraints := placement["Constraints"].([]any)
 	if len(constraints) != 1 || constraints[0] != "node.role==manager" {
@@ -1537,7 +1539,9 @@ func TestHandleGetServicePorts_NilEndpointSpec(t *testing.T) {
 		t.Fatalf("status=%d, want 200", w.Code)
 	}
 	var resp map[string]any
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
 	ports := resp["ports"].([]any)
 	if len(ports) != 0 {
 		t.Errorf("expected empty ports, got %v", ports)
@@ -1798,7 +1802,9 @@ func TestHandleGetServiceLogDriver_Nil(t *testing.T) {
 		t.Fatalf("status=%d, want 200", w.Code)
 	}
 	var resp map[string]any
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
 	if resp["logDriver"] != nil {
 		t.Errorf("expected null logDriver, got %v", resp["logDriver"])
 	}

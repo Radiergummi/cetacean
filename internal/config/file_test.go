@@ -192,8 +192,10 @@ func TestDiscoverConfigFile_WorkingDir(t *testing.T) {
 	}
 
 	original, _ := os.Getwd()
-	os.Chdir(dir)
-	defer os.Chdir(original)
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(original) //nolint:errcheck // best-effort restore
 
 	got := DiscoverConfigFile()
 	if got != "cetacean.toml" {
@@ -204,7 +206,9 @@ func TestDiscoverConfigFile_WorkingDir(t *testing.T) {
 func TestDiscoverConfigFile_XDGConfigHome(t *testing.T) {
 	dir := t.TempDir()
 	xdgDir := filepath.Join(dir, "cetacean")
-	os.MkdirAll(xdgDir, 0755)
+	if err := os.MkdirAll(xdgDir, 0750); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(
 		filepath.Join(xdgDir, "cetacean.toml"),
 		[]byte("[server]\n"),
@@ -218,8 +222,10 @@ func TestDiscoverConfigFile_XDGConfigHome(t *testing.T) {
 	// Run from a dir with no config file
 	empty := t.TempDir()
 	original, _ := os.Getwd()
-	os.Chdir(empty)
-	defer os.Chdir(original)
+	if err := os.Chdir(empty); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(original) //nolint:errcheck // best-effort restore
 
 	got := DiscoverConfigFile()
 	want := filepath.Join(xdgDir, "cetacean.toml")
@@ -231,8 +237,10 @@ func TestDiscoverConfigFile_XDGConfigHome(t *testing.T) {
 func TestDiscoverConfigFile_None(t *testing.T) {
 	dir := t.TempDir()
 	original, _ := os.Getwd()
-	os.Chdir(dir)
-	defer os.Chdir(original)
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(original) //nolint:errcheck // best-effort restore
 
 	// Clear env to prevent XDG/HOME discovery
 	t.Setenv("XDG_CONFIG_HOME", dir) // points to temp dir with no cetacean subdir

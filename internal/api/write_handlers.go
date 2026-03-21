@@ -7,19 +7,19 @@ import (
 	"net/http"
 	"strings"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/swarm"
-	"github.com/docker/docker/errdefs"
 	json "github.com/goccy/go-json"
 )
 
 // writeDockerError maps Docker API errors to appropriate HTTP status codes.
 func writeDockerError(w http.ResponseWriter, r *http.Request, err error, resource string) {
-	if errdefs.IsNotFound(err) {
+	if cerrdefs.IsNotFound(err) {
 		writeProblem(w, r, http.StatusNotFound, resource+" not found")
 		return
 	}
-	if errdefs.IsConflict(err) {
+	if cerrdefs.IsConflict(err) {
 		writeProblem(
 			w,
 			r,
@@ -28,7 +28,7 @@ func writeDockerError(w http.ResponseWriter, r *http.Request, err error, resourc
 		)
 		return
 	}
-	if errdefs.IsInvalidParameter(err) {
+	if cerrdefs.IsInvalidArgument(err) {
 		writeProblem(w, r, http.StatusBadRequest, err.Error())
 		return
 	}

@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"maps"
 
 	json "github.com/goccy/go-json"
 )
@@ -40,9 +41,7 @@ func (e *testFailedError) Error() string {
 func applyJSONPatch(m map[string]string, ops []PatchOp) (map[string]string, error) {
 	// Copy the input map
 	result := make(map[string]string, len(m))
-	for k, v := range m {
-		result[k] = v
-	}
+	maps.Copy(result, m)
 
 	for i, op := range ops {
 		key := normalizePath(op.Path)
@@ -92,9 +91,7 @@ func applyMergePatchStringMap(m map[string]string, body []byte) (map[string]stri
 	}
 
 	result := make(map[string]string, len(m))
-	for k, v := range m {
-		result[k] = v
-	}
+	maps.Copy(result, m)
 
 	for k, v := range patch {
 		if v == nil {

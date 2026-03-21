@@ -144,9 +144,8 @@ func main() {
 		authProvider = auth.NewHeadersProvider(authCfg.Headers)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown auth mode %q\n", authCfg.Mode)
-		os.Exit(
-			1,
-		) //nolint:gocritic // exitAfterDefer: tsnet defers only run in the tailscale case, not here
+		//nolint:gocritic // exitAfterDefer: tsnet defers only run in the tailscale case, not here
+		os.Exit(1)
 	}
 
 	// SSE broadcaster
@@ -169,10 +168,8 @@ func main() {
 	snapshotPath := ""
 	if cfg.Snapshot {
 		snapshotPath = filepath.Join(cfg.DataDir, "snapshot.json")
-		if err := os.MkdirAll(
-			cfg.DataDir,
-			0700,
-		); err != nil { //nolint:gosec // DataDir is operator-configured, not user input
+		//nolint:gosec // DataDir is operator-configured, not user input
+		if err := os.MkdirAll(cfg.DataDir, 0700); err != nil {
 			slog.Warn("could not create data dir", "error", err)
 		}
 		if err := stateCache.LoadFromDisk(snapshotPath); err != nil {
