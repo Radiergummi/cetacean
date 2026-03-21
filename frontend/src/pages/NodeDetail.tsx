@@ -143,7 +143,7 @@ export default function NodeDetail() {
       <MetadataGrid>
         <RoleEditor
           nodeId={node.ID}
-          currentRole={node.Spec.Role as "worker" | "manager"}
+          currentRole={node.Spec.Role}
           isLeader={node.ManagerStatus?.Leader ?? false}
           managerCount={managerCount}
         />

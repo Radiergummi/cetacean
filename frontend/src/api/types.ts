@@ -2,7 +2,7 @@ export interface Node {
   ID: string;
   Version: { Index: number };
   Spec: {
-    Role: string;
+    Role: "worker" | "manager";
     Availability: string;
     Labels: Record<string, string>;
   };
