@@ -29,6 +29,8 @@ type mockWriteClient struct {
 	removeServiceFn               func(ctx context.Context, id string) error
 	updateServiceEnvFn            func(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
 	updateNodeLabelsFn            func(ctx context.Context, id string, labels map[string]string) (swarm.Node, error)
+	updateNodeRoleFn              func(ctx context.Context, id string, role swarm.NodeRole) (swarm.Node, error)
+	removeNodeFn                  func(ctx context.Context, id string) error
 	updateServiceLabelsFn         func(ctx context.Context, id string, labels map[string]string) (swarm.Service, error)
 	updateServiceResourcesFn      func(ctx context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error)
 	updateServiceModeFn           func(ctx context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error)
@@ -115,6 +117,24 @@ func (m *mockWriteClient) UpdateNodeLabels(
 		return m.updateNodeLabelsFn(ctx, id, labels)
 	}
 	return swarm.Node{}, fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) UpdateNodeRole(
+	ctx context.Context,
+	id string,
+	role swarm.NodeRole,
+) (swarm.Node, error) {
+	if m.updateNodeRoleFn != nil {
+		return m.updateNodeRoleFn(ctx, id, role)
+	}
+	return swarm.Node{}, fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) RemoveNode(ctx context.Context, id string) error {
+	if m.removeNodeFn != nil {
+		return m.removeNodeFn(ctx, id)
+	}
+	return fmt.Errorf("not implemented")
 }
 
 func (m *mockWriteClient) UpdateServiceLabels(
