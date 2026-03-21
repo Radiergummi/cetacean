@@ -299,6 +299,9 @@ export const api = {
     put<{ node: Node }>(`/nodes/${id}/availability`, { availability }),
   removeTask: (id: string) => del(`/tasks/${id}`),
   removeService: (id: string) => del(`/services/${id}`),
+  updateNodeRole: (id: string, role: "worker" | "manager") =>
+    put<{ node: Node }>(`/nodes/${id}/role`, { role }),
+  removeNode: (id: string) => del(`/nodes/${id}`),
 
   // Tier 2: sub-resource GETs
   serviceEnv: (id: string, signal?: AbortSignal) =>
@@ -306,6 +309,11 @@ export const api = {
   nodeLabels: (id: string, signal?: AbortSignal) =>
     fetchJSON<{ labels: Record<string, string> }>(`/nodes/${id}/labels`, signal).then(
       (r) => r.labels,
+    ),
+  nodeRole: (id: string, signal?: AbortSignal) =>
+    fetchJSON<{ role: string; isLeader: boolean; managerCount: number }>(
+      `/nodes/${id}/role`,
+      signal,
     ),
   serviceLabels: (id: string, signal?: AbortSignal) =>
     fetchJSON<{ labels: Record<string, string> }>(`/services/${id}/labels`, signal).then(
