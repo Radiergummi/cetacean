@@ -198,6 +198,7 @@ func NewRouter(
 			h.broadcaster.serveSSE(w, r, stackMatcher(h.cache, r.PathValue("name")))
 		}, spa),
 	)
+	mux.Handle("DELETE /stacks/{name}", tier3(h.HandleRemoveStack))
 
 	// Configs
 	mux.HandleFunc(
