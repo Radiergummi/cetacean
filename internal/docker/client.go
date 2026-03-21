@@ -421,6 +421,27 @@ func (c *Client) UpdateNodeAvailability(
 	return c.InspectNode(ctx, id)
 }
 
+func (c *Client) UpdateNodeRole(
+	ctx context.Context,
+	id string,
+	role swarm.NodeRole,
+) (swarm.Node, error) {
+	node, _, err := c.docker.NodeInspectWithRaw(ctx, id)
+	if err != nil {
+		return swarm.Node{}, err
+	}
+	node.Spec.Role = role
+	err = c.docker.NodeUpdate(ctx, node.ID, node.Version, node.Spec)
+	if err != nil {
+		return swarm.Node{}, err
+	}
+	return c.InspectNode(ctx, id)
+}
+
+func (c *Client) RemoveNode(ctx context.Context, id string) error {
+	return c.docker.NodeRemove(ctx, id, swarm.NodeRemoveOptions{Force: false})
+}
+
 func (c *Client) RemoveTask(ctx context.Context, id string) error {
 	task, _, err := c.docker.TaskInspectWithRaw(ctx, id)
 	if err != nil {
