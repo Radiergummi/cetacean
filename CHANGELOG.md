@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Resizable log viewer (drag bottom edge, double-click to reset)
 - Fullscreen log viewer via browser Fullscreen API
 - Service placement, ports, update/rollback policy, and log driver read and write endpoints
+- Healthcheck editor on service detail page (view and edit healthcheck configuration)
+- Interactive healthcheck timeline on task detail page
+- Delete service button on service detail page
+- Config file auto-discovery from standard locations
+- Mobile-responsive layout (navigation, topology, log viewer, search palette, charts)
+- Replica doughnut chart on service detail page
 
 ### Improved
 - All mutation forms use polished shadcn/ui components (popovers, confirmation dialogs, styled dropdowns)
@@ -39,6 +45,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - Log viewer appearing empty on service and task detail pages until user interaction
+- Node metrics showing when node-exporter targets are not available
+- Duplicate labels section on service detail page
+- Long values overflowing in last deployment section
+- Command palette showing write actions above the configured operations level
 
 ## [0.6.0] - 2026-03-16
 
