@@ -545,7 +545,17 @@ func (c *Cache) GetStack(name string) (Stack, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	s, ok := c.stacks[name]
-	return s, ok
+	if !ok {
+		return Stack{}, false
+	}
+	return Stack{
+		Name:     s.Name,
+		Services: append([]string{}, s.Services...),
+		Configs:  append([]string{}, s.Configs...),
+		Secrets:  append([]string{}, s.Secrets...),
+		Networks: append([]string{}, s.Networks...),
+		Volumes:  append([]string{}, s.Volumes...),
+	}, true
 }
 
 func (c *Cache) ListStacks() []Stack {
