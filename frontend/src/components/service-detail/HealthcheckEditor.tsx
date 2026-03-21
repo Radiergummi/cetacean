@@ -1,16 +1,19 @@
-import { api } from "@/api/client";
-import type { Healthcheck } from "@/api/types";
+import {api} from "@/api/client";
+import type {Healthcheck} from "@/api/types";
 import CollapsibleSection from "@/components/CollapsibleSection";
-import { Spinner } from "@/components/Spinner";
-import { Button } from "@/components/ui/button";
-import { CopyButton } from "@/components/ui/copy-button";
-import { SliderNumberField } from "@/components/ui/slider-number-field";
-import { useOperationsLevel } from "@/hooks/useOperationsLevel";
-import { formatDuration } from "@/lib/format";
-import { joinCommand, parseCommand } from "@/lib/parseCommand";
-import { cn, getErrorMessage } from "@/lib/utils";
-import { Pencil } from "lucide-react";
-import { useState } from "react";
+import {HealthcheckTimeline} from "@/components/service-detail/HealthcheckTimeline";
+import {Spinner} from "@/components/Spinner";
+import {Button} from "@/components/ui/button";
+import {CopyButton} from "@/components/ui/copy-button";
+import {SliderNumberField} from "@/components/ui/slider-number-field";
+import {useEscapeCancel} from "@/hooks/useEscapeCancel";
+import {opsLevel, useOperationsLevel} from "@/hooks/useOperationsLevel";
+import {formatDuration, nanosToSeconds} from "@/lib/format";
+import {joinCommand, parseCommand} from "@/lib/parseCommand";
+import {cn, getErrorMessage} from "@/lib/utils";
+import {Pencil} from "lucide-react";
+import type {MouseEvent} from "react";
+import {useState} from "react";
 
 interface FormState {
   enabled: boolean;
@@ -34,14 +37,6 @@ const emptyForm: FormState = {
   retries: undefined,
 };
 
-function nanosToSeconds(nanoseconds: number | undefined): number | undefined {
-  if (!nanoseconds) {
-    return undefined;
-  }
-
-  return nanoseconds / 1e9;
-}
-
 function formatHealthcheckDuration(nanoseconds: number | undefined): string {
   if (nanoseconds == null || nanoseconds === 0) {
     return "default";
@@ -60,18 +55,18 @@ function formatRetries(retries: number | undefined): string {
 
 function extractCommand(test: string[] | undefined): { shell: boolean; command: string } {
   if (!test || test.length === 0) {
-    return { shell: true, command: "" };
+    return {shell: true, command: ""};
   }
 
   if (test[0] === "CMD-SHELL") {
-    return { shell: true, command: test[1] ?? "" };
+    return {shell: true, command: test[1] ?? ""};
   }
 
   if (test[0] === "CMD") {
-    return { shell: false, command: joinCommand(test.slice(1)) };
+    return {shell: false, command: joinCommand(test.slice(1))};
   }
 
-  return { shell: true, command: joinCommand(test) };
+  return {shell: true, command: joinCommand(test)};
 }
 
 function isDisabled(healthcheck: Healthcheck | null): boolean {
@@ -86,7 +81,7 @@ function formFromHealthcheck(healthcheck: Healthcheck | null): FormState {
   const disabled = isDisabled(healthcheck);
 
   if (disabled || !healthcheck) {
-    return { ...emptyForm, enabled: false };
+    return {...emptyForm, enabled: false};
   }
 
   const extracted = extractCommand(healthcheck.Test);
@@ -133,16 +128,17 @@ export function HealthcheckEditor({
   healthcheck: Healthcheck | null;
   onSaved: (updated: Healthcheck | null) => void;
 }) {
-  const { level } = useOperationsLevel();
-  const canEdit = level >= 1;
+  const {level, loading: levelLoading} = useOperationsLevel();
+  const canEdit = !levelLoading && level >= opsLevel.configuration;
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
+  useEscapeCancel(editing, () => cancelEdit());
 
   function updateForm(partial: Partial<FormState>) {
-    setForm((previous) => ({ ...previous, ...partial }));
+    setForm((previous) => ({...previous, ...partial}));
   }
 
   function openEdit() {
@@ -174,18 +170,16 @@ export function HealthcheckEditor({
   const disabled = isDisabled(healthcheck);
   const extracted = !disabled && healthcheck ? extractCommand(healthcheck.Test) : null;
 
-  const controls = !editing ? (
+  const controls = !editing && canEdit ? (
     <Button
       variant="outline"
       size="xs"
-      disabled={!canEdit}
-      title={canEdit ? undefined : "Editing disabled by server configuration"}
-      onClick={(event: React.MouseEvent) => {
+      onClick={(event: MouseEvent) => {
         event.stopPropagation();
         openEdit();
       }}
     >
-      <Pencil className="size-3" />
+      <Pencil className="size-3"/>
       Edit
     </Button>
   ) : undefined;
@@ -196,8 +190,8 @@ export function HealthcheckEditor({
       defaultOpen={!disabled}
       controls={controls}
     >
-      <div className="rounded-lg border p-3">
-        {editing ? (
+      {editing ? (
+        <div className="rounded-lg border p-3">
           <EditMode
             form={form}
             updateForm={updateForm}
@@ -206,16 +200,22 @@ export function HealthcheckEditor({
             onSave={() => void save()}
             onCancel={cancelEdit}
           />
-        ) : disabled ? (
-          <p className="text-sm text-muted-foreground">No healthcheck configured</p>
-        ) : (
+        </div>
+      ) : disabled ? (
+        <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed py-6 text-center text-muted-foreground">
+          <p className="text-sm">No healthcheck configured</p>
+          {canEdit &&
+            <p className="text-xs">Click Edit to add a command that Docker runs to verify the container is healthy.</p>}
+        </div>
+      ) : (
+        <div className="rounded-lg border p-3 pb-0">
           <DisplayMode
             healthcheck={healthcheck!}
             shell={extracted!.shell}
             command={extracted!.command}
           />
-        )}
-      </div>
+        </div>
+      )}
     </CollapsibleSection>
   );
 }
@@ -230,7 +230,7 @@ function DisplayMode({
   command: string;
 }) {
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       {/* Command row */}
       <div className="flex items-start gap-2">
         <span
@@ -242,7 +242,7 @@ function DisplayMode({
         <code className="min-w-0 flex-1 rounded bg-muted px-2 py-1 font-mono text-xs break-all">
           {command}
         </code>
-        <CopyButton text={command} />
+        <CopyButton text={command}/>
       </div>
 
       {/* Stat cards */}
@@ -270,11 +270,14 @@ function DisplayMode({
           value={formatRetries(healthcheck.Retries)}
         />
       </div>
+
+      {/* Timeline */}
+      <HealthcheckTimeline healthcheck={healthcheck}/>
     </div>
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({label, value}: { label: string; value: string }) {
   return (
     <div className="rounded-lg border px-3 py-2">
       <div className="text-xs text-muted-foreground">{label}</div>
@@ -304,11 +307,11 @@ function ToggleButton({
     >
       <span
         data-on={pressed || undefined}
-        className="relative inline-block h-5 w-9 rounded-full bg-muted transition-colors data-[on]:bg-primary"
+        className="relative inline-block h-5 w-9 rounded-full bg-muted transition-colors data-on:bg-primary"
       >
         <span
           data-on={pressed || undefined}
-          className="absolute top-0.5 left-0.5 size-4 rounded-full bg-background shadow transition-transform data-[on]:translate-x-4"
+          className="absolute top-0.5 left-0.5 size-4 rounded-full bg-background shadow transition-transform data-on:translate-x-4"
         />
       </span>
       {label}
@@ -337,18 +340,25 @@ function EditMode({
         <ToggleButton
           label="Enabled"
           pressed={form.enabled}
-          onToggle={(enabled) => updateForm({ enabled })}
+          onToggle={(enabled) => updateForm({enabled})}
         />
 
         {form.enabled && (
           <ToggleButton
             label="Use Shell"
             pressed={form.useShell}
-            onToggle={(useShell) => updateForm({ useShell })}
+            onToggle={(useShell) => updateForm({useShell})}
             className="ms-auto sm:hidden"
           />
         )}
       </div>
+
+      {!form.enabled && (
+        <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed py-6 text-center text-muted-foreground">
+          <p className="text-sm">Healthcheck disabled</p>
+          <p className="text-xs">Toggle to configure a command that verifies the container is healthy.</p>
+        </div>
+      )}
 
       {form.enabled && (
         <>
@@ -358,18 +368,18 @@ function EditMode({
               <ToggleButton
                 label="Use Shell"
                 pressed={form.useShell}
-                onToggle={(useShell) => updateForm({ useShell })}
+                onToggle={(useShell) => updateForm({useShell})}
                 className="ms-auto hidden sm:inline-flex"
               />
             </div>
             <input
               type="text"
               value={form.command}
-              onChange={(event) => updateForm({ command: event.target.value })}
+              onChange={(event) => updateForm({command: event.target.value})}
               placeholder={
                 form.useShell ? "curl -f http://localhost/ || exit 1" : "/bin/healthcheck"
               }
-              className="h-8 w-full rounded-md border bg-background px-2 font-mono text-sm outline-none focus:ring-1 focus:ring-ring"
+              className="h-8 w-full rounded-md border bg-background px-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             />
             {!form.useShell && (
               <p className="text-xs text-muted-foreground">Executed directly, not via shell</p>
@@ -381,7 +391,7 @@ function EditMode({
               label="Interval (s)"
               tooltip="Time between running the healthcheck. Leave empty for the Docker default (30s)."
               value={form.interval}
-              onChange={(interval) => updateForm({ interval })}
+              onChange={(interval) => updateForm({interval})}
               min={0}
               step={0.1}
             />
@@ -389,7 +399,7 @@ function EditMode({
               label="Timeout (s)"
               tooltip="Maximum time a single check can run before it is considered failed. Leave empty for the Docker default (30s)."
               value={form.timeout}
-              onChange={(timeout) => updateForm({ timeout })}
+              onChange={(timeout) => updateForm({timeout})}
               min={0}
               step={0.1}
             />
@@ -397,7 +407,7 @@ function EditMode({
               label="Start Period (s)"
               tooltip="Grace period after container start during which failures do not count towards the retry limit. Leave empty for the Docker default (0s)."
               value={form.startPeriod}
-              onChange={(startPeriod) => updateForm({ startPeriod })}
+              onChange={(startPeriod) => updateForm({startPeriod})}
               min={0}
               step={0.1}
             />
@@ -405,7 +415,7 @@ function EditMode({
               label="Start Interval (s)"
               tooltip="Interval between checks during the start period. Leave empty for the Docker default (5s)."
               value={form.startInterval}
-              onChange={(startInterval) => updateForm({ startInterval })}
+              onChange={(startInterval) => updateForm({startInterval})}
               min={0}
               step={0.1}
             />
@@ -413,7 +423,7 @@ function EditMode({
               label="Retries"
               tooltip="Number of consecutive failures needed to mark the container as unhealthy. Leave empty for the Docker default (3)."
               value={form.retries}
-              onChange={(retries) => updateForm({ retries })}
+              onChange={(retries) => updateForm({retries})}
               min={0}
               step={1}
             />
@@ -429,7 +439,7 @@ function EditMode({
           onClick={onSave}
           disabled={saving}
         >
-          {saving && <Spinner className="size-3" />}
+          {saving && <Spinner className="size-3"/>}
           Save
         </Button>
         <Button

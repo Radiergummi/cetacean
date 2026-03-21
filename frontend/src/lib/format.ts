@@ -2,7 +2,7 @@
  *  Locale-aware number formatting with N decimal places.
  */
 export function formatNumber(value: number, maximumFractionDigits = 0): string {
-  return value.toLocaleString(undefined, { maximumFractionDigits });
+  return value.toLocaleString(undefined, {maximumFractionDigits});
 }
 
 /**
@@ -46,7 +46,7 @@ export function formatCores(cores: number, maximumFractionDigits = 2): string {
 /**
  * Format nanoseconds as a human-readable duration (e.g. "5s", "30min", "2h").
  */
-export function formatDuration(nanoseconds: number): string {
+export function formatDuration(nanoseconds: number, precise = false): string {
   if (nanoseconds <= 0) {
     return "—";
   }
@@ -65,6 +65,14 @@ export function formatDuration(nanoseconds: number): string {
 
   const min = sec / 60;
 
+  if (precise) {
+    return new Intl.DurationFormat(undefined, {style: "narrow"}).format({
+      hours: Math.floor(sec / 3600),
+      minutes: Math.floor((sec % 3600) / 60),
+      seconds: Math.round(sec % 60),
+    });
+  }
+
   if (min < 60) {
     return formatUnit(Math.round(min), "minute");
   }
@@ -76,6 +84,16 @@ export function formatDuration(nanoseconds: number): string {
   }
 
   return formatUnit(Math.round(hours / 24), "day");
+}
+
+export function formatTimeRange(start: Date, end: Date): string {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+    fractionalSecondDigits: 2,
+    timeStyle: "medium",
+  }).formatRange(start, end);
 }
 
 /**
@@ -165,6 +183,17 @@ export function formatRelativeDate(date: string): string {
   }
 
   return formatDate(date);
+}
+
+/**
+ * Convert nanoseconds to seconds. Returns undefined if the input is nullish or zero.
+ */
+export function nanosToSeconds(nanoseconds: number | undefined): number | undefined {
+  if (!nanoseconds) {
+    return undefined;
+  }
+
+  return nanoseconds / 1e9;
 }
 
 /**
