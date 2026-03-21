@@ -223,6 +223,24 @@ export default function ServiceDetail() {
 
   const containerSpec = service.Spec.TaskTemplate.ContainerSpec;
   const taskTemplate = service.Spec.TaskTemplate;
+  const placement = taskTemplate.Placement;
+  const canEditConfig = !levelLoading && operationsLevel >= opsLevel.configuration;
+  const hasPlacementContent =
+    (placement?.Constraints && placement.Constraints.length > 0) ||
+    (placement?.Preferences && placement.Preferences.length > 0) ||
+    (placement?.MaxReplicas != null && placement.MaxReplicas > 0);
+  const hasHealthcheckContent =
+    healthcheck != null && !(healthcheck.Test?.length === 1 && healthcheck.Test[0] === "NONE");
+  const hasPortsContent = specPorts != null && specPorts.length > 0;
+  const hasEnvContent = envVars != null && Object.keys(envVars).length > 0;
+  const hasLabelsContent = serviceLabels != null && Object.keys(serviceLabels).length > 0;
+  const hasResourcesContent =
+    serviceResources != null &&
+    (serviceResources.Limits?.NanoCPUs != null ||
+      serviceResources.Limits?.MemoryBytes != null ||
+      serviceResources.Reservations?.NanoCPUs != null ||
+      serviceResources.Reservations?.MemoryBytes != null ||
+      taskTemplate.Resources?.Limits?.Pids != null);
   const labels = service.Spec.Labels;
 
   const hasContainerConfig =
@@ -390,7 +408,7 @@ export default function ServiceDetail() {
       )}
 
       {/* Environment variables */}
-      {envVars !== null && (
+      {envVars !== null && (hasEnvContent || canEditConfig) && (
         <EnvEditor
           serviceId={id!}
           envVars={envVars}
@@ -399,7 +417,7 @@ export default function ServiceDetail() {
       )}
 
       {/* Labels */}
-      {serviceLabels !== null && (
+      {serviceLabels !== null && (hasLabelsContent || canEditConfig) && (
         <KeyValueEditor
           title="Labels"
           entries={serviceLabels}
@@ -418,7 +436,7 @@ export default function ServiceDetail() {
       )}
 
       {/* Healthcheck */}
-      {healthcheck !== undefined && (
+      {healthcheck !== undefined && (hasHealthcheckContent || canEditConfig) && (
         <HealthcheckEditor
           serviceId={id!}
           healthcheck={healthcheck}
@@ -427,7 +445,7 @@ export default function ServiceDetail() {
       )}
 
       {/* Ports */}
-      {specPorts !== null && (
+      {specPorts !== null && (hasPortsContent || canEditConfig) && (
         <PortsEditor
           serviceId={id!}
           ports={specPorts}
@@ -564,7 +582,7 @@ export default function ServiceDetail() {
               </div>
             )}
 
-            {serviceResources !== null && (
+            {serviceResources !== null && (hasResourcesContent || canEditConfig) && (
               <div className="flex flex-col gap-3 rounded-lg border p-3">
                 <ResourcesEditor
                   serviceId={id!}
@@ -576,13 +594,15 @@ export default function ServiceDetail() {
               </div>
             )}
 
-            <div className="flex flex-col gap-3 rounded-lg border p-3">
-              <PlacementEditor
-                serviceId={id!}
-                placement={taskTemplate.Placement ?? null}
-                onSaved={fetchData}
-              />
-            </div>
+            {(hasPlacementContent || canEditConfig) && (
+              <div className="flex flex-col gap-3 rounded-lg border p-3">
+                <PlacementEditor
+                  serviceId={id!}
+                  placement={taskTemplate.Placement ?? null}
+                  onSaved={fetchData}
+                />
+              </div>
+            )}
 
             {taskTemplate.RestartPolicy && (
               <div className="flex flex-col gap-3 rounded-lg border p-3">
@@ -620,23 +640,27 @@ export default function ServiceDetail() {
               onSaved={fetchData}
             />
 
-            <div className="flex flex-col gap-3 rounded-lg border p-3">
-              <PolicyEditor
-                type="update"
-                serviceId={id!}
-                policy={service.Spec.UpdateConfig ?? null}
-                onSaved={fetchData}
-              />
-            </div>
+            {(service.Spec.UpdateConfig || canEditConfig) && (
+              <div className="flex flex-col gap-3 rounded-lg border p-3">
+                <PolicyEditor
+                  type="update"
+                  serviceId={id!}
+                  policy={service.Spec.UpdateConfig ?? null}
+                  onSaved={fetchData}
+                />
+              </div>
+            )}
 
-            <div className="flex flex-col gap-3 rounded-lg border p-3">
-              <PolicyEditor
-                type="rollback"
-                serviceId={id!}
-                policy={service.Spec.RollbackConfig ?? null}
-                onSaved={fetchData}
-              />
-            </div>
+            {(service.Spec.RollbackConfig || canEditConfig) && (
+              <div className="flex flex-col gap-3 rounded-lg border p-3">
+                <PolicyEditor
+                  type="rollback"
+                  serviceId={id!}
+                  policy={service.Spec.RollbackConfig ?? null}
+                  onSaved={fetchData}
+                />
+              </div>
+            )}
           </div>
         </div>
       </CollapsibleSection>

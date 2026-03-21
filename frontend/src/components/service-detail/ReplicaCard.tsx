@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { SliderNumberField } from "@/components/ui/slider-number-field";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { cn } from "@/lib/utils";
 import { Copy, Globe, Pencil } from "lucide-react";
 import { useState } from "react";
@@ -80,6 +81,10 @@ function ReplicaDoughnut({ running, desired }: { running: number; desired: numbe
 type Mode = "replicated" | "global";
 
 export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[] }) {
+  const { level, loading: levelLoading } = useOperationsLevel();
+  const canScale = !levelLoading && level >= opsLevel.operational;
+  const canChangeMode = !levelLoading && level >= opsLevel.impactful;
+
   const currentMode: Mode = service.Spec.Mode.Replicated ? "replicated" : "global";
   const currentReplicas = service.Spec.Mode.Replicated?.Replicas ?? 0;
 
@@ -127,7 +132,7 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
     : currentReplicas;
   const healthy = running >= desired;
 
-  const editPopover = (
+  const editPopover = canScale ? (
     <Popover
       open={open}
       onOpenChange={handleOpenChange}
@@ -154,77 +159,79 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
         className="w-72"
         align="end"
       >
-        <div className="mb-3 flex flex-col gap-2">
-          <button
-            type="button"
-            onClick={() => setMode("global")}
-            disabled={action.loading}
-            className={cn(
-              "flex items-start gap-3 rounded-lg border p-3 text-left transition-colors",
-              mode === "global"
-                ? "border-primary bg-primary/5 ring-1 ring-primary"
-                : "border-border hover:border-muted-foreground/40",
-              action.loading && "pointer-events-none opacity-50",
-            )}
-          >
-            <Globe className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-
-            <div className="flex-1">
-              <div className="text-sm font-medium">Global</div>
-              <div className="text-xs text-muted-foreground">
-                One task will run on every node in the swarm.
-              </div>
-            </div>
-
-            <div
+        {canChangeMode && (
+          <div className="mb-3 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => setMode("global")}
+              disabled={action.loading}
               className={cn(
-                "mt-0.5 size-4 shrink-0 rounded-full border-2 transition-colors",
-                mode === "global" ? "border-primary bg-primary" : "border-muted-foreground/40",
+                "flex items-start gap-3 rounded-lg border p-3 text-left transition-colors",
+                mode === "global"
+                  ? "border-primary bg-primary/5 ring-1 ring-primary"
+                  : "border-border hover:border-muted-foreground/40",
+                action.loading && "pointer-events-none opacity-50",
               )}
             >
-              {mode === "global" && (
-                <div className="flex size-full items-center justify-center">
-                  <div className="size-1.5 rounded-full bg-primary-foreground" />
+              <Globe className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+
+              <div className="flex-1">
+                <div className="text-sm font-medium">Global</div>
+                <div className="text-xs text-muted-foreground">
+                  One task will run on every node in the swarm.
                 </div>
-              )}
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setMode("replicated")}
-            disabled={action.loading}
-            className={cn(
-              "flex items-start gap-3 rounded-lg border p-3 text-left transition-colors",
-              mode === "replicated"
-                ? "border-primary bg-primary/5 ring-1 ring-primary"
-                : "border-border hover:border-muted-foreground/40",
-              action.loading && "pointer-events-none opacity-50",
-            )}
-          >
-            <Copy className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-
-            <div className="flex-1">
-              <div className="text-sm font-medium">Replicated</div>
-              <div className="text-xs text-muted-foreground">
-                Run a specified number of tasks across the swarm.
               </div>
-            </div>
 
-            <div
+              <div
+                className={cn(
+                  "mt-0.5 size-4 shrink-0 rounded-full border-2 transition-colors",
+                  mode === "global" ? "border-primary bg-primary" : "border-muted-foreground/40",
+                )}
+              >
+                {mode === "global" && (
+                  <div className="flex size-full items-center justify-center">
+                    <div className="size-1.5 rounded-full bg-primary-foreground" />
+                  </div>
+                )}
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMode("replicated")}
+              disabled={action.loading}
               className={cn(
-                "mt-0.5 size-4 shrink-0 rounded-full border-2 transition-colors",
-                mode === "replicated" ? "border-primary bg-primary" : "border-muted-foreground/40",
+                "flex items-start gap-3 rounded-lg border p-3 text-left transition-colors",
+                mode === "replicated"
+                  ? "border-primary bg-primary/5 ring-1 ring-primary"
+                  : "border-border hover:border-muted-foreground/40",
+                action.loading && "pointer-events-none opacity-50",
               )}
             >
-              {mode === "replicated" && (
-                <div className="flex size-full items-center justify-center">
-                  <div className="size-1.5 rounded-full bg-primary-foreground" />
+              <Copy className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+
+              <div className="flex-1">
+                <div className="text-sm font-medium">Replicated</div>
+                <div className="text-xs text-muted-foreground">
+                  Run a specified number of tasks across the swarm.
                 </div>
-              )}
-            </div>
-          </button>
-        </div>
+              </div>
+
+              <div
+                className={cn(
+                  "mt-0.5 size-4 shrink-0 rounded-full border-2 transition-colors",
+                  mode === "replicated" ? "border-primary bg-primary" : "border-muted-foreground/40",
+                )}
+              >
+                {mode === "replicated" && (
+                  <div className="flex size-full items-center justify-center">
+                    <div className="size-1.5 rounded-full bg-primary-foreground" />
+                  </div>
+                )}
+              </div>
+            </button>
+          </div>
+        )}
 
         {mode === "replicated" && (
           <SliderNumberField
@@ -264,7 +271,7 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
         </div>
       </PopoverContent>
     </Popover>
-  );
+  ) : null;
 
   if (isGlobal) {
     return (

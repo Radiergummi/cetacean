@@ -2,7 +2,6 @@ import { api, type ClusterSnapshot } from "../api/client";
 import type { HistoryEntry } from "../api/types";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
-import DiskUsageSection from "../components/DiskUsageSection";
 import {
   CapacitySection,
   MetricsPanel,
@@ -190,8 +189,6 @@ export default function ClusterOverview() {
           </MetricsPanel>
         </div>
       )}
-
-      <DiskUsageSection />
     </div>
   );
 }

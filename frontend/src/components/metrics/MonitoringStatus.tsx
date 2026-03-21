@@ -94,7 +94,7 @@ export default function MonitoringStatus({ status, source }: Props) {
     }
   }
 
-  if (hints.length === 0) {
+  if (hints.length === 0 || dismissed) {
     return null;
   }
 
