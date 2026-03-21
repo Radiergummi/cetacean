@@ -12,6 +12,7 @@ import (
 	json "github.com/goccy/go-json"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/errdefs"
 
@@ -2106,5 +2107,152 @@ func TestHandleGetNodeRole_NotFound(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+func seedStack(c *cache.Cache, name string) {
+	label := map[string]string{"com.docker.stack.namespace": name}
+	c.SetService(swarm.Service{
+		ID:   name + "_svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: name + "_svc1", Labels: label}},
+	})
+	c.SetService(swarm.Service{
+		ID:   name + "_svc2",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: name + "_svc2", Labels: label}},
+	})
+	c.SetNetwork(network.Summary{ID: name + "_net1", Name: name + "_net1", Labels: label})
+	c.SetConfig(swarm.Config{
+		ID:   name + "_cfg1",
+		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: name + "_cfg1", Labels: label}},
+	})
+	c.SetSecret(swarm.Secret{
+		ID:   name + "_sec1",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: name + "_sec1", Labels: label}},
+	})
+}
+
+func TestHandleRemoveStack_OK(t *testing.T) {
+	c := cache.New(nil)
+	seedStack(c, "myapp")
+
+	wc := &mockWriteClient{
+		removeServiceFn: func(_ context.Context, _ string) error { return nil },
+		removeNetworkFn: func(_ context.Context, _ string) error { return nil },
+		removeConfigFn:  func(_ context.Context, _ string) error { return nil },
+		removeSecretFn:  func(_ context.Context, _ string) error { return nil },
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/stacks/myapp", nil)
+	req.SetPathValue("name", "myapp")
+	w := httptest.NewRecorder()
+	h.HandleRemoveStack(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	removed := resp["removed"].(map[string]any)
+	if removed["services"] != float64(2) {
+		t.Errorf("services=%v, want 2", removed["services"])
+	}
+	if removed["networks"] != float64(1) {
+		t.Errorf("networks=%v, want 1", removed["networks"])
+	}
+	if resp["errors"] != nil {
+		t.Errorf("errors=%v, want nil", resp["errors"])
+	}
+}
+
+func TestHandleRemoveStack_NotFound(t *testing.T) {
+	c := cache.New(nil)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/stacks/missing", nil)
+	req.SetPathValue("name", "missing")
+	w := httptest.NewRecorder()
+	h.HandleRemoveStack(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestHandleRemoveStack_PartialFailure(t *testing.T) {
+	c := cache.New(nil)
+	seedStack(c, "myapp")
+
+	wc := &mockWriteClient{
+		removeServiceFn: func(_ context.Context, _ string) error { return nil },
+		removeNetworkFn: func(_ context.Context, _ string) error {
+			return fmt.Errorf("network is in use")
+		},
+		removeConfigFn: func(_ context.Context, _ string) error { return nil },
+		removeSecretFn: func(_ context.Context, _ string) error { return nil },
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/stacks/myapp", nil)
+	req.SetPathValue("name", "myapp")
+	w := httptest.NewRecorder()
+	h.HandleRemoveStack(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["errors"] == nil {
+		t.Fatal("expected errors array")
+	}
+	errs := resp["errors"].([]any)
+	if len(errs) != 1 {
+		t.Fatalf("errors length=%d, want 1", len(errs))
+	}
+}
+
+func TestHandleRemoveStack_AlreadyGone(t *testing.T) {
+	c := cache.New(nil)
+	seedStack(c, "myapp")
+
+	wc := &mockWriteClient{
+		removeServiceFn: func(_ context.Context, _ string) error {
+			return errdefs.NotFound(fmt.Errorf("not found"))
+		},
+		removeNetworkFn: func(_ context.Context, _ string) error {
+			return errdefs.NotFound(fmt.Errorf("not found"))
+		},
+		removeConfigFn: func(_ context.Context, _ string) error {
+			return errdefs.NotFound(fmt.Errorf("not found"))
+		},
+		removeSecretFn: func(_ context.Context, _ string) error {
+			return errdefs.NotFound(fmt.Errorf("not found"))
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/stacks/myapp", nil)
+	req.SetPathValue("name", "myapp")
+	w := httptest.NewRecorder()
+	h.HandleRemoveStack(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	removed := resp["removed"].(map[string]any)
+	if removed["services"] != float64(0) {
+		t.Errorf("services=%v, want 0 (all were already gone)", removed["services"])
+	}
+	if resp["errors"] != nil {
+		t.Errorf("errors=%v, want nil (404s are skipped)", resp["errors"])
 	}
 }
