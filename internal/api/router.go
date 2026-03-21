@@ -102,6 +102,9 @@ func NewRouter(
 	mux.Handle("PUT /nodes/{id}/availability", tier3(h.HandleUpdateNodeAvailability))
 	mux.HandleFunc("GET /nodes/{id}/labels", contentNegotiated(h.HandleGetNodeLabels, spa))
 	mux.Handle("PATCH /nodes/{id}/labels", tier3(h.HandlePatchNodeLabels))
+	mux.HandleFunc("GET /nodes/{id}/role", contentNegotiated(h.HandleGetNodeRole, spa))
+	mux.Handle("PUT /nodes/{id}/role", tier3(h.HandleUpdateNodeRole))
+	mux.Handle("DELETE /nodes/{id}", tier3(h.HandleRemoveNode))
 
 	// Service write operations — tier 1 (operational)
 	mux.Handle("PUT /services/{id}/scale", tier1(h.HandleScaleService))
