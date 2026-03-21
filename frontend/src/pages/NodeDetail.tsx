@@ -38,11 +38,7 @@ export default function NodeDetail() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [nodeLabels, setNodeLabels] = useState<Record<string, string> | null>(null);
-  const [nodeRole, setNodeRole] = useState<{
-    role: "worker" | "manager";
-    isLeader: boolean;
-    managerCount: number;
-  } | null>(null);
+  const [managerCount, setManagerCount] = useState<number | null>(null);
 
   const monitoring = useMonitoringStatus();
   const { level: operationsLevel, loading: levelLoading } = useOperationsLevel();
@@ -85,7 +81,7 @@ export default function NodeDetail() {
       .catch(() => {});
     api
       .nodeRole(id, signal)
-      .then(setNodeRole)
+      .then(({ managerCount: count }) => setManagerCount(count))
       .catch(() => {});
   }, [id]);
 
@@ -145,19 +141,12 @@ export default function NodeDetail() {
       <NodeActions node={node} />
 
       <MetadataGrid>
-        {nodeRole ? (
-          <RoleEditor
-            nodeId={node.ID}
-            currentRole={nodeRole.role}
-            isLeader={nodeRole.isLeader}
-            managerCount={nodeRole.managerCount}
-          />
-        ) : (
-          <InfoCard
-            label="Role"
-            value={<span className="capitalize">{node.Spec.Role}</span>}
-          />
-        )}
+        <RoleEditor
+          nodeId={node.ID}
+          currentRole={node.Spec.Role as "worker" | "manager"}
+          isLeader={node.ManagerStatus?.Leader ?? false}
+          managerCount={managerCount}
+        />
         <StatusCard state={node.Status.State} />
         <AvailabilityEditor
           nodeId={node.ID}

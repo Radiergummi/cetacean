@@ -12,7 +12,7 @@ interface RoleEditorProps {
   nodeId: string;
   currentRole: "worker" | "manager";
   isLeader: boolean;
-  managerCount: number;
+  managerCount: number | null;
 }
 
 const roles = [
@@ -57,8 +57,8 @@ export function RoleEditor({ nodeId, currentRole, isLeader, managerCount }: Role
   }
 
   const isDemoting = currentRole === "manager" && value === "worker";
-  const quorum = Math.floor(managerCount / 2) + 1;
-  const remainingManagers = managerCount - 1;
+  const quorum = managerCount !== null ? Math.floor(managerCount / 2) + 1 : null;
+  const remainingManagers = managerCount !== null ? managerCount - 1 : null;
 
   return (
     <InfoCard
@@ -107,17 +107,19 @@ export function RoleEditor({ nodeId, currentRole, isLeader, managerCount }: Role
                   {isDemoting && (
                     <div className="rounded-md border border-yellow-500/25 bg-yellow-500/5 px-3 py-2 text-xs leading-relaxed text-yellow-600 dark:text-yellow-500">
                       {isLeader && (
-                        <p className="mb-2 font-medium">
+                        <p className={quorum !== null ? "mb-2 font-medium" : "font-medium"}>
                           This node is the Raft leader. Demoting it will trigger a leader
                           re-election.
                         </p>
                       )}
-                      <p>
-                        This cluster has {managerCount} managers. Demoting this node leaves{" "}
-                        {remainingManagers} managers (quorum requires {quorum}).
-                        {remainingManagers === quorum &&
-                          " Losing one more manager will make the cluster unrecoverable."}
-                      </p>
+                      {quorum !== null && remainingManagers !== null && (
+                        <p>
+                          This cluster has {managerCount} managers. Demoting this node leaves{" "}
+                          {remainingManagers} managers (quorum requires {quorum}).
+                          {remainingManagers === quorum &&
+                            " Losing one more manager will make the cluster unrecoverable."}
+                        </p>
+                      )}
                     </div>
                   )}
 

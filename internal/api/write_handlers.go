@@ -422,7 +422,7 @@ func (h *Handlers) HandleGetNodeRole(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, map[string]any{
+	writeJSONWithETag(w, r, map[string]any{
 		"role":         string(node.Spec.Role),
 		"isLeader":     node.ManagerStatus != nil && node.ManagerStatus.Leader,
 		"managerCount": managerCount,
