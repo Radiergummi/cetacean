@@ -6,6 +6,7 @@ import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
 import SimpleTable from "../components/SimpleTable";
+import { StackActions } from "../components/stack-detail/StackActions";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -101,6 +102,17 @@ export default function StackDetail() {
         title={stack.name}
         subtitle={subtitle}
         breadcrumbs={[{ label: "Stacks", to: "/stacks" }, { label: stack.name }]}
+        actions={
+          <StackActions
+            stackName={stack.name}
+            resourceCounts={{
+              services: stack.services?.length ?? 0,
+              networks: stack.networks?.length ?? 0,
+              configs: stack.configs?.length ?? 0,
+              secrets: stack.secrets?.length ?? 0,
+            }}
+          />
+        }
       />
 
       {stack.services?.length > 0 && (
