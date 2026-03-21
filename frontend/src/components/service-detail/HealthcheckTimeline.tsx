@@ -1,9 +1,9 @@
-import type {Healthcheck} from "@/api/types";
-import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
-import {formatDuration} from "@/lib/format";
-import {useState} from "react";
+import type { Healthcheck } from "@/api/types";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { formatDuration } from "@/lib/format";
+import { useState } from "react";
 
-const labelStyle = {fontSize: 7} as const;
+const labelStyle = { fontSize: 7 } as const;
 type HoverGroup = "failed" | "ghost" | null;
 
 /**
@@ -11,7 +11,7 @@ type HoverGroup = "failed" | "ghost" | null;
  * from container start (0) through the start period to the point
  * where `retries` consecutive failures would mark the container unhealthy.
  */
-export function HealthcheckTimeline({healthcheck}: { healthcheck: Healthcheck }) {
+export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck }) {
   const [hoverGroup, setHoverGroup] = useState<HoverGroup>(null);
 
   const interval = healthcheck.Interval || 30e9;
@@ -77,9 +77,9 @@ export function HealthcheckTimeline({healthcheck}: { healthcheck: Healthcheck })
       viewBox={`0 0 ${viewWidth} ${viewHeight}`}
       className="mt-1 w-full"
       role="img"
-      aria-label={`Healthcheck timeline: ${startPeriod > 0
-        ? `${formatDuration(startPeriod)} start period, then `
-        : ""}checks every ${formatDuration(effectiveInterval)}, ${retries} retries to unhealthy`}
+      aria-label={`Healthcheck timeline: ${
+        startPeriod > 0 ? `${formatDuration(startPeriod)} start period, then ` : ""
+      }checks every ${formatDuration(effectiveInterval)}, ${retries} retries to unhealthy`}
     >
       {/* Start period background */}
       {startPeriod > 0 && (
@@ -117,24 +117,51 @@ export function HealthcheckTimeline({healthcheck}: { healthcheck: Healthcheck })
       {/* Hover track bars — behind all dots */}
       <defs>
         <linearGradient id="hc-grad-amber-light">
-          <stop offset="0%" style={{stopColor: "var(--color-amber-300)"}}/>
-          <stop offset="100%" style={{stopColor: "var(--color-zinc-200)"}}/>
+          <stop
+            offset="0%"
+            style={{ stopColor: "var(--color-amber-300)" }}
+          />
+          <stop
+            offset="100%"
+            style={{ stopColor: "var(--color-zinc-200)" }}
+          />
         </linearGradient>
         <linearGradient id="hc-grad-amber-dark">
-          <stop offset="0%" style={{stopColor: "var(--color-amber-800)"}}/>
-          <stop offset="100%" style={{stopColor: "var(--color-zinc-700)"}}/>
+          <stop
+            offset="0%"
+            style={{ stopColor: "var(--color-amber-800)" }}
+          />
+          <stop
+            offset="100%"
+            style={{ stopColor: "var(--color-zinc-700)" }}
+          />
         </linearGradient>
         <linearGradient id="hc-grad-red-light">
-          <stop offset="8%" style={{stopColor: "var(--color-zinc-300)"}}/>
-          <stop offset="25%" style={{stopColor: "var(--color-red-400)"}}/>
+          <stop
+            offset="8%"
+            style={{ stopColor: "var(--color-zinc-300)" }}
+          />
+          <stop
+            offset="25%"
+            style={{ stopColor: "var(--color-red-400)" }}
+          />
         </linearGradient>
         <linearGradient id="hc-grad-red-dark">
-          <stop offset="8%" style={{stopColor: "var(--color-zinc-600)"}}/>
-          <stop offset="25%" style={{stopColor: "var(--color-red-900)"}}/>
+          <stop
+            offset="8%"
+            style={{ stopColor: "var(--color-zinc-600)" }}
+          />
+          <stop
+            offset="25%"
+            style={{ stopColor: "var(--color-red-900)" }}
+          />
         </linearGradient>
       </defs>
       {intervalTicks.length > 1 && (
-        <g className="pointer-events-none transition-opacity" opacity={showGhost ? 1 : 0}>
+        <g
+          className="pointer-events-none transition-opacity"
+          opacity={showGhost ? 1 : 0}
+        >
           {startChecks.length > 0 && (
             <>
               <rect
@@ -176,7 +203,10 @@ export function HealthcheckTimeline({healthcheck}: { healthcheck: Healthcheck })
         </g>
       )}
       {regularChecks.length > 0 && (
-        <g className="pointer-events-none transition-opacity" opacity={showFailed ? 1 : 0}>
+        <g
+          className="pointer-events-none transition-opacity"
+          opacity={showFailed ? 1 : 0}
+        >
           <rect
             x={x(firstCheck)}
             y={axisY - 1}
@@ -216,7 +246,7 @@ export function HealthcheckTimeline({healthcheck}: { healthcheck: Healthcheck })
                 cy={axisY}
                 r={2.5}
                 className="fill-amber-400 transition-transform hover:scale-150 dark:fill-amber-500"
-                style={{transformOrigin: `${x(t)}px ${axisY}px`}}
+                style={{ transformOrigin: `${x(t)}px ${axisY}px` }}
                 stroke="transparent"
                 strokeWidth={6}
                 onMouseEnter={() => setHoverGroup("ghost")}
@@ -233,36 +263,42 @@ export function HealthcheckTimeline({healthcheck}: { healthcheck: Healthcheck })
       ))}
 
       {/* Interval tick dots (skip start-period checks — already rendered as amber) */}
-      {intervalTicks.filter((t) => t >= startPeriod).map((t, i) => {
-        const isFirst = i === 0;
+      {intervalTicks
+        .filter((t) => t >= startPeriod)
+        .map((t, i) => {
+          const isFirst = i === 0;
 
-        return (
-          <Tooltip key={`g${t}`}>
-            <TooltipTrigger
-              render={
-                <circle
-                  cx={x(t)}
-                  cy={axisY}
-                  r={2}
-                  className="fill-zinc-300 transition-transform hover:scale-150 dark:fill-zinc-600"
-                  style={{transformOrigin: `${x(t)}px ${axisY}px`}}
-                  stroke="transparent"
-                  strokeWidth={6}
-                  onMouseEnter={() => setHoverGroup("ghost")}
-                  onMouseLeave={() => setHoverGroup(null)}
-                />
-              }
-            />
-            <TooltipContent>
-              <p className="font-medium">{isFirst ? "Initial check" : "Interval tick"}</p>
-              <p>{isFirst
-                ? (startPeriod > 0 ? "First check after start period" : "First healthcheck")
-                : "Healthcheck executed"}</p>
-              <p className="text-muted-foreground">{formatDuration(t, true)}</p>
-            </TooltipContent>
-          </Tooltip>
-        );
-      })}
+          return (
+            <Tooltip key={`g${t}`}>
+              <TooltipTrigger
+                render={
+                  <circle
+                    cx={x(t)}
+                    cy={axisY}
+                    r={2}
+                    className="fill-zinc-300 transition-transform hover:scale-150 dark:fill-zinc-600"
+                    style={{ transformOrigin: `${x(t)}px ${axisY}px` }}
+                    stroke="transparent"
+                    strokeWidth={6}
+                    onMouseEnter={() => setHoverGroup("ghost")}
+                    onMouseLeave={() => setHoverGroup(null)}
+                  />
+                }
+              />
+              <TooltipContent>
+                <p className="font-medium">{isFirst ? "Initial check" : "Interval tick"}</p>
+                <p>
+                  {isFirst
+                    ? startPeriod > 0
+                      ? "First check after start period"
+                      : "First healthcheck"
+                    : "Healthcheck executed"}
+                </p>
+                <p className="text-muted-foreground">{formatDuration(t, true)}</p>
+              </TooltipContent>
+            </Tooltip>
+          );
+        })}
 
       {/* Failure check dots */}
       {regularChecks.map((t, i) => {
@@ -271,13 +307,13 @@ export function HealthcheckTimeline({healthcheck}: { healthcheck: Healthcheck })
 
         return (
           <Tooltip key={`r${t}`}>
-            <TooltipTrigger render={<g/>}>
+            <TooltipTrigger render={<g />}>
               <circle
                 cx={x(t)}
                 cy={axisY}
                 r={isLast ? 3.5 : 2.5}
                 className="fill-red-600 transition-transform hover:scale-150 dark:fill-red-500"
-                style={{transformOrigin: `${x(t)}px ${axisY}px`}}
+                style={{ transformOrigin: `${x(t)}px ${axisY}px` }}
                 stroke="transparent"
                 strokeWidth={6}
                 onMouseEnter={() => setHoverGroup("failed")}
@@ -294,10 +330,10 @@ export function HealthcheckTimeline({healthcheck}: { healthcheck: Healthcheck })
               </text>
             </TooltipTrigger>
             <TooltipContent>
-              <p className="font-medium">Retry {failureNumber}/{retries}</p>
-              <p>{isLast
-                ? "Container marked unhealthy"
-                : "Failure counts toward retry limit"}</p>
+              <p className="font-medium">
+                Retry {failureNumber}/{retries}
+              </p>
+              <p>{isLast ? "Container marked unhealthy" : "Failure counts toward retry limit"}</p>
               <p className="text-muted-foreground">{formatDuration(t, true)}</p>
             </TooltipContent>
           </Tooltip>
@@ -306,7 +342,10 @@ export function HealthcheckTimeline({healthcheck}: { healthcheck: Healthcheck })
 
       {/* Hover label pills — on top of dots */}
       {intervalTicks.length > 1 && (
-        <g className="pointer-events-none transition-opacity" opacity={showGhost ? 1 : 0}>
+        <g
+          className="pointer-events-none transition-opacity"
+          opacity={showGhost ? 1 : 0}
+        >
           {intervalTicks.map((t, i) => {
             if (i >= intervalTicks.length - 1) {
               return null;
@@ -323,14 +362,18 @@ export function HealthcheckTimeline({healthcheck}: { healthcheck: Healthcheck })
                   width={22}
                   height={8}
                   rx={2.5}
-                  className={inStartPeriod ? "fill-amber-300 dark:fill-amber-800" : "fill-zinc-300 dark:fill-zinc-600"}
+                  className={
+                    inStartPeriod
+                      ? "fill-amber-300 dark:fill-amber-800"
+                      : "fill-zinc-300 dark:fill-zinc-600"
+                  }
                 />
                 <text
                   x={midX}
                   y={axisY}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  style={{...labelStyle, fontWeight: 500, fill: "var(--background)"}}
+                  style={{ ...labelStyle, fontWeight: 500, fill: "var(--background)" }}
                 >
                   +{Math.round((intervalTicks[i + 1] - t) / 1e9)}s
                 </text>
@@ -340,7 +383,10 @@ export function HealthcheckTimeline({healthcheck}: { healthcheck: Healthcheck })
         </g>
       )}
       {regularChecks.length > 0 && (
-        <g className="pointer-events-none transition-opacity" opacity={showFailed ? 1 : 0}>
+        <g
+          className="pointer-events-none transition-opacity"
+          opacity={showFailed ? 1 : 0}
+        >
           {[firstCheck, ...regularChecks].map((t, i, all) => {
             if (i >= all.length - 1) {
               return null;
@@ -363,7 +409,7 @@ export function HealthcheckTimeline({healthcheck}: { healthcheck: Healthcheck })
                   y={axisY}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  style={{...labelStyle, fontWeight: 500, fill: "var(--background)"}}
+                  style={{ ...labelStyle, fontWeight: 500, fill: "var(--background)" }}
                 >
                   +{Math.round(timeout / 1e9)}s
                 </text>

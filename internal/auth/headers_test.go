@@ -193,7 +193,10 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
-		r.Header.Set("X-User", "alice") // Go canonicalizes headers; case insensitivity is guaranteed by net/http
+		r.Header.Set(
+			"X-User",
+			"alice",
+		) // Go canonicalizes headers; case insensitivity is guaranteed by net/http
 
 		id, err := p.Authenticate(httptest.NewRecorder(), r)
 		if err != nil {
@@ -220,7 +223,11 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 			t.Errorf("Subject = %q, want %q", id.Subject, "charlie")
 		}
 		if id.DisplayName != "charlie" {
-			t.Errorf("DisplayName = %q, want %q (should fall back to subject)", id.DisplayName, "charlie")
+			t.Errorf(
+				"DisplayName = %q, want %q (should fall back to subject)",
+				id.DisplayName,
+				"charlie",
+			)
 		}
 		if id.Email != "" {
 			t.Errorf("Email = %q, want empty", id.Email)

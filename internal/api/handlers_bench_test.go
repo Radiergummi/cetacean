@@ -423,7 +423,12 @@ func BenchmarkHandleSearch(b *testing.B) {
 func BenchmarkHandleSearch_Broad(b *testing.B) {
 	benchHandler(b, "Search_Broad", func(b *testing.B, h *Handlers) {
 		for b.Loop() {
-			req := httptest.NewRequestWithContext(b.Context(), "GET", "/search?q=stack&limit=0", nil)
+			req := httptest.NewRequestWithContext(
+				b.Context(),
+				"GET",
+				"/search?q=stack&limit=0",
+				nil,
+			)
 			h.HandleSearch(httptest.NewRecorder(), req)
 		}
 	})
@@ -454,7 +459,12 @@ func BenchmarkHandleListServices_Search(b *testing.B) {
 func BenchmarkHandleListNodes_Filter(b *testing.B) {
 	benchHandler(b, "ListNodes_Filter", func(b *testing.B, h *Handlers) {
 		for b.Loop() {
-			req := httptest.NewRequestWithContext(b.Context(), "GET", `/nodes?filter=Status+%3D%3D+"ready"`, nil)
+			req := httptest.NewRequestWithContext(
+				b.Context(),
+				"GET",
+				`/nodes?filter=Status+%3D%3D+"ready"`,
+				nil,
+			)
 			h.HandleListNodes(httptest.NewRecorder(), req)
 		}
 	})
@@ -463,7 +473,12 @@ func BenchmarkHandleListNodes_Filter(b *testing.B) {
 func BenchmarkHandleListServices_Filter(b *testing.B) {
 	benchHandler(b, "ListServices_Filter", func(b *testing.B, h *Handlers) {
 		for b.Loop() {
-			req := httptest.NewRequestWithContext(b.Context(), "GET", `/services?filter=Mode+%3D%3D+"replicated"`, nil)
+			req := httptest.NewRequestWithContext(
+				b.Context(),
+				"GET",
+				`/services?filter=Mode+%3D%3D+"replicated"`,
+				nil,
+			)
 			h.HandleListServices(httptest.NewRecorder(), req)
 		}
 	})
@@ -472,7 +487,12 @@ func BenchmarkHandleListServices_Filter(b *testing.B) {
 func BenchmarkHandleListTasks_Filter(b *testing.B) {
 	benchHandler(b, "ListTasks_Filter", func(b *testing.B, h *Handlers) {
 		for b.Loop() {
-			req := httptest.NewRequestWithContext(b.Context(), "GET", `/tasks?filter=State+%3D%3D+"running"`, nil)
+			req := httptest.NewRequestWithContext(
+				b.Context(),
+				"GET",
+				`/tasks?filter=State+%3D%3D+"running"`,
+				nil,
+			)
 			h.HandleListTasks(httptest.NewRecorder(), req)
 		}
 	})
@@ -481,7 +501,12 @@ func BenchmarkHandleListTasks_Filter(b *testing.B) {
 func BenchmarkHandleListNodes_Sort(b *testing.B) {
 	benchHandler(b, "ListNodes_Sort", func(b *testing.B, h *Handlers) {
 		for b.Loop() {
-			req := httptest.NewRequestWithContext(b.Context(), "GET", "/nodes?sort=hostname&dir=desc", nil)
+			req := httptest.NewRequestWithContext(
+				b.Context(),
+				"GET",
+				"/nodes?sort=hostname&dir=desc",
+				nil,
+			)
 			h.HandleListNodes(httptest.NewRecorder(), req)
 		}
 	})
@@ -490,7 +515,12 @@ func BenchmarkHandleListNodes_Sort(b *testing.B) {
 func BenchmarkHandleListServices_Sort(b *testing.B) {
 	benchHandler(b, "ListServices_Sort", func(b *testing.B, h *Handlers) {
 		for b.Loop() {
-			req := httptest.NewRequestWithContext(b.Context(), "GET", "/services?sort=name&dir=desc", nil)
+			req := httptest.NewRequestWithContext(
+				b.Context(),
+				"GET",
+				"/services?sort=name&dir=desc",
+				nil,
+			)
 			h.HandleListServices(httptest.NewRecorder(), req)
 		}
 	})
@@ -499,7 +529,12 @@ func BenchmarkHandleListServices_Sort(b *testing.B) {
 func BenchmarkHandleListNodes_Paginated(b *testing.B) {
 	benchHandler(b, "ListNodes_Paginated", func(b *testing.B, h *Handlers) {
 		for b.Loop() {
-			req := httptest.NewRequestWithContext(b.Context(), "GET", "/nodes?limit=10&offset=5", nil)
+			req := httptest.NewRequestWithContext(
+				b.Context(),
+				"GET",
+				"/nodes?limit=10&offset=5",
+				nil,
+			)
 			h.HandleListNodes(httptest.NewRecorder(), req)
 		}
 	})
@@ -631,7 +666,9 @@ func BenchmarkDetailResponseMarshalJSON(b *testing.B) {
 				ID: fmt.Sprintf("svc-%d", i),
 				Spec: swarm.ServiceSpec{
 					Annotations: swarm.Annotations{Name: fmt.Sprintf("mystack_web-%d", i)},
-					Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: &replicas}},
+					Mode: swarm.ServiceMode{
+						Replicated: &swarm.ReplicatedService{Replicas: &replicas},
+					},
 				},
 			}
 		}
@@ -785,8 +822,16 @@ func BenchmarkHandleListNodes_FullPipeline(b *testing.B) {
 		h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			for b.Loop() {
-				req := httptest.NewRequestWithContext(b.Context(), "GET",
-					"/nodes?filter="+strings.ReplaceAll("role == \"worker\"", " ", "%20")+"&sort=name&dir=desc&limit=10&offset=5", nil)
+				req := httptest.NewRequestWithContext(
+					b.Context(),
+					"GET",
+					"/nodes?filter="+strings.ReplaceAll(
+						"role == \"worker\"",
+						" ",
+						"%20",
+					)+"&sort=name&dir=desc&limit=10&offset=5",
+					nil,
+				)
 				h.HandleListNodes(httptest.NewRecorder(), req)
 			}
 		})
@@ -825,7 +870,10 @@ func realisticServiceEvent() cache.Event {
 							{ConfigID: "cfg-1", ConfigName: "mystack_nginx.conf"},
 						},
 						Secrets: []*swarm.SecretReference{
-							{SecretID: "sec-1", SecretName: "mystack_tls_cert"}, //nolint:gosec // test data
+							{
+								SecretID:   "sec-1",
+								SecretName: "mystack_tls_cert",
+							}, //nolint:gosec // test data
 						},
 					},
 					Networks: []swarm.NetworkAttachmentConfig{
@@ -1017,7 +1065,12 @@ func BenchmarkStackMatcher(b *testing.B) {
 		}
 	})
 	b.Run("task_hit", func(b *testing.B) {
-		e := cache.Event{Type: "task", Action: "update", ID: "t1", Resource: swarm.Task{ServiceID: "id-0"}}
+		e := cache.Event{
+			Type:     "task",
+			Action:   "update",
+			ID:       "t1",
+			Resource: swarm.Task{ServiceID: "id-0"},
+		}
 		for b.Loop() {
 			match(e)
 		}
@@ -1312,9 +1365,13 @@ func BenchmarkServeSSEFiltered(b *testing.B) {
 		// Send mix of types — only service events should be written.
 		for i := range 5 {
 			if i%2 == 0 {
-				br.Broadcast(cache.Event{Type: "service", Action: "update", ID: fmt.Sprintf("svc-%d", i)})
+				br.Broadcast(
+					cache.Event{Type: "service", Action: "update", ID: fmt.Sprintf("svc-%d", i)},
+				)
 			} else {
-				br.Broadcast(cache.Event{Type: "node", Action: "update", ID: fmt.Sprintf("n-%d", i)})
+				br.Broadcast(
+					cache.Event{Type: "node", Action: "update", ID: fmt.Sprintf("n-%d", i)},
+				)
 			}
 		}
 
@@ -1406,7 +1463,12 @@ func BenchmarkHandleNetworkTopologyParallel(b *testing.B) {
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
-					req := httptest.NewRequestWithContext(b.Context(), "GET", "/topology/networks", nil)
+					req := httptest.NewRequestWithContext(
+						b.Context(),
+						"GET",
+						"/topology/networks",
+						nil,
+					)
 					h.HandleNetworkTopology(httptest.NewRecorder(), req)
 				}
 			})
@@ -1430,18 +1492,38 @@ func BenchmarkMixedWorkloadParallel(b *testing.B) {
 						req := httptest.NewRequestWithContext(b.Context(), "GET", "/nodes", nil)
 						h.HandleListNodes(httptest.NewRecorder(), req)
 					case 1:
-						req := httptest.NewRequestWithContext(b.Context(), "GET", "/services/id-0", nil)
+						req := httptest.NewRequestWithContext(
+							b.Context(),
+							"GET",
+							"/services/id-0",
+							nil,
+						)
 						req.SetPathValue("id", "id-0")
 						h.HandleGetService(httptest.NewRecorder(), req)
 					case 2:
-						req := httptest.NewRequestWithContext(b.Context(), "GET", "/search?q=svc", nil)
+						req := httptest.NewRequestWithContext(
+							b.Context(),
+							"GET",
+							"/search?q=svc",
+							nil,
+						)
 						h.HandleSearch(httptest.NewRecorder(), req)
 					case 3:
-						req := httptest.NewRequestWithContext(b.Context(), "GET", "/stacks/stack-0", nil)
+						req := httptest.NewRequestWithContext(
+							b.Context(),
+							"GET",
+							"/stacks/stack-0",
+							nil,
+						)
 						req.SetPathValue("name", "stack-0")
 						h.HandleGetStack(httptest.NewRecorder(), req)
 					case 4:
-						req := httptest.NewRequestWithContext(b.Context(), "GET", "/topology/networks", nil)
+						req := httptest.NewRequestWithContext(
+							b.Context(),
+							"GET",
+							"/topology/networks",
+							nil,
+						)
 						h.HandleNetworkTopology(httptest.NewRecorder(), req)
 					}
 					i++

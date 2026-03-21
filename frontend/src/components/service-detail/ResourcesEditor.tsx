@@ -195,7 +195,9 @@ export function ResourcesEditor({
         {!hasResources && pids == null ? (
           <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed py-6 text-center text-muted-foreground">
             <p className="text-sm">No resource limits configured</p>
-            {canEdit && <p className="text-xs">Click Edit to set CPU and memory reservations and limits.</p>}
+            {canEdit && (
+              <p className="text-xs">Click Edit to set CPU and memory reservations and limits.</p>
+            )}
           </div>
         ) : (
           <>

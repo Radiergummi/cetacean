@@ -78,7 +78,11 @@ func (m *mockClient) FullSync(ctx context.Context) cache.FullSyncData {
 	return data
 }
 
-func (m *mockClient) Inspect(ctx context.Context, resourceType events.Type, id string) (any, error) {
+func (m *mockClient) Inspect(
+	ctx context.Context,
+	resourceType events.Type,
+	id string,
+) (any, error) {
 	if m.inspectFn != nil {
 		return m.inspectFn(ctx, resourceType, id)
 	}
@@ -106,7 +110,14 @@ func (m *mockClient) Events(ctx context.Context) (<-chan events.Message, <-chan 
 	return m.eventsCh, m.errCh
 }
 
-func (m *mockClient) Logs(_ context.Context, _ LogKind, _ string, _ string, _ bool, _, _ string) (io.ReadCloser, error) {
+func (m *mockClient) Logs(
+	_ context.Context,
+	_ LogKind,
+	_ string,
+	_ string,
+	_ bool,
+	_, _ string,
+) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader("")), nil
 }
 

@@ -77,7 +77,12 @@ function ConfirmAction({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction variant={variant} onClick={onConfirm}>{label}</AlertDialogAction>
+            <AlertDialogAction
+              variant={variant}
+              onClick={onConfirm}
+            >
+              {label}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -95,7 +100,6 @@ export function ServiceActions({ service, serviceId }: { service: Service; servi
   const rollback = useAsyncAction();
   const restart = useAsyncAction();
   const remove = useAsyncAction();
-
 
   if (!canWrite && !canImpact) {
     return null;

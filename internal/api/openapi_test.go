@@ -69,7 +69,9 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 		ID: "svc-1",
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: "web"},
-			Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: &replicas}},
+			Mode: swarm.ServiceMode{
+				Replicated: &swarm.ReplicatedService{Replicas: &replicas},
+			},
 		},
 	})
 	c.SetTask(swarm.Task{
@@ -203,7 +205,12 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 
 			if resp.StatusCode != tc.wantStatus {
 				body, _ := io.ReadAll(resp.Body)
-				t.Fatalf("status=%d, want %d; body=%s", resp.StatusCode, tc.wantStatus, string(body))
+				t.Fatalf(
+					"status=%d, want %d; body=%s",
+					resp.StatusCode,
+					tc.wantStatus,
+					string(body),
+				)
 			}
 
 			// For HTML responses, just verify we got HTML, not JSON.
@@ -241,7 +248,10 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 				},
 			}
 
-			if err := openapi3filter.ValidateResponse(req.Context(), responseValidationInput); err != nil {
+			if err := openapi3filter.ValidateResponse(
+				req.Context(),
+				responseValidationInput,
+			); err != nil {
 				body, _ := io.ReadAll(w.Body)
 				t.Errorf("response validation failed: %v\nresponse body: %s", err, string(body))
 			}

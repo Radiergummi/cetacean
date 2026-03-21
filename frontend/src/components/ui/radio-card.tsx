@@ -10,7 +10,14 @@ interface RadioCardProps {
   disabled?: boolean;
 }
 
-export function RadioCard({ selected, onClick, icon, title, description, disabled }: RadioCardProps) {
+export function RadioCard({
+  selected,
+  onClick,
+  icon,
+  title,
+  description,
+  disabled,
+}: RadioCardProps) {
   return (
     <button
       type="button"

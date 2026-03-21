@@ -59,7 +59,9 @@ func TestHandleNetworkTopology_WithReplicatedService(t *testing.T) {
 		ID: "svc1",
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: "web"},
-			Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: &replicas}},
+			Mode: swarm.ServiceMode{
+				Replicated: &swarm.ReplicatedService{Replicas: &replicas},
+			},
 		},
 		Endpoint: swarm.Endpoint{
 			VirtualIPs: []swarm.EndpointVirtualIP{{NetworkID: "net1"}},
@@ -84,9 +86,29 @@ func TestHandleNetworkTopology_WithReplicatedService(t *testing.T) {
 
 func TestHandlePlacementTopology(t *testing.T) {
 	c := cache.New(nil)
-	c.SetNode(swarm.Node{ID: "n1", Description: swarm.NodeDescription{Hostname: "worker-01"}, Spec: swarm.NodeSpec{Role: swarm.NodeRoleWorker}, Status: swarm.NodeStatus{State: swarm.NodeStateReady}})
-	c.SetService(swarm.Service{ID: "svc1", Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "nginx"}}})
-	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", NodeID: "n1", Slot: 1, Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
+	c.SetNode(
+		swarm.Node{
+			ID:          "n1",
+			Description: swarm.NodeDescription{Hostname: "worker-01"},
+			Spec:        swarm.NodeSpec{Role: swarm.NodeRoleWorker},
+			Status:      swarm.NodeStatus{State: swarm.NodeStateReady},
+		},
+	)
+	c.SetService(
+		swarm.Service{
+			ID:   "svc1",
+			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "nginx"}},
+		},
+	)
+	c.SetTask(
+		swarm.Task{
+			ID:        "t1",
+			ServiceID: "svc1",
+			NodeID:    "n1",
+			Slot:      1,
+			Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
+		},
+	)
 
 	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 	req := httptest.NewRequest("GET", "/topology/placement", nil)
@@ -170,8 +192,11 @@ func TestHandlePlacementTopology_EnrichedFields(t *testing.T) {
 	c.SetNode(swarm.Node{
 		ID:          "n1",
 		Description: swarm.NodeDescription{Hostname: "worker-01"},
-		Spec:        swarm.NodeSpec{Role: swarm.NodeRoleWorker, Availability: swarm.NodeAvailabilityActive},
-		Status:      swarm.NodeStatus{State: swarm.NodeStateReady},
+		Spec: swarm.NodeSpec{
+			Role:         swarm.NodeRoleWorker,
+			Availability: swarm.NodeAvailabilityActive,
+		},
+		Status: swarm.NodeStatus{State: swarm.NodeStateReady},
 	})
 	c.SetService(swarm.Service{
 		ID: "svc1",

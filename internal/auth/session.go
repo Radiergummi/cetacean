@@ -56,7 +56,12 @@ func NewSessionCodecWithKey(hexKey string) (*SessionCodec, error) {
 // Set serializes the identity with an expiry, signs it, and sets it as a cookie.
 // Raw claims are excluded to keep the cookie compact (browsers enforce ~4KB).
 // The optional idTokenHint is stored for RP-initiated logout (RFC 9722).
-func (s *SessionCodec) Set(w http.ResponseWriter, id *Identity, ttl time.Duration, idTokenHint ...string) {
+func (s *SessionCodec) Set(
+	w http.ResponseWriter,
+	id *Identity,
+	ttl time.Duration,
+	idTokenHint ...string,
+) {
 	// Strip Raw claims to avoid cookie bloat from large IdP claim sets.
 	compact := &Identity{
 		Subject:     id.Subject,
@@ -82,7 +87,11 @@ func (s *SessionCodec) Set(w http.ResponseWriter, id *Identity, ttl time.Duratio
 	mac.Write(payload)
 	sig := mac.Sum(nil)
 
-	value := base64.RawURLEncoding.EncodeToString(payload) + "." + base64.RawURLEncoding.EncodeToString(sig)
+	value := base64.RawURLEncoding.EncodeToString(
+		payload,
+	) + "." + base64.RawURLEncoding.EncodeToString(
+		sig,
+	)
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     cookieName,

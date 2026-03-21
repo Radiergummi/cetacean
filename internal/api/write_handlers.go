@@ -20,7 +20,12 @@ func writeDockerError(w http.ResponseWriter, r *http.Request, err error, resourc
 		return
 	}
 	if errdefs.IsConflict(err) {
-		writeProblem(w, r, http.StatusConflict, resource+" was modified by another client, please retry")
+		writeProblem(
+			w,
+			r,
+			http.StatusConflict,
+			resource+" was modified by another client, please retry",
+		)
 		return
 	}
 	if errdefs.IsInvalidParameter(err) {
@@ -108,7 +113,12 @@ func (h *Handlers) HandleUpdateServiceMode(w http.ResponseWriter, r *http.Reques
 	switch req.Mode {
 	case "replicated":
 		if req.Replicas == nil {
-			writeProblem(w, r, http.StatusBadRequest, "replicas is required when switching to replicated mode")
+			writeProblem(
+				w,
+				r,
+				http.StatusBadRequest,
+				"replicas is required when switching to replicated mode",
+			)
 			return
 		}
 		mode.Replicated = &swarm.ReplicatedService{Replicas: req.Replicas}
@@ -264,7 +274,12 @@ func (h *Handlers) HandleUpdateNodeAvailability(w http.ResponseWriter, r *http.R
 	case "pause":
 		availability = swarm.NodeAvailabilityPause
 	default:
-		writeProblem(w, r, http.StatusBadRequest, "availability must be one of: active, drain, pause")
+		writeProblem(
+			w,
+			r,
+			http.StatusBadRequest,
+			"availability must be one of: active, drain, pause",
+		)
 		return
 	}
 
@@ -388,7 +403,12 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")
 
 	if !isJSONPatch && !isMergePatch {
-		writeProblem(w, r, http.StatusUnsupportedMediaType, "Content-Type must be application/json-patch+json or application/merge-patch+json")
+		writeProblem(
+			w,
+			r,
+			http.StatusUnsupportedMediaType,
+			"Content-Type must be application/json-patch+json or application/merge-patch+json",
+		)
 		return
 	}
 
@@ -467,7 +487,12 @@ func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request)
 	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")
 
 	if !isJSONPatch && !isMergePatch {
-		writeProblem(w, r, http.StatusUnsupportedMediaType, "Content-Type must be application/json-patch+json or application/merge-patch+json")
+		writeProblem(
+			w,
+			r,
+			http.StatusUnsupportedMediaType,
+			"Content-Type must be application/json-patch+json or application/merge-patch+json",
+		)
 		return
 	}
 
@@ -531,9 +556,13 @@ func (h *Handlers) HandleGetServiceLabels(w http.ResponseWriter, r *http.Request
 	if labels == nil {
 		labels = map[string]string{}
 	}
-	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/labels", "ServiceLabels", map[string]any{
-		"labels": labels,
-	}))
+	writeJSONWithETag(
+		w,
+		r,
+		NewDetailResponse("/services/"+id+"/labels", "ServiceLabels", map[string]any{
+			"labels": labels,
+		}),
+	)
 }
 
 func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Request) {
@@ -545,7 +574,12 @@ func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Reque
 	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")
 
 	if !isJSONPatch && !isMergePatch {
-		writeProblem(w, r, http.StatusUnsupportedMediaType, "Content-Type must be application/json-patch+json or application/merge-patch+json")
+		writeProblem(
+			w,
+			r,
+			http.StatusUnsupportedMediaType,
+			"Content-Type must be application/json-patch+json or application/merge-patch+json",
+		)
 		return
 	}
 
@@ -609,9 +643,13 @@ func (h *Handlers) HandleGetServiceResources(w http.ResponseWriter, r *http.Requ
 	if resources == nil {
 		resources = &swarm.ResourceRequirements{}
 	}
-	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/resources", "ServiceResources", map[string]any{
-		"resources": resources,
-	}))
+	writeJSONWithETag(
+		w,
+		r,
+		NewDetailResponse("/services/"+id+"/resources", "ServiceResources", map[string]any{
+			"resources": resources,
+		}),
+	)
 }
 
 func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Request) {
@@ -620,7 +658,12 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		writeProblem(
+			w,
+			r,
+			http.StatusUnsupportedMediaType,
+			"expected Content-Type: application/merge-patch+json",
+		)
 		return
 	}
 
@@ -718,9 +761,13 @@ func (h *Handlers) HandleGetServicePorts(w http.ResponseWriter, r *http.Request)
 	if ports == nil {
 		ports = []swarm.PortConfig{}
 	}
-	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/ports", "ServicePorts", map[string]any{
-		"ports": ports,
-	}))
+	writeJSONWithETag(
+		w,
+		r,
+		NewDetailResponse("/services/"+id+"/ports", "ServicePorts", map[string]any{
+			"ports": ports,
+		}),
+	)
 }
 
 func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Request) {
@@ -729,7 +776,12 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		writeProblem(
+			w,
+			r,
+			http.StatusUnsupportedMediaType,
+			"expected Content-Type: application/merge-patch+json",
+		)
 		return
 	}
 
@@ -780,9 +832,13 @@ func (h *Handlers) HandleGetServiceHealthcheck(w http.ResponseWriter, r *http.Re
 		hc = svc.Spec.TaskTemplate.ContainerSpec.Healthcheck
 	}
 
-	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/healthcheck", "ServiceHealthcheck", map[string]any{
-		"healthcheck": hc,
-	}))
+	writeJSONWithETag(
+		w,
+		r,
+		NewDetailResponse("/services/"+id+"/healthcheck", "ServiceHealthcheck", map[string]any{
+			"healthcheck": hc,
+		}),
+	)
 }
 
 func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
@@ -814,9 +870,12 @@ func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Re
 		resultHC = updated.Spec.TaskTemplate.ContainerSpec.Healthcheck
 	}
 
-	writeJSON(w, NewDetailResponse("/services/"+id+"/healthcheck", "ServiceHealthcheck", map[string]any{
-		"healthcheck": resultHC,
-	}))
+	writeJSON(
+		w,
+		NewDetailResponse("/services/"+id+"/healthcheck", "ServiceHealthcheck", map[string]any{
+			"healthcheck": resultHC,
+		}),
+	)
 }
 
 func (h *Handlers) HandleGetServicePlacement(w http.ResponseWriter, r *http.Request) {
@@ -832,9 +891,13 @@ func (h *Handlers) HandleGetServicePlacement(w http.ResponseWriter, r *http.Requ
 		placement = &swarm.Placement{}
 	}
 
-	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/placement", "ServicePlacement", map[string]any{
-		"placement": placement,
-	}))
+	writeJSONWithETag(
+		w,
+		r,
+		NewDetailResponse("/services/"+id+"/placement", "ServicePlacement", map[string]any{
+			"placement": placement,
+		}),
+	)
 }
 
 func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Request) {
@@ -882,9 +945,13 @@ func (h *Handlers) HandleGetServiceUpdatePolicy(w http.ResponseWriter, r *http.R
 	if policy == nil {
 		policy = &swarm.UpdateConfig{}
 	}
-	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/update-policy", "ServiceUpdatePolicy", map[string]any{
-		"updatePolicy": policy,
-	}))
+	writeJSONWithETag(
+		w,
+		r,
+		NewDetailResponse("/services/"+id+"/update-policy", "ServiceUpdatePolicy", map[string]any{
+			"updatePolicy": policy,
+		}),
+	)
 }
 
 func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http.Request) {
@@ -893,7 +960,12 @@ func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		writeProblem(
+			w,
+			r,
+			http.StatusUnsupportedMediaType,
+			"expected Content-Type: application/merge-patch+json",
+		)
 		return
 	}
 
@@ -910,12 +982,22 @@ func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http
 
 	base, err := json.Marshal(current)
 	if err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal current update policy")
+		writeProblem(
+			w,
+			r,
+			http.StatusInternalServerError,
+			"failed to marshal current update policy",
+		)
 		return
 	}
 	var baseMap map[string]any
 	if err := json.Unmarshal(base, &baseMap); err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to unmarshal current update policy")
+		writeProblem(
+			w,
+			r,
+			http.StatusInternalServerError,
+			"failed to unmarshal current update policy",
+		)
 		return
 	}
 
@@ -955,9 +1037,12 @@ func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http
 	if resultPolicy == nil {
 		resultPolicy = &swarm.UpdateConfig{}
 	}
-	writeJSON(w, NewDetailResponse("/services/"+id+"/update-policy", "ServiceUpdatePolicy", map[string]any{
-		"updatePolicy": resultPolicy,
-	}))
+	writeJSON(
+		w,
+		NewDetailResponse("/services/"+id+"/update-policy", "ServiceUpdatePolicy", map[string]any{
+			"updatePolicy": resultPolicy,
+		}),
+	)
 }
 
 func (h *Handlers) HandleGetServiceRollbackPolicy(w http.ResponseWriter, r *http.Request) {
@@ -971,9 +1056,17 @@ func (h *Handlers) HandleGetServiceRollbackPolicy(w http.ResponseWriter, r *http
 	if policy == nil {
 		policy = &swarm.UpdateConfig{}
 	}
-	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/rollback-policy", "ServiceRollbackPolicy", map[string]any{
-		"rollbackPolicy": policy,
-	}))
+	writeJSONWithETag(
+		w,
+		r,
+		NewDetailResponse(
+			"/services/"+id+"/rollback-policy",
+			"ServiceRollbackPolicy",
+			map[string]any{
+				"rollbackPolicy": policy,
+			},
+		),
+	)
 }
 
 func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *http.Request) {
@@ -982,7 +1075,12 @@ func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *ht
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		writeProblem(
+			w,
+			r,
+			http.StatusUnsupportedMediaType,
+			"expected Content-Type: application/merge-patch+json",
+		)
 		return
 	}
 
@@ -999,12 +1097,22 @@ func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *ht
 
 	base, err := json.Marshal(current)
 	if err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal current rollback policy")
+		writeProblem(
+			w,
+			r,
+			http.StatusInternalServerError,
+			"failed to marshal current rollback policy",
+		)
 		return
 	}
 	var baseMap map[string]any
 	if err := json.Unmarshal(base, &baseMap); err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to unmarshal current rollback policy")
+		writeProblem(
+			w,
+			r,
+			http.StatusInternalServerError,
+			"failed to unmarshal current rollback policy",
+		)
 		return
 	}
 
@@ -1023,7 +1131,12 @@ func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *ht
 
 	merged, err := json.Marshal(baseMap)
 	if err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal merged rollback policy")
+		writeProblem(
+			w,
+			r,
+			http.StatusInternalServerError,
+			"failed to marshal merged rollback policy",
+		)
 		return
 	}
 	var result swarm.UpdateConfig
@@ -1044,9 +1157,16 @@ func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *ht
 	if resultPolicy == nil {
 		resultPolicy = &swarm.UpdateConfig{}
 	}
-	writeJSON(w, NewDetailResponse("/services/"+id+"/rollback-policy", "ServiceRollbackPolicy", map[string]any{
-		"rollbackPolicy": resultPolicy,
-	}))
+	writeJSON(
+		w,
+		NewDetailResponse(
+			"/services/"+id+"/rollback-policy",
+			"ServiceRollbackPolicy",
+			map[string]any{
+				"rollbackPolicy": resultPolicy,
+			},
+		),
+	)
 }
 
 func (h *Handlers) HandleGetServiceLogDriver(w http.ResponseWriter, r *http.Request) {
@@ -1056,9 +1176,13 @@ func (h *Handlers) HandleGetServiceLogDriver(w http.ResponseWriter, r *http.Requ
 		writeProblem(w, r, http.StatusNotFound, "service not found")
 		return
 	}
-	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/log-driver", "ServiceLogDriver", map[string]any{
-		"logDriver": svc.Spec.TaskTemplate.LogDriver,
-	}))
+	writeJSONWithETag(
+		w,
+		r,
+		NewDetailResponse("/services/"+id+"/log-driver", "ServiceLogDriver", map[string]any{
+			"logDriver": svc.Spec.TaskTemplate.LogDriver,
+		}),
+	)
 }
 
 func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Request) {
@@ -1067,7 +1191,12 @@ func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Re
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		writeProblem(
+			w,
+			r,
+			http.StatusUnsupportedMediaType,
+			"expected Content-Type: application/merge-patch+json",
+		)
 		return
 	}
 
@@ -1125,9 +1254,12 @@ func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	writeJSON(w, NewDetailResponse("/services/"+id+"/log-driver", "ServiceLogDriver", map[string]any{
-		"logDriver": updated.Spec.TaskTemplate.LogDriver,
-	}))
+	writeJSON(
+		w,
+		NewDetailResponse("/services/"+id+"/log-driver", "ServiceLogDriver", map[string]any{
+			"logDriver": updated.Spec.TaskTemplate.LogDriver,
+		}),
+	)
 }
 
 func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
@@ -1136,7 +1268,12 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		writeProblem(
+			w,
+			r,
+			http.StatusUnsupportedMediaType,
+			"expected Content-Type: application/merge-patch+json",
+		)
 		return
 	}
 
@@ -1147,7 +1284,8 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 	}
 
 	current := &container.HealthConfig{}
-	if svc.Spec.TaskTemplate.ContainerSpec != nil && svc.Spec.TaskTemplate.ContainerSpec.Healthcheck != nil {
+	if svc.Spec.TaskTemplate.ContainerSpec != nil &&
+		svc.Spec.TaskTemplate.ContainerSpec.Healthcheck != nil {
 		current = svc.Spec.TaskTemplate.ContainerSpec.Healthcheck
 	}
 
@@ -1159,7 +1297,12 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 
 	var baseMap map[string]any
 	if err := json.Unmarshal(base, &baseMap); err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to unmarshal current healthcheck")
+		writeProblem(
+			w,
+			r,
+			http.StatusInternalServerError,
+			"failed to unmarshal current healthcheck",
+		)
 		return
 	}
 
@@ -1202,7 +1345,10 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 		resultHC = updated.Spec.TaskTemplate.ContainerSpec.Healthcheck
 	}
 
-	writeJSON(w, NewDetailResponse("/services/"+id+"/healthcheck", "ServiceHealthcheck", map[string]any{
-		"healthcheck": resultHC,
-	}))
+	writeJSON(
+		w,
+		NewDetailResponse("/services/"+id+"/healthcheck", "ServiceHealthcheck", map[string]any{
+			"healthcheck": resultHC,
+		}),
+	)
 }

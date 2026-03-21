@@ -80,7 +80,10 @@ func (pc *PromClient) InstantQuery(ctx context.Context, query string) ([]PromRes
 	return results, nil
 }
 
-func (pc *PromClient) RangeQueryRaw(ctx context.Context, query, start, end, step string) ([]byte, error) {
+func (pc *PromClient) RangeQueryRaw(
+	ctx context.Context,
+	query, start, end, step string,
+) ([]byte, error) {
 	u := pc.baseURL + "/api/v1/query_range?query=" + url.QueryEscape(query) +
 		"&start=" + url.QueryEscape(start) + "&end=" + url.QueryEscape(end) +
 		"&step=" + url.QueryEscape(step)

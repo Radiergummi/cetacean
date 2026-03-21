@@ -86,18 +86,35 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		}
 	}
 
-	batchInterval, err := resolveDuration(nil, "CETACEAN_SSE_BATCH_INTERVAL", fSSEBatch, 100*time.Millisecond)
+	batchInterval, err := resolveDuration(
+		nil,
+		"CETACEAN_SSE_BATCH_INTERVAL",
+		fSSEBatch,
+		100*time.Millisecond,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	opsLevel, err := resolveInt(nil, "CETACEAN_OPERATIONS_LEVEL", fOpsLevel, int(OpsOperational), int(OpsReadOnly), int(OpsImpactful))
+	opsLevel, err := resolveInt(
+		nil,
+		"CETACEAN_OPERATIONS_LEVEL",
+		fOpsLevel,
+		int(OpsOperational),
+		int(OpsReadOnly),
+		int(OpsImpactful),
+	)
 	if err != nil {
 		return nil, err
 	}
 
 	cfg := &Config{
-		DockerHost:       resolve(flags.DockerHost, "CETACEAN_DOCKER_HOST", fDockerHost, "unix:///var/run/docker.sock"),
+		DockerHost: resolve(
+			flags.DockerHost,
+			"CETACEAN_DOCKER_HOST",
+			fDockerHost,
+			"unix:///var/run/docker.sock",
+		),
 		PrometheusURL:    resolve(flags.PrometheusURL, "CETACEAN_PROMETHEUS_URL", fPromURL, ""),
 		ListenAddr:       resolve(flags.Listen, "CETACEAN_LISTEN_ADDR", fListen, ":9000"),
 		LogLevel:         resolve(flags.LogLevel, "CETACEAN_LOG_LEVEL", fLogLevel, "info"),

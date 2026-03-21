@@ -40,7 +40,9 @@ type TailscaleProvider struct {
 // NewTailscaleTsnetProvider creates a provider using an embedded tsnet node.
 // Returns the provider, the tsnet server (caller must close), and a net.Listener
 // that should be used for serving authenticated routes.
-func NewTailscaleTsnetProvider(hostname, authKey, stateDir, capability string) (*TailscaleProvider, *tsnet.Server, net.Listener, error) {
+func NewTailscaleTsnetProvider(
+	hostname, authKey, stateDir, capability string,
+) (*TailscaleProvider, *tsnet.Server, net.Listener, error) {
 	srv := &tsnet.Server{
 		Hostname: hostname,
 		AuthKey:  authKey,
@@ -60,13 +62,19 @@ func NewTailscaleTsnetProvider(hostname, authKey, stateDir, capability string) (
 		return nil, nil, nil, fmt.Errorf("tsnet local client: %w", err)
 	}
 
-	return &TailscaleProvider{client: lc, capability: tailcfg.PeerCapability(capability)}, srv, ln, nil
+	return &TailscaleProvider{
+		client:     lc,
+		capability: tailcfg.PeerCapability(capability),
+	}, srv, ln, nil
 }
 
 // NewTailscaleLocalProvider creates a TailscaleProvider that uses the local
 // Tailscale daemon to identify peers.
 func NewTailscaleLocalProvider(capability string) *TailscaleProvider {
-	return &TailscaleProvider{client: &local.Client{}, capability: tailcfg.PeerCapability(capability)}
+	return &TailscaleProvider{
+		client:     &local.Client{},
+		capability: tailcfg.PeerCapability(capability),
+	}
 }
 
 // Authenticate identifies the Tailscale peer by calling WhoIs on the request's
@@ -74,7 +82,10 @@ func NewTailscaleLocalProvider(capability string) *TailscaleProvider {
 // As defense-in-depth, the remote address is validated against the Tailscale
 // CGNAT (100.64.0.0/10) and ULA (fd7a:115c:a1e0::/48) ranges before calling
 // WhoIs, preventing spoofed non-tailnet addresses from reaching the daemon.
-func (p *TailscaleProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (*Identity, error) {
+func (p *TailscaleProvider) Authenticate(
+	_ http.ResponseWriter,
+	r *http.Request,
+) (*Identity, error) {
 	if err := validateTailscaleAddr(r.RemoteAddr); err != nil {
 		return nil, err
 	}

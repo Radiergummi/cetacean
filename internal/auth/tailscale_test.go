@@ -18,7 +18,10 @@ type mockWhoIsClient struct {
 	gotAddr string // records the remoteAddr passed to WhoIs
 }
 
-func (m *mockWhoIsClient) WhoIs(_ context.Context, remoteAddr string) (*apitype.WhoIsResponse, error) {
+func (m *mockWhoIsClient) WhoIs(
+	_ context.Context,
+	remoteAddr string,
+) (*apitype.WhoIsResponse, error) {
 	m.gotAddr = remoteAddr
 	return m.result, m.err
 }
@@ -59,7 +62,11 @@ func TestTailscaleProvider_Authenticate_Success(t *testing.T) {
 		t.Errorf("Provider = %q, want %q", id.Provider, "tailscale")
 	}
 	if id.Raw["node_name"] != "alice-laptop.tail1234.ts.net." {
-		t.Errorf("Raw[node_name] = %v, want %q", id.Raw["node_name"], "alice-laptop.tail1234.ts.net.")
+		t.Errorf(
+			"Raw[node_name] = %v, want %q",
+			id.Raw["node_name"],
+			"alice-laptop.tail1234.ts.net.",
+		)
 	}
 	if id.Raw["user_id"] != int64(42) {
 		t.Errorf("Raw[user_id] = %v, want %d", id.Raw["user_id"], 42)
@@ -579,7 +586,10 @@ type spyWhoIsClient struct {
 	called *bool
 }
 
-func (s *spyWhoIsClient) WhoIs(ctx context.Context, remoteAddr string) (*apitype.WhoIsResponse, error) {
+func (s *spyWhoIsClient) WhoIs(
+	ctx context.Context,
+	remoteAddr string,
+) (*apitype.WhoIsResponse, error) {
 	*s.called = true
 	return s.inner.WhoIs(ctx, remoteAddr)
 }

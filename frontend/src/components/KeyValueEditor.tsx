@@ -86,7 +86,7 @@ export function KeyValueEditor({
     });
   }
 
-  const newKeyError = newKey.trim() ? validateKey?.(newKey.trim()) ?? null : null;
+  const newKeyError = newKey.trim() ? (validateKey?.(newKey.trim()) ?? null) : null;
 
   async function save() {
     const ops: PatchOp[] = [];
@@ -140,16 +140,17 @@ export function KeyValueEditor({
     [draft],
   );
 
-  const controls = !editing && !editDisabled ? (
-    <Button
-      variant="outline"
-      size="xs"
-      onClick={openEdit}
-    >
-      <Pencil className="size-3" />
-      Edit
-    </Button>
-  ) : null;
+  const controls =
+    !editing && !editDisabled ? (
+      <Button
+        variant="outline"
+        size="xs"
+        onClick={openEdit}
+      >
+        <Pencil className="size-3" />
+        Edit
+      </Button>
+    ) : null;
 
   return (
     <CollapsibleSection
@@ -176,8 +177,8 @@ export function KeyValueEditor({
             <table className="w-full min-w-max whitespace-nowrap">
               <thead className="sticky top-0 z-10 bg-background/50">
                 <tr className="bg-muted/50 dark:bg-transparent">
-                  <th className="pt-3 ps-3 text-left text-sm font-medium">{keyLabel}</th>
-                  <th className="pt-3 ps-3 text-left text-sm font-medium">{valueLabel}</th>
+                  <th className="ps-3 pt-3 text-left text-sm font-medium">{keyLabel}</th>
+                  <th className="ps-3 pt-3 text-left text-sm font-medium">{valueLabel}</th>
                   <th className="w-12 py-3 ps-3" />
                 </tr>
               </thead>
@@ -188,7 +189,7 @@ export function KeyValueEditor({
                   return (
                     <tr
                       key={key}
-                      className="border-b last:border-b-0 bg-transparent!"
+                      className="border-b bg-transparent! last:border-b-0"
                     >
                       <td className="py-3 ps-3 font-mono text-xs">
                         {key}

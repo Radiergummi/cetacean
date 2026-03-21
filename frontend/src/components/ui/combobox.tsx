@@ -95,16 +95,16 @@ export function Combobox({ value, onChange, options, placeholder, className }: C
               <Check
                 className={cn(
                   "mt-0.5 size-3.5 shrink-0",
-                  value === option.value
-                    ? "text-primary opacity-100"
-                    : "opacity-0",
+                  value === option.value ? "text-primary opacity-100" : "opacity-0",
                 )}
               />
 
               <div className="min-w-0 flex-1">
                 <div className="font-mono text-sm">{option.label}</div>
                 {option.description && (
-                  <div className="text-xs leading-snug text-muted-foreground">{option.description}</div>
+                  <div className="text-xs leading-snug text-muted-foreground">
+                    {option.description}
+                  </div>
                 )}
               </div>
             </button>

@@ -57,7 +57,7 @@ export function SectionToggle({
       className={
         className ??
         "flex cursor-pointer items-center gap-1.5 rounded text-sm font-medium tracking-wider text-muted-foreground uppercase " +
-          "outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+          "transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
       }
     >
       <ChevronRight

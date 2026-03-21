@@ -14,7 +14,11 @@ const logDriverOptions = [
   { value: "local", label: "local", description: "Compressed, rotated logs with minimal overhead" },
   { value: "journald", label: "journald", description: "systemd journal" },
   { value: "syslog", label: "syslog", description: "Syslog daemon" },
-  { value: "gelf", label: "gelf", description: "Graylog Extended Log Format (e.g. Graylog, Logstash)" },
+  {
+    value: "gelf",
+    label: "gelf",
+    description: "Graylog Extended Log Format (e.g. Graylog, Logstash)",
+  },
   { value: "fluentd", label: "fluentd", description: "Fluentd forward protocol" },
   { value: "awslogs", label: "awslogs", description: "Amazon CloudWatch Logs" },
   { value: "gcplogs", label: "gcplogs", description: "Google Cloud Logging" },
@@ -101,7 +105,7 @@ export function LogDriverEditor({ serviceId, logDriver, onSaved }: LogDriverEdit
 
   if (!editing) {
     return (
-      <div className="rounded-lg border p-3 space-y-3">
+      <div className="space-y-3 rounded-lg border p-3">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
             Log Driver
@@ -143,7 +147,11 @@ export function LogDriverEditor({ serviceId, logDriver, onSaved }: LogDriverEdit
         ) : (
           <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed py-6 text-center text-muted-foreground">
             <p className="text-sm">No log driver configured</p>
-            {canEdit && <p className="text-xs">Click Edit to choose how container logs are collected and forwarded.</p>}
+            {canEdit && (
+              <p className="text-xs">
+                Click Edit to choose how container logs are collected and forwarded.
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -151,7 +159,7 @@ export function LogDriverEditor({ serviceId, logDriver, onSaved }: LogDriverEdit
   }
 
   return (
-    <div className="rounded-lg border p-3 space-y-3">
+    <div className="space-y-3 rounded-lg border p-3">
       <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
         Log Driver
       </h3>

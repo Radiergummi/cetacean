@@ -25,8 +25,8 @@ export default function ResourceName({
 
   if (direction === "responsive") {
     return (
-      <span className="inline-flex items-baseline md:items-baseline flex-col md:flex-row leading-tight md:leading-normal">
-        <span className="text-[0.5em] md:text-[1em] font-normal text-muted-foreground">
+      <span className="inline-flex flex-col items-baseline leading-tight md:flex-row md:items-baseline md:leading-normal">
+        <span className="text-[0.5em] font-normal text-muted-foreground md:text-[1em]">
           <span className="md:hidden">{prefix}</span>
           <span className="hidden md:inline">{prefix}/</span>
         </span>

@@ -205,7 +205,11 @@ func TestDiscoverConfigFile_XDGConfigHome(t *testing.T) {
 	dir := t.TempDir()
 	xdgDir := filepath.Join(dir, "cetacean")
 	os.MkdirAll(xdgDir, 0755)
-	if err := os.WriteFile(filepath.Join(xdgDir, "cetacean.toml"), []byte("[server]\n"), 0644); err != nil {
+	if err := os.WriteFile(
+		filepath.Join(xdgDir, "cetacean.toml"),
+		[]byte("[server]\n"),
+		0644,
+	); err != nil {
 		t.Fatal(err)
 	}
 

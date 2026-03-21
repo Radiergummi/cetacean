@@ -85,7 +85,10 @@ func TestMetricsStream_StreamsEvents(t *testing.T) {
 		t.Error("expected at least one point event in body")
 	}
 	if queryCount.Load() < 2 {
-		t.Errorf("expected at least 2 Prometheus calls (range + instant), got %d", queryCount.Load())
+		t.Errorf(
+			"expected at least 2 Prometheus calls (range + instant), got %d",
+			queryCount.Load(),
+		)
 	}
 }
 
@@ -99,9 +102,17 @@ func TestMetricsStream_FullLifecycle(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		ts := time.Now().Unix()
 		if r.URL.Path == "/api/v1/query_range" {
-			fmt.Fprintf(w, `{"status":"success","data":{"resultType":"matrix","result":[{"metric":{"__name__":"cpu"},"values":[[%d,"42"]]}]}}`, ts)
+			fmt.Fprintf(
+				w,
+				`{"status":"success","data":{"resultType":"matrix","result":[{"metric":{"__name__":"cpu"},"values":[[%d,"42"]]}]}}`,
+				ts,
+			)
 		} else {
-			fmt.Fprintf(w, `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"cpu"},"value":[%d,"43"]}]}}`, ts)
+			fmt.Fprintf(
+				w,
+				`{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"cpu"},"value":[%d,"43"]}]}}`,
+				ts,
+			)
 		}
 	}))
 	defer srv.Close()

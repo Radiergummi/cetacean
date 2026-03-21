@@ -102,7 +102,12 @@ func TestDetailResponse_DeterministicSerialization(t *testing.T) {
 			t.Fatal(err)
 		}
 		if string(got) != string(first) {
-			t.Fatalf("iteration %d: serialization not deterministic\nfirst: %s\n  got: %s", i, first, got)
+			t.Fatalf(
+				"iteration %d: serialization not deterministic\nfirst: %s\n  got: %s",
+				i,
+				first,
+				got,
+			)
 		}
 	}
 

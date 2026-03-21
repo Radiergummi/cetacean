@@ -780,7 +780,10 @@ func (c *Cache) serviceRefsFromIndex(idx map[string]map[string]struct{}, key str
 	refs := make([]ServiceRef, 0, len(svcIDs))
 	for svcID := range svcIDs {
 		if svc, ok := c.services[svcID]; ok {
-			refs = append(refs, ServiceRef{AtID: "/services/" + svc.ID, ID: svc.ID, Name: svc.Spec.Name})
+			refs = append(
+				refs,
+				ServiceRef{AtID: "/services/" + svc.ID, ID: svc.ID, Name: svc.Spec.Name},
+			)
 		}
 	}
 	return refs

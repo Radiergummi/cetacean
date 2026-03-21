@@ -154,7 +154,10 @@ func (p *OIDCProvider) Authenticate(w http.ResponseWriter, r *http.Request) (*Id
 func (p *OIDCProvider) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /auth/login", p.handleLogin)
 	mux.HandleFunc("GET /auth/callback", p.handleCallback)
-	mux.Handle("POST /auth/logout", http.NewCrossOriginProtection().Handler(http.HandlerFunc(p.handleLogout)))
+	mux.Handle(
+		"POST /auth/logout",
+		http.NewCrossOriginProtection().Handler(http.HandlerFunc(p.handleLogout)),
+	)
 }
 
 func (p *OIDCProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -241,7 +244,9 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	// the iss parameter MUST be present. Always validate it when present.
 	iss := r.URL.Query().Get("iss")
 	if iss == "" && p.issRequired {
-		slog.Error("oidc callback missing required iss parameter (IdP advertises authorization_response_iss_parameter_supported)")
+		slog.Error(
+			"oidc callback missing required iss parameter (IdP advertises authorization_response_iss_parameter_supported)",
+		)
 		http.Error(w, "missing iss parameter", http.StatusBadRequest)
 		return
 	}
@@ -260,7 +265,10 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if subtle.ConstantTimeCompare([]byte(r.URL.Query().Get("state")), []byte(stateCookie.Value)) != 1 {
+	if subtle.ConstantTimeCompare(
+		[]byte(r.URL.Query().Get("state")),
+		[]byte(stateCookie.Value),
+	) != 1 {
 		http.Error(w, "state mismatch", http.StatusBadRequest)
 		return
 	}
@@ -286,7 +294,11 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Exchange code for token with PKCE verifier.
-	oauth2Token, err := p.oauth2Config.Exchange(r.Context(), r.URL.Query().Get("code"), oauth2.VerifierOption(verifierCookie.Value))
+	oauth2Token, err := p.oauth2Config.Exchange(
+		r.Context(),
+		r.URL.Query().Get("code"),
+		oauth2.VerifierOption(verifierCookie.Value),
+	)
 	if err != nil {
 		slog.Error("oidc token exchange failed", "error", err)
 		http.Error(w, "token exchange failed", http.StatusInternalServerError)

@@ -243,7 +243,13 @@ func TestIntegration_HeadersMode_GroupsParsing(t *testing.T) {
 					t.Fatal("expected identity in context")
 				}
 				if len(id.Groups) != len(tt.wantGroups) {
-					t.Errorf("groups = %v (len %d), want %v (len %d)", id.Groups, len(id.Groups), tt.wantGroups, len(tt.wantGroups))
+					t.Errorf(
+						"groups = %v (len %d), want %v (len %d)",
+						id.Groups,
+						len(id.Groups),
+						tt.wantGroups,
+						len(tt.wantGroups),
+					)
 					return
 				}
 				for i, g := range tt.wantGroups {
@@ -411,7 +417,10 @@ func TestIntegration_ExemptRoutes_SkipAuth(t *testing.T) {
 // failingProvider always returns an error from Authenticate.
 type failingProvider struct{}
 
-func (p *failingProvider) Authenticate(_ http.ResponseWriter, _ *http.Request) (*auth.Identity, error) {
+func (p *failingProvider) Authenticate(
+	_ http.ResponseWriter,
+	_ *http.Request,
+) (*auth.Identity, error) {
 	return nil, fmt.Errorf("always fails")
 }
 

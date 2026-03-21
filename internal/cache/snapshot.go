@@ -77,7 +77,11 @@ func (c *Cache) LoadFromDisk(path string) error {
 	}
 
 	if snap.Version != snapshotVersion {
-		return fmt.Errorf("snapshot version mismatch: got %d, want %d", snap.Version, snapshotVersion)
+		return fmt.Errorf(
+			"snapshot version mismatch: got %d, want %d",
+			snap.Version,
+			snapshotVersion,
+		)
 	}
 
 	c.ReplaceAll(FullSyncData{

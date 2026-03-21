@@ -2,13 +2,14 @@ package api
 
 import (
 	"context"
-	json "github.com/goccy/go-json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	json "github.com/goccy/go-json"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/swarm"
@@ -19,20 +20,20 @@ import (
 )
 
 type mockWriteClient struct {
-	scaleServiceFn             func(ctx context.Context, id string, replicas uint64) (swarm.Service, error)
-	updateServiceImageFn       func(ctx context.Context, id string, image string) (swarm.Service, error)
-	rollbackServiceFn          func(ctx context.Context, id string) (swarm.Service, error)
-	restartServiceFn           func(ctx context.Context, id string) (swarm.Service, error)
-	updateNodeAvailabilityFn   func(ctx context.Context, id string, availability swarm.NodeAvailability) (swarm.Node, error)
-	removeTaskFn               func(ctx context.Context, id string) error
-	removeServiceFn            func(ctx context.Context, id string) error
-	updateServiceEnvFn         func(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
-	updateNodeLabelsFn         func(ctx context.Context, id string, labels map[string]string) (swarm.Node, error)
-	updateServiceLabelsFn      func(ctx context.Context, id string, labels map[string]string) (swarm.Service, error)
-	updateServiceResourcesFn   func(ctx context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error)
-	updateServiceModeFn            func(ctx context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error)
-	updateServiceEndpointModeFn    func(ctx context.Context, id string, mode swarm.ResolutionMode) (swarm.Service, error)
-	updateServiceHealthcheckFn     func(ctx context.Context, id string, hc *container.HealthConfig) (swarm.Service, error)
+	scaleServiceFn                func(ctx context.Context, id string, replicas uint64) (swarm.Service, error)
+	updateServiceImageFn          func(ctx context.Context, id string, image string) (swarm.Service, error)
+	rollbackServiceFn             func(ctx context.Context, id string) (swarm.Service, error)
+	restartServiceFn              func(ctx context.Context, id string) (swarm.Service, error)
+	updateNodeAvailabilityFn      func(ctx context.Context, id string, availability swarm.NodeAvailability) (swarm.Node, error)
+	removeTaskFn                  func(ctx context.Context, id string) error
+	removeServiceFn               func(ctx context.Context, id string) error
+	updateServiceEnvFn            func(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
+	updateNodeLabelsFn            func(ctx context.Context, id string, labels map[string]string) (swarm.Node, error)
+	updateServiceLabelsFn         func(ctx context.Context, id string, labels map[string]string) (swarm.Service, error)
+	updateServiceResourcesFn      func(ctx context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error)
+	updateServiceModeFn           func(ctx context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error)
+	updateServiceEndpointModeFn   func(ctx context.Context, id string, mode swarm.ResolutionMode) (swarm.Service, error)
+	updateServiceHealthcheckFn    func(ctx context.Context, id string, hc *container.HealthConfig) (swarm.Service, error)
 	updateServicePlacementFn      func(ctx context.Context, id string, placement *swarm.Placement) (swarm.Service, error)
 	updateServicePortsFn          func(ctx context.Context, id string, ports []swarm.PortConfig) (swarm.Service, error)
 	updateServiceUpdatePolicyFn   func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error)
@@ -40,14 +41,22 @@ type mockWriteClient struct {
 	updateServiceLogDriverFn      func(ctx context.Context, id string, driver *swarm.Driver) (swarm.Service, error)
 }
 
-func (m *mockWriteClient) ScaleService(ctx context.Context, id string, replicas uint64) (swarm.Service, error) {
+func (m *mockWriteClient) ScaleService(
+	ctx context.Context,
+	id string,
+	replicas uint64,
+) (swarm.Service, error) {
 	if m.scaleServiceFn != nil {
 		return m.scaleServiceFn(ctx, id, replicas)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceImage(ctx context.Context, id string, image string) (swarm.Service, error) {
+func (m *mockWriteClient) UpdateServiceImage(
+	ctx context.Context,
+	id string,
+	image string,
+) (swarm.Service, error) {
 	if m.updateServiceImageFn != nil {
 		return m.updateServiceImageFn(ctx, id, image)
 	}
@@ -68,7 +77,11 @@ func (m *mockWriteClient) RestartService(ctx context.Context, id string) (swarm.
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateNodeAvailability(ctx context.Context, id string, availability swarm.NodeAvailability) (swarm.Node, error) {
+func (m *mockWriteClient) UpdateNodeAvailability(
+	ctx context.Context,
+	id string,
+	availability swarm.NodeAvailability,
+) (swarm.Node, error) {
 	if m.updateNodeAvailabilityFn != nil {
 		return m.updateNodeAvailabilityFn(ctx, id, availability)
 	}
@@ -82,84 +95,132 @@ func (m *mockWriteClient) RemoveTask(ctx context.Context, id string) error {
 	return fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceEnv(ctx context.Context, id string, env map[string]string) (swarm.Service, error) {
+func (m *mockWriteClient) UpdateServiceEnv(
+	ctx context.Context,
+	id string,
+	env map[string]string,
+) (swarm.Service, error) {
 	if m.updateServiceEnvFn != nil {
 		return m.updateServiceEnvFn(ctx, id, env)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateNodeLabels(ctx context.Context, id string, labels map[string]string) (swarm.Node, error) {
+func (m *mockWriteClient) UpdateNodeLabels(
+	ctx context.Context,
+	id string,
+	labels map[string]string,
+) (swarm.Node, error) {
 	if m.updateNodeLabelsFn != nil {
 		return m.updateNodeLabelsFn(ctx, id, labels)
 	}
 	return swarm.Node{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceLabels(ctx context.Context, id string, labels map[string]string) (swarm.Service, error) {
+func (m *mockWriteClient) UpdateServiceLabels(
+	ctx context.Context,
+	id string,
+	labels map[string]string,
+) (swarm.Service, error) {
 	if m.updateServiceLabelsFn != nil {
 		return m.updateServiceLabelsFn(ctx, id, labels)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceResources(ctx context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error) {
+func (m *mockWriteClient) UpdateServiceResources(
+	ctx context.Context,
+	id string,
+	resources *swarm.ResourceRequirements,
+) (swarm.Service, error) {
 	if m.updateServiceResourcesFn != nil {
 		return m.updateServiceResourcesFn(ctx, id, resources)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceEndpointMode(ctx context.Context, id string, mode swarm.ResolutionMode) (swarm.Service, error) {
+func (m *mockWriteClient) UpdateServiceEndpointMode(
+	ctx context.Context,
+	id string,
+	mode swarm.ResolutionMode,
+) (swarm.Service, error) {
 	if m.updateServiceEndpointModeFn != nil {
 		return m.updateServiceEndpointModeFn(ctx, id, mode)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceMode(ctx context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error) {
+func (m *mockWriteClient) UpdateServiceMode(
+	ctx context.Context,
+	id string,
+	mode swarm.ServiceMode,
+) (swarm.Service, error) {
 	if m.updateServiceModeFn != nil {
 		return m.updateServiceModeFn(ctx, id, mode)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceHealthcheck(ctx context.Context, id string, hc *container.HealthConfig) (swarm.Service, error) {
+func (m *mockWriteClient) UpdateServiceHealthcheck(
+	ctx context.Context,
+	id string,
+	hc *container.HealthConfig,
+) (swarm.Service, error) {
 	if m.updateServiceHealthcheckFn != nil {
 		return m.updateServiceHealthcheckFn(ctx, id, hc)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServicePlacement(ctx context.Context, id string, placement *swarm.Placement) (swarm.Service, error) {
+func (m *mockWriteClient) UpdateServicePlacement(
+	ctx context.Context,
+	id string,
+	placement *swarm.Placement,
+) (swarm.Service, error) {
 	if m.updateServicePlacementFn != nil {
 		return m.updateServicePlacementFn(ctx, id, placement)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServicePorts(ctx context.Context, id string, ports []swarm.PortConfig) (swarm.Service, error) {
+func (m *mockWriteClient) UpdateServicePorts(
+	ctx context.Context,
+	id string,
+	ports []swarm.PortConfig,
+) (swarm.Service, error) {
 	if m.updateServicePortsFn != nil {
 		return m.updateServicePortsFn(ctx, id, ports)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceUpdatePolicy(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error) {
+func (m *mockWriteClient) UpdateServiceUpdatePolicy(
+	ctx context.Context,
+	id string,
+	policy *swarm.UpdateConfig,
+) (swarm.Service, error) {
 	if m.updateServiceUpdatePolicyFn != nil {
 		return m.updateServiceUpdatePolicyFn(ctx, id, policy)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceRollbackPolicy(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error) {
+func (m *mockWriteClient) UpdateServiceRollbackPolicy(
+	ctx context.Context,
+	id string,
+	policy *swarm.UpdateConfig,
+) (swarm.Service, error) {
 	if m.updateServiceRollbackPolicyFn != nil {
 		return m.updateServiceRollbackPolicyFn(ctx, id, policy)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceLogDriver(ctx context.Context, id string, driver *swarm.Driver) (swarm.Service, error) {
+func (m *mockWriteClient) UpdateServiceLogDriver(
+	ctx context.Context,
+	id string,
+	driver *swarm.Driver,
+) (swarm.Service, error) {
 	if m.updateServiceLogDriverFn != nil {
 		return m.updateServiceLogDriverFn(ctx, id, driver)
 	}
@@ -942,8 +1003,10 @@ func TestHandlePatchServiceEnv_MergePatch(t *testing.T) {
 func TestHandleGetNodeLabels(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{
-		ID:   "node1",
-		Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: map[string]string{"region": "us-east"}}},
+		ID: "node1",
+		Spec: swarm.NodeSpec{
+			Annotations: swarm.Annotations{Labels: map[string]string{"region": "us-east"}},
+		},
 	})
 	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
 
@@ -974,13 +1037,18 @@ func TestHandleGetNodeLabels(t *testing.T) {
 func TestHandlePatchNodeLabels_Add(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{
-		ID:   "node1",
-		Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: map[string]string{"existing": "value"}}},
+		ID: "node1",
+		Spec: swarm.NodeSpec{
+			Annotations: swarm.Annotations{Labels: map[string]string{"existing": "value"}},
+		},
 	})
 
 	wc := &mockWriteClient{
 		updateNodeLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Node, error) {
-			return swarm.Node{ID: id, Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: labels}}}, nil
+			return swarm.Node{
+				ID:   id,
+				Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: labels}},
+			}, nil
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, config.OpsImpactful)
@@ -1016,13 +1084,20 @@ func TestHandlePatchNodeLabels_WrongContentType(t *testing.T) {
 func TestHandlePatchNodeLabels_MergePatch(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNode(swarm.Node{
-		ID:   "node1",
-		Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: map[string]string{"existing": "value", "remove": "me"}}},
+		ID: "node1",
+		Spec: swarm.NodeSpec{
+			Annotations: swarm.Annotations{
+				Labels: map[string]string{"existing": "value", "remove": "me"},
+			},
+		},
 	})
 
 	wc := &mockWriteClient{
 		updateNodeLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Node, error) {
-			return swarm.Node{ID: id, Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: labels}}}, nil
+			return swarm.Node{
+				ID:   id,
+				Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: labels}},
+			}, nil
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, config.OpsImpactful)
@@ -1426,7 +1501,12 @@ func TestHandleGetServicePorts(t *testing.T) {
 		Spec: swarm.ServiceSpec{
 			EndpointSpec: &swarm.EndpointSpec{
 				Ports: []swarm.PortConfig{
-					{Protocol: "tcp", TargetPort: 80, PublishedPort: 8080, PublishMode: swarm.PortConfigPublishModeIngress},
+					{
+						Protocol:      "tcp",
+						TargetPort:    80,
+						PublishedPort: 8080,
+						PublishMode:   swarm.PortConfigPublishModeIngress,
+					},
 				},
 			},
 		},
@@ -1582,7 +1662,11 @@ func TestHandlePatchServiceUpdatePolicy_InvalidBody(t *testing.T) {
 	c.SetService(swarm.Service{ID: "svc1"})
 
 	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
-	req := httptest.NewRequest("PATCH", "/services/svc1/update-policy", strings.NewReader(`not json`))
+	req := httptest.NewRequest(
+		"PATCH",
+		"/services/svc1/update-policy",
+		strings.NewReader(`not json`),
+	)
 	req.Header.Set("Content-Type", "application/merge-patch+json")
 	req.SetPathValue("id", "svc1")
 	w := httptest.NewRecorder()
@@ -1637,7 +1721,11 @@ func TestHandlePatchServiceRollbackPolicy_InvalidBody(t *testing.T) {
 	c.SetService(swarm.Service{ID: "svc1"})
 
 	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
-	req := httptest.NewRequest("PATCH", "/services/svc1/rollback-policy", strings.NewReader(`not json`))
+	req := httptest.NewRequest(
+		"PATCH",
+		"/services/svc1/rollback-policy",
+		strings.NewReader(`not json`),
+	)
 	req.Header.Set("Content-Type", "application/merge-patch+json")
 	req.SetPathValue("id", "svc1")
 	w := httptest.NewRecorder()
@@ -1754,7 +1842,14 @@ func TestHandlePatchServiceLogDriver(t *testing.T) {
 
 func TestHandlePatchServiceLogDriver_InvalidBody(t *testing.T) {
 	c := cache.New(nil)
-	c.SetService(swarm.Service{ID: "svc1", Spec: swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{LogDriver: &swarm.Driver{Name: "json-file"}}}})
+	c.SetService(
+		swarm.Service{
+			ID: "svc1",
+			Spec: swarm.ServiceSpec{
+				TaskTemplate: swarm.TaskSpec{LogDriver: &swarm.Driver{Name: "json-file"}},
+			},
+		},
+	)
 
 	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
 	req := httptest.NewRequest("PATCH", "/services/svc1/log-driver", strings.NewReader(`not json`))

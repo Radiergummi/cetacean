@@ -187,17 +187,18 @@ export default function ContainerImage({
     <span className="inline-flex items-center gap-1.5">{inner}</span>
   );
 
-  const value = serviceId && canEdit ? (
-    <>
-      {link}
-      <ImageUpdatePopover
-        serviceId={serviceId}
-        currentImage={image}
-      />
-    </>
-  ) : (
-    link
-  );
+  const value =
+    serviceId && canEdit ? (
+      <>
+        {link}
+        <ImageUpdatePopover
+          serviceId={serviceId}
+          currentImage={image}
+        />
+      </>
+    ) : (
+      link
+    );
 
   return (
     <InfoCard

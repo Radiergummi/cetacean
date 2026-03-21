@@ -589,7 +589,14 @@ export default function ServiceDetail() {
                   resources={serviceResources}
                   onSaved={setServiceResources}
                   pids={taskTemplate.Resources?.Limits?.Pids}
-                  allocation={{ cpuReserved, cpuLimit, cpuActual, memReserved, memLimit, memActual }}
+                  allocation={{
+                    cpuReserved,
+                    cpuLimit,
+                    cpuActual,
+                    memReserved,
+                    memLimit,
+                    memActual,
+                  }}
                 />
               </div>
             )}

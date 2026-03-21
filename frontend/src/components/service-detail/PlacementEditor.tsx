@@ -99,7 +99,10 @@ export function PlacementEditor({ serviceId, placement, onSaved }: PlacementEdit
           )}
         </div>
 
-        <PlacementPanel placement={placement ?? { Constraints: [], Preferences: [] }} canEdit={canEdit} />
+        <PlacementPanel
+          placement={placement ?? { Constraints: [], Preferences: [] }}
+          canEdit={canEdit}
+        />
       </div>
     );
   }

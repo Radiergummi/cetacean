@@ -125,8 +125,12 @@ func TestSecurityHeaders(t *testing.T) {
 	if got := w.Header().Get("X-Frame-Options"); got != "DENY" {
 		t.Errorf("X-Frame-Options=%q, want DENY", got)
 	}
-	if got := w.Header().Get("Content-Security-Policy"); got != "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:" {
-		t.Errorf("Content-Security-Policy=%q, want default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:", got)
+	if got := w.Header().
+		Get("Content-Security-Policy"); got != "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:" {
+		t.Errorf(
+			"Content-Security-Policy=%q, want default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:",
+			got,
+		)
 	}
 	if got := w.Header().Get("Referrer-Policy"); got != "no-referrer" {
 		t.Errorf("Referrer-Policy=%q, want no-referrer", got)
@@ -266,7 +270,16 @@ func TestNewRouter_Smoke(t *testing.T) {
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}
 	spa := NewSPAHandler(fs.FS(fsys))
 
-	router := NewRouter(h, b, prom, spa, []byte("openapi: '3.1.0'"), nil, false, &auth.NoneProvider{})
+	router := NewRouter(
+		h,
+		b,
+		prom,
+		spa,
+		[]byte("openapi: '3.1.0'"),
+		nil,
+		false,
+		&auth.NoneProvider{},
+	)
 	if router == nil {
 		t.Fatal("NewRouter returned nil")
 	}

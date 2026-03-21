@@ -66,7 +66,11 @@ type DockerWriteClient interface {
 	RemoveService(ctx context.Context, id string) error
 	UpdateServiceEnv(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
 	UpdateNodeLabels(ctx context.Context, id string, labels map[string]string) (swarm.Node, error)
-	UpdateServiceLabels(ctx context.Context, id string, labels map[string]string) (swarm.Service, error)
+	UpdateServiceLabels(
+		ctx context.Context,
+		id string,
+		labels map[string]string,
+	) (swarm.Service, error)
 	UpdateServiceResources(
 		ctx context.Context,
 		id string,

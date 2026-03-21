@@ -71,7 +71,10 @@ func TestParseDockerLogs_MultipleFrames(t *testing.T) {
 
 func TestParseDockerLogs_MultilineSingleFrame(t *testing.T) {
 	// A single frame can contain multiple newline-separated lines
-	data := buildFrame(1, "2024-01-01T00:00:00.000000000Z line1\n2024-01-01T00:00:01.000000000Z line2\n")
+	data := buildFrame(
+		1,
+		"2024-01-01T00:00:00.000000000Z line1\n2024-01-01T00:00:01.000000000Z line2\n",
+	)
 	lines, err := ParseDockerLogs(bytes.NewReader(data))
 	if err != nil {
 		t.Fatal(err)
@@ -105,7 +108,10 @@ func TestParseDockerLogs_NoTimestamp(t *testing.T) {
 }
 
 func TestParseDockerLogs_WithDetails(t *testing.T) {
-	data := buildFrame(1, "2024-01-01T00:00:00.000000000Z com.docker.swarm.node.id=n1,com.docker.swarm.service.id=s1,com.docker.swarm.task.id=t1 hello\n")
+	data := buildFrame(
+		1,
+		"2024-01-01T00:00:00.000000000Z com.docker.swarm.node.id=n1,com.docker.swarm.service.id=s1,com.docker.swarm.task.id=t1 hello\n",
+	)
 	lines, err := ParseDockerLogs(bytes.NewReader(data))
 	if err != nil {
 		t.Fatal(err)

@@ -48,14 +48,22 @@ func DiffServiceSpecs(prev, curr *swarm.ServiceSpec) []SpecChange {
 	prevContainer := prev.TaskTemplate.ContainerSpec
 	currContainer := curr.TaskTemplate.ContainerSpec
 	if prevContainer != nil && currContainer != nil {
-		add("Command", strings.Join(prevContainer.Command, " "), strings.Join(currContainer.Command, " "))
+		add(
+			"Command",
+			strings.Join(prevContainer.Command, " "),
+			strings.Join(currContainer.Command, " "),
+		)
 		add("Args", strings.Join(prevContainer.Args, " "), strings.Join(currContainer.Args, " "))
 		add("User", prevContainer.User, currContainer.User)
 		add("Dir", prevContainer.Dir, currContainer.Dir)
 		add("Hostname", prevContainer.Hostname, currContainer.Hostname)
 
-		changes = append(changes, diffLabels("Env", envToMap(prevContainer.Env), envToMap(currContainer.Env))...)
-		changes = append(changes, diffLabels("Label", prevContainer.Labels, currContainer.Labels)...)
+		changes = append(
+			changes,
+			diffLabels("Env", envToMap(prevContainer.Env), envToMap(currContainer.Env))...)
+		changes = append(
+			changes,
+			diffLabels("Label", prevContainer.Labels, currContainer.Labels)...)
 		changes = append(changes, diffMounts(prevContainer.Mounts, currContainer.Mounts)...)
 
 		changes = append(changes, diffSets("Config",
@@ -76,7 +84,9 @@ func DiffServiceSpecs(prev, curr *swarm.ServiceSpec) []SpecChange {
 		portKeys(prev.EndpointSpec), portKeys(curr.EndpointSpec))...)
 
 	// Resources
-	changes = append(changes, diffResources(prev.TaskTemplate.Resources, curr.TaskTemplate.Resources)...)
+	changes = append(
+		changes,
+		diffResources(prev.TaskTemplate.Resources, curr.TaskTemplate.Resources)...)
 
 	// Placement constraints
 	var prevConstraints, currConstraints []string
@@ -225,7 +235,13 @@ func diffMounts(prev, curr []mount.Mount) []SpecChange {
 	for target := range currByTarget {
 		if _, ok := prevByTarget[target]; !ok {
 			cm := currByTarget[target]
-			changes = append(changes, SpecChange{Field: "Mount added", New: fmt.Sprintf("%s → %s (%s)", cm.Source, target, cm.Type)})
+			changes = append(
+				changes,
+				SpecChange{
+					Field: "Mount added",
+					New:   fmt.Sprintf("%s → %s (%s)", cm.Source, target, cm.Type),
+				},
+			)
 		}
 	}
 	return changes
@@ -251,7 +267,10 @@ func diffResources(prev, curr *swarm.ResourceRequirements) []SpecChange {
 	var changes []SpecChange
 	for _, p := range pairs {
 		if p.prev != p.curr {
-			changes = append(changes, SpecChange{Field: p.field, Old: p.format(p.prev), New: p.format(p.curr)})
+			changes = append(
+				changes,
+				SpecChange{Field: p.field, Old: p.format(p.prev), New: p.format(p.curr)},
+			)
 		}
 	}
 	return changes

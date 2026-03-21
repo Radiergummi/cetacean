@@ -202,7 +202,10 @@ func TestApplyJSONPatch_MultipleOps(t *testing.T) {
 }
 
 func TestTestFailedError(t *testing.T) {
-	_, err := applyJSONPatch(map[string]string{"k": "a"}, []PatchOp{{Op: "test", Path: "k", Value: "b"}})
+	_, err := applyJSONPatch(
+		map[string]string{"k": "a"},
+		[]PatchOp{{Op: "test", Path: "k", Value: "b"}},
+	)
 	var tfe *testFailedError
 	if !errors.As(err, &tfe) {
 		t.Fatal("expected testFailedError")

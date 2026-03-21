@@ -105,7 +105,11 @@ func (b *Broadcaster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	b.serveSSE(w, r, match)
 }
 
-func (b *Broadcaster) serveSSE(w http.ResponseWriter, r *http.Request, match func(cache.Event) bool) {
+func (b *Broadcaster) serveSSE(
+	w http.ResponseWriter,
+	r *http.Request,
+	match func(cache.Event) bool,
+) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		writeProblem(w, r, http.StatusInternalServerError, "streaming not supported")

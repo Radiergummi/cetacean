@@ -86,92 +86,94 @@ export function AvailabilityEditor({ nodeId, current }: { nodeId: string; curren
   const cardValue = (
     <>
       {availabilityOptions.find(({ value: v }) => v === current)?.title ?? current}
-      {canEdit && <Popover
-        open={open}
-        onOpenChange={handleOpenChange}
-        modal
-      >
-        <PopoverTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              title="Edit availability"
-            >
-              <Pencil className="size-3.5" />
-            </Button>
-          }
-        />
-        <PopoverContent
-          className="w-72"
-          align="end"
+      {canEdit && (
+        <Popover
+          open={open}
+          onOpenChange={handleOpenChange}
+          modal
         >
-          <div className="mb-3 flex flex-col gap-2">
-            {availabilityOptions.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setValue(option.value)}
-                disabled={action.loading}
-                className={cn(
-                  "flex items-start gap-3 rounded-lg border p-3 text-left transition-colors",
-                  value === option.value
-                    ? "border-primary bg-primary/5 ring-1 ring-primary"
-                    : "border-border hover:border-muted-foreground/40",
-                  action.loading && "pointer-events-none opacity-50",
-                )}
+          <PopoverTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                title="Edit availability"
               >
-                <option.icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-
-                <div className="flex-1">
-                  <div className="text-sm font-medium">{option.title}</div>
-                  <div className="text-xs text-muted-foreground">{option.description}</div>
-                </div>
-
-                <div
+                <Pencil className="size-3.5" />
+              </Button>
+            }
+          />
+          <PopoverContent
+            className="w-72"
+            align="end"
+          >
+            <div className="mb-3 flex flex-col gap-2">
+              {availabilityOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setValue(option.value)}
+                  disabled={action.loading}
                   className={cn(
-                    "mt-0.5 size-4 shrink-0 rounded-full border-2 transition-colors",
+                    "flex items-start gap-3 rounded-lg border p-3 text-left transition-colors",
                     value === option.value
-                      ? "border-primary bg-primary"
-                      : "border-muted-foreground/40",
+                      ? "border-primary bg-primary/5 ring-1 ring-primary"
+                      : "border-border hover:border-muted-foreground/40",
+                    action.loading && "pointer-events-none opacity-50",
                   )}
                 >
-                  {value === option.value && (
-                    <div className="flex size-full items-center justify-center">
-                      <div className="size-1.5 rounded-full bg-primary-foreground" />
-                    </div>
-                  )}
-                </div>
-              </button>
-            ))}
-          </div>
+                  <option.icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
 
-          {action.error && (
-            <p className="mb-2 text-xs text-red-600 dark:text-red-400">{action.error}</p>
-          )}
+                  <div className="flex-1">
+                    <div className="text-sm font-medium">{option.title}</div>
+                    <div className="text-xs text-muted-foreground">{option.description}</div>
+                  </div>
 
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              className="flex-1"
-              onClick={() => void save()}
-              disabled={action.loading}
-            >
-              {action.loading && <Spinner className="size-3" />}
-              Apply
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-1"
-              onClick={() => handleOpenChange(false)}
-              disabled={action.loading}
-            >
-              Cancel
-            </Button>
-          </div>
-        </PopoverContent>
-      </Popover>}
+                  <div
+                    className={cn(
+                      "mt-0.5 size-4 shrink-0 rounded-full border-2 transition-colors",
+                      value === option.value
+                        ? "border-primary bg-primary"
+                        : "border-muted-foreground/40",
+                    )}
+                  >
+                    {value === option.value && (
+                      <div className="flex size-full items-center justify-center">
+                        <div className="size-1.5 rounded-full bg-primary-foreground" />
+                      </div>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {action.error && (
+              <p className="mb-2 text-xs text-red-600 dark:text-red-400">{action.error}</p>
+            )}
+
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                className="flex-1"
+                onClick={() => void save()}
+                disabled={action.loading}
+              >
+                {action.loading && <Spinner className="size-3" />}
+                Apply
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => handleOpenChange(false)}
+                disabled={action.loading}
+              >
+                Cancel
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+      )}
     </>
   );
 

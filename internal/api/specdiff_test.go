@@ -45,11 +45,15 @@ func TestDiffServiceSpecs_ImageChange(t *testing.T) {
 func TestDiffServiceSpecs_ReplicaChange(t *testing.T) {
 	prev := &swarm.ServiceSpec{
 		TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{Image: "nginx"}},
-		Mode:         swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: ptr(uint64(3))}},
+		Mode: swarm.ServiceMode{
+			Replicated: &swarm.ReplicatedService{Replicas: ptr(uint64(3))},
+		},
 	}
 	curr := &swarm.ServiceSpec{
 		TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{Image: "nginx"}},
-		Mode:         swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: ptr(uint64(5))}},
+		Mode: swarm.ServiceMode{
+			Replicated: &swarm.ReplicatedService{Replicas: ptr(uint64(5))},
+		},
 	}
 	changes := DiffServiceSpecs(prev, curr)
 	assertChange(t, changes, "Replicas", "3", "5")

@@ -84,7 +84,9 @@ func extractSPIFFEID(uris []*url.URL) (string, error) {
 			continue
 		}
 		if spiffeURI != nil {
-			return "", fmt.Errorf("certificate contains multiple SPIFFE URI SANs; X.509-SVID requires exactly one")
+			return "", fmt.Errorf(
+				"certificate contains multiple SPIFFE URI SANs; X.509-SVID requires exactly one",
+			)
 		}
 		spiffeURI = uri
 	}

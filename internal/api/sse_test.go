@@ -308,10 +308,24 @@ func TestSSE_ResourceMatcher_Service(t *testing.T) {
 	if !match(cache.Event{Type: "service", Action: "update", ID: "svc1"}) {
 		t.Error("should match direct service event")
 	}
-	if !match(cache.Event{Type: "task", Action: "update", ID: "t1", Resource: swarm.Task{ServiceID: "svc1"}}) {
+	if !match(
+		cache.Event{
+			Type:     "task",
+			Action:   "update",
+			ID:       "t1",
+			Resource: swarm.Task{ServiceID: "svc1"},
+		},
+	) {
 		t.Error("should match task for this service")
 	}
-	if match(cache.Event{Type: "task", Action: "update", ID: "t2", Resource: swarm.Task{ServiceID: "svc2"}}) {
+	if match(
+		cache.Event{
+			Type:     "task",
+			Action:   "update",
+			ID:       "t2",
+			Resource: swarm.Task{ServiceID: "svc2"},
+		},
+	) {
 		t.Error("should not match task for different service")
 	}
 }
@@ -321,10 +335,14 @@ func TestSSE_ResourceMatcher_Node(t *testing.T) {
 	if !match(cache.Event{Type: "node", Action: "update", ID: "n1"}) {
 		t.Error("should match direct node event")
 	}
-	if !match(cache.Event{Type: "task", Action: "update", ID: "t1", Resource: swarm.Task{NodeID: "n1"}}) {
+	if !match(
+		cache.Event{Type: "task", Action: "update", ID: "t1", Resource: swarm.Task{NodeID: "n1"}},
+	) {
 		t.Error("should match task on this node")
 	}
-	if match(cache.Event{Type: "task", Action: "update", ID: "t2", Resource: swarm.Task{NodeID: "n2"}}) {
+	if match(
+		cache.Event{Type: "task", Action: "update", ID: "t2", Resource: swarm.Task{NodeID: "n2"}},
+	) {
 		t.Error("should not match task on different node")
 	}
 }

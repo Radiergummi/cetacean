@@ -1,5 +1,6 @@
 import { api } from "../../api/client";
 import type { SearchResourceType, SearchResponse, SearchResult } from "../../api/types";
+import { useOperationsLevel } from "../../hooks/useOperationsLevel";
 import { getActions, matchAction, type PaletteAction, type PaletteStep } from "../../lib/actions";
 import { resourcePath, statusColor, typeLabels, typeOrder } from "../../lib/searchConstants";
 import { getErrorMessage } from "../../lib/utils";
@@ -10,7 +11,6 @@ import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { useOperationsLevel } from "../../hooks/useOperationsLevel";
 
 function StateOrb({ state }: { state: string }) {
   if (state === "updating") {
@@ -113,7 +113,10 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   // Action mode state
   const { level: operationsLevel } = useOperationsLevel();
   const actions = useMemo(
-    () => getActions().filter(({ requiredLevel }) => requiredLevel === undefined || operationsLevel >= requiredLevel),
+    () =>
+      getActions().filter(
+        ({ requiredLevel }) => requiredLevel === undefined || operationsLevel >= requiredLevel,
+      ),
     [operationsLevel],
   );
   const [activeAction, setActiveAction] = useState<PaletteAction | null>(null);

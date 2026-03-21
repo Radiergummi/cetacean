@@ -95,7 +95,8 @@ func TestParseFlags_AllFlags(t *testing.T) {
 	if flags.OIDCClientSecret == nil || *flags.OIDCClientSecret != "my-secret" {
 		t.Error("OIDCClientSecret not set correctly")
 	}
-	if flags.OIDCRedirectURL == nil || *flags.OIDCRedirectURL != "https://app.example.com/auth/callback" {
+	if flags.OIDCRedirectURL == nil ||
+		*flags.OIDCRedirectURL != "https://app.example.com/auth/callback" {
 		t.Error("OIDCRedirectURL not set correctly")
 	}
 	if flags.OIDCScopes == nil || *flags.OIDCScopes != "openid,profile" {

@@ -220,7 +220,9 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
               <div
                 className={cn(
                   "mt-0.5 size-4 shrink-0 rounded-full border-2 transition-colors",
-                  mode === "replicated" ? "border-primary bg-primary" : "border-muted-foreground/40",
+                  mode === "replicated"
+                    ? "border-primary bg-primary"
+                    : "border-muted-foreground/40",
                 )}
               >
                 {mode === "replicated" && (

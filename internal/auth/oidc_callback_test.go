@@ -54,20 +54,23 @@ func newMockIDP(t *testing.T, clientID string) *mockIDPServer {
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		endSession := ""
-		if idp.endSessionEndpoint {
-			endSession = fmt.Sprintf(`, "end_session_endpoint": %q`, idp.server.URL+"/logout")
-		}
-		fmt.Fprintf(w, `{
+	mux.HandleFunc(
+		"/.well-known/openid-configuration",
+		func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			endSession := ""
+			if idp.endSessionEndpoint {
+				endSession = fmt.Sprintf(`, "end_session_endpoint": %q`, idp.server.URL+"/logout")
+			}
+			fmt.Fprintf(w, `{
 			"issuer": %q,
 			"authorization_endpoint": %q,
 			"token_endpoint": %q,
 			"jwks_uri": %q,
 			"authorization_response_iss_parameter_supported": %v%s
 		}`, idp.server.URL, idp.server.URL+"/authorize", idp.server.URL+"/token", idp.server.URL+"/jwks", idp.issSupported, endSession)
-	})
+		},
+	)
 
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
 		jwk := jose.JSONWebKey{
@@ -131,7 +134,13 @@ func (idp *mockIDPServer) issueIDToken(t *testing.T, nonce string, expiry time.T
 
 // issueIDTokenMultiAud creates a signed JWT with multiple audiences and an
 // optional azp claim for testing OIDC Core Section 3.1.3.7 compliance.
-func (idp *mockIDPServer) issueIDTokenMultiAud(t *testing.T, nonce string, expiry time.Time, audiences []string, azp string) string {
+func (idp *mockIDPServer) issueIDTokenMultiAud(
+	t *testing.T,
+	nonce string,
+	expiry time.Time,
+	audiences []string,
+	azp string,
+) string {
 	t.Helper()
 
 	signer, err := jose.NewSigner(
@@ -204,7 +213,10 @@ func newProviderWithIDP(t *testing.T, idp *mockIDPServer, redirectURL string) *O
 
 // initiateLogin performs a login redirect and returns the flow cookies + the
 // nonce and state values embedded in them.
-func initiateLogin(t *testing.T, p *OIDCProvider) (cookies []*http.Cookie, state, nonce, verifier string) {
+func initiateLogin(
+	t *testing.T,
+	p *OIDCProvider,
+) (cookies []*http.Cookie, state, nonce, verifier string) {
 	t.Helper()
 
 	r := httptest.NewRequest(http.MethodGet, "/auth/login?redirect=/dashboard", nil)
@@ -286,7 +298,10 @@ func TestCallback_HappyPath(t *testing.T) {
 	// Auth flow cookies should be cleared.
 	for _, c := range resp.Cookies() {
 		switch c.Name {
-		case "cetacean_auth_state", "cetacean_auth_nonce", "cetacean_auth_verifier", "cetacean_auth_redirect":
+		case "cetacean_auth_state",
+			"cetacean_auth_nonce",
+			"cetacean_auth_verifier",
+			"cetacean_auth_redirect":
 			if c.MaxAge != -1 {
 				t.Errorf("flow cookie %q not cleared (MaxAge=%d)", c.Name, c.MaxAge)
 			}
@@ -369,7 +384,11 @@ func TestCallback_SessionTTL_CappedAtMax(t *testing.T) {
 	}
 	// MaxAge should be at most maxSessionTTL.
 	if sessionCookie.MaxAge > int(maxSessionTTL.Seconds()) {
-		t.Errorf("session MaxAge = %d, want <= %d", sessionCookie.MaxAge, int(maxSessionTTL.Seconds()))
+		t.Errorf(
+			"session MaxAge = %d, want <= %d",
+			sessionCookie.MaxAge,
+			int(maxSessionTTL.Seconds()),
+		)
 	}
 }
 
@@ -396,7 +415,11 @@ func TestCallback_SessionTTL_UsesIDTokenExpiry(t *testing.T) {
 	}
 	// Allow 5s tolerance for test execution time.
 	if sessionCookie.MaxAge > int((30*time.Minute + 5*time.Second).Seconds()) {
-		t.Errorf("session MaxAge = %d, expected ~%d", sessionCookie.MaxAge, int((30 * time.Minute).Seconds()))
+		t.Errorf(
+			"session MaxAge = %d, expected ~%d",
+			sessionCookie.MaxAge,
+			int((30 * time.Minute).Seconds()),
+		)
 	}
 }
 
@@ -440,7 +463,11 @@ func TestCallback_RFC9207_IssuerMismatch(t *testing.T) {
 	p.handleCallback(w, r)
 
 	if w.Result().StatusCode != http.StatusBadRequest {
-		t.Errorf("mismatched iss: status = %d, want %d", w.Result().StatusCode, http.StatusBadRequest)
+		t.Errorf(
+			"mismatched iss: status = %d, want %d",
+			w.Result().StatusCode,
+			http.StatusBadRequest,
+		)
 	}
 }
 
@@ -480,7 +507,11 @@ func TestCallback_StateMismatch(t *testing.T) {
 	p.handleCallback(w, r)
 
 	if w.Result().StatusCode != http.StatusBadRequest {
-		t.Errorf("state mismatch: status = %d, want %d", w.Result().StatusCode, http.StatusBadRequest)
+		t.Errorf(
+			"state mismatch: status = %d, want %d",
+			w.Result().StatusCode,
+			http.StatusBadRequest,
+		)
 	}
 }
 
@@ -498,7 +529,11 @@ func TestCallback_MissingStateCookie(t *testing.T) {
 	p.handleCallback(w, r)
 
 	if w.Result().StatusCode != http.StatusBadRequest {
-		t.Errorf("missing state cookie: status = %d, want %d", w.Result().StatusCode, http.StatusBadRequest)
+		t.Errorf(
+			"missing state cookie: status = %d, want %d",
+			w.Result().StatusCode,
+			http.StatusBadRequest,
+		)
 	}
 }
 
@@ -522,7 +557,11 @@ func TestCallback_MissingNonceCookie(t *testing.T) {
 	p.handleCallback(w, r)
 
 	if w.Result().StatusCode != http.StatusBadRequest {
-		t.Errorf("missing nonce cookie: status = %d, want %d", w.Result().StatusCode, http.StatusBadRequest)
+		t.Errorf(
+			"missing nonce cookie: status = %d, want %d",
+			w.Result().StatusCode,
+			http.StatusBadRequest,
+		)
 	}
 }
 
@@ -546,7 +585,11 @@ func TestCallback_MissingVerifierCookie(t *testing.T) {
 	p.handleCallback(w, r)
 
 	if w.Result().StatusCode != http.StatusBadRequest {
-		t.Errorf("missing verifier cookie: status = %d, want %d", w.Result().StatusCode, http.StatusBadRequest)
+		t.Errorf(
+			"missing verifier cookie: status = %d, want %d",
+			w.Result().StatusCode,
+			http.StatusBadRequest,
+		)
 	}
 }
 
@@ -566,7 +609,11 @@ func TestCallback_NonceMismatch(t *testing.T) {
 	p.handleCallback(w, r)
 
 	if w.Result().StatusCode != http.StatusBadRequest {
-		t.Errorf("nonce mismatch: status = %d, want %d", w.Result().StatusCode, http.StatusBadRequest)
+		t.Errorf(
+			"nonce mismatch: status = %d, want %d",
+			w.Result().StatusCode,
+			http.StatusBadRequest,
+		)
 	}
 }
 
@@ -589,7 +636,11 @@ func TestCallback_TokenExchangeFailure(t *testing.T) {
 	p.handleCallback(w, r)
 
 	if w.Result().StatusCode != http.StatusInternalServerError {
-		t.Errorf("token exchange failure: status = %d, want %d", w.Result().StatusCode, http.StatusInternalServerError)
+		t.Errorf(
+			"token exchange failure: status = %d, want %d",
+			w.Result().StatusCode,
+			http.StatusInternalServerError,
+		)
 	}
 }
 
@@ -611,7 +662,11 @@ func TestCallback_MissingIDToken(t *testing.T) {
 	p.handleCallback(w, r)
 
 	if w.Result().StatusCode != http.StatusInternalServerError {
-		t.Errorf("missing id_token: status = %d, want %d", w.Result().StatusCode, http.StatusInternalServerError)
+		t.Errorf(
+			"missing id_token: status = %d, want %d",
+			w.Result().StatusCode,
+			http.StatusInternalServerError,
+		)
 	}
 }
 
@@ -656,7 +711,11 @@ func TestCallback_InvalidIDTokenSignature(t *testing.T) {
 	p.handleCallback(w, r)
 
 	if w.Result().StatusCode != http.StatusInternalServerError {
-		t.Errorf("invalid signature: status = %d, want %d", w.Result().StatusCode, http.StatusInternalServerError)
+		t.Errorf(
+			"invalid signature: status = %d, want %d",
+			w.Result().StatusCode,
+			http.StatusInternalServerError,
+		)
 	}
 }
 
@@ -676,7 +735,11 @@ func TestCallback_ExpiredIDToken(t *testing.T) {
 	p.handleCallback(w, r)
 
 	if w.Result().StatusCode != http.StatusInternalServerError {
-		t.Errorf("expired id_token: status = %d, want %d", w.Result().StatusCode, http.StatusInternalServerError)
+		t.Errorf(
+			"expired id_token: status = %d, want %d",
+			w.Result().StatusCode,
+			http.StatusInternalServerError,
+		)
 	}
 }
 
@@ -702,7 +765,11 @@ func TestCallback_MissingCode(t *testing.T) {
 	// The code reaches the Exchange call with an empty code, which the token
 	// endpoint rejects, resulting in a 500 from handleCallback.
 	if w.Result().StatusCode != http.StatusInternalServerError {
-		t.Errorf("missing code: status = %d, want %d", w.Result().StatusCode, http.StatusInternalServerError)
+		t.Errorf(
+			"missing code: status = %d, want %d",
+			w.Result().StatusCode,
+			http.StatusInternalServerError,
+		)
 	}
 }
 
@@ -984,7 +1051,11 @@ func TestAuthenticate_ExpiredBearerToken(t *testing.T) {
 		t.Fatalf("expected AuthError, got %T: %v", err, err)
 	}
 	if authErr.WWWAuthenticate != `Bearer error="invalid_token"` {
-		t.Errorf("WWW-Authenticate = %q, want %q", authErr.WWWAuthenticate, `Bearer error="invalid_token"`)
+		t.Errorf(
+			"WWW-Authenticate = %q, want %q",
+			authErr.WWWAuthenticate,
+			`Bearer error="invalid_token"`,
+		)
 	}
 }
 
@@ -1035,7 +1106,11 @@ func TestLogout_RFC9722_RedirectsToEndSessionEndpoint(t *testing.T) {
 	p.handleCallback(callbackRec, callbackReq)
 
 	if callbackRec.Result().StatusCode != http.StatusFound {
-		t.Fatalf("callback: status = %d, want %d", callbackRec.Result().StatusCode, http.StatusFound)
+		t.Fatalf(
+			"callback: status = %d, want %d",
+			callbackRec.Result().StatusCode,
+			http.StatusFound,
+		)
 	}
 
 	sessionCookie := findCookie(callbackRec.Result().Cookies(), cookieName)
@@ -1200,7 +1275,11 @@ func TestCallback_RFC9207_IssRequired_MissingIss_Rejected(t *testing.T) {
 	p.handleCallback(w, r)
 
 	if w.Result().StatusCode != http.StatusBadRequest {
-		t.Errorf("missing iss (required): status = %d, want %d", w.Result().StatusCode, http.StatusBadRequest)
+		t.Errorf(
+			"missing iss (required): status = %d, want %d",
+			w.Result().StatusCode,
+			http.StatusBadRequest,
+		)
 	}
 }
 
@@ -1225,7 +1304,11 @@ func TestCallback_RFC9207_IssRequired_ValidIss_Accepted(t *testing.T) {
 	p.handleCallback(w, r)
 
 	if w.Result().StatusCode != http.StatusFound {
-		t.Errorf("valid iss (required): status = %d, want %d", w.Result().StatusCode, http.StatusFound)
+		t.Errorf(
+			"valid iss (required): status = %d, want %d",
+			w.Result().StatusCode,
+			http.StatusFound,
+		)
 	}
 }
 
@@ -1249,7 +1332,11 @@ func TestCallback_RFC9207_IssRequired_WrongIss_Rejected(t *testing.T) {
 	p.handleCallback(w, r)
 
 	if w.Result().StatusCode != http.StatusBadRequest {
-		t.Errorf("wrong iss (required): status = %d, want %d", w.Result().StatusCode, http.StatusBadRequest)
+		t.Errorf(
+			"wrong iss (required): status = %d, want %d",
+			w.Result().StatusCode,
+			http.StatusBadRequest,
+		)
 	}
 }
 
@@ -1273,7 +1360,11 @@ func TestCallback_RFC9207_IssNotRequired_MissingIss_Accepted(t *testing.T) {
 	p.handleCallback(w, r)
 
 	if w.Result().StatusCode != http.StatusFound {
-		t.Errorf("missing iss (not required): status = %d, want %d", w.Result().StatusCode, http.StatusFound)
+		t.Errorf(
+			"missing iss (not required): status = %d, want %d",
+			w.Result().StatusCode,
+			http.StatusFound,
+		)
 	}
 }
 

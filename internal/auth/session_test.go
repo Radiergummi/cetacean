@@ -211,7 +211,9 @@ func TestNewSessionCodecWithKey_InvalidLength(t *testing.T) {
 }
 
 func TestNewSessionCodecWithKey_InvalidHex(t *testing.T) {
-	_, err := NewSessionCodecWithKey("not-hex-at-all-not-hex-at-all-not-hex-at-all-not-hex-at-all-zzzz")
+	_, err := NewSessionCodecWithKey(
+		"not-hex-at-all-not-hex-at-all-not-hex-at-all-not-hex-at-all-zzzz",
+	)
 	if err == nil {
 		t.Fatal("expected error for invalid hex")
 	}

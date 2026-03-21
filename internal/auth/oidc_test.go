@@ -21,15 +21,18 @@ func newMockOIDCServer(t *testing.T) *httptest.Server {
 
 	var server *httptest.Server
 
-	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{
+	mux.HandleFunc(
+		"/.well-known/openid-configuration",
+		func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{
 			"issuer": %q,
 			"authorization_endpoint": %q,
 			"token_endpoint": %q,
 			"jwks_uri": %q
 		}`, server.URL, server.URL+"/authorize", server.URL+"/token", server.URL+"/jwks")
-	})
+		},
+	)
 
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -525,7 +528,11 @@ func TestLogin_RejectsAbsoluteURL(t *testing.T) {
 	for _, c := range w.Result().Cookies() {
 		if c.Name == "cetacean_auth_redirect" {
 			if c.Value != "/" {
-				t.Errorf("redirect cookie = %q, want %q (absolute URL should be rejected)", c.Value, "/")
+				t.Errorf(
+					"redirect cookie = %q, want %q (absolute URL should be rejected)",
+					c.Value,
+					"/",
+				)
 			}
 			return
 		}
@@ -544,7 +551,11 @@ func TestLogin_RejectsProtocolRelativeURL(t *testing.T) {
 	for _, c := range w.Result().Cookies() {
 		if c.Name == "cetacean_auth_redirect" {
 			if c.Value != "/" {
-				t.Errorf("redirect cookie = %q, want %q (protocol-relative URL should be rejected)", c.Value, "/")
+				t.Errorf(
+					"redirect cookie = %q, want %q (protocol-relative URL should be rejected)",
+					c.Value,
+					"/",
+				)
 			}
 			return
 		}
@@ -563,7 +574,11 @@ func TestLogin_RejectsBackslashURL(t *testing.T) {
 	for _, c := range w.Result().Cookies() {
 		if c.Name == "cetacean_auth_redirect" {
 			if c.Value != "/" {
-				t.Errorf("redirect cookie = %q, want %q (backslash URL should be rejected)", c.Value, "/")
+				t.Errorf(
+					"redirect cookie = %q, want %q (backslash URL should be rejected)",
+					c.Value,
+					"/",
+				)
 			}
 			return
 		}
@@ -641,7 +656,11 @@ func TestCallback_IdPError_ClearsCookies(t *testing.T) {
 	mux := http.NewServeMux()
 	p.RegisterRoutes(mux)
 
-	r := httptest.NewRequest(http.MethodGet, "/auth/callback?error=access_denied&error_description=user+denied", nil)
+	r := httptest.NewRequest(
+		http.MethodGet,
+		"/auth/callback?error=access_denied&error_description=user+denied",
+		nil,
+	)
 	addAuthFlowCookies(r, "some-state", "some-nonce", "some-verifier", "/nodes")
 	w := httptest.NewRecorder()
 
@@ -660,7 +679,11 @@ func TestCallback_IssuerMismatch_ClearsCookies(t *testing.T) {
 	mux := http.NewServeMux()
 	p.RegisterRoutes(mux)
 
-	r := httptest.NewRequest(http.MethodGet, "/auth/callback?code=abc&state=test-state&iss=https://evil.example.com", nil)
+	r := httptest.NewRequest(
+		http.MethodGet,
+		"/auth/callback?code=abc&state=test-state&iss=https://evil.example.com",
+		nil,
+	)
 	addAuthFlowCookies(r, "test-state", "some-nonce", "some-verifier", "/")
 	w := httptest.NewRecorder()
 

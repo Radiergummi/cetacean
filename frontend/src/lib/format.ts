@@ -2,7 +2,7 @@
  *  Locale-aware number formatting with N decimal places.
  */
 export function formatNumber(value: number, maximumFractionDigits = 0): string {
-  return value.toLocaleString(undefined, {maximumFractionDigits});
+  return value.toLocaleString(undefined, { maximumFractionDigits });
 }
 
 /**
@@ -66,7 +66,7 @@ export function formatDuration(nanoseconds: number, precise = false): string {
   const min = sec / 60;
 
   if (precise) {
-    return new Intl.DurationFormat(undefined, {style: "narrow"}).format({
+    return new Intl.DurationFormat(undefined, { style: "narrow" }).format({
       hours: Math.floor(sec / 3600),
       minutes: Math.floor((sec % 3600) / 60),
       seconds: Math.round(sec % 60),

@@ -73,19 +73,20 @@ export function PortsEditor({ serviceId, ports, onSaved }: PortsEditorProps) {
     }
   }
 
-  const controls = !editing && canEdit ? (
-    <Button
-      variant="outline"
-      size="xs"
-      onClick={(event: React.MouseEvent) => {
-        event.stopPropagation();
-        openEdit();
-      }}
-    >
-      <Pencil className="size-3" />
-      Edit
-    </Button>
-  ) : undefined;
+  const controls =
+    !editing && canEdit ? (
+      <Button
+        variant="outline"
+        size="xs"
+        onClick={(event: React.MouseEvent) => {
+          event.stopPropagation();
+          openEdit();
+        }}
+      >
+        <Pencil className="size-3" />
+        Edit
+      </Button>
+    ) : undefined;
 
   return (
     <CollapsibleSection
@@ -105,82 +106,86 @@ export function PortsEditor({ serviceId, ports, onSaved }: PortsEditorProps) {
               <p className="text-sm">Add a port mapping</p>
             </button>
           ) : (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {draft.map((port, index) => (
-              <div
-                key={index}
-                className="relative rounded-lg border p-3"
-              >
-                <Button
-                  variant="outline"
-                  size="xs"
-                  className="absolute top-2 right-2"
-                  onClick={() => removePort(index)}
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {draft.map((port, index) => (
+                <div
+                  key={index}
+                  className="relative rounded-lg border p-3"
                 >
-                  <Trash2 className="size-3" />
-                </Button>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    className="absolute top-2 right-2"
+                    onClick={() => removePort(index)}
+                  >
+                    <Trash2 className="size-3" />
+                  </Button>
 
-                <div className="grid grid-cols-2 gap-3 pr-10">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-muted-foreground">Protocol</label>
+                  <div className="grid grid-cols-2 gap-3 pr-10">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-muted-foreground">Protocol</label>
 
-                    <select
-                      value={port.Protocol}
-                      onChange={(event) => updatePort(index, "Protocol", event.target.value)}
-                      className="flex h-8 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                    >
-                      <option value="tcp">TCP</option>
-                      <option value="udp">UDP</option>
-                      <option value="sctp">SCTP</option>
-                    </select>
-                  </div>
+                      <select
+                        value={port.Protocol}
+                        onChange={(event) => updatePort(index, "Protocol", event.target.value)}
+                        className="flex h-8 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                      >
+                        <option value="tcp">TCP</option>
+                        <option value="udp">UDP</option>
+                        <option value="sctp">SCTP</option>
+                      </select>
+                    </div>
 
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-muted-foreground">Publish mode</label>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-muted-foreground">
+                        Publish mode
+                      </label>
 
-                    <select
-                      value={port.PublishMode}
-                      onChange={(event) => updatePort(index, "PublishMode", event.target.value)}
-                      className="flex h-8 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                    >
-                      <option value="ingress">Ingress (load-balanced)</option>
-                      <option value="host">Host (direct)</option>
-                    </select>
-                  </div>
+                      <select
+                        value={port.PublishMode}
+                        onChange={(event) => updatePort(index, "PublishMode", event.target.value)}
+                        className="flex h-8 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                      >
+                        <option value="ingress">Ingress (load-balanced)</option>
+                        <option value="host">Host (direct)</option>
+                      </select>
+                    </div>
 
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-muted-foreground">Container port</label>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-muted-foreground">
+                        Container port
+                      </label>
 
-                    <Input
-                      type="number"
-                      min={1}
-                      max={65535}
-                      value={port.TargetPort || ""}
-                      onChange={(event) =>
-                        updatePort(index, "TargetPort", Number(event.target.value) || 0)
-                      }
-                      placeholder="80"
-                    />
-                  </div>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={65535}
+                        value={port.TargetPort || ""}
+                        onChange={(event) =>
+                          updatePort(index, "TargetPort", Number(event.target.value) || 0)
+                        }
+                        placeholder="80"
+                      />
+                    </div>
 
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-muted-foreground">Host port</label>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-muted-foreground">Host port</label>
 
-                    <Input
-                      type="number"
-                      min={0}
-                      max={65535}
-                      value={port.PublishedPort || ""}
-                      onChange={(event) =>
-                        updatePort(index, "PublishedPort", Number(event.target.value) || 0)
-                      }
-                      placeholder="Auto-assign"
-                    />
+                      <Input
+                        type="number"
+                        min={0}
+                        max={65535}
+                        value={port.PublishedPort || ""}
+                        onChange={(event) =>
+                          updatePort(index, "PublishedPort", Number(event.target.value) || 0)
+                        }
+                        placeholder="Auto-assign"
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
           )}
 
           {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
@@ -219,7 +224,11 @@ export function PortsEditor({ serviceId, ports, onSaved }: PortsEditorProps) {
       ) : ports.length === 0 ? (
         <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed py-6 text-center text-muted-foreground">
           <p className="text-sm">No published ports</p>
-          {canEdit && <p className="text-xs">Click Edit to expose container ports to the swarm routing mesh.</p>}
+          {canEdit && (
+            <p className="text-xs">
+              Click Edit to expose container ports to the swarm routing mesh.
+            </p>
+          )}
         </div>
       ) : (
         <div className="flex flex-wrap gap-2 rounded-lg border p-3">

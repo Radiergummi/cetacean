@@ -204,7 +204,12 @@ func TestSortItems(t *testing.T) {
 	sorted := sortItems(items, "name", "asc", accessors)
 
 	if sorted[0].Name != "Alice" || sorted[1].Name != "Bob" || sorted[2].Name != "Charlie" {
-		t.Errorf("expected [Alice, Bob, Charlie], got [%s, %s, %s]", sorted[0].Name, sorted[1].Name, sorted[2].Name)
+		t.Errorf(
+			"expected [Alice, Bob, Charlie], got [%s, %s, %s]",
+			sorted[0].Name,
+			sorted[1].Name,
+			sorted[2].Name,
+		)
 	}
 	// Original should be unchanged
 	if items[0].Name != "Charlie" {
@@ -221,7 +226,12 @@ func TestSortItems_Desc(t *testing.T) {
 	sorted := sortItems(items, "name", "desc", accessors)
 
 	if sorted[0].Name != "Charlie" || sorted[1].Name != "Bob" || sorted[2].Name != "Alice" {
-		t.Errorf("expected [Charlie, Bob, Alice], got [%s, %s, %s]", sorted[0].Name, sorted[1].Name, sorted[2].Name)
+		t.Errorf(
+			"expected [Charlie, Bob, Alice], got [%s, %s, %s]",
+			sorted[0].Name,
+			sorted[1].Name,
+			sorted[2].Name,
+		)
 	}
 }
 
@@ -234,6 +244,11 @@ func TestSortItems_InvalidKey(t *testing.T) {
 	sorted := sortItems(items, "unknown", "asc", accessors)
 
 	if sorted[0].Name != "Charlie" || sorted[1].Name != "Alice" || sorted[2].Name != "Bob" {
-		t.Errorf("expected original order preserved, got [%s, %s, %s]", sorted[0].Name, sorted[1].Name, sorted[2].Name)
+		t.Errorf(
+			"expected original order preserved, got [%s, %s, %s]",
+			sorted[0].Name,
+			sorted[1].Name,
+			sorted[2].Name,
+		)
 	}
 }

@@ -61,7 +61,7 @@ export default function SegmentedControl<T extends string>({
             key={segmentValue}
             value={segmentValue}
             disabled={disabled}
-            className="group/seg inline-flex cursor-pointer items-center gap-1.5 rounded-sm px-3 py-1 text-sm font-medium text-muted-foreground outline-none transition hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-default disabled:text-muted-foreground/40 data-pressed:bg-primary data-pressed:text-primary-foreground data-pressed:shadow-sm"
+            className="group/seg inline-flex cursor-pointer items-center gap-1.5 rounded-sm px-3 py-1 text-sm font-medium text-muted-foreground transition outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-default disabled:text-muted-foreground/40 data-pressed:bg-primary data-pressed:text-primary-foreground data-pressed:shadow-sm"
           >
             <span>{label}</span>
             {badge != null && (
@@ -80,7 +80,7 @@ export default function SegmentedControl<T extends string>({
         >
           <Menu.Trigger
             aria-current={isActive || undefined}
-            className="inline-flex cursor-pointer items-center gap-1 rounded-sm px-2 py-1 text-sm text-muted-foreground outline-none transition hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-current:bg-primary aria-current:text-primary-foreground aria-current:shadow-sm"
+            className="inline-flex cursor-pointer items-center gap-1 rounded-sm px-2 py-1 text-sm text-muted-foreground transition outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-current:bg-primary aria-current:text-primary-foreground aria-current:shadow-sm"
           >
             {overflowLabel ?? (activeOverflow ? <span>{activeOverflow.label}</span> : undefined)}
             {overflowIcon ?? <ChevronDown className="size-3" />}
@@ -108,7 +108,7 @@ export default function SegmentedControl<T extends string>({
                             value={segmentValue}
                             disabled={disabled}
                             closeOnClick
-                            className="flex w-full cursor-default items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-sm text-popover-foreground outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:pointer-events-none data-disabled:text-muted-foreground/40 data-checked:bg-accent data-checked:text-accent-foreground"
+                            className="flex w-full cursor-default items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-sm text-popover-foreground outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-checked:bg-accent data-checked:text-accent-foreground data-disabled:pointer-events-none data-disabled:text-muted-foreground/40"
                           >
                             <span>{label}</span>
                             {badge != null && (

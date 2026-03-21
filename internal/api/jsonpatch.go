@@ -71,7 +71,11 @@ func applyJSONPatch(m map[string]string, ops []PatchOp) (map[string]string, erro
 				return nil, &testFailedError{key: key, expected: op.Value, actual: v}
 			}
 		case "move", "copy":
-			return nil, fmt.Errorf("operation %d: %q is not supported for flat key-value maps", i, op.Op)
+			return nil, fmt.Errorf(
+				"operation %d: %q is not supported for flat key-value maps",
+				i,
+				op.Op,
+			)
 		default:
 			return nil, fmt.Errorf("operation %d: unknown operation %q", i, op.Op)
 		}

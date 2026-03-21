@@ -26,7 +26,12 @@ const maxPrometheusResponseBytes = 10 << 20
 
 // proxyTo sends a proxied request to the given Prometheus API path with the given params.
 // Does not read r.URL.Path — the caller determines the target path.
-func (p *PrometheusProxy) proxyTo(w http.ResponseWriter, r *http.Request, promPath string, params url.Values) {
+func (p *PrometheusProxy) proxyTo(
+	w http.ResponseWriter,
+	r *http.Request,
+	promPath string,
+	params url.Values,
+) {
 	targetURL := p.baseURL + promPath
 	if encoded := params.Encode(); encoded != "" {
 		targetURL += "?" + encoded

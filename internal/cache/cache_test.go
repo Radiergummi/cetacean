@@ -112,10 +112,34 @@ func TestCache_ListTasksByNode(t *testing.T) {
 
 func TestCache_RunningTaskCount(t *testing.T) {
 	c := New(nil)
-	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
-	c.SetTask(swarm.Task{ID: "t2", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateFailed}})
-	c.SetTask(swarm.Task{ID: "t3", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
-	c.SetTask(swarm.Task{ID: "t4", ServiceID: "svc2", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
+	c.SetTask(
+		swarm.Task{
+			ID:        "t1",
+			ServiceID: "svc1",
+			Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
+		},
+	)
+	c.SetTask(
+		swarm.Task{
+			ID:        "t2",
+			ServiceID: "svc1",
+			Status:    swarm.TaskStatus{State: swarm.TaskStateFailed},
+		},
+	)
+	c.SetTask(
+		swarm.Task{
+			ID:        "t3",
+			ServiceID: "svc1",
+			Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
+		},
+	)
+	c.SetTask(
+		swarm.Task{
+			ID:        "t4",
+			ServiceID: "svc2",
+			Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
+		},
+	)
 
 	if got := c.RunningTaskCount("svc1"); got != 2 {
 		t.Errorf("RunningTaskCount(svc1) = %d, want 2", got)
@@ -313,9 +337,19 @@ func TestCache_Stack_MultipleResourceTypes(t *testing.T) {
 	if !ok {
 		t.Fatal("expected stack to exist")
 	}
-	if len(stack.Services) != 1 || len(stack.Configs) != 1 || len(stack.Secrets) != 1 || len(stack.Networks) != 1 || len(stack.Volumes) != 1 {
-		t.Errorf("expected 1 of each resource, got services=%d configs=%d secrets=%d networks=%d volumes=%d",
-			len(stack.Services), len(stack.Configs), len(stack.Secrets), len(stack.Networks), len(stack.Volumes))
+	if len(stack.Services) != 1 || len(stack.Configs) != 1 || len(stack.Secrets) != 1 ||
+		len(stack.Networks) != 1 ||
+		len(stack.Volumes) != 1 {
+		t.Errorf(
+			"expected 1 of each resource, got services=%d configs=%d secrets=%d networks=%d volumes=%d",
+			len(
+				stack.Services,
+			),
+			len(stack.Configs),
+			len(stack.Secrets),
+			len(stack.Networks),
+			len(stack.Volumes),
+		)
 	}
 }
 
@@ -685,7 +719,14 @@ func TestCache_OnChange_AllTypes(t *testing.T) {
 	}
 	for i, exp := range expected {
 		if events[i].Type != exp.typ || events[i].Action != exp.action {
-			t.Errorf("event[%d]: expected %s/%s, got %s/%s", i, exp.typ, exp.action, events[i].Type, events[i].Action)
+			t.Errorf(
+				"event[%d]: expected %s/%s, got %s/%s",
+				i,
+				exp.typ,
+				exp.action,
+				events[i].Type,
+				events[i].Action,
+			)
 		}
 	}
 }
@@ -855,15 +896,39 @@ func TestCache_ListStackSummaries(t *testing.T) {
 	})
 
 	// Tasks: 2 running for svc1, 1 failed for svc2
-	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
-	c.SetTask(swarm.Task{ID: "t2", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
-	c.SetTask(swarm.Task{ID: "t3", ServiceID: "svc2", Status: swarm.TaskStatus{State: swarm.TaskStateFailed}})
+	c.SetTask(
+		swarm.Task{
+			ID:        "t1",
+			ServiceID: "svc1",
+			Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
+		},
+	)
+	c.SetTask(
+		swarm.Task{
+			ID:        "t2",
+			ServiceID: "svc1",
+			Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
+		},
+	)
+	c.SetTask(
+		swarm.Task{
+			ID:        "t3",
+			ServiceID: "svc2",
+			Status:    swarm.TaskStatus{State: swarm.TaskStateFailed},
+		},
+	)
 
 	// Config and network in same stack
 	c.SetConfig(swarm.Config{ID: "cfg1", Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{
 		Name: "myapp_config", Labels: map[string]string{"com.docker.stack.namespace": "myapp"},
 	}}})
-	c.SetNetwork(network.Summary{ID: "net1", Name: "myapp_default", Labels: map[string]string{"com.docker.stack.namespace": "myapp"}})
+	c.SetNetwork(
+		network.Summary{
+			ID:     "net1",
+			Name:   "myapp_default",
+			Labels: map[string]string{"com.docker.stack.namespace": "myapp"},
+		},
+	)
 
 	summaries := c.ListStackSummaries()
 	if len(summaries) != 1 {
@@ -908,7 +973,10 @@ func TestCache_ListStackSummaries(t *testing.T) {
 		t.Errorf("volumeCount=%d, want 0", s.VolumeCount)
 	}
 	if s.MemoryUsageBytes != 0 {
-		t.Errorf("memoryUsageBytes=%d, want 0 (populated by handler, not cache)", s.MemoryUsageBytes)
+		t.Errorf(
+			"memoryUsageBytes=%d, want 0 (populated by handler, not cache)",
+			s.MemoryUsageBytes,
+		)
 	}
 	if s.CPUUsagePercent != 0 {
 		t.Errorf("cpuUsagePercent=%f, want 0 (populated by handler, not cache)", s.CPUUsagePercent)
@@ -1148,7 +1216,12 @@ func TestCache_DeleteService_EmitsCrossRefEvents(t *testing.T) {
 		t.Errorf("event[0]: expected service/remove, got %s/%s", events[0].Type, events[0].Action)
 	}
 	if events[1].Type != "secret" || events[1].Action != "ref_changed" || events[1].ID != "sec1" {
-		t.Errorf("event[1]: expected secret/ref_changed/sec1, got %s/%s/%s", events[1].Type, events[1].Action, events[1].ID)
+		t.Errorf(
+			"event[1]: expected secret/ref_changed/sec1, got %s/%s/%s",
+			events[1].Type,
+			events[1].Action,
+			events[1].ID,
+		)
 	}
 }
 
@@ -1166,38 +1239,75 @@ func TestCache_SetService_NoRefChange_NoExtraEvents(t *testing.T) {
 func TestSnapshot_ConvergenceAndReservations(t *testing.T) {
 	c := New(nil)
 	c.SetNode(swarm.Node{
-		ID: "n1", Status: swarm.NodeStatus{State: swarm.NodeStateReady},
-		Spec:        swarm.NodeSpec{Availability: swarm.NodeAvailabilityDrain},
-		Description: swarm.NodeDescription{Resources: swarm.Resources{NanoCPUs: 4_000_000_000, MemoryBytes: 8_589_934_592}},
+		ID:     "n1",
+		Status: swarm.NodeStatus{State: swarm.NodeStateReady},
+		Spec:   swarm.NodeSpec{Availability: swarm.NodeAvailabilityDrain},
+		Description: swarm.NodeDescription{
+			Resources: swarm.Resources{NanoCPUs: 4_000_000_000, MemoryBytes: 8_589_934_592},
+		},
 	})
 	c.SetNode(swarm.Node{
-		ID: "n2", Status: swarm.NodeStatus{State: swarm.NodeStateReady},
-		Spec:        swarm.NodeSpec{Availability: swarm.NodeAvailabilityActive},
-		Description: swarm.NodeDescription{Resources: swarm.Resources{NanoCPUs: 4_000_000_000, MemoryBytes: 8_589_934_592}},
+		ID:     "n2",
+		Status: swarm.NodeStatus{State: swarm.NodeStateReady},
+		Spec:   swarm.NodeSpec{Availability: swarm.NodeAvailabilityActive},
+		Description: swarm.NodeDescription{
+			Resources: swarm.Resources{NanoCPUs: 4_000_000_000, MemoryBytes: 8_589_934_592},
+		},
 	})
 	c.SetService(swarm.Service{
 		ID: "svc1",
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: "web"},
-			Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: new(uint64(2))}},
+			Mode: swarm.ServiceMode{
+				Replicated: &swarm.ReplicatedService{Replicas: new(uint64(2))},
+			},
 			TaskTemplate: swarm.TaskSpec{
 				Resources: &swarm.ResourceRequirements{
-					Reservations: &swarm.Resources{NanoCPUs: 500_000_000, MemoryBytes: 256 * 1024 * 1024},
+					Reservations: &swarm.Resources{
+						NanoCPUs:    500_000_000,
+						MemoryBytes: 256 * 1024 * 1024,
+					},
 				},
 			},
 		},
 	})
-	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
-	c.SetTask(swarm.Task{ID: "t2", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
+	c.SetTask(
+		swarm.Task{
+			ID:        "t1",
+			ServiceID: "svc1",
+			Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
+		},
+	)
+	c.SetTask(
+		swarm.Task{
+			ID:        "t2",
+			ServiceID: "svc1",
+			Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
+		},
+	)
 	c.SetService(swarm.Service{
 		ID: "svc2",
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: "api"},
-			Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: new(uint64(3))}},
+			Mode: swarm.ServiceMode{
+				Replicated: &swarm.ReplicatedService{Replicas: new(uint64(3))},
+			},
 		},
 	})
-	c.SetTask(swarm.Task{ID: "t3", ServiceID: "svc2", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
-	c.SetTask(swarm.Task{ID: "t4", ServiceID: "svc2", Status: swarm.TaskStatus{State: swarm.TaskStateFailed}})
+	c.SetTask(
+		swarm.Task{
+			ID:        "t3",
+			ServiceID: "svc2",
+			Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
+		},
+	)
+	c.SetTask(
+		swarm.Task{
+			ID:        "t4",
+			ServiceID: "svc2",
+			Status:    swarm.TaskStatus{State: swarm.TaskStateFailed},
+		},
+	)
 
 	snap := c.Snapshot()
 	if snap.ServicesConverged != 1 {

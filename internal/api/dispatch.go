@@ -11,7 +11,12 @@ func contentNegotiated(jsonHandler http.HandlerFunc, spa http.Handler) http.Hand
 		case ContentTypeHTML:
 			spa.ServeHTTP(w, r)
 		case ContentTypeSSE:
-			writeProblem(w, r, http.StatusNotAcceptable, "this endpoint does not support text/event-stream")
+			writeProblem(
+				w,
+				r,
+				http.StatusNotAcceptable,
+				"this endpoint does not support text/event-stream",
+			)
 		default:
 			jsonHandler(w, r)
 		}
@@ -19,7 +24,10 @@ func contentNegotiated(jsonHandler http.HandlerFunc, spa http.Handler) http.Hand
 }
 
 // contentNegotiatedWithSSE is like contentNegotiated but allows SSE.
-func contentNegotiatedWithSSE(jsonHandler, sseHandler http.HandlerFunc, spa http.Handler) http.HandlerFunc {
+func contentNegotiatedWithSSE(
+	jsonHandler, sseHandler http.HandlerFunc,
+	spa http.Handler,
+) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch ContentTypeFromContext(r.Context()) {
 		case ContentTypeHTML:
@@ -41,7 +49,12 @@ func sseOnly(sseHandler http.Handler, spa http.Handler) http.HandlerFunc {
 		case ContentTypeSSE:
 			sseHandler.ServeHTTP(w, r)
 		default:
-			writeProblem(w, r, http.StatusNotAcceptable, "this endpoint only supports text/event-stream")
+			writeProblem(
+				w,
+				r,
+				http.StatusNotAcceptable,
+				"this endpoint only supports text/event-stream",
+			)
 		}
 	}
 }

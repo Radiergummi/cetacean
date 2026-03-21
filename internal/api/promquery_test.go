@@ -26,7 +26,10 @@ func TestPromClient_InstantQuery(t *testing.T) {
 	defer prom.Close()
 
 	pc := NewPromClient(prom.URL)
-	results, err := pc.InstantQuery(context.Background(), `sum by (container_label_com_docker_stack_namespace)(container_memory_usage_bytes)`)
+	results, err := pc.InstantQuery(
+		context.Background(),
+		`sum by (container_label_com_docker_stack_namespace)(container_memory_usage_bytes)`,
+	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -71,7 +74,8 @@ func TestRangeQueryRaw(t *testing.T) {
 		if r.URL.Query().Get("query") != "up" {
 			t.Errorf("unexpected query: %s", r.URL.Query().Get("query"))
 		}
-		if r.URL.Query().Get("start") == "" || r.URL.Query().Get("end") == "" || r.URL.Query().Get("step") == "" {
+		if r.URL.Query().Get("start") == "" || r.URL.Query().Get("end") == "" ||
+			r.URL.Query().Get("step") == "" {
 			t.Error("missing start/end/step params")
 		}
 		w.Header().Set("Content-Type", "application/json")

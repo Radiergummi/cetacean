@@ -20,8 +20,18 @@ func LoadTLS(flags *Flags, fc *fileConfig) TLSConfig {
 		ft = fc.TLS
 	}
 	return TLSConfig{
-		Cert: resolve(flags.TLSCert, "CETACEAN_TLS_CERT", fileField(ft, func(t *fileTLS) *string { return t.Cert }), ""),
-		Key:  resolve(flags.TLSKey, "CETACEAN_TLS_KEY", fileField(ft, func(t *fileTLS) *string { return t.Key }), ""),
+		Cert: resolve(
+			flags.TLSCert,
+			"CETACEAN_TLS_CERT",
+			fileField(ft, func(t *fileTLS) *string { return t.Cert }),
+			"",
+		),
+		Key: resolve(
+			flags.TLSKey,
+			"CETACEAN_TLS_KEY",
+			fileField(ft, func(t *fileTLS) *string { return t.Key }),
+			"",
+		),
 	}
 }
 

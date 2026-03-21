@@ -20,7 +20,14 @@ type DockerClient interface {
 	FullSync(ctx context.Context) cache.FullSyncData
 	Inspect(ctx context.Context, resourceType events.Type, id string) (any, error)
 	Events(ctx context.Context) (<-chan events.Message, <-chan error)
-	Logs(ctx context.Context, kind LogKind, id string, tail string, follow bool, since, until string) (io.ReadCloser, error)
+	Logs(
+		ctx context.Context,
+		kind LogKind,
+		id string,
+		tail string,
+		follow bool,
+		since, until string,
+	) (io.ReadCloser, error)
 	Close() error
 }
 
@@ -114,7 +121,17 @@ func (w *Watcher) fullSync(ctx context.Context) {
 	w.store.ReplaceAll(data)
 
 	snap := w.store.Snapshot()
-	slog.Info("full sync complete", "nodes", snap.NodeCount, "services", snap.ServiceCount, "tasks", snap.TaskCount, "stacks", snap.StackCount)
+	slog.Info(
+		"full sync complete",
+		"nodes",
+		snap.NodeCount,
+		"services",
+		snap.ServiceCount,
+		"tasks",
+		snap.TaskCount,
+		"stacks",
+		snap.StackCount,
+	)
 }
 
 const (

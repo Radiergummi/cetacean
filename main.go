@@ -46,7 +46,12 @@ func main() {
 	}
 
 	if flags.Version {
-		fmt.Printf("cetacean %s (commit %s, built %s)\n", version.Version, version.Commit, version.Date)
+		fmt.Printf(
+			"cetacean %s (commit %s, built %s)\n",
+			version.Version,
+			version.Commit,
+			version.Date,
+		)
 		os.Exit(0)
 	}
 
@@ -139,7 +144,9 @@ func main() {
 		authProvider = auth.NewHeadersProvider(authCfg.Headers)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown auth mode %q\n", authCfg.Mode)
-		os.Exit(1) //nolint:gocritic // exitAfterDefer: tsnet defers only run in the tailscale case, not here
+		os.Exit(
+			1,
+		) //nolint:gocritic // exitAfterDefer: tsnet defers only run in the tailscale case, not here
 	}
 
 	// SSE broadcaster
@@ -162,7 +169,10 @@ func main() {
 	snapshotPath := ""
 	if cfg.Snapshot {
 		snapshotPath = filepath.Join(cfg.DataDir, "snapshot.json")
-		if err := os.MkdirAll(cfg.DataDir, 0700); err != nil { //nolint:gosec // DataDir is operator-configured, not user input
+		if err := os.MkdirAll(
+			cfg.DataDir,
+			0700,
+		); err != nil { //nolint:gosec // DataDir is operator-configured, not user input
 			slog.Warn("could not create data dir", "error", err)
 		}
 		if err := stateCache.LoadFromDisk(snapshotPath); err != nil {
@@ -191,7 +201,16 @@ func main() {
 		slog.Warn("prometheus not configured, metrics disabled")
 	}
 	slog.Info("operations level", "level", cfg.OperationsLevel)
-	handlers := api.NewHandlers(stateCache, broadcaster, dockerClient, dockerClient, dockerClient, watcher.Ready(), promClient, cfg.OperationsLevel)
+	handlers := api.NewHandlers(
+		stateCache,
+		broadcaster,
+		dockerClient,
+		dockerClient,
+		dockerClient,
+		watcher.Ready(),
+		promClient,
+		cfg.OperationsLevel,
+	)
 
 	// SPA
 	distFS, err := fs.Sub(frontendDist, "frontend/dist")
@@ -205,7 +224,16 @@ func main() {
 		slog.Warn("pprof endpoints enabled", "path", "/debug/pprof/")
 	}
 
-	router := api.NewRouter(handlers, broadcaster, metricsProxy, spa, openapiSpec, scalarJS, cfg.Pprof, authProvider)
+	router := api.NewRouter(
+		handlers,
+		broadcaster,
+		metricsProxy,
+		spa,
+		openapiSpec,
+		scalarJS,
+		cfg.Pprof,
+		authProvider,
+	)
 
 	var serverTLSConfig *tls.Config
 	if authCfg.Mode == "cert" {
@@ -251,7 +279,17 @@ func main() {
 		}
 	}()
 
-	slog.Info("server started", "addr", cfg.ListenAddr, "version", version.Version, "commit", version.Commit, "auth", authCfg.Mode)
+	slog.Info(
+		"server started",
+		"addr",
+		cfg.ListenAddr,
+		"version",
+		version.Version,
+		"commit",
+		version.Commit,
+		"auth",
+		authCfg.Mode,
+	)
 	if tlsCfg.Enabled() {
 		slog.Info("TLS enabled", "cert", tlsCfg.Cert, "key", tlsCfg.Key)
 		if err := server.ListenAndServeTLS(tlsCfg.Cert, tlsCfg.Key); err != http.ErrServerClosed {
@@ -275,7 +313,12 @@ func runHealthcheck() int {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://localhost"+addr+"/-/ready", nil)
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		"http://localhost"+addr+"/-/ready",
+		nil,
+	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "healthcheck failed: %v\n", err)
 		return 1
@@ -298,7 +341,14 @@ func runHealthcheck() int {
 // serveDualListeners runs two HTTP servers for tsnet mode:
 // - the full router on the tsnet listener (tailnet traffic)
 // - meta endpoints only on the regular listener (health checks from Docker)
-func serveDualListeners(ctx context.Context, cfg *config.Config, tlsCfg config.TLSConfig, router http.Handler, h *api.Handlers, tsnetLn net.Listener) {
+func serveDualListeners(
+	ctx context.Context,
+	cfg *config.Config,
+	tlsCfg config.TLSConfig,
+	router http.Handler,
+	h *api.Handlers,
+	tsnetLn net.Listener,
+) {
 	metaMux := http.NewServeMux()
 	metaMux.HandleFunc("GET /-/health", h.HandleHealth)
 	metaMux.HandleFunc("GET /-/ready", h.HandleReady)
@@ -336,7 +386,10 @@ func serveDualListeners(ctx context.Context, cfg *config.Config, tlsCfg config.T
 	go func() {
 		slog.Info("meta server started", "addr", cfg.ListenAddr)
 		if tlsCfg.Enabled() {
-			if err := metaServer.ListenAndServeTLS(tlsCfg.Cert, tlsCfg.Key); err != http.ErrServerClosed {
+			if err := metaServer.ListenAndServeTLS(
+				tlsCfg.Cert,
+				tlsCfg.Key,
+			); err != http.ErrServerClosed {
 				slog.Error("meta server error", "error", err)
 			}
 		} else {

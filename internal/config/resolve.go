@@ -73,7 +73,12 @@ func resolveBool(flag *bool, envKey string, file *bool, def bool) bool {
 // resolveDuration returns the first set value in precedence order:
 // flag > env > file > hardcoded default. Returns an error if any
 // explicitly set value is unparseable or non-positive.
-func resolveDuration(flag *string, envKey string, file *string, def time.Duration) (time.Duration, error) {
+func resolveDuration(
+	flag *string,
+	envKey string,
+	file *string,
+	def time.Duration,
+) (time.Duration, error) {
 	// Check sources in precedence order; parse the first one found.
 	var raw string
 	var source string

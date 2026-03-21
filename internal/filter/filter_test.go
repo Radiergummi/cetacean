@@ -272,7 +272,10 @@ func TestResourceEnv_Dispatch(t *testing.T) {
 }
 
 func TestConfigEnv(t *testing.T) {
-	c := swarm.Config{ID: "c1", Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "app-config"}}}
+	c := swarm.Config{
+		ID:   "c1",
+		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "app-config"}},
+	}
 	env := ConfigEnv(c, nil)
 	if env["id"] != "c1" {
 		t.Errorf("id=%v", env["id"])
@@ -283,7 +286,10 @@ func TestConfigEnv(t *testing.T) {
 }
 
 func TestSecretEnv(t *testing.T) {
-	s := swarm.Secret{ID: "s1", Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "tls-cert"}}}
+	s := swarm.Secret{
+		ID:   "s1",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "tls-cert"}},
+	}
 	env := SecretEnv(s, nil)
 	if env["id"] != "s1" {
 		t.Errorf("id=%v", env["id"])

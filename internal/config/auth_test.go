@@ -70,7 +70,8 @@ func TestLoadAuth_OIDCHappyPath(t *testing.T) {
 	if cfg.OIDC.Issuer != "https://issuer.example.com" {
 		t.Errorf("unexpected issuer: %q", cfg.OIDC.Issuer)
 	}
-	if len(cfg.OIDC.Scopes) != 2 || cfg.OIDC.Scopes[0] != "openid" || cfg.OIDC.Scopes[1] != "custom" {
+	if len(cfg.OIDC.Scopes) != 2 || cfg.OIDC.Scopes[0] != "openid" ||
+		cfg.OIDC.Scopes[1] != "custom" {
 		t.Errorf("unexpected scopes: %v", cfg.OIDC.Scopes)
 	}
 }
@@ -123,7 +124,10 @@ func TestLoadAuth_OIDCSessionKey(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_ID", "client-id")
 	t.Setenv("CETACEAN_AUTH_OIDC_CLIENT_SECRET", "secret")
 	t.Setenv("CETACEAN_AUTH_OIDC_REDIRECT_URL", "https://app.example.com/auth/callback")
-	t.Setenv("CETACEAN_AUTH_OIDC_SESSION_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	t.Setenv(
+		"CETACEAN_AUTH_OIDC_SESSION_KEY",
+		"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+	)
 
 	cfg, err := LoadAuth(nil, nil)
 	if err != nil {
@@ -253,7 +257,10 @@ func TestLoadAuth_HeadersRequiresSecretOrTrustedProxies(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when neither secret nor trusted proxies are set")
 	}
-	if !strings.Contains(err.Error(), "CETACEAN_AUTH_HEADERS_SECRET_HEADER or CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES") {
+	if !strings.Contains(
+		err.Error(),
+		"CETACEAN_AUTH_HEADERS_SECRET_HEADER or CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES",
+	) {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -381,7 +388,10 @@ func TestLoadAuth_EnvOverridesFile(t *testing.T) {
 		t.Errorf("issuer = %q, want env-issuer (env should override file)", cfg.OIDC.Issuer)
 	}
 	if cfg.OIDC.ClientID != "file-client" {
-		t.Errorf("client_id = %q, want file-client (should fall through to file)", cfg.OIDC.ClientID)
+		t.Errorf(
+			"client_id = %q, want file-client (should fall through to file)",
+			cfg.OIDC.ClientID,
+		)
 	}
 }
 
@@ -541,7 +551,12 @@ func TestParseTrustedProxies(t *testing.T) {
 			continue
 		}
 		if len(prefixes) != tt.want {
-			t.Errorf("parseTrustedProxies(%q) = %d prefixes, want %d", tt.input, len(prefixes), tt.want)
+			t.Errorf(
+				"parseTrustedProxies(%q) = %d prefixes, want %d",
+				tt.input,
+				len(prefixes),
+				tt.want,
+			)
 		}
 	}
 }

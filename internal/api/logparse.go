@@ -158,7 +158,11 @@ func StreamDockerLogs(r io.Reader, ch chan<- LogLine) error {
 // context (via cancelFn) if no new frames arrive within idleTimeout after
 // the first frame. This works around Docker's ServiceLogs not closing the
 // stream after sending all data with Follow=false.
-func ParseDockerLogsWithIdleCancel(r io.Reader, cancelFn context.CancelFunc, idleTimeout time.Duration) ([]LogLine, error) {
+func ParseDockerLogsWithIdleCancel(
+	r io.Reader,
+	cancelFn context.CancelFunc,
+	idleTimeout time.Duration,
+) ([]LogLine, error) {
 	var lines []LogLine
 	var timer *time.Timer
 	defer func() {

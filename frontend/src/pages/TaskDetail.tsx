@@ -114,7 +114,9 @@ export default function TaskDetail() {
               <ResourceName name={serviceName} /> Replica #{task.Slot}
             </span>
           ) : (
-            <>Task <span className="font-mono">{taskIdShort}</span></>
+            <>
+              Task <span className="font-mono">{taskIdShort}</span>
+            </>
           )
         }
         breadcrumbs={[
@@ -128,49 +130,51 @@ export default function TaskDetail() {
             ),
           },
         ]}
-        actions={canRemove ? (
-          <>
-            <AlertDialog>
-              <AlertDialogTrigger
-                render={
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                  >
-                    {removal.loading ? (
-                      <Spinner className="size-3" />
-                    ) : (
-                      <Trash2 className="size-3.5" />
-                    )}
-                    Remove
-                  </Button>
-                }
-              />
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Force-remove this task?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will kill the backing container. The service scheduler will start a
-                    replacement.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => void executeRemove()}
-                    variant="destructive"
-                  >
-                    Remove
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+        actions={
+          canRemove ? (
+            <>
+              <AlertDialog>
+                <AlertDialogTrigger
+                  render={
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                    >
+                      {removal.loading ? (
+                        <Spinner className="size-3" />
+                      ) : (
+                        <Trash2 className="size-3.5" />
+                      )}
+                      Remove
+                    </Button>
+                  }
+                />
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Force-remove this task?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will kill the backing container. The service scheduler will start a
+                      replacement.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => void executeRemove()}
+                      variant="destructive"
+                    >
+                      Remove
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
 
-            {removal.error && (
-              <p className="text-xs text-red-600 dark:text-red-400">{removal.error}</p>
-            )}
-          </>
-        ) : undefined}
+              {removal.error && (
+                <p className="text-xs text-red-600 dark:text-red-400">{removal.error}</p>
+              )}
+            </>
+          ) : undefined
+        }
       />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -279,12 +283,12 @@ export default function TaskDetail() {
         </ErrorBoundary>
       )}
 
-        <ErrorBoundary inline>
-          <LogViewer
-            taskId={id!}
-            header="Logs"
-          />
-        </ErrorBoundary>
+      <ErrorBoundary inline>
+        <LogViewer
+          taskId={id!}
+          header="Logs"
+        />
+      </ErrorBoundary>
     </div>
   );
 }

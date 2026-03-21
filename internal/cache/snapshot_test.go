@@ -14,7 +14,12 @@ import (
 func TestWriteAndLoadSnapshot(t *testing.T) {
 	c := New(nil)
 	c.SetNode(swarm.Node{ID: "n1", Description: swarm.NodeDescription{Hostname: "worker-01"}})
-	c.SetService(swarm.Service{ID: "s1", Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "nginx"}}})
+	c.SetService(
+		swarm.Service{
+			ID:   "s1",
+			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "nginx"}},
+		},
+	)
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "snapshot.json")

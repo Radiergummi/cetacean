@@ -369,7 +369,9 @@ func BenchmarkReplaceAll(b *testing.B) {
 					}},
 				})
 				data.Tasks = append(data.Tasks, swarm.Task{
-					ID: id, ServiceID: fmt.Sprintf("id-%d", i%10), NodeID: fmt.Sprintf("id-%d", i%10),
+					ID:        id,
+					ServiceID: fmt.Sprintf("id-%d", i%10),
+					NodeID:    fmt.Sprintf("id-%d", i%10),
 				})
 				data.Configs = append(data.Configs, swarm.Config{
 					ID: id,
