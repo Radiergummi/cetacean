@@ -10,7 +10,14 @@ import { KeyValueEditor } from "../components/KeyValueEditor";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import { MetricsPanel } from "../components/metrics";
 import ResourceGauge from "../components/metrics/ResourceGauge";
-import { AvailabilityEditor, EngineCard, NodeActions, OsCard, RoleEditor, StatusCard } from "../components/node-detail";
+import {
+  AvailabilityEditor,
+  EngineCard,
+  NodeActions,
+  OsCard,
+  RoleEditor,
+  StatusCard,
+} from "../components/node-detail";
 import PageHeader from "../components/PageHeader";
 import TasksTable from "../components/TasksTable";
 import { useGaugeValue } from "../hooks/useGaugeValue";

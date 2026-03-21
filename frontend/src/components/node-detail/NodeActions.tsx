@@ -49,7 +49,11 @@ export function NodeActions({ node, nodeId }: { node: Node; nodeId: string }) {
       variant="outline"
       size="sm"
       disabled={!isDown || remove.loading}
-      className={isDown ? "border-red-500/50 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20" : ""}
+      className={
+        isDown
+          ? "border-red-500/50 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20"
+          : ""
+      }
       onClick={() => setDialogOpen(true)}
     >
       {remove.loading ? <Spinner className="size-3" /> : <Trash2 className="size-3.5" />}
@@ -70,9 +74,7 @@ export function NodeActions({ node, nodeId }: { node: Node; nodeId: string }) {
         )}
       </div>
 
-      {remove.error && (
-        <p className="text-xs text-red-600 dark:text-red-400">{remove.error}</p>
-      )}
+      {remove.error && <p className="text-xs text-red-600 dark:text-red-400">{remove.error}</p>}
 
       <AlertDialog
         open={dialogOpen}
@@ -82,10 +84,9 @@ export function NodeActions({ node, nodeId }: { node: Node; nodeId: string }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Remove node?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove{" "}
-              <strong className="text-foreground">{hostname}</strong> from the swarm. The
-              node will no longer appear in the cluster and cannot rejoin without being
-              re-initialized. Any node-specific labels and configuration will be lost.
+              This will permanently remove <strong className="text-foreground">{hostname}</strong>{" "}
+              from the swarm. The node will no longer appear in the cluster and cannot rejoin
+              without being re-initialized. Any node-specific labels and configuration will be lost.
             </AlertDialogDescription>
           </AlertDialogHeader>
 

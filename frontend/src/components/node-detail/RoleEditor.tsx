@@ -99,9 +99,7 @@ export function RoleEditor({ nodeId, currentRole, isLeader, managerCount }: Role
                       selected={value === role.value}
                       onClick={() => setValue(role.value)}
                       disabled={role.value === currentRole}
-                      title={
-                        role.value === currentRole ? `${role.title} (current)` : role.title
-                      }
+                      title={role.value === currentRole ? `${role.title} (current)` : role.title}
                       description={role.description}
                     />
                   ))}
