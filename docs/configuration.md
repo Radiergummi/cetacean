@@ -13,22 +13,22 @@ Supported `_FILE` variants: `CETACEAN_AUTH_OIDC_CLIENT_SECRET_FILE`, `CETACEAN_A
 
 ## General Settings
 
-| Flag              | Env var                       | Config file key             | Default                       | Description                                                   |
-|-------------------|-------------------------------|-----------------------------|-------------------------------|---------------------------------------------------------------|
-| `-listen`         | `CETACEAN_LISTEN_ADDR`        | `server.listen_addr`        | `:9000`                       | HTTP server bind address                                      |
-| `-docker-host`    | `CETACEAN_DOCKER_HOST`        | `docker.host`               | `unix:///var/run/docker.sock` | Docker socket URI                                             |
-| `-prometheus-url` | `CETACEAN_PROMETHEUS_URL`     | `prometheus.url`            | _—_                           | Prometheus base URL. Unset = metrics disabled.                |
-| `-log-level`      | `CETACEAN_LOG_LEVEL`          | `logging.level`             | `info`                        | `debug`, `info`, `warn`, `error`                              |
-| `-log-format`     | `CETACEAN_LOG_FORMAT`         | `logging.format`            | `json`                        | `json` or `text`                                              |
-| `-pprof`          | `CETACEAN_PPROF`              | `server.pprof`              | `false`                       | Expose Go pprof endpoints at `/debug/pprof/`                  |
+| Flag              | Env var                       | Config file key             | Default                       | Description                                                                    |
+|-------------------|-------------------------------|-----------------------------|-------------------------------|--------------------------------------------------------------------------------|
+| `-listen`         | `CETACEAN_LISTEN_ADDR`        | `server.listen_addr`        | `:9000`                       | HTTP server bind address                                                       |
+| `-docker-host`    | `CETACEAN_DOCKER_HOST`        | `docker.host`               | `unix:///var/run/docker.sock` | Docker socket URI                                                              |
+| `-prometheus-url` | `CETACEAN_PROMETHEUS_URL`     | `prometheus.url`            | _—_                           | Prometheus base URL. Unset = metrics disabled.                                 |
+| `-log-level`      | `CETACEAN_LOG_LEVEL`          | `logging.level`             | `info`                        | `debug`, `info`, `warn`, `error`                                               |
+| `-log-format`     | `CETACEAN_LOG_FORMAT`         | `logging.format`            | `json`                        | `json` or `text`                                                               |
+| `-pprof`          | `CETACEAN_PPROF`              | `server.pprof`              | `false`                       | Expose Go pprof endpoints at `/debug/pprof/`                                   |
 | _—_               | `CETACEAN_OPERATIONS_LEVEL`   | `server.operations_level`   | `1`                           | Write operation tier: 0=read-only, 1=operational, 2=configuration, 3=impactful |
-| _—_               | `CETACEAN_SSE_BATCH_INTERVAL` | `server.sse.batch_interval` | `100ms`                       | SSE event batching window (Go duration)                       |
-| _—_               | `CETACEAN_SNAPSHOT`           | `storage.snapshot`          | `true`                        | Enable disk persistence of swarm state                        |
-| _—_               | `CETACEAN_DATA_DIR`           | `storage.data_dir`          | `./data`                      | Directory for snapshot file                                   |
-| `-tls-cert`       | `CETACEAN_TLS_CERT`           | `tls.cert`                  | _—_                           | Server certificate path (PEM)                                 |
-| `-tls-key`        | `CETACEAN_TLS_KEY`            | `tls.key`                   | _—_                           | Server private key path (PEM)                                 |
-| `-config`         | `CETACEAN_CONFIG`             | _—_                         | _—_                           | Path to TOML config file                                      |
-| `-version`        | _—_                           | _—_                         | _—_                           | Print version and exit                                        |
+| _—_               | `CETACEAN_SSE_BATCH_INTERVAL` | `server.sse.batch_interval` | `100ms`                       | SSE event batching window (Go duration)                                        |
+| _—_               | `CETACEAN_SNAPSHOT`           | `storage.snapshot`          | `true`                        | Enable disk persistence of swarm state                                         |
+| _—_               | `CETACEAN_DATA_DIR`           | `storage.data_dir`          | `./data`                      | Directory for snapshot file                                                    |
+| `-tls-cert`       | `CETACEAN_TLS_CERT`           | `tls.cert`                  | _—_                           | Server certificate path (PEM)                                                  |
+| `-tls-key`        | `CETACEAN_TLS_KEY`            | `tls.key`                   | _—_                           | Server private key path (PEM)                                                  |
+| `-config`         | `CETACEAN_CONFIG`             | _—_                         | _—_                           | Path to TOML config file                                                       |
+| `-version`        | _—_                           | _—_                         | _—_                           | Print version and exit                                                         |
 
 TLS cert and key must be set together or not at all. Required for `cert` auth mode (mTLS), optional otherwise.
 
@@ -256,31 +256,31 @@ configured level receive a `403 Forbidden` response.
 The current level is exposed in the health endpoint (`GET /-/health`) as `operationsLevel`, which the frontend uses to
 hide disabled action buttons.
 
-| Operation                        | Endpoint                                    | 0 Read-only | 1 Operational | 2 Configuration | 3 Impactful |
-|----------------------------------|---------------------------------------------|:-----------:|:-------------:|:---------------:|:-----------:|
-| Browse all resources             | `GET /…`                                    | ✔           | ✔             | ✔               | ✔           |
-| **Reactive ops**                 |                                             |             |               |                 |             |
-| Scale service                    | `PUT /services/{id}/scale`                  | —           | ✔             | ✔               | ✔           |
-| Update service image             | `PUT /services/{id}/image`                  | —           | ✔             | ✔               | ✔           |
-| Rollback service                 | `POST /services/{id}/rollback`              | —           | ✔             | ✔               | ✔           |
-| Restart service                  | `POST /services/{id}/restart`               | —           | ✔             | ✔               | ✔           |
-| **Service definition changes**   |                                             |             |               |                 |             |
-| Patch environment variables      | `PATCH /services/{id}/env`                  | —           | —             | ✔               | ✔           |
-| Patch service labels             | `PATCH /services/{id}/labels`               | —           | —             | ✔               | ✔           |
-| Patch resources                  | `PATCH /services/{id}/resources`            | —           | —             | ✔               | ✔           |
-| Update healthcheck               | `PUT\|PATCH /services/{id}/healthcheck`     | —           | —             | ✔               | ✔           |
-| Update placement                 | `PUT /services/{id}/placement`              | —           | —             | ✔               | ✔           |
-| Patch ports                      | `PATCH /services/{id}/ports`                | —           | —             | ✔               | ✔           |
-| Patch update policy              | `PATCH /services/{id}/update-policy`        | —           | —             | ✔               | ✔           |
-| Patch rollback policy            | `PATCH /services/{id}/rollback-policy`      | —           | —             | ✔               | ✔           |
-| Patch log driver                 | `PATCH /services/{id}/log-driver`           | —           | —             | ✔               | ✔           |
-| **Dangerous operations**         |                                             |             |               |                 |             |
-| Change node availability         | `PUT /nodes/{id}/availability`              | —           | —             | —               | ✔           |
-| Patch node labels                | `PATCH /nodes/{id}/labels`                  | —           | —             | —               | ✔           |
-| Change service mode              | `PUT /services/{id}/mode`                   | —           | —             | —               | ✔           |
-| Change endpoint mode             | `PUT /services/{id}/endpoint-mode`          | —           | —             | —               | ✔           |
-| Remove service                   | `DELETE /services/{id}`                     | —           | —             | —               | ✔           |
-| Remove task                      | `DELETE /tasks/{id}`                        | —           | —             | —               | ✔           |
+| Operation                      | Endpoint                                | 0 Read-only | 1 Operational | 2 Configuration | 3 Impactful |
+|--------------------------------|-----------------------------------------|:-----------:|:-------------:|:---------------:|:-----------:|
+| Browse all resources           | `GET /…`                                |      ✔      |       ✔       |        ✔        |      ✔      |
+| **Reactive ops**               |                                         |             |               |                 |             |
+| Scale service                  | `PUT /services/{id}/scale`              |      —      |       ✔       |        ✔        |      ✔      |
+| Update service image           | `PUT /services/{id}/image`              |      —      |       ✔       |        ✔        |      ✔      |
+| Rollback service               | `POST /services/{id}/rollback`          |      —      |       ✔       |        ✔        |      ✔      |
+| Restart service                | `POST /services/{id}/restart`           |      —      |       ✔       |        ✔        |      ✔      |
+| **Service definition changes** |                                         |             |               |                 |             |
+| Patch environment variables    | `PATCH /services/{id}/env`              |      —      |       —       |        ✔        |      ✔      |
+| Patch service labels           | `PATCH /services/{id}/labels`           |      —      |       —       |        ✔        |      ✔      |
+| Patch resources                | `PATCH /services/{id}/resources`        |      —      |       —       |        ✔        |      ✔      |
+| Update healthcheck             | `PUT\|PATCH /services/{id}/healthcheck` |      —      |       —       |        ✔        |      ✔      |
+| Update placement               | `PUT /services/{id}/placement`          |      —      |       —       |        ✔        |      ✔      |
+| Patch ports                    | `PATCH /services/{id}/ports`            |      —      |       —       |        ✔        |      ✔      |
+| Patch update policy            | `PATCH /services/{id}/update-policy`    |      —      |       —       |        ✔        |      ✔      |
+| Patch rollback policy          | `PATCH /services/{id}/rollback-policy`  |      —      |       —       |        ✔        |      ✔      |
+| Patch log driver               | `PATCH /services/{id}/log-driver`       |      —      |       —       |        ✔        |      ✔      |
+| **Dangerous operations**       |                                         |             |               |                 |             |
+| Change node availability       | `PUT /nodes/{id}/availability`          |      —      |       —       |        —        |      ✔      |
+| Patch node labels              | `PATCH /nodes/{id}/labels`              |      —      |       —       |        —        |      ✔      |
+| Change service mode            | `PUT /services/{id}/mode`               |      —      |       —       |        —        |      ✔      |
+| Change endpoint mode           | `PUT /services/{id}/endpoint-mode`      |      —      |       —       |        —        |      ✔      |
+| Remove service                 | `DELETE /services/{id}`                 |      —      |       —       |        —        |      ✔      |
+| Remove task                    | `DELETE /tasks/{id}`                    |      —      |       —       |        —        |      ✔      |
 
 ## Profiling
 
