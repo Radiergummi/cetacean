@@ -1,16 +1,16 @@
 import type { Task } from "../api/types";
 import TaskStateFilter from "./TaskStateFilter";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, within, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 
 const fakeTasks: Task[] = [
-  { Status: { State: "running" } },
-  { Status: { State: "running" } },
-  { Status: { State: "failed" } },
+  { DesiredState: "running", Status: { State: "running" } },
+  { DesiredState: "running", Status: { State: "running" } },
+  { DesiredState: "shutdown", Status: { State: "failed" } },
 ] as Task[];
 
 describe("TaskStateFilter", () => {
-  it("renders all button with total count", () => {
+  it("renders Active and All segments with counts", () => {
     render(
       <TaskStateFilter
         tasks={fakeTasks}
@@ -18,11 +18,11 @@ describe("TaskStateFilter", () => {
         onChange={() => {}}
       />,
     );
+    expect(screen.getByText("Active")).toBeInTheDocument();
     expect(screen.getByText("All")).toBeInTheDocument();
-    expect(screen.getByText("3")).toBeInTheDocument();
   });
 
-  it("renders state buttons with counts", () => {
+  it("renders visible state segments with counts", () => {
     render(
       <TaskStateFilter
         tasks={fakeTasks}
@@ -30,10 +30,10 @@ describe("TaskStateFilter", () => {
         onChange={() => {}}
       />,
     );
-    expect(screen.getByText("Running")).toBeInTheDocument();
-    expect(screen.getByText("2")).toBeInTheDocument();
-    expect(screen.getByText("Failed")).toBeInTheDocument();
-    expect(screen.getByText("1")).toBeInTheDocument();
+    // With max=3, only Active, All, and Running are visible
+    const running = screen.getByText("Running").closest("button")!;
+    expect(running).toBeInTheDocument();
+    expect(within(running).getByText("2")).toBeInTheDocument();
   });
 
   it("calls onChange with state on click", () => {
@@ -49,7 +49,7 @@ describe("TaskStateFilter", () => {
     expect(onChange).toHaveBeenCalledWith("running");
   });
 
-  it("calls onChange with same state when clicking active state", () => {
+  it("defaults to Active filter and calls onChange(null) for Active", () => {
     const onChange = vi.fn();
     render(
       <TaskStateFilter
@@ -58,20 +58,21 @@ describe("TaskStateFilter", () => {
         onChange={onChange}
       />,
     );
-    fireEvent.click(screen.getByText("Running"));
-    expect(onChange).toHaveBeenCalledWith("running");
+    // Clicking Active maps __active__ → null
+    fireEvent.click(screen.getByText("Active"));
+    expect(onChange).toHaveBeenCalledWith(null);
   });
 
-  it("calls onChange with null when clicking All", () => {
-    const onChange = vi.fn();
+  it("passes active filter as selected value", () => {
     render(
       <TaskStateFilter
         tasks={fakeTasks}
         active="running"
-        onChange={onChange}
+        onChange={() => {}}
       />,
     );
-    fireEvent.click(screen.getByText("All"));
-    expect(onChange).toHaveBeenCalledWith(null);
+    // The Running toggle should have data-pressed when active
+    const running = screen.getByText("Running").closest("button");
+    expect(running).toHaveAttribute("data-pressed");
   });
 });
