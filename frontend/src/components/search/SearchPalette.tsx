@@ -10,6 +10,7 @@ import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
+import { useOperationsLevel } from "../../hooks/useOperationsLevel";
 
 function StateOrb({ state }: { state: string }) {
   if (state === "updating") {
@@ -110,7 +111,11 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
 
   // Action mode state
-  const actions = useMemo(() => getActions(), []);
+  const { level: operationsLevel } = useOperationsLevel();
+  const actions = useMemo(
+    () => getActions().filter(({ requiredLevel }) => requiredLevel === undefined || operationsLevel >= requiredLevel),
+    [operationsLevel],
+  );
   const [activeAction, setActiveAction] = useState<PaletteAction | null>(null);
   const [actionStep, setActionStep] = useState(0);
   const [actionArgs, setActionArgs] = useState<unknown[]>([]);
