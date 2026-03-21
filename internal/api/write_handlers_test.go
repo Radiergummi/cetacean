@@ -2113,12 +2113,16 @@ func TestHandleGetNodeRole_NotFound(t *testing.T) {
 func seedStack(c *cache.Cache, name string) {
 	label := map[string]string{"com.docker.stack.namespace": name}
 	c.SetService(swarm.Service{
-		ID:   name + "_svc1",
-		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: name + "_svc1", Labels: label}},
+		ID: name + "_svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: name + "_svc1", Labels: label},
+		},
 	})
 	c.SetService(swarm.Service{
-		ID:   name + "_svc2",
-		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: name + "_svc2", Labels: label}},
+		ID: name + "_svc2",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: name + "_svc2", Labels: label},
+		},
 	})
 	c.SetNetwork(network.Summary{ID: name + "_net1", Name: name + "_net1", Labels: label})
 	c.SetConfig(swarm.Config{
