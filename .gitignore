@@ -47,3 +47,4 @@ cetacean
 frontend/dist/
 node_modules/
 .worktrees/
+cetacean.toml

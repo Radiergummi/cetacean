@@ -111,7 +111,7 @@ export default function NodeList() {
     },
   ];
 
-  const metricsColumns: Column<Node>[] = hasPrometheus
+  const metricsColumns: Column<Node>[] = hasNodeExporter
     ? [
         {
           header: "CPU",
@@ -178,7 +178,7 @@ export default function NodeList() {
   return (
     <div>
       <PageHeader title="Nodes" />
-      {hasPrometheus && (
+      {hasNodeExporter && (
         <div className="mb-6 rounded-lg border bg-card p-4">
           <ErrorBoundary inline>
             <NodeResourceGauges />
@@ -253,7 +253,7 @@ export default function NodeList() {
                   `v${node.Description.Engine.EngineVersion}`,
                 ]}
               >
-                {hasPrometheus && (
+                {hasNodeExporter && (
                   <div className="flex items-center justify-center gap-4">
                     <ResourceGauge
                       label="CPU"
