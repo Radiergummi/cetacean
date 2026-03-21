@@ -10,7 +10,7 @@ import { KeyValueEditor } from "../components/KeyValueEditor";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import { MetricsPanel } from "../components/metrics";
 import ResourceGauge from "../components/metrics/ResourceGauge";
-import { AvailabilityEditor, EngineCard, OsCard, StatusCard } from "../components/node-detail";
+import { AvailabilityEditor, EngineCard, NodeActions, OsCard, RoleEditor, StatusCard } from "../components/node-detail";
 import PageHeader from "../components/PageHeader";
 import TasksTable from "../components/TasksTable";
 import { useGaugeValue } from "../hooks/useGaugeValue";
@@ -31,6 +31,11 @@ export default function NodeDetail() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [nodeLabels, setNodeLabels] = useState<Record<string, string> | null>(null);
+  const [nodeRole, setNodeRole] = useState<{
+    role: string;
+    isLeader: boolean;
+    managerCount: number;
+  } | null>(null);
 
   const monitoring = useMonitoringStatus();
   const { level: operationsLevel, loading: levelLoading } = useOperationsLevel();
@@ -70,6 +75,10 @@ export default function NodeDetail() {
     api
       .nodeLabels(id, signal)
       .then(setNodeLabels)
+      .catch(() => {});
+    api
+      .nodeRole(id, signal)
+      .then(setNodeRole)
       .catch(() => {});
   }, [id]);
 
@@ -126,20 +135,25 @@ export default function NodeDetail() {
         ]}
       />
 
+      <NodeActions
+        node={node}
+        nodeId={node.ID}
+      />
+
       <MetadataGrid>
-        <InfoCard
-          label="Role"
-          value={
-            <>
-              <span className="capitalize">{node.Spec.Role}</span>
-              {node.ManagerStatus?.Leader && (
-                <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary">
-                  Leader
-                </span>
-              )}
-            </>
-          }
-        />
+        {nodeRole ? (
+          <RoleEditor
+            nodeId={node.ID}
+            currentRole={nodeRole.role}
+            isLeader={nodeRole.isLeader}
+            managerCount={nodeRole.managerCount}
+          />
+        ) : (
+          <InfoCard
+            label="Role"
+            value={<span className="capitalize">{node.Spec.Role}</span>}
+          />
+        )}
         <StatusCard state={node.Status.State} />
         <AvailabilityEditor
           nodeId={node.ID}
