@@ -1888,3 +1888,199 @@ func TestHandlePatchServiceLogDriver_InvalidBody(t *testing.T) {
 		t.Errorf("status=%d, want 400", w.Code)
 	}
 }
+
+func TestHandleUpdateNodeRole_OK(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{ID: "node1", Spec: swarm.NodeSpec{Role: swarm.NodeRoleWorker}})
+
+	wc := &mockWriteClient{
+		updateNodeRoleFn: func(_ context.Context, id string, role swarm.NodeRole) (swarm.Node, error) {
+			return swarm.Node{ID: id, Spec: swarm.NodeSpec{Role: role}}, nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, config.OpsImpactful)
+
+	body := `{"role":"manager"}`
+	req := httptest.NewRequest("PUT", "/nodes/node1/role", strings.NewReader(body))
+	req.SetPathValue("id", "node1")
+	w := httptest.NewRecorder()
+	h.HandleUpdateNodeRole(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["@type"] != "Node" {
+		t.Errorf("@type=%v, want Node", resp["@type"])
+	}
+}
+
+func TestHandleUpdateNodeRole_NotFound(t *testing.T) {
+	c := cache.New(nil)
+	wc := &mockWriteClient{}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, config.OpsImpactful)
+
+	body := `{"role":"manager"}`
+	req := httptest.NewRequest("PUT", "/nodes/missing/role", strings.NewReader(body))
+	req.SetPathValue("id", "missing")
+	w := httptest.NewRecorder()
+	h.HandleUpdateNodeRole(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestHandleUpdateNodeRole_InvalidRole(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{ID: "node1"})
+	wc := &mockWriteClient{}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, config.OpsImpactful)
+
+	body := `{"role":"invalid"}`
+	req := httptest.NewRequest("PUT", "/nodes/node1/role", strings.NewReader(body))
+	req.SetPathValue("id", "node1")
+	w := httptest.NewRecorder()
+	h.HandleUpdateNodeRole(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status=%d, want 400", w.Code)
+	}
+}
+
+func TestHandleUpdateNodeRole_Conflict(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{ID: "node1"})
+
+	wc := &mockWriteClient{
+		updateNodeRoleFn: func(_ context.Context, _ string, _ swarm.NodeRole) (swarm.Node, error) {
+			return swarm.Node{}, errdefs.Conflict(fmt.Errorf("conflict"))
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, config.OpsImpactful)
+
+	body := `{"role":"manager"}`
+	req := httptest.NewRequest("PUT", "/nodes/node1/role", strings.NewReader(body))
+	req.SetPathValue("id", "node1")
+	w := httptest.NewRecorder()
+	h.HandleUpdateNodeRole(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Errorf("status=%d, want 409", w.Code)
+	}
+}
+
+func TestHandleRemoveNode_OK(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{ID: "node1"})
+
+	wc := &mockWriteClient{
+		removeNodeFn: func(_ context.Context, _ string) error {
+			return nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/nodes/node1", nil)
+	req.SetPathValue("id", "node1")
+	w := httptest.NewRecorder()
+	h.HandleRemoveNode(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Errorf("status=%d, want 204; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleRemoveNode_NotFound(t *testing.T) {
+	c := cache.New(nil)
+	wc := &mockWriteClient{}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/nodes/missing", nil)
+	req.SetPathValue("id", "missing")
+	w := httptest.NewRecorder()
+	h.HandleRemoveNode(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestHandleRemoveNode_DockerError(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{ID: "node1"})
+
+	wc := &mockWriteClient{
+		removeNodeFn: func(_ context.Context, _ string) error {
+			return fmt.Errorf("node is not down")
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/nodes/node1", nil)
+	req.SetPathValue("id", "node1")
+	w := httptest.NewRecorder()
+	h.HandleRemoveNode(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("status=%d, want 500", w.Code)
+	}
+}
+
+func TestHandleGetNodeRole_Manager(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{
+		ID:            "node1",
+		Spec:          swarm.NodeSpec{Role: swarm.NodeRoleManager},
+		ManagerStatus: &swarm.ManagerStatus{Leader: true},
+	})
+	c.SetNode(swarm.Node{
+		ID:   "node2",
+		Spec: swarm.NodeSpec{Role: swarm.NodeRoleManager},
+	})
+	c.SetNode(swarm.Node{
+		ID:   "node3",
+		Spec: swarm.NodeSpec{Role: swarm.NodeRoleWorker},
+	})
+
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("GET", "/nodes/node1/role", nil)
+	req.SetPathValue("id", "node1")
+	w := httptest.NewRecorder()
+	h.HandleGetNodeRole(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["role"] != "manager" {
+		t.Errorf("role=%v, want manager", resp["role"])
+	}
+	if resp["isLeader"] != true {
+		t.Errorf("isLeader=%v, want true", resp["isLeader"])
+	}
+	if resp["managerCount"] != float64(2) {
+		t.Errorf("managerCount=%v, want 2", resp["managerCount"])
+	}
+}
+
+func TestHandleGetNodeRole_NotFound(t *testing.T) {
+	c := cache.New(nil)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("GET", "/nodes/missing/role", nil)
+	req.SetPathValue("id", "missing")
+	w := httptest.NewRecorder()
+	h.HandleGetNodeRole(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want 404", w.Code)
+	}
+}

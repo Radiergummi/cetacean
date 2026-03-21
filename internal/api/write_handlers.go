@@ -342,6 +342,93 @@ func (h *Handlers) HandleRemoveService(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+type updateRoleRequest struct {
+	Role string `json:"role"`
+}
+
+func (h *Handlers) HandleUpdateNodeRole(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	var req updateRoleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	var role swarm.NodeRole
+	switch req.Role {
+	case "worker":
+		role = swarm.NodeRoleWorker
+	case "manager":
+		role = swarm.NodeRoleManager
+	default:
+		writeProblem(w, r, http.StatusBadRequest, "role must be one of: worker, manager")
+		return
+	}
+
+	_, ok := h.cache.GetNode(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "node not found")
+		return
+	}
+
+	slog.Info("updating node role", "node", id, "role", req.Role)
+
+	updated, err := h.writeClient.UpdateNodeRole(r.Context(), id, role)
+	if err != nil {
+		writeDockerError(w, r, err, "node")
+		return
+	}
+
+	writeJSON(w, NewDetailResponse("/nodes/"+id, "Node", map[string]any{
+		"node": updated,
+	}))
+}
+
+func (h *Handlers) HandleRemoveNode(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	_, ok := h.cache.GetNode(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "node not found")
+		return
+	}
+
+	slog.Info("removing node", "node", id)
+
+	err := h.writeClient.RemoveNode(r.Context(), id)
+	if err != nil {
+		writeDockerError(w, r, err, "node")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handlers) HandleGetNodeRole(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	node, ok := h.cache.GetNode(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "node not found")
+		return
+	}
+
+	managerCount := 0
+	for _, n := range h.cache.ListNodes() {
+		if n.Spec.Role == swarm.NodeRoleManager {
+			managerCount++
+		}
+	}
+
+	writeJSON(w, map[string]any{
+		"role":         string(node.Spec.Role),
+		"isLeader":     node.ManagerStatus != nil && node.ManagerStatus.Leader,
+		"managerCount": managerCount,
+	})
+}
+
 func (h *Handlers) HandleRestartService(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
