@@ -56,8 +56,8 @@ export function SectionToggle({
       aria-expanded={open}
       className={
         className ??
-        "flex cursor-pointer items-center gap-1.5 text-sm font-medium tracking-wider text-muted-foreground uppercase " +
-          "transition-colors hover:text-foreground"
+        "flex cursor-pointer items-center gap-1.5 rounded text-sm font-medium tracking-wider text-muted-foreground uppercase " +
+          "outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
       }
     >
       <ChevronRight

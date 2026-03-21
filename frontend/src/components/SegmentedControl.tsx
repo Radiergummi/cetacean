@@ -1,39 +1,15 @@
+import { Menu } from "@base-ui/react/menu";
+import { Toggle } from "@base-ui/react/toggle";
+import { ToggleGroup } from "@base-ui/react/toggle-group";
 import { ChevronDown } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 
 export interface Segment<T extends string> {
   value: T;
   label: string;
   badge?: number;
   disabled?: boolean;
-}
-
-function SegmentButton<T extends string>({
-  segment,
-  active,
-  onClick,
-}: {
-  segment: Segment<T>;
-  active: boolean;
-  onClick: () => void;
-}) {
-  const { badge, disabled, label } = segment;
-  return (
-    <button
-      disabled={disabled}
-      onClick={onClick}
-      aria-current={active || undefined}
-      className="group/seg inline-flex cursor-pointer items-center gap-1.5 rounded-sm px-3 py-1 text-sm font-medium text-muted-foreground transition hover:text-foreground disabled:cursor-default disabled:text-muted-foreground/40 aria-current:bg-primary aria-current:text-primary-foreground aria-current:shadow-sm"
-    >
-      <span>{label}</span>
-      {badge != null && (
-        <span className="min-size-4 inline-flex items-center justify-center rounded-full bg-foreground/5 px-1 text-[10px] font-semibold tabular-nums group-aria-current/seg:bg-accent/25">
-          {badge}
-        </span>
-      )}
-    </button>
-  );
 }
 
 export default function SegmentedControl<T extends string>({
@@ -59,34 +35,7 @@ export default function SegmentedControl<T extends string>({
   /** Custom popover content. Receives a `close` callback. When provided, the overflow button is always shown. */
   overflowContent?: (close: () => void) => ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const handleClick = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open]);
+  const actionsRef = useRef<Menu.Root.Actions>(null);
 
   const visible = segments.slice(0, max);
   const overflow = segments.slice(max);
@@ -94,63 +43,87 @@ export default function SegmentedControl<T extends string>({
   const hasOverflow = overflow.length > 0 || overflowContent != null;
   const isActive = overflowActive ?? !!activeOverflow;
 
-  const close = () => setOpen(false);
+  const close = () => actionsRef.current?.close();
 
   return (
     <div className="inline-flex h-8 items-center gap-0.5 rounded-md bg-card px-0.5 ring-1 ring-input ring-inset">
-      {visible.map((segment) => (
-        <SegmentButton
-          key={segment.value}
-          segment={segment}
-          active={value === segment.value}
-          onClick={() => onChange(segment.value)}
-        />
-      ))}
+      <ToggleGroup
+        value={[value]}
+        onValueChange={(values) => {
+          if (values.length > 0) {
+            onChange(values[0] as T);
+          }
+        }}
+        className="flex items-center gap-0.5"
+      >
+        {visible.map(({ badge, disabled, label, value: segmentValue }) => (
+          <Toggle
+            key={segmentValue}
+            value={segmentValue}
+            disabled={disabled}
+            className="group/seg inline-flex cursor-pointer items-center gap-1.5 rounded-sm px-3 py-1 text-sm font-medium text-muted-foreground outline-none transition hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-default disabled:text-muted-foreground/40 data-pressed:bg-primary data-pressed:text-primary-foreground data-pressed:shadow-sm"
+          >
+            <span>{label}</span>
+            {badge != null && (
+              <span className="min-size-4 inline-flex items-center justify-center rounded-full bg-foreground/5 px-1 text-[10px] font-semibold tabular-nums group-data-pressed/seg:bg-accent/25">
+                {badge}
+              </span>
+            )}
+          </Toggle>
+        ))}
+      </ToggleGroup>
 
       {hasOverflow && (
-        <div
-          className="relative"
-          ref={menuRef}
+        <Menu.Root
+          modal={false}
+          actionsRef={actionsRef}
         >
-          <button
-            onClick={() => setOpen((o) => !o)}
+          <Menu.Trigger
             aria-current={isActive || undefined}
-            aria-haspopup="menu"
-            aria-expanded={open}
-            className="inline-flex cursor-pointer items-center gap-1 rounded-sm px-2 py-1 text-sm text-muted-foreground transition hover:text-foreground aria-current:bg-primary aria-current:text-primary-foreground aria-current:shadow-sm"
+            className="inline-flex cursor-pointer items-center gap-1 rounded-sm px-2 py-1 text-sm text-muted-foreground outline-none transition hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-current:bg-primary aria-current:text-primary-foreground aria-current:shadow-sm"
           >
             {overflowLabel ?? (activeOverflow ? <span>{activeOverflow.label}</span> : undefined)}
             {overflowIcon ?? <ChevronDown className="size-3" />}
-          </button>
+          </Menu.Trigger>
 
-          {open && (
-            <div
-              role="menu"
-              className="absolute top-full right-0 z-50 mt-1 min-w-36 rounded-md border bg-popover p-1 shadow-md"
+          <Menu.Portal>
+            <Menu.Positioner
+              align="end"
+              sideOffset={4}
+              className="z-50"
             >
-              {overflowContent
-                ? overflowContent(close)
-                : overflow.map(({ badge, disabled, label, value: segmentValue }) => (
-                    <button
-                      key={segmentValue}
-                      role="menuitemradio"
-                      disabled={disabled}
-                      aria-checked={value === segmentValue}
-                      onClick={() => {
-                        onChange(segmentValue);
-                        setOpen(false);
-                      }}
-                      className="flex w-full items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-sm text-popover-foreground hover:bg-accent hover:text-accent-foreground disabled:cursor-default disabled:text-muted-foreground/40 disabled:hover:bg-transparent aria-checked:bg-accent aria-checked:text-accent-foreground"
-                    >
-                      <span>{label}</span>
-                      {badge != null && (
-                        <span className="text-xs text-muted-foreground tabular-nums">{badge}</span>
-                      )}
-                    </button>
-                  ))}
-            </div>
-          )}
-        </div>
+              <Menu.Popup className="min-w-36 rounded-md border bg-popover p-1 shadow-md outline-hidden">
+                {overflowContent
+                  ? overflowContent(close)
+                  : overflow.length > 0 && (
+                      <Menu.RadioGroup
+                        value={value}
+                        onValueChange={(nextValue) => {
+                          onChange(nextValue as T);
+                        }}
+                      >
+                        {overflow.map(({ badge, disabled, label, value: segmentValue }) => (
+                          <Menu.RadioItem
+                            key={segmentValue}
+                            value={segmentValue}
+                            disabled={disabled}
+                            closeOnClick
+                            className="flex w-full cursor-default items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-sm text-popover-foreground outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:pointer-events-none data-disabled:text-muted-foreground/40 data-checked:bg-accent data-checked:text-accent-foreground"
+                          >
+                            <span>{label}</span>
+                            {badge != null && (
+                              <span className="text-xs text-muted-foreground tabular-nums">
+                                {badge}
+                              </span>
+                            )}
+                          </Menu.RadioItem>
+                        ))}
+                      </Menu.RadioGroup>
+                    )}
+              </Menu.Popup>
+            </Menu.Positioner>
+          </Menu.Portal>
+        </Menu.Root>
       )}
     </div>
   );

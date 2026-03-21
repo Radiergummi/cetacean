@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
-import { useOperationsLevel } from "@/hooks/useOperationsLevel";
+import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { stackNamespaceLabel } from "@/lib/parseStackLabels";
 import type { LucideIcon } from "lucide-react";
 import { RefreshCw, RotateCcw, Trash2 } from "lucide-react";
@@ -88,66 +88,69 @@ function ConfirmAction({
 
 export function ServiceActions({ service, serviceId }: { service: Service; serviceId: string }) {
   const { level, loading: levelLoading } = useOperationsLevel();
-  const canWrite = !levelLoading && level >= 1;
-  const canImpact = !levelLoading && level >= 2;
+  const canWrite = !levelLoading && level >= opsLevel.operational;
+  const canImpact = !levelLoading && level >= opsLevel.impactful;
 
   const navigate = useNavigate();
   const rollback = useAsyncAction();
   const restart = useAsyncAction();
   const remove = useAsyncAction();
 
-  const canRollback = canWrite && !!service.PreviousSpec;
+
+  if (!canWrite && !canImpact) {
+    return null;
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <ConfirmAction
-        icon={RotateCcw}
-        label="Rollback"
-        title="Rollback service?"
-        description="This will rollback the service to its previous specification."
-        disabled={!canRollback}
-        disabledTitle={
-          !canWrite ? "Editing disabled by server configuration" : "No previous spec available"
-        }
-        loading={rollback.loading}
-        error={rollback.error}
-        onConfirm={() =>
-          void rollback.execute(() => api.rollbackService(serviceId), "Failed to rollback")
-        }
-      />
+      {canWrite && (
+        <ConfirmAction
+          icon={RotateCcw}
+          label="Rollback"
+          title="Rollback service?"
+          description="This will rollback the service to its previous specification."
+          disabled={!service.PreviousSpec}
+          disabledTitle="No previous spec available"
+          loading={rollback.loading}
+          error={rollback.error}
+          onConfirm={() =>
+            void rollback.execute(() => api.rollbackService(serviceId), "Failed to rollback")
+          }
+        />
+      )}
 
-      <ConfirmAction
-        icon={RefreshCw}
-        label="Restart"
-        title="Restart service?"
-        description="This triggers a rolling restart of all tasks."
-        disabled={!canWrite}
-        disabledTitle="Editing disabled by server configuration"
-        loading={restart.loading}
-        error={restart.error}
-        onConfirm={() =>
-          void restart.execute(() => api.restartService(serviceId), "Failed to restart")
-        }
-      />
+      {canWrite && (
+        <ConfirmAction
+          icon={RefreshCw}
+          label="Restart"
+          title="Restart service?"
+          description="This triggers a rolling restart of all tasks."
+          loading={restart.loading}
+          error={restart.error}
+          onConfirm={() =>
+            void restart.execute(() => api.restartService(serviceId), "Failed to restart")
+          }
+        />
+      )}
 
-      <ConfirmAction
-        icon={Trash2}
-        label="Remove"
-        title="Remove service?"
-        description="This will permanently remove the service and all its tasks. This action cannot be undone."
-        disabled={!canImpact}
-        disabledTitle="Editing disabled by server configuration"
-        loading={remove.loading}
-        error={remove.error}
-        variant="destructive"
-        onConfirm={() =>
-          void remove.execute(async () => {
-            await api.removeService(serviceId);
-            const stackName = service.Spec?.Labels?.[stackNamespaceLabel];
-            navigate(stackName ? `/stacks/${stackName}` : "/services", { replace: true });
-          }, "Failed to remove service")
-        }
-      />
+      {canImpact && (
+        <ConfirmAction
+          icon={Trash2}
+          label="Remove"
+          title="Remove service?"
+          description="This will permanently remove the service and all its tasks. This action cannot be undone."
+          loading={remove.loading}
+          error={remove.error}
+          variant="destructive"
+          onConfirm={() =>
+            void remove.execute(async () => {
+              await api.removeService(serviceId);
+              const stackName = service.Spec?.Labels?.[stackNamespaceLabel];
+              navigate(stackName ? `/stacks/${stackName}` : "/services", { replace: true });
+            }, "Failed to remove service")
+          }
+        />
+      )}
     </div>
   );
 }

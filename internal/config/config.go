@@ -13,14 +13,18 @@ const (
 	// OpsReadOnly disables all write operations.
 	OpsReadOnly OperationsLevel = 0
 
-	// OpsOperational allows routine service actions: scale, image update,
-	// rollback, restart, and service env/labels/resources/healthcheck/placement/
-	// ports/update-policy/rollback-policy/log-driver patches.
+	// OpsOperational allows reactive service actions: scale, image update,
+	// rollback, restart.
 	OpsOperational OperationsLevel = 1
 
+	// OpsConfiguration allows service definition changes: env, labels,
+	// resources, healthcheck, placement, ports, update-policy, rollback-policy,
+	// log-driver.
+	OpsConfiguration OperationsLevel = 2
+
 	// OpsImpactful allows all operations including node availability/labels,
-	// service mode/endpoint mode changes, and task removal.
-	OpsImpactful OperationsLevel = 2
+	// service mode/endpoint mode changes, task removal, and service deletion.
+	OpsImpactful OperationsLevel = 3
 )
 
 type Config struct {

@@ -1,7 +1,5 @@
-import type { Service } from "../../api/types";
+import type { Placement } from "../../api/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-
-export type PlacementShape = NonNullable<Service["Spec"]["TaskTemplate"]["Placement"]>;
 
 function humanizeConstraint(raw: string): { label: string; exclude: boolean } | null {
   const match = raw.match(/^(.+?)\s*(==|!=)\s*(.+)$/);
@@ -92,42 +90,48 @@ function humanizeConstraint(raw: string): { label: string; exclude: boolean } | 
   return null;
 }
 
-export function PlacementPanel({ placement }: { placement: PlacementShape }) {
+export function PlacementPanel({ placement, canEdit }: { placement: Placement; canEdit?: boolean }) {
   const constraints = placement.Constraints ?? [];
   const preferences = placement.Preferences ?? [];
   const hasContent = constraints.length > 0 || placement.MaxReplicas || preferences.length > 0;
 
   if (!hasContent) {
     return (
-      <div className="flex items-center justify-center rounded-md bg-muted/75 p-3 text-muted-foreground">
-        <p className="text-sm text-muted-foreground">No placement constraints.</p>
+      <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed py-6 text-center text-muted-foreground">
+        <p className="text-sm">No placement constraints</p>
+        {canEdit && <p className="text-xs">Click Edit to control which nodes this service can run on.</p>}
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       {constraints.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {constraints.map((constraint) => {
             const humanized = humanizeConstraint(constraint);
-            const pill = (
-              <span
-                key={constraint}
-                data-exclude={humanized?.exclude || undefined}
-                className="inline-flex items-center rounded-lg border px-3 py-2 text-sm data-exclude:border-red-200 data-exclude:bg-red-50 data-exclude:text-red-800 dark:data-exclude:border-red-800 dark:data-exclude:bg-red-950/30 dark:data-exclude:text-red-300"
-              >
-                {humanized?.label ?? constraint}
-              </span>
-            );
+            const pillClassName =
+              "inline-flex items-center rounded-lg border px-3 py-2 text-sm data-exclude:border-red-200 data-exclude:bg-red-50 data-exclude:text-red-800 dark:data-exclude:border-red-800 dark:data-exclude:bg-red-950/30 dark:data-exclude:text-red-300";
 
             if (!humanized) {
-              return pill;
+              return (
+                <span
+                  key={constraint}
+                  className={pillClassName}
+                >
+                  {constraint}
+                </span>
+              );
             }
 
             return (
               <Tooltip key={constraint}>
-                <TooltipTrigger render={pill} />
+                <TooltipTrigger
+                  data-exclude={humanized.exclude || undefined}
+                  className={pillClassName}
+                >
+                  {humanized.label}
+                </TooltipTrigger>
                 <TooltipContent className="font-mono">{constraint}</TooltipContent>
               </Tooltip>
             );

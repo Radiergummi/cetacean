@@ -37,11 +37,12 @@ import SimpleTable from "../components/SimpleTable";
 import TasksTable from "../components/TasksTable";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
-import { useOperationsLevel } from "../hooks/useOperationsLevel";
+import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
 import { formatDuration, formatRelativeDate } from "../lib/format";
+import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
 import { handleCopyWithTemplates, renderSwarmTemplate } from "../lib/swarmTemplates";
 import { escapePromQL } from "../lib/utils";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -59,7 +60,7 @@ export default function ServiceDetail() {
   const [healthcheck, setHealthcheck] = useState<Healthcheck | null | undefined>(undefined);
   const [specPorts, setSpecPorts] = useState<PortConfig[] | null>(null);
   const monitoring = useMonitoringStatus();
-  const { level: operationsLevel } = useOperationsLevel();
+  const { level: operationsLevel, loading: levelLoading } = useOperationsLevel();
   const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
   const hasCadvisor = !!monitoring?.cadvisor?.targets;
   const [error, setError] = useState(false);
@@ -256,7 +257,7 @@ export default function ServiceDetail() {
         title={
           <ResourceName
             name={name}
-            direction="column"
+            direction="responsive"
           />
         }
         breadcrumbs={[
@@ -402,10 +403,12 @@ export default function ServiceDetail() {
         <KeyValueEditor
           title="Labels"
           entries={serviceLabels}
-          keyPlaceholder="key"
+          defaultOpen={Object.keys(serviceLabels).length > 0}
+          keyPlaceholder="com.example.my-label"
           valuePlaceholder="value"
-          editDisabled={operationsLevel < 1}
-          editDisabledTitle="Editing disabled by server configuration"
+          editDisabled={levelLoading || operationsLevel < opsLevel.configuration}
+          isKeyReadOnly={isReservedLabelKey}
+          validateKey={validateLabelKey}
           onSave={async (ops) => {
             const updated = await api.patchServiceLabels(id!, ops);
             setServiceLabels(updated);
@@ -425,21 +428,16 @@ export default function ServiceDetail() {
 
       {/* Ports */}
       {specPorts !== null && (
-        <div className="flex flex-col gap-3 rounded-lg border p-3">
-          <PortsEditor
-            serviceId={id!}
-            ports={specPorts}
-            onSaved={setSpecPorts}
-          />
-        </div>
+        <PortsEditor
+          serviceId={id!}
+          ports={specPorts}
+          onSaved={setSpecPorts}
+        />
       )}
 
       {/* Mounts */}
       {containerSpec.Mounts && containerSpec.Mounts.length > 0 && (
-        <CollapsibleSection
-          title="Mounts"
-          defaultOpen={false}
-        >
+        <CollapsibleSection title="Mounts">
           {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
           <div onCopy={handleCopyWithTemplates}>
             <SimpleTable
@@ -474,10 +472,7 @@ export default function ServiceDetail() {
 
       {/* Networks */}
       {taskTemplate.Networks && taskTemplate.Networks.length > 0 && (
-        <CollapsibleSection
-          title="Networks"
-          defaultOpen={false}
-        >
+        <CollapsibleSection title="Networks">
           <SimpleTable
             columns={["Network", "Virtual IP", "Aliases"]}
             items={taskTemplate.Networks}
@@ -507,10 +502,7 @@ export default function ServiceDetail() {
 
       {/* Configs */}
       {containerSpec.Configs && containerSpec.Configs.length > 0 && (
-        <CollapsibleSection
-          title="Configs"
-          defaultOpen={false}
-        >
+        <CollapsibleSection title="Configs">
           <SimpleTable
             columns={["Name", "Target"]}
             items={containerSpec.Configs}
@@ -534,10 +526,7 @@ export default function ServiceDetail() {
 
       {/* Secrets */}
       {containerSpec.Secrets && containerSpec.Secrets.length > 0 && (
-        <CollapsibleSection
-          title="Secrets"
-          defaultOpen={false}
-        >
+        <CollapsibleSection title="Secrets">
           <SimpleTable
             columns={["Name", "Target"]}
             items={containerSpec.Secrets}
@@ -564,89 +553,91 @@ export default function ServiceDetail() {
         title="Deploy Configuration"
         defaultOpen={false}
       >
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {serviceResources !== null && (
+        <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
+          <div className="flex flex-col gap-4">
+            {service.Spec.EndpointSpec?.Mode && (
+              <div className="flex flex-col gap-3 rounded-lg border p-3">
+                <EndpointModeEditor
+                  serviceId={id!}
+                  currentMode={service.Spec.EndpointSpec.Mode as "vip" | "dnsrr"}
+                />
+              </div>
+            )}
+
+            {serviceResources !== null && (
+              <div className="flex flex-col gap-3 rounded-lg border p-3">
+                <ResourcesEditor
+                  serviceId={id!}
+                  resources={serviceResources}
+                  onSaved={setServiceResources}
+                  pids={taskTemplate.Resources?.Limits?.Pids}
+                  allocation={{ cpuReserved, cpuLimit, cpuActual, memReserved, memLimit, memActual }}
+                />
+              </div>
+            )}
+
             <div className="flex flex-col gap-3 rounded-lg border p-3">
-              <ResourcesEditor
+              <PlacementEditor
                 serviceId={id!}
-                resources={serviceResources}
-                onSaved={setServiceResources}
-                pids={taskTemplate.Resources?.Limits?.Pids}
-                allocation={{ cpuReserved, cpuLimit, cpuActual, memReserved, memLimit, memActual }}
+                placement={taskTemplate.Placement ?? null}
+                onSaved={fetchData}
               />
             </div>
-          )}
 
-          <div className="flex flex-col gap-3 rounded-lg border p-3">
-            <PlacementEditor
-              serviceId={id!}
-              placement={taskTemplate.Placement ?? null}
-              onSaved={fetchData}
-            />
+            {taskTemplate.RestartPolicy && (
+              <div className="flex flex-col gap-3 rounded-lg border p-3">
+                <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                  Restart Policy
+                </h3>
+                <KVTable
+                  rows={[
+                    taskTemplate.RestartPolicy.Condition && [
+                      "Condition",
+                      taskTemplate.RestartPolicy.Condition,
+                    ],
+                    taskTemplate.RestartPolicy.Delay != null && [
+                      "Delay",
+                      formatDuration(taskTemplate.RestartPolicy.Delay),
+                    ],
+                    taskTemplate.RestartPolicy.MaxAttempts != null && [
+                      "Max Attempts",
+                      String(taskTemplate.RestartPolicy.MaxAttempts),
+                    ],
+                    taskTemplate.RestartPolicy.Window != null && [
+                      "Window",
+                      formatDuration(taskTemplate.RestartPolicy.Window),
+                    ],
+                  ]}
+                />
+              </div>
+            )}
           </div>
 
-          {taskTemplate.RestartPolicy && (
-            <div className="flex flex-col gap-3 rounded-lg border p-3">
-              <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                Restart Policy
-              </h3>
-              <KVTable
-                rows={[
-                  taskTemplate.RestartPolicy.Condition && [
-                    "Condition",
-                    taskTemplate.RestartPolicy.Condition,
-                  ],
-                  taskTemplate.RestartPolicy.Delay != null && [
-                    "Delay",
-                    formatDuration(taskTemplate.RestartPolicy.Delay),
-                  ],
-                  taskTemplate.RestartPolicy.MaxAttempts != null && [
-                    "Max Attempts",
-                    String(taskTemplate.RestartPolicy.MaxAttempts),
-                  ],
-                  taskTemplate.RestartPolicy.Window != null && [
-                    "Window",
-                    formatDuration(taskTemplate.RestartPolicy.Window),
-                  ],
-                ]}
-              />
-            </div>
-          )}
-
-          <div className="flex flex-col gap-3 rounded-lg border p-3">
+          <div className="flex flex-col gap-4">
             <LogDriverEditor
               serviceId={id!}
               logDriver={taskTemplate.LogDriver ?? null}
               onSaved={fetchData}
             />
-          </div>
 
-          <div className="flex flex-col gap-3 rounded-lg border p-3">
-            <PolicyEditor
-              type="update"
-              serviceId={id!}
-              policy={service.Spec.UpdateConfig ?? null}
-              onSaved={fetchData}
-            />
-          </div>
-
-          <div className="flex flex-col gap-3 rounded-lg border p-3">
-            <PolicyEditor
-              type="rollback"
-              serviceId={id!}
-              policy={service.Spec.RollbackConfig ?? null}
-              onSaved={fetchData}
-            />
-          </div>
-
-          {service.Spec.EndpointSpec?.Mode && (
             <div className="flex flex-col gap-3 rounded-lg border p-3">
-              <EndpointModeEditor
+              <PolicyEditor
+                type="update"
                 serviceId={id!}
-                currentMode={service.Spec.EndpointSpec.Mode as "vip" | "dnsrr"}
+                policy={service.Spec.UpdateConfig ?? null}
+                onSaved={fetchData}
               />
             </div>
-          )}
+
+            <div className="flex flex-col gap-3 rounded-lg border p-3">
+              <PolicyEditor
+                type="rollback"
+                serviceId={id!}
+                policy={service.Spec.RollbackConfig ?? null}
+                onSaved={fetchData}
+              />
+            </div>
+          </div>
         </div>
       </CollapsibleSection>
 

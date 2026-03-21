@@ -189,7 +189,7 @@ export default function DataTable<T>({ columns, data, keyFn, rowClassName, onRow
       ref={scrollRef}
       tabIndex={0}
       data-virtual={useVirtual || undefined}
-      className="overflow-x-auto rounded-lg border outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 data-virtual:max-h-[calc(100vh-16rem)] data-virtual:overflow-y-auto"
+      className="overflow-x-auto rounded-lg border outline-none focus-visible:ring-3 focus-visible:ring-ring/50 data-virtual:max-h-[calc(100vh-16rem)] data-virtual:overflow-y-auto"
       onKeyDown={onKeyDown}
     >
       <table className="w-full min-w-max">

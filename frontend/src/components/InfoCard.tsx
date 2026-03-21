@@ -30,7 +30,7 @@ export default function InfoCard({
         className="inline-flex items-center gap-2 truncate text-base font-medium"
         title={isString ? value : undefined}
       >
-        {value && href && isString ? (
+        {value && href ? (
           isExternal ? (
             <a
               href={href}

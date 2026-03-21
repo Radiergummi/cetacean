@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { cn } from "@/lib/utils";
 import { CircleCheck, CirclePause, LogOut, Pencil } from "lucide-react";
 import { useState } from "react";
@@ -42,6 +43,8 @@ const availabilityOptions = [
 ];
 
 export function AvailabilityEditor({ nodeId, current }: { nodeId: string; current: string }) {
+  const { level, loading: levelLoading } = useOperationsLevel();
+  const canEdit = !levelLoading && level >= opsLevel.impactful;
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState<Availability>(current as Availability);
   const [drainPending, setDrainPending] = useState(false);
@@ -83,7 +86,7 @@ export function AvailabilityEditor({ nodeId, current }: { nodeId: string; curren
   const cardValue = (
     <>
       {availabilityOptions.find(({ value: v }) => v === current)?.title ?? current}
-      <Popover
+      {canEdit && <Popover
         open={open}
         onOpenChange={handleOpenChange}
         modal
@@ -168,7 +171,7 @@ export function AvailabilityEditor({ nodeId, current }: { nodeId: string; curren
             </Button>
           </div>
         </PopoverContent>
-      </Popover>
+      </Popover>}
     </>
   );
 

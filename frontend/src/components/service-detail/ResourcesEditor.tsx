@@ -3,7 +3,8 @@ import { api } from "@/api/client";
 import type { ClusterCapacity } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
-import { useOperationsLevel } from "@/hooks/useOperationsLevel";
+import { useEscapeCancel } from "@/hooks/useEscapeCancel";
+import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { formatBytes, formatCores, formatNumber, formatPercentage } from "@/lib/format";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil } from "lucide-react";
@@ -56,14 +57,15 @@ export function ResourcesEditor({
   resources: ServiceResourceShape;
   pids?: number;
   allocation?: AllocationData;
-  onSaved: (updated: Record<string, unknown>) => void;
+  onSaved: (updated: ServiceResourceShape) => void;
 }) {
-  const { level } = useOperationsLevel();
-  const canEdit = level >= 1;
+  const { level, loading: levelLoading } = useOperationsLevel();
+  const canEdit = !levelLoading && level >= opsLevel.configuration;
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  useEscapeCancel(editing, () => cancelEdit());
 
   const [cpu, setCpu] = useState<{ reservation: number | undefined; limit: number | undefined }>({
     reservation: undefined,
@@ -77,6 +79,7 @@ export function ResourcesEditor({
     limit: undefined,
   });
   const [capacity, setCapacity] = useState<ClusterCapacity | null>(null);
+  const [capacityError, setCapacityError] = useState(false);
 
   function openEdit() {
     setCpu({
@@ -88,10 +91,12 @@ export function ResourcesEditor({
         Reservations?.MemoryBytes != null ? Reservations.MemoryBytes / (1024 * 1024) : undefined,
       limit: Limits?.MemoryBytes != null ? Limits.MemoryBytes / (1024 * 1024) : undefined,
     });
+    setCapacity(null);
+    setCapacityError(false);
     api
       .clusterCapacity()
       .then(setCapacity)
-      .catch(() => {});
+      .catch(() => setCapacityError(true));
     setSaveError(null);
     setEditing(true);
   }
@@ -115,6 +120,7 @@ export function ResourcesEditor({
         patch.Limits.MemoryBytes = Math.round(memory.limit * 1024 * 1024);
       }
     }
+
     if (cpu.reservation !== undefined || memory.reservation !== undefined) {
       patch.Reservations = {};
 
@@ -126,6 +132,19 @@ export function ResourcesEditor({
         patch.Reservations.MemoryBytes = Math.round(memory.reservation * 1024 * 1024);
       }
     }
+
+    // No-op: nothing changed
+    if (
+      patch.Limits?.NanoCPUs === Limits?.NanoCPUs &&
+      patch.Limits?.MemoryBytes === Limits?.MemoryBytes &&
+      patch.Reservations?.NanoCPUs === Reservations?.NanoCPUs &&
+      patch.Reservations?.MemoryBytes === Reservations?.MemoryBytes
+    ) {
+      setEditing(false);
+
+      return;
+    }
+
     setSaving(true);
     setSaveError(null);
 
@@ -156,13 +175,11 @@ export function ResourcesEditor({
       <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
         Resources
       </h3>
-      {!editing && (
+      {!editing && canEdit && (
         <Button
           variant="outline"
           size="xs"
           onClick={openEdit}
-          disabled={!canEdit}
-          title={canEdit ? undefined : "Editing disabled by server configuration"}
         >
           <Pencil className="size-3" />
           Edit
@@ -176,7 +193,10 @@ export function ResourcesEditor({
       <div className="space-y-3">
         {header}
         {!hasResources && pids == null ? (
-          <p className="text-sm text-muted-foreground">No resource limits configured.</p>
+          <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed py-6 text-center text-muted-foreground">
+            <p className="text-sm">No resource limits configured</p>
+            {canEdit && <p className="text-xs">Click Edit to set CPU and memory reservations and limits.</p>}
+          </div>
         ) : (
           <>
             {hasActualUsage && allocation ? (
@@ -274,6 +294,10 @@ export function ResourcesEditor({
             formatLabel={formatMemoryTick}
           />
         </div>
+      ) : capacityError ? (
+        <p className="text-xs text-red-600 dark:text-red-400">
+          Failed to load cluster capacity. Try closing and reopening the editor.
+        </p>
       ) : (
         <div className="h-24 animate-pulse rounded bg-muted" />
       )}

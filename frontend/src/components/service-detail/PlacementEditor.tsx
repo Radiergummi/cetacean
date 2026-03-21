@@ -3,8 +3,9 @@ import type { Placement } from "@/api/types";
 import { PlacementPanel } from "@/components/service-detail/PlacementPanel";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useOperationsLevel } from "@/hooks/useOperationsLevel";
+import { SliderNumberField } from "@/components/ui/slider-number-field";
+import { useEscapeCancel } from "@/hooks/useEscapeCancel";
+import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -16,12 +17,13 @@ interface PlacementEditorProps {
 }
 
 export function PlacementEditor({ serviceId, placement, onSaved }: PlacementEditorProps) {
-  const { level } = useOperationsLevel();
-  const canEdit = level >= 1;
+  const { level, loading: levelLoading } = useOperationsLevel();
+  const canEdit = !levelLoading && level >= opsLevel.configuration;
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  useEscapeCancel(editing, () => cancelEdit());
 
   const [constraints, setConstraints] = useState<string[]>([]);
   const [maxReplicas, setMaxReplicas] = useState<number>(0);
@@ -57,11 +59,14 @@ export function PlacementEditor({ serviceId, placement, onSaved }: PlacementEdit
     setSaveError(null);
 
     try {
-      const nonEmpty = constraints.filter((c) => c.trim() !== "");
+      const nonEmpty = constraints.filter((constraint) => constraint.trim() !== "");
+
+      // Fetch fresh placement to avoid overwriting externally changed Preferences
+      const current = await api.servicePlacement(serviceId);
 
       await api.putServicePlacement(serviceId, {
         Constraints: nonEmpty.length > 0 ? nonEmpty : undefined,
-        Preferences: placement?.Preferences,
+        Preferences: current?.Preferences,
         MaxReplicas: maxReplicas || undefined,
       });
 
@@ -82,19 +87,19 @@ export function PlacementEditor({ serviceId, placement, onSaved }: PlacementEdit
             Placement
           </h3>
 
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={openEdit}
-            disabled={!canEdit}
-            title={canEdit ? undefined : "Editing disabled by server configuration"}
-          >
-            <Pencil className="size-3" />
-            Edit
-          </Button>
+          {canEdit && (
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={openEdit}
+            >
+              <Pencil className="size-3" />
+              Edit
+            </Button>
+          )}
         </div>
 
-        <PlacementPanel placement={placement ?? { Constraints: [], Preferences: [] }} />
+        <PlacementPanel placement={placement ?? { Constraints: [], Preferences: [] }} canEdit={canEdit} />
       </div>
     );
   }
@@ -105,19 +110,29 @@ export function PlacementEditor({ serviceId, placement, onSaved }: PlacementEdit
         Placement
       </h3>
 
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Constraints</label>
+      <div className="w-48">
+        <SliderNumberField
+          label="Max replicas per node"
+          value={maxReplicas || undefined}
+          onChange={(value) => setMaxReplicas(value ?? 0)}
+          min={0}
+          step={1}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-muted-foreground">Constraints</label>
 
         {constraints.map((constraint, index) => (
           <div
             key={index}
             className="flex items-center gap-2"
           >
-            <Input
+            <input
               value={constraint}
               onChange={(event) => updateConstraint(index, event.target.value)}
               placeholder="node.role==manager"
-              className="font-mono text-sm"
+              className="h-8 w-full rounded-md border border-input bg-transparent px-3 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             />
 
             <Button
@@ -129,7 +144,11 @@ export function PlacementEditor({ serviceId, placement, onSaved }: PlacementEdit
             </Button>
           </div>
         ))}
+      </div>
 
+      {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
+
+      <footer className="flex items-center gap-2">
         <Button
           variant="outline"
           size="sm"
@@ -138,42 +157,27 @@ export function PlacementEditor({ serviceId, placement, onSaved }: PlacementEdit
           <Plus className="size-3" />
           Add constraint
         </Button>
-      </div>
 
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Max replicas per node</label>
+        <div className="ml-auto flex gap-2">
+          <Button
+            size="sm"
+            onClick={save}
+            disabled={saving}
+          >
+            {saving && <Spinner className="size-3" />}
+            Save
+          </Button>
 
-        <Input
-          type="number"
-          min={0}
-          value={maxReplicas || ""}
-          onChange={(event) => setMaxReplicas(Number(event.target.value) || 0)}
-          placeholder="0 (unlimited)"
-          className="w-32"
-        />
-      </div>
-
-      {saveError && <p className="text-xs text-red-600">{saveError}</p>}
-
-      <div className="flex gap-2">
-        <Button
-          size="sm"
-          onClick={save}
-          disabled={saving}
-        >
-          {saving && <Spinner className="size-3" />}
-          Save
-        </Button>
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={cancelEdit}
-          disabled={saving}
-        >
-          Cancel
-        </Button>
-      </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={cancelEdit}
+            disabled={saving}
+          >
+            Cancel
+          </Button>
+        </div>
+      </footer>
     </div>
   );
 }

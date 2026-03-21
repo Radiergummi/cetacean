@@ -8,6 +8,7 @@ import { LoadingDetail } from "../components/LoadingSkeleton";
 import { LogViewer } from "../components/log";
 import { MetricsPanel, ResourceGauge } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
+import ResourceName from "../components/ResourceName";
 import { Spinner } from "../components/Spinner";
 import TaskStatusBadge from "../components/TaskStatusBadge";
 import {
@@ -24,6 +25,7 @@ import {
 import { Button } from "../components/ui/button";
 import { useAsyncAction } from "../hooks/useAsyncAction";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
@@ -39,6 +41,8 @@ export default function TaskDetail() {
   const [task, setTask] = useState<Task | null>(null);
   const [service, setService] = useState<Service | null>(null);
   const [error, setError] = useState(false);
+  const { level, loading: levelLoading } = useOperationsLevel();
+  const canRemove = !levelLoading && level >= opsLevel.impactful;
   const removal = useAsyncAction();
 
   const fetchTask = useCallback(() => {
@@ -97,20 +101,25 @@ export default function TaskDetail() {
 
   const serviceName = task.ServiceName || task.ServiceID.slice(0, 12);
   const nodeLabel = task.NodeHostname || task.NodeID.slice(0, 12);
-  const taskLabel = task.Slot
-    ? `${serviceName} Replica #${task.Slot}`
-    : `Task ${task.ID.slice(0, 12)}`;
   const taskIdShort = task.ID.slice(0, 12);
   const exitCode = task.Status.ContainerStatus?.ExitCode;
   const containerId = task.Status.ContainerStatus?.ContainerID;
 
   return (
-    <div>
+    <div className="flex flex-col gap-6">
       <PageHeader
-        title={taskLabel}
+        title={
+          task.Slot ? (
+            <span>
+              <ResourceName name={serviceName} /> Replica #{task.Slot}
+            </span>
+          ) : (
+            <>Task <span className="font-mono">{taskIdShort}</span></>
+          )
+        }
         breadcrumbs={[
           { label: "Services", to: "/services" },
-          { label: serviceName, to: `/services/${task.ServiceID}` },
+          { label: <ResourceName name={serviceName} />, to: `/services/${task.ServiceID}` },
           {
             label: task.Slot ? (
               `Replica #${task.Slot}`
@@ -119,7 +128,7 @@ export default function TaskDetail() {
             ),
           },
         ]}
-        actions={
+        actions={canRemove ? (
           <>
             <AlertDialog>
               <AlertDialogTrigger
@@ -161,10 +170,10 @@ export default function TaskDetail() {
               <p className="text-xs text-red-600 dark:text-red-400">{removal.error}</p>
             )}
           </>
-        }
+        ) : undefined}
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         <div className="rounded-lg border bg-card p-4">
           <div className="mb-1 text-xs font-medium tracking-wider text-muted-foreground uppercase">
             State
@@ -177,7 +186,7 @@ export default function TaskDetail() {
         />
         <ResourceLink
           label="Service"
-          name={serviceName}
+          name={<ResourceName name={serviceName} />}
           to={`/services/${task.ServiceID}`}
         />
         <ResourceLink
@@ -206,28 +215,28 @@ export default function TaskDetail() {
             value={String(exitCode)}
           />
         )}
+
+        {task.Status.Err && (
+          <div className="col-span-full rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/30">
+            <div className="mb-1 text-xs font-medium tracking-wider text-red-600 uppercase dark:text-red-400">
+              Error
+            </div>
+            <div className="text-sm text-red-700 dark:text-red-300">{task.Status.Err}</div>
+          </div>
+        )}
+
+        {task.Status.Message && (
+          <div className="col-span-full rounded-lg border bg-card p-4">
+            <div className="mb-1 text-xs font-medium tracking-wider text-muted-foreground uppercase">
+              Status Message
+            </div>
+            <div className="text-sm">{task.Status.Message}</div>
+          </div>
+        )}
       </div>
 
-      {task.Status.Err && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/30">
-          <div className="mb-1 text-xs font-medium tracking-wider text-red-600 uppercase dark:text-red-400">
-            Error
-          </div>
-          <div className="text-sm text-red-700 dark:text-red-300">{task.Status.Err}</div>
-        </div>
-      )}
-
-      {task.Status.Message && (
-        <div className="mb-6 rounded-lg border bg-card p-4">
-          <div className="mb-1 text-xs font-medium tracking-wider text-muted-foreground uppercase">
-            Status Message
-          </div>
-          <div className="text-sm">{task.Status.Message}</div>
-        </div>
-      )}
-
       {hasCadvisor && task.Status.State === "running" && myMetrics && (
-        <div className="mb-6 flex items-center justify-center gap-8">
+        <div className="flex items-center justify-center gap-8">
           <ResourceGauge
             label="CPU"
             value={cpuGaugePercent(myMetrics.currentCpu, service)}
@@ -270,14 +279,12 @@ export default function TaskDetail() {
         </ErrorBoundary>
       )}
 
-      <div className="mb-6">
         <ErrorBoundary inline>
           <LogViewer
             taskId={id!}
             header="Logs"
           />
         </ErrorBoundary>
-      </div>
     </div>
   );
 }

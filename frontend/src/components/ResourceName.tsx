@@ -6,7 +6,7 @@ export default function ResourceName({
   direction = "row",
 }: {
   name: string;
-  direction?: "row" | "column";
+  direction?: "row" | "column" | "responsive";
 }) {
   const { prefix, name: rest } = splitStackPrefix(name);
 
@@ -18,6 +18,18 @@ export default function ResourceName({
     return (
       <span className="flex flex-col leading-tight">
         <span className="text-[0.5em] font-normal text-muted-foreground">{prefix}</span>
+        <strong className="font-semibold">{rest}</strong>
+      </span>
+    );
+  }
+
+  if (direction === "responsive") {
+    return (
+      <span className="inline-flex items-baseline md:items-baseline flex-col md:flex-row leading-tight md:leading-normal">
+        <span className="text-[0.5em] md:text-[1em] font-normal text-muted-foreground">
+          <span className="md:hidden">{prefix}</span>
+          <span className="hidden md:inline">{prefix}/</span>
+        </span>
         <strong className="font-semibold">{rest}</strong>
       </span>
     );

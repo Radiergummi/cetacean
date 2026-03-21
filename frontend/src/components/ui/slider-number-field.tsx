@@ -86,17 +86,24 @@ export function SliderNumberField({
         <NumberField.Root
           value={value ?? null}
           onValueChange={handleNumberChange}
+          allowWheelScrub
           min={min}
           max={max}
           step={step}
           className="min-w-0 flex-1"
         >
-          <NumberField.Group className="flex w-full items-center overflow-hidden rounded-md border">
-            <NumberField.Decrement className="flex size-8 shrink-0 items-center justify-center border-r text-muted-foreground hover:bg-accent disabled:opacity-50">
+          <NumberField.Group className="flex w-full items-center overflow-hidden rounded-md border focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
+            <NumberField.Decrement
+              className="flex size-8 shrink-0 items-center justify-center border-r text-muted-foreground hover:bg-accent disabled:opacity-50"
+              onClick={value == null ? () => onChange(min) : undefined}
+            >
               <Minus className="size-3" />
             </NumberField.Decrement>
             <NumberField.Input className="min-w-0 flex-1 bg-transparent px-2 py-1 text-center font-mono text-sm focus:outline-none" />
-            <NumberField.Increment className="flex size-8 shrink-0 items-center justify-center border-l text-muted-foreground hover:bg-accent disabled:opacity-50">
+            <NumberField.Increment
+              className="flex size-8 shrink-0 items-center justify-center border-l text-muted-foreground hover:bg-accent disabled:opacity-50"
+              onClick={value == null ? () => onChange(min + (step ?? 1)) : undefined}
+            >
               <Plus className="size-3" />
             </NumberField.Increment>
           </NumberField.Group>

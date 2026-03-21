@@ -20,13 +20,15 @@ export default function SearchInput({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder || "Search…"}
-        className="w-full rounded-md border bg-background py-2 pr-8 pl-9 text-sm focus:border-transparent focus:ring-2 focus:ring-ring focus:outline-none"
+        className="w-full rounded-md border bg-background py-2 pr-8 pl-9 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
       />
 
       {value && (
         <button
+          type="button"
+          aria-label="Clear search"
           onClick={() => onChange("")}
-          className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:bg-muted"
+          className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-0.5 text-muted-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <X className="size-3.5" />
         </button>

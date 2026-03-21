@@ -16,10 +16,11 @@ import TasksTable from "../components/TasksTable";
 import { useGaugeValue } from "../hooks/useGaugeValue";
 import { useInstanceResolver } from "../hooks/useInstanceResolver";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
-import { useOperationsLevel } from "../hooks/useOperationsLevel";
+import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { formatBytes, formatNumber } from "../lib/format";
+import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
 import { escapePromQL } from "../lib/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -32,7 +33,7 @@ export default function NodeDetail() {
   const [nodeLabels, setNodeLabels] = useState<Record<string, string> | null>(null);
 
   const monitoring = useMonitoringStatus();
-  const { level: operationsLevel } = useOperationsLevel();
+  const { level: operationsLevel, loading: levelLoading } = useOperationsLevel();
   const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
   const hasCadvisor = !!monitoring?.cadvisor?.targets;
   const { resolve } = useInstanceResolver();
@@ -207,10 +208,12 @@ export default function NodeDetail() {
         <KeyValueEditor
           title="Labels"
           entries={nodeLabels}
-          keyPlaceholder="key"
+          defaultOpen={Object.keys(nodeLabels).length > 0}
+          keyPlaceholder="com.example.my-label"
           valuePlaceholder="value"
-          editDisabled={operationsLevel < 2}
-          editDisabledTitle="Editing disabled by server configuration"
+          editDisabled={levelLoading || operationsLevel < opsLevel.impactful}
+          isKeyReadOnly={isReservedLabelKey}
+          validateKey={validateLabelKey}
           onSave={async (ops) => {
             const updated = await api.patchNodeLabels(node.ID, ops);
             setNodeLabels(updated);

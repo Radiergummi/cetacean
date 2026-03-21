@@ -21,7 +21,7 @@ Supported `_FILE` variants: `CETACEAN_AUTH_OIDC_CLIENT_SECRET_FILE`, `CETACEAN_A
 | `-log-level`      | `CETACEAN_LOG_LEVEL`          | `logging.level`             | `info`                        | `debug`, `info`, `warn`, `error`                              |
 | `-log-format`     | `CETACEAN_LOG_FORMAT`         | `logging.format`            | `json`                        | `json` or `text`                                              |
 | `-pprof`          | `CETACEAN_PPROF`              | `server.pprof`              | `false`                       | Expose Go pprof endpoints at `/debug/pprof/`                  |
-| _—_               | `CETACEAN_OPERATIONS_LEVEL`   | `server.operations_level`   | `1`                           | Write operation tier: 0=read-only, 1=operational, 2=impactful |
+| _—_               | `CETACEAN_OPERATIONS_LEVEL`   | `server.operations_level`   | `1`                           | Write operation tier: 0=read-only, 1=operational, 2=configuration, 3=impactful |
 | _—_               | `CETACEAN_SSE_BATCH_INTERVAL` | `server.sse.batch_interval` | `100ms`                       | SSE event batching window (Go duration)                       |
 | _—_               | `CETACEAN_SNAPSHOT`           | `storage.snapshot`          | `true`                        | Enable disk persistence of swarm state                        |
 | _—_               | `CETACEAN_DATA_DIR`           | `storage.data_dir`          | `./data`                      | Directory for snapshot file                                   |
@@ -256,37 +256,31 @@ configured level receive a `403 Forbidden` response.
 The current level is exposed in the health endpoint (`GET /-/health`) as `operationsLevel`, which the frontend uses to
 hide disabled action buttons.
 
-### Level 0 — Read-only
-
-All write endpoints are disabled. Cetacean operates as a pure observability dashboard.
-
-### Level 1 — Operational
-
-Routine service management actions:
-
-- **Scale service** — `PUT /services/{id}/scale`
-- **Update service image** — `PUT /services/{id}/image`
-- **Rollback service** — `POST /services/{id}/rollback`
-- **Restart service** — `POST /services/{id}/restart`
-- **Patch service environment variables** — `PATCH /services/{id}/env`
-- **Patch service labels** — `PATCH /services/{id}/labels`
-- **Patch service resources** — `PATCH /services/{id}/resources`
-- **Update service healthcheck** — `PUT /services/{id}/healthcheck`, `PATCH /services/{id}/healthcheck`
-- **Update service placement** — `PUT /services/{id}/placement`
-- **Patch service ports** — `PATCH /services/{id}/ports`
-- **Patch service update policy** — `PATCH /services/{id}/update-policy`
-- **Patch service rollback policy** — `PATCH /services/{id}/rollback-policy`
-- **Patch service log driver** — `PATCH /services/{id}/log-driver`
-
-### Level 2 — Impactful
-
-Everything in level 1, plus actions that affect scheduling, topology, or destroy running work:
-
-- **Change node availability** (active/drain/pause) — `PUT /nodes/{id}/availability`
-- **Patch node labels** — `PATCH /nodes/{id}/labels`
-- **Change service mode** (replicated/global) — `PUT /services/{id}/mode`
-- **Change service endpoint mode** (vip/dnsrr) — `PUT /services/{id}/endpoint-mode`
-- **Remove task** (force-kill a running container) — `DELETE /tasks/{id}`
+| Operation                        | Endpoint                                    | 0 Read-only | 1 Operational | 2 Configuration | 3 Impactful |
+|----------------------------------|---------------------------------------------|:-----------:|:-------------:|:---------------:|:-----------:|
+| Browse all resources             | `GET /…`                                    | ✔           | ✔             | ✔               | ✔           |
+| **Reactive ops**                 |                                             |             |               |                 |             |
+| Scale service                    | `PUT /services/{id}/scale`                  | —           | ✔             | ✔               | ✔           |
+| Update service image             | `PUT /services/{id}/image`                  | —           | ✔             | ✔               | ✔           |
+| Rollback service                 | `POST /services/{id}/rollback`              | —           | ✔             | ✔               | ✔           |
+| Restart service                  | `POST /services/{id}/restart`               | —           | ✔             | ✔               | ✔           |
+| **Service definition changes**   |                                             |             |               |                 |             |
+| Patch environment variables      | `PATCH /services/{id}/env`                  | —           | —             | ✔               | ✔           |
+| Patch service labels             | `PATCH /services/{id}/labels`               | —           | —             | ✔               | ✔           |
+| Patch resources                  | `PATCH /services/{id}/resources`            | —           | —             | ✔               | ✔           |
+| Update healthcheck               | `PUT\|PATCH /services/{id}/healthcheck`     | —           | —             | ✔               | ✔           |
+| Update placement                 | `PUT /services/{id}/placement`              | —           | —             | ✔               | ✔           |
+| Patch ports                      | `PATCH /services/{id}/ports`                | —           | —             | ✔               | ✔           |
+| Patch update policy              | `PATCH /services/{id}/update-policy`        | —           | —             | ✔               | ✔           |
+| Patch rollback policy            | `PATCH /services/{id}/rollback-policy`      | —           | —             | ✔               | ✔           |
+| Patch log driver                 | `PATCH /services/{id}/log-driver`           | —           | —             | ✔               | ✔           |
+| **Dangerous operations**         |                                             |             |               |                 |             |
+| Change node availability         | `PUT /nodes/{id}/availability`              | —           | —             | —               | ✔           |
+| Patch node labels                | `PATCH /nodes/{id}/labels`                  | —           | —             | —               | ✔           |
+| Change service mode              | `PUT /services/{id}/mode`                   | —           | —             | —               | ✔           |
+| Change endpoint mode             | `PUT /services/{id}/endpoint-mode`          | —           | —             | —               | ✔           |
+| Remove service                   | `DELETE /services/{id}`                     | —           | —             | —               | ✔           |
+| Remove task                      | `DELETE /tasks/{id}`                        | —           | —             | —               | ✔           |
 
 ## Profiling
 

@@ -205,7 +205,7 @@ function CompactStepper({
         max={max}
         step={step}
       >
-        <NumberField.Group className="flex items-center rounded-md border">
+        <NumberField.Group className="flex items-center rounded-md border focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
           <NumberField.Decrement className="flex size-6 items-center justify-center border-r text-muted-foreground hover:bg-accent disabled:opacity-50">
             <Minus className="size-2.5" />
           </NumberField.Decrement>

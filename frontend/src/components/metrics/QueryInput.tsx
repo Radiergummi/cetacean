@@ -192,7 +192,7 @@ export function QueryInput({ value, onChange, onRun, loading, completion }: Prop
           onBlur={handleBlur}
           placeholder="Enter a PromQL expression..."
           rows={1}
-          className="w-full resize-none overflow-hidden rounded-md border bg-background px-3 py-1.5 font-mono text-sm placeholder:text-muted-foreground focus:ring-1 focus:ring-ring focus:outline-none"
+          className="w-full resize-none overflow-hidden rounded-md border bg-background px-3 py-1.5 font-mono text-sm placeholder:text-muted-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         />
 
         {hasSuggestions && (

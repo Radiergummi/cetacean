@@ -2,11 +2,26 @@ import { api } from "@/api/client";
 import type { LogDriver } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useOperationsLevel } from "@/hooks/useOperationsLevel";
+import { Combobox } from "@/components/ui/combobox";
+import { useEscapeCancel } from "@/hooks/useEscapeCancel";
+import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
+
+const logDriverOptions = [
+  { value: "json-file", label: "json-file", description: "JSON log files on the host (default)" },
+  { value: "local", label: "local", description: "Compressed, rotated logs with minimal overhead" },
+  { value: "journald", label: "journald", description: "systemd journal" },
+  { value: "syslog", label: "syslog", description: "Syslog daemon" },
+  { value: "gelf", label: "gelf", description: "Graylog Extended Log Format (e.g. Graylog, Logstash)" },
+  { value: "fluentd", label: "fluentd", description: "Fluentd forward protocol" },
+  { value: "awslogs", label: "awslogs", description: "Amazon CloudWatch Logs" },
+  { value: "gcplogs", label: "gcplogs", description: "Google Cloud Logging" },
+  { value: "splunk", label: "splunk", description: "Splunk HTTP Event Collector" },
+  { value: "loki", label: "loki", description: "Grafana Loki" },
+  { value: "none", label: "none", description: "Discard all logs" },
+];
 
 interface LogDriverEditorProps {
   serviceId: string;
@@ -15,12 +30,13 @@ interface LogDriverEditorProps {
 }
 
 export function LogDriverEditor({ serviceId, logDriver, onSaved }: LogDriverEditorProps) {
-  const { level } = useOperationsLevel();
-  const canEdit = level >= 1;
+  const { level, loading: levelLoading } = useOperationsLevel();
+  const canEdit = !levelLoading && level >= opsLevel.configuration;
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  useEscapeCancel(editing, () => cancelEdit());
 
   const [driverName, setDriverName] = useState("");
   const [options, setOptions] = useState<[string, string][]>([]);
@@ -79,24 +95,28 @@ export function LogDriverEditor({ serviceId, logDriver, onSaved }: LogDriverEdit
     }
   }
 
+  if (!editing && !logDriver && !canEdit) {
+    return null;
+  }
+
   if (!editing) {
     return (
-      <div className="space-y-3">
+      <div className="rounded-lg border p-3 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
             Log Driver
           </h3>
 
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={openEdit}
-            disabled={!canEdit}
-            title={canEdit ? undefined : "Editing disabled by server configuration"}
-          >
-            <Pencil className="size-3" />
-            Edit
-          </Button>
+          {canEdit && (
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={openEdit}
+            >
+              <Pencil className="size-3" />
+              Edit
+            </Button>
+          )}
         </div>
 
         {logDriver ? (
@@ -121,30 +141,33 @@ export function LogDriverEditor({ serviceId, logDriver, onSaved }: LogDriverEdit
             )}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">No log driver configured.</p>
+          <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed py-6 text-center text-muted-foreground">
+            <p className="text-sm">No log driver configured</p>
+            {canEdit && <p className="text-xs">Click Edit to choose how container logs are collected and forwarded.</p>}
+          </div>
         )}
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="rounded-lg border p-3 space-y-3">
       <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
         Log Driver
       </h3>
 
-      <div className="space-y-1">
+      <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-muted-foreground">Driver name</label>
 
-        <Input
+        <Combobox
           value={driverName}
-          onChange={(event) => setDriverName(event.target.value)}
-          placeholder="json-file"
-          className="w-64"
+          onChange={setDriverName}
+          placeholder="Select driver..."
+          options={logDriverOptions}
         />
       </div>
 
-      <div className="space-y-2">
+      <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-muted-foreground">Options</label>
 
         {options.map(([key, value], index) => (
@@ -152,18 +175,18 @@ export function LogDriverEditor({ serviceId, logDriver, onSaved }: LogDriverEdit
             key={index}
             className="flex items-center gap-2"
           >
-            <Input
+            <input
               value={key}
               onChange={(event) => updateOption(index, 0, event.target.value)}
               placeholder="key"
-              className="font-mono text-sm"
+              className="h-8 w-full rounded-md border border-input bg-transparent px-3 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             />
 
-            <Input
+            <input
               value={value}
               onChange={(event) => updateOption(index, 1, event.target.value)}
               placeholder="value"
-              className="font-mono text-sm"
+              className="h-8 w-full rounded-md border border-input bg-transparent px-3 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             />
 
             <Button
@@ -175,7 +198,11 @@ export function LogDriverEditor({ serviceId, logDriver, onSaved }: LogDriverEdit
             </Button>
           </div>
         ))}
+      </div>
 
+      {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
+
+      <footer className="flex items-center gap-2">
         <Button
           variant="outline"
           size="sm"
@@ -184,29 +211,27 @@ export function LogDriverEditor({ serviceId, logDriver, onSaved }: LogDriverEdit
           <Plus className="size-3" />
           Add option
         </Button>
-      </div>
 
-      {saveError && <p className="text-xs text-red-600">{saveError}</p>}
+        <div className="ml-auto flex gap-2">
+          <Button
+            size="sm"
+            onClick={save}
+            disabled={saving}
+          >
+            {saving && <Spinner className="size-3" />}
+            Save
+          </Button>
 
-      <div className="flex gap-2">
-        <Button
-          size="sm"
-          onClick={save}
-          disabled={saving}
-        >
-          {saving && <Spinner className="size-3" />}
-          Save
-        </Button>
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={cancelEdit}
-          disabled={saving}
-        >
-          Cancel
-        </Button>
-      </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={cancelEdit}
+            disabled={saving}
+          >
+            Cancel
+          </Button>
+        </div>
+      </footer>
     </div>
   );
 }

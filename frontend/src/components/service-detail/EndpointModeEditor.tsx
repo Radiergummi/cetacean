@@ -1,59 +1,14 @@
 import { api } from "@/api/client";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
+import { RadioCard } from "@/components/ui/radio-card";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
-import { useOperationsLevel } from "@/hooks/useOperationsLevel";
-import { cn } from "@/lib/utils";
+import { useEscapeCancel } from "@/hooks/useEscapeCancel";
+import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { Globe, Pencil, Shuffle } from "lucide-react";
 import { useState } from "react";
 
 type EndpointMode = "vip" | "dnsrr";
-
-interface RadioCardProps {
-  selected: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  disabled?: boolean;
-}
-
-function RadioCard({ selected, onClick, icon, title, description, disabled }: RadioCardProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "flex items-start gap-3 rounded-lg border p-3 text-left transition-colors",
-        selected
-          ? "border-primary bg-primary/5 ring-1 ring-primary"
-          : "border-border hover:border-muted-foreground/40",
-        disabled && "pointer-events-none opacity-50",
-      )}
-    >
-      <div className="mt-0.5 shrink-0 text-muted-foreground">{icon}</div>
-
-      <div className="flex-1">
-        <div className="text-sm font-medium">{title}</div>
-        <div className="text-xs text-muted-foreground">{description}</div>
-      </div>
-
-      <div
-        className={cn(
-          "mt-0.5 size-4 shrink-0 rounded-full border-2 transition-colors",
-          selected ? "border-primary bg-primary" : "border-muted-foreground/40",
-        )}
-      >
-        {selected && (
-          <div className="flex size-full items-center justify-center">
-            <div className="size-1.5 rounded-full bg-primary-foreground" />
-          </div>
-        )}
-      </div>
-    </button>
-  );
-}
 
 export function EndpointModeEditor({
   serviceId,
@@ -62,11 +17,12 @@ export function EndpointModeEditor({
   serviceId: string;
   currentMode: EndpointMode;
 }) {
-  const { level } = useOperationsLevel();
-  const canEdit = level >= 2;
+  const { level, loading: levelLoading } = useOperationsLevel();
+  const canEdit = !levelLoading && level >= opsLevel.impactful;
 
   const [editing, setEditing] = useState(false);
   const [mode, setMode] = useState<EndpointMode>(currentMode);
+  useEscapeCancel(editing, () => setEditing(false));
   const action = useAsyncAction();
 
   function openEdit() {
@@ -93,13 +49,11 @@ export function EndpointModeEditor({
         <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
           Endpoint Mode
         </h3>
-        {!editing && (
+        {!editing && canEdit && (
           <Button
             variant="outline"
             size="xs"
             onClick={openEdit}
-            disabled={!canEdit}
-            title={canEdit ? undefined : "Editing disabled by server configuration"}
           >
             <Pencil className="size-3" />
             Edit
