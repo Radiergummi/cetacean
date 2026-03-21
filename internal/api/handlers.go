@@ -68,6 +68,9 @@ type DockerWriteClient interface {
 	UpdateNodeLabels(ctx context.Context, id string, labels map[string]string) (swarm.Node, error)
 	UpdateNodeRole(ctx context.Context, id string, role swarm.NodeRole) (swarm.Node, error)
 	RemoveNode(ctx context.Context, id string) error
+	RemoveNetwork(ctx context.Context, id string) error
+	RemoveConfig(ctx context.Context, id string) error
+	RemoveSecret(ctx context.Context, id string) error
 	UpdateServiceLabels(
 		ctx context.Context,
 		id string,
