@@ -6,20 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
+import { formatDuration } from "@/lib/format";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil } from "lucide-react";
 import type { MouseEvent } from "react";
 import { useState } from "react";
-
-function formatGracePeriod(nanoseconds: number | undefined): string {
-  if (nanoseconds == null) {
-    return "—";
-  }
-
-  const seconds = nanoseconds / 1e9;
-
-  return `${seconds}s`;
-}
 
 function formatInit(init: boolean | undefined): string {
   if (init === undefined) {
@@ -230,7 +221,9 @@ export function RuntimeEditor({
             />
             <DescriptionRow
               label="Stop Grace Period"
-              value={formatGracePeriod(config.stopGracePeriod)}
+              value={
+                config.stopGracePeriod != null ? formatDuration(config.stopGracePeriod) : undefined
+              }
             />
           </dl>
 
