@@ -1,5 +1,6 @@
 import { api } from "../api/client";
 import type {
+  ContainerConfig,
   Healthcheck,
   HistoryEntry,
   PortConfig,
@@ -20,9 +21,13 @@ import { MetricsPanel, type Threshold } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
 import {
+  CapabilitiesEditor,
+  CommandEditor,
   DeploymentChanges,
+  DnsEditor,
   EndpointModeEditor,
   EnvEditor,
+  ExtraHostsEditor,
   HealthcheckEditor,
   LogDriverEditor,
   PlacementEditor,
@@ -30,6 +35,7 @@ import {
   PortsEditor,
   ReplicaCard,
   ResourcesEditor,
+  RuntimeEditor,
   ServiceActions,
   type ServiceResourceShape,
 } from "../components/service-detail";
@@ -59,6 +65,7 @@ export default function ServiceDetail() {
   const [serviceLabels, setServiceLabels] = useState<Record<string, string> | null>(null);
   const [healthcheck, setHealthcheck] = useState<Healthcheck | null | undefined>(undefined);
   const [specPorts, setSpecPorts] = useState<PortConfig[] | null>(null);
+  const [containerConfig, setContainerConfig] = useState<ContainerConfig | null>(null);
   const monitoring = useMonitoringStatus();
   const { level: operationsLevel, loading: levelLoading } = useOperationsLevel();
   const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
@@ -118,6 +125,10 @@ export default function ServiceDetail() {
     api
       .servicePorts(id, signal)
       .then(setSpecPorts)
+      .catch(() => {});
+    api
+      .serviceContainerConfig(id, signal)
+      .then(setContainerConfig)
       .catch(() => {});
   }, [id]);
 
@@ -243,17 +254,6 @@ export default function ServiceDetail() {
       taskTemplate.Resources?.Limits?.Pids != null);
   const labels = service.Spec.Labels;
 
-  const hasContainerConfig =
-    containerSpec.Command ||
-    containerSpec.Args ||
-    containerSpec.User ||
-    containerSpec.Dir ||
-    containerSpec.Hostname ||
-    containerSpec.StopSignal ||
-    containerSpec.StopGracePeriod != null ||
-    containerSpec.Init != null ||
-    containerSpec.ReadOnly;
-
   const runningTasks = tasks?.filter(({ Status }) => Status?.State === "running").length ?? 0;
   const resources = service?.Spec?.TaskTemplate?.Resources;
   const cpuReserved = resources?.Reservations?.NanoCPUs
@@ -346,66 +346,44 @@ export default function ServiceDetail() {
       )}
 
       {/* Container configuration */}
-      {hasContainerConfig && (
-        <CollapsibleSection
-          title="Container Configuration"
-          defaultOpen={false}
-        >
-          {/* onCopy rewrites template badge labels to raw {{...}} strings */}
-          <div onCopy={handleCopyWithTemplates}>
-            <KVTable
-              rows={[
-                containerSpec.Command && [
-                  "Command",
-                  containerSpec.Command.join(" "),
-                  "The command to run inside the container, overriding the image's default entrypoint.",
-                ],
-                containerSpec.Args && [
-                  "Args",
-                  containerSpec.Args.join(" "),
-                  "Arguments passed to the container's entrypoint command.",
-                ],
-                containerSpec.User && [
-                  "User",
-                  containerSpec.User,
-                  "The user (UID or name) the container process runs as.",
-                ],
-                containerSpec.Dir && [
-                  "Working Dir",
-                  containerSpec.Dir,
-                  "The working directory inside the container where commands are executed.",
-                ],
-                containerSpec.Hostname && [
-                  "Hostname",
-                  renderSwarmTemplate(containerSpec.Hostname),
-                  "The hostname set inside the container.",
-                  containerSpec.Hostname,
-                ],
-                containerSpec.StopSignal && [
-                  "Stop Signal",
-                  containerSpec.StopSignal,
-                  "The signal sent to the container process to request a graceful shutdown.",
-                ],
-                containerSpec.StopGracePeriod != null && [
-                  "Stop Grace Period",
-                  formatDuration(containerSpec.StopGracePeriod),
-                  "How long to wait for graceful shutdown before force-killing the container.",
-                ],
-                containerSpec.Init != null && [
-                  "Init",
-                  containerSpec.Init ? "yes" : "no",
-                  "Runs an init process (tini) as PID 1 to reap zombie processes.",
-                ],
-                containerSpec.ReadOnly && [
-                  "Read Only Root FS",
-                  "yes",
-                  "The container's root filesystem is mounted read-only. Writes are only possible to volumes.",
-                ],
-              ]}
+      <CollapsibleSection
+        title="Container Configuration"
+        defaultOpen={containerConfig != null}
+      >
+        {containerConfig ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <CommandEditor
+              serviceId={id!}
+              config={containerConfig}
+              onSaved={setContainerConfig}
+            />
+            <RuntimeEditor
+              serviceId={id!}
+              config={containerConfig}
+              onSaved={setContainerConfig}
+            />
+            <CapabilitiesEditor
+              serviceId={id!}
+              config={containerConfig}
+              onSaved={setContainerConfig}
+            />
+            <ExtraHostsEditor
+              serviceId={id!}
+              config={containerConfig}
+              onSaved={setContainerConfig}
+            />
+            <DnsEditor
+              serviceId={id!}
+              config={containerConfig}
+              onSaved={setContainerConfig}
             />
           </div>
-        </CollapsibleSection>
-      )}
+        ) : (
+          <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+            Loading…
+          </div>
+        )}
+      </CollapsibleSection>
 
       {/* Environment variables */}
       {envVars !== null && (hasEnvContent || canEditConfig) && (

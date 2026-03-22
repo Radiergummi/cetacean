@@ -1,6 +1,10 @@
+export { CapabilitiesEditor } from "./CapabilitiesEditor";
+export { CommandEditor } from "./CommandEditor";
 export { DeploymentChanges } from "./DeploymentChanges";
+export { DnsEditor } from "./DnsEditor";
 export { EndpointModeEditor } from "./EndpointModeEditor";
 export { EnvEditor } from "./EnvEditor";
+export { ExtraHostsEditor } from "./ExtraHostsEditor";
 export { HealthcheckEditor } from "./HealthcheckEditor";
 export { LogDriverEditor } from "./LogDriverEditor";
 export { PlacementEditor } from "./PlacementEditor";
@@ -9,4 +13,5 @@ export { PolicyEditor } from "./PolicyEditor";
 export { ReplicaCard } from "./ReplicaCard";
 export { ResourcesEditor } from "./ResourcesEditor";
 export type { ServiceResourceShape } from "./ResourcesEditor";
+export { RuntimeEditor } from "./RuntimeEditor";
 export { ServiceActions } from "./ServiceActions";
