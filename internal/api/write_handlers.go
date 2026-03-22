@@ -72,6 +72,11 @@ type serviceSecretRef struct {
 	FileName   string `json:"fileName"`
 }
 
+type serviceNetworkRef struct {
+	Target  string   `json:"target"`
+	Aliases []string `json:"aliases,omitempty"`
+}
+
 func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
@@ -1922,5 +1927,88 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 	}
 	writeJSON(w, NewDetailResponse("/services/"+id+"/secrets", "ServiceSecrets", map[string]any{
 		"secrets": resultRefs,
+	}))
+}
+
+func (h *Handlers) HandleGetServiceNetworks(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	var refs []serviceNetworkRef
+	for _, net := range svc.Spec.TaskTemplate.Networks {
+		refs = append(refs, serviceNetworkRef{
+			Target:  net.Target,
+			Aliases: net.Aliases,
+		})
+	}
+	if refs == nil {
+		refs = []serviceNetworkRef{}
+	}
+
+	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/networks", "ServiceNetworks", map[string]any{
+		"networks": refs,
+	}))
+}
+
+func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	ct := r.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/merge-patch+json") {
+		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		return
+	}
+
+	_, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	var patch struct {
+		Networks []serviceNetworkRef `json:"networks"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	networks := make([]swarm.NetworkAttachmentConfig, len(patch.Networks))
+	for i, ref := range patch.Networks {
+		if ref.Target == "" {
+			writeProblem(w, r, http.StatusBadRequest, "each network must have a target")
+			return
+		}
+		networks[i] = swarm.NetworkAttachmentConfig{
+			Target:  ref.Target,
+			Aliases: ref.Aliases,
+		}
+	}
+
+	slog.Info("updating service networks", "service", id)
+
+	updated, err := h.writeClient.UpdateServiceNetworks(r.Context(), id, networks)
+	if err != nil {
+		writeDockerError(w, r, err, "service")
+		return
+	}
+
+	var resultRefs []serviceNetworkRef
+	for _, net := range updated.Spec.TaskTemplate.Networks {
+		resultRefs = append(resultRefs, serviceNetworkRef{
+			Target:  net.Target,
+			Aliases: net.Aliases,
+		})
+	}
+	if resultRefs == nil {
+		resultRefs = []serviceNetworkRef{}
+	}
+	writeJSON(w, NewDetailResponse("/services/"+id+"/networks", "ServiceNetworks", map[string]any{
+		"networks": resultRefs,
 	}))
 }

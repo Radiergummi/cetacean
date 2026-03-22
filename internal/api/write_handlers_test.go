@@ -2738,3 +2738,128 @@ func TestHandlePatchServiceSecrets_WrongContentType(t *testing.T) {
 		t.Errorf("status=%d, want 415", w.Code)
 	}
 }
+
+func TestHandleGetServiceNetworks_OK(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			TaskTemplate: swarm.TaskSpec{
+				Networks: []swarm.NetworkAttachmentConfig{
+					{Target: "net1", Aliases: []string{"web"}},
+				},
+			},
+		},
+	})
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("GET", "/services/svc1/networks", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetServiceNetworks(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	networks := resp["networks"].([]any)
+	if len(networks) != 1 {
+		t.Fatalf("len(networks)=%d, want 1", len(networks))
+	}
+	net := networks[0].(map[string]any)
+	if net["target"] != "net1" {
+		t.Errorf("target=%v, want net1", net["target"])
+	}
+	aliases := net["aliases"].([]any)
+	if len(aliases) != 1 || aliases[0] != "web" {
+		t.Errorf("aliases=%v, want [web]", aliases)
+	}
+}
+
+func TestHandleGetServiceNetworks_Empty(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("GET", "/services/svc1/networks", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetServiceNetworks(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	networks := resp["networks"].([]any)
+	if len(networks) != 0 {
+		t.Errorf("len(networks)=%d, want 0", len(networks))
+	}
+}
+
+func TestHandleGetServiceNetworks_NotFound(t *testing.T) {
+	c := cache.New(nil)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("GET", "/services/missing/networks", nil)
+	req.SetPathValue("id", "missing")
+	w := httptest.NewRecorder()
+	h.HandleGetServiceNetworks(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestHandlePatchServiceNetworks_OK(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	updated := swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			TaskTemplate: swarm.TaskSpec{
+				Networks: []swarm.NetworkAttachmentConfig{
+					{Target: "net1", Aliases: []string{"web"}},
+				},
+			},
+		},
+	}
+	mock := &mockWriteClient{
+		updateServiceNetworksFn: func(_ context.Context, _ string, _ []swarm.NetworkAttachmentConfig) (swarm.Service, error) {
+			return updated, nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, mock, closedReady(), nil, config.OpsImpactful)
+
+	body := `{"networks":[{"target":"net1","aliases":["web"]}]}`
+	req := httptest.NewRequest("PATCH", "/services/svc1/networks", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceNetworks(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandlePatchServiceNetworks_WrongContentType(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+
+	body := `{"networks":[]}`
+	req := httptest.NewRequest("PATCH", "/services/svc1/networks", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceNetworks(w, req)
+
+	if w.Code != http.StatusUnsupportedMediaType {
+		t.Errorf("status=%d, want 415", w.Code)
+	}
+}
