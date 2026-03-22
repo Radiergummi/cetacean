@@ -25,7 +25,12 @@ interface NetworkOption {
   label: string;
 }
 
-export function NetworksEditor({ serviceId, networks, networkNames, onSaved }: NetworksEditorProps) {
+export function NetworksEditor({
+  serviceId,
+  networks,
+  networkNames,
+  onSaved,
+}: NetworksEditorProps) {
   const { level, loading: levelLoading } = useOperationsLevel();
   const canEdit = !levelLoading && level >= opsLevel.configuration;
 
@@ -57,7 +62,12 @@ export function NetworksEditor({ serviceId, networks, networkNames, onSaved }: N
   }, [networkNames, availableNetworks]);
 
   function openEdit() {
-    setDraft(networks.map((network) => ({ ...network, aliases: network.aliases ? [...network.aliases] : undefined })));
+    setDraft(
+      networks.map((network) => ({
+        ...network,
+        aliases: network.aliases ? [...network.aliases] : undefined,
+      })),
+    );
     setSaveError(null);
     setNewNetworkId("");
     setNewAliases([]);

@@ -2526,7 +2526,9 @@ func TestHandleGetServiceConfigs_Empty(t *testing.T) {
 		t.Fatalf("status=%d, want 200", w.Code)
 	}
 	var resp map[string]any
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
 	configs := resp["configs"].([]any)
 	if len(configs) != 0 {
 		t.Errorf("len(configs)=%d, want 0", len(configs))
@@ -2614,7 +2616,9 @@ func TestHandleGetServiceSecrets_OK(t *testing.T) {
 						{
 							SecretID:   "sec1",
 							SecretName: "db-password",
-							File:       &swarm.SecretReferenceFileTarget{Name: "/run/secrets/db-password"},
+							File: &swarm.SecretReferenceFileTarget{
+								Name: "/run/secrets/db-password",
+							},
 						},
 					},
 				},
@@ -2662,7 +2666,9 @@ func TestHandleGetServiceSecrets_Empty(t *testing.T) {
 		t.Fatalf("status=%d, want 200", w.Code)
 	}
 	var resp map[string]any
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
 	secrets := resp["secrets"].([]any)
 	if len(secrets) != 0 {
 		t.Errorf("len(secrets)=%d, want 0", len(secrets))
@@ -2696,7 +2702,9 @@ func TestHandlePatchServiceSecrets_OK(t *testing.T) {
 						{
 							SecretID:   "sec1",
 							SecretName: "db-password",
-							File:       &swarm.SecretReferenceFileTarget{Name: "/run/secrets/db-password"},
+							File: &swarm.SecretReferenceFileTarget{
+								Name: "/run/secrets/db-password",
+							},
 						},
 					},
 				},
@@ -2793,7 +2801,9 @@ func TestHandleGetServiceNetworks_Empty(t *testing.T) {
 		t.Fatalf("status=%d, want 200", w.Code)
 	}
 	var resp map[string]any
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
 	networks := resp["networks"].([]any)
 	if len(networks) != 0 {
 		t.Errorf("len(networks)=%d, want 0", len(networks))

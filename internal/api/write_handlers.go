@@ -1742,9 +1742,13 @@ func (h *Handlers) HandleGetServiceConfigs(w http.ResponseWriter, r *http.Reques
 		refs = []serviceConfigRef{}
 	}
 
-	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/configs", "ServiceConfigs", map[string]any{
-		"configs": refs,
-	}))
+	writeJSONWithETag(
+		w,
+		r,
+		NewDetailResponse("/services/"+id+"/configs", "ServiceConfigs", map[string]any{
+			"configs": refs,
+		}),
+	)
 }
 
 func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Request) {
@@ -1753,7 +1757,12 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		writeProblem(
+			w,
+			r,
+			http.StatusUnsupportedMediaType,
+			"expected Content-Type: application/merge-patch+json",
+		)
 		return
 	}
 
@@ -1774,7 +1783,12 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 	configs := make([]*swarm.ConfigReference, len(patch.Configs))
 	for i, ref := range patch.Configs {
 		if ref.ConfigID == "" || ref.ConfigName == "" {
-			writeProblem(w, r, http.StatusBadRequest, "each config must have configID and configName")
+			writeProblem(
+				w,
+				r,
+				http.StatusBadRequest,
+				"each config must have configID and configName",
+			)
 			return
 		}
 		fileName := ref.FileName
@@ -1849,9 +1863,13 @@ func (h *Handlers) HandleGetServiceSecrets(w http.ResponseWriter, r *http.Reques
 		refs = []serviceSecretRef{}
 	}
 
-	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/secrets", "ServiceSecrets", map[string]any{
-		"secrets": refs,
-	}))
+	writeJSONWithETag(
+		w,
+		r,
+		NewDetailResponse("/services/"+id+"/secrets", "ServiceSecrets", map[string]any{
+			"secrets": refs,
+		}),
+	)
 }
 
 func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Request) {
@@ -1860,7 +1878,12 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		writeProblem(
+			w,
+			r,
+			http.StatusUnsupportedMediaType,
+			"expected Content-Type: application/merge-patch+json",
+		)
 		return
 	}
 
@@ -1881,7 +1904,12 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 	secrets := make([]*swarm.SecretReference, len(patch.Secrets))
 	for i, ref := range patch.Secrets {
 		if ref.SecretID == "" || ref.SecretName == "" {
-			writeProblem(w, r, http.StatusBadRequest, "each secret must have secretID and secretName")
+			writeProblem(
+				w,
+				r,
+				http.StatusBadRequest,
+				"each secret must have secretID and secretName",
+			)
 			return
 		}
 		fileName := ref.FileName
@@ -1949,9 +1977,13 @@ func (h *Handlers) HandleGetServiceNetworks(w http.ResponseWriter, r *http.Reque
 		refs = []serviceNetworkRef{}
 	}
 
-	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/networks", "ServiceNetworks", map[string]any{
-		"networks": refs,
-	}))
+	writeJSONWithETag(
+		w,
+		r,
+		NewDetailResponse("/services/"+id+"/networks", "ServiceNetworks", map[string]any{
+			"networks": refs,
+		}),
+	)
 }
 
 func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Request) {
@@ -1960,7 +1992,12 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		writeProblem(
+			w,
+			r,
+			http.StatusUnsupportedMediaType,
+			"expected Content-Type: application/merge-patch+json",
+		)
 		return
 	}
 
