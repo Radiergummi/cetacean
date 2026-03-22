@@ -176,7 +176,6 @@ export function RuntimeEditor({
               options={signalOptions}
               allowCustom={false}
             />
-            <p className="text-xs text-muted-foreground">Signal to stop the container</p>
           </div>
 
           <div className="flex flex-col gap-1">

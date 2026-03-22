@@ -97,7 +97,7 @@ export function StackActions({ stackName, resourceCounts }: StackActionsProps) {
           )}
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm text-muted-foreground">
+            <label className="text-sm text-foreground">
               Type <strong className="text-foreground">{stackName}</strong> to confirm
             </label>
             <Input

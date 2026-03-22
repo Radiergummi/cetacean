@@ -89,7 +89,7 @@ export function NodeActions({ node }: { node: Node }) {
           </AlertDialogHeader>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm text-muted-foreground">
+            <label className="text-sm text-foreground">
               Type <strong className="text-foreground">{hostname}</strong> to confirm
             </label>
             <Input
