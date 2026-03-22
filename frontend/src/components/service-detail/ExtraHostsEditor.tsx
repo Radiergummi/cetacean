@@ -2,6 +2,7 @@ import { api } from "@/api/client";
 import type { ContainerConfig } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { getErrorMessage } from "@/lib/utils";
@@ -106,19 +107,17 @@ export function ExtraHostsEditor({
                 key={index}
                 className="flex items-center gap-2"
               >
-                <input
-                  type="text"
+                <Input
                   value={row.ip}
                   onChange={(event) => updateRow(index, "ip", event.target.value)}
                   placeholder="192.168.1.1"
-                  className="h-8 w-40 rounded-md border bg-background px-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  className="w-40 font-mono"
                 />
-                <input
-                  type="text"
+                <Input
                   value={row.hostname}
                   onChange={(event) => updateRow(index, "hostname", event.target.value)}
                   placeholder="myhost"
-                  className="h-8 flex-1 rounded-md border bg-background px-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  className="flex-1 font-mono"
                 />
                 <Button
                   variant="ghost"

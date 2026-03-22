@@ -3,6 +3,7 @@ import type { ContainerConfig } from "@/api/types";
 import { DescriptionRow } from "@/components/data";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { getErrorMessage } from "@/lib/utils";
@@ -109,36 +110,34 @@ export function RuntimeEditor({
         <div className="space-y-4">
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Hostname</label>
-            <input
-              type="text"
+            <Input
               value={hostnameInput}
               onChange={(event) => setHostnameInput(event.target.value)}
               placeholder="my-container"
-              className="h-8 w-full rounded-md border bg-background px-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="font-mono"
             />
           </div>
 
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Stop Signal</label>
-            <input
-              type="text"
+            <Input
               value={stopSignalInput}
               onChange={(event) => setStopSignalInput(event.target.value)}
               placeholder="SIGTERM"
-              className="h-8 w-full rounded-md border bg-background px-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="font-mono"
             />
           </div>
 
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Stop Grace Period (seconds)</label>
-            <input
+            <Input
               type="number"
               value={gracePeriodInput}
               onChange={(event) => setGracePeriodInput(event.target.value)}
               placeholder="10"
               min={0}
               step={0.1}
-              className="h-8 w-full rounded-md border bg-background px-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="font-mono"
             />
           </div>
 

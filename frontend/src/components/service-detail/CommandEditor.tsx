@@ -3,6 +3,7 @@ import type { ContainerConfig } from "@/api/types";
 import { DescriptionRow } from "@/components/data";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { getErrorMessage } from "@/lib/utils";
@@ -75,47 +76,43 @@ export function CommandEditor({
         <div className="space-y-4">
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Command</label>
-            <input
-              type="text"
+            <Input
               value={commandInput}
               onChange={(event) => setCommandInput(event.target.value)}
               placeholder="/bin/my-entrypoint"
-              className="h-8 w-full rounded-md border bg-background px-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="font-mono"
             />
             <p className="text-xs text-muted-foreground">Space-separated list of tokens</p>
           </div>
 
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Args</label>
-            <input
-              type="text"
+            <Input
               value={argsInput}
               onChange={(event) => setArgsInput(event.target.value)}
               placeholder="--flag value"
-              className="h-8 w-full rounded-md border bg-background px-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="font-mono"
             />
             <p className="text-xs text-muted-foreground">Space-separated list of tokens</p>
           </div>
 
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Working Dir</label>
-            <input
-              type="text"
+            <Input
               value={dirInput}
               onChange={(event) => setDirInput(event.target.value)}
               placeholder="/app"
-              className="h-8 w-full rounded-md border bg-background px-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="font-mono"
             />
           </div>
 
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">User</label>
-            <input
-              type="text"
+            <Input
               value={userInput}
               onChange={(event) => setUserInput(event.target.value)}
               placeholder="nobody"
-              className="h-8 w-full rounded-md border bg-background px-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="font-mono"
             />
           </div>
 

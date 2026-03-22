@@ -3,6 +3,7 @@ import type { ContainerConfig } from "@/api/types";
 import { DescriptionRow } from "@/components/data";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { getErrorMessage } from "@/lib/utils";
@@ -84,36 +85,33 @@ export function DnsEditor({
         <div className="space-y-4">
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Nameservers</label>
-            <input
-              type="text"
+            <Input
               value={nameserversInput}
               onChange={(event) => setNameserversInput(event.target.value)}
               placeholder="8.8.8.8, 1.1.1.1"
-              className="h-8 w-full rounded-md border bg-background px-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="font-mono"
             />
             <p className="text-xs text-muted-foreground">Comma-separated IP addresses</p>
           </div>
 
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Search Domains</label>
-            <input
-              type="text"
+            <Input
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
               placeholder="example.com, local"
-              className="h-8 w-full rounded-md border bg-background px-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="font-mono"
             />
             <p className="text-xs text-muted-foreground">Comma-separated domain names</p>
           </div>
 
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Options</label>
-            <input
-              type="text"
+            <Input
               value={optionsInput}
               onChange={(event) => setOptionsInput(event.target.value)}
               placeholder="ndots:5, timeout:2"
-              className="h-8 w-full rounded-md border bg-background px-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="font-mono"
             />
             <p className="text-xs text-muted-foreground">Comma-separated resolver options</p>
           </div>

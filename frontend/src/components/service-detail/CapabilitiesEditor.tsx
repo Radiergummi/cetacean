@@ -2,12 +2,48 @@ import { api } from "@/api/client";
 import type { ContainerConfig } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil, X } from "lucide-react";
 import type { KeyboardEvent, MouseEvent } from "react";
 import { useState } from "react";
+
+function CapabilityBadges({
+  items,
+  onRemove,
+}: {
+  items: string[];
+  onRemove?: (cap: string) => void;
+}) {
+  if (items.length === 0) {
+    return <span className="text-muted-foreground">None</span>;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {items.map((cap) => (
+        <span
+          key={cap}
+          className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 font-mono text-xs"
+        >
+          {cap}
+          {onRemove && (
+            <button
+              type="button"
+              onClick={() => onRemove(cap)}
+              className="text-muted-foreground hover:text-foreground"
+              aria-label={`Remove ${cap}`}
+            >
+              <X className="size-3" />
+            </button>
+          )}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 export function CapabilitiesEditor({
   serviceId,
@@ -56,6 +92,8 @@ export function CapabilitiesEditor({
       return;
     }
 
+    event.preventDefault();
+
     const value = input.trim().toUpperCase();
 
     if (value && !list.includes(value)) {
@@ -91,65 +129,35 @@ export function CapabilitiesEditor({
         <div className="space-y-4">
           <div className="flex flex-col gap-2">
             <label className="text-xs text-muted-foreground">Add Capabilities</label>
-            <div className="flex flex-wrap gap-1">
-              {addList.map((cap) => (
-                <span
-                  key={cap}
-                  className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 font-mono text-xs"
-                >
-                  {cap}
-                  <button
-                    type="button"
-                    onClick={() => setAddList(addList.filter((c) => c !== cap))}
-                    className="text-muted-foreground hover:text-foreground"
-                    aria-label={`Remove ${cap}`}
-                  >
-                    <X className="size-3" />
-                  </button>
-                </span>
-              ))}
-            </div>
-            <input
-              type="text"
+            <CapabilityBadges
+              items={addList}
+              onRemove={(cap) => setAddList(addList.filter((c) => c !== cap))}
+            />
+            <Input
               value={addInput}
               onChange={(event) => setAddInput(event.target.value.toUpperCase())}
               onKeyDown={(event) =>
                 handleKeyDown(event, addInput, addList, setAddList, setAddInput)
               }
               placeholder="NET_ADMIN — press Enter to add"
-              className="h-8 w-full rounded-md border bg-background px-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="font-mono"
             />
           </div>
 
           <div className="flex flex-col gap-2">
             <label className="text-xs text-muted-foreground">Drop Capabilities</label>
-            <div className="flex flex-wrap gap-1">
-              {dropList.map((cap) => (
-                <span
-                  key={cap}
-                  className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 font-mono text-xs"
-                >
-                  {cap}
-                  <button
-                    type="button"
-                    onClick={() => setDropList(dropList.filter((c) => c !== cap))}
-                    className="text-muted-foreground hover:text-foreground"
-                    aria-label={`Remove ${cap}`}
-                  >
-                    <X className="size-3" />
-                  </button>
-                </span>
-              ))}
-            </div>
-            <input
-              type="text"
+            <CapabilityBadges
+              items={dropList}
+              onRemove={(cap) => setDropList(dropList.filter((c) => c !== cap))}
+            />
+            <Input
               value={dropInput}
               onChange={(event) => setDropInput(event.target.value.toUpperCase())}
               onKeyDown={(event) =>
                 handleKeyDown(event, dropInput, dropList, setDropList, setDropInput)
               }
               placeholder="ALL — press Enter to add"
-              className="h-8 w-full rounded-md border bg-background px-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="font-mono"
             />
           </div>
 
@@ -180,40 +188,14 @@ export function CapabilitiesEditor({
             <div className="grid grid-cols-[8rem_1fr] items-baseline gap-x-2">
               <dt className="text-muted-foreground">Add</dt>
               <dd>
-                {config.capabilityAdd && config.capabilityAdd.length > 0 ? (
-                  <div className="flex flex-wrap gap-1">
-                    {config.capabilityAdd.map((cap) => (
-                      <span
-                        key={cap}
-                        className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs"
-                      >
-                        {cap}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <span className="text-muted-foreground">None</span>
-                )}
+                <CapabilityBadges items={config.capabilityAdd ?? []} />
               </dd>
             </div>
 
             <div className="grid grid-cols-[8rem_1fr] items-baseline gap-x-2">
               <dt className="text-muted-foreground">Drop</dt>
               <dd>
-                {config.capabilityDrop && config.capabilityDrop.length > 0 ? (
-                  <div className="flex flex-wrap gap-1">
-                    {config.capabilityDrop.map((cap) => (
-                      <span
-                        key={cap}
-                        className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs"
-                      >
-                        {cap}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <span className="text-muted-foreground">None</span>
-                )}
+                <CapabilityBadges items={config.capabilityDrop ?? []} />
               </dd>
             </div>
           </dl>
