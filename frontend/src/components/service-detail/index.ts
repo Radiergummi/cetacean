@@ -8,6 +8,7 @@ export { EnvEditor } from "./EnvEditor";
 export { ExtraHostsEditor } from "./ExtraHostsEditor";
 export { HealthcheckEditor } from "./HealthcheckEditor";
 export { LogDriverEditor } from "./LogDriverEditor";
+export { NetworksEditor } from "./NetworksEditor";
 export { PlacementEditor } from "./PlacementEditor";
 export { PortsEditor } from "./PortsEditor";
 export { PolicyEditor } from "./PolicyEditor";
