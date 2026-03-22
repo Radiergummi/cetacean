@@ -52,14 +52,25 @@ export function ConfigsEditor({ serviceId, configs, onSaved }: ConfigsEditorProp
       return;
     }
 
-    api.configs({ limit: 0 }).then((response) => {
-      setAvailableConfigs(
-        response.items.map((config) => ({
-          value: config.ID,
-          label: config.Spec.Name,
-        })),
-      );
-    });
+    let cancelled = false;
+
+    api
+      .configs({ limit: 200 })
+      .then((response) => {
+        if (!cancelled) {
+          setAvailableConfigs(
+            response.items.map((config) => ({
+              value: config.ID,
+              label: config.Spec.Name,
+            })),
+          );
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
   }, [editing]);
 
   function cancelEdit() {

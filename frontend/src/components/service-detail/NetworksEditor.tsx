@@ -79,14 +79,25 @@ export function NetworksEditor({
       return;
     }
 
-    api.networks({ limit: 0 }).then((response) => {
-      setAvailableNetworks(
-        response.items.map((network) => ({
-          value: network.Id,
-          label: network.Name,
-        })),
-      );
-    });
+    let cancelled = false;
+
+    api
+      .networks({ limit: 200 })
+      .then((response) => {
+        if (!cancelled) {
+          setAvailableNetworks(
+            response.items.map((network) => ({
+              value: network.Id,
+              label: network.Name,
+            })),
+          );
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
   }, [editing]);
 
   function cancelEdit() {

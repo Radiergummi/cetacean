@@ -52,14 +52,25 @@ export function SecretsEditor({ serviceId, secrets, onSaved }: SecretsEditorProp
       return;
     }
 
-    api.secrets({ limit: 0 }).then((response) => {
-      setAvailableSecrets(
-        response.items.map((secret) => ({
-          value: secret.ID,
-          label: secret.Spec.Name,
-        })),
-      );
-    });
+    let cancelled = false;
+
+    api
+      .secrets({ limit: 200 })
+      .then((response) => {
+        if (!cancelled) {
+          setAvailableSecrets(
+            response.items.map((secret) => ({
+              value: secret.ID,
+              label: secret.Spec.Name,
+            })),
+          );
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
   }, [editing]);
 
   function cancelEdit() {
