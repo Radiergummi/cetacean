@@ -110,7 +110,7 @@ export function EditablePanel({
 
           <footer className="flex items-center gap-2">
             {actions}
-            <div className={actions ? "ml-auto flex gap-2" : "ml-auto flex gap-2"}>
+            <div className="ml-auto flex gap-2">
               <Button
                 size="sm"
                 onClick={() => void save()}
@@ -139,7 +139,7 @@ export function EditablePanel({
       <div className={wrapperClass}>
         <div className="space-y-3">
           {titleRow}
-          <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed py-6 text-center text-muted-foreground">
+          <div className="flex flex-col items-center gap-1 py-6 text-center text-muted-foreground">
             <p className="text-sm">Not configured</p>
             {canEdit && emptyDescription && <p className="text-xs">{emptyDescription}</p>}
           </div>

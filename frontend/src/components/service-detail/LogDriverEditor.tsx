@@ -4,6 +4,7 @@ import { api } from "@/api/client";
 import type { LogDriver } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
+import { Input } from "@/components/ui/input";
 import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
@@ -132,18 +133,18 @@ export function LogDriverEditor({ serviceId, logDriver, onSaved }: LogDriverEdit
                 key={index}
                 className="flex items-center gap-2"
               >
-                <input
+                <Input
                   value={key}
                   onChange={(event) => updateOption(index, 0, event.target.value)}
                   placeholder="key"
-                  className="h-8 w-full rounded-md border border-input bg-transparent px-3 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  className="font-mono"
                 />
 
-                <input
+                <Input
                   value={value}
                   onChange={(event) => updateOption(index, 1, event.target.value)}
                   placeholder="value"
-                  className="h-8 w-full rounded-md border border-input bg-transparent px-3 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  className="font-mono"
                 />
 
                 <Button
