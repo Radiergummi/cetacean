@@ -763,3 +763,26 @@ func (c *Client) UpdateServiceLogDriver(
 	}
 	return c.InspectService(ctx, id)
 }
+
+func (c *Client) UpdateServiceContainerConfig(
+	ctx context.Context,
+	id string,
+	apply func(spec *swarm.ContainerSpec),
+) (swarm.Service, error) {
+	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	apply(svc.Spec.TaskTemplate.ContainerSpec)
+	_, err = c.docker.ServiceUpdate(
+		ctx,
+		svc.ID,
+		svc.Version,
+		svc.Spec,
+		swarm.ServiceUpdateOptions{},
+	)
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	return c.InspectService(ctx, id)
+}
