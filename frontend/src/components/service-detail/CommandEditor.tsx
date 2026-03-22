@@ -39,31 +39,47 @@ export function CommandEditor({
     onSaved(updated);
   }
 
+  const hasCommand = config.command && config.command.length > 0;
+  const hasArgs = config.args && config.args.length > 0;
+  const hasDir = !!config.dir;
+  const hasUser = !!config.user;
+  const isEmpty = !hasCommand && !hasArgs && !hasDir && !hasUser;
+
   return (
     <EditablePanel
       title="Command"
+      empty={isEmpty}
+      emptyDescription="Click Edit to configure the container entrypoint, args, working directory, or user."
       onOpen={resetForm}
       onSave={save}
       display={
         <dl className="grid gap-y-2 text-sm">
-          <DescriptionRow
-            label="Command"
-            value={config.command?.join(" ")}
-            mono
-          />
-          <DescriptionRow
-            label="Args"
-            value={config.args?.join(" ")}
-            mono
-          />
-          <DescriptionRow
-            label="Working Dir"
-            value={config.dir}
-          />
-          <DescriptionRow
-            label="User"
-            value={config.user}
-          />
+          {hasCommand && (
+            <DescriptionRow
+              label="Command"
+              value={config.command!.join(" ")}
+              mono
+            />
+          )}
+          {hasArgs && (
+            <DescriptionRow
+              label="Args"
+              value={config.args!.join(" ")}
+              mono
+            />
+          )}
+          {hasDir && (
+            <DescriptionRow
+              label="Working Dir"
+              value={config.dir}
+            />
+          )}
+          {hasUser && (
+            <DescriptionRow
+              label="User"
+              value={config.user}
+            />
+          )}
         </dl>
       }
       edit={

@@ -9,14 +9,6 @@ import { formatDuration } from "@/lib/format";
 import { renderSwarmTemplate } from "@/lib/swarmTemplates";
 import { useCallback, useState } from "react";
 
-function formatInit(init: boolean | undefined): string {
-  if (init === undefined) {
-    return "Default";
-  }
-
-  return init ? "Yes" : "No";
-}
-
 const signalOptions = [
   { value: "SIGTERM", label: "SIGTERM", description: "Graceful termination (default)" },
   { value: "SIGKILL", label: "SIGKILL", description: "Immediate kill, cannot be caught" },
@@ -98,41 +90,60 @@ export function RuntimeEditor({
     onSaved(updated);
   }
 
+  const hasHostname = !!config.hostname;
+  const hasInit = config.init !== undefined;
+  const hasTty = config.tty;
+  const hasReadOnly = config.readOnly;
+  const hasStopSignal = !!config.stopSignal;
+  const hasGracePeriod = config.stopGracePeriod != null;
+  const isEmpty =
+    !hasHostname && !hasInit && !hasTty && !hasReadOnly && !hasStopSignal && !hasGracePeriod;
+
   return (
     <EditablePanel
       title="Runtime"
+      empty={isEmpty}
+      emptyDescription="Click Edit to configure runtime options like hostname, init, TTY, or stop behavior."
       onOpen={resetForm}
       onSave={save}
       display={
         <dl className="grid gap-y-2 text-sm">
-          <div className="grid grid-cols-[8rem_1fr] items-baseline gap-x-2">
-            <dt className="text-muted-foreground">Hostname</dt>
-            <dd className="font-mono">
-              {config.hostname ? renderSwarmTemplate(config.hostname) : "—"}
-            </dd>
-          </div>
-          <DescriptionRow
-            label="Init"
-            value={formatInit(config.init)}
-          />
-          <DescriptionRow
-            label="TTY"
-            value={config.tty ? "Yes" : "No"}
-          />
-          <DescriptionRow
-            label="Read Only"
-            value={config.readOnly ? "Yes" : "No"}
-          />
-          <DescriptionRow
-            label="Stop Signal"
-            value={config.stopSignal || undefined}
-          />
-          <DescriptionRow
-            label="Stop Grace Period"
-            value={
-              config.stopGracePeriod != null ? formatDuration(config.stopGracePeriod) : undefined
-            }
-          />
+          {hasHostname && (
+            <div className="grid grid-cols-[8rem_1fr] items-baseline gap-x-2">
+              <dt className="text-muted-foreground">Hostname</dt>
+              <dd className="font-mono">{renderSwarmTemplate(config.hostname)}</dd>
+            </div>
+          )}
+          {hasInit && (
+            <DescriptionRow
+              label="Init"
+              value={config.init ? "Yes" : "No"}
+            />
+          )}
+          {hasTty && (
+            <DescriptionRow
+              label="TTY"
+              value="Yes"
+            />
+          )}
+          {hasReadOnly && (
+            <DescriptionRow
+              label="Read Only"
+              value="Yes"
+            />
+          )}
+          {hasStopSignal && (
+            <DescriptionRow
+              label="Stop Signal"
+              value={config.stopSignal}
+            />
+          )}
+          {hasGracePeriod && (
+            <DescriptionRow
+              label="Stop Grace Period"
+              value={formatDuration(config.stopGracePeriod!)}
+            />
+          )}
         </dl>
       }
       edit={
