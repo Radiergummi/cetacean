@@ -44,7 +44,8 @@ type mockWriteClient struct {
 	updateServicePortsFn          func(ctx context.Context, id string, ports []swarm.PortConfig) (swarm.Service, error)
 	updateServiceUpdatePolicyFn   func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error)
 	updateServiceRollbackPolicyFn func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error)
-	updateServiceLogDriverFn      func(ctx context.Context, id string, driver *swarm.Driver) (swarm.Service, error)
+	updateServiceLogDriverFn             func(ctx context.Context, id string, driver *swarm.Driver) (swarm.Service, error)
+	updateServiceContainerConfigFn       func(ctx context.Context, id string, apply func(spec *swarm.ContainerSpec)) (swarm.Service, error)
 }
 
 func (m *mockWriteClient) ScaleService(
@@ -268,6 +269,17 @@ func (m *mockWriteClient) UpdateServiceLogDriver(
 ) (swarm.Service, error) {
 	if m.updateServiceLogDriverFn != nil {
 		return m.updateServiceLogDriverFn(ctx, id, driver)
+	}
+	return swarm.Service{}, fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) UpdateServiceContainerConfig(
+	ctx context.Context,
+	id string,
+	apply func(spec *swarm.ContainerSpec),
+) (swarm.Service, error) {
+	if m.updateServiceContainerConfigFn != nil {
+		return m.updateServiceContainerConfigFn(ctx, id, apply)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
@@ -2258,5 +2270,152 @@ func TestHandleRemoveStack_AlreadyGone(t *testing.T) {
 	}
 	if resp["errors"] != nil {
 		t.Errorf("errors=%v, want nil (404s are skipped)", resp["errors"])
+	}
+}
+
+func TestHandleGetServiceContainerConfig_OK(t *testing.T) {
+	init := true
+	gracePeriod := time.Duration(10_000_000_000)
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{
+					Command:         []string{"/bin/sh"},
+					Args:            []string{"-c", "echo hello"},
+					Dir:             "/app",
+					User:            "node",
+					Hostname:        "web-1",
+					Init:            &init,
+					TTY:             false,
+					ReadOnly:        true,
+					StopSignal:      "SIGTERM",
+					StopGracePeriod: &gracePeriod,
+					CapabilityAdd:   []string{"NET_ADMIN"},
+					CapabilityDrop:  []string{"ALL"},
+				},
+			},
+		},
+	})
+
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("GET", "/services/svc1/container-config", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetServiceContainerConfig(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["hostname"] != "web-1" {
+		t.Errorf("hostname=%v, want web-1", resp["hostname"])
+	}
+	if resp["readOnly"] != true {
+		t.Errorf("readOnly=%v, want true", resp["readOnly"])
+	}
+	if resp["stopGracePeriod"] != float64(10_000_000_000) {
+		t.Errorf("stopGracePeriod=%v, want 10000000000", resp["stopGracePeriod"])
+	}
+}
+
+func TestHandleGetServiceContainerConfig_NotFound(t *testing.T) {
+	c := cache.New(nil)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("GET", "/services/missing/container-config", nil)
+	req.SetPathValue("id", "missing")
+	w := httptest.NewRecorder()
+	h.HandleGetServiceContainerConfig(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestHandlePatchServiceContainerConfig_PartialPatch(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{
+					Hostname: "old-host",
+					TTY:      false,
+				},
+			},
+		},
+	})
+
+	wc := &mockWriteClient{
+		updateServiceContainerConfigFn: func(_ context.Context, id string, apply func(*swarm.ContainerSpec)) (swarm.Service, error) {
+			cs := &swarm.ContainerSpec{}
+			apply(cs)
+			return swarm.Service{
+				ID: id,
+				Spec: swarm.ServiceSpec{
+					TaskTemplate: swarm.TaskSpec{ContainerSpec: cs},
+				},
+			}, nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, config.OpsImpactful)
+
+	body := `{"hostname":"new-host","tty":true}`
+	req := httptest.NewRequest("PATCH", "/services/svc1/container-config", strings.NewReader(body))
+	req.SetPathValue("id", "svc1")
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceContainerConfig(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["hostname"] != "new-host" {
+		t.Errorf("hostname=%v, want new-host", resp["hostname"])
+	}
+	if resp["tty"] != true {
+		t.Errorf("tty=%v, want true", resp["tty"])
+	}
+}
+
+func TestHandlePatchServiceContainerConfig_WrongContentType(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1", Spec: swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{}}}})
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+
+	body := `{"hostname":"x"}`
+	req := httptest.NewRequest("PATCH", "/services/svc1/container-config", strings.NewReader(body))
+	req.SetPathValue("id", "svc1")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceContainerConfig(w, req)
+
+	if w.Code != http.StatusUnsupportedMediaType {
+		t.Errorf("status=%d, want 415", w.Code)
+	}
+}
+
+func TestHandlePatchServiceContainerConfig_NotFound(t *testing.T) {
+	c := cache.New(nil)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("PATCH", "/services/missing/container-config", strings.NewReader(`{}`))
+	req.SetPathValue("id", "missing")
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceContainerConfig(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want 404", w.Code)
 	}
 }

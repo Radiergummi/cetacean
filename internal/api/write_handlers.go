@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
@@ -1525,4 +1526,166 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 			"healthcheck": resultHC,
 		}),
 	)
+}
+
+type containerConfigResponse struct {
+	Command         []string       `json:"command"`
+	Args            []string       `json:"args"`
+	Dir             string         `json:"dir"`
+	User            string         `json:"user"`
+	Hostname        string         `json:"hostname"`
+	Init            *bool          `json:"init"`
+	TTY             bool           `json:"tty"`
+	ReadOnly        bool           `json:"readOnly"`
+	StopSignal      string         `json:"stopSignal"`
+	StopGracePeriod *int64         `json:"stopGracePeriod"`
+	CapabilityAdd   []string       `json:"capabilityAdd"`
+	CapabilityDrop  []string       `json:"capabilityDrop"`
+	Groups          []string       `json:"groups"`
+	Hosts           []string       `json:"hosts"`
+	DNSConfig       *dnsConfigJSON `json:"dnsConfig"`
+}
+
+type dnsConfigJSON struct {
+	Nameservers []string `json:"nameservers"`
+	Search      []string `json:"search"`
+	Options     []string `json:"options"`
+}
+
+func containerConfigFromSpec(cs *swarm.ContainerSpec) containerConfigResponse {
+	if cs == nil {
+		return containerConfigResponse{}
+	}
+	resp := containerConfigResponse{
+		Command:        cs.Command,
+		Args:           cs.Args,
+		Dir:            cs.Dir,
+		User:           cs.User,
+		Hostname:       cs.Hostname,
+		Init:           cs.Init,
+		TTY:            cs.TTY,
+		ReadOnly:       cs.ReadOnly,
+		StopSignal:     cs.StopSignal,
+		CapabilityAdd:  cs.CapabilityAdd,
+		CapabilityDrop: cs.CapabilityDrop,
+		Groups:         cs.Groups,
+		Hosts:          cs.Hosts,
+	}
+	if cs.StopGracePeriod != nil {
+		ns := int64(*cs.StopGracePeriod)
+		resp.StopGracePeriod = &ns
+	}
+	if cs.DNSConfig != nil {
+		resp.DNSConfig = &dnsConfigJSON{
+			Nameservers: cs.DNSConfig.Nameservers,
+			Search:      cs.DNSConfig.Search,
+			Options:     cs.DNSConfig.Options,
+		}
+	}
+	return resp
+}
+
+func (h *Handlers) HandleGetServiceContainerConfig(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	resp := containerConfigFromSpec(svc.Spec.TaskTemplate.ContainerSpec)
+	writeJSON(w, resp)
+}
+
+func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	ct := r.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/merge-patch+json") {
+		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	current := containerConfigFromSpec(svc.Spec.TaskTemplate.ContainerSpec)
+	baseBytes, err := json.Marshal(current)
+	if err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal current config")
+		return
+	}
+	var baseMap map[string]any
+	if err := json.Unmarshal(baseBytes, &baseMap); err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to unmarshal current config")
+		return
+	}
+
+	patchBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
+		return
+	}
+	var patchMap map[string]any
+	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	mergePatch(baseMap, patchMap)
+
+	mergedBytes, err := json.Marshal(baseMap)
+	if err != nil {
+		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal merged config")
+		return
+	}
+	var merged containerConfigResponse
+	if err := json.Unmarshal(mergedBytes, &merged); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid patch result")
+		return
+	}
+
+	slog.Info("updating service container config", "service", id)
+
+	updated, err := h.writeClient.UpdateServiceContainerConfig(r.Context(), id, func(cs *swarm.ContainerSpec) {
+		cs.Command = merged.Command
+		cs.Args = merged.Args
+		cs.Dir = merged.Dir
+		cs.User = merged.User
+		cs.Hostname = merged.Hostname
+		cs.Init = merged.Init
+		cs.TTY = merged.TTY
+		cs.ReadOnly = merged.ReadOnly
+		cs.StopSignal = merged.StopSignal
+		cs.CapabilityAdd = merged.CapabilityAdd
+		cs.CapabilityDrop = merged.CapabilityDrop
+		cs.Groups = merged.Groups
+		cs.Hosts = merged.Hosts
+		if merged.StopGracePeriod != nil {
+			d := time.Duration(*merged.StopGracePeriod)
+			cs.StopGracePeriod = &d
+		} else {
+			cs.StopGracePeriod = nil
+		}
+		if merged.DNSConfig != nil {
+			cs.DNSConfig = &swarm.DNSConfig{
+				Nameservers: merged.DNSConfig.Nameservers,
+				Search:      merged.DNSConfig.Search,
+				Options:     merged.DNSConfig.Options,
+			}
+		} else {
+			cs.DNSConfig = nil
+		}
+	})
+	if err != nil {
+		writeDockerError(w, r, err, "service")
+		return
+	}
+
+	result := containerConfigFromSpec(updated.Spec.TaskTemplate.ContainerSpec)
+	writeJSON(w, result)
 }
