@@ -90,27 +90,9 @@ function humanizeConstraint(raw: string): { label: string; exclude: boolean } | 
   return null;
 }
 
-export function PlacementPanel({
-  placement,
-  canEdit,
-}: {
-  placement: Placement;
-  canEdit?: boolean;
-}) {
+export function PlacementPanel({ placement }: { placement: Placement }) {
   const constraints = placement.Constraints ?? [];
   const preferences = placement.Preferences ?? [];
-  const hasContent = constraints.length > 0 || placement.MaxReplicas || preferences.length > 0;
-
-  if (!hasContent) {
-    return (
-      <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed py-6 text-center text-muted-foreground">
-        <p className="text-sm">No placement constraints</p>
-        {canEdit && (
-          <p className="text-xs">Click Edit to control which nodes this service can run on.</p>
-        )}
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col gap-3">

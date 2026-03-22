@@ -48,6 +48,12 @@ export function PlacementEditor({ serviceId, placement, onSaved }: PlacementEdit
     <EditablePanel
       title="Placement"
       bordered={false}
+      empty={
+        !placement?.Constraints?.length &&
+        !placement?.MaxReplicas &&
+        !placement?.Preferences?.length
+      }
+      emptyDescription="Click Edit to control which nodes this service can run on."
       onOpen={resetForm}
       onSave={save}
       actions={
@@ -60,12 +66,7 @@ export function PlacementEditor({ serviceId, placement, onSaved }: PlacementEdit
           Add constraint
         </Button>
       }
-      display={
-        <PlacementPanel
-          placement={placement ?? { Constraints: [], Preferences: [] }}
-          canEdit={false}
-        />
-      }
+      display={<PlacementPanel placement={placement ?? { Constraints: [], Preferences: [] }} />}
       edit={
         <>
           <div className="w-48">
