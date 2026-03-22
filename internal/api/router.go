@@ -150,6 +150,12 @@ func NewRouter(
 		contentNegotiated(h.HandleGetServiceLogDriver, spa),
 	)
 	mux.Handle("PATCH /services/{id}/log-driver", tier2(h.HandlePatchServiceLogDriver))
+	mux.HandleFunc("GET /services/{id}/configs", contentNegotiated(h.HandleGetServiceConfigs, spa))
+	mux.Handle("PATCH /services/{id}/configs", tier2(h.HandlePatchServiceConfigs))
+	mux.HandleFunc("GET /services/{id}/secrets", contentNegotiated(h.HandleGetServiceSecrets, spa))
+	mux.Handle("PATCH /services/{id}/secrets", tier2(h.HandlePatchServiceSecrets))
+	mux.HandleFunc("GET /services/{id}/networks", contentNegotiated(h.HandleGetServiceNetworks, spa))
+	mux.Handle("PATCH /services/{id}/networks", tier2(h.HandlePatchServiceNetworks))
 
 	mux.HandleFunc(
 		"GET /services/{id}/container-config",
