@@ -535,3 +535,20 @@ export interface ContainerConfig {
     options?: string[];
   };
 }
+
+export interface ServiceConfigRef {
+  configID: string;
+  configName: string;
+  fileName: string;
+}
+
+export interface ServiceSecretRef {
+  secretID: string;
+  secretName: string;
+  fileName: string;
+}
+
+export interface ServiceNetworkRef {
+  target: string;
+  aliases?: string[];
+}

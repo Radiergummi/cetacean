@@ -34,6 +34,9 @@ import type {
   UpdateConfig,
   LogDriver,
   ContainerConfig,
+  ServiceConfigRef,
+  ServiceSecretRef,
+  ServiceNetworkRef,
 } from "./types";
 
 const headers = { Accept: "application/json" };
@@ -333,6 +336,18 @@ export const api = {
     fetchJSON<{ healthcheck: Healthcheck | null }>(`/services/${id}/healthcheck`, signal).then(
       (r) => r.healthcheck,
     ),
+  serviceConfigs: (id: string, signal?: AbortSignal) =>
+    fetchJSON<{ configs: ServiceConfigRef[] }>(`/services/${id}/configs`, signal).then(
+      (r) => r.configs,
+    ),
+  serviceSecrets: (id: string, signal?: AbortSignal) =>
+    fetchJSON<{ secrets: ServiceSecretRef[] }>(`/services/${id}/secrets`, signal).then(
+      (r) => r.secrets,
+    ),
+  serviceNetworks: (id: string, signal?: AbortSignal) =>
+    fetchJSON<{ networks: ServiceNetworkRef[] }>(`/services/${id}/networks`, signal).then(
+      (r) => r.networks,
+    ),
 
   // Tier 2: sub-resource PATCHes
   patchServiceEnv: (id: string, ops: PatchOp[]) =>
@@ -363,6 +378,24 @@ export const api = {
     patch<{ ports: PortConfig[] }>(
       `/services/${id}/ports`,
       { ports },
+      "application/merge-patch+json",
+    ),
+  patchServiceConfigs: (id: string, configs: ServiceConfigRef[]) =>
+    patch<{ configs: ServiceConfigRef[] }>(
+      `/services/${id}/configs`,
+      { configs },
+      "application/merge-patch+json",
+    ),
+  patchServiceSecrets: (id: string, secrets: ServiceSecretRef[]) =>
+    patch<{ secrets: ServiceSecretRef[] }>(
+      `/services/${id}/secrets`,
+      { secrets },
+      "application/merge-patch+json",
+    ),
+  patchServiceNetworks: (id: string, networks: ServiceNetworkRef[]) =>
+    patch<{ networks: ServiceNetworkRef[] }>(
+      `/services/${id}/networks`,
+      { networks },
       "application/merge-patch+json",
     ),
 
