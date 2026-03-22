@@ -4,6 +4,7 @@ import type { ContainerConfig } from "@/api/types";
 import { DescriptionRow } from "@/components/data";
 import { Input } from "@/components/ui/input";
 import { formatDuration } from "@/lib/format";
+import { renderSwarmTemplate } from "@/lib/swarmTemplates";
 import { useState } from "react";
 
 function formatInit(init: boolean | undefined): string {
@@ -70,10 +71,12 @@ export function RuntimeEditor({
       onSave={save}
       display={
         <dl className="grid gap-y-2 text-sm">
-          <DescriptionRow
-            label="Hostname"
-            value={config.hostname || undefined}
-          />
+          <div className="grid grid-cols-[8rem_1fr] items-baseline gap-x-2">
+            <dt className="text-muted-foreground">Hostname</dt>
+            <dd className="font-mono">
+              {config.hostname ? renderSwarmTemplate(config.hostname) : "—"}
+            </dd>
+          </div>
           <DescriptionRow
             label="Init"
             value={formatInit(config.init)}
@@ -105,9 +108,12 @@ export function RuntimeEditor({
             <Input
               value={hostnameInput}
               onChange={(event) => setHostnameInput(event.target.value)}
-              placeholder="my-container"
+              placeholder="{{.Node.Hostname}}-{{.Task.Slot}}"
               className="font-mono"
             />
+            <p className="text-xs text-muted-foreground">
+              Supports swarm templates: {"{{.Node.Hostname}}"}, {"{{.Task.Slot}}"}, etc.
+            </p>
           </div>
 
           <div className="flex flex-col gap-1">
