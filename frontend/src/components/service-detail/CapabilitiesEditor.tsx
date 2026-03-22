@@ -1,3 +1,4 @@
+import { DockerDocsLink } from "./DockerDocsLink";
 import { EditablePanel } from "./EditablePanel";
 import { api } from "@/api/client";
 import type { ContainerConfig } from "@/api/types";
@@ -97,7 +98,9 @@ export function CapabilitiesEditor({
       edit={
         <>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs text-muted-foreground">Add Capabilities</label>
+            <label className="flex items-center gap-1 text-xs text-muted-foreground">
+              Add Capabilities <DockerDocsLink anchor="cap-add" />
+            </label>
             <MultiCombobox
               values={addList}
               onChange={setAddList}
@@ -108,7 +111,9 @@ export function CapabilitiesEditor({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs text-muted-foreground">Drop Capabilities</label>
+            <label className="flex items-center gap-1 text-xs text-muted-foreground">
+              Drop Capabilities <DockerDocsLink anchor="cap-drop" />
+            </label>
             <MultiCombobox
               values={dropList}
               onChange={setDropList}

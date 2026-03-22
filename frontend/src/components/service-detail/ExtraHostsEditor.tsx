@@ -1,3 +1,4 @@
+import { DockerDocsLink } from "./DockerDocsLink";
 import { EditablePanel } from "./EditablePanel";
 import { api } from "@/api/client";
 import type { ContainerConfig } from "@/api/types";
@@ -126,6 +127,9 @@ export function ExtraHostsEditor({
       }
       edit={
         <div className="space-y-2">
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            Custom /etc/hosts entries <DockerDocsLink anchor="host" />
+          </p>
           {rows.map((row, index) => {
             const ipTouched = row.ip.length > 0;
             const hostnameTouched = row.hostname.length > 0;

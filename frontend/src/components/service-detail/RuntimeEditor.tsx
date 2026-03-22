@@ -1,3 +1,4 @@
+import { DockerDocsLink } from "./DockerDocsLink";
 import { EditablePanel } from "./EditablePanel";
 import { api } from "@/api/client";
 import type { ContainerConfig } from "@/api/types";
@@ -137,7 +138,9 @@ export function RuntimeEditor({
       edit={
         <>
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">Hostname</label>
+            <label className="flex items-center gap-1 text-xs text-foreground">
+              Hostname <DockerDocsLink anchor="hostname" />
+            </label>
             <Input
               value={hostnameInput}
               onChange={(event) => setHostnameInput(event.target.value)}
@@ -150,7 +153,9 @@ export function RuntimeEditor({
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">Stop Signal</label>
+            <label className="flex items-center gap-1 text-xs text-foreground">
+              Stop Signal <DockerDocsLink anchor="stop-signal" />
+            </label>
             <Combobox
               value={stopSignalInput}
               onChange={setStopSignalInput}
@@ -161,7 +166,9 @@ export function RuntimeEditor({
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">Stop Grace Period (seconds)</label>
+            <label className="flex items-center gap-1 text-xs text-foreground">
+              Stop Grace Period (seconds) <DockerDocsLink anchor="stop-grace-period" />
+            </label>
             <Input
               type="number"
               value={gracePeriodInput}
@@ -171,6 +178,10 @@ export function RuntimeEditor({
               step={0.1}
               className="font-mono"
             />
+
+            <p className="text-xs text-muted-foreground">
+              Time to wait before force killing a container
+            </p>
           </div>
 
           <div className="flex flex-col gap-3">
@@ -198,7 +209,9 @@ export function RuntimeEditor({
                 className="mt-0.5 size-4"
               />
               <span>
-                Init
+                <span className="inline-flex items-center gap-1">
+                  Init <DockerDocsLink anchor="init" />
+                </span>
                 {initValue === undefined && (
                   <span className="text-xs text-muted-foreground"> (default)</span>
                 )}
@@ -217,7 +230,9 @@ export function RuntimeEditor({
                 className="mt-0.5 size-4"
               />
               <span>
-                TTY
+                <span className="inline-flex items-center gap-1">
+                  TTY <DockerDocsLink anchor="tty" />
+                </span>
                 <p className="text-xs text-muted-foreground">
                   Allocate a pseudo-TTY for the container. Required for interactive or TUI-based
                   applications.
@@ -233,7 +248,9 @@ export function RuntimeEditor({
                 className="mt-0.5 size-4"
               />
               <span>
-                Read Only
+                <span className="inline-flex items-center gap-1">
+                  Read Only <DockerDocsLink anchor="read-only" />
+                </span>
                 <p className="text-xs text-muted-foreground">
                   Mount the container's root filesystem as read-only. Use volumes or tmpfs for
                   writable paths.

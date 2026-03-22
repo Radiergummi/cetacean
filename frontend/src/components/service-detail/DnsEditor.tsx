@@ -1,3 +1,4 @@
+import { DockerDocsLink } from "./DockerDocsLink";
 import { EditablePanel } from "./EditablePanel";
 import { api } from "@/api/client";
 import type { ContainerConfig } from "@/api/types";
@@ -70,7 +71,9 @@ export function DnsEditor({
       edit={
         <>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs text-muted-foreground">Nameservers</label>
+            <label className="flex items-center gap-1 text-xs text-muted-foreground">
+              Nameservers <DockerDocsLink anchor="dns" />
+            </label>
             <MultiCombobox
               values={nameservers}
               onChange={setNameservers}
@@ -80,7 +83,9 @@ export function DnsEditor({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs text-muted-foreground">Search Domains</label>
+            <label className="flex items-center gap-1 text-xs text-muted-foreground">
+              Search Domains <DockerDocsLink anchor="dns-search" />
+            </label>
             <MultiCombobox
               values={searchDomains}
               onChange={setSearchDomains}
@@ -90,7 +95,9 @@ export function DnsEditor({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs text-muted-foreground">Options</label>
+            <label className="flex items-center gap-1 text-xs text-muted-foreground">
+              Options <DockerDocsLink anchor="dns-option" />
+            </label>
             <MultiCombobox
               values={resolverOptions}
               onChange={setResolverOptions}

@@ -1,3 +1,4 @@
+import { DockerDocsLink } from "./DockerDocsLink";
 import { EditablePanel } from "./EditablePanel";
 import { api } from "@/api/client";
 import type { ContainerConfig } from "@/api/types";
@@ -68,7 +69,9 @@ export function CommandEditor({
       edit={
         <>
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">Command</label>
+            <label className="flex items-center gap-1 text-xs text-muted-foreground">
+              Command <DockerDocsLink anchor="entrypoint" />
+            </label>
             <Input
               value={commandInput}
               onChange={(event) => setCommandInput(event.target.value)}
@@ -79,7 +82,9 @@ export function CommandEditor({
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">Args</label>
+            <label className="flex items-center gap-1 text-xs text-muted-foreground">
+              Args <DockerDocsLink anchor="args" />
+            </label>
             <Input
               value={argsInput}
               onChange={(event) => setArgsInput(event.target.value)}
@@ -90,7 +95,9 @@ export function CommandEditor({
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">Working Dir</label>
+            <label className="flex items-center gap-1 text-xs text-muted-foreground">
+              Working Dir <DockerDocsLink anchor="workdir" />
+            </label>
             <Input
               value={dirInput}
               onChange={(event) => setDirInput(event.target.value)}
@@ -100,7 +107,9 @@ export function CommandEditor({
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">User</label>
+            <label className="flex items-center gap-1 text-xs text-muted-foreground">
+              User <DockerDocsLink anchor="user" />
+            </label>
             <Input
               value={userInput}
               onChange={(event) => setUserInput(event.target.value)}
