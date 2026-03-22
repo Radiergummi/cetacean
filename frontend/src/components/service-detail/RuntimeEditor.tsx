@@ -58,9 +58,7 @@ export function RuntimeEditor({
     setTtyInput(config.tty);
     setReadOnlyInput(config.readOnly);
     setStopSignalInput(config.stopSignal);
-    setGracePeriodInput(
-      config.stopGracePeriod != null ? String(config.stopGracePeriod / 1e9) : "",
-    );
+    setGracePeriodInput(config.stopGracePeriod != null ? String(config.stopGracePeriod / 1e9) : "");
     setSaveError(null);
     setEditing(true);
   }

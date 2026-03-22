@@ -151,7 +151,10 @@ func NewRouter(
 	)
 	mux.Handle("PATCH /services/{id}/log-driver", tier2(h.HandlePatchServiceLogDriver))
 
-	mux.HandleFunc("GET /services/{id}/container-config", contentNegotiated(h.HandleGetServiceContainerConfig, spa))
+	mux.HandleFunc(
+		"GET /services/{id}/container-config",
+		contentNegotiated(h.HandleGetServiceContainerConfig, spa),
+	)
 	mux.Handle("PATCH /services/{id}/container-config", tier2(h.HandlePatchServiceContainerConfig))
 
 	// Service write operations — tier 3 (impactful)

@@ -21,31 +21,31 @@ import (
 )
 
 type mockWriteClient struct {
-	scaleServiceFn                func(ctx context.Context, id string, replicas uint64) (swarm.Service, error)
-	updateServiceImageFn          func(ctx context.Context, id string, image string) (swarm.Service, error)
-	rollbackServiceFn             func(ctx context.Context, id string) (swarm.Service, error)
-	restartServiceFn              func(ctx context.Context, id string) (swarm.Service, error)
-	updateNodeAvailabilityFn      func(ctx context.Context, id string, availability swarm.NodeAvailability) (swarm.Node, error)
-	removeTaskFn                  func(ctx context.Context, id string) error
-	removeServiceFn               func(ctx context.Context, id string) error
-	updateServiceEnvFn            func(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
-	updateNodeLabelsFn            func(ctx context.Context, id string, labels map[string]string) (swarm.Node, error)
-	updateNodeRoleFn              func(ctx context.Context, id string, role swarm.NodeRole) (swarm.Node, error)
-	removeNodeFn                  func(ctx context.Context, id string) error
-	removeNetworkFn               func(ctx context.Context, id string) error
-	removeConfigFn                func(ctx context.Context, id string) error
-	removeSecretFn                func(ctx context.Context, id string) error
-	updateServiceLabelsFn         func(ctx context.Context, id string, labels map[string]string) (swarm.Service, error)
-	updateServiceResourcesFn      func(ctx context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error)
-	updateServiceModeFn           func(ctx context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error)
-	updateServiceEndpointModeFn   func(ctx context.Context, id string, mode swarm.ResolutionMode) (swarm.Service, error)
-	updateServiceHealthcheckFn    func(ctx context.Context, id string, hc *container.HealthConfig) (swarm.Service, error)
-	updateServicePlacementFn      func(ctx context.Context, id string, placement *swarm.Placement) (swarm.Service, error)
-	updateServicePortsFn          func(ctx context.Context, id string, ports []swarm.PortConfig) (swarm.Service, error)
-	updateServiceUpdatePolicyFn   func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error)
-	updateServiceRollbackPolicyFn func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error)
-	updateServiceLogDriverFn             func(ctx context.Context, id string, driver *swarm.Driver) (swarm.Service, error)
-	updateServiceContainerConfigFn       func(ctx context.Context, id string, apply func(spec *swarm.ContainerSpec)) (swarm.Service, error)
+	scaleServiceFn                 func(ctx context.Context, id string, replicas uint64) (swarm.Service, error)
+	updateServiceImageFn           func(ctx context.Context, id string, image string) (swarm.Service, error)
+	rollbackServiceFn              func(ctx context.Context, id string) (swarm.Service, error)
+	restartServiceFn               func(ctx context.Context, id string) (swarm.Service, error)
+	updateNodeAvailabilityFn       func(ctx context.Context, id string, availability swarm.NodeAvailability) (swarm.Node, error)
+	removeTaskFn                   func(ctx context.Context, id string) error
+	removeServiceFn                func(ctx context.Context, id string) error
+	updateServiceEnvFn             func(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
+	updateNodeLabelsFn             func(ctx context.Context, id string, labels map[string]string) (swarm.Node, error)
+	updateNodeRoleFn               func(ctx context.Context, id string, role swarm.NodeRole) (swarm.Node, error)
+	removeNodeFn                   func(ctx context.Context, id string) error
+	removeNetworkFn                func(ctx context.Context, id string) error
+	removeConfigFn                 func(ctx context.Context, id string) error
+	removeSecretFn                 func(ctx context.Context, id string) error
+	updateServiceLabelsFn          func(ctx context.Context, id string, labels map[string]string) (swarm.Service, error)
+	updateServiceResourcesFn       func(ctx context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error)
+	updateServiceModeFn            func(ctx context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error)
+	updateServiceEndpointModeFn    func(ctx context.Context, id string, mode swarm.ResolutionMode) (swarm.Service, error)
+	updateServiceHealthcheckFn     func(ctx context.Context, id string, hc *container.HealthConfig) (swarm.Service, error)
+	updateServicePlacementFn       func(ctx context.Context, id string, placement *swarm.Placement) (swarm.Service, error)
+	updateServicePortsFn           func(ctx context.Context, id string, ports []swarm.PortConfig) (swarm.Service, error)
+	updateServiceUpdatePolicyFn    func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error)
+	updateServiceRollbackPolicyFn  func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error)
+	updateServiceLogDriverFn       func(ctx context.Context, id string, driver *swarm.Driver) (swarm.Service, error)
+	updateServiceContainerConfigFn func(ctx context.Context, id string, apply func(spec *swarm.ContainerSpec)) (swarm.Service, error)
 }
 
 func (m *mockWriteClient) ScaleService(
@@ -2390,7 +2390,14 @@ func TestHandlePatchServiceContainerConfig_PartialPatch(t *testing.T) {
 
 func TestHandlePatchServiceContainerConfig_WrongContentType(t *testing.T) {
 	c := cache.New(nil)
-	c.SetService(swarm.Service{ID: "svc1", Spec: swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{}}}})
+	c.SetService(
+		swarm.Service{
+			ID: "svc1",
+			Spec: swarm.ServiceSpec{
+				TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{}},
+			},
+		},
+	)
 	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
 
 	body := `{"hostname":"x"}`
@@ -2409,7 +2416,11 @@ func TestHandlePatchServiceContainerConfig_NotFound(t *testing.T) {
 	c := cache.New(nil)
 	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
 
-	req := httptest.NewRequest("PATCH", "/services/missing/container-config", strings.NewReader(`{}`))
+	req := httptest.NewRequest(
+		"PATCH",
+		"/services/missing/container-config",
+		strings.NewReader(`{}`),
+	)
 	req.SetPathValue("id", "missing")
 	req.Header.Set("Content-Type", "application/merge-patch+json")
 	w := httptest.NewRecorder()

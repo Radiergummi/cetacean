@@ -106,10 +106,10 @@ export default function StackDetail() {
           <StackActions
             stackName={stack.name}
             resourceCounts={{
-              services: stack.services.length,
-              networks: stack.networks.length,
-              configs: stack.configs.length,
-              secrets: stack.secrets.length,
+              services: stack.services?.length ?? 0,
+              networks: stack.networks?.length ?? 0,
+              configs: stack.configs?.length ?? 0,
+              secrets: stack.secrets?.length ?? 0,
             }}
           />
         }

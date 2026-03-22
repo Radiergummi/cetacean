@@ -1602,7 +1602,12 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 	id := r.PathValue("id")
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		writeProblem(
+			w,
+			r,
+			http.StatusUnsupportedMediaType,
+			"expected Content-Type: application/merge-patch+json",
+		)
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
@@ -1651,36 +1656,40 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 
 	slog.Info("updating service container config", "service", id)
 
-	updated, err := h.writeClient.UpdateServiceContainerConfig(r.Context(), id, func(cs *swarm.ContainerSpec) {
-		cs.Command = merged.Command
-		cs.Args = merged.Args
-		cs.Dir = merged.Dir
-		cs.User = merged.User
-		cs.Hostname = merged.Hostname
-		cs.Init = merged.Init
-		cs.TTY = merged.TTY
-		cs.ReadOnly = merged.ReadOnly
-		cs.StopSignal = merged.StopSignal
-		cs.CapabilityAdd = merged.CapabilityAdd
-		cs.CapabilityDrop = merged.CapabilityDrop
-		cs.Groups = merged.Groups
-		cs.Hosts = merged.Hosts
-		if merged.StopGracePeriod != nil {
-			d := time.Duration(*merged.StopGracePeriod)
-			cs.StopGracePeriod = &d
-		} else {
-			cs.StopGracePeriod = nil
-		}
-		if merged.DNSConfig != nil {
-			cs.DNSConfig = &swarm.DNSConfig{
-				Nameservers: merged.DNSConfig.Nameservers,
-				Search:      merged.DNSConfig.Search,
-				Options:     merged.DNSConfig.Options,
+	updated, err := h.writeClient.UpdateServiceContainerConfig(
+		r.Context(),
+		id,
+		func(cs *swarm.ContainerSpec) {
+			cs.Command = merged.Command
+			cs.Args = merged.Args
+			cs.Dir = merged.Dir
+			cs.User = merged.User
+			cs.Hostname = merged.Hostname
+			cs.Init = merged.Init
+			cs.TTY = merged.TTY
+			cs.ReadOnly = merged.ReadOnly
+			cs.StopSignal = merged.StopSignal
+			cs.CapabilityAdd = merged.CapabilityAdd
+			cs.CapabilityDrop = merged.CapabilityDrop
+			cs.Groups = merged.Groups
+			cs.Hosts = merged.Hosts
+			if merged.StopGracePeriod != nil {
+				d := time.Duration(*merged.StopGracePeriod)
+				cs.StopGracePeriod = &d
+			} else {
+				cs.StopGracePeriod = nil
 			}
-		} else {
-			cs.DNSConfig = nil
-		}
-	})
+			if merged.DNSConfig != nil {
+				cs.DNSConfig = &swarm.DNSConfig{
+					Nameservers: merged.DNSConfig.Nameservers,
+					Search:      merged.DNSConfig.Search,
+					Options:     merged.DNSConfig.Options,
+				}
+			} else {
+				cs.DNSConfig = nil
+			}
+		},
+	)
 	if err != nil {
 		writeDockerError(w, r, err, "service")
 		return

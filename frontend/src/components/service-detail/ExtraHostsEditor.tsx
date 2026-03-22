@@ -170,7 +170,7 @@ export function ExtraHostsEditor({
               <table className="w-full text-sm">
                 <thead>
                   <tr>
-                    <th className="pb-1 pr-4 text-left font-normal text-muted-foreground">
+                    <th className="pr-4 pb-1 text-left font-normal text-muted-foreground">
                       IP Address
                     </th>
                     <th className="pb-1 text-left font-normal text-muted-foreground">Hostname</th>

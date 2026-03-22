@@ -121,7 +121,11 @@ type DockerWriteClient interface {
 		id string,
 		driver *swarm.Driver,
 	) (swarm.Service, error)
-	UpdateServiceContainerConfig(ctx context.Context, id string, apply func(spec *swarm.ContainerSpec)) (swarm.Service, error)
+	UpdateServiceContainerConfig(
+		ctx context.Context,
+		id string,
+		apply func(spec *swarm.ContainerSpec),
+	) (swarm.Service, error)
 }
 
 type Handlers struct {
