@@ -66,6 +66,12 @@ type serviceConfigRef struct {
 	FileName   string `json:"fileName"`
 }
 
+type serviceSecretRef struct {
+	SecretID   string `json:"secretID"`
+	SecretName string `json:"secretName"`
+	FileName   string `json:"fileName"`
+}
+
 func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
@@ -1809,5 +1815,112 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 	}
 	writeJSON(w, NewDetailResponse("/services/"+id+"/configs", "ServiceConfigs", map[string]any{
 		"configs": resultRefs,
+	}))
+}
+
+func (h *Handlers) HandleGetServiceSecrets(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	var refs []serviceSecretRef
+	if svc.Spec.TaskTemplate.ContainerSpec != nil {
+		for _, sec := range svc.Spec.TaskTemplate.ContainerSpec.Secrets {
+			var fileName string
+			if sec.File != nil {
+				fileName = sec.File.Name
+			}
+			refs = append(refs, serviceSecretRef{
+				SecretID:   sec.SecretID,
+				SecretName: sec.SecretName,
+				FileName:   fileName,
+			})
+		}
+	}
+	if refs == nil {
+		refs = []serviceSecretRef{}
+	}
+
+	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/secrets", "ServiceSecrets", map[string]any{
+		"secrets": refs,
+	}))
+}
+
+func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	ct := r.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/merge-patch+json") {
+		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		return
+	}
+
+	_, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	var patch struct {
+		Secrets []serviceSecretRef `json:"secrets"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	secrets := make([]*swarm.SecretReference, len(patch.Secrets))
+	for i, ref := range patch.Secrets {
+		if ref.SecretID == "" || ref.SecretName == "" {
+			writeProblem(w, r, http.StatusBadRequest, "each secret must have secretID and secretName")
+			return
+		}
+		fileName := ref.FileName
+		if fileName == "" {
+			fileName = "/run/secrets/" + ref.SecretName
+		}
+		secrets[i] = &swarm.SecretReference{
+			SecretID:   ref.SecretID,
+			SecretName: ref.SecretName,
+			File: &swarm.SecretReferenceFileTarget{
+				Name: fileName,
+				UID:  "0",
+				GID:  "0",
+				Mode: 0444,
+			},
+		}
+	}
+
+	slog.Info("updating service secrets", "service", id)
+
+	updated, err := h.writeClient.UpdateServiceSecrets(r.Context(), id, secrets)
+	if err != nil {
+		writeDockerError(w, r, err, "service")
+		return
+	}
+
+	var resultRefs []serviceSecretRef
+	if updated.Spec.TaskTemplate.ContainerSpec != nil {
+		for _, sec := range updated.Spec.TaskTemplate.ContainerSpec.Secrets {
+			var fn string
+			if sec.File != nil {
+				fn = sec.File.Name
+			}
+			resultRefs = append(resultRefs, serviceSecretRef{
+				SecretID:   sec.SecretID,
+				SecretName: sec.SecretName,
+				FileName:   fn,
+			})
+		}
+	}
+	if resultRefs == nil {
+		resultRefs = []serviceSecretRef{}
+	}
+	writeJSON(w, NewDetailResponse("/services/"+id+"/secrets", "ServiceSecrets", map[string]any{
+		"secrets": resultRefs,
 	}))
 }
