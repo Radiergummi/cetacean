@@ -23,6 +23,7 @@ import ResourceName from "../components/ResourceName";
 import {
   CapabilitiesEditor,
   CommandEditor,
+  ConfigsEditor,
   DeploymentChanges,
   DnsEditor,
   EndpointModeEditor,
@@ -30,12 +31,14 @@ import {
   ExtraHostsEditor,
   HealthcheckEditor,
   LogDriverEditor,
+  NetworksEditor,
   PlacementEditor,
   PolicyEditor,
   PortsEditor,
   ReplicaCard,
   ResourcesEditor,
   RuntimeEditor,
+  SecretsEditor,
   ServiceActions,
   type ServiceResourceShape,
 } from "../components/service-detail";
@@ -467,82 +470,37 @@ export default function ServiceDetail() {
       )}
 
       {/* Networks */}
-      {taskTemplate.Networks && taskTemplate.Networks.length > 0 && (
-        <CollapsibleSection title="Networks">
-          <SimpleTable
-            columns={["Network", "Virtual IP", "Aliases"]}
-            items={taskTemplate.Networks}
-            keyFn={({ Target }) => Target}
-            renderRow={({ Aliases, Target }) => {
-              const vip = service.Endpoint?.VirtualIPs?.find(
-                ({ NetworkID }) => NetworkID === Target,
-              );
-              return (
-                <>
-                  <td className="p-3 text-sm">
-                    <Link
-                      to={`/networks/${Target}`}
-                      className="text-link hover:underline"
-                    >
-                      <ResourceName name={networkNames[Target] || Target} />
-                    </Link>
-                  </td>
-                  <td className="p-3 font-mono text-xs">{vip?.Addr || "\u2014"}</td>
-                  <td className="p-3 font-mono text-xs">{Aliases?.join(", ") || "\u2014"}</td>
-                </>
-              );
-            }}
-          />
-        </CollapsibleSection>
-      )}
+      <NetworksEditor
+        serviceId={id!}
+        networks={(taskTemplate?.Networks ?? []).map(({ Target, Aliases }) => ({
+          target: Target,
+          aliases: Aliases,
+        }))}
+        networkNames={networkNames}
+        onSaved={() => fetchData()}
+      />
 
       {/* Configs */}
-      {containerSpec.Configs && containerSpec.Configs.length > 0 && (
-        <CollapsibleSection title="Configs">
-          <SimpleTable
-            columns={["Name", "Target"]}
-            items={containerSpec.Configs}
-            keyFn={({ ConfigID }) => ConfigID}
-            renderRow={({ ConfigID, ConfigName, File }) => (
-              <>
-                <td className="p-3 text-sm">
-                  <Link
-                    to={`/configs/${ConfigID}`}
-                    className="text-link hover:underline"
-                  >
-                    <ResourceName name={ConfigName} />
-                  </Link>
-                </td>
-                <td className="p-3 font-mono text-xs">{File?.Name ?? "\u2014"}</td>
-              </>
-            )}
-          />
-        </CollapsibleSection>
-      )}
+      <ConfigsEditor
+        serviceId={id!}
+        configs={(containerSpec?.Configs ?? []).map((cfg) => ({
+          configID: cfg.ConfigID,
+          configName: cfg.ConfigName,
+          fileName: cfg.File?.Name ?? "",
+        }))}
+        onSaved={() => fetchData()}
+      />
 
       {/* Secrets */}
-      {containerSpec.Secrets && containerSpec.Secrets.length > 0 && (
-        <CollapsibleSection title="Secrets">
-          <SimpleTable
-            columns={["Name", "Target"]}
-            items={containerSpec.Secrets}
-            keyFn={({ SecretID }) => SecretID}
-            renderRow={({ File, SecretID, SecretName }) => (
-              <>
-                <td className="p-3 text-sm">
-                  <Link
-                    to={`/secrets/${SecretID}`}
-                    className="text-link hover:underline"
-                  >
-                    <ResourceName name={SecretName} />
-                  </Link>
-                </td>
-                <td className="p-3 font-mono text-xs">{File?.Name || "\u2014"}</td>
-              </>
-            )}
-          />
-        </CollapsibleSection>
-      )}
+      <SecretsEditor
+        serviceId={id!}
+        secrets={(containerSpec?.Secrets ?? []).map((sec) => ({
+          secretID: sec.SecretID,
+          secretName: sec.SecretName,
+          fileName: sec.File?.Name ?? "",
+        }))}
+        onSaved={() => fetchData()}
+      />
 
       {/* Deploy: Resources, Placement, Restart, Update, Rollback */}
       <CollapsibleSection
