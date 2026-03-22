@@ -764,6 +764,81 @@ func (c *Client) UpdateServiceLogDriver(
 	return c.InspectService(ctx, id)
 }
 
+func (c *Client) UpdateServiceConfigs(
+	ctx context.Context,
+	id string,
+	configs []*swarm.ConfigReference,
+) (swarm.Service, error) {
+	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	if svc.Spec.TaskTemplate.ContainerSpec == nil {
+		svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{}
+	}
+	svc.Spec.TaskTemplate.ContainerSpec.Configs = configs
+	_, err = c.docker.ServiceUpdate(
+		ctx,
+		svc.ID,
+		svc.Version,
+		svc.Spec,
+		swarm.ServiceUpdateOptions{},
+	)
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	return c.InspectService(ctx, id)
+}
+
+func (c *Client) UpdateServiceSecrets(
+	ctx context.Context,
+	id string,
+	secrets []*swarm.SecretReference,
+) (swarm.Service, error) {
+	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	if svc.Spec.TaskTemplate.ContainerSpec == nil {
+		svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{}
+	}
+	svc.Spec.TaskTemplate.ContainerSpec.Secrets = secrets
+	_, err = c.docker.ServiceUpdate(
+		ctx,
+		svc.ID,
+		svc.Version,
+		svc.Spec,
+		swarm.ServiceUpdateOptions{},
+	)
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	return c.InspectService(ctx, id)
+}
+
+func (c *Client) UpdateServiceNetworks(
+	ctx context.Context,
+	id string,
+	networks []swarm.NetworkAttachmentConfig,
+) (swarm.Service, error) {
+	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	svc.Spec.TaskTemplate.Networks = networks
+	_, err = c.docker.ServiceUpdate(
+		ctx,
+		svc.ID,
+		svc.Version,
+		svc.Spec,
+		swarm.ServiceUpdateOptions{},
+	)
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	return c.InspectService(ctx, id)
+}
+
 func (c *Client) UpdateServiceContainerConfig(
 	ctx context.Context,
 	id string,
