@@ -19,6 +19,28 @@ interface MultiComboboxProps {
   transformInput?: (value: string) => string;
 }
 
+function Chips({ values, onRemove }: { values: string[]; onRemove: (value: string) => void }) {
+  return values.map((value) => (
+    <span
+      key={value}
+      className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 font-mono text-xs"
+    >
+      {value}
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onRemove(value);
+        }}
+        className="text-muted-foreground hover:text-foreground"
+        aria-label={`Remove ${value}`}
+      >
+        <X className="size-3" />
+      </button>
+    </span>
+  ));
+}
+
 export function MultiCombobox({
   values,
   onChange,
@@ -27,30 +49,61 @@ export function MultiCombobox({
   className,
   transformInput,
 }: MultiComboboxProps) {
+  const [input, setInput] = useState("");
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const transform = transformInput ?? ((value: string) => value);
-
-  const filtered = options.filter(
-    (option) =>
-      !values.includes(option.value) &&
-      (option.value.toLowerCase().includes(search.toLowerCase()) ||
-        option.label.toLowerCase().includes(search.toLowerCase()) ||
-        option.description?.toLowerCase().includes(search.toLowerCase())),
-  );
 
   function add(value: string) {
     if (!values.includes(value)) {
       onChange([...values, value]);
     }
 
-    setSearch("");
+    setInput("");
   }
 
   function remove(value: string) {
     onChange(values.filter((v) => v !== value));
   }
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter" && input.trim()) {
+      event.preventDefault();
+      add(transform(input.trim()));
+    }
+  }
+
+  if (options.length === 0) {
+    return (
+      <div
+        className={cn(
+          "flex min-h-8 w-full flex-wrap items-center gap-1 rounded-md border border-input bg-transparent px-2 py-1 text-sm",
+          "focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50",
+          className,
+        )}
+      >
+        <Chips
+          values={values}
+          onRemove={remove}
+        />
+        <input
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={values.length === 0 ? placeholder : undefined}
+          className="min-w-20 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+        />
+      </div>
+    );
+  }
+
+  const filtered = options.filter(
+    (option) =>
+      !values.includes(option.value) &&
+      (option.value.toLowerCase().includes(input.toLowerCase()) ||
+        option.label.toLowerCase().includes(input.toLowerCase()) ||
+        option.description?.toLowerCase().includes(input.toLowerCase())),
+  );
 
   return (
     <Popover
@@ -59,7 +112,7 @@ export function MultiCombobox({
         setOpen(nextOpen);
 
         if (nextOpen) {
-          setSearch("");
+          setInput("");
           requestAnimationFrame(() => inputRef.current?.focus());
         }
       }}
@@ -71,25 +124,10 @@ export function MultiCombobox({
           className,
         )}
       >
-        {values.map((value) => (
-          <span
-            key={value}
-            className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 font-mono text-xs"
-          >
-            {value}
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                remove(value);
-              }}
-              className="text-muted-foreground hover:text-foreground"
-              aria-label={`Remove ${value}`}
-            >
-              <X className="size-3" />
-            </button>
-          </span>
-        ))}
+        <Chips
+          values={values}
+          onRemove={remove}
+        />
 
         {values.length === 0 && (
           <span className="text-muted-foreground">{placeholder || "Select..."}</span>
@@ -107,14 +145,9 @@ export function MultiCombobox({
 
           <input
             ref={inputRef}
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && search.trim()) {
-                event.preventDefault();
-                add(transform(search.trim()));
-              }
-            }}
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="Search or enter custom..."
             className="h-6 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
@@ -141,16 +174,16 @@ export function MultiCombobox({
             </button>
           ))}
 
-          {filtered.length === 0 && search.trim() && !values.includes(transform(search.trim())) && (
+          {filtered.length === 0 && input.trim() && !values.includes(transform(input.trim())) && (
             <button
               type="button"
-              onClick={() => add(transform(search.trim()))}
+              onClick={() => add(transform(input.trim()))}
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
             >
               <Check className="size-3.5 shrink-0 opacity-0" />
 
               <span>
-                Add "<span className="font-mono">{transform(search.trim())}</span>"
+                Add "<span className="font-mono">{transform(input.trim())}</span>"
               </span>
             </button>
           )}
