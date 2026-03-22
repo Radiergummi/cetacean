@@ -121,6 +121,9 @@ type DockerWriteClient interface {
 		id string,
 		driver *swarm.Driver,
 	) (swarm.Service, error)
+	UpdateServiceConfigs(ctx context.Context, id string, configs []*swarm.ConfigReference) (swarm.Service, error)
+	UpdateServiceSecrets(ctx context.Context, id string, secrets []*swarm.SecretReference) (swarm.Service, error)
+	UpdateServiceNetworks(ctx context.Context, id string, networks []swarm.NetworkAttachmentConfig) (swarm.Service, error)
 	UpdateServiceContainerConfig(
 		ctx context.Context,
 		id string,

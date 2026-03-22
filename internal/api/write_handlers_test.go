@@ -46,6 +46,9 @@ type mockWriteClient struct {
 	updateServiceRollbackPolicyFn  func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error)
 	updateServiceLogDriverFn       func(ctx context.Context, id string, driver *swarm.Driver) (swarm.Service, error)
 	updateServiceContainerConfigFn func(ctx context.Context, id string, apply func(spec *swarm.ContainerSpec)) (swarm.Service, error)
+	updateServiceConfigsFn         func(ctx context.Context, id string, configs []*swarm.ConfigReference) (swarm.Service, error)
+	updateServiceSecretsFn         func(ctx context.Context, id string, secrets []*swarm.SecretReference) (swarm.Service, error)
+	updateServiceNetworksFn        func(ctx context.Context, id string, networks []swarm.NetworkAttachmentConfig) (swarm.Service, error)
 }
 
 func (m *mockWriteClient) ScaleService(
@@ -280,6 +283,39 @@ func (m *mockWriteClient) UpdateServiceContainerConfig(
 ) (swarm.Service, error) {
 	if m.updateServiceContainerConfigFn != nil {
 		return m.updateServiceContainerConfigFn(ctx, id, apply)
+	}
+	return swarm.Service{}, fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) UpdateServiceConfigs(
+	ctx context.Context,
+	id string,
+	configs []*swarm.ConfigReference,
+) (swarm.Service, error) {
+	if m.updateServiceConfigsFn != nil {
+		return m.updateServiceConfigsFn(ctx, id, configs)
+	}
+	return swarm.Service{}, fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) UpdateServiceSecrets(
+	ctx context.Context,
+	id string,
+	secrets []*swarm.SecretReference,
+) (swarm.Service, error) {
+	if m.updateServiceSecretsFn != nil {
+		return m.updateServiceSecretsFn(ctx, id, secrets)
+	}
+	return swarm.Service{}, fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) UpdateServiceNetworks(
+	ctx context.Context,
+	id string,
+	networks []swarm.NetworkAttachmentConfig,
+) (swarm.Service, error) {
+	if m.updateServiceNetworksFn != nil {
+		return m.updateServiceNetworksFn(ctx, id, networks)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
