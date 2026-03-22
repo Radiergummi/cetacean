@@ -127,9 +127,10 @@ export function ExtraHostsEditor({
       }
       edit={
         <div className="space-y-2">
-          <p className="flex items-center gap-1 text-xs text-muted-foreground">
-            Custom /etc/hosts entries <DockerDocsLink anchor="host" />
-          </p>
+          <span className="flex items-center gap-1 text-xs text-foreground">
+            Custom <code>/etc/hosts</code> entries{" "}
+            <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#extra_hosts" />
+          </span>
           {rows.map((row, index) => {
             const ipTouched = row.ip.length > 0;
             const hostnameTouched = row.hostname.length > 0;

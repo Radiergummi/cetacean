@@ -139,7 +139,8 @@ export function RuntimeEditor({
         <>
           <div className="flex flex-col gap-1">
             <label className="flex items-center gap-1 text-xs text-foreground">
-              Hostname <DockerDocsLink anchor="hostname" />
+              Hostname{" "}
+              <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/service/create/#hostname" />
             </label>
             <Input
               value={hostnameInput}
@@ -154,20 +155,23 @@ export function RuntimeEditor({
 
           <div className="flex flex-col gap-1">
             <label className="flex items-center gap-1 text-xs text-foreground">
-              Stop Signal <DockerDocsLink anchor="stop-signal" />
+              Stop Signal{" "}
+              <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#stop_signal" />
             </label>
             <Combobox
               value={stopSignalInput}
               onChange={setStopSignalInput}
-              placeholder="Select signal..."
+              placeholder="Select signal…"
               options={signalOptions}
               allowCustom={false}
             />
+            <p className="text-xs text-muted-foreground">Signal to stop the container</p>
           </div>
 
           <div className="flex flex-col gap-1">
             <label className="flex items-center gap-1 text-xs text-foreground">
-              Stop Grace Period (seconds) <DockerDocsLink anchor="stop-grace-period" />
+              Stop Grace Period (seconds){" "}
+              <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#stop_grace_period" />
             </label>
             <Input
               type="number"
@@ -210,7 +214,8 @@ export function RuntimeEditor({
               />
               <span>
                 <span className="inline-flex items-center gap-1">
-                  Init <DockerDocsLink anchor="init" />
+                  Init{" "}
+                  <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#init" />
                 </span>
                 {initValue === undefined && (
                   <span className="text-xs text-muted-foreground"> (default)</span>
@@ -231,7 +236,8 @@ export function RuntimeEditor({
               />
               <span>
                 <span className="inline-flex items-center gap-1">
-                  TTY <DockerDocsLink anchor="tty" />
+                  TTY{" "}
+                  <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#tty" />
                 </span>
                 <p className="text-xs text-muted-foreground">
                   Allocate a pseudo-TTY for the container. Required for interactive or TUI-based
@@ -249,7 +255,8 @@ export function RuntimeEditor({
               />
               <span>
                 <span className="inline-flex items-center gap-1">
-                  Read Only <DockerDocsLink anchor="read-only" />
+                  Read Only{" "}
+                  <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#read_only" />
                 </span>
                 <p className="text-xs text-muted-foreground">
                   Mount the container's root filesystem as read-only. Use volumes or tmpfs for

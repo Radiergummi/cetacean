@@ -71,8 +71,9 @@ export function DnsEditor({
       edit={
         <>
           <div className="flex flex-col gap-1.5">
-            <label className="flex items-center gap-1 text-xs text-muted-foreground">
-              Nameservers <DockerDocsLink anchor="dns" />
+            <label className="flex items-center gap-1 text-xs text-foreground">
+              Nameservers{" "}
+              <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#dns" />
             </label>
             <MultiCombobox
               values={nameservers}
@@ -83,8 +84,9 @@ export function DnsEditor({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="flex items-center gap-1 text-xs text-muted-foreground">
-              Search Domains <DockerDocsLink anchor="dns-search" />
+            <label className="flex items-center gap-1 text-xs text-foreground">
+              Search Domains{" "}
+              <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#dns_search" />
             </label>
             <MultiCombobox
               values={searchDomains}
@@ -95,8 +97,9 @@ export function DnsEditor({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="flex items-center gap-1 text-xs text-muted-foreground">
-              Options <DockerDocsLink anchor="dns-option" />
+            <label className="flex items-center gap-1 text-xs text-foreground">
+              Options{" "}
+              <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#dns_opt" />
             </label>
             <MultiCombobox
               values={resolverOptions}

@@ -69,8 +69,9 @@ export function CommandEditor({
       edit={
         <>
           <div className="flex flex-col gap-1">
-            <label className="flex items-center gap-1 text-xs text-muted-foreground">
-              Command <DockerDocsLink anchor="entrypoint" />
+            <label className="flex items-center gap-1 text-xs text-foreground">
+              Command{" "}
+              <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#entrypoint" />
             </label>
             <Input
               value={commandInput}
@@ -82,8 +83,9 @@ export function CommandEditor({
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="flex items-center gap-1 text-xs text-muted-foreground">
-              Args <DockerDocsLink anchor="args" />
+            <label className="flex items-center gap-1 text-xs text-foreground">
+              Args{" "}
+              <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#command" />
             </label>
             <Input
               value={argsInput}
@@ -95,8 +97,9 @@ export function CommandEditor({
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="flex items-center gap-1 text-xs text-muted-foreground">
-              Working Dir <DockerDocsLink anchor="workdir" />
+            <label className="flex items-center gap-1 text-xs text-foreground">
+              Working Dir{" "}
+              <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#working_dir" />
             </label>
             <Input
               value={dirInput}
@@ -107,8 +110,9 @@ export function CommandEditor({
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="flex items-center gap-1 text-xs text-muted-foreground">
-              User <DockerDocsLink anchor="user" />
+            <label className="flex items-center gap-1 text-xs text-foreground">
+              User{" "}
+              <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#user" />
             </label>
             <Input
               value={userInput}

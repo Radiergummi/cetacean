@@ -98,8 +98,9 @@ export function CapabilitiesEditor({
       edit={
         <>
           <div className="flex flex-col gap-1.5">
-            <label className="flex items-center gap-1 text-xs text-muted-foreground">
-              Add Capabilities <DockerDocsLink anchor="cap-add" />
+            <label className="flex items-center gap-1 text-xs text-foreground">
+              Add Capabilities{" "}
+              <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#cap_add" />
             </label>
             <MultiCombobox
               values={addList}
@@ -111,8 +112,9 @@ export function CapabilitiesEditor({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="flex items-center gap-1 text-xs text-muted-foreground">
-              Drop Capabilities <DockerDocsLink anchor="cap-drop" />
+            <label className="flex items-center gap-1 text-xs text-foreground">
+              Drop Capabilities{" "}
+              <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#cap_drop" />
             </label>
             <MultiCombobox
               values={dropList}

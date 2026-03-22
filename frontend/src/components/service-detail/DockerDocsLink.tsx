@@ -1,19 +1,16 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CircleHelp } from "lucide-react";
 
-const baseUrl = "https://docs.docker.com/reference/cli/docker/service/create/";
-
 /**
- * Tiny help icon linking to Docker CLI reference for a specific option.
- * Pass the CLI flag name as `anchor` (e.g. "hostname", "cap-add").
+ * Tiny help icon linking to Docker documentation.
  */
-export function DockerDocsLink({ anchor }: { anchor: string }) {
+export function DockerDocsLink({ href }: { href: string }) {
   return (
     <Tooltip>
       <TooltipTrigger
         render={
           <a
-            href={`${baseUrl}#${anchor}`}
+            href={href}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex text-muted-foreground hover:text-foreground"
