@@ -60,6 +60,12 @@ type scaleRequest struct {
 	Replicas *uint64 `json:"replicas"`
 }
 
+type serviceConfigRef struct {
+	ConfigID   string `json:"configID"`
+	ConfigName string `json:"configName"`
+	FileName   string `json:"fileName"`
+}
+
 func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
@@ -1697,4 +1703,111 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 
 	result := containerConfigFromSpec(updated.Spec.TaskTemplate.ContainerSpec)
 	writeJSON(w, result)
+}
+
+func (h *Handlers) HandleGetServiceConfigs(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	var refs []serviceConfigRef
+	if svc.Spec.TaskTemplate.ContainerSpec != nil {
+		for _, cfg := range svc.Spec.TaskTemplate.ContainerSpec.Configs {
+			var fileName string
+			if cfg.File != nil {
+				fileName = cfg.File.Name
+			}
+			refs = append(refs, serviceConfigRef{
+				ConfigID:   cfg.ConfigID,
+				ConfigName: cfg.ConfigName,
+				FileName:   fileName,
+			})
+		}
+	}
+	if refs == nil {
+		refs = []serviceConfigRef{}
+	}
+
+	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/configs", "ServiceConfigs", map[string]any{
+		"configs": refs,
+	}))
+}
+
+func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	ct := r.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/merge-patch+json") {
+		writeProblem(w, r, http.StatusUnsupportedMediaType, "expected Content-Type: application/merge-patch+json")
+		return
+	}
+
+	_, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	var patch struct {
+		Configs []serviceConfigRef `json:"configs"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	configs := make([]*swarm.ConfigReference, len(patch.Configs))
+	for i, ref := range patch.Configs {
+		if ref.ConfigID == "" || ref.ConfigName == "" {
+			writeProblem(w, r, http.StatusBadRequest, "each config must have configID and configName")
+			return
+		}
+		fileName := ref.FileName
+		if fileName == "" {
+			fileName = "/" + ref.ConfigName
+		}
+		configs[i] = &swarm.ConfigReference{
+			ConfigID:   ref.ConfigID,
+			ConfigName: ref.ConfigName,
+			File: &swarm.ConfigReferenceFileTarget{
+				Name: fileName,
+				UID:  "0",
+				GID:  "0",
+				Mode: 0444,
+			},
+		}
+	}
+
+	slog.Info("updating service configs", "service", id)
+
+	updated, err := h.writeClient.UpdateServiceConfigs(r.Context(), id, configs)
+	if err != nil {
+		writeDockerError(w, r, err, "service")
+		return
+	}
+
+	var resultRefs []serviceConfigRef
+	if updated.Spec.TaskTemplate.ContainerSpec != nil {
+		for _, cfg := range updated.Spec.TaskTemplate.ContainerSpec.Configs {
+			var fn string
+			if cfg.File != nil {
+				fn = cfg.File.Name
+			}
+			resultRefs = append(resultRefs, serviceConfigRef{
+				ConfigID:   cfg.ConfigID,
+				ConfigName: cfg.ConfigName,
+				FileName:   fn,
+			})
+		}
+	}
+	if resultRefs == nil {
+		resultRefs = []serviceConfigRef{}
+	}
+	writeJSON(w, NewDetailResponse("/services/"+id+"/configs", "ServiceConfigs", map[string]any{
+		"configs": resultRefs,
+	}))
 }
