@@ -173,8 +173,8 @@ export function RuntimeEditor({
             />
           </div>
 
-          <div className="flex flex-col gap-2">
-            <label className="flex items-center gap-2 text-sm">
+          <div className="flex flex-col gap-3">
+            <label className="flex gap-2 text-sm">
               <input
                 type="checkbox"
                 ref={useCallback(
@@ -195,32 +195,50 @@ export function RuntimeEditor({
                     setInitValue(undefined);
                   }
                 }}
-                className="size-4"
+                className="mt-0.5 size-4"
               />
-              Init
-              {initValue === undefined && (
-                <span className="text-xs text-muted-foreground">(default)</span>
-              )}
+              <span>
+                Init
+                {initValue === undefined && (
+                  <span className="text-xs text-muted-foreground"> (default)</span>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Run an init process inside the container to forward signals and reap zombie
+                  processes.
+                </p>
+              </span>
             </label>
 
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex gap-2 text-sm">
               <input
                 type="checkbox"
                 checked={ttyInput}
                 onChange={(event) => setTtyInput(event.target.checked)}
-                className="size-4"
+                className="mt-0.5 size-4"
               />
-              TTY
+              <span>
+                TTY
+                <p className="text-xs text-muted-foreground">
+                  Allocate a pseudo-TTY for the container. Required for interactive or TUI-based
+                  applications.
+                </p>
+              </span>
             </label>
 
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex gap-2 text-sm">
               <input
                 type="checkbox"
                 checked={readOnlyInput}
                 onChange={(event) => setReadOnlyInput(event.target.checked)}
-                className="size-4"
+                className="mt-0.5 size-4"
               />
-              Read Only
+              <span>
+                Read Only
+                <p className="text-xs text-muted-foreground">
+                  Mount the container's root filesystem as read-only. Use volumes or tmpfs for
+                  writable paths.
+                </p>
+              </span>
             </label>
           </div>
         </>
