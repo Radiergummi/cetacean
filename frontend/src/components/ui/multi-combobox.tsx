@@ -71,6 +71,10 @@ export function MultiCombobox({
       event.preventDefault();
       add(transform(input.trim()));
     }
+
+    if (event.key === "Backspace" && input === "" && values.length > 0) {
+      remove(values[values.length - 1]);
+    }
   }
 
   if (options.length === 0) {
