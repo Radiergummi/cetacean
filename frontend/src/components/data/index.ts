@@ -1,4 +1,5 @@
 export { default as ContainerImage } from "./ContainerImage";
+export { DescriptionRow } from "./DescriptionRow";
 export { default as KeyValuePills } from "./KeyValuePills";
 export { default as KVTable } from "./KVTable";
 export { default as LabelSection } from "./LabelSection";

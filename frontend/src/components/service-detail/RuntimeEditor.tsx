@@ -1,5 +1,6 @@
 import { api } from "@/api/client";
 import type { ContainerConfig } from "@/api/types";
+import { DescriptionRow } from "@/components/data";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
@@ -146,13 +147,7 @@ export function RuntimeEditor({
               <input
                 type="checkbox"
                 checked={initValue === true}
-                onChange={(event) => {
-                  if (initValue === undefined) {
-                    setInitValue(event.target.checked);
-                  } else {
-                    setInitValue(event.target.checked);
-                  }
-                }}
+                onChange={(event) => setInitValue(event.target.checked)}
                 className="size-4"
               />
               Init
@@ -214,27 +209,27 @@ export function RuntimeEditor({
       ) : (
         <div className="flex items-start justify-between gap-2">
           <dl className="grid flex-1 gap-y-2 text-sm">
-            <Row
+            <DescriptionRow
               label="Hostname"
               value={config.hostname || undefined}
             />
-            <Row
+            <DescriptionRow
               label="Init"
               value={formatInit(config.init)}
             />
-            <Row
+            <DescriptionRow
               label="TTY"
               value={config.tty ? "Yes" : "No"}
             />
-            <Row
+            <DescriptionRow
               label="Read Only"
               value={config.readOnly ? "Yes" : "No"}
             />
-            <Row
+            <DescriptionRow
               label="Stop Signal"
               value={config.stopSignal || undefined}
             />
-            <Row
+            <DescriptionRow
               label="Stop Grace Period"
               value={formatGracePeriod(config.stopGracePeriod)}
             />
@@ -255,15 +250,6 @@ export function RuntimeEditor({
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string | undefined }) {
-  return (
-    <div className="grid grid-cols-[8rem_1fr] items-baseline gap-x-2">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd>{value ?? "—"}</dd>
     </div>
   );
 }

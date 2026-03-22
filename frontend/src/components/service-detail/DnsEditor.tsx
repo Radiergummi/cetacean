@@ -1,5 +1,6 @@
 import { api } from "@/api/client";
 import type { ContainerConfig } from "@/api/types";
+import { DescriptionRow } from "@/components/data";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
@@ -144,17 +145,20 @@ export function DnsEditor({
             <p className="flex-1 text-sm text-muted-foreground">Default</p>
           ) : (
             <dl className="grid flex-1 gap-y-2 text-sm">
-              <Row
+              <DescriptionRow
                 label="Nameservers"
                 value={config.dnsConfig.nameservers?.join(", ")}
+                mono
               />
-              <Row
+              <DescriptionRow
                 label="Search Domains"
                 value={config.dnsConfig.search?.join(", ")}
+                mono
               />
-              <Row
+              <DescriptionRow
                 label="Options"
                 value={config.dnsConfig.options?.join(", ")}
+                mono
               />
             </dl>
           )}
@@ -174,15 +178,6 @@ export function DnsEditor({
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string | undefined }) {
-  return (
-    <div className="grid grid-cols-[8rem_1fr] items-baseline gap-x-2">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="font-mono">{value || "—"}</dd>
     </div>
   );
 }

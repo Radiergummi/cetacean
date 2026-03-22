@@ -1,5 +1,6 @@
 import { api } from "@/api/client";
 import type { ContainerConfig } from "@/api/types";
+import { DescriptionRow } from "@/components/data";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
@@ -142,21 +143,21 @@ export function CommandEditor({
       ) : (
         <div className="flex items-start justify-between gap-2">
           <dl className="grid flex-1 gap-y-2 text-sm">
-            <Row
+            <DescriptionRow
               label="Command"
               value={config.command?.join(" ")}
               mono
             />
-            <Row
+            <DescriptionRow
               label="Args"
               value={config.args?.join(" ")}
               mono
             />
-            <Row
+            <DescriptionRow
               label="Working Dir"
               value={config.dir}
             />
-            <Row
+            <DescriptionRow
               label="User"
               value={config.user}
             />
@@ -177,15 +178,6 @@ export function CommandEditor({
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-function Row({ label, value, mono }: { label: string; value: string | undefined; mono?: boolean }) {
-  return (
-    <div className="grid grid-cols-[8rem_1fr] items-baseline gap-x-2">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className={mono ? "font-mono" : undefined}>{value || "—"}</dd>
     </div>
   );
 }

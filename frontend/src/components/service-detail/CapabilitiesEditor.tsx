@@ -45,32 +45,24 @@ export function CapabilitiesEditor({
     setSaveError(null);
   }
 
-  function handleAddKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+  function handleKeyDown(
+    event: KeyboardEvent<HTMLInputElement>,
+    input: string,
+    list: string[],
+    setList: (list: string[]) => void,
+    setInput: (value: string) => void,
+  ) {
     if (event.key !== "Enter") {
       return;
     }
 
-    const value = addInput.trim().toUpperCase();
+    const value = input.trim().toUpperCase();
 
-    if (value && !addList.includes(value)) {
-      setAddList([...addList, value]);
+    if (value && !list.includes(value)) {
+      setList([...list, value]);
     }
 
-    setAddInput("");
-  }
-
-  function handleDropKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key !== "Enter") {
-      return;
-    }
-
-    const value = dropInput.trim().toUpperCase();
-
-    if (value && !dropList.includes(value)) {
-      setDropList([...dropList, value]);
-    }
-
-    setDropInput("");
+    setInput("");
   }
 
   async function save() {
@@ -121,7 +113,9 @@ export function CapabilitiesEditor({
               type="text"
               value={addInput}
               onChange={(event) => setAddInput(event.target.value.toUpperCase())}
-              onKeyDown={handleAddKeyDown}
+              onKeyDown={(event) =>
+                handleKeyDown(event, addInput, addList, setAddList, setAddInput)
+              }
               placeholder="NET_ADMIN — press Enter to add"
               className="h-8 w-full rounded-md border bg-background px-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             />
@@ -151,7 +145,9 @@ export function CapabilitiesEditor({
               type="text"
               value={dropInput}
               onChange={(event) => setDropInput(event.target.value.toUpperCase())}
-              onKeyDown={handleDropKeyDown}
+              onKeyDown={(event) =>
+                handleKeyDown(event, dropInput, dropList, setDropList, setDropInput)
+              }
               placeholder="ALL — press Enter to add"
               className="h-8 w-full rounded-md border bg-background px-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             />
