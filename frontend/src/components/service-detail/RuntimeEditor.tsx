@@ -2,6 +2,7 @@ import { EditablePanel } from "./EditablePanel";
 import { api } from "@/api/client";
 import type { ContainerConfig } from "@/api/types";
 import { DescriptionRow } from "@/components/data";
+import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { formatDuration } from "@/lib/format";
 import { renderSwarmTemplate } from "@/lib/swarmTemplates";
@@ -14,6 +15,17 @@ function formatInit(init: boolean | undefined): string {
 
   return init ? "Yes" : "No";
 }
+
+const signalOptions = [
+  { value: "SIGTERM", label: "SIGTERM", description: "Graceful termination (default)" },
+  { value: "SIGKILL", label: "SIGKILL", description: "Immediate kill, cannot be caught" },
+  { value: "SIGINT", label: "SIGINT", description: "Interrupt (Ctrl+C)" },
+  { value: "SIGQUIT", label: "SIGQUIT", description: "Quit with core dump" },
+  { value: "SIGHUP", label: "SIGHUP", description: "Hangup, often used for config reload" },
+  { value: "SIGUSR1", label: "SIGUSR1", description: "User-defined signal 1" },
+  { value: "SIGUSR2", label: "SIGUSR2", description: "User-defined signal 2" },
+  { value: "SIGWINCH", label: "SIGWINCH", description: "Window size change" },
+];
 
 export function RuntimeEditor({
   serviceId,
@@ -118,11 +130,11 @@ export function RuntimeEditor({
 
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Stop Signal</label>
-            <Input
+            <Combobox
               value={stopSignalInput}
-              onChange={(event) => setStopSignalInput(event.target.value)}
-              placeholder="SIGTERM"
-              className="font-mono"
+              onChange={setStopSignalInput}
+              placeholder="Select signal..."
+              options={signalOptions}
             />
           </div>
 
