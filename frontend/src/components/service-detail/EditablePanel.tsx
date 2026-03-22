@@ -5,7 +5,7 @@ import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil } from "lucide-react";
 import type { MouseEvent, ReactNode } from "react";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 interface EditablePanelProps {
   /** Read-only display content */
@@ -26,10 +26,10 @@ export function EditablePanel({ display, edit, onOpen, onSave }: EditablePanelPr
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const cancelEdit = useCallback(() => {
+  function cancelEdit() {
     setEditing(false);
     setSaveError(null);
-  }, []);
+  }
 
   useEscapeCancel(editing, cancelEdit);
 
