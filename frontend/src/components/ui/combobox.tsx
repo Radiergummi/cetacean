@@ -15,9 +15,18 @@ interface ComboboxProps {
   options: ComboboxOption[];
   placeholder?: string;
   className?: string;
+  /** Allow typing custom values not in the options list (default true) */
+  allowCustom?: boolean;
 }
 
-export function Combobox({ value, onChange, options, placeholder, className }: ComboboxProps) {
+export function Combobox({
+  value,
+  onChange,
+  options,
+  placeholder,
+  className,
+  allowCustom = true,
+}: ComboboxProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -71,12 +80,12 @@ export function Combobox({ value, onChange, options, placeholder, className }: C
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && search.trim()) {
+              if (event.key === "Enter" && search.trim() && allowCustom) {
                 event.preventDefault();
                 select(search.trim());
               }
             }}
-            placeholder="Search or enter custom..."
+            placeholder={allowCustom ? "Search or enter custom..." : "Search..."}
             className="h-6 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
         </div>
@@ -110,7 +119,7 @@ export function Combobox({ value, onChange, options, placeholder, className }: C
             </button>
           ))}
 
-          {filtered.length === 0 && search.trim() && (
+          {filtered.length === 0 && search.trim() && allowCustom && (
             <button
               type="button"
               onClick={() => select(search.trim())}
@@ -122,6 +131,10 @@ export function Combobox({ value, onChange, options, placeholder, className }: C
                 Use "<span className="font-mono">{search.trim()}</span>"
               </span>
             </button>
+          )}
+
+          {filtered.length === 0 && !allowCustom && (
+            <p className="px-2 py-1.5 text-sm text-muted-foreground">No matches</p>
           )}
         </div>
       </PopoverContent>

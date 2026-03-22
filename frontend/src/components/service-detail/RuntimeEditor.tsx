@@ -24,7 +24,28 @@ const signalOptions = [
   { value: "SIGHUP", label: "SIGHUP", description: "Hangup, often used for config reload" },
   { value: "SIGUSR1", label: "SIGUSR1", description: "User-defined signal 1" },
   { value: "SIGUSR2", label: "SIGUSR2", description: "User-defined signal 2" },
+  { value: "SIGABRT", label: "SIGABRT", description: "Abort" },
+  { value: "SIGALRM", label: "SIGALRM", description: "Timer alarm" },
+  { value: "SIGBUS", label: "SIGBUS", description: "Bus error" },
+  { value: "SIGCHLD", label: "SIGCHLD", description: "Child process status change" },
+  { value: "SIGCONT", label: "SIGCONT", description: "Continue if stopped" },
+  { value: "SIGFPE", label: "SIGFPE", description: "Floating-point exception" },
+  { value: "SIGILL", label: "SIGILL", description: "Illegal instruction" },
+  { value: "SIGIO", label: "SIGIO", description: "I/O possible" },
+  { value: "SIGPIPE", label: "SIGPIPE", description: "Broken pipe" },
+  { value: "SIGPROF", label: "SIGPROF", description: "Profiling timer expired" },
+  { value: "SIGSEGV", label: "SIGSEGV", description: "Segmentation fault" },
+  { value: "SIGSTOP", label: "SIGSTOP", description: "Stop process, cannot be caught" },
+  { value: "SIGSYS", label: "SIGSYS", description: "Bad system call" },
+  { value: "SIGTRAP", label: "SIGTRAP", description: "Trace/breakpoint trap" },
+  { value: "SIGTSTP", label: "SIGTSTP", description: "Stop from terminal (Ctrl+Z)" },
+  { value: "SIGTTIN", label: "SIGTTIN", description: "Background process read from terminal" },
+  { value: "SIGTTOU", label: "SIGTTOU", description: "Background process write to terminal" },
+  { value: "SIGURG", label: "SIGURG", description: "Urgent socket condition" },
+  { value: "SIGVTALRM", label: "SIGVTALRM", description: "Virtual timer expired" },
   { value: "SIGWINCH", label: "SIGWINCH", description: "Window size change" },
+  { value: "SIGXCPU", label: "SIGXCPU", description: "CPU time limit exceeded" },
+  { value: "SIGXFSZ", label: "SIGXFSZ", description: "File size limit exceeded" },
 ];
 
 export function RuntimeEditor({
@@ -135,6 +156,7 @@ export function RuntimeEditor({
               onChange={setStopSignalInput}
               placeholder="Select signal..."
               options={signalOptions}
+              allowCustom={false}
             />
           </div>
 
