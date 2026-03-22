@@ -1,13 +1,9 @@
+import { EditablePanel } from "./EditablePanel";
 import { api } from "@/api/client";
 import type { ContainerConfig } from "@/api/types";
-import { Spinner } from "@/components/Spinner";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useEscapeCancel } from "@/hooks/useEscapeCancel";
-import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
-import { getErrorMessage } from "@/lib/utils";
-import { Pencil, X } from "lucide-react";
-import type { KeyboardEvent, MouseEvent } from "react";
+import { X } from "lucide-react";
+import type { KeyboardEvent } from "react";
 import { useState } from "react";
 
 function CapabilityBadges({
@@ -54,31 +50,16 @@ export function CapabilitiesEditor({
   config: ContainerConfig;
   onSaved: (updated: ContainerConfig) => void;
 }) {
-  const { level, loading: levelLoading } = useOperationsLevel();
-  const canEdit = !levelLoading && level >= opsLevel.configuration;
-
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
   const [addList, setAddList] = useState<string[]>([]);
   const [dropList, setDropList] = useState<string[]>([]);
   const [addInput, setAddInput] = useState("");
   const [dropInput, setDropInput] = useState("");
 
-  useEscapeCancel(editing, () => cancelEdit());
-
-  function openEdit() {
+  function resetForm() {
     setAddList(config.capabilityAdd ?? []);
     setDropList(config.capabilityDrop ?? []);
     setAddInput("");
     setDropInput("");
-    setSaveError(null);
-    setEditing(true);
-  }
-
-  function cancelEdit() {
-    setEditing(false);
-    setSaveError(null);
   }
 
   function handleKeyDown(
@@ -104,29 +85,36 @@ export function CapabilitiesEditor({
   }
 
   async function save() {
-    setSaving(true);
-    setSaveError(null);
-
-    try {
-      const patch: Record<string, unknown> = {
-        capabilityAdd: addList.length > 0 ? addList : null,
-        capabilityDrop: dropList.length > 0 ? dropList : null,
-      };
-
-      const updated = await api.patchServiceContainerConfig(serviceId, patch);
-      onSaved(updated);
-      setEditing(false);
-    } catch (error) {
-      setSaveError(getErrorMessage(error, "Save failed"));
-    } finally {
-      setSaving(false);
-    }
+    const updated = await api.patchServiceContainerConfig(serviceId, {
+      capabilityAdd: addList.length > 0 ? addList : null,
+      capabilityDrop: dropList.length > 0 ? dropList : null,
+    });
+    onSaved(updated);
   }
 
   return (
-    <div className="rounded-lg border p-3">
-      {editing ? (
-        <div className="space-y-4">
+    <EditablePanel
+      onOpen={resetForm}
+      onSave={save}
+      display={
+        <dl className="grid gap-y-2 text-sm">
+          <div className="grid grid-cols-[8rem_1fr] items-baseline gap-x-2">
+            <dt className="text-muted-foreground">Add</dt>
+            <dd>
+              <CapabilityBadges items={config.capabilityAdd ?? []} />
+            </dd>
+          </div>
+
+          <div className="grid grid-cols-[8rem_1fr] items-baseline gap-x-2">
+            <dt className="text-muted-foreground">Drop</dt>
+            <dd>
+              <CapabilityBadges items={config.capabilityDrop ?? []} />
+            </dd>
+          </div>
+        </dl>
+      }
+      edit={
+        <>
           <div className="flex flex-col gap-2">
             <label className="text-xs text-muted-foreground">Add Capabilities</label>
             <CapabilityBadges
@@ -160,61 +148,8 @@ export function CapabilitiesEditor({
               className="font-mono"
             />
           </div>
-
-          {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
-
-          <footer className="flex items-center justify-end gap-2">
-            <Button
-              size="sm"
-              onClick={() => void save()}
-              disabled={saving}
-            >
-              {saving && <Spinner className="size-3" />}
-              Save
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={cancelEdit}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
-          </footer>
-        </div>
-      ) : (
-        <div className="flex items-start justify-between gap-2">
-          <dl className="grid flex-1 gap-y-2 text-sm">
-            <div className="grid grid-cols-[8rem_1fr] items-baseline gap-x-2">
-              <dt className="text-muted-foreground">Add</dt>
-              <dd>
-                <CapabilityBadges items={config.capabilityAdd ?? []} />
-              </dd>
-            </div>
-
-            <div className="grid grid-cols-[8rem_1fr] items-baseline gap-x-2">
-              <dt className="text-muted-foreground">Drop</dt>
-              <dd>
-                <CapabilityBadges items={config.capabilityDrop ?? []} />
-              </dd>
-            </div>
-          </dl>
-
-          {canEdit && (
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={(event: MouseEvent) => {
-                event.stopPropagation();
-                openEdit();
-              }}
-            >
-              <Pencil className="size-3" />
-              Edit
-            </Button>
-          )}
-        </div>
-      )}
-    </div>
+        </>
+      }
+    />
   );
 }
