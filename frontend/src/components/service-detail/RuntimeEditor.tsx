@@ -6,7 +6,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { formatDuration } from "@/lib/format";
 import { renderSwarmTemplate } from "@/lib/swarmTemplates";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 function formatInit(init: boolean | undefined): string {
   if (init === undefined) {
@@ -177,21 +177,29 @@ export function RuntimeEditor({
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
+                ref={useCallback(
+                  (element: HTMLInputElement | null) => {
+                    if (element) {
+                      element.indeterminate = initValue === undefined;
+                    }
+                  },
+                  [initValue],
+                )}
                 checked={initValue === true}
-                onChange={(event) => setInitValue(event.target.checked)}
+                onChange={() => {
+                  if (initValue === undefined) {
+                    setInitValue(true);
+                  } else if (initValue === true) {
+                    setInitValue(false);
+                  } else {
+                    setInitValue(undefined);
+                  }
+                }}
                 className="size-4"
               />
               Init
-              {initValue === undefined ? (
+              {initValue === undefined && (
                 <span className="text-xs text-muted-foreground">(default)</span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setInitValue(undefined)}
-                  className="text-xs text-muted-foreground underline hover:text-foreground"
-                >
-                  Reset to default
-                </button>
               )}
             </label>
 
