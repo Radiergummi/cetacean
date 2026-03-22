@@ -1,6 +1,7 @@
 import { api } from "@/api/client";
 import type { Service, Task } from "@/api/types";
 import InfoCard from "@/components/InfoCard";
+import { DockerDocsLink } from "@/components/service-detail/DockerDocsLink";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -161,6 +162,10 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
       >
         {canChangeMode && (
           <div className="mb-3 flex flex-col gap-2">
+            <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+              Mode{" "}
+              <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/service/create/#replicas" />
+            </span>
             <button
               type="button"
               onClick={() => setMode("global")}
@@ -237,7 +242,12 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
 
         {mode === "replicated" && (
           <SliderNumberField
-            label="Replicas"
+            label={
+              <span className="flex items-center gap-1">
+                Replicas{" "}
+                <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/service/create/#replicas" />
+              </span>
+            }
             value={replicas}
             onChange={setReplicas}
             min={0}

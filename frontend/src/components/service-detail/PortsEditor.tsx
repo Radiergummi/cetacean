@@ -1,6 +1,7 @@
 import { api } from "@/api/client";
 import type { PortConfig } from "@/api/types";
 import CollapsibleSection from "@/components/CollapsibleSection";
+import { DockerDocsLink } from "@/components/service-detail/DockerDocsLink";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -123,7 +124,10 @@ export function PortsEditor({ serviceId, ports, onSaved }: PortsEditorProps) {
 
                   <div className="grid grid-cols-2 gap-3 pr-10">
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Protocol</label>
+                      <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+                        Protocol{" "}
+                        <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/service/create/#publish" />
+                      </label>
 
                       <select
                         value={port.Protocol}
@@ -137,8 +141,9 @@ export function PortsEditor({ serviceId, ports, onSaved }: PortsEditorProps) {
                     </div>
 
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">
-                        Publish mode
+                      <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+                        Publish mode{" "}
+                        <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/service/create/#publish" />
                       </label>
 
                       <select
@@ -152,8 +157,9 @@ export function PortsEditor({ serviceId, ports, onSaved }: PortsEditorProps) {
                     </div>
 
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">
-                        Container port
+                      <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+                        Container port{" "}
+                        <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/service/create/#publish" />
                       </label>
 
                       <Input
@@ -169,7 +175,10 @@ export function PortsEditor({ serviceId, ports, onSaved }: PortsEditorProps) {
                     </div>
 
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Host port</label>
+                      <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+                        Host port{" "}
+                        <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/service/create/#publish" />
+                      </label>
 
                       <Input
                         type="number"

@@ -1,3 +1,4 @@
+import { DockerDocsLink } from "./DockerDocsLink";
 import { ResourceRangeSlider } from "./resource-range-slider";
 import { api } from "@/api/client";
 import type { ClusterCapacity } from "@/api/types";
@@ -272,7 +273,12 @@ export function ResourcesEditor({
       {capacity ? (
         <div className="space-y-3">
           <ResourceRangeSlider
-            label="CPU (cores)"
+            label={
+              <span className="flex items-center gap-1">
+                CPU (cores){" "}
+                <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/service/create/#reserve-memory" />
+              </span>
+            }
             reservation={cpu.reservation}
             limit={cpu.limit}
             onChange={setCpu}
@@ -281,7 +287,12 @@ export function ResourcesEditor({
             formatLabel={formatCpuTick}
           />
           <ResourceRangeSlider
-            label="Memory"
+            label={
+              <span className="flex items-center gap-1">
+                Memory{" "}
+                <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/service/create/#reserve-memory" />
+              </span>
+            }
             reservation={memory.reservation}
             limit={memory.limit}
             onChange={setMemory}

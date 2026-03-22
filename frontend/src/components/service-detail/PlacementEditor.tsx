@@ -1,5 +1,6 @@
 import { api } from "@/api/client";
 import type { Placement } from "@/api/types";
+import { DockerDocsLink } from "@/components/service-detail/DockerDocsLink";
 import { PlacementPanel } from "@/components/service-detail/PlacementPanel";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
@@ -115,7 +116,12 @@ export function PlacementEditor({ serviceId, placement, onSaved }: PlacementEdit
 
       <div className="w-48">
         <SliderNumberField
-          label="Max replicas per node"
+          label={
+            <span className="flex items-center gap-1">
+              Max replicas per node{" "}
+              <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/service/create/#replicas-max-per-node" />
+            </span>
+          }
           value={maxReplicas || undefined}
           onChange={(value) => setMaxReplicas(value ?? 0)}
           min={0}
@@ -124,7 +130,10 @@ export function PlacementEditor({ serviceId, placement, onSaved }: PlacementEdit
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-muted-foreground">Constraints</label>
+        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+          Constraints{" "}
+          <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/service/create/#constraint" />
+        </label>
 
         {constraints.map((constraint, index) => (
           <div

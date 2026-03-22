@@ -1,6 +1,7 @@
 import { api } from "@/api/client";
 import type { PatchOp } from "@/api/types";
 import { KeyValueEditor } from "@/components/KeyValueEditor";
+import { DockerDocsLink } from "@/components/service-detail/DockerDocsLink";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { handleCopyWithTemplates, renderSwarmTemplate } from "@/lib/swarmTemplates";
 
@@ -27,6 +28,9 @@ export function EnvEditor({
   return (
     <KeyValueEditor
       title="Environment Variables"
+      titleExtra={
+        <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/service/create/#env" />
+      }
       entries={envVars}
       defaultOpen={Object.keys(envVars).length > 0}
       keyLabel="Variable"

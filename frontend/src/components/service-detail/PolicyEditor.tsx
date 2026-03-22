@@ -1,3 +1,4 @@
+import { DockerDocsLink } from "./DockerDocsLink";
 import { EditablePanel } from "./EditablePanel";
 import { api } from "@/api/client";
 import type { UpdateConfig } from "@/api/types";
@@ -138,7 +139,12 @@ export function PolicyEditor({ type, serviceId, policy, onSaved }: PolicyEditorP
         <>
           <div className="grid grid-cols-2 gap-3">
             <SliderNumberField
-              label="Parallelism"
+              label={
+                <span className="flex items-center gap-1">
+                  Parallelism{" "}
+                  <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/service/create/#update-delay" />
+                </span>
+              }
               value={form.parallelism}
               onChange={(value) => setForm({ ...form, parallelism: value ?? 0 })}
               min={0}
@@ -146,7 +152,12 @@ export function PolicyEditor({ type, serviceId, policy, onSaved }: PolicyEditorP
             />
 
             <SliderNumberField
-              label="Delay (s)"
+              label={
+                <span className="flex items-center gap-1">
+                  Delay (s){" "}
+                  <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/service/create/#update-delay" />
+                </span>
+              }
               value={form.delaySeconds || undefined}
               onChange={(value) => setForm({ ...form, delaySeconds: value ?? 0 })}
               min={0}
@@ -154,7 +165,12 @@ export function PolicyEditor({ type, serviceId, policy, onSaved }: PolicyEditorP
             />
 
             <SliderNumberField
-              label="Monitor (s)"
+              label={
+                <span className="flex items-center gap-1">
+                  Monitor (s){" "}
+                  <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/service/create/#update-delay" />
+                </span>
+              }
               value={form.monitorSeconds || undefined}
               onChange={(value) => setForm({ ...form, monitorSeconds: value ?? 0 })}
               min={0}
@@ -162,7 +178,12 @@ export function PolicyEditor({ type, serviceId, policy, onSaved }: PolicyEditorP
             />
 
             <SliderNumberField
-              label="Max failure ratio"
+              label={
+                <span className="flex items-center gap-1">
+                  Max failure ratio{" "}
+                  <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/service/create/#update-delay" />
+                </span>
+              }
               value={form.maxFailureRatio || undefined}
               onChange={(value) => setForm({ ...form, maxFailureRatio: Math.min(value ?? 0, 1) })}
               min={0}
@@ -171,7 +192,10 @@ export function PolicyEditor({ type, serviceId, policy, onSaved }: PolicyEditorP
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Failure action</span>
+            <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+              Failure action{" "}
+              <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/service/create/#update-delay" />
+            </span>
 
             <div
               className={
@@ -193,7 +217,10 @@ export function PolicyEditor({ type, serviceId, policy, onSaved }: PolicyEditorP
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Order</span>
+            <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+              Order{" "}
+              <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/service/create/#update-delay" />
+            </span>
 
             <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
               <RadioCard

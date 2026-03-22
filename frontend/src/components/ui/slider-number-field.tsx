@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { NumberField } from "@base-ui/react/number-field";
 import { Minus, Plus, X } from "lucide-react";
+import type React from "react";
 import { useState } from "react";
 
 interface SliderNumberFieldProps {
@@ -12,7 +13,7 @@ interface SliderNumberFieldProps {
   min?: number;
   max?: number;
   step?: number;
-  label: string;
+  label: React.ReactNode;
   tooltip?: string;
   clearable?: boolean;
 }
@@ -67,7 +68,7 @@ export function SliderNumberField({
   return (
     <div className="flex w-full flex-col gap-2">
       <div className="flex items-center justify-between">
-        <Label className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+        <Label className="inline-flex items-center gap-1 text-xs text-foreground">
           {label}
           {tooltip && <HelpTooltip text={tooltip} />}
         </Label>

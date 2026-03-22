@@ -1,4 +1,5 @@
 import { api } from "@/api/client";
+import { DockerDocsLink } from "@/components/service-detail/DockerDocsLink";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { RadioCard } from "@/components/ui/radio-card";
@@ -46,8 +47,11 @@ export function EndpointModeEditor({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+        <h3 className="flex items-center gap-1 text-xs font-medium tracking-wider text-muted-foreground uppercase">
           Endpoint Mode
+          {editing && (
+            <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#endpoint_mode" />
+          )}
         </h3>
         {!editing && canEdit && (
           <Button

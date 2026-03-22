@@ -1,10 +1,11 @@
 import { NumberField } from "@base-ui/react/number-field";
 import { Slider as SliderPrimitive } from "@base-ui/react/slider";
 import { Minus, Plus } from "lucide-react";
+import type React from "react";
 import { useMemo } from "react";
 
 interface ResourceRangeSliderProps {
-  label: string;
+  label: React.ReactNode;
   reservation: number | undefined;
   limit: number | undefined;
   onChange: (values: { reservation: number | undefined; limit: number | undefined }) => void;

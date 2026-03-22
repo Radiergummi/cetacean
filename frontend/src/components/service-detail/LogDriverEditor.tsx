@@ -1,3 +1,4 @@
+import { DockerDocsLink } from "./DockerDocsLink";
 import { EditablePanel } from "./EditablePanel";
 import { api } from "@/api/client";
 import type { LogDriver } from "@/api/types";
@@ -107,7 +108,10 @@ export function LogDriverEditor({ serviceId, logDriver, onSaved }: LogDriverEdit
       edit={
         <>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Driver name</label>
+            <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+              Driver name{" "}
+              <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#logging" />
+            </label>
 
             <Combobox
               value={driverName}
@@ -118,7 +122,10 @@ export function LogDriverEditor({ serviceId, logDriver, onSaved }: LogDriverEdit
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Options</label>
+            <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+              Options{" "}
+              <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#logging" />
+            </label>
 
             {options.map(([key, value], index) => (
               <div

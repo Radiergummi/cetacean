@@ -12,6 +12,8 @@ import { useMemo, useState } from "react";
 
 interface KeyValueEditorProps {
   title: string;
+  /** Optional extra element rendered inline after the section title (e.g. a help link). */
+  titleExtra?: React.ReactNode;
   entries: Record<string, string>;
   keyLabel?: string;
   valueLabel?: string;
@@ -30,6 +32,7 @@ interface KeyValueEditorProps {
 
 export function KeyValueEditor({
   title,
+  titleExtra,
   entries,
   keyLabel = "Key",
   valueLabel = "Value",
@@ -140,17 +143,22 @@ export function KeyValueEditor({
     [draft],
   );
 
-  const controls =
-    !editing && !editDisabled ? (
-      <Button
-        variant="outline"
-        size="xs"
-        onClick={openEdit}
-      >
-        <Pencil className="size-3" />
-        Edit
-      </Button>
-    ) : null;
+  const hasControls = (editing && titleExtra) || (!editing && !editDisabled);
+  const controls = hasControls ? (
+    <>
+      {editing && titleExtra}
+      {!editing && !editDisabled && (
+        <Button
+          variant="outline"
+          size="xs"
+          onClick={openEdit}
+        >
+          <Pencil className="size-3" />
+          Edit
+        </Button>
+      )}
+    </>
+  ) : null;
 
   return (
     <CollapsibleSection

@@ -1,6 +1,7 @@
 import { api } from "@/api/client";
 import type { Healthcheck } from "@/api/types";
 import CollapsibleSection from "@/components/CollapsibleSection";
+import { DockerDocsLink } from "@/components/service-detail/DockerDocsLink";
 import { HealthcheckTimeline } from "@/components/service-detail/HealthcheckTimeline";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
@@ -370,7 +371,10 @@ function EditMode({
         <>
           <div className="flex flex-col gap-1">
             <div className="flex items-center">
-              <label className="text-xs text-muted-foreground">Command</label>
+              <label className="flex items-center gap-1 text-xs text-foreground">
+                Command{" "}
+                <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#healthcheck" />
+              </label>
               <ToggleButton
                 label="Use Shell"
                 pressed={form.useShell}
@@ -394,7 +398,12 @@ function EditMode({
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             <SliderNumberField
-              label="Interval (s)"
+              label={
+                <span className="flex items-center gap-1">
+                  Interval (s){" "}
+                  <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#healthcheck" />
+                </span>
+              }
               tooltip="Time between running the healthcheck. Leave empty for the Docker default (30s)."
               value={form.interval}
               onChange={(interval) => updateForm({ interval })}
@@ -402,7 +411,12 @@ function EditMode({
               step={0.1}
             />
             <SliderNumberField
-              label="Timeout (s)"
+              label={
+                <span className="flex items-center gap-1">
+                  Timeout (s){" "}
+                  <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#healthcheck" />
+                </span>
+              }
               tooltip="Maximum time a single check can run before it is considered failed. Leave empty for the Docker default (30s)."
               value={form.timeout}
               onChange={(timeout) => updateForm({ timeout })}
@@ -410,7 +424,12 @@ function EditMode({
               step={0.1}
             />
             <SliderNumberField
-              label="Start Period (s)"
+              label={
+                <span className="flex items-center gap-1">
+                  Start Period (s){" "}
+                  <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#healthcheck" />
+                </span>
+              }
               tooltip="Grace period after container start during which failures do not count towards the retry limit. Leave empty for the Docker default (0s)."
               value={form.startPeriod}
               onChange={(startPeriod) => updateForm({ startPeriod })}
@@ -418,7 +437,12 @@ function EditMode({
               step={0.1}
             />
             <SliderNumberField
-              label="Start Interval (s)"
+              label={
+                <span className="flex items-center gap-1">
+                  Start Interval (s){" "}
+                  <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#healthcheck" />
+                </span>
+              }
               tooltip="Interval between checks during the start period. Leave empty for the Docker default (5s)."
               value={form.startInterval}
               onChange={(startInterval) => updateForm({ startInterval })}
@@ -426,7 +450,12 @@ function EditMode({
               step={0.1}
             />
             <SliderNumberField
-              label="Retries"
+              label={
+                <span className="flex items-center gap-1">
+                  Retries{" "}
+                  <DockerDocsLink href="https://docs.docker.com/reference/compose-file/services/#healthcheck" />
+                </span>
+              }
               tooltip="Number of consecutive failures needed to mark the container as unhealthy. Leave empty for the Docker default (3)."
               value={form.retries}
               onChange={(retries) => updateForm({ retries })}
