@@ -40,6 +40,7 @@ export function CommandEditor({
 
   return (
     <EditablePanel
+      title="Command"
       onOpen={resetForm}
       onSave={save}
       display={

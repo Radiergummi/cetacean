@@ -8,8 +8,9 @@ import { useState } from "react";
 function splitComma(value: string): string[] | undefined {
   const items = value
     .split(",")
-    .map((s) => s.trim())
+    .map((part) => part.trim())
     .filter(Boolean);
+
   return items.length > 0 ? items : undefined;
 }
 
@@ -38,6 +39,7 @@ export function DnsEditor({
     const options = splitComma(optionsInput);
 
     const patch: Record<string, unknown> = {};
+
     if (!nameservers && !search && !options) {
       patch.dnsConfig = null;
     } else {
@@ -45,35 +47,35 @@ export function DnsEditor({
     }
 
     const updated = await api.patchServiceContainerConfig(serviceId, patch);
+
     onSaved(updated);
   }
 
   return (
     <EditablePanel
+      title="DNS"
+      empty={config.dnsConfig == null}
+      emptyDescription="Click Edit to configure custom DNS settings."
       onOpen={resetForm}
       onSave={save}
       display={
-        config.dnsConfig == null ? (
-          <p className="text-sm text-muted-foreground">Default</p>
-        ) : (
-          <dl className="grid gap-y-2 text-sm">
-            <DescriptionRow
-              label="Nameservers"
-              value={config.dnsConfig.nameservers?.join(", ")}
-              mono
-            />
-            <DescriptionRow
-              label="Search Domains"
-              value={config.dnsConfig.search?.join(", ")}
-              mono
-            />
-            <DescriptionRow
-              label="Options"
-              value={config.dnsConfig.options?.join(", ")}
-              mono
-            />
-          </dl>
-        )
+        <dl className="grid gap-y-2 text-sm">
+          <DescriptionRow
+            label="Nameservers"
+            value={config.dnsConfig?.nameservers?.join(", ")}
+            mono
+          />
+          <DescriptionRow
+            label="Search Domains"
+            value={config.dnsConfig?.search?.join(", ")}
+            mono
+          />
+          <DescriptionRow
+            label="Options"
+            value={config.dnsConfig?.options?.join(", ")}
+            mono
+          />
+        </dl>
       }
       edit={
         <>

@@ -60,31 +60,28 @@ export function ExtraHostsEditor({
 
   return (
     <EditablePanel
+      title="Extra Hosts"
+      empty={!config.hosts || config.hosts.length === 0}
+      emptyDescription="Click Edit to add custom /etc/hosts entries."
       onOpen={resetForm}
       onSave={save}
       display={
-        config.hosts && config.hosts.length > 0 ? (
-          <table className="w-full text-sm">
-            <thead>
-              <tr>
-                <th className="pr-4 pb-1 text-left font-normal text-muted-foreground">
-                  IP Address
-                </th>
-                <th className="pb-1 text-left font-normal text-muted-foreground">Hostname</th>
+        <table className="w-full text-sm">
+          <thead>
+            <tr>
+              <th className="pr-4 pb-1 text-left font-normal text-muted-foreground">IP Address</th>
+              <th className="pb-1 text-left font-normal text-muted-foreground">Hostname</th>
+            </tr>
+          </thead>
+          <tbody>
+            {parseHosts(config.hosts).map((row, index) => (
+              <tr key={index}>
+                <td className="pr-4 font-mono">{row.ip}</td>
+                <td className="font-mono">{row.hostname}</td>
               </tr>
-            </thead>
-            <tbody>
-              {parseHosts(config.hosts).map((row, index) => (
-                <tr key={index}>
-                  <td className="pr-4 font-mono">{row.ip}</td>
-                  <td className="font-mono">{row.hostname}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <span className="text-sm text-muted-foreground">None</span>
-        )
+            ))}
+          </tbody>
+        </table>
       }
       edit={
         <>

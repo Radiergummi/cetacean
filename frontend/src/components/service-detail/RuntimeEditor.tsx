@@ -65,6 +65,7 @@ export function RuntimeEditor({
 
   return (
     <EditablePanel
+      title="Runtime"
       onOpen={resetForm}
       onSave={save}
       display={

@@ -94,6 +94,7 @@ export function CapabilitiesEditor({
 
   return (
     <EditablePanel
+      title="Capabilities"
       onOpen={resetForm}
       onSave={save}
       display={
