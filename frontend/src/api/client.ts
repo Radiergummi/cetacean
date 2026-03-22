@@ -33,6 +33,7 @@ import type {
   PortConfig,
   UpdateConfig,
   LogDriver,
+  ContainerConfig,
 } from "./types";
 
 const headers = { Accept: "application/json" };
@@ -382,6 +383,16 @@ export const api = {
   patchServiceLogDriver: (id: string, partial: Record<string, unknown>) =>
     patch<{ logDriver: LogDriver }>(
       `/services/${id}/log-driver`,
+      partial,
+      "application/merge-patch+json",
+    ),
+
+  serviceContainerConfig: (id: string, signal?: AbortSignal) =>
+    fetchJSON<ContainerConfig>(`/services/${id}/container-config`, signal),
+
+  patchServiceContainerConfig: (id: string, partial: Record<string, unknown>) =>
+    patch<ContainerConfig>(
+      `/services/${id}/container-config`,
       partial,
       "application/merge-patch+json",
     ),

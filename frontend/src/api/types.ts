@@ -44,6 +44,16 @@ export interface Service {
         StopSignal?: string;
         StopGracePeriod?: number;
         ReadOnly?: boolean;
+        TTY?: boolean;
+        Groups?: string[];
+        Hosts?: string[];
+        DNSConfig?: {
+          Nameservers?: string[];
+          Search?: string[];
+          Options?: string[];
+        };
+        CapabilityAdd?: string[];
+        CapabilityDrop?: string[];
         Healthcheck?: {
           Test?: string[];
           Interval?: number;
@@ -503,3 +513,25 @@ export type Placement = NonNullable<Service["Spec"]["TaskTemplate"]["Placement"]
 export type PortConfig = NonNullable<NonNullable<Service["Spec"]["EndpointSpec"]>["Ports"]>[number];
 export type UpdateConfig = NonNullable<Service["Spec"]["UpdateConfig"]>;
 export type LogDriver = NonNullable<Service["Spec"]["TaskTemplate"]["LogDriver"]>;
+
+export interface ContainerConfig {
+  command?: string[];
+  args?: string[];
+  dir: string;
+  user: string;
+  hostname: string;
+  init?: boolean;
+  tty: boolean;
+  readOnly: boolean;
+  stopSignal: string;
+  stopGracePeriod?: number;
+  capabilityAdd?: string[];
+  capabilityDrop?: string[];
+  groups?: string[];
+  hosts?: string[];
+  dnsConfig?: {
+    nameservers?: string[];
+    search?: string[];
+    options?: string[];
+  };
+}
