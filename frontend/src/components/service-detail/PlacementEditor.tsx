@@ -141,6 +141,7 @@ export function PlacementEditor({ serviceId, placement, onSaved }: PlacementEdit
             <Button
               variant="outline"
               size="xs"
+              className="h-8 shrink-0"
               onClick={() => removeConstraint(index)}
             >
               <Trash2 className="size-3" />

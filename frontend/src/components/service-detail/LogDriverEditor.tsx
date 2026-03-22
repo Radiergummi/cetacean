@@ -142,6 +142,7 @@ export function LogDriverEditor({ serviceId, logDriver, onSaved }: LogDriverEdit
                 <Button
                   variant="outline"
                   size="xs"
+                  className="h-8 shrink-0"
                   onClick={() => setOptions(options.filter((_, i) => i !== index))}
                 >
                   <Trash2 className="size-3" />

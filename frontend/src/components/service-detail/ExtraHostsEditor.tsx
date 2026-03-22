@@ -158,7 +158,7 @@ export function ExtraHostsEditor({
                 <Button
                   variant="outline"
                   size="xs"
-                  className="mt-1"
+                  className="h-8 shrink-0"
                   onClick={() => removeRow(index)}
                 >
                   <Trash2 className="size-3" />
