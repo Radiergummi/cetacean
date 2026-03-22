@@ -15,6 +15,8 @@ interface MultiComboboxProps {
   options: MultiComboboxOption[];
   placeholder?: string;
   className?: string;
+  /** Transform custom input before adding (e.g. toUpperCase for capabilities) */
+  transformInput?: (value: string) => string;
 }
 
 export function MultiCombobox({
@@ -23,10 +25,12 @@ export function MultiCombobox({
   options,
   placeholder,
   className,
+  transformInput,
 }: MultiComboboxProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const transform = transformInput ?? ((value: string) => value);
 
   const filtered = options.filter(
     (option) =>
@@ -108,7 +112,7 @@ export function MultiCombobox({
             onKeyDown={(event) => {
               if (event.key === "Enter" && search.trim()) {
                 event.preventDefault();
-                add(search.trim().toUpperCase());
+                add(transform(search.trim()));
               }
             }}
             placeholder="Search or enter custom..."
@@ -137,21 +141,19 @@ export function MultiCombobox({
             </button>
           ))}
 
-          {filtered.length === 0 &&
-            search.trim() &&
-            !values.includes(search.trim().toUpperCase()) && (
-              <button
-                type="button"
-                onClick={() => add(search.trim().toUpperCase())}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
-              >
-                <Check className="size-3.5 shrink-0 opacity-0" />
+          {filtered.length === 0 && search.trim() && !values.includes(transform(search.trim())) && (
+            <button
+              type="button"
+              onClick={() => add(transform(search.trim()))}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
+            >
+              <Check className="size-3.5 shrink-0 opacity-0" />
 
-                <span>
-                  Add "<span className="font-mono">{search.trim().toUpperCase()}</span>"
-                </span>
-              </button>
-            )}
+              <span>
+                Add "<span className="font-mono">{transform(search.trim())}</span>"
+              </span>
+            </button>
+          )}
         </div>
       </PopoverContent>
     </Popover>

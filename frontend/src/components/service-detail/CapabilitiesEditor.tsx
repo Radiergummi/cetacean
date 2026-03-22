@@ -103,6 +103,7 @@ export function CapabilitiesEditor({
               onChange={setAddList}
               options={linuxCapabilities}
               placeholder="Select or type a capability..."
+              transformInput={(value) => value.toUpperCase()}
             />
           </div>
 
@@ -113,6 +114,7 @@ export function CapabilitiesEditor({
               onChange={setDropList}
               options={linuxCapabilities}
               placeholder="Select or type a capability..."
+              transformInput={(value) => value.toUpperCase()}
             />
           </div>
         </>

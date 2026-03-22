@@ -2,17 +2,8 @@ import { EditablePanel } from "./EditablePanel";
 import { api } from "@/api/client";
 import type { ContainerConfig } from "@/api/types";
 import { DescriptionRow } from "@/components/data";
-import { Input } from "@/components/ui/input";
+import { MultiCombobox } from "@/components/ui/multi-combobox";
 import { useState } from "react";
-
-function splitComma(value: string): string[] | undefined {
-  const items = value
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  return items.length > 0 ? items : undefined;
-}
 
 export function DnsEditor({
   serviceId,
@@ -23,31 +14,30 @@ export function DnsEditor({
   config: ContainerConfig;
   onSaved: (updated: ContainerConfig) => void;
 }) {
-  const [nameserversInput, setNameserversInput] = useState("");
-  const [searchInput, setSearchInput] = useState("");
-  const [optionsInput, setOptionsInput] = useState("");
+  const [nameservers, setNameservers] = useState<string[]>([]);
+  const [searchDomains, setSearchDomains] = useState<string[]>([]);
+  const [resolverOptions, setResolverOptions] = useState<string[]>([]);
 
   function resetForm() {
-    setNameserversInput(config.dnsConfig?.nameservers?.join(", ") ?? "");
-    setSearchInput(config.dnsConfig?.search?.join(", ") ?? "");
-    setOptionsInput(config.dnsConfig?.options?.join(", ") ?? "");
+    setNameservers(config.dnsConfig?.nameservers ?? []);
+    setSearchDomains(config.dnsConfig?.search ?? []);
+    setResolverOptions(config.dnsConfig?.options ?? []);
   }
 
   async function save() {
-    const nameservers = splitComma(nameserversInput);
-    const search = splitComma(searchInput);
-    const options = splitComma(optionsInput);
-
     const patch: Record<string, unknown> = {};
 
-    if (!nameservers && !search && !options) {
+    if (!nameservers.length && !searchDomains.length && !resolverOptions.length) {
       patch.dnsConfig = null;
     } else {
-      patch.dnsConfig = { nameservers, search, options };
+      patch.dnsConfig = {
+        nameservers: nameservers.length > 0 ? nameservers : undefined,
+        search: searchDomains.length > 0 ? searchDomains : undefined,
+        options: resolverOptions.length > 0 ? resolverOptions : undefined,
+      };
     }
 
     const updated = await api.patchServiceContainerConfig(serviceId, patch);
-
     onSaved(updated);
   }
 
@@ -79,37 +69,34 @@ export function DnsEditor({
       }
       edit={
         <>
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1.5">
             <label className="text-xs text-muted-foreground">Nameservers</label>
-            <Input
-              value={nameserversInput}
-              onChange={(event) => setNameserversInput(event.target.value)}
-              placeholder="8.8.8.8, 1.1.1.1"
-              className="font-mono"
+            <MultiCombobox
+              values={nameservers}
+              onChange={setNameservers}
+              options={[]}
+              placeholder="Type an IP address and press Enter..."
             />
-            <p className="text-xs text-muted-foreground">Comma-separated IP addresses</p>
           </div>
 
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1.5">
             <label className="text-xs text-muted-foreground">Search Domains</label>
-            <Input
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              placeholder="example.com, local"
-              className="font-mono"
+            <MultiCombobox
+              values={searchDomains}
+              onChange={setSearchDomains}
+              options={[]}
+              placeholder="Type a domain and press Enter..."
             />
-            <p className="text-xs text-muted-foreground">Comma-separated domain names</p>
           </div>
 
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1.5">
             <label className="text-xs text-muted-foreground">Options</label>
-            <Input
-              value={optionsInput}
-              onChange={(event) => setOptionsInput(event.target.value)}
-              placeholder="ndots:5, timeout:2"
-              className="font-mono"
+            <MultiCombobox
+              values={resolverOptions}
+              onChange={setResolverOptions}
+              options={[]}
+              placeholder="Type an option and press Enter..."
             />
-            <p className="text-xs text-muted-foreground">Comma-separated resolver options</p>
           </div>
         </>
       }
