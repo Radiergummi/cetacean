@@ -12,6 +12,7 @@ import (
 	json "github.com/goccy/go-json"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/errdefs"
@@ -49,6 +50,7 @@ type mockWriteClient struct {
 	updateServiceConfigsFn         func(ctx context.Context, id string, configs []*swarm.ConfigReference) (swarm.Service, error)
 	updateServiceSecretsFn         func(ctx context.Context, id string, secrets []*swarm.SecretReference) (swarm.Service, error)
 	updateServiceNetworksFn        func(ctx context.Context, id string, networks []swarm.NetworkAttachmentConfig) (swarm.Service, error)
+	updateServiceMountsFn          func(ctx context.Context, id string, mounts []mount.Mount) (swarm.Service, error)
 }
 
 func (m *mockWriteClient) ScaleService(
@@ -316,6 +318,17 @@ func (m *mockWriteClient) UpdateServiceNetworks(
 ) (swarm.Service, error) {
 	if m.updateServiceNetworksFn != nil {
 		return m.updateServiceNetworksFn(ctx, id, networks)
+	}
+	return swarm.Service{}, fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) UpdateServiceMounts(
+	ctx context.Context,
+	id string,
+	mounts []mount.Mount,
+) (swarm.Service, error) {
+	if m.updateServiceMountsFn != nil {
+		return m.updateServiceMountsFn(ctx, id, mounts)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }

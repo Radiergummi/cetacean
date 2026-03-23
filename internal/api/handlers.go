@@ -15,6 +15,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
@@ -136,6 +137,7 @@ type DockerWriteClient interface {
 		id string,
 		networks []swarm.NetworkAttachmentConfig,
 	) (swarm.Service, error)
+	UpdateServiceMounts(ctx context.Context, id string, mounts []mount.Mount) (swarm.Service, error)
 	UpdateServiceContainerConfig(
 		ctx context.Context,
 		id string,
