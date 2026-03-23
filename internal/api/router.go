@@ -60,6 +60,7 @@ func NewRouter(
 	mux.Handle("PATCH /swarm/encryption", tier3(h.HandlePatchSwarmEncryption))
 	mux.Handle("POST /swarm/rotate-token", tier3(h.HandlePostRotateToken))
 	mux.Handle("POST /swarm/rotate-unlock-key", tier3(h.HandlePostRotateUnlockKey))
+	mux.Handle("POST /swarm/force-rotate-ca", tier3(h.HandlePostForceRotateCA))
 	mux.HandleFunc("GET /swarm/unlock-key", h.HandleGetUnlockKey)
 	mux.HandleFunc("GET /disk-usage", contentNegotiated(h.HandleDiskUsage, spa))
 	mux.HandleFunc("GET /plugins", contentNegotiated(h.HandlePlugins, spa))

@@ -213,6 +213,7 @@ export const api = {
   rotateToken: (target: "worker" | "manager") =>
     mutationFetch<void>("/swarm/rotate-token", "POST", { target }, "application/json"),
   rotateUnlockKey: () => mutationFetch<void>("/swarm/rotate-unlock-key", "POST"),
+  forceRotateCA: () => mutationFetch<void>("/swarm/force-rotate-ca", "POST"),
   plugins: () => fetchJSON<CollectionResponse<Plugin>>("/plugins").then((r) => r.items),
   clusterMetrics: () => fetchJSON<ClusterMetrics>("/cluster/metrics"),
   monitoringStatus: () => fetchJSON<MonitoringStatus>("/-/metrics/status"),

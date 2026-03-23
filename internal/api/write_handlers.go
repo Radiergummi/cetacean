@@ -2421,6 +2421,44 @@ func (h *Handlers) HandlePostRotateUnlockKey(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *Handlers) HandlePostForceRotateCA(w http.ResponseWriter, r *http.Request) {
+	if h.systemClient == nil {
+		writeProblem(w, r, http.StatusNotImplemented, "swarm API not available")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	current, err := h.systemClient.SwarmInspect(ctx)
+	if err != nil {
+		writeProblem(w, r, http.StatusServiceUnavailable, "failed to inspect swarm")
+		return
+	}
+
+	spec := current.Spec
+	spec.CAConfig.ForceRotate++
+
+	slog.Info("forcing CA certificate rotation", "forceRotate", spec.CAConfig.ForceRotate)
+
+	if err := h.systemClient.UpdateSwarm(
+		ctx,
+		spec,
+		current.Version,
+		swarm.UpdateFlags{},
+	); err != nil {
+		writeProblem(
+			w,
+			r,
+			http.StatusInternalServerError,
+			"failed to force CA rotation: "+err.Error(),
+		)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *Handlers) HandleGetUnlockKey(w http.ResponseWriter, r *http.Request) {
 	if h.systemClient == nil {
 		writeProblem(w, r, http.StatusNotImplemented, "swarm API not available")
