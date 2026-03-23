@@ -292,7 +292,7 @@ export default function SwarmPage() {
                     "Node Certificate Expiry",
                     formatDuration(spec.CAConfig.NodeCertExpiry),
                   ],
-                  ["Force Rotate", String(spec.CAConfig.ForceRotate)],
+                  ["Force Rotate", String(spec.CAConfig.ForceRotate ?? 0)],
                   ["Root Rotation In Progress", swarm.RootRotationInProgress ? "Yes" : "No"],
                   ...(spec.CAConfig.ExternalCAs?.map(
                     ({ Protocol, URL }, index): [string, string] => [
@@ -315,7 +315,7 @@ export default function SwarmPage() {
 
                 <KVTable
                   rows={[
-                    ["Force Rotate", String(spec.CAConfig.ForceRotate)],
+                    ["Force Rotate", String(spec.CAConfig.ForceRotate ?? 0)],
                     ["Root Rotation In Progress", swarm.RootRotationInProgress ? "Yes" : "No"],
                     ...(spec.CAConfig.ExternalCAs?.map(
                       ({ Protocol, URL }, index): [string, string] => [
