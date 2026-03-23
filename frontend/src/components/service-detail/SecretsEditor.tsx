@@ -3,7 +3,7 @@ import type { ServiceSecretRef } from "@/api/types";
 import { EditableTable } from "@/components/EditableTable";
 import ResourceName from "@/components/ResourceName";
 import SimpleTable from "@/components/SimpleTable";
-import { Combobox } from "@/components/ui/combobox";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { splitStackPrefix } from "@/lib/searchConstants";
@@ -16,17 +16,11 @@ interface SecretsEditorProps {
   onSaved: (secrets: ServiceSecretRef[]) => void;
 }
 
-interface SecretOption {
-  value: string;
-  label: string;
-  description?: string;
-}
-
 export function SecretsEditor({ serviceId, secrets, onSaved }: SecretsEditorProps) {
   const { level, loading: levelLoading } = useOperationsLevel();
   const canEdit = !levelLoading && level >= opsLevel.configuration;
 
-  const [availableSecrets, setAvailableSecrets] = useState<SecretOption[]>([]);
+  const [availableSecrets, setAvailableSecrets] = useState<ComboboxOption[]>([]);
   const [newSecretId, setNewSecretId] = useState("");
   const [newTargetPath, setNewTargetPath] = useState("");
 

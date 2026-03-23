@@ -141,8 +141,6 @@ export function EditableTable<T>({
     </>
   ) : null;
 
-  const addError = renderAddError?.();
-
   return (
     <CollapsibleSection
       title={title}
@@ -161,7 +159,7 @@ export function EditableTable<T>({
       ) : (
         <div className="flex flex-col gap-3">
           <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full min-w-max whitespace-nowrap">
+            <table className="w-full whitespace-nowrap">
               <thead className="sticky top-0 z-10 bg-background/50">
                 <tr className="bg-muted/50 dark:bg-transparent">
                   <th className="w-1/2 ps-3 pt-3 pb-1.5 text-left text-sm font-medium">
@@ -209,16 +207,19 @@ export function EditableTable<T>({
                       <td className="py-3 ps-3">{renderAddValueCell(draft)}</td>
                       <td />
                     </tr>
-                    {addError && (
-                      <tr className="bg-transparent!">
-                        <td
-                          colSpan={3}
-                          className="px-3 pb-2 text-xs text-red-600 dark:text-red-400"
-                        >
-                          {addError}
-                        </td>
-                      </tr>
-                    )}
+                    {(() => {
+                      const error = renderAddError?.();
+                      return error ? (
+                        <tr className="bg-transparent!">
+                          <td
+                            colSpan={3}
+                            className="px-3 pb-2 text-xs text-red-600 dark:text-red-400"
+                          >
+                            {error}
+                          </td>
+                        </tr>
+                      ) : null;
+                    })()}
                   </>
                 )}
               </tbody>

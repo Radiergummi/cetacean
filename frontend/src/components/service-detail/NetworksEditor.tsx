@@ -3,7 +3,7 @@ import type { ServiceNetworkRef } from "@/api/types";
 import { EditableTable } from "@/components/EditableTable";
 import ResourceName from "@/components/ResourceName";
 import SimpleTable from "@/components/SimpleTable";
-import { Combobox } from "@/components/ui/combobox";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { MultiCombobox } from "@/components/ui/multi-combobox";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { useEffect, useMemo, useState } from "react";
@@ -16,12 +16,6 @@ interface NetworksEditorProps {
   onSaved: (networks: ServiceNetworkRef[]) => void;
 }
 
-interface NetworkOption {
-  value: string;
-  label: string;
-  description?: string;
-}
-
 export function NetworksEditor({
   serviceId,
   networks,
@@ -31,7 +25,7 @@ export function NetworksEditor({
   const { level, loading: levelLoading } = useOperationsLevel();
   const canEdit = !levelLoading && level >= opsLevel.configuration;
 
-  const [availableNetworks, setAvailableNetworks] = useState<NetworkOption[]>([]);
+  const [availableNetworks, setAvailableNetworks] = useState<ComboboxOption[]>([]);
   const [newNetworkId, setNewNetworkId] = useState("");
   const [newAliases, setNewAliases] = useState<string[]>([]);
 

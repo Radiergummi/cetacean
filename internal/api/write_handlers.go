@@ -1716,6 +1716,55 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 	writeJSON(w, result)
 }
 
+func extractConfigRefs(cs *swarm.ContainerSpec) []serviceConfigRef {
+	if cs == nil {
+		return []serviceConfigRef{}
+	}
+	refs := make([]serviceConfigRef, 0, len(cs.Configs))
+	for _, cfg := range cs.Configs {
+		var fileName string
+		if cfg.File != nil {
+			fileName = cfg.File.Name
+		}
+		refs = append(refs, serviceConfigRef{
+			ConfigID:   cfg.ConfigID,
+			ConfigName: cfg.ConfigName,
+			FileName:   fileName,
+		})
+	}
+	return refs
+}
+
+func extractSecretRefs(cs *swarm.ContainerSpec) []serviceSecretRef {
+	if cs == nil {
+		return []serviceSecretRef{}
+	}
+	refs := make([]serviceSecretRef, 0, len(cs.Secrets))
+	for _, sec := range cs.Secrets {
+		var fileName string
+		if sec.File != nil {
+			fileName = sec.File.Name
+		}
+		refs = append(refs, serviceSecretRef{
+			SecretID:   sec.SecretID,
+			SecretName: sec.SecretName,
+			FileName:   fileName,
+		})
+	}
+	return refs
+}
+
+func extractNetworkRefs(networks []swarm.NetworkAttachmentConfig) []serviceNetworkRef {
+	refs := make([]serviceNetworkRef, 0, len(networks))
+	for _, net := range networks {
+		refs = append(refs, serviceNetworkRef{
+			Target:  net.Target,
+			Aliases: net.Aliases,
+		})
+	}
+	return refs
+}
+
 func (h *Handlers) HandleGetServiceConfigs(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
@@ -1724,29 +1773,11 @@ func (h *Handlers) HandleGetServiceConfigs(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var refs []serviceConfigRef
-	if svc.Spec.TaskTemplate.ContainerSpec != nil {
-		for _, cfg := range svc.Spec.TaskTemplate.ContainerSpec.Configs {
-			var fileName string
-			if cfg.File != nil {
-				fileName = cfg.File.Name
-			}
-			refs = append(refs, serviceConfigRef{
-				ConfigID:   cfg.ConfigID,
-				ConfigName: cfg.ConfigName,
-				FileName:   fileName,
-			})
-		}
-	}
-	if refs == nil {
-		refs = []serviceConfigRef{}
-	}
-
 	writeJSONWithETag(
 		w,
 		r,
 		NewDetailResponse("/services/"+id+"/configs", "ServiceConfigs", map[string]any{
-			"configs": refs,
+			"configs": extractConfigRefs(svc.Spec.TaskTemplate.ContainerSpec),
 		}),
 	)
 }
@@ -1815,25 +1846,8 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var resultRefs []serviceConfigRef
-	if updated.Spec.TaskTemplate.ContainerSpec != nil {
-		for _, cfg := range updated.Spec.TaskTemplate.ContainerSpec.Configs {
-			var fn string
-			if cfg.File != nil {
-				fn = cfg.File.Name
-			}
-			resultRefs = append(resultRefs, serviceConfigRef{
-				ConfigID:   cfg.ConfigID,
-				ConfigName: cfg.ConfigName,
-				FileName:   fn,
-			})
-		}
-	}
-	if resultRefs == nil {
-		resultRefs = []serviceConfigRef{}
-	}
 	writeJSON(w, NewDetailResponse("/services/"+id+"/configs", "ServiceConfigs", map[string]any{
-		"configs": resultRefs,
+		"configs": extractConfigRefs(updated.Spec.TaskTemplate.ContainerSpec),
 	}))
 }
 
@@ -1845,29 +1859,11 @@ func (h *Handlers) HandleGetServiceSecrets(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var refs []serviceSecretRef
-	if svc.Spec.TaskTemplate.ContainerSpec != nil {
-		for _, sec := range svc.Spec.TaskTemplate.ContainerSpec.Secrets {
-			var fileName string
-			if sec.File != nil {
-				fileName = sec.File.Name
-			}
-			refs = append(refs, serviceSecretRef{
-				SecretID:   sec.SecretID,
-				SecretName: sec.SecretName,
-				FileName:   fileName,
-			})
-		}
-	}
-	if refs == nil {
-		refs = []serviceSecretRef{}
-	}
-
 	writeJSONWithETag(
 		w,
 		r,
 		NewDetailResponse("/services/"+id+"/secrets", "ServiceSecrets", map[string]any{
-			"secrets": refs,
+			"secrets": extractSecretRefs(svc.Spec.TaskTemplate.ContainerSpec),
 		}),
 	)
 }
@@ -1936,25 +1932,8 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var resultRefs []serviceSecretRef
-	if updated.Spec.TaskTemplate.ContainerSpec != nil {
-		for _, sec := range updated.Spec.TaskTemplate.ContainerSpec.Secrets {
-			var fn string
-			if sec.File != nil {
-				fn = sec.File.Name
-			}
-			resultRefs = append(resultRefs, serviceSecretRef{
-				SecretID:   sec.SecretID,
-				SecretName: sec.SecretName,
-				FileName:   fn,
-			})
-		}
-	}
-	if resultRefs == nil {
-		resultRefs = []serviceSecretRef{}
-	}
 	writeJSON(w, NewDetailResponse("/services/"+id+"/secrets", "ServiceSecrets", map[string]any{
-		"secrets": resultRefs,
+		"secrets": extractSecretRefs(updated.Spec.TaskTemplate.ContainerSpec),
 	}))
 }
 
@@ -1966,22 +1945,11 @@ func (h *Handlers) HandleGetServiceNetworks(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var refs []serviceNetworkRef
-	for _, net := range svc.Spec.TaskTemplate.Networks {
-		refs = append(refs, serviceNetworkRef{
-			Target:  net.Target,
-			Aliases: net.Aliases,
-		})
-	}
-	if refs == nil {
-		refs = []serviceNetworkRef{}
-	}
-
 	writeJSONWithETag(
 		w,
 		r,
 		NewDetailResponse("/services/"+id+"/networks", "ServiceNetworks", map[string]any{
-			"networks": refs,
+			"networks": extractNetworkRefs(svc.Spec.TaskTemplate.Networks),
 		}),
 	)
 }
@@ -2035,17 +2003,7 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	var resultRefs []serviceNetworkRef
-	for _, net := range updated.Spec.TaskTemplate.Networks {
-		resultRefs = append(resultRefs, serviceNetworkRef{
-			Target:  net.Target,
-			Aliases: net.Aliases,
-		})
-	}
-	if resultRefs == nil {
-		resultRefs = []serviceNetworkRef{}
-	}
 	writeJSON(w, NewDetailResponse("/services/"+id+"/networks", "ServiceNetworks", map[string]any{
-		"networks": resultRefs,
+		"networks": extractNetworkRefs(updated.Spec.TaskTemplate.Networks),
 	}))
 }

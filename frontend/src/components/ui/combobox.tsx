@@ -1,9 +1,9 @@
-import {Popover, PopoverContent, PopoverTrigger} from "@/components/ui/popover";
-import {cn} from "@/lib/utils";
-import {Check, ChevronsUpDown, Search} from "lucide-react";
-import {useRef, useState} from "react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { Check, ChevronsUpDown, Search } from "lucide-react";
+import { useRef, useState } from "react";
 
-interface ComboboxOption {
+export interface ComboboxOption {
   value: string;
   label: string;
   description?: string;
@@ -32,7 +32,7 @@ export function Combobox({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const filtered = options.filter(
-    ({description, label, value: optionValue}) =>
+    ({ description, label, value: optionValue }) =>
       optionValue.toLowerCase().includes(search.toLowerCase()) ||
       label.toLowerCase().includes(search.toLowerCase()) ||
       description?.toLowerCase().includes(search.toLowerCase()),
@@ -58,7 +58,7 @@ export function Combobox({
     >
       <PopoverTrigger
         className={cn(
-          "flex h-8 items-center justify-between rounded-md border border-input bg-transparent px-3 text-sm",
+          "flex w-full h-8 items-center justify-between rounded-md border border-input bg-transparent px-3 text-sm",
           "hover:bg-muted outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
           !value && "font-sans text-muted-foreground",
           className,
@@ -70,7 +70,7 @@ export function Combobox({
             placeholder ||
             "Select…"}
         </span>
-        <ChevronsUpDown className="ml-2 size-3 shrink-0 opacity-50"/>
+        <ChevronsUpDown className="ml-2 size-3 shrink-0 opacity-50" />
       </PopoverTrigger>
 
       <PopoverContent
@@ -78,7 +78,7 @@ export function Combobox({
         className="w-full max-w-84 gap-0 p-0"
       >
         <div className="flex items-center gap-2 border-b px-3 py-2">
-          <Search className="size-3.5 shrink-0 text-muted-foreground"/>
+          <Search className="size-3.5 shrink-0 text-muted-foreground" />
 
           <input
             ref={inputRef}
@@ -120,9 +120,7 @@ export function Combobox({
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm">{option.label}</div>
                 {option.description && (
-                  <div className="truncate text-xs text-muted-foreground">
-                    {option.description}
-                  </div>
+                  <div className="truncate text-xs text-muted-foreground">{option.description}</div>
                 )}
               </div>
             </button>
@@ -134,7 +132,7 @@ export function Combobox({
               onClick={() => select(search.trim())}
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
             >
-              <Check className="size-3.5 shrink-0 opacity-0"/>
+              <Check className="size-3.5 shrink-0 opacity-0" />
 
               <span>
                 Use "<span>{search.trim()}</span>"
