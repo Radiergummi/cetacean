@@ -2886,3 +2886,144 @@ func TestHandlePatchServiceNetworks_WrongContentType(t *testing.T) {
 		t.Errorf("status=%d, want 415", w.Code)
 	}
 }
+
+func TestHandleGetServiceMounts_OK(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{
+					Mounts: []mount.Mount{
+						{Type: mount.TypeVolume, Source: "data", Target: "/data"},
+					},
+				},
+			},
+		},
+	})
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("GET", "/services/svc1/mounts", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetServiceMounts(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	mounts, ok := resp["mounts"].([]any)
+	if !ok || len(mounts) != 1 {
+		t.Fatalf("mounts=%v, want 1 mount", resp["mounts"])
+	}
+}
+
+func TestHandleGetServiceMounts_Empty(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{},
+			},
+		},
+	})
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("GET", "/services/svc1/mounts", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetServiceMounts(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	mounts, ok := resp["mounts"].([]any)
+	if !ok || len(mounts) != 0 {
+		t.Fatalf("mounts=%v, want empty array", resp["mounts"])
+	}
+}
+
+func TestHandleGetServiceMounts_NotFound(t *testing.T) {
+	c := cache.New(nil)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("GET", "/services/missing/mounts", nil)
+	req.SetPathValue("id", "missing")
+	w := httptest.NewRecorder()
+	h.HandleGetServiceMounts(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestHandlePatchServiceMounts_OK(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	wc := &mockWriteClient{
+		updateServiceMountsFn: func(_ context.Context, _ string, mounts []mount.Mount) (swarm.Service, error) {
+			return swarm.Service{
+				ID: "svc1",
+				Spec: swarm.ServiceSpec{
+					TaskTemplate: swarm.TaskSpec{
+						ContainerSpec: &swarm.ContainerSpec{Mounts: mounts},
+					},
+				},
+			}, nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, closedReady(), nil, config.OpsImpactful)
+
+	body := `{"mounts":[{"Type":"volume","Source":"data","Target":"/data"}]}`
+	req := httptest.NewRequest("PATCH", "/services/svc1/mounts", strings.NewReader(body))
+	req.SetPathValue("id", "svc1")
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceMounts(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandlePatchServiceMounts_NotFound(t *testing.T) {
+	c := cache.New(nil)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+
+	body := `{"mounts":[]}`
+	req := httptest.NewRequest("PATCH", "/services/missing/mounts", strings.NewReader(body))
+	req.SetPathValue("id", "missing")
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceMounts(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestHandlePatchServiceMounts_WrongContentType(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsImpactful)
+
+	body := `{"mounts":[]}`
+	req := httptest.NewRequest("PATCH", "/services/svc1/mounts", strings.NewReader(body))
+	req.SetPathValue("id", "svc1")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceMounts(w, req)
+
+	if w.Code != http.StatusUnsupportedMediaType {
+		t.Errorf("status=%d, want 415", w.Code)
+	}
+}

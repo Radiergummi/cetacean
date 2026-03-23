@@ -10,6 +10,7 @@ import (
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
 )
@@ -2005,5 +2006,72 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 
 	writeJSON(w, NewDetailResponse("/services/"+id+"/networks", "ServiceNetworks", map[string]any{
 		"networks": extractNetworkRefs(updated.Spec.TaskTemplate.Networks),
+	}))
+}
+
+func (h *Handlers) HandleGetServiceMounts(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	svc, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	var mounts []mount.Mount
+	if svc.Spec.TaskTemplate.ContainerSpec != nil {
+		mounts = svc.Spec.TaskTemplate.ContainerSpec.Mounts
+	}
+	if mounts == nil {
+		mounts = []mount.Mount{}
+	}
+
+	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/mounts", "ServiceMounts", map[string]any{
+		"mounts": mounts,
+	}))
+}
+
+func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	ct := r.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/merge-patch+json") {
+		writeProblem(w, r, http.StatusUnsupportedMediaType, "Content-Type must be application/merge-patch+json")
+		return
+	}
+
+	_, ok := h.cache.GetService(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "service not found")
+		return
+	}
+
+	var req struct {
+		Mounts []mount.Mount `json:"mounts"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	slog.Info("updating service mounts", "service", id, "count", len(req.Mounts))
+
+	updated, err := h.writeClient.UpdateServiceMounts(r.Context(), id, req.Mounts)
+	if err != nil {
+		writeDockerError(w, r, err, "service")
+		return
+	}
+
+	var mounts []mount.Mount
+	if updated.Spec.TaskTemplate.ContainerSpec != nil {
+		mounts = updated.Spec.TaskTemplate.ContainerSpec.Mounts
+	}
+	if mounts == nil {
+		mounts = []mount.Mount{}
+	}
+
+	writeJSON(w, NewDetailResponse("/services/"+id+"/mounts", "ServiceMounts", map[string]any{
+		"mounts": mounts,
 	}))
 }
