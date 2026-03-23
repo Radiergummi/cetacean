@@ -31,6 +31,7 @@ import {
 } from "../components/ui/dialog";
 import { DurationInput } from "../components/ui/duration-input";
 import { NumberField } from "../components/ui/number-field";
+import { Switch } from "../components/ui/switch";
 import { useAsyncAction } from "../hooks/useAsyncAction";
 import { opsLevel } from "../hooks/useOperationsLevel";
 import { formatDuration } from "../lib/format";
@@ -463,12 +464,10 @@ export default function SwarmPage() {
               />
             }
             edit={
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
+              <label className="flex items-center gap-3 text-sm">
+                <Switch
                   checked={draftAutoLock}
-                  onChange={(event) => setDraftAutoLock(event.target.checked)}
-                  className="size-4 rounded border-input accent-primary"
+                  onCheckedChange={setDraftAutoLock}
                 />
                 Auto-Lock Managers
               </label>
