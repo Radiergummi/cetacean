@@ -62,6 +62,7 @@ export function SecretsEditor({ serviceId, secrets, onSaved }: SecretsEditorProp
             response.items.map((secret) => ({
               value: secret.ID,
               label: secret.Spec.Name,
+              description: secret.ID.slice(0, 12),
             })),
           );
         }

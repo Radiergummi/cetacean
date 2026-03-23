@@ -62,6 +62,7 @@ export function ConfigsEditor({ serviceId, configs, onSaved }: ConfigsEditorProp
             response.items.map((config) => ({
               value: config.ID,
               label: config.Spec.Name,
+              description: config.ID.slice(0, 12),
             })),
           );
         }

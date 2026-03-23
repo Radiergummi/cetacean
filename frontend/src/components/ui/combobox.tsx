@@ -64,7 +64,12 @@ export function Combobox({
           className,
         )}
       >
-        <span className="truncate">{value || placeholder || "Select..."}</span>
+        <span className="truncate">
+          {(value && options.find((option) => option.value === value)?.label) ||
+            value ||
+            placeholder ||
+            "Select..."}
+        </span>
         <ChevronsUpDown className="ml-2 size-3 shrink-0 opacity-50" />
       </PopoverTrigger>
 

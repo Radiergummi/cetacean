@@ -89,6 +89,7 @@ export function NetworksEditor({
             response.items.map((network) => ({
               value: network.Id,
               label: network.Name,
+              description: network.Id.slice(0, 12),
             })),
           );
         }
