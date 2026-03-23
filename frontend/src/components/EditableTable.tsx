@@ -164,8 +164,12 @@ export function EditableTable<T>({
             <table className="w-full min-w-max whitespace-nowrap">
               <thead className="sticky top-0 z-10 bg-background/50">
                 <tr className="bg-muted/50 dark:bg-transparent">
-                  <th className="ps-3 pt-3 pb-1.5 text-left text-sm font-medium">{columns[0]}</th>
-                  <th className="ps-3 pt-3 pb-1.5 text-left text-sm font-medium">{columns[1]}</th>
+                  <th className="w-1/2 ps-3 pt-3 pb-1.5 text-left text-sm font-medium">
+                    {columns[0]}
+                  </th>
+                  <th className="w-1/2 ps-3 pt-3 pb-1.5 text-left text-sm font-medium">
+                    {columns[1]}
+                  </th>
                   <th className="w-12 py-3 ps-3 pb-1.5" />
                 </tr>
               </thead>
