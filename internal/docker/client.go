@@ -139,6 +139,23 @@ func (c *Client) SwarmInspect(ctx context.Context) (swarm.Swarm, error) {
 	return c.docker.SwarmInspect(ctx)
 }
 
+func (c *Client) UpdateSwarm(
+	ctx context.Context,
+	spec swarm.Spec,
+	version swarm.Version,
+	flags swarm.UpdateFlags,
+) error {
+	return c.docker.SwarmUpdate(ctx, version, spec, flags)
+}
+
+func (c *Client) GetUnlockKey(ctx context.Context) (string, error) {
+	resp, err := c.docker.SwarmGetUnlockKey(ctx)
+	if err != nil {
+		return "", err
+	}
+	return resp.UnlockKey, nil
+}
+
 func (c *Client) PluginList(ctx context.Context) (types.PluginsListResponse, error) {
 	return c.docker.PluginList(ctx, filters.Args{})
 }
