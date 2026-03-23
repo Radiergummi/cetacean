@@ -74,425 +74,424 @@ export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck 
 
   return (
     <div className="mt-1 overflow-x-auto">
-    <svg
-      viewBox={`0 0 ${viewWidth} ${viewHeight}`}
-      width={viewWidth}
-      height={viewHeight}
-      role="img"
-      aria-label={`Healthcheck timeline: ${
-        startPeriod > 0 ? `${formatDuration(startPeriod)} start period, then ` : ""
-      }checks every ${formatDuration(effectiveInterval)}, ${retries} retries to unhealthy`}
-    >
-      {/* Start period background */}
-      {startPeriod > 0 && (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <rect
-                x={x(0)}
-                y={axisY - 9}
-                width={x(startPeriod) - x(0)}
-                height={18}
-                rx={2}
-                tabIndex={0}
-                className="fill-amber-100 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring/50 dark:fill-amber-950"
-              />
-            }
-          />
-          <TooltipContent>
-            <p className="font-medium">Start period</p>
-            <p>Failures during this grace period do not count toward retries</p>
-            <p className="text-muted-foreground">0 – {formatDuration(startPeriod, true)}</p>
-          </TooltipContent>
-        </Tooltip>
-      )}
+      <svg
+        viewBox={`0 0 ${viewWidth} ${viewHeight}`}
+        role="img"
+        aria-label={`Healthcheck timeline: ${
+          startPeriod > 0 ? `${formatDuration(startPeriod)} start period, then ` : ""
+        }checks every ${formatDuration(effectiveInterval)}, ${retries} retries to unhealthy`}
+      >
+        {/* Start period background */}
+        {startPeriod > 0 && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <rect
+                  x={x(0)}
+                  y={axisY - 9}
+                  width={x(startPeriod) - x(0)}
+                  height={18}
+                  rx={2}
+                  tabIndex={0}
+                  className="fill-amber-100 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring/50 dark:fill-amber-950"
+                />
+              }
+            />
+            <TooltipContent>
+              <p className="font-medium">Start period</p>
+              <p>Failures during this grace period do not count toward retries</p>
+              <p className="text-muted-foreground">0 – {formatDuration(startPeriod, true)}</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
 
-      {/* Main axis */}
-      <line
-        x1={x(0)}
-        y1={axisY}
-        x2={x(axisDuration)}
-        y2={axisY}
-        className="stroke-zinc-200 dark:stroke-zinc-700"
-        strokeWidth={1}
-      />
+        {/* Main axis */}
+        <line
+          x1={x(0)}
+          y1={axisY}
+          x2={x(axisDuration)}
+          y2={axisY}
+          className="stroke-zinc-200 dark:stroke-zinc-700"
+          strokeWidth={1}
+        />
 
-      {/* Hover track bars — behind all dots */}
-      <defs>
-        <linearGradient id="hc-grad-amber-light">
-          <stop
-            offset="0%"
-            style={{ stopColor: "var(--color-amber-300)" }}
-          />
-          <stop
-            offset="100%"
-            style={{ stopColor: "var(--color-zinc-200)" }}
-          />
-        </linearGradient>
-        <linearGradient id="hc-grad-amber-dark">
-          <stop
-            offset="0%"
-            style={{ stopColor: "var(--color-amber-800)" }}
-          />
-          <stop
-            offset="100%"
-            style={{ stopColor: "var(--color-zinc-700)" }}
-          />
-        </linearGradient>
-        <linearGradient id="hc-grad-red-light">
-          <stop
-            offset="8%"
-            style={{ stopColor: "var(--color-zinc-300)" }}
-          />
-          <stop
-            offset="25%"
-            style={{ stopColor: "var(--color-red-400)" }}
-          />
-        </linearGradient>
-        <linearGradient id="hc-grad-red-dark">
-          <stop
-            offset="8%"
-            style={{ stopColor: "var(--color-zinc-600)" }}
-          />
-          <stop
-            offset="25%"
-            style={{ stopColor: "var(--color-red-900)" }}
-          />
-        </linearGradient>
-      </defs>
-      {intervalTicks.length > 1 && (
-        <g
-          className="pointer-events-none transition-opacity"
-          opacity={showGhost ? 1 : 0}
-        >
-          {startChecks.length > 0 && (
-            <>
-              <rect
-                x={x(intervalTicks[0])}
-                y={axisY - 1}
-                width={x(startChecks[startChecks.length - 1]) - x(intervalTicks[0])}
-                height={2}
-                rx={1}
-                className="fill-amber-300 dark:fill-amber-800"
-              />
-              <rect
-                x={x(startChecks[startChecks.length - 1])}
-                y={axisY - 1}
-                width={x(firstCheck) - x(startChecks[startChecks.length - 1])}
-                height={2}
-                rx={1}
-                fill="url(#hc-grad-amber-light)"
-                className="dark:hidden"
-              />
-              <rect
-                x={x(startChecks[startChecks.length - 1])}
-                y={axisY - 1}
-                width={x(firstCheck) - x(startChecks[startChecks.length - 1])}
-                height={2}
-                rx={1}
-                fill="url(#hc-grad-amber-dark)"
-                className="hidden dark:block"
-              />
-            </>
-          )}
-          <rect
-            x={x(firstCheck)}
-            y={axisY - 1}
-            width={x(axisDuration) - x(firstCheck)}
-            height={2}
-            rx={1}
-            className="fill-zinc-200 dark:fill-zinc-700"
-          />
-        </g>
-      )}
-      {regularChecks.length > 0 && (
-        <g
-          className="pointer-events-none transition-opacity"
-          opacity={showFailed ? 1 : 0}
-        >
-          <rect
-            x={x(firstCheck)}
-            y={axisY - 1}
-            width={x(regularChecks[0]) - x(firstCheck)}
-            height={2}
-            rx={1}
-            fill="url(#hc-grad-red-light)"
-            className="dark:hidden"
-          />
-          <rect
-            x={x(firstCheck)}
-            y={axisY - 1}
-            width={x(regularChecks[0]) - x(firstCheck)}
-            height={2}
-            rx={1}
-            fill="url(#hc-grad-red-dark)"
-            className="hidden dark:block"
-          />
-          <rect
-            x={x(regularChecks[0])}
-            y={axisY - 1}
-            width={x(regularChecks[regularChecks.length - 1]) - x(regularChecks[0])}
-            height={2}
-            rx={1}
-            className="fill-red-400 dark:fill-red-900"
-          />
-        </g>
-      )}
+        {/* Hover track bars — behind all dots */}
+        <defs>
+          <linearGradient id="hc-grad-amber-light">
+            <stop
+              offset="0%"
+              style={{ stopColor: "var(--color-amber-300)" }}
+            />
+            <stop
+              offset="100%"
+              style={{ stopColor: "var(--color-zinc-200)" }}
+            />
+          </linearGradient>
+          <linearGradient id="hc-grad-amber-dark">
+            <stop
+              offset="0%"
+              style={{ stopColor: "var(--color-amber-800)" }}
+            />
+            <stop
+              offset="100%"
+              style={{ stopColor: "var(--color-zinc-700)" }}
+            />
+          </linearGradient>
+          <linearGradient id="hc-grad-red-light">
+            <stop
+              offset="8%"
+              style={{ stopColor: "var(--color-zinc-300)" }}
+            />
+            <stop
+              offset="25%"
+              style={{ stopColor: "var(--color-red-400)" }}
+            />
+          </linearGradient>
+          <linearGradient id="hc-grad-red-dark">
+            <stop
+              offset="8%"
+              style={{ stopColor: "var(--color-zinc-600)" }}
+            />
+            <stop
+              offset="25%"
+              style={{ stopColor: "var(--color-red-900)" }}
+            />
+          </linearGradient>
+        </defs>
+        {intervalTicks.length > 1 && (
+          <g
+            className="pointer-events-none transition-opacity"
+            opacity={showGhost ? 1 : 0}
+          >
+            {startChecks.length > 0 && (
+              <>
+                <rect
+                  x={x(intervalTicks[0])}
+                  y={axisY - 1}
+                  width={x(startChecks[startChecks.length - 1]) - x(intervalTicks[0])}
+                  height={2}
+                  rx={1}
+                  className="fill-amber-300 dark:fill-amber-800"
+                />
+                <rect
+                  x={x(startChecks[startChecks.length - 1])}
+                  y={axisY - 1}
+                  width={x(firstCheck) - x(startChecks[startChecks.length - 1])}
+                  height={2}
+                  rx={1}
+                  fill="url(#hc-grad-amber-light)"
+                  className="dark:hidden"
+                />
+                <rect
+                  x={x(startChecks[startChecks.length - 1])}
+                  y={axisY - 1}
+                  width={x(firstCheck) - x(startChecks[startChecks.length - 1])}
+                  height={2}
+                  rx={1}
+                  fill="url(#hc-grad-amber-dark)"
+                  className="hidden dark:block"
+                />
+              </>
+            )}
+            <rect
+              x={x(firstCheck)}
+              y={axisY - 1}
+              width={x(axisDuration) - x(firstCheck)}
+              height={2}
+              rx={1}
+              className="fill-zinc-200 dark:fill-zinc-700"
+            />
+          </g>
+        )}
+        {regularChecks.length > 0 && (
+          <g
+            className="pointer-events-none transition-opacity"
+            opacity={showFailed ? 1 : 0}
+          >
+            <rect
+              x={x(firstCheck)}
+              y={axisY - 1}
+              width={x(regularChecks[0]) - x(firstCheck)}
+              height={2}
+              rx={1}
+              fill="url(#hc-grad-red-light)"
+              className="dark:hidden"
+            />
+            <rect
+              x={x(firstCheck)}
+              y={axisY - 1}
+              width={x(regularChecks[0]) - x(firstCheck)}
+              height={2}
+              rx={1}
+              fill="url(#hc-grad-red-dark)"
+              className="hidden dark:block"
+            />
+            <rect
+              x={x(regularChecks[0])}
+              y={axisY - 1}
+              width={x(regularChecks[regularChecks.length - 1]) - x(regularChecks[0])}
+              height={2}
+              rx={1}
+              className="fill-red-400 dark:fill-red-900"
+            />
+          </g>
+        )}
 
-      {/* Start period checks (forgiven) */}
-      {startChecks.map((t) => (
-        <Tooltip key={`s${t}`}>
-          <TooltipTrigger
-            render={
-              <circle
-                cx={x(t)}
-                cy={axisY}
-                r={2.5}
-                className="fill-amber-400 outline-none transition-transform hover:scale-150 focus-visible:scale-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring/50 dark:fill-amber-500"
-                style={{ transformOrigin: `${x(t)}px ${axisY}px` }}
-                tabIndex={0}
-                stroke="transparent"
-                strokeWidth={6}
-                onMouseEnter={() => setHoverGroup("ghost")}
-                onMouseLeave={() => setHoverGroup(null)}
-                onFocus={() => setHoverGroup("ghost")}
-                onBlur={() => setHoverGroup(null)}
-              />
-            }
-          />
-          <TooltipContent>
-            <p className="font-medium">Start period check</p>
-            <p>Failure forgiven during grace period</p>
-            <p className="text-muted-foreground">{formatDuration(t, true)}</p>
-          </TooltipContent>
-        </Tooltip>
-      ))}
+        {/* Start period checks (forgiven) */}
+        {startChecks.map((t) => (
+          <Tooltip key={`s${t}`}>
+            <TooltipTrigger
+              render={
+                <circle
+                  cx={x(t)}
+                  cy={axisY}
+                  r={2.5}
+                  className="fill-amber-400 transition-transform outline-none hover:scale-150 focus-visible:scale-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring/50 dark:fill-amber-500"
+                  style={{ transformOrigin: `${x(t)}px ${axisY}px` }}
+                  tabIndex={0}
+                  stroke="transparent"
+                  strokeWidth={6}
+                  onMouseEnter={() => setHoverGroup("ghost")}
+                  onMouseLeave={() => setHoverGroup(null)}
+                  onFocus={() => setHoverGroup("ghost")}
+                  onBlur={() => setHoverGroup(null)}
+                />
+              }
+            />
+            <TooltipContent>
+              <p className="font-medium">Start period check</p>
+              <p>Failure forgiven during grace period</p>
+              <p className="text-muted-foreground">{formatDuration(t, true)}</p>
+            </TooltipContent>
+          </Tooltip>
+        ))}
 
-      {/* Interval tick dots (skip start-period checks — already rendered as amber) */}
-      {intervalTicks
-        .filter((t) => t >= startPeriod)
-        .map((t, i) => {
-          const isFirst = i === 0;
+        {/* Interval tick dots (skip start-period checks — already rendered as amber) */}
+        {intervalTicks
+          .filter((t) => t >= startPeriod)
+          .map((t, i) => {
+            const isFirst = i === 0;
+
+            return (
+              <Tooltip key={`g${t}`}>
+                <TooltipTrigger
+                  render={
+                    <circle
+                      cx={x(t)}
+                      cy={axisY}
+                      r={2}
+                      className="fill-zinc-300 transition-transform outline-none hover:scale-150 focus-visible:scale-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring/50 dark:fill-zinc-600"
+                      style={{ transformOrigin: `${x(t)}px ${axisY}px` }}
+                      tabIndex={0}
+                      stroke="transparent"
+                      strokeWidth={6}
+                      onMouseEnter={() => setHoverGroup("ghost")}
+                      onMouseLeave={() => setHoverGroup(null)}
+                      onFocus={() => setHoverGroup("ghost")}
+                      onBlur={() => setHoverGroup(null)}
+                    />
+                  }
+                />
+                <TooltipContent>
+                  <p className="font-medium">{isFirst ? "Initial check" : "Interval tick"}</p>
+                  <p>
+                    {isFirst
+                      ? startPeriod > 0
+                        ? "First check after start period"
+                        : "First healthcheck"
+                      : "Healthcheck executed"}
+                  </p>
+                  <p className="text-muted-foreground">{formatDuration(t, true)}</p>
+                </TooltipContent>
+              </Tooltip>
+            );
+          })}
+
+        {/* Failure check dots */}
+        {regularChecks.map((t, i) => {
+          const failureNumber = i + 1;
+          const isLast = failureNumber === retries;
 
           return (
-            <Tooltip key={`g${t}`}>
-              <TooltipTrigger
-                render={
-                  <circle
-                    cx={x(t)}
-                    cy={axisY}
-                    r={2}
-                    className="fill-zinc-300 outline-none transition-transform hover:scale-150 focus-visible:scale-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring/50 dark:fill-zinc-600"
-                    style={{ transformOrigin: `${x(t)}px ${axisY}px` }}
-                    tabIndex={0}
-                    stroke="transparent"
-                    strokeWidth={6}
-                    onMouseEnter={() => setHoverGroup("ghost")}
-                    onMouseLeave={() => setHoverGroup(null)}
-                    onFocus={() => setHoverGroup("ghost")}
-                    onBlur={() => setHoverGroup(null)}
-                  />
-                }
-              />
+            <Tooltip key={`r${t}`}>
+              <TooltipTrigger render={<g />}>
+                <circle
+                  cx={x(t)}
+                  cy={axisY}
+                  r={isLast ? 3.5 : 2.5}
+                  className="fill-red-600 transition-transform outline-none hover:scale-150 focus-visible:scale-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring/50 dark:fill-red-500"
+                  style={{ transformOrigin: `${x(t)}px ${axisY}px` }}
+                  tabIndex={0}
+                  stroke="transparent"
+                  strokeWidth={6}
+                  onMouseEnter={() => setHoverGroup("failed")}
+                  onMouseLeave={() => setHoverGroup(null)}
+                  onFocus={() => setHoverGroup("failed")}
+                  onBlur={() => setHoverGroup(null)}
+                />
+                <text
+                  x={x(t)}
+                  y={axisY - 5}
+                  textAnchor="middle"
+                  className="fill-muted-foreground"
+                  style={labelStyle}
+                >
+                  {failureNumber}
+                </text>
+              </TooltipTrigger>
               <TooltipContent>
-                <p className="font-medium">{isFirst ? "Initial check" : "Interval tick"}</p>
-                <p>
-                  {isFirst
-                    ? startPeriod > 0
-                      ? "First check after start period"
-                      : "First healthcheck"
-                    : "Healthcheck executed"}
+                <p className="font-medium">
+                  Retry {failureNumber}/{retries}
                 </p>
+                <p>{isLast ? "Container marked unhealthy" : "Failure counts toward retry limit"}</p>
                 <p className="text-muted-foreground">{formatDuration(t, true)}</p>
               </TooltipContent>
             </Tooltip>
           );
         })}
 
-      {/* Failure check dots */}
-      {regularChecks.map((t, i) => {
-        const failureNumber = i + 1;
-        const isLast = failureNumber === retries;
+        {/* Hover label pills — on top of dots */}
+        {intervalTicks.length > 1 && (
+          <g
+            className="pointer-events-none transition-opacity"
+            opacity={showGhost ? 1 : 0}
+          >
+            {intervalTicks[0] > 0 &&
+              (() => {
+                const midX = (x(0) + x(intervalTicks[0])) / 2;
+                const inStartPeriod = intervalTicks[0] <= startPeriod;
 
-        return (
-          <Tooltip key={`r${t}`}>
-            <TooltipTrigger render={<g />}>
-              <circle
-                cx={x(t)}
-                cy={axisY}
-                r={isLast ? 3.5 : 2.5}
-                className="fill-red-600 outline-none transition-transform hover:scale-150 focus-visible:scale-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring/50 dark:fill-red-500"
-                style={{ transformOrigin: `${x(t)}px ${axisY}px` }}
-                tabIndex={0}
-                stroke="transparent"
-                strokeWidth={6}
-                onMouseEnter={() => setHoverGroup("failed")}
-                onMouseLeave={() => setHoverGroup(null)}
-                onFocus={() => setHoverGroup("failed")}
-                onBlur={() => setHoverGroup(null)}
-              />
-              <text
-                x={x(t)}
-                y={axisY - 5}
-                textAnchor="middle"
-                className="fill-muted-foreground"
-                style={labelStyle}
-              >
-                {failureNumber}
-              </text>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p className="font-medium">
-                Retry {failureNumber}/{retries}
-              </p>
-              <p>{isLast ? "Container marked unhealthy" : "Failure counts toward retry limit"}</p>
-              <p className="text-muted-foreground">{formatDuration(t, true)}</p>
-            </TooltipContent>
-          </Tooltip>
-        );
-      })}
+                return (
+                  <g>
+                    <rect
+                      x={midX - 11}
+                      y={axisY - 4}
+                      width={22}
+                      height={8}
+                      rx={2.5}
+                      className={
+                        inStartPeriod
+                          ? "fill-amber-300 dark:fill-amber-800"
+                          : "fill-zinc-300 dark:fill-zinc-600"
+                      }
+                    />
+                    <text
+                      x={midX}
+                      y={axisY}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      style={{ ...labelStyle, fontWeight: 500, fill: "var(--background)" }}
+                    >
+                      +{Math.round(intervalTicks[0] / 1e9)}s
+                    </text>
+                  </g>
+                );
+              })()}
+            {intervalTicks.map((t, i) => {
+              if (i >= intervalTicks.length - 1) {
+                return null;
+              }
 
-      {/* Hover label pills — on top of dots */}
-      {intervalTicks.length > 1 && (
-        <g
-          className="pointer-events-none transition-opacity"
-          opacity={showGhost ? 1 : 0}
-        >
-          {intervalTicks[0] > 0 && (() => {
-            const midX = (x(0) + x(intervalTicks[0])) / 2;
-            const inStartPeriod = intervalTicks[0] <= startPeriod;
+              const midX = (x(t) + x(intervalTicks[i + 1])) / 2;
+              const inStartPeriod = t < startPeriod;
 
-            return (
-              <g>
-                <rect
-                  x={midX - 11}
-                  y={axisY - 4}
-                  width={22}
-                  height={8}
-                  rx={2.5}
-                  className={
-                    inStartPeriod
-                      ? "fill-amber-300 dark:fill-amber-800"
-                      : "fill-zinc-300 dark:fill-zinc-600"
-                  }
-                />
-                <text
-                  x={midX}
-                  y={axisY}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  style={{ ...labelStyle, fontWeight: 500, fill: "var(--background)" }}
-                >
-                  +{Math.round(intervalTicks[0] / 1e9)}s
-                </text>
-              </g>
-            );
-          })()}
-          {intervalTicks.map((t, i) => {
-            if (i >= intervalTicks.length - 1) {
-              return null;
-            }
+              return (
+                <g key={`go${t}`}>
+                  <rect
+                    x={midX - 11}
+                    y={axisY - 4}
+                    width={22}
+                    height={8}
+                    rx={2.5}
+                    className={
+                      inStartPeriod
+                        ? "fill-amber-300 dark:fill-amber-800"
+                        : "fill-zinc-300 dark:fill-zinc-600"
+                    }
+                  />
+                  <text
+                    x={midX}
+                    y={axisY}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    style={{ ...labelStyle, fontWeight: 500, fill: "var(--background)" }}
+                  >
+                    +{Math.round((intervalTicks[i + 1] - t) / 1e9)}s
+                  </text>
+                </g>
+              );
+            })}
+          </g>
+        )}
+        {regularChecks.length > 0 && (
+          <g
+            className="pointer-events-none transition-opacity"
+            opacity={showFailed ? 1 : 0}
+          >
+            {[firstCheck, ...regularChecks].map((t, i, all) => {
+              if (i >= all.length - 1) {
+                return null;
+              }
 
-            const midX = (x(t) + x(intervalTicks[i + 1])) / 2;
-            const inStartPeriod = t < startPeriod;
+              const midX = (x(t) + x(all[i + 1])) / 2;
 
-            return (
-              <g key={`go${t}`}>
-                <rect
-                  x={midX - 11}
-                  y={axisY - 4}
-                  width={22}
-                  height={8}
-                  rx={2.5}
-                  className={
-                    inStartPeriod
-                      ? "fill-amber-300 dark:fill-amber-800"
-                      : "fill-zinc-300 dark:fill-zinc-600"
-                  }
-                />
-                <text
-                  x={midX}
-                  y={axisY}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  style={{ ...labelStyle, fontWeight: 500, fill: "var(--background)" }}
-                >
-                  +{Math.round((intervalTicks[i + 1] - t) / 1e9)}s
-                </text>
-              </g>
-            );
-          })}
-        </g>
-      )}
-      {regularChecks.length > 0 && (
-        <g
-          className="pointer-events-none transition-opacity"
-          opacity={showFailed ? 1 : 0}
-        >
-          {[firstCheck, ...regularChecks].map((t, i, all) => {
-            if (i >= all.length - 1) {
-              return null;
-            }
+              return (
+                <g key={`fo${t}`}>
+                  <rect
+                    x={midX - 11}
+                    y={axisY - 4}
+                    width={22}
+                    height={8}
+                    rx={2.5}
+                    className="fill-red-300 dark:fill-red-800"
+                  />
+                  <text
+                    x={midX}
+                    y={axisY}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    style={{ ...labelStyle, fontWeight: 500, fill: "var(--background)" }}
+                  >
+                    +{Math.round(timeout / 1e9)}s
+                  </text>
+                </g>
+              );
+            })}
+          </g>
+        )}
 
-            const midX = (x(t) + x(all[i + 1])) / 2;
-
-            return (
-              <g key={`fo${t}`}>
-                <rect
-                  x={midX - 11}
-                  y={axisY - 4}
-                  width={22}
-                  height={8}
-                  rx={2.5}
-                  className="fill-red-300 dark:fill-red-800"
-                />
-                <text
-                  x={midX}
-                  y={axisY}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  style={{ ...labelStyle, fontWeight: 500, fill: "var(--background)" }}
-                >
-                  +{Math.round(timeout / 1e9)}s
-                </text>
-              </g>
-            );
-          })}
-        </g>
-      )}
-
-      {/* Time labels */}
-      <text
-        x={x(0)}
-        y={axisY + 16}
-        className="fill-muted-foreground"
-        style={labelStyle}
-      >
-        0s
-      </text>
-
-      {startPeriod > 0 && (
+        {/* Time labels */}
         <text
-          x={x(startPeriod)}
+          x={x(0)}
+          y={axisY + 16}
+          className="fill-muted-foreground"
+          style={labelStyle}
+        >
+          0s
+        </text>
+
+        {startPeriod > 0 && (
+          <text
+            x={x(startPeriod)}
+            y={axisY + 16}
+            textAnchor="middle"
+            className="fill-muted-foreground"
+            style={labelStyle}
+          >
+            {formatDuration(startPeriod)}
+          </text>
+        )}
+
+        <text
+          x={x(totalDuration)}
           y={axisY + 16}
           textAnchor="middle"
           className="fill-muted-foreground"
           style={labelStyle}
         >
-          {formatDuration(startPeriod)}
+          {formatDuration(totalDuration)}
         </text>
-      )}
-
-      <text
-        x={x(totalDuration)}
-        y={axisY + 16}
-        textAnchor="middle"
-        className="fill-muted-foreground"
-        style={labelStyle}
-      >
-        {formatDuration(totalDuration)}
-      </text>
-    </svg>
+      </svg>
     </div>
   );
 }
