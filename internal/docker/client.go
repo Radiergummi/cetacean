@@ -12,6 +12,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
@@ -833,6 +834,26 @@ func (c *Client) UpdateServiceNetworks(
 		svc.Spec,
 		swarm.ServiceUpdateOptions{},
 	)
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	return c.InspectService(ctx, id)
+}
+
+func (c *Client) UpdateServiceMounts(
+	ctx context.Context,
+	id string,
+	mounts []mount.Mount,
+) (swarm.Service, error) {
+	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	if svc.Spec.TaskTemplate.ContainerSpec == nil {
+		svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{}
+	}
+	svc.Spec.TaskTemplate.ContainerSpec.Mounts = mounts
+	_, err = c.docker.ServiceUpdate(ctx, svc.ID, svc.Version, svc.Spec, swarm.ServiceUpdateOptions{})
 	if err != nil {
 		return swarm.Service{}, err
 	}
