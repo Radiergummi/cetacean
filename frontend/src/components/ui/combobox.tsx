@@ -114,9 +114,9 @@ export function Combobox({
               />
 
               <div className="min-w-0 flex-1">
-                <div className="font-mono text-sm">{option.label}</div>
+                <div className="truncate font-mono text-sm">{option.label}</div>
                 {option.description && (
-                  <div className="text-xs leading-snug text-muted-foreground">
+                  <div className="truncate font-mono text-xs text-muted-foreground">
                     {option.description}
                   </div>
                 )}
