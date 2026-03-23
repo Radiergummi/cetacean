@@ -7,7 +7,7 @@ import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { splitStackPrefix } from "@/lib/searchConstants";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 
 interface SecretsEditorProps {
@@ -24,27 +24,19 @@ export function SecretsEditor({ serviceId, secrets, onSaved }: SecretsEditorProp
   const [newSecretId, setNewSecretId] = useState("");
   const [newTargetPath, setNewTargetPath] = useState("");
 
-  useEffect(() => {
-    let cancelled = false;
-
+  const fetchSecrets = useCallback(() => {
     api
       .secrets({ limit: 0 })
       .then((response) => {
-        if (!cancelled) {
-          setAvailableSecrets(
-            response.items.map((secret) => ({
-              value: secret.ID,
-              label: secret.Spec.Name,
-              description: secret.ID.slice(0, 12),
-            })),
-          );
-        }
+        setAvailableSecrets(
+          response.items.map((secret) => ({
+            value: secret.ID,
+            label: secret.Spec.Name,
+            description: secret.ID.slice(0, 12),
+          })),
+        );
       })
       .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   function handleSecretSelected(secretId: string) {
@@ -64,6 +56,7 @@ export function SecretsEditor({ serviceId, secrets, onSaved }: SecretsEditorProp
       columns={["Secret", "Target"]}
       defaultOpen={secrets.length > 0}
       editDisabled={!canEdit}
+      onEditStart={fetchSecrets}
       emptyLabel="No secrets attached"
       emptyHint="Click Edit to attach Docker secrets to this service."
       keyFn={({ secretID }) => secretID}

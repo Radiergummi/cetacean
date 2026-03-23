@@ -7,7 +7,7 @@ import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { splitStackPrefix } from "@/lib/searchConstants";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 
 interface ConfigsEditorProps {
@@ -24,27 +24,19 @@ export function ConfigsEditor({ serviceId, configs, onSaved }: ConfigsEditorProp
   const [newConfigId, setNewConfigId] = useState("");
   const [newTargetPath, setNewTargetPath] = useState("");
 
-  useEffect(() => {
-    let cancelled = false;
-
+  const fetchConfigs = useCallback(() => {
     api
       .configs({ limit: 0 })
       .then((response) => {
-        if (!cancelled) {
-          setAvailableConfigs(
-            response.items.map((config) => ({
-              value: config.ID,
-              label: config.Spec.Name,
-              description: config.ID.slice(0, 12),
-            })),
-          );
-        }
+        setAvailableConfigs(
+          response.items.map((config) => ({
+            value: config.ID,
+            label: config.Spec.Name,
+            description: config.ID.slice(0, 12),
+          })),
+        );
       })
       .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   function handleConfigSelected(configId: string) {
@@ -64,6 +56,7 @@ export function ConfigsEditor({ serviceId, configs, onSaved }: ConfigsEditorProp
       columns={["Config", "Target"]}
       defaultOpen={configs.length > 0}
       editDisabled={!canEdit}
+      onEditStart={fetchConfigs}
       emptyLabel="No configs attached"
       emptyHint="Click Edit to attach Docker configs to this service."
       keyFn={({ configID }) => configID}

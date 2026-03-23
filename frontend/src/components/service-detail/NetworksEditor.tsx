@@ -6,7 +6,7 @@ import SimpleTable from "@/components/SimpleTable";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { MultiCombobox } from "@/components/ui/multi-combobox";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 interface NetworksEditorProps {
@@ -29,27 +29,19 @@ export function NetworksEditor({
   const [newNetworkId, setNewNetworkId] = useState("");
   const [newAliases, setNewAliases] = useState<string[]>([]);
 
-  useEffect(() => {
-    let cancelled = false;
-
+  const fetchNetworks = useCallback(() => {
     api
       .networks({ limit: 0 })
       .then((response) => {
-        if (!cancelled) {
-          setAvailableNetworks(
-            response.items.map((network) => ({
-              value: network.Id,
-              label: network.Name,
-              description: network.Id.slice(0, 12),
-            })),
-          );
-        }
+        setAvailableNetworks(
+          response.items.map((network) => ({
+            value: network.Id,
+            label: network.Name,
+            description: network.Id.slice(0, 12),
+          })),
+        );
       })
       .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   /**
@@ -75,6 +67,7 @@ export function NetworksEditor({
       columns={["Network", "Aliases"]}
       defaultOpen={networks.length > 0}
       editDisabled={!canEdit}
+      onEditStart={fetchNetworks}
       emptyLabel="No networks attached"
       emptyHint="Click Edit to attach Docker networks to this service."
       keyFn={({ target }) => target}

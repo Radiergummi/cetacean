@@ -35,8 +35,10 @@ interface EditableTableProps<T> {
   onAddCommit: () => T | null;
   onAddReset: () => void;
 
-  // Save
+  // Lifecycle
   onSave: (items: T[]) => Promise<void>;
+  /** Called when the user opens edit mode. Use for lazy data fetching. */
+  onEditStart?: () => void;
 }
 
 export function EditableTable<T>({
@@ -60,6 +62,7 @@ export function EditableTable<T>({
   onAddCommit,
   onAddReset,
   onSave,
+  onEditStart,
 }: EditableTableProps<T>) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -74,6 +77,7 @@ export function EditableTable<T>({
     setAdding(items.length === 0);
     setSaveError(null);
     setEditing(true);
+    onEditStart?.();
   }
 
   function cancelEdit() {
