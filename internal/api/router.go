@@ -159,6 +159,8 @@ func NewRouter(
 		contentNegotiated(h.HandleGetServiceNetworks, spa),
 	)
 	mux.Handle("PATCH /services/{id}/networks", tier2(h.HandlePatchServiceNetworks))
+	mux.HandleFunc("GET /services/{id}/mounts", contentNegotiated(h.HandleGetServiceMounts, spa))
+	mux.Handle("PATCH /services/{id}/mounts", tier2(h.HandlePatchServiceMounts))
 
 	mux.HandleFunc(
 		"GET /services/{id}/container-config",
