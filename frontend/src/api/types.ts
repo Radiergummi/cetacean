@@ -72,12 +72,7 @@ export interface Service {
           SecretName: string;
           File?: { Name: string; UID: string; GID: string; Mode: number };
         }>;
-        Mounts?: Array<{
-          Type: string;
-          Source: string;
-          Target: string;
-          ReadOnly?: boolean;
-        }>;
+        Mounts?: ServiceMount[];
       };
       Resources?: {
         Limits?: { NanoCPUs?: number; MemoryBytes?: number; Pids?: number };
@@ -551,4 +546,29 @@ export interface ServiceSecretRef {
 export interface ServiceNetworkRef {
   target: string;
   aliases?: string[];
+}
+
+export interface ServiceMount {
+  Type: string;
+  Source: string;
+  Target: string;
+  ReadOnly?: boolean;
+  BindOptions?: {
+    Propagation?: string;
+    NonRecursive?: boolean;
+    CreateMountpoint?: boolean;
+  };
+  VolumeOptions?: {
+    NoCopy?: boolean;
+    Labels?: Record<string, string>;
+    Subpath?: string;
+  };
+  TmpfsOptions?: {
+    SizeBytes?: number;
+    Mode?: number;
+  };
+  ImageOptions?: {
+    Subpath?: string;
+  };
+  ClusterOptions?: Record<string, unknown>;
 }

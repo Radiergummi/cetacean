@@ -37,6 +37,7 @@ import type {
   ServiceConfigRef,
   ServiceSecretRef,
   ServiceNetworkRef,
+  ServiceMount,
 } from "./types";
 
 const headers = { Accept: "application/json" };
@@ -348,6 +349,10 @@ export const api = {
     fetchJSON<{ networks: ServiceNetworkRef[] }>(`/services/${id}/networks`, signal).then(
       (r) => r.networks,
     ),
+  serviceMounts: (id: string, signal?: AbortSignal) =>
+    fetchJSON<{ mounts: ServiceMount[] }>(`/services/${id}/mounts`, signal).then(
+      (r) => r.mounts ?? [],
+    ),
 
   // Tier 2: sub-resource PATCHes
   patchServiceEnv: (id: string, ops: PatchOp[]) =>
@@ -396,6 +401,12 @@ export const api = {
     patch<{ networks: ServiceNetworkRef[] }>(
       `/services/${id}/networks`,
       { networks },
+      "application/merge-patch+json",
+    ),
+  patchServiceMounts: (id: string, mounts: ServiceMount[]) =>
+    patch<{ mounts: ServiceMount[] }>(
+      `/services/${id}/mounts`,
+      { mounts },
       "application/merge-patch+json",
     ),
 
