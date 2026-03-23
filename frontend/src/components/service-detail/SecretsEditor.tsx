@@ -1,6 +1,7 @@
 import { api } from "@/api/client";
 import type { ServiceSecretRef } from "@/api/types";
 import { EditableTable } from "@/components/EditableTable";
+import ResourceName from "@/components/ResourceName";
 import SimpleTable from "@/components/SimpleTable";
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
@@ -83,7 +84,7 @@ export function SecretsEditor({ serviceId, secrets, onSaved }: SecretsEditorProp
                   to={`/secrets/${secretID}`}
                   className="text-link hover:underline"
                 >
-                  {secretName}
+                  <ResourceName name={secretName} />
                 </Link>
               </td>
               <td className="p-3 font-mono text-sm">{fileName}</td>
@@ -91,7 +92,11 @@ export function SecretsEditor({ serviceId, secrets, onSaved }: SecretsEditorProp
           )}
         />
       )}
-      renderKeyCell={({ secretName }) => <span className="font-mono text-xs">{secretName}</span>}
+      renderKeyCell={({ secretName }) => (
+        <span className="text-xs">
+          <ResourceName name={secretName} />
+        </span>
+      )}
       renderValueCell={(item, _index, update) => (
         <Input
           value={item.fileName}

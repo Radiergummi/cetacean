@@ -1,6 +1,7 @@
 import { api } from "@/api/client";
 import type { ServiceNetworkRef } from "@/api/types";
 import { EditableTable } from "@/components/EditableTable";
+import ResourceName from "@/components/ResourceName";
 import SimpleTable from "@/components/SimpleTable";
 import { Combobox } from "@/components/ui/combobox";
 import { MultiCombobox } from "@/components/ui/multi-combobox";
@@ -95,7 +96,7 @@ export function NetworksEditor({
                   to={`/networks/${target}`}
                   className="text-link hover:underline"
                 >
-                  {networkNames[target] || target}
+                  <ResourceName name={networkNames[target] || target} />
                 </Link>
               </td>
               <td className="p-3 font-mono text-sm">{aliases?.join(", ") || "\u2014"}</td>
@@ -104,7 +105,9 @@ export function NetworksEditor({
         />
       )}
       renderKeyCell={({ target }) => (
-        <span className="font-mono text-xs">{nameMap[target] || target}</span>
+        <span className="text-xs">
+          <ResourceName name={nameMap[target] || target} />
+        </span>
       )}
       renderValueCell={(item, _index, update) => (
         <MultiCombobox

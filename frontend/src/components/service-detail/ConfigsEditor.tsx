@@ -1,6 +1,7 @@
 import { api } from "@/api/client";
 import type { ServiceConfigRef } from "@/api/types";
 import { EditableTable } from "@/components/EditableTable";
+import ResourceName from "@/components/ResourceName";
 import SimpleTable from "@/components/SimpleTable";
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
@@ -83,7 +84,7 @@ export function ConfigsEditor({ serviceId, configs, onSaved }: ConfigsEditorProp
                   to={`/configs/${configID}`}
                   className="text-link hover:underline"
                 >
-                  {configName}
+                  <ResourceName name={configName} />
                 </Link>
               </td>
               <td className="p-3 font-mono text-sm">{fileName}</td>
@@ -91,7 +92,11 @@ export function ConfigsEditor({ serviceId, configs, onSaved }: ConfigsEditorProp
           )}
         />
       )}
-      renderKeyCell={({ configName }) => <span className="font-mono text-xs">{configName}</span>}
+      renderKeyCell={({ configName }) => (
+        <span className="text-xs">
+          <ResourceName name={configName} />
+        </span>
+      )}
       renderValueCell={(item, _index, update) => (
         <Input
           value={item.fileName}
