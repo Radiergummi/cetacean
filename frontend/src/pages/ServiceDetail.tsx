@@ -5,6 +5,7 @@ import type {
   HistoryEntry,
   PortConfig,
   Service,
+  ServiceMount,
   SpecChange,
   Task,
 } from "../api/types";
@@ -31,6 +32,7 @@ import {
   ExtraHostsEditor,
   HealthcheckEditor,
   LogDriverEditor,
+  MountsEditor,
   NetworksEditor,
   PlacementEditor,
   PolicyEditor,
@@ -42,7 +44,6 @@ import {
   ServiceActions,
   type ServiceResourceShape,
 } from "../components/service-detail";
-import SimpleTable from "../components/SimpleTable";
 import TasksTable from "../components/TasksTable";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
@@ -52,10 +53,9 @@ import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
 import { formatDuration, formatRelativeDate } from "../lib/format";
 import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
-import { handleCopyWithTemplates, renderSwarmTemplate } from "../lib/swarmTemplates";
 import { escapePromQL } from "../lib/utils";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 
 export default function ServiceDetail() {
   const { id } = useParams<{ id: string }>();
@@ -68,6 +68,7 @@ export default function ServiceDetail() {
   const [serviceLabels, setServiceLabels] = useState<Record<string, string> | null>(null);
   const [healthcheck, setHealthcheck] = useState<Healthcheck | null | undefined>(undefined);
   const [specPorts, setSpecPorts] = useState<PortConfig[] | null>(null);
+  const [serviceMounts, setServiceMounts] = useState<ServiceMount[] | null>(null);
   const [containerConfig, setContainerConfig] = useState<ContainerConfig | null>(null);
   const monitoring = useMonitoringStatus();
   const { level: operationsLevel, loading: levelLoading } = useOperationsLevel();
@@ -128,6 +129,10 @@ export default function ServiceDetail() {
     api
       .servicePorts(id, signal)
       .then(setSpecPorts)
+      .catch(() => {});
+    api
+      .serviceMounts(id, signal)
+      .then(setServiceMounts)
       .catch(() => {});
     api
       .serviceContainerConfig(id, signal)
@@ -445,39 +450,12 @@ export default function ServiceDetail() {
         />
       )}
 
-      {/* Mounts */}
-      {containerSpec.Mounts && containerSpec.Mounts.length > 0 && (
-        <CollapsibleSection title="Mounts">
-          {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-          <div onCopy={handleCopyWithTemplates}>
-            <SimpleTable
-              columns={["Type", "Source", "Target", "Read Only"]}
-              items={containerSpec.Mounts}
-              keyFn={(_, index) => index}
-              renderRow={({ ReadOnly, Source, Target, Type }) => (
-                <>
-                  <td className="p-3 text-sm">
-                    <MountTypeBadge type={Type} />
-                  </td>
-                  <td className="p-3 font-mono text-xs">
-                    {Type === "volume" && Source ? (
-                      <Link
-                        to={`/volumes/${Source}`}
-                        className="text-link hover:underline"
-                      >
-                        <ResourceName name={Source} />
-                      </Link>
-                    ) : (
-                      (Source && renderSwarmTemplate(Source)) || "\u2014"
-                    )}
-                  </td>
-                  <td className="p-3 font-mono text-xs">{renderSwarmTemplate(Target)}</td>
-                  <td className="p-3 text-sm">{ReadOnly ? "yes" : "no"}</td>
-                </>
-              )}
-            />
-          </div>
-        </CollapsibleSection>
+      {serviceMounts !== null && (
+        <MountsEditor
+          serviceId={id!}
+          mounts={serviceMounts}
+          onSaved={setServiceMounts}
+        />
       )}
 
       {/* Networks */}
@@ -677,17 +655,6 @@ function ServiceStatusCard({ service }: { service: Service }) {
         </div>
       }
     />
-  );
-}
-
-function MountTypeBadge({ type }: { type: string }) {
-  return (
-    <span
-      data-type={type}
-      className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground data-[type=bind]:bg-amber-100 data-[type=bind]:text-amber-800 data-[type=tmpfs]:bg-purple-100 data-[type=tmpfs]:text-purple-800 data-[type=volume]:bg-blue-100 data-[type=volume]:text-blue-800 dark:data-[type=bind]:bg-amber-900/30 dark:data-[type=bind]:text-amber-300 dark:data-[type=tmpfs]:bg-purple-900/30 dark:data-[type=tmpfs]:text-purple-300 dark:data-[type=volume]:bg-blue-900/30 dark:data-[type=volume]:text-blue-300"
-    >
-      {type}
-    </span>
   );
 }
 
