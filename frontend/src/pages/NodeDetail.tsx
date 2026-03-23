@@ -49,7 +49,50 @@ export default function NodeDetail() {
 
   const abortRef = useRef<AbortController | null>(null);
 
-  const fetchData = useCallback(() => {
+  const fetchNode = useCallback(
+    (signal: AbortSignal) => {
+      if (!id) {
+        return;
+      }
+
+      api
+        .node(id, signal)
+        .then((n) => {
+          setNode(n);
+          setNodeLabels(n.Spec.Labels ?? {});
+        })
+        .catch(() => {
+          if (!signal.aborted) {
+            setError(true);
+          }
+        });
+    },
+    [id],
+  );
+
+  const fetchSideData = useCallback(
+    (signal: AbortSignal) => {
+      if (!id) {
+        return;
+      }
+
+      api
+        .nodeTasks(id, signal)
+        .then(setTasks)
+        .catch(() => {});
+      api
+        .history({ resourceId: id, limit: 10 }, signal)
+        .then(setHistory)
+        .catch(() => {});
+      api
+        .nodeRole(id, signal)
+        .then(({ managerCount: count }) => setManagerCount(count))
+        .catch(() => {});
+    },
+    [id],
+  );
+
+  useEffect(() => {
     if (!id) {
       return;
     }
@@ -57,40 +100,33 @@ export default function NodeDetail() {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    const { signal } = controller;
 
-    api
-      .node(id, signal)
-      .then(setNode)
-      .catch(() => {
-        if (!signal.aborted) {
-          setError(true);
-        }
-      });
-    api
-      .nodeTasks(id, signal)
-      .then(setTasks)
-      .catch(() => {});
-    api
-      .history({ resourceId: id, limit: 10 }, signal)
-      .then(setHistory)
-      .catch(() => {});
-    api
-      .nodeLabels(id, signal)
-      .then(setNodeLabels)
-      .catch(() => {});
-    api
-      .nodeRole(id, signal)
-      .then(({ managerCount: count }) => setManagerCount(count))
-      .catch(() => {});
-  }, [id]);
+    fetchNode(controller.signal);
+    fetchSideData(controller.signal);
 
-  useEffect(() => {
-    fetchData();
-    return () => abortRef.current?.abort();
-  }, [fetchData]);
+    return () => controller.abort();
+  }, [id, fetchNode, fetchSideData]);
 
-  useResourceStream(`/nodes/${id}`, fetchData);
+  useResourceStream(`/nodes/${id}`, (event) => {
+    if (!id) {
+      return;
+    }
+
+    if (event.resource) {
+      const n = event.resource as Node;
+      setNode(n);
+      setNodeLabels(n.Spec.Labels ?? {});
+    }
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    fetchSideData(controller.signal);
+
+    if (!event.resource) {
+      fetchNode(controller.signal);
+    }
+  });
 
   const nodeId = node?.ID || "";
   const hostname = node?.Description?.Hostname || "";
