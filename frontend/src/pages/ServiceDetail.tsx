@@ -319,19 +319,6 @@ export default function ServiceDetail() {
         />
       </MetadataGrid>
 
-      {/* Last Deployment */}
-      {changes.length > 0 && (
-        <CollapsibleSection
-          title="Last Deployment"
-          defaultOpen={service.UpdateStatus?.State === "updating"}
-        >
-          <DeploymentChanges
-            changes={changes}
-            updateStatus={service.UpdateStatus}
-          />
-        </CollapsibleSection>
-      )}
-
       {/* Tasks */}
       <TasksTable
         tasks={tasks}
@@ -346,6 +333,30 @@ export default function ServiceDetail() {
             charts={metricsCharts}
           />
         </ErrorBoundary>
+      )}
+
+      {(changes.length > 0 || history.length > 0) && (
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          {changes.length > 0 && (
+            <CollapsibleSection
+              title="Last Deployment"
+              defaultOpen={service.UpdateStatus?.State === "updating"}
+            >
+              <DeploymentChanges
+                changes={changes}
+                updateStatus={service.UpdateStatus}
+              />
+            </CollapsibleSection>
+          )}
+          {history.length > 0 && (
+            <CollapsibleSection title="Recent Activity">
+              <ActivityFeed
+                entries={history}
+                hideType
+              />
+            </CollapsibleSection>
+          )}
+        </div>
       )}
 
       {/* Container configuration */}
@@ -607,15 +618,6 @@ export default function ServiceDetail() {
           </div>
         </div>
       </CollapsibleSection>
-
-      {history.length > 0 && (
-        <CollapsibleSection title="Recent Activity">
-          <ActivityFeed
-            entries={history}
-            hideType
-          />
-        </CollapsibleSection>
-      )}
 
       <ErrorBoundary inline>
         <LogViewer
