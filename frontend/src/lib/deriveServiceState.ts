@@ -1,13 +1,4 @@
-import type {
-  ContainerConfig,
-  Healthcheck,
-  PortConfig,
-  ServiceConfigRef,
-  ServiceMount,
-  ServiceNetworkRef,
-  ServiceSecretRef,
-  Service,
-} from "@/api/types";
+import type { ContainerConfig, Healthcheck, PortConfig, ServiceMount, Service } from "@/api/types";
 import type { ServiceResourceShape } from "@/components/service-detail";
 
 export interface DerivedServiceState {
@@ -18,9 +9,6 @@ export interface DerivedServiceState {
   specPorts: PortConfig[];
   serviceMounts: ServiceMount[];
   containerConfig: ContainerConfig;
-  serviceConfigs: ServiceConfigRef[];
-  serviceSecrets: ServiceSecretRef[];
-  serviceNetworks: ServiceNetworkRef[];
 }
 
 /**
@@ -41,9 +29,6 @@ export function deriveServiceSubResources(service: Service): DerivedServiceState
     specPorts: spec.EndpointSpec?.Ports ?? [],
     serviceMounts: containerSpec.Mounts ?? [],
     containerConfig: containerConfigFromSpec(containerSpec),
-    serviceConfigs: extractConfigRefs(containerSpec.Configs),
-    serviceSecrets: extractSecretRefs(containerSpec.Secrets),
-    serviceNetworks: extractNetworkRefs(taskTemplate.Networks),
   };
 }
 
@@ -93,45 +78,4 @@ function containerConfigFromSpec(
         }
       : undefined,
   };
-}
-
-function extractConfigRefs(
-  configs?: Array<{ ConfigID: string; ConfigName: string; File?: { Name: string } }>,
-): ServiceConfigRef[] {
-  if (!configs) {
-    return [];
-  }
-
-  return configs.map(({ ConfigID, ConfigName, File }) => ({
-    configID: ConfigID,
-    configName: ConfigName,
-    fileName: File?.Name ?? "",
-  }));
-}
-
-function extractSecretRefs(
-  secrets?: Array<{ SecretID: string; SecretName: string; File?: { Name: string } }>,
-): ServiceSecretRef[] {
-  if (!secrets) {
-    return [];
-  }
-
-  return secrets.map(({ SecretID, SecretName, File }) => ({
-    secretID: SecretID,
-    secretName: SecretName,
-    fileName: File?.Name ?? "",
-  }));
-}
-
-function extractNetworkRefs(
-  networks?: Array<{ Target: string; Aliases?: string[] }>,
-): ServiceNetworkRef[] {
-  if (!networks) {
-    return [];
-  }
-
-  return networks.map(({ Target, Aliases }) => ({
-    target: Target,
-    aliases: Aliases,
-  }));
 }

@@ -57,9 +57,9 @@ export default function NodeDetail() {
 
       api
         .node(id, signal)
-        .then((n) => {
-          setNode(n);
-          setNodeLabels(n.Spec.Labels ?? {});
+        .then((node) => {
+          setNode(node);
+          setNodeLabels(node.Spec.Labels ?? {});
         })
         .catch(() => {
           if (!signal.aborted) {
