@@ -73,9 +73,11 @@ export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck 
   const showGhost = hoverGroup === "ghost";
 
   return (
+    <div className="mt-1 overflow-x-auto">
     <svg
       viewBox={`0 0 ${viewWidth} ${viewHeight}`}
-      className="mt-1 w-full"
+      width={viewWidth}
+      height={viewHeight}
       role="img"
       aria-label={`Healthcheck timeline: ${
         startPeriod > 0 ? `${formatDuration(startPeriod)} start period, then ` : ""
@@ -491,5 +493,6 @@ export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck 
         {formatDuration(totalDuration)}
       </text>
     </svg>
+    </div>
   );
 }
