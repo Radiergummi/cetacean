@@ -6,7 +6,7 @@ import { HealthcheckTimeline } from "@/components/service-detail/HealthcheckTime
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
-import { SliderNumberField } from "@/components/ui/slider-number-field";
+import { NumberField } from "@/components/ui/number-field";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { formatDuration, nanosToSeconds } from "@/lib/format";
@@ -397,7 +397,7 @@ function EditMode({
           </div>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            <SliderNumberField
+            <NumberField
               label={
                 <span className="flex items-center gap-1">
                   Interval (s){" "}
@@ -410,7 +410,7 @@ function EditMode({
               min={0}
               step={0.1}
             />
-            <SliderNumberField
+            <NumberField
               label={
                 <span className="flex items-center gap-1">
                   Timeout (s){" "}
@@ -423,7 +423,7 @@ function EditMode({
               min={0}
               step={0.1}
             />
-            <SliderNumberField
+            <NumberField
               label={
                 <span className="flex items-center gap-1">
                   Start Period (s){" "}
@@ -436,7 +436,7 @@ function EditMode({
               min={0}
               step={0.1}
             />
-            <SliderNumberField
+            <NumberField
               label={
                 <span className="flex items-center gap-1">
                   Start Interval (s){" "}
@@ -449,7 +449,7 @@ function EditMode({
               min={0}
               step={0.1}
             />
-            <SliderNumberField
+            <NumberField
               label={
                 <span className="flex items-center gap-1">
                   Retries{" "}

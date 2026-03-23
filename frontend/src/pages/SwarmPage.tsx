@@ -6,7 +6,6 @@ import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
-import { EditablePanel } from "@/components/service-detail/EditablePanel";
 import { Spinner } from "../components/Spinner";
 import { SwarmActions } from "../components/swarm-detail/SwarmActions";
 import {
@@ -31,10 +30,11 @@ import {
   DialogTrigger,
 } from "../components/ui/dialog";
 import { DurationInput } from "../components/ui/duration-input";
-import { Input } from "../components/ui/input";
+import { NumberField } from "../components/ui/number-field";
 import { useAsyncAction } from "../hooks/useAsyncAction";
 import { opsLevel } from "../hooks/useOperationsLevel";
 import { formatDuration } from "../lib/format";
+import { EditablePanel } from "@/components/service-detail/EditablePanel";
 import { Check, Copy, KeyRound, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -230,37 +230,29 @@ export default function SwarmPage() {
           }
           edit={
             <div className="space-y-3">
-              <label className="block space-y-1">
-                <span className="text-xs text-muted-foreground">Snapshot Interval</span>
-                <Input
-                  type="number"
-                  min={0}
-                  value={draftSnapshotInterval}
-                  onChange={(event) => setDraftSnapshotInterval(Number(event.target.value) || 0)}
-                />
-              </label>
+              <NumberField
+                value={draftSnapshotInterval || undefined}
+                onChange={(next) => setDraftSnapshotInterval(next ?? 0)}
+                min={0}
+                step={1000}
+                label="Snapshot Interval"
+              />
 
-              <label className="block space-y-1">
-                <span className="text-xs text-muted-foreground">Keep Old Snapshots</span>
-                <Input
-                  type="number"
-                  min={0}
-                  value={draftKeepOldSnapshots}
-                  onChange={(event) => setDraftKeepOldSnapshots(Number(event.target.value) || 0)}
-                />
-              </label>
+              <NumberField
+                value={draftKeepOldSnapshots || undefined}
+                onChange={(next) => setDraftKeepOldSnapshots(next ?? 0)}
+                min={0}
+                step={1}
+                label="Keep Old Snapshots"
+              />
 
-              <label className="block space-y-1">
-                <span className="text-xs text-muted-foreground">
-                  Log Entries for Slow Followers
-                </span>
-                <Input
-                  type="number"
-                  min={0}
-                  value={draftLogEntries}
-                  onChange={(event) => setDraftLogEntries(Number(event.target.value) || 0)}
-                />
-              </label>
+              <NumberField
+                value={draftLogEntries || undefined}
+                onChange={(next) => setDraftLogEntries(next ?? 0)}
+                min={0}
+                step={100}
+                label="Log Entries for Slow Followers"
+              />
 
               <KVTable
                 rows={[
@@ -355,15 +347,13 @@ export default function SwarmPage() {
             />
           }
           edit={
-            <label className="block space-y-1">
-              <span className="text-xs text-muted-foreground">Task History Retention Limit</span>
-              <Input
-                type="number"
-                min={0}
-                value={draftTaskHistoryLimit}
-                onChange={(event) => setDraftTaskHistoryLimit(Number(event.target.value) || 0)}
-              />
-            </label>
+            <NumberField
+              value={draftTaskHistoryLimit || undefined}
+              onChange={(next) => setDraftTaskHistoryLimit(next ?? 0)}
+              min={0}
+              step={1}
+              label="Task History Retention Limit"
+            />
           }
           onOpen={() => {
             setDraftTaskHistoryLimit(spec.Orchestration.TaskHistoryRetentionLimit ?? 0);

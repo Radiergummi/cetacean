@@ -4,8 +4,8 @@ import InfoCard from "@/components/InfoCard";
 import { DockerDocsLink } from "@/components/service-detail/DockerDocsLink";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
+import { NumberField } from "@/components/ui/number-field";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { SliderNumberField } from "@/components/ui/slider-number-field";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
@@ -241,7 +241,7 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
         )}
 
         {mode === "replicated" && (
-          <SliderNumberField
+          <NumberField
             label={
               <span className="flex items-center gap-1">
                 Replicas{" "}

@@ -4,7 +4,7 @@ import { DockerDocsLink } from "@/components/service-detail/DockerDocsLink";
 import { EditablePanel } from "@/components/service-detail/EditablePanel";
 import { PlacementPanel } from "@/components/service-detail/PlacementPanel";
 import { Button } from "@/components/ui/button";
-import { SliderNumberField } from "@/components/ui/slider-number-field";
+import { NumberField } from "@/components/ui/number-field";
 import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
@@ -70,7 +70,7 @@ export function PlacementEditor({ serviceId, placement, onSaved }: PlacementEdit
       edit={
         <>
           <div className="w-48">
-            <SliderNumberField
+            <NumberField
               label={
                 <span className="flex items-center gap-1">
                   Max replicas per node{" "}

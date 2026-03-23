@@ -2,8 +2,8 @@ import { DockerDocsLink } from "./DockerDocsLink";
 import { EditablePanel } from "./EditablePanel";
 import { api } from "@/api/client";
 import type { UpdateConfig } from "@/api/types";
+import { NumberField } from "@/components/ui/number-field";
 import { RadioCard } from "@/components/ui/radio-card";
-import { SliderNumberField } from "@/components/ui/slider-number-field";
 import { formatDuration, formatPercentage, nanosToSeconds } from "@/lib/format";
 import { useState } from "react";
 
@@ -138,7 +138,7 @@ export function PolicyEditor({ type, serviceId, policy, onSaved }: PolicyEditorP
       edit={
         <>
           <div className="grid grid-cols-2 gap-3">
-            <SliderNumberField
+            <NumberField
               label={
                 <span className="flex items-center gap-1">
                   Parallelism{" "}
@@ -151,7 +151,7 @@ export function PolicyEditor({ type, serviceId, policy, onSaved }: PolicyEditorP
               step={1}
             />
 
-            <SliderNumberField
+            <NumberField
               label={
                 <span className="flex items-center gap-1">
                   Delay (s){" "}
@@ -164,7 +164,7 @@ export function PolicyEditor({ type, serviceId, policy, onSaved }: PolicyEditorP
               step={0.1}
             />
 
-            <SliderNumberField
+            <NumberField
               label={
                 <span className="flex items-center gap-1">
                   Monitor (s){" "}
@@ -177,7 +177,7 @@ export function PolicyEditor({ type, serviceId, policy, onSaved }: PolicyEditorP
               step={0.1}
             />
 
-            <SliderNumberField
+            <NumberField
               label={
                 <span className="flex items-center gap-1">
                   Max failure ratio{" "}

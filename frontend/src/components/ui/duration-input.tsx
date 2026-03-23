@@ -1,4 +1,4 @@
-import { Input } from "@/components/ui/input";
+import { NumberField } from "@/components/ui/number-field";
 import { useEffect, useState } from "react";
 
 const units = [
@@ -33,18 +33,18 @@ export function DurationInput({ value, onChange, disabled }: DurationInputProps)
   }, [value]);
 
   return (
-    <div className="flex gap-2">
-      <Input
-        type="number"
-        min={0}
-        value={displayValue}
-        onChange={(event) => {
-          const number = Number(event.target.value) || 0;
-          onChange(number * unit.factor);
-        }}
-        disabled={disabled}
-        className="flex-1"
-      />
+    <div className="flex items-end gap-2">
+      <div className="flex-1">
+        <NumberField
+          value={displayValue || undefined}
+          onChange={(next) => {
+            onChange((next ?? 0) * unit.factor);
+          }}
+          min={0}
+          step={1}
+          label=""
+        />
+      </div>
       <select
         value={unit.label}
         onChange={(event) => {

@@ -2,12 +2,12 @@ import { Button } from "@/components/ui/button";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { NumberField } from "@base-ui/react/number-field";
+import { NumberField as NumberFieldPrimitive } from "@base-ui/react/number-field";
 import { Minus, Plus, X } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 
-interface SliderNumberFieldProps {
+interface NumberFieldProps {
   value: number | undefined;
   onChange: (value: number | undefined) => void;
   min?: number;
@@ -18,7 +18,7 @@ interface SliderNumberFieldProps {
   clearable?: boolean;
 }
 
-export function SliderNumberField({
+export function NumberField({
   value,
   onChange,
   min = 0,
@@ -27,7 +27,7 @@ export function SliderNumberField({
   label,
   tooltip,
   clearable,
-}: SliderNumberFieldProps) {
+}: NumberFieldProps) {
   // Track the slider value separately so that clearing the number input
   // (which sends undefined) doesn't snap the slider back to min.
   const [sliderValue, setSliderValue] = useState(value ?? min);
@@ -84,7 +84,7 @@ export function SliderNumberField({
         )}
       </div>
       <div className="flex min-w-0 items-center gap-3">
-        <NumberField.Root
+        <NumberFieldPrimitive.Root
           value={value ?? null}
           onValueChange={handleNumberChange}
           allowWheelScrub
@@ -93,22 +93,22 @@ export function SliderNumberField({
           step={step}
           className="min-w-0 flex-1"
         >
-          <NumberField.Group className="flex w-full items-center overflow-hidden rounded-md border focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
-            <NumberField.Decrement
+          <NumberFieldPrimitive.Group className="flex w-full items-center overflow-hidden rounded-md border focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
+            <NumberFieldPrimitive.Decrement
               className="flex size-8 shrink-0 items-center justify-center border-r text-muted-foreground hover:bg-accent disabled:opacity-50"
               onClick={value == null ? () => onChange(min) : undefined}
             >
               <Minus className="size-3" />
-            </NumberField.Decrement>
-            <NumberField.Input className="min-w-0 flex-1 bg-transparent px-2 py-1 text-center font-mono text-sm focus:outline-none" />
-            <NumberField.Increment
+            </NumberFieldPrimitive.Decrement>
+            <NumberFieldPrimitive.Input className="min-w-0 flex-1 bg-transparent px-2 py-1 text-center font-mono text-sm focus:outline-none" />
+            <NumberFieldPrimitive.Increment
               className="flex size-8 shrink-0 items-center justify-center border-l text-muted-foreground hover:bg-accent disabled:opacity-50"
               onClick={value == null ? () => onChange(min + (step ?? 1)) : undefined}
             >
               <Plus className="size-3" />
-            </NumberField.Increment>
-          </NumberField.Group>
-        </NumberField.Root>
+            </NumberFieldPrimitive.Increment>
+          </NumberFieldPrimitive.Group>
+        </NumberFieldPrimitive.Root>
         {max !== undefined && (
           <Slider
             value={sliderValue}
