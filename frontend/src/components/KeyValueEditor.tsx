@@ -69,6 +69,7 @@ export function KeyValueEditor({
           onCopy={onCopyValue}
         />
       )}
+      canRemove={isKeyReadOnly ? ([key]) => !isKeyReadOnly(key) : undefined}
       renderKeyCell={([key]) => (
         <span className="font-mono text-xs">
           {key}

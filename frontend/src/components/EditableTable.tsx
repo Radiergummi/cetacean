@@ -1,12 +1,11 @@
-import type { ReactNode } from "react";
-import { useState } from "react";
-
 import CollapsibleSection from "@/components/CollapsibleSection";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil, Trash2 } from "lucide-react";
+import type { ReactNode } from "react";
+import { useState } from "react";
 
 interface EditableTableProps<T> {
   title: string;
@@ -25,6 +24,8 @@ interface EditableTableProps<T> {
   keyFn: (item: T, index: number) => string | number;
   renderKeyCell: (item: T, index: number) => ReactNode;
   renderValueCell: (item: T, index: number, update: (next: T) => void) => ReactNode;
+  /** Return false to hide the remove button for a specific row. Defaults to true. */
+  canRemove?: (item: T, index: number) => boolean;
 
   // Edit mode — add row
   renderAddKeyCell: (draft: T[]) => ReactNode;
@@ -51,6 +52,7 @@ export function EditableTable<T>({
   keyFn,
   renderKeyCell,
   renderValueCell,
+  canRemove,
   renderAddKeyCell,
   renderAddValueCell,
   renderAddError,
@@ -173,36 +175,34 @@ export function EditableTable<T>({
                     key={keyFn(item, index)}
                     className="border-b bg-transparent! last:border-b-0"
                   >
-                    <td className="py-3 ps-3">
-                      {renderKeyCell(item, index)}
-                    </td>
+                    <td className="py-3 ps-3">{renderKeyCell(item, index)}</td>
                     <td className="py-3 ps-3">
                       {renderValueCell(item, index, (next) =>
-                        setDraft((previous) => previous.map((existing, i) => (i === index ? next : existing)))
+                        setDraft((previous) =>
+                          previous.map((existing, i) => (i === index ? next : existing)),
+                        ),
                       )}
                     </td>
                     <td className="py-3 ps-3">
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => removeRow(index)}
-                        title="Remove"
-                        className="text-muted-foreground hover:text-red-600"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
+                      {(canRemove?.(item, index) ?? true) && (
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => removeRow(index)}
+                          title="Remove"
+                          className="text-muted-foreground hover:text-red-600"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))}
                 {adding && (
                   <>
                     <tr className="bg-transparent!">
-                      <td className="py-3 ps-3">
-                        {renderAddKeyCell(draft)}
-                      </td>
-                      <td className="py-3 ps-3">
-                        {renderAddValueCell(draft)}
-                      </td>
+                      <td className="py-3 ps-3">{renderAddKeyCell(draft)}</td>
+                      <td className="py-3 ps-3">{renderAddValueCell(draft)}</td>
                       <td />
                     </tr>
                     {addError && (
