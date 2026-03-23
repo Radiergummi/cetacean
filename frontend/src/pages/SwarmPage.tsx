@@ -109,18 +109,20 @@ export default function SwarmPage() {
   const [plugins, setPlugins] = useState<Plugin[]>([]);
   const [error, setError] = useState(false);
 
-  const fetchData = useCallback(() => {
+  const fetchSwarmInfo = useCallback(() => {
     api
       .swarm()
       .then(setData)
       .catch(() => setError(true));
+  }, []);
+
+  useEffect(() => {
+    fetchSwarmInfo();
     api
       .plugins()
       .then(setPlugins)
       .catch(() => {});
-  }, []);
-
-  useEffect(fetchData, [fetchData]);
+  }, [fetchSwarmInfo]);
 
   // Orchestration draft
   const [draftTaskHistoryLimit, setDraftTaskHistoryLimit] = useState(0);
@@ -162,7 +164,7 @@ export default function SwarmPage() {
         title="Swarm"
         actions={
           <>
-            <SwarmActions onRotated={fetchData} />
+            <SwarmActions onRotated={fetchSwarmInfo} />
             <JoinTokenDialog
               label="Manager"
               token={swarm.JoinTokens.Manager}
@@ -279,7 +281,7 @@ export default function SwarmPage() {
               LogEntriesForSlowFollowers: draftLogEntries,
               KeepOldSnapshots: draftKeepOldSnapshots,
             });
-            fetchData();
+            fetchSwarmInfo();
           }}
         />
 
@@ -332,7 +334,7 @@ export default function SwarmPage() {
           }}
           onSave={async () => {
             await api.patchSwarmCAConfig({ NodeCertExpiry: draftCertExpiry });
-            fetchData();
+            fetchSwarmInfo();
           }}
         />
 
@@ -370,7 +372,7 @@ export default function SwarmPage() {
             await api.patchSwarmOrchestration({
               TaskHistoryRetentionLimit: draftTaskHistoryLimit,
             });
-            fetchData();
+            fetchSwarmInfo();
           }}
         />
 
@@ -402,7 +404,7 @@ export default function SwarmPage() {
           }}
           onSave={async () => {
             await api.patchSwarmDispatcher({ HeartbeatPeriod: draftHeartbeatPeriod });
-            fetchData();
+            fetchSwarmInfo();
           }}
         />
 
@@ -434,7 +436,7 @@ export default function SwarmPage() {
             }}
             onSave={async () => {
               await api.patchSwarmEncryption({ AutoLockManagers: draftAutoLock });
-              fetchData();
+              fetchSwarmInfo();
             }}
           />
 
@@ -497,7 +499,7 @@ export default function SwarmPage() {
                           await api.rotateUnlockKey();
                           setShowUnlockKey(false);
                           setUnlockKeyValue(null);
-                          fetchData();
+                          fetchSwarmInfo();
                         }, "Failed to rotate unlock key")
                       }
                     >

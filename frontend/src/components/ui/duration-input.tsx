@@ -1,5 +1,5 @@
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const units = [
   { label: "seconds", factor: 1_000_000_000 },
@@ -25,9 +25,12 @@ function bestUnit(nanoseconds: number): (typeof units)[number] {
 }
 
 export function DurationInput({ value, onChange, disabled }: DurationInputProps) {
-  const initial = bestUnit(value);
-  const [unit, setUnit] = useState(initial);
+  const [unit, setUnit] = useState(() => bestUnit(value));
   const displayValue = value === 0 ? 0 : value / unit.factor;
+
+  useEffect(() => {
+    setUnit(bestUnit(value));
+  }, [value]);
 
   return (
     <div className="flex gap-2">
