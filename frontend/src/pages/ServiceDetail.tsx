@@ -51,6 +51,7 @@ import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
+import { deriveServiceSubResources } from "../lib/deriveServiceState";
 import { formatDuration, formatRelativeDate } from "../lib/format";
 import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
 import { escapePromQL } from "../lib/utils";
@@ -81,64 +82,63 @@ export default function ServiceDetail() {
 
   const abortRef = useRef<AbortController | null>(null);
 
-  const fetchData = useCallback(() => {
-    if (!id) {
-      return;
-    }
+  function applyDerivedState(svc: Service) {
+    const derived = deriveServiceSubResources(svc);
+    setEnvVars(derived.envVars);
+    setServiceResources(derived.serviceResources);
+    setServiceLabels(derived.serviceLabels);
+    setHealthcheck(derived.healthcheck);
+    setSpecPorts(derived.specPorts);
+    setServiceMounts(derived.serviceMounts);
+    setContainerConfig(derived.containerConfig);
+  }
 
+  const fetchService = useCallback(
+    (signal: AbortSignal) => {
+      if (!id) {
+        return;
+      }
+
+      api
+        .service(id, signal)
+        .then((response) => {
+          setService(response.service);
+          setChanges(response.changes ?? []);
+          applyDerivedState(response.service);
+        })
+        .catch(() => {
+          if (!signal.aborted) {
+            setError(true);
+          }
+        });
+    },
+    [id],
+  );
+
+  const fetchSideData = useCallback(
+    (signal: AbortSignal) => {
+      if (!id) {
+        return;
+      }
+
+      api
+        .serviceTasks(id, signal)
+        .then(setTasks)
+        .catch(() => {});
+      api
+        .history({ resourceId: id, limit: 10 }, signal)
+        .then(setHistory)
+        .catch(() => {});
+    },
+    [id],
+  );
+
+  const refetchService = useCallback(() => {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    const { signal } = controller;
-
-    api
-      .service(id, signal)
-      .then((response) => {
-        setService(response.service);
-        setChanges(response.changes ?? []);
-      })
-      .catch(() => {
-        if (!signal.aborted) {
-          setError(true);
-        }
-      });
-    api
-      .serviceTasks(id, signal)
-      .then(setTasks)
-      .catch(() => {});
-    api
-      .history({ resourceId: id, limit: 10 }, signal)
-      .then(setHistory)
-      .catch(() => {});
-    api
-      .serviceEnv(id, signal)
-      .then(setEnvVars)
-      .catch(() => {});
-    api
-      .serviceResources(id, signal)
-      .then(setServiceResources)
-      .catch(() => {});
-    api
-      .serviceLabels(id, signal)
-      .then(setServiceLabels)
-      .catch(() => {});
-    api
-      .serviceHealthcheck(id, signal)
-      .then(setHealthcheck)
-      .catch(() => {});
-    api
-      .servicePorts(id, signal)
-      .then(setSpecPorts)
-      .catch(() => {});
-    api
-      .serviceMounts(id, signal)
-      .then(setServiceMounts)
-      .catch(() => {});
-    api
-      .serviceContainerConfig(id, signal)
-      .then(setContainerConfig)
-      .catch(() => {});
-  }, [id]);
+    fetchService(controller.signal);
+  }, [fetchService]);
 
   useEffect(() => {
     api
@@ -155,11 +155,43 @@ export default function ServiceDetail() {
   }, []);
 
   useEffect(() => {
-    fetchData();
-    return () => abortRef.current?.abort();
-  }, [fetchData]);
+    if (!id) {
+      return;
+    }
 
-  useResourceStream(`/services/${id}`, fetchData);
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    fetchService(controller.signal);
+    fetchSideData(controller.signal);
+
+    return () => controller.abort();
+  }, [id, fetchService, fetchSideData]);
+
+  useResourceStream(`/services/${id}`, (event) => {
+    if (!id) {
+      return;
+    }
+
+    // Use SSE payload for optimistic service update
+    if (event.resource) {
+      const svc = event.resource as Service;
+      setService(svc);
+      applyDerivedState(svc);
+    }
+
+    // Always refetch tasks and history — not in the service object
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    fetchSideData(controller.signal);
+
+    // On sync events (no resource), also refetch service for fresh changes/diff
+    if (!event.resource) {
+      fetchService(controller.signal);
+    }
+  });
 
   const serviceName = service?.Spec.Name || "";
   const taskMetrics = useTaskMetrics(
@@ -466,7 +498,7 @@ export default function ServiceDetail() {
           aliases: Aliases,
         }))}
         networkNames={networkNames}
-        onSaved={() => fetchData()}
+        onSaved={refetchService}
       />
 
       {/* Configs */}
@@ -477,7 +509,7 @@ export default function ServiceDetail() {
           configName: cfg.ConfigName,
           fileName: cfg.File?.Name ?? "",
         }))}
-        onSaved={() => fetchData()}
+        onSaved={refetchService}
       />
 
       {/* Secrets */}
@@ -488,7 +520,7 @@ export default function ServiceDetail() {
           secretName: sec.SecretName,
           fileName: sec.File?.Name ?? "",
         }))}
-        onSaved={() => fetchData()}
+        onSaved={refetchService}
       />
 
       {/* Deploy: Resources, Placement, Restart, Update, Rollback */}
@@ -531,7 +563,7 @@ export default function ServiceDetail() {
                 <PlacementEditor
                   serviceId={id!}
                   placement={taskTemplate.Placement ?? null}
-                  onSaved={fetchData}
+                  onSaved={refetchService}
                 />
               </div>
             )}
@@ -569,7 +601,7 @@ export default function ServiceDetail() {
             <LogDriverEditor
               serviceId={id!}
               logDriver={taskTemplate.LogDriver ?? null}
-              onSaved={fetchData}
+              onSaved={refetchService}
             />
 
             {(service.Spec.UpdateConfig || canEditConfig) && (
@@ -578,7 +610,7 @@ export default function ServiceDetail() {
                   type="update"
                   serviceId={id!}
                   policy={service.Spec.UpdateConfig ?? null}
-                  onSaved={fetchData}
+                  onSaved={refetchService}
                 />
               </div>
             )}
@@ -589,7 +621,7 @@ export default function ServiceDetail() {
                   type="rollback"
                   serviceId={id!}
                   policy={service.Spec.RollbackConfig ?? null}
-                  onSaved={fetchData}
+                  onSaved={refetchService}
                 />
               </div>
             )}
