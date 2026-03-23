@@ -180,8 +180,20 @@ export function SecretsEditor({ serviceId, secrets, onSaved }: SecretsEditorProp
                     key={secretID}
                     className="border-b bg-transparent! last:border-b-0"
                   >
-                    <td className="py-3 ps-3 text-sm">{secretName}</td>
-                    <td className="py-3 ps-3 font-mono text-sm">{fileName}</td>
+                    <td className="py-3 ps-3 font-mono text-xs">{secretName}</td>
+                    <td className="py-3 ps-3">
+                      <Input
+                        value={fileName}
+                        onChange={(event) =>
+                          setDraft((previous) =>
+                            previous.map((item, i) =>
+                              i === index ? { ...item, fileName: event.target.value } : item,
+                            ),
+                          )
+                        }
+                        className="font-mono text-xs"
+                      />
+                    </td>
                     <td className="py-3 ps-3">
                       <Button
                         variant="ghost"

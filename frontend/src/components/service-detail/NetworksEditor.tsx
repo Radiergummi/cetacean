@@ -198,9 +198,22 @@ export function NetworksEditor({
                     key={target}
                     className="border-b bg-transparent! last:border-b-0"
                   >
-                    <td className="py-3 ps-3 text-sm">{nameMap[target] || target}</td>
-                    <td className="py-3 ps-3 font-mono text-sm">
-                      {aliases?.join(", ") || "\u2014"}
+                    <td className="py-3 ps-3 font-mono text-xs">{nameMap[target] || target}</td>
+                    <td className="py-3 ps-3">
+                      <MultiCombobox
+                        values={aliases ?? []}
+                        onChange={(values) =>
+                          setDraft((previous) =>
+                            previous.map((item, i) =>
+                              i === index
+                                ? { ...item, aliases: values.length > 0 ? values : undefined }
+                                : item,
+                            ),
+                          )
+                        }
+                        options={[]}
+                        placeholder="Type alias and press Enter..."
+                      />
                     </td>
                     <td className="py-3 ps-3">
                       <Button
