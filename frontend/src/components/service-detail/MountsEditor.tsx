@@ -28,6 +28,9 @@ const mountTypes = ["bind", "volume", "tmpfs", "npipe", "cluster", "image"] as c
 
 const propagationOptions = ["private", "rprivate", "shared", "rshared", "slave", "rslave"] as const;
 
+const selectClassName =
+  "flex h-8 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+
 function sourceLabel(type: string): string {
   switch (type) {
     case "bind":
@@ -106,9 +109,6 @@ export function MountsEditor({ serviceId, mounts, onSaved }: MountsEditorProps) 
       setSaving(false);
     }
   }
-
-  const selectClassName =
-    "flex h-8 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
   const controls =
     !editing && canEdit ? (
