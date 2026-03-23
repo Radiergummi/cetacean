@@ -113,14 +113,14 @@ export default function NodeDetail() {
     }
 
     if (event.resource) {
-      const n = event.resource as Node;
-      setNode(n);
-      setNodeLabels(n.Spec.Labels ?? {});
+      const updatedNode = event.resource as Node;
+      setNode(updatedNode);
+      setNodeLabels(updatedNode.Spec.Labels ?? {});
     }
 
-    abortRef.current?.abort();
+    // Refetch tasks, history, and role — not in the node object.
+    // Don't abort previous fetches: let them complete during rapid event bursts.
     const controller = new AbortController();
-    abortRef.current = controller;
     fetchSideData(controller.signal);
 
     if (!event.resource) {

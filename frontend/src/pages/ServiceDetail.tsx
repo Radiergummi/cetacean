@@ -181,10 +181,10 @@ export default function ServiceDetail() {
       applyDerivedState(svc);
     }
 
-    // Always refetch tasks and history — not in the service object
-    abortRef.current?.abort();
+    // Refetch tasks and history — not in the service object.
+    // Don't abort previous fetches: let them complete so the UI stays
+    // current during rapid event bursts (e.g. rolling updates).
     const controller = new AbortController();
-    abortRef.current = controller;
     fetchSideData(controller.signal);
 
     // On sync events (no resource), also refetch service for fresh changes/diff
