@@ -51,6 +51,8 @@ type DockerSystemClient interface {
 	DiskUsage(ctx context.Context) (types.DiskUsage, error)
 	PluginList(ctx context.Context) (types.PluginsListResponse, error)
 	LocalNodeID(ctx context.Context) (string, error)
+	UpdateSwarm(ctx context.Context, spec swarm.Spec, version swarm.Version, flags swarm.UpdateFlags) error
+	GetUnlockKey(ctx context.Context) (string, error)
 }
 
 type DockerWriteClient interface {
