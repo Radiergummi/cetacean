@@ -26,6 +26,8 @@ interface EditablePanelProps {
   emptyDescription?: string;
   /** Whether to wrap in a bordered div (default true) */
   bordered?: boolean;
+  /** Minimum operations level required to edit (default: opsLevel.configuration) */
+  requiredLevel?: number;
 }
 
 export function EditablePanel({
@@ -38,9 +40,10 @@ export function EditablePanel({
   empty,
   emptyDescription,
   bordered = true,
+  requiredLevel,
 }: EditablePanelProps) {
   const { level, loading: levelLoading } = useOperationsLevel();
-  const canEdit = !levelLoading && level >= opsLevel.configuration;
+  const canEdit = !levelLoading && level >= (requiredLevel ?? opsLevel.configuration);
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
