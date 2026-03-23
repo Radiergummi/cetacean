@@ -5,6 +5,28 @@ All notable changes to Cetacean will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Node role change (promote/demote) with radio card selector and quorum impact warnings
+- Node removal with type-to-confirm hostname dialog (only available for down nodes)
+- Stack removal with type-to-confirm dialog (removes all services, configs, secrets, and networks)
+- Service mounts editor with card-based UI supporting all Docker mount types (bind, volume, tmpfs, npipe, cluster, image)
+- Service config, secret, and network attachment editors (add/remove references with searchable dropdowns)
+- Container configuration editors: command, runtime options, capabilities, extra hosts, DNS settings
+- Docker documentation help links on all service editor fields
+- Deployment diff and recent activity shown side by side on wide screens
+
+### Improved
+- Detail pages use SSE event payloads for instant sub-resource updates instead of refetching (10 → 2 HTTP requests per event on service pages)
+- Healthcheck timeline is keyboard-accessible and scrollable on small screens
+- Combobox dropdowns show resource IDs as subtitles for disambiguation
+- Editor sections show configured values only, with empty states and edit hints
+
+### Fixed
+- Config and secret editors auto-filling incorrect target paths for stack-namespaced resources
+- Escape key in combobox dropdowns closing the parent editor instead of just the dropdown
+
 ## [0.7.0] - 2026-03-21
 
 ### Added
