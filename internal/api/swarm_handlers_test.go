@@ -540,7 +540,11 @@ func TestHandlePostRotateToken_InvalidTarget(t *testing.T) {
 
 func TestHandlePostRotateToken_NilClient(t *testing.T) {
 	h := newSwarmHandlers(nil)
-	req := httptest.NewRequest(http.MethodPost, "/swarm/rotate-token", strings.NewReader(`{"target":"worker"}`))
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/swarm/rotate-token",
+		strings.NewReader(`{"target":"worker"}`),
+	)
 	rec := httptest.NewRecorder()
 
 	h.HandlePostRotateToken(rec, req)

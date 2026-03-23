@@ -2123,7 +2123,12 @@ func (h *Handlers) HandlePatchSwarmOrchestration(w http.ResponseWriter, r *http.
 
 	slog.Info("updating swarm orchestration config")
 
-	if err := h.systemClient.UpdateSwarm(ctx, spec, current.Version, swarm.UpdateFlags{}); err != nil {
+	if err := h.systemClient.UpdateSwarm(
+		ctx,
+		spec,
+		current.Version,
+		swarm.UpdateFlags{},
+	); err != nil {
 		writeProblem(w, r, http.StatusInternalServerError, "failed to update swarm: "+err.Error())
 		return
 	}
@@ -2174,7 +2179,12 @@ func (h *Handlers) HandlePatchSwarmRaft(w http.ResponseWriter, r *http.Request) 
 
 	slog.Info("updating swarm raft config")
 
-	if err := h.systemClient.UpdateSwarm(ctx, spec, current.Version, swarm.UpdateFlags{}); err != nil {
+	if err := h.systemClient.UpdateSwarm(
+		ctx,
+		spec,
+		current.Version,
+		swarm.UpdateFlags{},
+	); err != nil {
 		writeProblem(w, r, http.StatusInternalServerError, "failed to update swarm: "+err.Error())
 		return
 	}
@@ -2219,7 +2229,12 @@ func (h *Handlers) HandlePatchSwarmDispatcher(w http.ResponseWriter, r *http.Req
 
 	slog.Info("updating swarm dispatcher config")
 
-	if err := h.systemClient.UpdateSwarm(ctx, spec, current.Version, swarm.UpdateFlags{}); err != nil {
+	if err := h.systemClient.UpdateSwarm(
+		ctx,
+		spec,
+		current.Version,
+		swarm.UpdateFlags{},
+	); err != nil {
 		writeProblem(w, r, http.StatusInternalServerError, "failed to update swarm: "+err.Error())
 		return
 	}
@@ -2264,7 +2279,12 @@ func (h *Handlers) HandlePatchSwarmCAConfig(w http.ResponseWriter, r *http.Reque
 
 	slog.Info("updating swarm CA config")
 
-	if err := h.systemClient.UpdateSwarm(ctx, spec, current.Version, swarm.UpdateFlags{}); err != nil {
+	if err := h.systemClient.UpdateSwarm(
+		ctx,
+		spec,
+		current.Version,
+		swarm.UpdateFlags{},
+	); err != nil {
 		writeProblem(w, r, http.StatusInternalServerError, "failed to update swarm: "+err.Error())
 		return
 	}
@@ -2311,7 +2331,12 @@ func (h *Handlers) HandlePatchSwarmEncryption(w http.ResponseWriter, r *http.Req
 
 	slog.Info("updating swarm encryption config")
 
-	if err := h.systemClient.UpdateSwarm(ctx, spec, current.Version, swarm.UpdateFlags{}); err != nil {
+	if err := h.systemClient.UpdateSwarm(
+		ctx,
+		spec,
+		current.Version,
+		swarm.UpdateFlags{},
+	); err != nil {
 		writeProblem(w, r, http.StatusInternalServerError, "failed to update swarm: "+err.Error())
 		return
 	}
@@ -2384,7 +2409,12 @@ func (h *Handlers) HandlePostRotateUnlockKey(w http.ResponseWriter, r *http.Requ
 
 	flags := swarm.UpdateFlags{RotateManagerUnlockKey: true}
 	if err := h.systemClient.UpdateSwarm(ctx, current.Spec, current.Version, flags); err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to rotate unlock key: "+err.Error())
+		writeProblem(
+			w,
+			r,
+			http.StatusInternalServerError,
+			"failed to rotate unlock key: "+err.Error(),
+		)
 		return
 	}
 
