@@ -6,7 +6,7 @@ import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
-import { EditablePanel } from "../components/service-detail/EditablePanel";
+import { EditablePanel } from "@/components/service-detail/EditablePanel";
 import { Spinner } from "../components/Spinner";
 import { SwarmActions } from "../components/swarm-detail/SwarmActions";
 import {
