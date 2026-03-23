@@ -9,7 +9,7 @@ import { MultiCombobox } from "@/components/ui/multi-combobox";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { getErrorMessage } from "@/lib/utils";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -40,6 +40,7 @@ export function NetworksEditor({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [draft, setDraft] = useState<ServiceNetworkRef[]>([]);
   const [availableNetworks, setAvailableNetworks] = useState<NetworkOption[]>([]);
+  const [adding, setAdding] = useState(false);
 
   const [newNetworkId, setNewNetworkId] = useState("");
   const [newAliases, setNewAliases] = useState<string[]>([]);
@@ -72,6 +73,7 @@ export function NetworksEditor({
     setSaveError(null);
     setNewNetworkId("");
     setNewAliases([]);
+    setAdding(networks.length === 0);
     setEditing(true);
   }
 
@@ -111,13 +113,13 @@ export function NetworksEditor({
     setDraft(draft.filter((_, i) => i !== index));
   }
 
-  function addNetwork() {
+  function addRow() {
     if (!newNetworkId) {
       return;
     }
 
-    setDraft([
-      ...draft,
+    setDraft((previous) => [
+      ...previous,
       {
         target: newNetworkId,
         aliases: newAliases.length > 0 ? [...newAliases] : undefined,
@@ -125,14 +127,25 @@ export function NetworksEditor({
     ]);
     setNewNetworkId("");
     setNewAliases([]);
+    setAdding(false);
   }
 
   async function save() {
+    const effectiveDraft = newNetworkId
+      ? [
+          ...draft,
+          {
+            target: newNetworkId,
+            aliases: newAliases.length > 0 ? [...newAliases] : undefined,
+          },
+        ]
+      : draft;
+
     setSaving(true);
     setSaveError(null);
 
     try {
-      const result = await api.patchServiceNetworks(serviceId, draft);
+      const result = await api.patchServiceNetworks(serviceId, effectiveDraft);
       setEditing(false);
       onSaved(result.networks);
     } catch (error) {
@@ -169,88 +182,98 @@ export function NetworksEditor({
       controls={controls}
     >
       {editing ? (
-        <div className="space-y-3 rounded-lg border p-3">
-          {draft.length > 0 && (
-            <SimpleTable
-              columns={["Network", "Aliases", ""]}
-              items={draft}
-              keyFn={(_, index) => index}
-              renderRow={({ target, aliases }, index) => (
-                <>
-                  <td className="p-3 text-sm">{nameMap[target] || target}</td>
-                  <td className="p-3 font-mono text-sm">{aliases?.join(", ") || "\u2014"}</td>
-                  <td className="p-3 text-right">
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      onClick={() => removeNetwork(index)}
-                    >
-                      <Trash2 className="size-3" />
-                    </Button>
-                  </td>
-                </>
-              )}
-            />
-          )}
+        <div className="flex flex-col gap-3">
+          <div className="overflow-x-auto rounded-lg border">
+            <table className="w-full min-w-max whitespace-nowrap">
+              <thead className="sticky top-0 z-10 bg-background/50">
+                <tr className="bg-muted/50 dark:bg-transparent">
+                  <th className="ps-3 pt-3 text-left text-sm font-medium">Network</th>
+                  <th className="ps-3 pt-3 text-left text-sm font-medium">Aliases</th>
+                  <th className="w-12 py-3 ps-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {draft.map(({ target, aliases }, index) => (
+                  <tr
+                    key={target}
+                    className="border-b bg-transparent! last:border-b-0"
+                  >
+                    <td className="py-3 ps-3 text-sm">{nameMap[target] || target}</td>
+                    <td className="py-3 ps-3 font-mono text-sm">
+                      {aliases?.join(", ") || "\u2014"}
+                    </td>
+                    <td className="py-3 ps-3">
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => removeNetwork(index)}
+                        title="Remove"
+                        className="text-muted-foreground hover:text-red-600"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+                {adding && (
+                  <tr className="bg-transparent!">
+                    <td className="py-3 ps-3">
+                      <Combobox
+                        value={newNetworkId}
+                        onChange={setNewNetworkId}
+                        options={filteredOptions}
+                        placeholder="Select network..."
+                        allowCustom={false}
+                      />
+                    </td>
+                    <td className="py-3 ps-3">
+                      <MultiCombobox
+                        values={newAliases}
+                        onChange={setNewAliases}
+                        options={[]}
+                        placeholder="Type alias and press Enter..."
+                      />
+                    </td>
+                    <td />
+                  </tr>
+                )}
+              </tbody>
+            </table>
 
-          <div className="flex items-end gap-2 border-t border-dashed pt-3">
-            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-              <label className="text-xs font-medium text-foreground">Network</label>
+            {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
 
-              <Combobox
-                value={newNetworkId}
-                onChange={setNewNetworkId}
-                options={filteredOptions}
-                placeholder="Select network..."
-                allowCustom={false}
-              />
-            </div>
-
-            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-              <label className="text-xs font-medium text-foreground">Aliases</label>
-
-              <MultiCombobox
-                values={newAliases}
-                onChange={setNewAliases}
-                options={[]}
-                placeholder="Type alias and press Enter..."
-              />
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={addNetwork}
-              disabled={!newNetworkId}
-            >
-              <Plus className="size-3" />
-              Add
-            </Button>
-          </div>
-
-          {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
-
-          <footer className="flex items-center gap-2">
-            <div className="ml-auto flex gap-2">
-              <Button
-                size="sm"
-                onClick={save}
-                disabled={saving}
-              >
-                {saving && <Spinner className="size-3" />}
-                Save
-              </Button>
-
+            <footer className="flex items-center gap-2 p-3">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={cancelEdit}
-                disabled={saving}
+                onClick={() => {
+                  if (adding && newNetworkId) addRow();
+                  setAdding(true);
+                }}
+                disabled={adding && !newNetworkId}
               >
-                Cancel
+                Add another
               </Button>
-            </div>
-          </footer>
+              <div className="ml-auto flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => void save()}
+                  disabled={saving}
+                >
+                  {saving && <Spinner className="size-3" />}
+                  Save
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={cancelEdit}
+                  disabled={saving}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </footer>
+          </div>
         </div>
       ) : networks.length === 0 ? (
         <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed py-6 text-center text-muted-foreground">
