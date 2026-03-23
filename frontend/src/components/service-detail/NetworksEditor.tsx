@@ -23,6 +23,7 @@ interface NetworksEditorProps {
 interface NetworkOption {
   value: string;
   label: string;
+  description?: string;
 }
 
 export function NetworksEditor({

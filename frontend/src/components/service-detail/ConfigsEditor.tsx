@@ -22,6 +22,7 @@ interface ConfigsEditorProps {
 interface ConfigOption {
   value: string;
   label: string;
+  description?: string;
 }
 
 export function ConfigsEditor({ serviceId, configs, onSaved }: ConfigsEditorProps) {

@@ -22,6 +22,7 @@ interface SecretsEditorProps {
 interface SecretOption {
   value: string;
   label: string;
+  description?: string;
 }
 
 export function SecretsEditor({ serviceId, secrets, onSaved }: SecretsEditorProps) {
