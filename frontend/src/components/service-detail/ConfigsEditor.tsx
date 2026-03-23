@@ -55,7 +55,7 @@ export function ConfigsEditor({ serviceId, configs, onSaved }: ConfigsEditorProp
     let cancelled = false;
 
     api
-      .configs({ limit: 200 })
+      .configs({ limit: 0 })
       .then((response) => {
         if (!cancelled) {
           setAvailableConfigs(

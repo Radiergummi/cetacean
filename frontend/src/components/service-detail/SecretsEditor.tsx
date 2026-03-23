@@ -55,7 +55,7 @@ export function SecretsEditor({ serviceId, secrets, onSaved }: SecretsEditorProp
     let cancelled = false;
 
     api
-      .secrets({ limit: 200 })
+      .secrets({ limit: 0 })
       .then((response) => {
         if (!cancelled) {
           setAvailableSecrets(

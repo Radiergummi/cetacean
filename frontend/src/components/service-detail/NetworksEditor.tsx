@@ -82,7 +82,7 @@ export function NetworksEditor({
     let cancelled = false;
 
     api
-      .networks({ limit: 200 })
+      .networks({ limit: 0 })
       .then((response) => {
         if (!cancelled) {
           setAvailableNetworks(
@@ -140,9 +140,10 @@ export function NetworksEditor({
     }
   }
 
-  const draftIds = new Set(draft.map(({ target }) => target));
-
-  const filteredOptions = availableNetworks.filter((option) => !draftIds.has(option.value));
+  const filteredOptions = useMemo(() => {
+    const draftIds = new Set(draft.map(({ target }) => target));
+    return availableNetworks.filter((option) => !draftIds.has(option.value));
+  }, [draft, availableNetworks]);
 
   const controls =
     !editing && canEdit ? (
