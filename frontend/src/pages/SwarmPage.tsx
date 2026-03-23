@@ -6,6 +6,20 @@ import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
+import { EditablePanel } from "../components/service-detail/EditablePanel";
+import { Spinner } from "../components/Spinner";
+import { SwarmActions } from "../components/swarm-detail/SwarmActions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "../components/ui/alert-dialog";
 import { Button } from "../components/ui/button";
 import {
   Dialog,
@@ -16,8 +30,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../components/ui/dialog";
+import { DurationInput } from "../components/ui/duration-input";
+import { Input } from "../components/ui/input";
+import { useAsyncAction } from "../hooks/useAsyncAction";
+import { opsLevel } from "../hooks/useOperationsLevel";
 import { formatDuration } from "../lib/format";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, KeyRound, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 function JoinTokenDialog({
@@ -104,6 +122,30 @@ export default function SwarmPage() {
 
   useEffect(fetchData, [fetchData]);
 
+  // Orchestration draft
+  const [draftTaskHistoryLimit, setDraftTaskHistoryLimit] = useState(0);
+
+  // Raft draft
+  const [draftSnapshotInterval, setDraftSnapshotInterval] = useState(0);
+  const [draftLogEntries, setDraftLogEntries] = useState(0);
+  const [draftKeepOldSnapshots, setDraftKeepOldSnapshots] = useState(0);
+
+  // Dispatcher draft
+  const [draftHeartbeatPeriod, setDraftHeartbeatPeriod] = useState(0);
+
+  // CA draft
+  const [draftCertExpiry, setDraftCertExpiry] = useState(0);
+
+  // Encryption draft
+  const [draftAutoLock, setDraftAutoLock] = useState(false);
+
+  // Unlock key
+  const [unlockKeyValue, setUnlockKeyValue] = useState<string | null>(null);
+  const [showUnlockKey, setShowUnlockKey] = useState(false);
+  const [unlockKeyCopied, setUnlockKeyCopied] = useState(false);
+  const fetchUnlockKey = useAsyncAction();
+  const rotateUnlockKey = useAsyncAction();
+
   if (error) {
     return <FetchError message="Failed to load swarm info" />;
   }
@@ -120,6 +162,7 @@ export default function SwarmPage() {
         title="Swarm"
         actions={
           <>
+            <SwarmActions onRotated={fetchData} />
             <JoinTokenDialog
               label="Manager"
               token={swarm.JoinTokens.Manager}
@@ -166,71 +209,344 @@ export default function SwarmPage() {
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Raft */}
-        <CollapsibleSection title="Raft">
-          <KVTable
-            rows={[
-              ["Snapshot Interval", String(spec.Raft.SnapshotInterval)],
-              spec.Raft.KeepOldSnapshots != null && [
-                "Keep Old Snapshots",
-                String(spec.Raft.KeepOldSnapshots),
-              ],
-              ["Log Entries for Slow Followers", String(spec.Raft.LogEntriesForSlowFollowers)],
-              ["Election Tick", `${spec.Raft.ElectionTick} ticks`],
-              ["Heartbeat Tick", `${spec.Raft.HeartbeatTick} ticks`],
-            ]}
-          />
-        </CollapsibleSection>
+        <EditablePanel
+          title="Raft"
+          requiredLevel={opsLevel.configuration}
+          display={
+            <KVTable
+              rows={[
+                ["Snapshot Interval", String(spec.Raft.SnapshotInterval)],
+                spec.Raft.KeepOldSnapshots != null && [
+                  "Keep Old Snapshots",
+                  String(spec.Raft.KeepOldSnapshots),
+                ],
+                ["Log Entries for Slow Followers", String(spec.Raft.LogEntriesForSlowFollowers)],
+                ["Election Tick", `${spec.Raft.ElectionTick} ticks`],
+                ["Heartbeat Tick", `${spec.Raft.HeartbeatTick} ticks`],
+              ]}
+            />
+          }
+          edit={
+            <div className="space-y-3">
+              <label className="block space-y-1">
+                <span className="text-xs text-muted-foreground">Snapshot Interval</span>
+                <Input
+                  type="number"
+                  min={0}
+                  value={draftSnapshotInterval}
+                  onChange={(event) => setDraftSnapshotInterval(Number(event.target.value) || 0)}
+                />
+              </label>
+
+              <label className="block space-y-1">
+                <span className="text-xs text-muted-foreground">Keep Old Snapshots</span>
+                <Input
+                  type="number"
+                  min={0}
+                  value={draftKeepOldSnapshots}
+                  onChange={(event) => setDraftKeepOldSnapshots(Number(event.target.value) || 0)}
+                />
+              </label>
+
+              <label className="block space-y-1">
+                <span className="text-xs text-muted-foreground">
+                  Log Entries for Slow Followers
+                </span>
+                <Input
+                  type="number"
+                  min={0}
+                  value={draftLogEntries}
+                  onChange={(event) => setDraftLogEntries(Number(event.target.value) || 0)}
+                />
+              </label>
+
+              <KVTable
+                rows={[
+                  ["Election Tick", `${spec.Raft.ElectionTick} ticks`],
+                  ["Heartbeat Tick", `${spec.Raft.HeartbeatTick} ticks`],
+                ]}
+              />
+            </div>
+          }
+          onOpen={() => {
+            setDraftSnapshotInterval(spec.Raft.SnapshotInterval);
+            setDraftLogEntries(spec.Raft.LogEntriesForSlowFollowers);
+            setDraftKeepOldSnapshots(spec.Raft.KeepOldSnapshots ?? 0);
+          }}
+          onSave={async () => {
+            await api.patchSwarmRaft({
+              SnapshotInterval: draftSnapshotInterval,
+              LogEntriesForSlowFollowers: draftLogEntries,
+              KeepOldSnapshots: draftKeepOldSnapshots,
+            });
+            fetchData();
+          }}
+        />
 
         {/* CA Configuration */}
-        <CollapsibleSection title="CA Configuration">
-          <KVTable
-            rows={[
-              spec.CAConfig.NodeCertExpiry !== 0 && [
-                "Node Certificate Expiry",
-                formatDuration(spec.CAConfig.NodeCertExpiry),
-              ],
-              ["Force Rotate", String(spec.CAConfig.ForceRotate)],
-              ["Root Rotation In Progress", swarm.RootRotationInProgress ? "Yes" : "No"],
-              ...(spec.CAConfig.ExternalCAs?.map(({ Protocol, URL }, index): [string, string] => [
-                `External CA ${index + 1}`,
-                `${Protocol} — ${URL}`,
-              ]) ?? []),
-            ]}
-          />
-        </CollapsibleSection>
+        <EditablePanel
+          title="CA Configuration"
+          requiredLevel={opsLevel.impactful}
+          display={
+            <KVTable
+              rows={[
+                spec.CAConfig.NodeCertExpiry !== 0 && [
+                  "Node Certificate Expiry",
+                  formatDuration(spec.CAConfig.NodeCertExpiry),
+                ],
+                ["Force Rotate", String(spec.CAConfig.ForceRotate)],
+                ["Root Rotation In Progress", swarm.RootRotationInProgress ? "Yes" : "No"],
+                ...(spec.CAConfig.ExternalCAs?.map(({ Protocol, URL }, index): [string, string] => [
+                  `External CA ${index + 1}`,
+                  `${Protocol} — ${URL}`,
+                ]) ?? []),
+              ]}
+            />
+          }
+          edit={
+            <div className="space-y-3">
+              <label className="block space-y-1">
+                <span className="text-xs text-muted-foreground">Node Certificate Expiry</span>
+                <DurationInput
+                  value={draftCertExpiry}
+                  onChange={setDraftCertExpiry}
+                />
+              </label>
+
+              <KVTable
+                rows={[
+                  ["Force Rotate", String(spec.CAConfig.ForceRotate)],
+                  ["Root Rotation In Progress", swarm.RootRotationInProgress ? "Yes" : "No"],
+                  ...(spec.CAConfig.ExternalCAs?.map(
+                    ({ Protocol, URL }, index): [string, string] => [
+                      `External CA ${index + 1}`,
+                      `${Protocol} — ${URL}`,
+                    ],
+                  ) ?? []),
+                ]}
+              />
+            </div>
+          }
+          onOpen={() => {
+            setDraftCertExpiry(spec.CAConfig.NodeCertExpiry);
+          }}
+          onSave={async () => {
+            await api.patchSwarmCAConfig({ NodeCertExpiry: draftCertExpiry });
+            fetchData();
+          }}
+        />
 
         {/* Orchestration */}
-        <CollapsibleSection title="Orchestration">
-          <KVTable
-            rows={[
-              [
-                "Task History Retention Limit",
-                spec.Orchestration.TaskHistoryRetentionLimit != null
-                  ? String(spec.Orchestration.TaskHistoryRetentionLimit)
-                  : "—",
-              ],
-            ]}
-          />
-        </CollapsibleSection>
+        <EditablePanel
+          title="Orchestration"
+          requiredLevel={opsLevel.configuration}
+          display={
+            <KVTable
+              rows={[
+                [
+                  "Task History Retention Limit",
+                  spec.Orchestration.TaskHistoryRetentionLimit != null
+                    ? String(spec.Orchestration.TaskHistoryRetentionLimit)
+                    : "—",
+                ],
+              ]}
+            />
+          }
+          edit={
+            <label className="block space-y-1">
+              <span className="text-xs text-muted-foreground">Task History Retention Limit</span>
+              <Input
+                type="number"
+                min={0}
+                value={draftTaskHistoryLimit}
+                onChange={(event) => setDraftTaskHistoryLimit(Number(event.target.value) || 0)}
+              />
+            </label>
+          }
+          onOpen={() => {
+            setDraftTaskHistoryLimit(spec.Orchestration.TaskHistoryRetentionLimit ?? 0);
+          }}
+          onSave={async () => {
+            await api.patchSwarmOrchestration({
+              TaskHistoryRetentionLimit: draftTaskHistoryLimit,
+            });
+            fetchData();
+          }}
+        />
 
         {/* Dispatcher */}
-        <CollapsibleSection title="Dispatcher">
-          <KVTable
-            rows={[
-              spec.Dispatcher.HeartbeatPeriod !== 0 && [
-                "Heartbeat Period",
-                formatDuration(spec.Dispatcher.HeartbeatPeriod),
-              ],
-            ]}
-          />
-        </CollapsibleSection>
+        <EditablePanel
+          title="Dispatcher"
+          requiredLevel={opsLevel.configuration}
+          display={
+            <KVTable
+              rows={[
+                spec.Dispatcher.HeartbeatPeriod !== 0 && [
+                  "Heartbeat Period",
+                  formatDuration(spec.Dispatcher.HeartbeatPeriod),
+                ],
+              ]}
+            />
+          }
+          edit={
+            <label className="block space-y-1">
+              <span className="text-xs text-muted-foreground">Heartbeat Period</span>
+              <DurationInput
+                value={draftHeartbeatPeriod}
+                onChange={setDraftHeartbeatPeriod}
+              />
+            </label>
+          }
+          onOpen={() => {
+            setDraftHeartbeatPeriod(spec.Dispatcher.HeartbeatPeriod);
+          }}
+          onSave={async () => {
+            await api.patchSwarmDispatcher({ HeartbeatPeriod: draftHeartbeatPeriod });
+            fetchData();
+          }}
+        />
 
         {/* Encryption */}
-        <CollapsibleSection title="Encryption">
-          <KVTable
-            rows={[["Auto-Lock Managers", spec.EncryptionConfig.AutoLockManagers ? "Yes" : "No"]]}
+        <div className="space-y-3">
+          <EditablePanel
+            title="Encryption"
+            requiredLevel={opsLevel.impactful}
+            display={
+              <KVTable
+                rows={[
+                  ["Auto-Lock Managers", spec.EncryptionConfig.AutoLockManagers ? "Yes" : "No"],
+                ]}
+              />
+            }
+            edit={
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={draftAutoLock}
+                  onChange={(event) => setDraftAutoLock(event.target.checked)}
+                  className="size-4 rounded border-input accent-primary"
+                />
+                Auto-Lock Managers
+              </label>
+            }
+            onOpen={() => {
+              setDraftAutoLock(spec.EncryptionConfig.AutoLockManagers);
+            }}
+            onSave={async () => {
+              await api.patchSwarmEncryption({ AutoLockManagers: draftAutoLock });
+              fetchData();
+            }}
           />
-        </CollapsibleSection>
+
+          {spec.EncryptionConfig.AutoLockManagers && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={fetchUnlockKey.loading}
+                onClick={() => {
+                  if (showUnlockKey) {
+                    setShowUnlockKey(false);
+                    setUnlockKeyValue(null);
+                  } else {
+                    void fetchUnlockKey.execute(async () => {
+                      const result = await api.unlockKey();
+                      setUnlockKeyValue(result.unlockKey);
+                      setShowUnlockKey(true);
+                    }, "Failed to fetch unlock key");
+                  }
+                }}
+              >
+                {fetchUnlockKey.loading ? (
+                  <Spinner className="size-3" />
+                ) : (
+                  <KeyRound className="size-3.5" />
+                )}
+                {showUnlockKey ? "Hide Unlock Key" : "Show Unlock Key"}
+              </Button>
+
+              <AlertDialog>
+                <AlertDialogTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={rotateUnlockKey.loading}
+                    >
+                      {rotateUnlockKey.loading ? (
+                        <Spinner className="size-3" />
+                      ) : (
+                        <RefreshCw className="size-3.5" />
+                      )}
+                      Rotate Unlock Key
+                    </Button>
+                  }
+                />
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Rotate unlock key?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will invalidate the current unlock key. Make sure to save the new key.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() =>
+                        void rotateUnlockKey.execute(async () => {
+                          await api.rotateUnlockKey();
+                          setShowUnlockKey(false);
+                          setUnlockKeyValue(null);
+                          fetchData();
+                        }, "Failed to rotate unlock key")
+                      }
+                    >
+                      Rotate
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          )}
+
+          {fetchUnlockKey.error && (
+            <p className="text-xs text-red-600 dark:text-red-400">{fetchUnlockKey.error}</p>
+          )}
+
+          {rotateUnlockKey.error && (
+            <p className="text-xs text-red-600 dark:text-red-400">{rotateUnlockKey.error}</p>
+          )}
+
+          {showUnlockKey && unlockKeyValue && (
+            <div className="space-y-2">
+              <pre className="rounded-lg bg-muted/50 p-3 font-mono text-xs select-all">
+                {unlockKeyValue}
+              </pre>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  navigator.clipboard.writeText(unlockKeyValue).then(() => {
+                    setUnlockKeyCopied(true);
+                    setTimeout(() => setUnlockKeyCopied(false), 2000);
+                  });
+                }}
+              >
+                {unlockKeyCopied ? (
+                  <>
+                    <Check className="size-3" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="size-3" />
+                    Copy
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+        </div>
 
         {/* Task Defaults */}
         {spec.TaskDefaults.LogDriver && (
