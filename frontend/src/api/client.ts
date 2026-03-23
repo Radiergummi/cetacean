@@ -199,6 +199,20 @@ export const api = {
   whoami: () => fetchJSON<Identity>("/profile"),
   cluster: () => fetchJSON<ClusterSnapshot>("/cluster"),
   swarm: () => fetchJSON<SwarmInfo>("/swarm"),
+  unlockKey: () => fetchJSON<{ unlockKey: string }>("/swarm/unlock-key"),
+  patchSwarmOrchestration: (data: Record<string, unknown>) =>
+    patch("/swarm/orchestration", data, "application/merge-patch+json"),
+  patchSwarmRaft: (data: Record<string, unknown>) =>
+    patch("/swarm/raft", data, "application/merge-patch+json"),
+  patchSwarmDispatcher: (data: Record<string, unknown>) =>
+    patch("/swarm/dispatcher", data, "application/merge-patch+json"),
+  patchSwarmCAConfig: (data: Record<string, unknown>) =>
+    patch("/swarm/ca", data, "application/merge-patch+json"),
+  patchSwarmEncryption: (data: Record<string, unknown>) =>
+    patch("/swarm/encryption", data, "application/merge-patch+json"),
+  rotateToken: (target: "worker" | "manager") =>
+    mutationFetch<void>("/swarm/rotate-token", "POST", { target }, "application/json"),
+  rotateUnlockKey: () => mutationFetch<void>("/swarm/rotate-unlock-key", "POST"),
   plugins: () => fetchJSON<CollectionResponse<Plugin>>("/plugins").then((r) => r.items),
   clusterMetrics: () => fetchJSON<ClusterMetrics>("/cluster/metrics"),
   monitoringStatus: () => fetchJSON<MonitoringStatus>("/-/metrics/status"),
