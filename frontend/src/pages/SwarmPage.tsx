@@ -281,11 +281,53 @@ export default function SwarmPage() {
         />
 
         {/* CA Configuration */}
-        <div className="space-y-3">
-          <EditablePanel
-            title="CA Configuration"
-            requiredLevel={opsLevel.impactful}
-            display={
+        <EditablePanel
+          title="CA Configuration"
+          requiredLevel={opsLevel.impactful}
+          headerActions={
+            <AlertDialog>
+              <AlertDialogTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    disabled={forceRotateCA.loading}
+                  >
+                    {forceRotateCA.loading ? (
+                      <Spinner className="size-3" />
+                    ) : (
+                      <RefreshCw className="size-3" />
+                    )}
+                    Force Rotate
+                  </Button>
+                }
+              />
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Force CA certificate rotation?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will trigger an immediate rotation of all TLS certificates across the
+                    cluster. All nodes will need to re-issue their certificates.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() =>
+                      void forceRotateCA.execute(async () => {
+                        await api.forceRotateCA();
+                        fetchSwarmInfo();
+                      }, "Failed to force CA rotation")
+                    }
+                  >
+                    Rotate
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          }
+          display={
+            <div className="space-y-2">
               <KVTable
                 rows={[
                   spec.CAConfig.NodeCertExpiry !== 0 && [
@@ -302,85 +344,43 @@ export default function SwarmPage() {
                   ) ?? []),
                 ]}
               />
-            }
-            edit={
-              <div className="space-y-3">
-                <label className="block space-y-1">
-                  <span className="text-xs text-muted-foreground">Node Certificate Expiry</span>
-                  <DurationInput
-                    value={draftCertExpiry}
-                    onChange={setDraftCertExpiry}
-                  />
-                </label>
-
-                <KVTable
-                  rows={[
-                    ["Force Rotate", String(spec.CAConfig.ForceRotate ?? 0)],
-                    ["Root Rotation In Progress", swarm.RootRotationInProgress ? "Yes" : "No"],
-                    ...(spec.CAConfig.ExternalCAs?.map(
-                      ({ Protocol, URL }, index): [string, string] => [
-                        `External CA ${index + 1}`,
-                        `${Protocol} — ${URL}`,
-                      ],
-                    ) ?? []),
-                  ]}
+              {forceRotateCA.error && (
+                <p className="text-xs text-red-600 dark:text-red-400">{forceRotateCA.error}</p>
+              )}
+            </div>
+          }
+          edit={
+            <div className="space-y-3">
+              <label className="block space-y-1">
+                <span className="text-xs text-muted-foreground">Node Certificate Expiry</span>
+                <DurationInput
+                  value={draftCertExpiry}
+                  onChange={setDraftCertExpiry}
                 />
-              </div>
-            }
-            onOpen={() => {
-              setDraftCertExpiry(spec.CAConfig.NodeCertExpiry);
-            }}
-            onSave={async () => {
-              await api.patchSwarmCAConfig({ NodeCertExpiry: draftCertExpiry });
-              fetchSwarmInfo();
-            }}
-          />
+              </label>
 
-          <AlertDialog>
-            <AlertDialogTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={forceRotateCA.loading}
-                >
-                  {forceRotateCA.loading ? (
-                    <Spinner className="size-3" />
-                  ) : (
-                    <RefreshCw className="size-3.5" />
-                  )}
-                  Force CA Rotation
-                </Button>
-              }
-            />
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Force CA certificate rotation?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will trigger an immediate rotation of all TLS certificates across the
-                  cluster. All nodes will need to re-issue their certificates.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() =>
-                    void forceRotateCA.execute(async () => {
-                      await api.forceRotateCA();
-                      fetchSwarmInfo();
-                    }, "Failed to force CA rotation")
-                  }
-                >
-                  Rotate
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-
-          {forceRotateCA.error && (
-            <p className="text-xs text-red-600 dark:text-red-400">{forceRotateCA.error}</p>
-          )}
-        </div>
+              <KVTable
+                rows={[
+                  ["Force Rotate", String(spec.CAConfig.ForceRotate ?? 0)],
+                  ["Root Rotation In Progress", swarm.RootRotationInProgress ? "Yes" : "No"],
+                  ...(spec.CAConfig.ExternalCAs?.map(
+                    ({ Protocol, URL }, index): [string, string] => [
+                      `External CA ${index + 1}`,
+                      `${Protocol} — ${URL}`,
+                    ],
+                  ) ?? []),
+                ]}
+              />
+            </div>
+          }
+          onOpen={() => {
+            setDraftCertExpiry(spec.CAConfig.NodeCertExpiry);
+          }}
+          onSave={async () => {
+            await api.patchSwarmCAConfig({ NodeCertExpiry: draftCertExpiry });
+            fetchSwarmInfo();
+          }}
+        />
 
         {/* Orchestration */}
         <EditablePanel

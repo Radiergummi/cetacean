@@ -28,6 +28,8 @@ interface EditablePanelProps {
   bordered?: boolean;
   /** Minimum operations level required to edit (default: opsLevel.configuration) */
   requiredLevel?: number;
+  /** Extra buttons rendered next to Edit in the title row (only shown when not editing) */
+  headerActions?: ReactNode;
 }
 
 export function EditablePanel({
@@ -41,6 +43,7 @@ export function EditablePanel({
   emptyDescription,
   bordered = true,
   requiredLevel,
+  headerActions,
 }: EditablePanelProps) {
   const { level, loading: levelLoading } = useOperationsLevel();
   const canEdit = !levelLoading && level >= (requiredLevel ?? opsLevel.configuration);
@@ -87,15 +90,20 @@ export function EditablePanel({
         {title}
       </h3>
 
-      {!editing && canEdit && (
-        <Button
-          variant="outline"
-          size="xs"
-          onClick={openEdit}
-        >
-          <Pencil className="size-3" />
-          Edit
-        </Button>
+      {!editing && (
+        <div className="flex items-center gap-2">
+          {headerActions}
+          {canEdit && (
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={openEdit}
+            >
+              <Pencil className="size-3" />
+              Edit
+            </Button>
+          )}
+        </div>
       )}
     </div>
   );
