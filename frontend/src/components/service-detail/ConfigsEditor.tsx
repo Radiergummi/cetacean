@@ -6,6 +6,7 @@ import SimpleTable from "@/components/SimpleTable";
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
+import { splitStackPrefix } from "@/lib/searchConstants";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -58,7 +59,7 @@ export function ConfigsEditor({ serviceId, configs, onSaved }: ConfigsEditorProp
     const match = availableConfigs.find((option) => option.value === configId);
 
     if (match) {
-      setNewTargetPath(`/${match.label}`);
+      setNewTargetPath(`/${splitStackPrefix(match.label).name}`);
     }
   }
 
