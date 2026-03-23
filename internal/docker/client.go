@@ -853,7 +853,13 @@ func (c *Client) UpdateServiceMounts(
 		svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{}
 	}
 	svc.Spec.TaskTemplate.ContainerSpec.Mounts = mounts
-	_, err = c.docker.ServiceUpdate(ctx, svc.ID, svc.Version, svc.Spec, swarm.ServiceUpdateOptions{})
+	_, err = c.docker.ServiceUpdate(
+		ctx,
+		svc.ID,
+		svc.Version,
+		svc.Spec,
+		swarm.ServiceUpdateOptions{},
+	)
 	if err != nil {
 		return swarm.Service{}, err
 	}

@@ -2026,9 +2026,13 @@ func (h *Handlers) HandleGetServiceMounts(w http.ResponseWriter, r *http.Request
 		mounts = []mount.Mount{}
 	}
 
-	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id+"/mounts", "ServiceMounts", map[string]any{
-		"mounts": mounts,
-	}))
+	writeJSONWithETag(
+		w,
+		r,
+		NewDetailResponse("/services/"+id+"/mounts", "ServiceMounts", map[string]any{
+			"mounts": mounts,
+		}),
+	)
 }
 
 func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Request) {
@@ -2037,7 +2041,12 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(w, r, http.StatusUnsupportedMediaType, "Content-Type must be application/merge-patch+json")
+		writeProblem(
+			w,
+			r,
+			http.StatusUnsupportedMediaType,
+			"Content-Type must be application/merge-patch+json",
+		)
 		return
 	}
 
