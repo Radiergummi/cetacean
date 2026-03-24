@@ -21,7 +21,8 @@ type mockSystemClient struct {
 	diskUsageFn    func(ctx context.Context) (types.DiskUsage, error)
 	localNodeIDFn  func(ctx context.Context) (string, error)
 	updateSwarmFn  func(ctx context.Context, spec swarm.Spec, version swarm.Version, flags swarm.UpdateFlags) error
-	getUnlockKeyFn func(ctx context.Context) (string, error)
+	getUnlockKeyFn  func(ctx context.Context) (string, error)
+	unlockSwarmFn   func(ctx context.Context, key string) error
 }
 
 func (m *mockSystemClient) SwarmInspect(ctx context.Context) (swarm.Swarm, error) {
@@ -62,6 +63,13 @@ func (m *mockSystemClient) GetUnlockKey(ctx context.Context) (string, error) {
 		return m.getUnlockKeyFn(ctx)
 	}
 	return "", fmt.Errorf("not implemented")
+}
+
+func (m *mockSystemClient) UnlockSwarm(ctx context.Context, key string) error {
+	if m.unlockSwarmFn != nil {
+		return m.unlockSwarmFn(ctx, key)
+	}
+	return fmt.Errorf("not implemented")
 }
 
 // Compile-time check: mockSystemClient must satisfy DockerSystemClient.
@@ -638,6 +646,94 @@ func TestHandleGetUnlockKey_Error(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	h.HandleGetUnlockKey(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// --- HandlePostUnlockSwarm ---
+
+func TestHandlePostUnlockSwarm_Success(t *testing.T) {
+	var capturedKey string
+	sc := &mockSystemClient{
+		unlockSwarmFn: func(ctx context.Context, key string) error {
+			capturedKey = key
+			return nil
+		},
+	}
+	h := newSwarmHandlers(sc)
+
+	body := `{"unlockKey":"SWMKEY-1-abc123"}`
+	req := httptest.NewRequest(http.MethodPost, "/swarm/unlock", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	h.HandlePostUnlockSwarm(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status=%d, want %d", rec.Code, http.StatusNoContent)
+	}
+	if capturedKey != "SWMKEY-1-abc123" {
+		t.Fatalf("key=%q, want SWMKEY-1-abc123", capturedKey)
+	}
+}
+
+func TestHandlePostUnlockSwarm_MissingKey(t *testing.T) {
+	sc := &mockSystemClient{}
+	h := newSwarmHandlers(sc)
+
+	body := `{}`
+	req := httptest.NewRequest(http.MethodPost, "/swarm/unlock", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	h.HandlePostUnlockSwarm(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestHandlePostUnlockSwarm_InvalidBody(t *testing.T) {
+	sc := &mockSystemClient{}
+	h := newSwarmHandlers(sc)
+
+	req := httptest.NewRequest(http.MethodPost, "/swarm/unlock", strings.NewReader("not json"))
+	rec := httptest.NewRecorder()
+
+	h.HandlePostUnlockSwarm(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestHandlePostUnlockSwarm_NilClient(t *testing.T) {
+	h := newSwarmHandlers(nil)
+
+	body := `{"unlockKey":"SWMKEY-1-abc123"}`
+	req := httptest.NewRequest(http.MethodPost, "/swarm/unlock", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	h.HandlePostUnlockSwarm(rec, req)
+
+	if rec.Code != http.StatusNotImplemented {
+		t.Fatalf("status=%d, want %d", rec.Code, http.StatusNotImplemented)
+	}
+}
+
+func TestHandlePostUnlockSwarm_Error(t *testing.T) {
+	sc := &mockSystemClient{
+		unlockSwarmFn: func(ctx context.Context, key string) error {
+			return fmt.Errorf("invalid key")
+		},
+	}
+	h := newSwarmHandlers(sc)
+
+	body := `{"unlockKey":"SWMKEY-1-wrong"}`
+	req := httptest.NewRequest(http.MethodPost, "/swarm/unlock", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	h.HandlePostUnlockSwarm(rec, req)
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d, want %d", rec.Code, http.StatusInternalServerError)

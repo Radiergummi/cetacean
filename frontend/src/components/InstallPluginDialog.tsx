@@ -13,6 +13,18 @@ import {
 } from "./ui/dialog";
 import { useState } from "react";
 
+function normalizeReference(ref: string): string {
+  const trimmed = ref.trim();
+  const namePart = trimmed.split(":")[0].split("@")[0];
+  const hasRegistry = namePart.includes(".") || namePart.includes(":");
+
+  if (hasRegistry) {
+    return trimmed;
+  }
+
+  return `docker.io/${trimmed}`;
+}
+
 interface InstallPluginDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -50,7 +62,9 @@ export default function InstallPluginDialog({
 
   function handleCheckPrivileges() {
     void checkPrivileges.execute(async () => {
-      const result = await api.pluginPrivileges(remote);
+      const normalized = normalizeReference(remote);
+      const result = await api.pluginPrivileges(normalized);
+      setRemote(normalized);
       setPrivileges(result);
     }, "Failed to fetch plugin privileges");
   }
@@ -58,10 +72,12 @@ export default function InstallPluginDialog({
   function handleInstall() {
     void installAction.execute(
       async () => {
+        const normalized = normalizeReference(remote);
+
         if (isUpgrade && pluginName) {
-          await api.upgradePlugin(pluginName, remote);
+          await api.upgradePlugin(pluginName, normalized);
         } else {
-          await api.installPlugin(remote);
+          await api.installPlugin(normalized);
         }
 
         onInstalled();

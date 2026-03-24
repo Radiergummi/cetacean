@@ -137,12 +137,7 @@ func HandleDockerLatestVersion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if v == nil {
-		writeProblem(
-			w,
-			r,
-			http.StatusServiceUnavailable,
-			"Could not determine latest Docker version",
-		)
+		writeErrorCode(w, r, "ENG002", "could not determine latest Docker version")
 		return
 	}
 

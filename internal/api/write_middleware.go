@@ -15,7 +15,7 @@ func requireLevel(required, configured config.OperationsLevel) func(http.Handler
 			return next
 		}
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			writeProblem(w, r, http.StatusForbidden,
+			writeErrorCode(w, r, "OPS001",
 				"this operation requires operations level "+strconv.Itoa(int(required))+
 					", but the server is configured at level "+strconv.Itoa(int(configured)))
 		})

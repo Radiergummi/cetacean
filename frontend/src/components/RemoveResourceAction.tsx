@@ -1,3 +1,4 @@
+import { ApiError } from "@/api/client";
 import { Spinner } from "@/components/Spinner";
 import {
   AlertDialog,
@@ -14,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
+import { getErrorInfo } from "@/lib/errors";
 import { Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -22,6 +24,7 @@ interface RemoveResourceActionProps {
   resourceName: string;
   listPath: string;
   onRemove: () => Promise<void>;
+  onForceRemove?: () => Promise<void>;
   disabled?: boolean;
   disabledTitle?: string;
 }
@@ -31,6 +34,7 @@ export function RemoveResourceAction({
   resourceName,
   listPath,
   onRemove,
+  onForceRemove,
   disabled,
   disabledTitle,
 }: RemoveResourceActionProps) {
@@ -42,6 +46,10 @@ export function RemoveResourceAction({
   if (!canImpact) {
     return null;
   }
+
+  const errorCode = remove.cause instanceof ApiError ? remove.cause.code : null;
+  const errorInfo = getErrorInfo(errorCode);
+  const showForceRemove = onForceRemove && errorInfo?.action === "force-remove";
 
   const trigger = (
     <AlertDialogTrigger
@@ -94,7 +102,28 @@ export function RemoveResourceAction({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {remove.error && <p className="text-xs text-red-600 dark:text-red-400">{remove.error}</p>}
+      {remove.error && (
+        <div className="flex items-center gap-2">
+          <p className="text-xs text-red-600 dark:text-red-400">
+            {errorInfo?.suggestion ?? remove.error}
+          </p>
+          {showForceRemove && (
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={remove.loading}
+              onClick={() =>
+                void remove.execute(async () => {
+                  await onForceRemove();
+                  navigate(listPath, { replace: true });
+                }, `Failed to force remove ${resourceType.toLowerCase()}`)
+              }
+            >
+              Force remove
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -33,11 +33,11 @@ type mockWriteClient struct {
 	updateServiceEnvFn             func(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
 	updateNodeLabelsFn             func(ctx context.Context, id string, labels map[string]string) (swarm.Node, error)
 	updateNodeRoleFn               func(ctx context.Context, id string, role swarm.NodeRole) (swarm.Node, error)
-	removeNodeFn                   func(ctx context.Context, id string) error
+	removeNodeFn                   func(ctx context.Context, id string, force bool) error
 	removeNetworkFn                func(ctx context.Context, id string) error
 	removeConfigFn                 func(ctx context.Context, id string) error
 	removeSecretFn                 func(ctx context.Context, id string) error
-	removeVolumeFn                 func(ctx context.Context, name string) error
+	removeVolumeFn                 func(ctx context.Context, name string, force bool) error
 	updateServiceLabelsFn          func(ctx context.Context, id string, labels map[string]string) (swarm.Service, error)
 	updateServiceResourcesFn       func(ctx context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error)
 	updateServiceModeFn            func(ctx context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error)
@@ -142,9 +142,9 @@ func (m *mockWriteClient) UpdateNodeRole(
 	return swarm.Node{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) RemoveNode(ctx context.Context, id string) error {
+func (m *mockWriteClient) RemoveNode(ctx context.Context, id string, force bool) error {
 	if m.removeNodeFn != nil {
-		return m.removeNodeFn(ctx, id)
+		return m.removeNodeFn(ctx, id, force)
 	}
 	return fmt.Errorf("not implemented")
 }
@@ -170,9 +170,9 @@ func (m *mockWriteClient) RemoveSecret(ctx context.Context, id string) error {
 	return fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) RemoveVolume(ctx context.Context, name string) error {
+func (m *mockWriteClient) RemoveVolume(ctx context.Context, name string, force bool) error {
 	if m.removeVolumeFn != nil {
-		return m.removeVolumeFn(ctx, name)
+		return m.removeVolumeFn(ctx, name, force)
 	}
 	return fmt.Errorf("not implemented")
 }
@@ -2273,7 +2273,7 @@ func TestHandleRemoveNode_OK(t *testing.T) {
 	c.SetNode(swarm.Node{ID: "node1"})
 
 	wc := &mockWriteClient{
-		removeNodeFn: func(_ context.Context, _ string) error {
+		removeNodeFn: func(_ context.Context, _ string, _ bool) error {
 			return nil
 		},
 	}
@@ -2309,7 +2309,7 @@ func TestHandleRemoveNode_DockerError(t *testing.T) {
 	c.SetNode(swarm.Node{ID: "node1"})
 
 	wc := &mockWriteClient{
-		removeNodeFn: func(_ context.Context, _ string) error {
+		removeNodeFn: func(_ context.Context, _ string, _ bool) error {
 			return fmt.Errorf("node is not down")
 		},
 	}
@@ -2322,6 +2322,58 @@ func TestHandleRemoveNode_DockerError(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("status=%d, want 500", w.Code)
+	}
+}
+
+func TestHandleRemoveNode_Force(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{ID: "node1"})
+
+	var gotForce bool
+	wc := &mockWriteClient{
+		removeNodeFn: func(_ context.Context, _ string, force bool) error {
+			gotForce = force
+			return nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/nodes/node1?force=true", nil)
+	req.SetPathValue("id", "node1")
+	w := httptest.NewRecorder()
+	h.HandleRemoveNode(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Errorf("status=%d, want 204; body: %s", w.Code, w.Body.String())
+	}
+	if !gotForce {
+		t.Error("expected force=true to be passed to client")
+	}
+}
+
+func TestHandleRemoveVolume_Force(t *testing.T) {
+	c := cache.New(nil)
+	c.SetVolume(volume.Volume{Name: "my-vol"})
+
+	var gotForce bool
+	wc := &mockWriteClient{
+		removeVolumeFn: func(_ context.Context, _ string, force bool) error {
+			gotForce = force
+			return nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/volumes/my-vol?force=true", nil)
+	req.SetPathValue("name", "my-vol")
+	w := httptest.NewRecorder()
+	h.HandleRemoveVolume(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status=%d, want 204; body: %s", w.Code, w.Body.String())
+	}
+	if !gotForce {
+		t.Error("expected force=true to be passed to client")
 	}
 }
 
@@ -3665,7 +3717,7 @@ func TestHandleRemoveVolume_OK(t *testing.T) {
 	c.SetVolume(volume.Volume{Name: "my-vol"})
 
 	wc := &mockWriteClient{
-		removeVolumeFn: func(_ context.Context, name string) error {
+		removeVolumeFn: func(_ context.Context, name string, _ bool) error {
 			return nil
 		},
 	}
@@ -3701,7 +3753,7 @@ func TestHandleRemoveVolume_DockerError(t *testing.T) {
 	c.SetVolume(volume.Volume{Name: "my-vol"})
 
 	wc := &mockWriteClient{
-		removeVolumeFn: func(_ context.Context, name string) error {
+		removeVolumeFn: func(_ context.Context, name string, _ bool) error {
 			return fmt.Errorf("engine error")
 		},
 	}

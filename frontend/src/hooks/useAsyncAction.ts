@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 export function useAsyncAction() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cause, setCause] = useState<unknown>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -16,12 +17,14 @@ export function useAsyncAction() {
   async function execute(action: () => Promise<unknown>, errorMessage: string) {
     setLoading(true);
     setError(null);
+    setCause(null);
 
     try {
       await action();
-    } catch (thrown) {
+    } catch (caught) {
       if (mountedRef.current) {
-        setError(getErrorMessage(thrown, errorMessage));
+        setError(getErrorMessage(caught, errorMessage));
+        setCause(caught);
       }
     } finally {
       if (mountedRef.current) {
@@ -30,5 +33,5 @@ export function useAsyncAction() {
     }
   }
 
-  return { loading, error, execute };
+  return { loading, error, cause, execute };
 }

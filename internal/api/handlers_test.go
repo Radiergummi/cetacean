@@ -122,8 +122,8 @@ func TestHandleClusterMetrics_NoPrometheus(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleClusterMetrics(w, req)
 
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d", w.Code)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
 	}
 }
 

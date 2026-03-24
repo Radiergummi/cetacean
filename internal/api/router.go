@@ -44,6 +44,8 @@ func NewRouter(
 	mux.HandleFunc("GET /api", HandleAPIDoc(openapiSpec))
 	mux.HandleFunc("GET /api/scalar.js", HandleScalarJS(scalarJS))
 	mux.HandleFunc("GET /api/context.jsonld", HandleContext)
+	mux.HandleFunc("GET /api/errors", HandleErrorIndex)
+	mux.HandleFunc("GET /api/errors/{code}", HandleErrorDetail)
 
 	// SSE events
 	mux.Handle("GET /events", sseOnly(b, spa))
@@ -62,6 +64,7 @@ func NewRouter(
 	mux.Handle("POST /swarm/rotate-unlock-key", tier3(h.HandlePostRotateUnlockKey))
 	mux.Handle("POST /swarm/force-rotate-ca", tier3(h.HandlePostForceRotateCA))
 	mux.HandleFunc("GET /swarm/unlock-key", h.HandleGetUnlockKey)
+	mux.Handle("POST /swarm/unlock", tier3(h.HandlePostUnlockSwarm))
 	mux.HandleFunc("GET /disk-usage", contentNegotiated(h.HandleDiskUsage, spa))
 	// Plugins
 	mux.HandleFunc("GET /plugins", contentNegotiated(h.HandlePlugins, spa))

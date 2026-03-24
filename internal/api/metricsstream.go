@@ -19,12 +19,12 @@ var testTickerInterval time.Duration
 func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("query")
 	if query == "" {
-		writeProblem(w, r, http.StatusBadRequest, "missing required parameter: query")
+		writeErrorCode(w, r, "MTR003", "missing required parameter: query")
 		return
 	}
 
 	if h.promClient == nil {
-		writeProblem(w, r, http.StatusServiceUnavailable, "prometheus not configured")
+		writeErrorCode(w, r, "MTR001", "prometheus not configured")
 		return
 	}
 
@@ -32,7 +32,7 @@ func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
 	if s := r.URL.Query().Get("step"); s != "" {
 		v, err := strconv.Atoi(s)
 		if err != nil || v < 5 || v > 300 {
-			writeProblem(w, r, http.StatusBadRequest, "step must be between 5 and 300 seconds")
+			writeErrorCode(w, r, "MTR004", "step must be between 5 and 300 seconds")
 			return
 		}
 		step = v
@@ -50,7 +50,7 @@ func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
 		cur := metricsStreamCount.Load()
 		if int(cur) >= maxMetricsStreamClients {
 			w.Header().Set("Retry-After", "5")
-			writeProblem(w, r, http.StatusTooManyRequests, "too many metrics stream connections")
+			writeErrorCode(w, r, "MTR005", "too many metrics stream connections")
 			return
 		}
 		if metricsStreamCount.CompareAndSwap(cur, cur+1) {
@@ -61,7 +61,7 @@ func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		writeProblem(w, r, http.StatusInternalServerError, "streaming not supported")
+		writeErrorCode(w, r, "API005", "streaming not supported")
 		return
 	}
 

@@ -57,6 +57,7 @@ type DockerSystemClient interface {
 		flags swarm.UpdateFlags,
 	) error
 	GetUnlockKey(ctx context.Context) (string, error)
+	UnlockSwarm(ctx context.Context, key string) error
 }
 
 type DockerWriteClient interface {
@@ -74,11 +75,11 @@ type DockerWriteClient interface {
 	UpdateServiceEnv(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
 	UpdateNodeLabels(ctx context.Context, id string, labels map[string]string) (swarm.Node, error)
 	UpdateNodeRole(ctx context.Context, id string, role swarm.NodeRole) (swarm.Node, error)
-	RemoveNode(ctx context.Context, id string) error
+	RemoveNode(ctx context.Context, id string, force bool) error
 	RemoveNetwork(ctx context.Context, id string) error
 	RemoveConfig(ctx context.Context, id string) error
 	RemoveSecret(ctx context.Context, id string) error
-	RemoveVolume(ctx context.Context, name string) error
+	RemoveVolume(ctx context.Context, name string, force bool) error
 	UpdateServiceLabels(
 		ctx context.Context,
 		id string,
@@ -259,7 +260,7 @@ func writeJSONStatus(w http.ResponseWriter, status int, v any) {
 func HandleProfile(w http.ResponseWriter, r *http.Request) {
 	id := auth.IdentityFromContext(r.Context())
 	if id == nil {
-		writeProblem(w, r, http.StatusUnauthorized, "not authenticated")
+		writeErrorCode(w, r, "AUT001", "not authenticated")
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
@@ -375,22 +376,12 @@ func exprFilter[T any](
 		return items, true
 	}
 	if len(expr) > maxFilterLen {
-		writeProblemTyped(w, r, ProblemDetail{
-			Type:   "urn:cetacean:error:filter-invalid",
-			Title:  "Invalid Filter Expression",
-			Status: http.StatusBadRequest,
-			Detail: "filter expression too long",
-		})
+		writeErrorCode(w, r, "FLT001", "filter expression too long")
 		return nil, false
 	}
 	prog, err := filter.Compile(expr)
 	if err != nil {
-		writeProblemTyped(w, r, ProblemDetail{
-			Type:   "urn:cetacean:error:filter-invalid",
-			Title:  "Invalid Filter Expression",
-			Status: http.StatusBadRequest,
-			Detail: fmt.Sprintf("invalid filter expression: %s", err),
-		})
+		writeErrorCode(w, r, "FLT002", fmt.Sprintf("invalid filter expression: %s", err))
 		return nil, false
 	}
 	var filtered []T
@@ -399,12 +390,7 @@ func exprFilter[T any](
 		m = env(item, m)
 		ok, err := filter.Evaluate(prog, m)
 		if err != nil {
-			writeProblemTyped(w, r, ProblemDetail{
-				Type:   "urn:cetacean:error:filter-invalid",
-				Title:  "Invalid Filter Expression",
-				Status: http.StatusBadRequest,
-				Detail: fmt.Sprintf("filter evaluation error: %s", err),
-			})
+			writeErrorCode(w, r, "FLT003", fmt.Sprintf("filter evaluation error: %s", err))
 			return nil, false
 		}
 		if ok {
@@ -495,7 +481,7 @@ func (h *Handlers) HandleClusterCapacity(w http.ResponseWriter, r *http.Request)
 
 func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) {
 	if h.promClient == nil {
-		writeProblem(w, r, http.StatusNotFound, "prometheus not configured")
+		writeErrorCode(w, r, "MTR001", "prometheus not configured")
 		return
 	}
 
@@ -679,7 +665,7 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 
 func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 	if h.systemClient == nil {
-		writeProblem(w, r, http.StatusNotImplemented, "swarm inspect not available")
+		writeErrorCode(w, r, "SWM001", "swarm inspect not available")
 		return
 	}
 
@@ -689,7 +675,7 @@ func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 	sw, err := h.systemClient.SwarmInspect(ctx)
 	if err != nil {
 		slog.Error("swarm inspect failed", "error", err)
-		writeProblem(w, r, http.StatusInternalServerError, "swarm inspect failed")
+		writeErrorCode(w, r, "SWM002", "swarm inspect failed")
 		return
 	}
 
@@ -717,7 +703,7 @@ type DiskUsageSummary struct {
 
 func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
 	if h.systemClient == nil {
-		writeProblem(w, r, http.StatusNotImplemented, "disk usage not available")
+		writeErrorCode(w, r, "SWM004", "disk usage not available")
 		return
 	}
 
@@ -727,7 +713,7 @@ func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
 	du, err := h.systemClient.DiskUsage(ctx)
 	if err != nil {
 		slog.Error("disk usage failed", "error", err)
-		writeProblem(w, r, http.StatusInternalServerError, "disk usage failed")
+		writeErrorCode(w, r, "SWM005", "disk usage failed")
 		return
 	}
 
@@ -831,7 +817,7 @@ func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	node, ok := h.cache.GetNode(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("node %q not found", id))
+		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
 	writeJSONWithETag(w, r, NewDetailResponse("/nodes/"+id, "Node", map[string]any{
@@ -843,7 +829,7 @@ func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	_, ok := h.cache.GetNode(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("node %q not found", id))
+		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
 	tasks := h.enrichTasks(h.cache.ListTasksByNode(id))
@@ -902,7 +888,7 @@ func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("service %q not found", id))
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 	extra := map[string]any{
@@ -918,7 +904,7 @@ func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("service %q not found", id))
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 	tasks := h.enrichTasks(h.cache.ListTasksByService(id))
@@ -929,7 +915,7 @@ func (h *Handlers) HandleServiceLogs(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("service %q not found", id))
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 	h.serveLogs(
@@ -1012,7 +998,7 @@ func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	task, ok := h.cache.GetTask(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("task %q not found", id))
+		writeErrorCode(w, r, "TSK002", fmt.Sprintf("task %q not found", id))
 		return
 	}
 	et := h.enrichTask(task)
@@ -1027,7 +1013,7 @@ func (h *Handlers) HandleTaskLogs(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	_, ok := h.cache.GetTask(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("task %q not found", id))
+		writeErrorCode(w, r, "TSK002", fmt.Sprintf("task %q not found", id))
 		return
 	}
 	h.serveLogs(
@@ -1074,42 +1060,22 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	until := q.Get("before")
 	streamFilter := q.Get("stream") // "", "stdout", or "stderr"
 	if streamFilter != "" && streamFilter != "stdout" && streamFilter != "stderr" {
-		writeProblem(
-			w,
-			r,
-			http.StatusBadRequest,
-			`invalid "stream" parameter: must be "stdout" or "stderr"`,
-		)
+		writeErrorCode(w, r, "LOG002", `invalid "stream" parameter: must be "stdout" or "stderr"`)
 		return
 	}
 
 	if !validLogTimestamp(since) {
-		writeProblem(
-			w,
-			r,
-			http.StatusBadRequest,
-			`invalid "after" parameter: must be RFC3339 timestamp or Go duration`,
-		)
+		writeErrorCode(w, r, "LOG003", `invalid "after" parameter: must be RFC3339 timestamp or Go duration`)
 		return
 	}
 	if !validLogTimestamp(until) {
-		writeProblem(
-			w,
-			r,
-			http.StatusBadRequest,
-			`invalid "before" parameter: must be RFC3339 timestamp or Go duration`,
-		)
+		writeErrorCode(w, r, "LOG004", `invalid "before" parameter: must be RFC3339 timestamp or Go duration`)
 		return
 	}
 
 	if ContentTypeFromContext(r.Context()) == ContentTypeSSE {
 		if until != "" {
-			writeProblem(
-				w,
-				r,
-				http.StatusBadRequest,
-				`"before" parameter is not supported for SSE log streams`,
-			)
+			writeErrorCode(w, r, "LOG005", `"before" parameter is not supported for SSE log streams`)
 			return
 		}
 		h.serveLogsSSE(w, r, fetch, since, streamFilter)
@@ -1140,7 +1106,7 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	logs, err := fetch(ctx, strconv.Itoa(tail), false, since, until)
 	if err != nil {
 		slog.Error("failed to get logs", "error", err)
-		writeProblem(w, r, http.StatusInternalServerError, "failed to get logs")
+		writeErrorCode(w, r, "LOG006", "failed to get logs")
 		return
 	}
 	defer logs.Close() //nolint:errcheck
@@ -1152,7 +1118,7 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	lines, err := ParseDockerLogsWithIdleCancel(logs, cancel, 2*time.Second)
 	if err != nil {
 		slog.Error("failed to parse logs", "error", err)
-		writeProblem(w, r, http.StatusInternalServerError, "failed to parse logs")
+		writeErrorCode(w, r, "LOG007", "failed to parse logs")
 		return
 	}
 	if lines == nil {
@@ -1216,7 +1182,7 @@ func (h *Handlers) serveLogsSSE(
 		cur := activeLogSSEConns.Load()
 		if cur >= maxLogSSEConns {
 			w.Header().Set("Retry-After", "5")
-			writeProblem(w, r, http.StatusTooManyRequests, "too many active log streams")
+			writeErrorCode(w, r, "LOG001", "too many active log streams")
 			return
 		}
 		if activeLogSSEConns.CompareAndSwap(cur, cur+1) {
@@ -1233,14 +1199,14 @@ func (h *Handlers) serveLogsSSE(
 	}
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		writeProblem(w, r, http.StatusInternalServerError, "streaming not supported")
+		writeErrorCode(w, r, "API005", "streaming not supported")
 		return
 	}
 
 	logs, err := fetch(r.Context(), "0", true, since, "")
 	if err != nil {
 		slog.Error("failed to stream logs", "error", err)
-		writeProblem(w, r, http.StatusInternalServerError, "failed to stream logs")
+		writeErrorCode(w, r, "LOG008", "failed to stream logs")
 		return
 	}
 	defer logs.Close() //nolint:errcheck
@@ -1336,7 +1302,7 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	detail, ok := h.cache.GetStackDetail(name)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("stack %q not found", name))
+		writeErrorCode(w, r, "STK001", fmt.Sprintf("stack %q not found", name))
 		return
 	}
 	writeJSONWithETag(w, r, NewDetailResponse("/stacks/"+name, "Stack", map[string]any{
@@ -1403,7 +1369,7 @@ func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	cfg, ok := h.cache.GetConfig(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("config %q not found", id))
+		writeErrorCode(w, r, "CFG002", fmt.Sprintf("config %q not found", id))
 		return
 	}
 	writeJSONWithETag(w, r, NewDetailResponse("/configs/"+id, "Config", map[string]any{
@@ -1440,7 +1406,7 @@ func (h *Handlers) HandleGetSecret(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	sec, ok := h.cache.GetSecret(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("secret %q not found", id))
+		writeErrorCode(w, r, "SEC002", fmt.Sprintf("secret %q not found", id))
 		return
 	}
 	// Never expose secret data — clear it before responding.
@@ -1482,7 +1448,7 @@ func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	net, ok := h.cache.GetNetwork(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("network %q not found", id))
+		writeErrorCode(w, r, "NET002", fmt.Sprintf("network %q not found", id))
 		return
 	}
 	writeJSONWithETag(w, r, NewDetailResponse("/networks/"+id, "Network", map[string]any{
@@ -1525,7 +1491,7 @@ func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	vol, ok := h.cache.GetVolume(name)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, fmt.Sprintf("volume %q not found", name))
+		writeErrorCode(w, r, "VOL002", fmt.Sprintf("volume %q not found", name))
 		return
 	}
 	writeJSONWithETag(w, r, NewDetailResponse("/volumes/"+name, "Volume", map[string]any{
@@ -1577,11 +1543,11 @@ func labelsMatch(labels map[string]string, q string) bool {
 func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	if q == "" {
-		writeProblem(w, r, http.StatusBadRequest, "missing required query parameter: q")
+		writeErrorCode(w, r, "SEA001", "missing required query parameter: q")
 		return
 	}
 	if len(q) > 200 {
-		writeProblem(w, r, http.StatusBadRequest, "query too long (max 200 characters)")
+		writeErrorCode(w, r, "SEA002", "query too long (max 200 characters)")
 		return
 	}
 	ql := strings.ToLower(q)

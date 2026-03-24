@@ -112,7 +112,7 @@ func (b *Broadcaster) serveSSE(
 ) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		writeProblem(w, r, http.StatusInternalServerError, "streaming not supported")
+		writeErrorCode(w, r, "API005", "streaming not supported")
 		return
 	}
 
@@ -130,7 +130,7 @@ func (b *Broadcaster) serveSSE(
 	if len(b.clients) >= maxSSEClients {
 		b.mu.Unlock()
 		w.Header().Set("Retry-After", "5")
-		writeProblem(w, r, http.StatusTooManyRequests, "too many SSE connections")
+		writeErrorCode(w, r, "SSE001", "too many SSE connections")
 		return
 	}
 	w.Header().Set("Content-Type", "text/event-stream")

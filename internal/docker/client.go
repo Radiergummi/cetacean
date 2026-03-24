@@ -159,6 +159,10 @@ func (c *Client) GetUnlockKey(ctx context.Context) (string, error) {
 	return resp.UnlockKey, nil
 }
 
+func (c *Client) UnlockSwarm(ctx context.Context, key string) error {
+	return c.docker.SwarmUnlock(ctx, swarm.UnlockRequest{UnlockKey: key})
+}
+
 func (c *Client) PluginList(ctx context.Context) (types.PluginsListResponse, error) {
 	return c.docker.PluginList(ctx, filters.Args{})
 }
@@ -544,8 +548,8 @@ func (c *Client) UpdateNodeRole(
 	return c.InspectNode(ctx, id)
 }
 
-func (c *Client) RemoveNode(ctx context.Context, id string) error {
-	return c.docker.NodeRemove(ctx, id, swarm.NodeRemoveOptions{Force: false})
+func (c *Client) RemoveNode(ctx context.Context, id string, force bool) error {
+	return c.docker.NodeRemove(ctx, id, swarm.NodeRemoveOptions{Force: force})
 }
 
 func (c *Client) RemoveTask(ctx context.Context, id string) error {
@@ -579,8 +583,8 @@ func (c *Client) RemoveSecret(ctx context.Context, id string) error {
 	return c.docker.SecretRemove(ctx, id)
 }
 
-func (c *Client) RemoveVolume(ctx context.Context, name string) error {
-	return c.docker.VolumeRemove(ctx, name, false)
+func (c *Client) RemoveVolume(ctx context.Context, name string, force bool) error {
+	return c.docker.VolumeRemove(ctx, name, force)
 }
 
 func (c *Client) UpdateServiceEnv(

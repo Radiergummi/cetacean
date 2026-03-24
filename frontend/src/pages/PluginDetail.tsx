@@ -1,10 +1,13 @@
 import { api } from "../api/client";
 import type { Plugin } from "../api/types";
 import CollapsibleSection from "../components/CollapsibleSection";
-import { KVTable, MetadataGrid, ResourceId } from "../components/data";
+import { ContainerImage, KVTable, MetadataGrid, ResourceId } from "../components/data";
 import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
 import InstallPluginDialog from "../components/InstallPluginDialog";
+import { PluginEnvEditor } from "../components/PluginEnvEditor";
+import { DockerDocsLink } from "../components/service-detail/DockerDocsLink";
+import { EditablePanel } from "../components/service-detail/EditablePanel";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import { Spinner } from "../components/Spinner";
@@ -22,9 +25,19 @@ import {
 import { Button } from "../components/ui/button";
 import { useAsyncAction } from "../hooks/useAsyncAction";
 import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
+import { joinCommand, parseCommand } from "../lib/parseCommand";
 import { ArrowUpCircle, Power, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+
+const pluginTypeLabels: Record<string, string> = {
+  "docker.volumedriver/1.0": "Volume Driver",
+  "docker.networkdriver/1.0": "Network Driver",
+  "docker.ipamdriver/1.0": "IPAM Driver",
+  "docker.authz/1.0": "Authorization",
+  "docker.logdriver/1.0": "Log Driver",
+  "docker.metricscollector/1.0": "Metrics Collector",
+};
 
 export default function PluginDetail() {
   const { name: rawName } = useParams<{ name: string }>();
@@ -36,11 +49,9 @@ export default function PluginDetail() {
   const [error, setError] = useState<string | null>(null);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [draftArgs, setDraftArgs] = useState("");
-  const [argsEditing, setArgsEditing] = useState(false);
 
   const enableAction = useAsyncAction();
   const removeAction = useAsyncAction();
-  const configureAction = useAsyncAction();
 
   const fetchPlugin = useCallback(() => {
     setError(null);
@@ -48,7 +59,6 @@ export default function PluginDetail() {
       .plugin(name)
       .then((result) => {
         setPlugin(result);
-        setDraftArgs((result.Settings.Args ?? []).join("\n"));
       })
       .catch((thrown) => {
         setError(thrown instanceof Error ? thrown.message : "Failed to load plugin");
@@ -91,24 +101,16 @@ export default function PluginDetail() {
         ]}
         actions={
           <>
-            {level >= opsLevel.configuration && (
+            {level >= opsLevel.configuration && !plugin.Enabled && (
               <Button
                 variant="secondary"
                 size="sm"
                 disabled={enableAction.loading}
                 onClick={() =>
-                  void enableAction.execute(
-                    async () => {
-                      if (plugin.Enabled) {
-                        await api.disablePlugin(name);
-                      } else {
-                        await api.enablePlugin(name);
-                      }
-
-                      fetchPlugin();
-                    },
-                    `Failed to ${plugin.Enabled ? "disable" : "enable"} plugin`,
-                  )
+                  void enableAction.execute(async () => {
+                    await api.enablePlugin(name);
+                    fetchPlugin();
+                  }, "Failed to enable plugin")
                 }
               >
                 {enableAction.loading ? (
@@ -116,8 +118,51 @@ export default function PluginDetail() {
                 ) : (
                   <Power className="size-3.5" />
                 )}
-                {plugin.Enabled ? "Disable" : "Enable"}
+                Enable
               </Button>
+            )}
+
+            {level >= opsLevel.configuration && plugin.Enabled && (
+              <AlertDialog>
+                <AlertDialogTrigger
+                  render={
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={enableAction.loading}
+                    >
+                      {enableAction.loading ? (
+                        <Spinner className="size-3" />
+                      ) : (
+                        <Power className="size-3.5" />
+                      )}
+                      Disable
+                    </Button>
+                  }
+                />
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Disable plugin?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will disable the plugin <strong>{name}</strong>. Services using this plugin
+                      may be affected.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() =>
+                        void enableAction.execute(async () => {
+                          await api.disablePlugin(name);
+                          fetchPlugin();
+                        }, "Failed to disable plugin")
+                      }
+                    >
+                      Disable
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             )}
 
             {level >= opsLevel.impactful && (
@@ -198,9 +243,9 @@ export default function PluginDetail() {
           label="Description"
           value={config.Description || "—"}
         />
-        <InfoCard
+        <ContainerImage
           label="Reference"
-          value={plugin.PluginReference || "—"}
+          image={plugin.PluginReference}
         />
         <InfoCard
           label="Docker Version"
@@ -208,118 +253,93 @@ export default function PluginDetail() {
         />
         <InfoCard
           label="Status"
-          value={plugin.Enabled ? "Enabled" : "Disabled"}
+          value={
+            <span
+              className={
+                plugin.Enabled
+                  ? "text-green-700 dark:text-green-400"
+                  : "text-muted-foreground"
+              }
+            >
+              {plugin.Enabled ? "Enabled" : "Disabled"}
+            </span>
+          }
         />
         <InfoCard
           label="Type"
-          value={config.Interface.Types?.join(", ") || "—"}
+          value={
+            config.Interface.Types
+              ?.map((type) => pluginTypeLabels[type] ?? type)
+              .join(", ") || "—"
+          }
         />
       </MetadataGrid>
 
-      {/* Settings: Args */}
-      <CollapsibleSection title="Settings">
-        <div className="space-y-3">
-          {args.length > 0 && !argsEditing && (
-            <div className="space-y-1">
-              <span className="text-xs font-medium text-muted-foreground">Current Args</span>
-              <pre className="rounded-lg bg-muted/50 p-3 font-mono text-xs whitespace-pre-wrap">
-                {args.join("\n")}
-              </pre>
-            </div>
-          )}
-
-          {args.length === 0 && !argsEditing && (
-            <p className="text-sm text-muted-foreground">No args configured.</p>
-          )}
-
-          {argsEditing && (
-            <div className="space-y-2">
+      {/* Settings */}
+      <CollapsibleSection
+        title="Settings"
+        controls={
+          <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/plugin/set/" variant="label" />
+        }
+      >
+        <div className="grid gap-4 lg:grid-cols-2">
+          <EditablePanel
+            title="Args"
+            empty={args.length === 0}
+            emptyDescription="Click Edit to configure plugin arguments."
+            onOpen={() => setDraftArgs(joinCommand(args))}
+            onSave={async () => {
+              const parsed = parseCommand(draftArgs);
+              await api.configurePlugin(name, { args: parsed });
+              fetchPlugin();
+            }}
+            display={
+              <code className="block rounded-lg bg-muted/50 p-3 font-mono text-xs">
+                {joinCommand(args)}
+              </code>
+            }
+            edit={
               <label className="block space-y-1">
-                <span className="text-xs text-muted-foreground">Args (one per line)</span>
-                <textarea
+                <span className="text-xs text-muted-foreground">
+                  Args (space-separated, use quotes for values with spaces)
+                </span>
+                <input
+                  type="text"
                   value={draftArgs}
                   onChange={(event) => setDraftArgs(event.target.value)}
-                  rows={4}
-                  className="w-full rounded-md border bg-transparent px-3 py-2 font-mono text-xs transition outline-none focus:ring-2 focus:ring-ring"
-                  disabled={configureAction.loading}
+                  placeholder='--arg1 value1 --arg2 "value with spaces"'
+                  className="h-8 w-full rounded-md border bg-transparent px-2 font-mono text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 />
               </label>
+            }
+          />
 
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  disabled={configureAction.loading}
-                  onClick={() =>
-                    void configureAction.execute(async () => {
-                      const args = draftArgs
-                        .split("\n")
-                        .map((line) => line.trim())
-                        .filter(Boolean);
-                      await api.configurePlugin(name, args);
-                      setArgsEditing(false);
-                      fetchPlugin();
-                    }, "Failed to configure plugin")
-                  }
-                >
-                  {configureAction.loading && <Spinner className="size-3" />}
-                  Save
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setDraftArgs(args.join("\n"));
-                    setArgsEditing(false);
-                  }}
-                >
-                  Cancel
-                </Button>
-              </div>
-
-              {configureAction.error && (
-                <p className="text-xs text-red-600 dark:text-red-400">{configureAction.error}</p>
-              )}
-            </div>
-          )}
-
-          {!argsEditing && level >= opsLevel.configuration && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setArgsEditing(true)}
-            >
-              Edit Args
-            </Button>
-          )}
+          <PluginEnvEditor
+            pluginName={name}
+            declarations={configEnv}
+            values={settings.Env ?? []}
+            onSaved={fetchPlugin}
+          />
         </div>
       </CollapsibleSection>
 
       {/* Configuration */}
-      <CollapsibleSection title="Configuration">
+      <CollapsibleSection
+        title="Configuration"
+        controls={
+          <DockerDocsLink href="https://docs.docker.com/engine/extend/config/" variant="label" />
+        }
+      >
         <div className="space-y-4">
           <KVTable
             rows={[
               ["Entrypoint", entrypoint.join(" ") || "—"],
-              ["WorkDir", config.WorkDir || "—"],
-              config.User && ["User", `${config.User.UID}:${config.User.GID}`],
+              ["Working Directory", config.WorkDir || "—"],
+              config.User?.UID != null && ["User", `${config.User.UID}:${config.User.GID}`],
               ["Network Type", config.Network.Type || "—"],
               ["Interface Socket", config.Interface.Socket || "—"],
             ]}
           />
-
-          {configEnv.length > 0 && (
-            <div className="space-y-1">
-              <span className="text-xs font-medium text-muted-foreground">
-                Environment Variables
-              </span>
-              <KVTable
-                rows={configEnv.map(({ Name: envName, Value, Description }) => [
-                  envName,
-                  `${Value ?? ""}${Description ? ` — ${Description}` : ""}`,
-                ])}
-              />
-            </div>
-          )}
 
           {configMounts.length > 0 && (
             <div className="space-y-1">

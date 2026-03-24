@@ -68,7 +68,7 @@ func negotiate(next http.Handler) http.Handler {
 		}
 
 		if ct == ContentTypeUnsupported {
-			writeProblem(w, r, http.StatusNotAcceptable, "no supported media type in Accept header")
+			writeErrorCode(w, r, "API003", "no supported media type in Accept header")
 			return
 		}
 

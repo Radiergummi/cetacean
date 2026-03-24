@@ -142,8 +142,8 @@ func TestContentNegotiationIntegration(t *testing.T) {
 		if p.Status != http.StatusNotAcceptable {
 			t.Errorf("problem status=%d, want 406", p.Status)
 		}
-		if p.Type != "about:blank" {
-			t.Errorf("problem type=%q, want about:blank", p.Type)
+		if p.Type != "/api/errors/API001" {
+			t.Errorf("problem type=%q, want /api/errors/API001", p.Type)
 		}
 	})
 

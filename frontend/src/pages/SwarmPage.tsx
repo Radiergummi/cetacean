@@ -33,12 +33,13 @@ import {
 } from "../components/ui/dialog";
 import { DurationInput } from "../components/ui/duration-input";
 import { NumberField } from "../components/ui/number-field";
+import { Input } from "../components/ui/input";
 import { Switch } from "../components/ui/switch";
 import { useAsyncAction } from "../hooks/useAsyncAction";
 import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
 import { formatDuration } from "../lib/format";
 import { EditablePanel } from "@/components/service-detail/EditablePanel";
-import { Check, Copy, KeyRound, Plus, RefreshCw } from "lucide-react";
+import { Check, Copy, KeyRound, LockOpen, Plus, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 
@@ -156,6 +157,11 @@ export default function SwarmPage() {
   const [unlockKeyCopied, setUnlockKeyCopied] = useState(false);
   const fetchUnlockKey = useAsyncAction();
   const rotateUnlockKey = useAsyncAction();
+
+  // Unlock swarm
+  const [unlockInput, setUnlockInput] = useState("");
+  const [unlockOpen, setUnlockOpen] = useState(false);
+  const unlockSwarm = useAsyncAction();
 
   if (error) {
     return <FetchError message="Failed to load swarm info" />;
@@ -554,6 +560,67 @@ export default function SwarmPage() {
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
+
+              <Dialog
+                open={unlockOpen}
+                onOpenChange={(open) => {
+                  setUnlockOpen(open);
+
+                  if (!open) {
+                    setUnlockInput("");
+                  }
+                }}
+              >
+                <DialogTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={unlockSwarm.loading}
+                    >
+                      {unlockSwarm.loading ? (
+                        <Spinner className="size-3" />
+                      ) : (
+                        <LockOpen className="size-3.5" />
+                      )}
+                      Unlock Swarm
+                    </Button>
+                  }
+                />
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Unlock swarm</DialogTitle>
+                    <DialogDescription>
+                      Enter the unlock key to unlock a locked swarm manager.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <Input
+                    placeholder="SWMKEY-1-..."
+                    value={unlockInput}
+                    onChange={(event) => setUnlockInput(event.target.value)}
+                    className="font-mono"
+                  />
+                  {unlockSwarm.error && (
+                    <p className="text-xs text-red-600 dark:text-red-400">{unlockSwarm.error}</p>
+                  )}
+                  <DialogFooter>
+                    <Button
+                      disabled={unlockSwarm.loading || !unlockInput.trim()}
+                      onClick={() =>
+                        void unlockSwarm.execute(async () => {
+                          await api.unlockSwarm(unlockInput.trim());
+                          setUnlockOpen(false);
+                          setUnlockInput("");
+                          fetchSwarmInfo();
+                        }, "Failed to unlock swarm")
+                      }
+                    >
+                      {unlockSwarm.loading ? <Spinner className="size-3" /> : null}
+                      Unlock
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
           )}
 

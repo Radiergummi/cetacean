@@ -43,25 +43,62 @@ import type {
 
 const headers = { Accept: "application/json" };
 
+/**
+ * Structured API error carrying RFC 9457 problem detail fields.
+ * The `code` property extracts the error code from the type URI
+ * (e.g. "/api/errors/NOD001" → "NOD001").
+ */
+export class ApiError extends Error {
+  readonly type: string;
+  readonly title: string;
+  readonly status: number;
+  readonly detail: string;
+  readonly code: string | null;
+
+  constructor(type: string, title: string, status: number, detail: string) {
+    super(detail || title);
+    this.type = type;
+    this.title = title;
+    this.status = status;
+    this.detail = detail;
+
+    const match = type.match(/\/api\/errors\/([A-Z]{3}\d{3})$/);
+    this.code = match ? match[1] : null;
+  }
+}
+
+function redirectToLogin(): never {
+  const redirect = encodeURIComponent(window.location.pathname + window.location.search);
+  window.location.href = `/auth/login?redirect=${redirect}`;
+
+  // Throw to prevent callers from continuing while the browser navigates away.
+  throw new Error("redirecting to login");
+}
+
+async function throwResponseError(res: Response): Promise<never> {
+  let type = "about:blank";
+  let title = res.statusText;
+  let detail = "";
+
+  try {
+    const body = await res.json();
+    if (body?.type) type = body.type;
+    if (body?.title) title = body.title;
+    if (body?.detail) detail = body.detail;
+  } catch {
+    // response wasn't JSON
+  }
+
+  throw new ApiError(type, title, res.status, detail);
+}
+
 async function fetchJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(path, { headers, signal });
   if (!res.ok) {
-    // OIDC 401: server sets WWW-Authenticate: Bearer, redirect to login
     if (res.status === 401 && res.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
-      const redirect = encodeURIComponent(window.location.pathname + window.location.search);
-      window.location.href = `/auth/login?redirect=${redirect}`;
-      // Return a never-resolving promise to prevent callers from handling the error
-      // while the browser navigates away
-      return new Promise<T>(() => {});
+      redirectToLogin();
     }
-    let message = `${res.status} ${res.statusText}`;
-    try {
-      const body = await res.json();
-      if (body?.detail) message = body.detail;
-    } catch {
-      // response wasn't JSON, use status text
-    }
-    throw new Error(message);
+    await throwResponseError(res);
   }
   return res.json();
 }
@@ -81,18 +118,9 @@ async function mutationFetch<T>(
   });
   if (!res.ok) {
     if (res.status === 401 && res.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
-      const redirect = encodeURIComponent(window.location.pathname + window.location.search);
-      window.location.href = `/auth/login?redirect=${redirect}`;
-      return new Promise<T>(() => {});
+      redirectToLogin();
     }
-    let message = `${res.status} ${res.statusText}`;
-    try {
-      const body = await res.json();
-      if (body?.detail) message = body.detail;
-    } catch {
-      // response wasn't JSON
-    }
-    throw new Error(message);
+    await throwResponseError(res);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
@@ -214,6 +242,8 @@ export const api = {
   rotateToken: (target: "worker" | "manager") =>
     mutationFetch<void>("/swarm/rotate-token", "POST", { target }, "application/json"),
   rotateUnlockKey: () => mutationFetch<void>("/swarm/rotate-unlock-key", "POST"),
+  unlockSwarm: (unlockKey: string) =>
+    mutationFetch<void>("/swarm/unlock", "POST", { unlockKey }, "application/json"),
   forceRotateCA: () => mutationFetch<void>("/swarm/force-rotate-ca", "POST"),
   plugins: () => fetchJSON<CollectionResponse<Plugin>>("/plugins").then((r) => r.items),
   plugin: (name: string, signal?: AbortSignal) =>
@@ -235,8 +265,8 @@ export const api = {
       { remote },
       "application/json",
     ),
-  configurePlugin: (name: string, args: string[]) =>
-    patch<void>(`/plugins/${encodeURIComponent(name)}/settings`, { args }, "application/json"),
+  configurePlugin: (name: string, settings: { args?: string[]; env?: string[] }) =>
+    patch<void>(`/plugins/${encodeURIComponent(name)}/settings`, settings, "application/json"),
   clusterMetrics: () => fetchJSON<ClusterMetrics>("/cluster/metrics"),
   monitoringStatus: () => fetchJSON<MonitoringStatus>("/-/metrics/status"),
   nodes: (params?: ListParams) => fetchJSON<PagedResponse<Node>>(buildListURL("/nodes", params)),
@@ -343,7 +373,8 @@ export const api = {
   removeService: (id: string) => del(`/services/${id}`),
   updateNodeRole: (id: string, role: "worker" | "manager") =>
     put<{ node: Node }>(`/nodes/${id}/role`, { role }),
-  removeNode: (id: string) => del(`/nodes/${id}`),
+  removeNode: (id: string, force?: boolean) =>
+    del(force ? `/nodes/${id}?force=true` : `/nodes/${id}`),
   removeStack: (name: string) =>
     mutationFetch<{
       removed: { services: number; networks: number; configs: number; secrets: number };
@@ -352,7 +383,8 @@ export const api = {
   removeConfig: (id: string) => del(`/configs/${id}`),
   removeSecret: (id: string) => del(`/secrets/${id}`),
   removeNetwork: (id: string) => del(`/networks/${id}`),
-  removeVolume: (name: string) => del(`/volumes/${name}`),
+  removeVolume: (name: string, force?: boolean) =>
+    del(force ? `/volumes/${name}?force=true` : `/volumes/${name}`),
 
   // Tier 2: sub-resource GETs
   serviceEnv: (id: string, signal?: AbortSignal) =>

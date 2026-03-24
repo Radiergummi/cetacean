@@ -16,37 +16,69 @@ import (
 	json "github.com/goccy/go-json"
 )
 
-// writeDockerError maps Docker API errors to appropriate HTTP status codes.
+// writeDockerError handles Docker API errors that don't have a domain-specific
+// error code. Handlers should check for IsConflict/IsFailedPrecondition
+// themselves and call writeErrorCode with the appropriate code before falling
+// through to this function.
+var notFoundCodes = map[string]string{
+	"service": "SVC003",
+	"node":    "NOD003",
+	"task":    "TSK002",
+	"volume":  "VOL002",
+	"network": "NET002",
+	"config":  "CFG002",
+	"secret":  "SEC002",
+}
+
 func writeDockerError(w http.ResponseWriter, r *http.Request, err error, resource string) {
 	if cerrdefs.IsNotFound(err) {
-		writeProblem(w, r, http.StatusNotFound, resource+" not found")
-		return
-	}
-	if cerrdefs.IsConflict(err) {
-		writeProblem(
-			w,
-			r,
-			http.StatusConflict,
-			resource+" was modified by another client, please retry",
-		)
+		if code, ok := notFoundCodes[resource]; ok {
+			writeErrorCode(w, r, code, resource+" not found")
+		} else {
+			writeProblem(w, r, http.StatusNotFound, resource+" not found")
+		}
 		return
 	}
 	if cerrdefs.IsInvalidArgument(err) {
 		writeProblem(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
+	if cerrdefs.IsUnavailable(err) {
+		writeErrorCode(w, r, "ENG001", err.Error())
+		return
+	}
 	slog.Error("failed to update "+resource, "error", err)
 	writeProblem(w, r, http.StatusInternalServerError, "failed to update "+resource)
 }
 
-// writePatchError maps JSON Patch application errors to HTTP status codes.
+// writeServiceError handles Docker API errors for service mutations,
+// mapping version conflicts to SVC001.
+func writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
+	if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
+		writeErrorCode(w, r, "SVC001", err.Error())
+		return
+	}
+	writeDockerError(w, r, err, "service")
+}
+
+// writeNodeError handles Docker API errors for node mutations,
+// mapping version conflicts to NOD002.
+func writeNodeError(w http.ResponseWriter, r *http.Request, err error) {
+	if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
+		writeErrorCode(w, r, "NOD002", err.Error())
+		return
+	}
+	writeDockerError(w, r, err, "node")
+}
+
+// writePatchError maps JSON Patch application errors to error codes.
 func writePatchError(w http.ResponseWriter, r *http.Request, err error) {
 	var tfe *testFailedError
 	if errors.As(err, &tfe) {
-		writeProblem(w, r, http.StatusConflict, err.Error())
+		writeErrorCode(w, r, "API010", err.Error())
 		return
 	}
-	writeProblem(w, r, http.StatusBadRequest, err.Error())
+	writeErrorCode(w, r, "API011", err.Error())
 }
 
 type updateModeRequest struct {
@@ -85,21 +117,21 @@ func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
 
 	var req scaleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		writeErrorCode(w, r, "API006", "invalid request body")
 		return
 	}
 	if req.Replicas == nil {
-		writeProblem(w, r, http.StatusBadRequest, "replicas is required")
+		writeErrorCode(w, r, "SVC004", "replicas is required")
 		return
 	}
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 	if svc.Spec.Mode.Replicated == nil {
-		writeProblem(w, r, http.StatusBadRequest, "cannot scale a global-mode service")
+		writeErrorCode(w, r, "SVC005", "cannot scale a global-mode service")
 		return
 	}
 
@@ -107,7 +139,7 @@ func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := h.writeClient.ScaleService(r.Context(), id, *req.Replicas)
 	if err != nil {
-		writeDockerError(w, r, err, "service")
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -125,7 +157,7 @@ func (h *Handlers) HandleUpdateServiceMode(w http.ResponseWriter, r *http.Reques
 
 	var req updateModeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		writeErrorCode(w, r, "API006", "invalid request body")
 		return
 	}
 
@@ -133,10 +165,10 @@ func (h *Handlers) HandleUpdateServiceMode(w http.ResponseWriter, r *http.Reques
 	switch req.Mode {
 	case "replicated":
 		if req.Replicas == nil {
-			writeProblem(
+			writeErrorCode(
 				w,
 				r,
-				http.StatusBadRequest,
+				"SVC009",
 				"replicas is required when switching to replicated mode",
 			)
 			return
@@ -145,13 +177,13 @@ func (h *Handlers) HandleUpdateServiceMode(w http.ResponseWriter, r *http.Reques
 	case "global":
 		mode.Global = &swarm.GlobalService{}
 	default:
-		writeProblem(w, r, http.StatusBadRequest, "mode must be one of: replicated, global")
+		writeErrorCode(w, r, "SVC008", "mode must be one of: replicated, global")
 		return
 	}
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -159,7 +191,7 @@ func (h *Handlers) HandleUpdateServiceMode(w http.ResponseWriter, r *http.Reques
 
 	updated, err := h.writeClient.UpdateServiceMode(r.Context(), id, mode)
 	if err != nil {
-		writeDockerError(w, r, err, "service")
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -178,7 +210,7 @@ func (h *Handlers) HandleUpdateServiceEndpointMode(w http.ResponseWriter, r *htt
 
 	var req updateEndpointModeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		writeErrorCode(w, r, "API006", "invalid request body")
 		return
 	}
 
@@ -189,13 +221,13 @@ func (h *Handlers) HandleUpdateServiceEndpointMode(w http.ResponseWriter, r *htt
 	case "dnsrr":
 		mode = swarm.ResolutionModeDNSRR
 	default:
-		writeProblem(w, r, http.StatusBadRequest, "mode must be one of: vip, dnsrr")
+		writeErrorCode(w, r, "SVC010", "mode must be one of: vip, dnsrr")
 		return
 	}
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -203,7 +235,7 @@ func (h *Handlers) HandleUpdateServiceEndpointMode(w http.ResponseWriter, r *htt
 
 	updated, err := h.writeClient.UpdateServiceEndpointMode(r.Context(), id, mode)
 	if err != nil {
-		writeDockerError(w, r, err, "service")
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -218,17 +250,17 @@ func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Reque
 
 	var req updateImageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		writeErrorCode(w, r, "API006", "invalid request body")
 		return
 	}
 	if req.Image == "" {
-		writeProblem(w, r, http.StatusBadRequest, "image is required")
+		writeErrorCode(w, r, "SVC006", "image is required")
 		return
 	}
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -236,7 +268,7 @@ func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Reque
 
 	updated, err := h.writeClient.UpdateServiceImage(r.Context(), id, req.Image)
 	if err != nil {
-		writeDockerError(w, r, err, "service")
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -250,11 +282,11 @@ func (h *Handlers) HandleRollbackService(w http.ResponseWriter, r *http.Request)
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 	if svc.PreviousSpec == nil {
-		writeProblem(w, r, http.StatusBadRequest, "service has no previous spec to rollback to")
+		writeErrorCode(w, r, "SVC007", "service has no previous spec to rollback to")
 		return
 	}
 
@@ -262,7 +294,7 @@ func (h *Handlers) HandleRollbackService(w http.ResponseWriter, r *http.Request)
 
 	updated, err := h.writeClient.RollbackService(r.Context(), id)
 	if err != nil {
-		writeDockerError(w, r, err, "service")
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -281,7 +313,7 @@ func (h *Handlers) HandleUpdateNodeAvailability(w http.ResponseWriter, r *http.R
 
 	var req updateAvailabilityRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		writeErrorCode(w, r, "API006", "invalid request body")
 		return
 	}
 
@@ -294,10 +326,10 @@ func (h *Handlers) HandleUpdateNodeAvailability(w http.ResponseWriter, r *http.R
 	case "pause":
 		availability = swarm.NodeAvailabilityPause
 	default:
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusBadRequest,
+			"NOD004",
 			"availability must be one of: active, drain, pause",
 		)
 		return
@@ -305,7 +337,7 @@ func (h *Handlers) HandleUpdateNodeAvailability(w http.ResponseWriter, r *http.R
 
 	_, ok := h.cache.GetNode(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "node not found")
+		writeErrorCode(w, r, "NOD003", "node not found")
 		return
 	}
 
@@ -313,7 +345,7 @@ func (h *Handlers) HandleUpdateNodeAvailability(w http.ResponseWriter, r *http.R
 
 	updated, err := h.writeClient.UpdateNodeAvailability(r.Context(), id, availability)
 	if err != nil {
-		writeDockerError(w, r, err, "node")
+		writeNodeError(w, r, err)
 		return
 	}
 
@@ -327,7 +359,7 @@ func (h *Handlers) HandleRemoveTask(w http.ResponseWriter, r *http.Request) {
 
 	_, ok := h.cache.GetTask(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "task not found")
+		writeErrorCode(w, r, "TSK002", "task not found")
 		return
 	}
 
@@ -335,6 +367,10 @@ func (h *Handlers) HandleRemoveTask(w http.ResponseWriter, r *http.Request) {
 
 	err := h.writeClient.RemoveTask(r.Context(), id)
 	if err != nil {
+		if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
+			writeErrorCode(w, r, "TSK001", err.Error())
+			return
+		}
 		writeDockerError(w, r, err, "task")
 		return
 	}
@@ -347,7 +383,7 @@ func (h *Handlers) HandleRemoveService(w http.ResponseWriter, r *http.Request) {
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -355,6 +391,10 @@ func (h *Handlers) HandleRemoveService(w http.ResponseWriter, r *http.Request) {
 
 	err := h.writeClient.RemoveService(r.Context(), id)
 	if err != nil {
+		if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
+			writeErrorCode(w, r, "SVC002", err.Error())
+			return
+		}
 		writeDockerError(w, r, err, "service")
 		return
 	}
@@ -372,7 +412,7 @@ func (h *Handlers) HandleUpdateNodeRole(w http.ResponseWriter, r *http.Request) 
 
 	var req updateRoleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		writeErrorCode(w, r, "API006", "invalid request body")
 		return
 	}
 
@@ -383,13 +423,13 @@ func (h *Handlers) HandleUpdateNodeRole(w http.ResponseWriter, r *http.Request) 
 	case "manager":
 		role = swarm.NodeRoleManager
 	default:
-		writeProblem(w, r, http.StatusBadRequest, "role must be one of: worker, manager")
+		writeErrorCode(w, r, "NOD005", "role must be one of: worker, manager")
 		return
 	}
 
 	_, ok := h.cache.GetNode(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "node not found")
+		writeErrorCode(w, r, "NOD003", "node not found")
 		return
 	}
 
@@ -397,7 +437,7 @@ func (h *Handlers) HandleUpdateNodeRole(w http.ResponseWriter, r *http.Request) 
 
 	updated, err := h.writeClient.UpdateNodeRole(r.Context(), id, role)
 	if err != nil {
-		writeDockerError(w, r, err, "node")
+		writeNodeError(w, r, err)
 		return
 	}
 
@@ -411,14 +451,20 @@ func (h *Handlers) HandleRemoveNode(w http.ResponseWriter, r *http.Request) {
 
 	_, ok := h.cache.GetNode(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "node not found")
+		writeErrorCode(w, r, "NOD003", "node not found")
 		return
 	}
 
-	slog.Info("removing node", "node", id)
+	force := r.URL.Query().Get("force") == "true"
 
-	err := h.writeClient.RemoveNode(r.Context(), id)
+	slog.Info("removing node", "node", id, "force", force)
+
+	err := h.writeClient.RemoveNode(r.Context(), id, force)
 	if err != nil {
+		if !force && (cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err)) {
+			writeErrorCode(w, r, "NOD001", err.Error())
+			return
+		}
 		writeDockerError(w, r, err, "node")
 		return
 	}
@@ -431,7 +477,7 @@ func (h *Handlers) HandleGetNodeRole(w http.ResponseWriter, r *http.Request) {
 
 	node, ok := h.cache.GetNode(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "node not found")
+		writeErrorCode(w, r, "NOD003", "node not found")
 		return
 	}
 
@@ -470,7 +516,7 @@ func (h *Handlers) HandleRemoveStack(w http.ResponseWriter, r *http.Request) {
 
 	stack, ok := h.cache.GetStack(name)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "stack not found")
+		writeErrorCode(w, r, "STK001", "stack not found")
 		return
 	}
 
@@ -541,7 +587,7 @@ func (h *Handlers) HandleRemoveConfig(w http.ResponseWriter, r *http.Request) {
 
 	_, ok := h.cache.GetConfig(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "config not found")
+		writeErrorCode(w, r, "CFG002", "config not found")
 		return
 	}
 
@@ -549,6 +595,10 @@ func (h *Handlers) HandleRemoveConfig(w http.ResponseWriter, r *http.Request) {
 
 	err := h.writeClient.RemoveConfig(r.Context(), id)
 	if err != nil {
+		if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
+			writeErrorCode(w, r, "CFG001", err.Error())
+			return
+		}
 		writeDockerError(w, r, err, "config")
 		return
 	}
@@ -561,7 +611,7 @@ func (h *Handlers) HandleRemoveSecret(w http.ResponseWriter, r *http.Request) {
 
 	_, ok := h.cache.GetSecret(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "secret not found")
+		writeErrorCode(w, r, "SEC002", "secret not found")
 		return
 	}
 
@@ -569,6 +619,10 @@ func (h *Handlers) HandleRemoveSecret(w http.ResponseWriter, r *http.Request) {
 
 	err := h.writeClient.RemoveSecret(r.Context(), id)
 	if err != nil {
+		if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
+			writeErrorCode(w, r, "SEC001", err.Error())
+			return
+		}
 		writeDockerError(w, r, err, "secret")
 		return
 	}
@@ -581,7 +635,7 @@ func (h *Handlers) HandleRemoveNetwork(w http.ResponseWriter, r *http.Request) {
 
 	_, ok := h.cache.GetNetwork(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "network not found")
+		writeErrorCode(w, r, "NET002", "network not found")
 		return
 	}
 
@@ -589,6 +643,10 @@ func (h *Handlers) HandleRemoveNetwork(w http.ResponseWriter, r *http.Request) {
 
 	err := h.writeClient.RemoveNetwork(r.Context(), id)
 	if err != nil {
+		if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
+			writeErrorCode(w, r, "NET001", err.Error())
+			return
+		}
 		writeDockerError(w, r, err, "network")
 		return
 	}
@@ -601,14 +659,20 @@ func (h *Handlers) HandleRemoveVolume(w http.ResponseWriter, r *http.Request) {
 
 	_, ok := h.cache.GetVolume(name)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "volume not found")
+		writeErrorCode(w, r, "VOL002", "volume not found")
 		return
 	}
 
-	slog.Info("removing volume", "volume", name)
+	force := r.URL.Query().Get("force") == "true"
 
-	err := h.writeClient.RemoveVolume(r.Context(), name)
+	slog.Info("removing volume", "volume", name, "force", force)
+
+	err := h.writeClient.RemoveVolume(r.Context(), name, force)
 	if err != nil {
+		if !force && (cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err)) {
+			writeErrorCode(w, r, "VOL001", err.Error())
+			return
+		}
 		writeDockerError(w, r, err, "volume")
 		return
 	}
@@ -621,7 +685,7 @@ func (h *Handlers) HandleRestartService(w http.ResponseWriter, r *http.Request) 
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -629,7 +693,7 @@ func (h *Handlers) HandleRestartService(w http.ResponseWriter, r *http.Request) 
 
 	updated, err := h.writeClient.RestartService(r.Context(), id)
 	if err != nil {
-		writeDockerError(w, r, err, "service")
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -656,7 +720,7 @@ func (h *Handlers) HandleGetServiceEnv(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 	var env []string
@@ -677,10 +741,10 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")
 
 	if !isJSONPatch && !isMergePatch {
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusUnsupportedMediaType,
+			"API004",
 			"Content-Type must be application/json-patch+json or application/merge-patch+json",
 		)
 		return
@@ -688,13 +752,13 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
+		writeErrorCode(w, r, "API007", "failed to read request body")
 		return
 	}
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -708,7 +772,7 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 	if isJSONPatch {
 		var ops []PatchOp
 		if err := json.Unmarshal(body, &ops); err != nil {
-			writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+			writeErrorCode(w, r, "API006", "invalid request body")
 			return
 		}
 		updated, err = applyJSONPatch(current, ops)
@@ -725,7 +789,7 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 
 	result, err := h.writeClient.UpdateServiceEnv(r.Context(), id, updated)
 	if err != nil {
-		writeDockerError(w, r, err, "service")
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -740,7 +804,7 @@ func (h *Handlers) HandleGetNodeLabels(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	node, ok := h.cache.GetNode(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "node not found")
+		writeErrorCode(w, r, "NOD003", "node not found")
 		return
 	}
 	labels := node.Spec.Labels
@@ -761,10 +825,10 @@ func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request)
 	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")
 
 	if !isJSONPatch && !isMergePatch {
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusUnsupportedMediaType,
+			"API004",
 			"Content-Type must be application/json-patch+json or application/merge-patch+json",
 		)
 		return
@@ -772,13 +836,13 @@ func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request)
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
+		writeErrorCode(w, r, "API007", "failed to read request body")
 		return
 	}
 
 	node, ok := h.cache.GetNode(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "node not found")
+		writeErrorCode(w, r, "NOD003", "node not found")
 		return
 	}
 
@@ -791,7 +855,7 @@ func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request)
 	if isJSONPatch {
 		var ops []PatchOp
 		if err := json.Unmarshal(body, &ops); err != nil {
-			writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+			writeErrorCode(w, r, "API006", "invalid request body")
 			return
 		}
 		updated, err = applyJSONPatch(current, ops)
@@ -808,7 +872,7 @@ func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request)
 
 	result, err := h.writeClient.UpdateNodeLabels(r.Context(), id, updated)
 	if err != nil {
-		writeDockerError(w, r, err, "node")
+		writeNodeError(w, r, err)
 		return
 	}
 
@@ -823,7 +887,7 @@ func (h *Handlers) HandleGetServiceLabels(w http.ResponseWriter, r *http.Request
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 	labels := svc.Spec.Labels
@@ -848,10 +912,10 @@ func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Reque
 	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")
 
 	if !isJSONPatch && !isMergePatch {
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusUnsupportedMediaType,
+			"API004",
 			"Content-Type must be application/json-patch+json or application/merge-patch+json",
 		)
 		return
@@ -859,13 +923,13 @@ func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Reque
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
+		writeErrorCode(w, r, "API007", "failed to read request body")
 		return
 	}
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -878,7 +942,7 @@ func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Reque
 	if isJSONPatch {
 		var ops []PatchOp
 		if err := json.Unmarshal(body, &ops); err != nil {
-			writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+			writeErrorCode(w, r, "API006", "invalid request body")
 			return
 		}
 		updated, err = applyJSONPatch(current, ops)
@@ -895,7 +959,7 @@ func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Reque
 
 	result, err := h.writeClient.UpdateServiceLabels(r.Context(), id, updated)
 	if err != nil {
-		writeDockerError(w, r, err, "service")
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -910,7 +974,7 @@ func (h *Handlers) HandleGetServiceResources(w http.ResponseWriter, r *http.Requ
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 	resources := svc.Spec.TaskTemplate.Resources
@@ -932,10 +996,10 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusUnsupportedMediaType,
+			"API004",
 			"expected Content-Type: application/merge-patch+json",
 		)
 		return
@@ -943,7 +1007,7 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -955,24 +1019,24 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 	// Marshal current state to JSON, then to a generic map
 	base, err := json.Marshal(current)
 	if err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal current resources")
+		writeErrorCode(w, r, "API009", "failed to marshal current resources")
 		return
 	}
 	var baseMap map[string]any
 	if err := json.Unmarshal(base, &baseMap); err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to unmarshal current resources")
+		writeErrorCode(w, r, "API009", "failed to unmarshal current resources")
 		return
 	}
 
 	// Read the patch
 	patchBytes, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
+		writeErrorCode(w, r, "API007", "failed to read request body")
 		return
 	}
 	var patchMap map[string]any
 	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid JSON")
+		writeErrorCode(w, r, "API008", "invalid JSON")
 		return
 	}
 
@@ -982,19 +1046,19 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 	// Marshal back to struct
 	merged, err := json.Marshal(baseMap)
 	if err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal merged resources")
+		writeErrorCode(w, r, "API009", "failed to marshal merged resources")
 		return
 	}
 	var result swarm.ResourceRequirements
 	if err := json.Unmarshal(merged, &result); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid resource specification")
+		writeErrorCode(w, r, "SVC011", "invalid resource specification")
 		return
 	}
 
 	slog.Info("updating service resources", "service", id)
 	updated, err := h.writeClient.UpdateServiceResources(r.Context(), id, &result)
 	if err != nil {
-		writeDockerError(w, r, err, "service")
+		writeServiceError(w, r, err)
 		return
 	}
 	writeJSON(w, NewDetailResponse("/services/"+id+"/resources", "ServiceResources", map[string]any{
@@ -1025,7 +1089,7 @@ func (h *Handlers) HandleGetServicePorts(w http.ResponseWriter, r *http.Request)
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 	var ports []swarm.PortConfig
@@ -1050,10 +1114,10 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusUnsupportedMediaType,
+			"API004",
 			"expected Content-Type: application/merge-patch+json",
 		)
 		return
@@ -1061,7 +1125,7 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -1069,7 +1133,7 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 		Ports []swarm.PortConfig `json:"ports"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid JSON")
+		writeErrorCode(w, r, "API008", "invalid JSON")
 		return
 	}
 
@@ -1077,7 +1141,7 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 
 	updated, err := h.writeClient.UpdateServicePorts(r.Context(), id, patch.Ports)
 	if err != nil {
-		writeDockerError(w, r, err, "service")
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -1097,7 +1161,7 @@ func (h *Handlers) HandleGetServiceHealthcheck(w http.ResponseWriter, r *http.Re
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -1121,13 +1185,13 @@ func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Re
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
 	var hc container.HealthConfig
 	if err := json.NewDecoder(r.Body).Decode(&hc); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		writeErrorCode(w, r, "API006", "invalid request body")
 		return
 	}
 
@@ -1135,7 +1199,7 @@ func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Re
 
 	updated, err := h.writeClient.UpdateServiceHealthcheck(r.Context(), id, &hc)
 	if err != nil {
-		writeDockerError(w, r, err, "service")
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -1156,7 +1220,7 @@ func (h *Handlers) HandleGetServicePlacement(w http.ResponseWriter, r *http.Requ
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -1180,13 +1244,13 @@ func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Requ
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
 	var placement swarm.Placement
 	if err := json.NewDecoder(r.Body).Decode(&placement); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		writeErrorCode(w, r, "API006", "invalid request body")
 		return
 	}
 
@@ -1194,7 +1258,7 @@ func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Requ
 
 	updated, err := h.writeClient.UpdateServicePlacement(r.Context(), id, &placement)
 	if err != nil {
-		writeDockerError(w, r, err, "service")
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -1212,7 +1276,7 @@ func (h *Handlers) HandleGetServiceUpdatePolicy(w http.ResponseWriter, r *http.R
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 	policy := svc.Spec.UpdateConfig
@@ -1234,10 +1298,10 @@ func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusUnsupportedMediaType,
+			"API004",
 			"expected Content-Type: application/merge-patch+json",
 		)
 		return
@@ -1245,7 +1309,7 @@ func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -1256,20 +1320,20 @@ func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http
 
 	base, err := json.Marshal(current)
 	if err != nil {
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusInternalServerError,
+			"API009",
 			"failed to marshal current update policy",
 		)
 		return
 	}
 	var baseMap map[string]any
 	if err := json.Unmarshal(base, &baseMap); err != nil {
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusInternalServerError,
+			"API009",
 			"failed to unmarshal current update policy",
 		)
 		return
@@ -1277,12 +1341,12 @@ func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http
 
 	patchBytes, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
+		writeErrorCode(w, r, "API007", "failed to read request body")
 		return
 	}
 	var patchMap map[string]any
 	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid JSON")
+		writeErrorCode(w, r, "API008", "invalid JSON")
 		return
 	}
 
@@ -1290,12 +1354,12 @@ func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http
 
 	merged, err := json.Marshal(baseMap)
 	if err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal merged update policy")
+		writeErrorCode(w, r, "API009", "failed to marshal merged update policy")
 		return
 	}
 	var result swarm.UpdateConfig
 	if err := json.Unmarshal(merged, &result); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid update policy specification")
+		writeErrorCode(w, r, "SVC012", "invalid update policy specification")
 		return
 	}
 
@@ -1303,7 +1367,7 @@ func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http
 
 	updated, err := h.writeClient.UpdateServiceUpdatePolicy(r.Context(), id, &result)
 	if err != nil {
-		writeDockerError(w, r, err, "service")
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -1323,7 +1387,7 @@ func (h *Handlers) HandleGetServiceRollbackPolicy(w http.ResponseWriter, r *http
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 	policy := svc.Spec.RollbackConfig
@@ -1349,10 +1413,10 @@ func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *ht
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusUnsupportedMediaType,
+			"API004",
 			"expected Content-Type: application/merge-patch+json",
 		)
 		return
@@ -1360,7 +1424,7 @@ func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *ht
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -1371,20 +1435,20 @@ func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *ht
 
 	base, err := json.Marshal(current)
 	if err != nil {
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusInternalServerError,
+			"API009",
 			"failed to marshal current rollback policy",
 		)
 		return
 	}
 	var baseMap map[string]any
 	if err := json.Unmarshal(base, &baseMap); err != nil {
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusInternalServerError,
+			"API009",
 			"failed to unmarshal current rollback policy",
 		)
 		return
@@ -1392,12 +1456,12 @@ func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *ht
 
 	patchBytes, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
+		writeErrorCode(w, r, "API007", "failed to read request body")
 		return
 	}
 	var patchMap map[string]any
 	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid JSON")
+		writeErrorCode(w, r, "API008", "invalid JSON")
 		return
 	}
 
@@ -1405,17 +1469,17 @@ func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *ht
 
 	merged, err := json.Marshal(baseMap)
 	if err != nil {
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusInternalServerError,
+			"API009",
 			"failed to marshal merged rollback policy",
 		)
 		return
 	}
 	var result swarm.UpdateConfig
 	if err := json.Unmarshal(merged, &result); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid rollback policy specification")
+		writeErrorCode(w, r, "SVC013", "invalid rollback policy specification")
 		return
 	}
 
@@ -1423,7 +1487,7 @@ func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *ht
 
 	updated, err := h.writeClient.UpdateServiceRollbackPolicy(r.Context(), id, &result)
 	if err != nil {
-		writeDockerError(w, r, err, "service")
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -1447,7 +1511,7 @@ func (h *Handlers) HandleGetServiceLogDriver(w http.ResponseWriter, r *http.Requ
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 	writeJSONWithETag(
@@ -1465,10 +1529,10 @@ func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Re
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusUnsupportedMediaType,
+			"API004",
 			"expected Content-Type: application/merge-patch+json",
 		)
 		return
@@ -1476,7 +1540,7 @@ func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Re
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -1487,23 +1551,23 @@ func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Re
 
 	base, err := json.Marshal(current)
 	if err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal current log driver")
+		writeErrorCode(w, r, "API009", "failed to marshal current log driver")
 		return
 	}
 	var baseMap map[string]any
 	if err := json.Unmarshal(base, &baseMap); err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to unmarshal current log driver")
+		writeErrorCode(w, r, "API009", "failed to unmarshal current log driver")
 		return
 	}
 
 	patchBytes, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
+		writeErrorCode(w, r, "API007", "failed to read request body")
 		return
 	}
 	var patchMap map[string]any
 	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid JSON")
+		writeErrorCode(w, r, "API008", "invalid JSON")
 		return
 	}
 
@@ -1511,12 +1575,12 @@ func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Re
 
 	merged, err := json.Marshal(baseMap)
 	if err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal merged log driver")
+		writeErrorCode(w, r, "API009", "failed to marshal merged log driver")
 		return
 	}
 	var result swarm.Driver
 	if err := json.Unmarshal(merged, &result); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid log driver specification")
+		writeErrorCode(w, r, "SVC019", "invalid log driver specification")
 		return
 	}
 
@@ -1524,7 +1588,7 @@ func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Re
 
 	updated, err := h.writeClient.UpdateServiceLogDriver(r.Context(), id, &result)
 	if err != nil {
-		writeDockerError(w, r, err, "service")
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -1542,10 +1606,10 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusUnsupportedMediaType,
+			"API004",
 			"expected Content-Type: application/merge-patch+json",
 		)
 		return
@@ -1553,7 +1617,7 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -1565,16 +1629,16 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 
 	base, err := json.Marshal(current)
 	if err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal current healthcheck")
+		writeErrorCode(w, r, "API009", "failed to marshal current healthcheck")
 		return
 	}
 
 	var baseMap map[string]any
 	if err := json.Unmarshal(base, &baseMap); err != nil {
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusInternalServerError,
+			"API009",
 			"failed to unmarshal current healthcheck",
 		)
 		return
@@ -1582,13 +1646,13 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 
 	patchBytes, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
+		writeErrorCode(w, r, "API007", "failed to read request body")
 		return
 	}
 
 	var patchMap map[string]any
 	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid JSON")
+		writeErrorCode(w, r, "API008", "invalid JSON")
 		return
 	}
 
@@ -1596,13 +1660,13 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 
 	merged, err := json.Marshal(baseMap)
 	if err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal merged healthcheck")
+		writeErrorCode(w, r, "API009", "failed to marshal merged healthcheck")
 		return
 	}
 
 	var result container.HealthConfig
 	if err := json.Unmarshal(merged, &result); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid healthcheck specification")
+		writeErrorCode(w, r, "SVC014", "invalid healthcheck specification")
 		return
 	}
 
@@ -1610,7 +1674,7 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 
 	updated, err := h.writeClient.UpdateServiceHealthcheck(r.Context(), id, &result)
 	if err != nil {
-		writeDockerError(w, r, err, "service")
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -1689,7 +1753,7 @@ func (h *Handlers) HandleGetServiceContainerConfig(w http.ResponseWriter, r *htt
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -1701,10 +1765,10 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 	id := r.PathValue("id")
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusUnsupportedMediaType,
+			"API004",
 			"expected Content-Type: application/merge-patch+json",
 		)
 		return
@@ -1713,30 +1777,30 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
 	current := containerConfigFromSpec(svc.Spec.TaskTemplate.ContainerSpec)
 	baseBytes, err := json.Marshal(current)
 	if err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal current config")
+		writeErrorCode(w, r, "API009", "failed to marshal current config")
 		return
 	}
 	var baseMap map[string]any
 	if err := json.Unmarshal(baseBytes, &baseMap); err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to unmarshal current config")
+		writeErrorCode(w, r, "API009", "failed to unmarshal current config")
 		return
 	}
 
 	patchBytes, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "failed to read request body")
+		writeErrorCode(w, r, "API007", "failed to read request body")
 		return
 	}
 	var patchMap map[string]any
 	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		writeErrorCode(w, r, "API008", "invalid JSON")
 		return
 	}
 
@@ -1744,12 +1808,12 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 
 	mergedBytes, err := json.Marshal(baseMap)
 	if err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to marshal merged config")
+		writeErrorCode(w, r, "API009", "failed to marshal merged config")
 		return
 	}
 	var merged containerConfigResponse
 	if err := json.Unmarshal(mergedBytes, &merged); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid patch result")
+		writeErrorCode(w, r, "SVC018", "invalid patch result")
 		return
 	}
 
@@ -1790,7 +1854,7 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 		},
 	)
 	if err != nil {
-		writeDockerError(w, r, err, "service")
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -1851,7 +1915,7 @@ func (h *Handlers) HandleGetServiceConfigs(w http.ResponseWriter, r *http.Reques
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -1870,10 +1934,10 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusUnsupportedMediaType,
+			"API004",
 			"expected Content-Type: application/merge-patch+json",
 		)
 		return
@@ -1881,7 +1945,7 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -1889,17 +1953,17 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 		Configs []serviceConfigRef `json:"configs"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid JSON")
+		writeErrorCode(w, r, "API008", "invalid JSON")
 		return
 	}
 
 	configs := make([]*swarm.ConfigReference, len(patch.Configs))
 	for i, ref := range patch.Configs {
 		if ref.ConfigID == "" || ref.ConfigName == "" {
-			writeProblem(
+			writeErrorCode(
 				w,
 				r,
-				http.StatusBadRequest,
+				"SVC015",
 				"each config must have configID and configName",
 			)
 			return
@@ -1924,7 +1988,7 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 
 	updated, err := h.writeClient.UpdateServiceConfigs(r.Context(), id, configs)
 	if err != nil {
-		writeDockerError(w, r, err, "service")
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -1937,7 +2001,7 @@ func (h *Handlers) HandleGetServiceSecrets(w http.ResponseWriter, r *http.Reques
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -1956,10 +2020,10 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusUnsupportedMediaType,
+			"API004",
 			"expected Content-Type: application/merge-patch+json",
 		)
 		return
@@ -1967,7 +2031,7 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -1975,17 +2039,17 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 		Secrets []serviceSecretRef `json:"secrets"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid JSON")
+		writeErrorCode(w, r, "API008", "invalid JSON")
 		return
 	}
 
 	secrets := make([]*swarm.SecretReference, len(patch.Secrets))
 	for i, ref := range patch.Secrets {
 		if ref.SecretID == "" || ref.SecretName == "" {
-			writeProblem(
+			writeErrorCode(
 				w,
 				r,
-				http.StatusBadRequest,
+				"SVC016",
 				"each secret must have secretID and secretName",
 			)
 			return
@@ -2010,7 +2074,7 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 
 	updated, err := h.writeClient.UpdateServiceSecrets(r.Context(), id, secrets)
 	if err != nil {
-		writeDockerError(w, r, err, "service")
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -2023,7 +2087,7 @@ func (h *Handlers) HandleGetServiceNetworks(w http.ResponseWriter, r *http.Reque
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -2042,10 +2106,10 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusUnsupportedMediaType,
+			"API004",
 			"expected Content-Type: application/merge-patch+json",
 		)
 		return
@@ -2053,7 +2117,7 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -2061,14 +2125,14 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 		Networks []serviceNetworkRef `json:"networks"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid JSON")
+		writeErrorCode(w, r, "API008", "invalid JSON")
 		return
 	}
 
 	networks := make([]swarm.NetworkAttachmentConfig, len(patch.Networks))
 	for i, ref := range patch.Networks {
 		if ref.Target == "" {
-			writeProblem(w, r, http.StatusBadRequest, "each network must have a target")
+			writeErrorCode(w, r, "SVC017", "each network must have a target")
 			return
 		}
 		networks[i] = swarm.NetworkAttachmentConfig{
@@ -2081,7 +2145,7 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 
 	updated, err := h.writeClient.UpdateServiceNetworks(r.Context(), id, networks)
 	if err != nil {
-		writeDockerError(w, r, err, "service")
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -2095,7 +2159,7 @@ func (h *Handlers) HandleGetServiceMounts(w http.ResponseWriter, r *http.Request
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -2122,10 +2186,10 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusUnsupportedMediaType,
+			"API004",
 			"Content-Type must be application/merge-patch+json",
 		)
 		return
@@ -2133,7 +2197,7 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "service not found")
+		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
 
@@ -2141,7 +2205,7 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 		Mounts []mount.Mount `json:"mounts"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		writeErrorCode(w, r, "API006", "invalid request body")
 		return
 	}
 
@@ -2149,7 +2213,7 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 
 	updated, err := h.writeClient.UpdateServiceMounts(r.Context(), id, req.Mounts)
 	if err != nil {
-		writeDockerError(w, r, err, "service")
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -2171,13 +2235,13 @@ func (h *Handlers) HandlePatchSwarmOrchestration(w http.ResponseWriter, r *http.
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(w, r, http.StatusUnsupportedMediaType,
+		writeErrorCode(w, r, "API004",
 			"Content-Type must be application/merge-patch+json")
 		return
 	}
 
 	if h.systemClient == nil {
-		writeProblem(w, r, http.StatusNotImplemented, "swarm API not available")
+		writeErrorCode(w, r, "SWM001", "swarm API not available")
 		return
 	}
 
@@ -2186,13 +2250,13 @@ func (h *Handlers) HandlePatchSwarmOrchestration(w http.ResponseWriter, r *http.
 
 	current, err := h.systemClient.SwarmInspect(ctx)
 	if err != nil {
-		writeProblem(w, r, http.StatusServiceUnavailable, "failed to inspect swarm")
+		writeErrorCode(w, r, "SWM002", "failed to inspect swarm")
 		return
 	}
 
 	var patch swarm.OrchestrationConfig
 	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		writeErrorCode(w, r, "API006", "invalid request body")
 		return
 	}
 
@@ -2209,7 +2273,7 @@ func (h *Handlers) HandlePatchSwarmOrchestration(w http.ResponseWriter, r *http.
 		current.Version,
 		swarm.UpdateFlags{},
 	); err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to update swarm: "+err.Error())
+		writeErrorCode(w, r, "SWM003", "failed to update swarm: "+err.Error())
 		return
 	}
 
@@ -2221,13 +2285,13 @@ func (h *Handlers) HandlePatchSwarmRaft(w http.ResponseWriter, r *http.Request) 
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(w, r, http.StatusUnsupportedMediaType,
+		writeErrorCode(w, r, "API004",
 			"Content-Type must be application/merge-patch+json")
 		return
 	}
 
 	if h.systemClient == nil {
-		writeProblem(w, r, http.StatusNotImplemented, "swarm API not available")
+		writeErrorCode(w, r, "SWM001", "swarm API not available")
 		return
 	}
 
@@ -2236,13 +2300,13 @@ func (h *Handlers) HandlePatchSwarmRaft(w http.ResponseWriter, r *http.Request) 
 
 	current, err := h.systemClient.SwarmInspect(ctx)
 	if err != nil {
-		writeProblem(w, r, http.StatusServiceUnavailable, "failed to inspect swarm")
+		writeErrorCode(w, r, "SWM002", "failed to inspect swarm")
 		return
 	}
 
 	var patch swarm.RaftConfig
 	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		writeErrorCode(w, r, "API006", "invalid request body")
 		return
 	}
 
@@ -2265,7 +2329,7 @@ func (h *Handlers) HandlePatchSwarmRaft(w http.ResponseWriter, r *http.Request) 
 		current.Version,
 		swarm.UpdateFlags{},
 	); err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to update swarm: "+err.Error())
+		writeErrorCode(w, r, "SWM003", "failed to update swarm: "+err.Error())
 		return
 	}
 
@@ -2277,13 +2341,13 @@ func (h *Handlers) HandlePatchSwarmDispatcher(w http.ResponseWriter, r *http.Req
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(w, r, http.StatusUnsupportedMediaType,
+		writeErrorCode(w, r, "API004",
 			"Content-Type must be application/merge-patch+json")
 		return
 	}
 
 	if h.systemClient == nil {
-		writeProblem(w, r, http.StatusNotImplemented, "swarm API not available")
+		writeErrorCode(w, r, "SWM001", "swarm API not available")
 		return
 	}
 
@@ -2292,13 +2356,13 @@ func (h *Handlers) HandlePatchSwarmDispatcher(w http.ResponseWriter, r *http.Req
 
 	current, err := h.systemClient.SwarmInspect(ctx)
 	if err != nil {
-		writeProblem(w, r, http.StatusServiceUnavailable, "failed to inspect swarm")
+		writeErrorCode(w, r, "SWM002", "failed to inspect swarm")
 		return
 	}
 
 	var patch swarm.DispatcherConfig
 	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		writeErrorCode(w, r, "API006", "invalid request body")
 		return
 	}
 
@@ -2315,7 +2379,7 @@ func (h *Handlers) HandlePatchSwarmDispatcher(w http.ResponseWriter, r *http.Req
 		current.Version,
 		swarm.UpdateFlags{},
 	); err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to update swarm: "+err.Error())
+		writeErrorCode(w, r, "SWM003", "failed to update swarm: "+err.Error())
 		return
 	}
 
@@ -2327,13 +2391,13 @@ func (h *Handlers) HandlePatchSwarmCAConfig(w http.ResponseWriter, r *http.Reque
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(w, r, http.StatusUnsupportedMediaType,
+		writeErrorCode(w, r, "API004",
 			"Content-Type must be application/merge-patch+json")
 		return
 	}
 
 	if h.systemClient == nil {
-		writeProblem(w, r, http.StatusNotImplemented, "swarm API not available")
+		writeErrorCode(w, r, "SWM001", "swarm API not available")
 		return
 	}
 
@@ -2342,13 +2406,13 @@ func (h *Handlers) HandlePatchSwarmCAConfig(w http.ResponseWriter, r *http.Reque
 
 	current, err := h.systemClient.SwarmInspect(ctx)
 	if err != nil {
-		writeProblem(w, r, http.StatusServiceUnavailable, "failed to inspect swarm")
+		writeErrorCode(w, r, "SWM002", "failed to inspect swarm")
 		return
 	}
 
 	var patch swarm.CAConfig
 	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		writeErrorCode(w, r, "API006", "invalid request body")
 		return
 	}
 
@@ -2365,7 +2429,7 @@ func (h *Handlers) HandlePatchSwarmCAConfig(w http.ResponseWriter, r *http.Reque
 		current.Version,
 		swarm.UpdateFlags{},
 	); err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to update swarm: "+err.Error())
+		writeErrorCode(w, r, "SWM003", "failed to update swarm: "+err.Error())
 		return
 	}
 
@@ -2377,13 +2441,13 @@ func (h *Handlers) HandlePatchSwarmEncryption(w http.ResponseWriter, r *http.Req
 
 	ct := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeProblem(w, r, http.StatusUnsupportedMediaType,
+		writeErrorCode(w, r, "API004",
 			"Content-Type must be application/merge-patch+json")
 		return
 	}
 
 	if h.systemClient == nil {
-		writeProblem(w, r, http.StatusNotImplemented, "swarm API not available")
+		writeErrorCode(w, r, "SWM001", "swarm API not available")
 		return
 	}
 
@@ -2392,7 +2456,7 @@ func (h *Handlers) HandlePatchSwarmEncryption(w http.ResponseWriter, r *http.Req
 
 	current, err := h.systemClient.SwarmInspect(ctx)
 	if err != nil {
-		writeProblem(w, r, http.StatusServiceUnavailable, "failed to inspect swarm")
+		writeErrorCode(w, r, "SWM002", "failed to inspect swarm")
 		return
 	}
 
@@ -2400,7 +2464,7 @@ func (h *Handlers) HandlePatchSwarmEncryption(w http.ResponseWriter, r *http.Req
 		AutoLockManagers *bool `json:"AutoLockManagers"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		writeErrorCode(w, r, "API006", "invalid request body")
 		return
 	}
 
@@ -2417,7 +2481,7 @@ func (h *Handlers) HandlePatchSwarmEncryption(w http.ResponseWriter, r *http.Req
 		current.Version,
 		swarm.UpdateFlags{},
 	); err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to update swarm: "+err.Error())
+		writeErrorCode(w, r, "SWM003", "failed to update swarm: "+err.Error())
 		return
 	}
 
@@ -2428,7 +2492,7 @@ func (h *Handlers) HandlePostRotateToken(w http.ResponseWriter, r *http.Request)
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
 	if h.systemClient == nil {
-		writeProblem(w, r, http.StatusNotImplemented, "swarm API not available")
+		writeErrorCode(w, r, "SWM001", "swarm API not available")
 		return
 	}
 
@@ -2436,7 +2500,7 @@ func (h *Handlers) HandlePostRotateToken(w http.ResponseWriter, r *http.Request)
 		Target string `json:"target"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		writeErrorCode(w, r, "API006", "invalid request body")
 		return
 	}
 
@@ -2447,7 +2511,7 @@ func (h *Handlers) HandlePostRotateToken(w http.ResponseWriter, r *http.Request)
 	case "manager":
 		flags.RotateManagerToken = true
 	default:
-		writeProblem(w, r, http.StatusBadRequest, "target must be \"worker\" or \"manager\"")
+		writeErrorCode(w, r, "SWM011", "target must be \"worker\" or \"manager\"")
 		return
 	}
 
@@ -2456,14 +2520,14 @@ func (h *Handlers) HandlePostRotateToken(w http.ResponseWriter, r *http.Request)
 
 	current, err := h.systemClient.SwarmInspect(ctx)
 	if err != nil {
-		writeProblem(w, r, http.StatusServiceUnavailable, "failed to inspect swarm")
+		writeErrorCode(w, r, "SWM002", "failed to inspect swarm")
 		return
 	}
 
 	slog.Info("rotating swarm join token", "target", req.Target)
 
 	if err := h.systemClient.UpdateSwarm(ctx, current.Spec, current.Version, flags); err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to rotate token: "+err.Error())
+		writeErrorCode(w, r, "SWM006", "failed to rotate token: "+err.Error())
 		return
 	}
 
@@ -2472,7 +2536,7 @@ func (h *Handlers) HandlePostRotateToken(w http.ResponseWriter, r *http.Request)
 
 func (h *Handlers) HandlePostRotateUnlockKey(w http.ResponseWriter, r *http.Request) {
 	if h.systemClient == nil {
-		writeProblem(w, r, http.StatusNotImplemented, "swarm API not available")
+		writeErrorCode(w, r, "SWM001", "swarm API not available")
 		return
 	}
 
@@ -2481,7 +2545,7 @@ func (h *Handlers) HandlePostRotateUnlockKey(w http.ResponseWriter, r *http.Requ
 
 	current, err := h.systemClient.SwarmInspect(ctx)
 	if err != nil {
-		writeProblem(w, r, http.StatusServiceUnavailable, "failed to inspect swarm")
+		writeErrorCode(w, r, "SWM002", "failed to inspect swarm")
 		return
 	}
 
@@ -2489,10 +2553,10 @@ func (h *Handlers) HandlePostRotateUnlockKey(w http.ResponseWriter, r *http.Requ
 
 	flags := swarm.UpdateFlags{RotateManagerUnlockKey: true}
 	if err := h.systemClient.UpdateSwarm(ctx, current.Spec, current.Version, flags); err != nil {
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusInternalServerError,
+			"SWM007",
 			"failed to rotate unlock key: "+err.Error(),
 		)
 		return
@@ -2503,7 +2567,7 @@ func (h *Handlers) HandlePostRotateUnlockKey(w http.ResponseWriter, r *http.Requ
 
 func (h *Handlers) HandlePostForceRotateCA(w http.ResponseWriter, r *http.Request) {
 	if h.systemClient == nil {
-		writeProblem(w, r, http.StatusNotImplemented, "swarm API not available")
+		writeErrorCode(w, r, "SWM001", "swarm API not available")
 		return
 	}
 
@@ -2512,7 +2576,7 @@ func (h *Handlers) HandlePostForceRotateCA(w http.ResponseWriter, r *http.Reques
 
 	current, err := h.systemClient.SwarmInspect(ctx)
 	if err != nil {
-		writeProblem(w, r, http.StatusServiceUnavailable, "failed to inspect swarm")
+		writeErrorCode(w, r, "SWM002", "failed to inspect swarm")
 		return
 	}
 
@@ -2527,10 +2591,10 @@ func (h *Handlers) HandlePostForceRotateCA(w http.ResponseWriter, r *http.Reques
 		current.Version,
 		swarm.UpdateFlags{},
 	); err != nil {
-		writeProblem(
+		writeErrorCode(
 			w,
 			r,
-			http.StatusInternalServerError,
+			"SWM003",
 			"failed to force CA rotation: "+err.Error(),
 		)
 		return
@@ -2541,7 +2605,7 @@ func (h *Handlers) HandlePostForceRotateCA(w http.ResponseWriter, r *http.Reques
 
 func (h *Handlers) HandleGetUnlockKey(w http.ResponseWriter, r *http.Request) {
 	if h.systemClient == nil {
-		writeProblem(w, r, http.StatusNotImplemented, "swarm API not available")
+		writeErrorCode(w, r, "SWM001", "swarm API not available")
 		return
 	}
 
@@ -2550,9 +2614,41 @@ func (h *Handlers) HandleGetUnlockKey(w http.ResponseWriter, r *http.Request) {
 
 	key, err := h.systemClient.GetUnlockKey(ctx)
 	if err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "failed to get unlock key: "+err.Error())
+		writeErrorCode(w, r, "SWM009", "failed to get unlock key: "+err.Error())
 		return
 	}
 
 	writeJSON(w, map[string]any{"unlockKey": key})
+}
+
+func (h *Handlers) HandlePostUnlockSwarm(w http.ResponseWriter, r *http.Request) {
+	if h.systemClient == nil {
+		writeErrorCode(w, r, "SWM001", "swarm API not available")
+		return
+	}
+
+	var body struct {
+		UnlockKey string `json:"unlockKey"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeErrorCode(w, r, "API006", "invalid request body: "+err.Error())
+		return
+	}
+
+	if body.UnlockKey == "" {
+		writeErrorCode(w, r, "SWM010", "unlockKey is required")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	slog.Info("unlocking swarm")
+
+	if err := h.systemClient.UnlockSwarm(ctx, body.UnlockKey); err != nil {
+		writeErrorCode(w, r, "SWM008", "failed to unlock swarm: "+err.Error())
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

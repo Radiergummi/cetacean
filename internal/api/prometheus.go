@@ -40,14 +40,14 @@ func (p *PrometheusProxy) proxyTo(
 	outReq, err := http.NewRequestWithContext(r.Context(), "GET", targetURL, nil)
 	if err != nil {
 		slog.Error("failed to create prometheus request", "error", err)
-		writeProblem(w, r, http.StatusInternalServerError, "failed to create prometheus request")
+		writeErrorCode(w, r, "MTR007", "failed to create prometheus request")
 		return
 	}
 
 	resp, err := p.client.Do(outReq)
 	if err != nil {
 		slog.Error("prometheus unreachable", "url", p.baseURL, "error", err)
-		writeProblem(w, r, http.StatusBadGateway, "prometheus unreachable")
+		writeErrorCode(w, r, "MTR002", "prometheus unreachable")
 		return
 	}
 	defer resp.Body.Close()
@@ -63,7 +63,7 @@ func (p *PrometheusProxy) proxyTo(
 // HandleMetricsLabels proxies to /api/v1/labels with optional match[] param.
 func (p *PrometheusProxy) HandleMetricsLabels(w http.ResponseWriter, r *http.Request) {
 	if p == nil {
-		writeProblem(w, r, http.StatusServiceUnavailable, "prometheus not configured")
+		writeErrorCode(w, r, "MTR001", "prometheus not configured")
 		return
 	}
 	allowed := url.Values{}
@@ -81,12 +81,12 @@ func (p *PrometheusProxy) HandleMetricsLabels(w http.ResponseWriter, r *http.Req
 // HandleMetricsLabelValues proxies to /api/v1/label/{name}/values.
 func (p *PrometheusProxy) HandleMetricsLabelValues(w http.ResponseWriter, r *http.Request) {
 	if p == nil {
-		writeProblem(w, r, http.StatusServiceUnavailable, "prometheus not configured")
+		writeErrorCode(w, r, "MTR001", "prometheus not configured")
 		return
 	}
 	name := r.PathValue("name")
 	if name == "" {
-		writeProblem(w, r, http.StatusBadRequest, "missing label name")
+		writeErrorCode(w, r, "MTR006", "missing label name")
 		return
 	}
 	allowed := url.Values{}
@@ -100,14 +100,14 @@ func (p *PrometheusProxy) HandleMetricsLabelValues(w http.ResponseWriter, r *htt
 // It routes instant vs range queries by the presence of start+end params.
 func (p *PrometheusProxy) HandleMetrics(w http.ResponseWriter, r *http.Request) {
 	if p == nil {
-		writeProblem(w, r, http.StatusServiceUnavailable, "prometheus not configured")
+		writeErrorCode(w, r, "MTR001", "prometheus not configured")
 		return
 	}
 
 	q := r.URL.Query()
 	query := q.Get("query")
 	if query == "" {
-		writeProblem(w, r, http.StatusBadRequest, "missing required parameter: query")
+		writeErrorCode(w, r, "MTR003", "missing required parameter: query")
 		return
 	}
 

@@ -1,4 +1,4 @@
-import { api } from "@/api/client";
+import { api, ApiError } from "@/api/client";
 import type { Node } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
 import {
@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
+import { getErrorInfo } from "@/lib/errors";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -35,6 +36,10 @@ export function NodeActions({ node }: { node: Node }) {
   const hostname = node.Description?.Hostname || node.ID;
   const isDown = node.Status?.State === "down";
   const canRemove = isDown && confirmText === hostname;
+
+  const errorCode = remove.cause instanceof ApiError ? remove.cause.code : null;
+  const errorInfo = getErrorInfo(errorCode);
+  const showForceRemove = errorInfo?.action === "force-remove";
 
   function handleOpenChange(next: boolean) {
     setDialogOpen(next);
@@ -72,7 +77,28 @@ export function NodeActions({ node }: { node: Node }) {
         trigger
       )}
 
-      {remove.error && <p className="text-xs text-red-600 dark:text-red-400">{remove.error}</p>}
+      {remove.error && (
+        <div className="flex items-center gap-2">
+          <p className="text-xs text-red-600 dark:text-red-400">
+            {errorInfo?.suggestion ?? remove.error}
+          </p>
+          {showForceRemove && (
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={remove.loading}
+              onClick={() =>
+                void remove.execute(async () => {
+                  await api.removeNode(node.ID, true);
+                  navigate("/nodes", { replace: true });
+                }, "Failed to force remove node")
+              }
+            >
+              Force remove
+            </Button>
+          )}
+        </div>
+      )}
 
       <AlertDialog
         open={dialogOpen}

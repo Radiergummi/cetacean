@@ -17,7 +17,7 @@ func (h *Handlers) HandlePlugins(w http.ResponseWriter, r *http.Request) {
 	plugins, err := h.pluginClient.PluginList(ctx)
 	if err != nil {
 		slog.Error("plugin list failed", "error", err)
-		writeProblem(w, r, http.StatusInternalServerError, "plugin list failed")
+		writeErrorCode(w, r, "PLG001", "plugin list failed")
 		return
 	}
 	if plugins == nil {
@@ -87,6 +87,7 @@ type pluginRemoteRequest struct {
 
 type pluginConfigureRequest struct {
 	Args []string `json:"args"`
+	Env  []string `json:"env"`
 }
 
 func (h *Handlers) HandlePluginPrivileges(w http.ResponseWriter, r *http.Request) {
@@ -94,11 +95,11 @@ func (h *Handlers) HandlePluginPrivileges(w http.ResponseWriter, r *http.Request
 
 	var req pluginRemoteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		writeErrorCode(w, r, "API006", "invalid request body")
 		return
 	}
 	if req.Remote == "" {
-		writeProblem(w, r, http.StatusBadRequest, "remote is required")
+		writeErrorCode(w, r, "PLG002", "remote is required")
 		return
 	}
 
@@ -108,7 +109,7 @@ func (h *Handlers) HandlePluginPrivileges(w http.ResponseWriter, r *http.Request
 	privileges, err := h.pluginClient.PluginPrivileges(ctx, req.Remote)
 	if err != nil {
 		slog.Error("plugin privileges check failed", "remote", req.Remote, "error", err)
-		writeProblem(w, r, http.StatusInternalServerError, "failed to check plugin privileges")
+		writeErrorCode(w, r, "PLG003", "failed to check plugin privileges")
 		return
 	}
 
@@ -120,11 +121,11 @@ func (h *Handlers) HandleInstallPlugin(w http.ResponseWriter, r *http.Request) {
 
 	var req pluginRemoteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		writeErrorCode(w, r, "API006", "invalid request body")
 		return
 	}
 	if req.Remote == "" {
-		writeProblem(w, r, http.StatusBadRequest, "remote is required")
+		writeErrorCode(w, r, "PLG002", "remote is required")
 		return
 	}
 
@@ -147,11 +148,11 @@ func (h *Handlers) HandleUpgradePlugin(w http.ResponseWriter, r *http.Request) {
 
 	var req pluginRemoteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		writeErrorCode(w, r, "API006", "invalid request body")
 		return
 	}
 	if req.Remote == "" {
-		writeProblem(w, r, http.StatusBadRequest, "remote is required")
+		writeErrorCode(w, r, "PLG002", "remote is required")
 		return
 	}
 
@@ -179,13 +180,14 @@ func (h *Handlers) HandleConfigurePlugin(w http.ResponseWriter, r *http.Request)
 
 	var req pluginConfigureRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		writeErrorCode(w, r, "API006", "invalid request body")
 		return
 	}
 
-	slog.Info("configuring plugin", "plugin", name, "args", req.Args)
+	settings := append(req.Args, req.Env...)
+	slog.Info("configuring plugin", "plugin", name, "settings", settings)
 
-	if err := h.pluginClient.PluginConfigure(r.Context(), name, req.Args); err != nil {
+	if err := h.pluginClient.PluginConfigure(r.Context(), name, settings); err != nil {
 		writeDockerError(w, r, err, "plugin")
 		return
 	}

@@ -85,7 +85,7 @@ export function EditablePanel({
   }
 
   const titleRow = title && (
-    <div className="flex items-center justify-between">
+    <div className="flex min-h-7 items-center justify-between">
       <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
         {title}
       </h3>

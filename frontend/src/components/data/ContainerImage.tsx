@@ -157,7 +157,9 @@ export default function ContainerImage({
     return null;
   }
 
-  const display = image.split("@")[0];
+  const display = image
+    .split("@")[0]
+    .replace(/^(docker\.io|registry-1\.docker\.io)\//, "");
   const href = imageRegistryUrl(image);
   const favicon = registryFavicon(image);
 
