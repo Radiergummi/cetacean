@@ -8,7 +8,7 @@ export default function ResourceLink({
 }: {
   label: string;
   name?: string | React.ReactNode;
-  to: string;
+  to?: string;
 }) {
   if (!name) {
     return null;

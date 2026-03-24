@@ -170,12 +170,16 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
 
                     {variant === "service" && (
                       <td className="p-3 text-sm">
-                        <Link
-                          to={`/nodes/${NodeID}`}
-                          className="text-link hover:underline"
-                        >
-                          {NodeHostname || NodeID?.slice(0, 12) || "—"}
-                        </Link>
+                        {NodeID ? (
+                          <Link
+                            to={`/nodes/${NodeID}`}
+                            className="text-link hover:underline"
+                          >
+                            {NodeHostname || NodeID.slice(0, 12)}
+                          </Link>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </td>
                     )}
 

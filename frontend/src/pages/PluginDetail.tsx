@@ -315,7 +315,7 @@ export default function PluginDetail() {
               <KVTable
                 rows={configEnv.map(({ Name: envName, Value, Description }) => [
                   envName,
-                  `${Value}${Description ? ` — ${Description}` : ""}`,
+                  `${Value ?? ""}${Description ? ` — ${Description}` : ""}`,
                 ])}
               />
             </div>

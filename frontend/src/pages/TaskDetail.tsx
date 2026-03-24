@@ -196,7 +196,7 @@ export default function TaskDetail() {
         <ResourceLink
           label="Node"
           name={nodeLabel}
-          to={`/nodes/${task.NodeID}`}
+          to={task.NodeID ? `/nodes/${task.NodeID}` : undefined}
         />
         <InfoCard
           label="Slot"
