@@ -113,6 +113,57 @@ func newPluginHandlers(pc *mockPluginClient) *Handlers {
 	)
 }
 
+func TestHandlePlugins_OK(t *testing.T) {
+	pc := &mockPluginClient{
+		pluginListFn: func(_ context.Context) (types.PluginsListResponse, error) {
+			return types.PluginsListResponse{
+				{Name: "plugin-a", Enabled: true},
+				{Name: "plugin-b", Enabled: false},
+			}, nil
+		},
+	}
+	h := newPluginHandlers(pc)
+
+	req := httptest.NewRequest(http.MethodGet, "/plugins", nil)
+	req.Header.Set("Accept", "application/json")
+	w := httptest.NewRecorder()
+
+	h.HandlePlugins(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+
+	total, _ := resp["total"].(float64)
+	if total != 2 {
+		t.Errorf("expected total 2, got %v", resp["total"])
+	}
+}
+
+func TestHandlePlugins_Empty(t *testing.T) {
+	pc := &mockPluginClient{
+		pluginListFn: func(_ context.Context) (types.PluginsListResponse, error) {
+			return nil, nil
+		},
+	}
+	h := newPluginHandlers(pc)
+
+	req := httptest.NewRequest(http.MethodGet, "/plugins", nil)
+	req.Header.Set("Accept", "application/json")
+	w := httptest.NewRecorder()
+
+	h.HandlePlugins(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestHandlePlugin_OK(t *testing.T) {
 	pc := &mockPluginClient{
 		pluginInspectFn: func(_ context.Context, name string) (*types.Plugin, error) {

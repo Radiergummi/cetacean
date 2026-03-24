@@ -4,23 +4,26 @@ import FetchError from "../components/FetchError";
 import InstallPluginDialog from "../components/InstallPluginDialog";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
+import PluginTable from "../components/PluginTable";
 import { Button } from "../components/ui/button";
 import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
 import { Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 
 export default function PluginList() {
   const [plugins, setPlugins] = useState<Plugin[] | null>(null);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [installOpen, setInstallOpen] = useState(false);
   const { level } = useOperationsLevel();
 
   const fetchPlugins = useCallback(() => {
+    setError(null);
     api
       .plugins()
       .then(setPlugins)
-      .catch(() => setError(true));
+      .catch((thrown) => {
+        setError(thrown instanceof Error ? thrown.message : "Failed to load plugins");
+      });
   }, []);
 
   useEffect(() => {
@@ -28,7 +31,12 @@ export default function PluginList() {
   }, [fetchPlugins]);
 
   if (error) {
-    return <FetchError message="Failed to load plugins" />;
+    return (
+      <FetchError
+        message={error}
+        onRetry={fetchPlugins}
+      />
+    );
   }
 
   if (!plugins) {
@@ -53,45 +61,7 @@ export default function PluginList() {
       {plugins.length === 0 ? (
         <p className="py-12 text-center text-sm text-muted-foreground">No plugins installed</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b text-left text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                <th className="p-3">Name</th>
-                <th className="p-3">Type</th>
-                <th className="p-3">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {plugins.map(({ Config: { Interface }, Enabled, Id, Name }) => (
-                <tr
-                  key={Id ?? Name}
-                  className="border-b last:border-b-0"
-                >
-                  <td className="p-3 font-mono text-xs">
-                    <Link
-                      to={`/plugins/${encodeURIComponent(Name)}`}
-                      className="text-link hover:underline"
-                    >
-                      {Name}
-                    </Link>
-                  </td>
-                  <td className="p-3 text-sm text-muted-foreground">
-                    {Interface.Types.map(({ Capability }) => Capability).join(", ") || "—"}
-                  </td>
-                  <td className="p-3">
-                    <span
-                      data-enabled={Enabled || undefined}
-                      className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground data-enabled:bg-green-500/10 data-enabled:text-green-500"
-                    >
-                      {Enabled ? "Enabled" : "Disabled"}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <PluginTable plugins={plugins} />
       )}
 
       <InstallPluginDialog

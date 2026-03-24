@@ -11,11 +11,6 @@ import (
 )
 
 func (h *Handlers) HandlePlugins(w http.ResponseWriter, r *http.Request) {
-	if h.pluginClient == nil {
-		writeProblem(w, r, http.StatusNotImplemented, "plugin list not available")
-		return
-	}
-
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 

@@ -6,6 +6,7 @@ import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
 import InstallPluginDialog from "../components/InstallPluginDialog";
 import { LoadingDetail } from "../components/LoadingSkeleton";
+import PluginTable from "../components/PluginTable";
 import PageHeader from "../components/PageHeader";
 import { Spinner } from "../components/Spinner";
 import { SwarmActions } from "../components/swarm-detail/SwarmActions";
@@ -632,45 +633,7 @@ export default function SwarmPage() {
           <p className="py-4 text-sm text-muted-foreground">No plugins installed.</p>
         ) : (
           <div className="space-y-3">
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b text-left text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                    <th className="p-3">Name</th>
-                    <th className="p-3">Type</th>
-                    <th className="p-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {plugins.map(({ Config: { Interface }, Enabled, Id, Name }) => (
-                    <tr
-                      key={Id ?? Name}
-                      className="border-b last:border-b-0"
-                    >
-                      <td className="p-3 font-mono text-xs">
-                        <Link
-                          to={`/plugins/${encodeURIComponent(Name)}`}
-                          className="text-link hover:underline"
-                        >
-                          {Name}
-                        </Link>
-                      </td>
-                      <td className="p-3 text-sm text-muted-foreground">
-                        {Interface.Types.map(({ Capability }) => Capability).join(", ") || "—"}
-                      </td>
-                      <td className="p-3">
-                        <span
-                          data-enabled={Enabled || undefined}
-                          className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground data-enabled:bg-green-500/10 data-enabled:text-green-500"
-                        >
-                          {Enabled ? "Enabled" : "Disabled"}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <PluginTable plugins={plugins} />
 
             <Link
               to="/plugins"

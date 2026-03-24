@@ -44,10 +44,7 @@ export default function InstallPluginDialog({
   }
 
   function handleOpenChange(next: boolean) {
-    if (!next) {
-      reset();
-    }
-
+    reset();
     onOpenChange(next);
   }
 

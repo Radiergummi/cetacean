@@ -207,6 +207,10 @@ func (c *Client) PluginUpgrade(ctx context.Context, name string, remote string) 
 	return nil
 }
 
+// PluginPrivileges queries the registry for the privileges a plugin requires.
+// The Docker SDK has no public method for this — the internal tryPluginPrivileges
+// is unexported and embedded in the PluginInstall flow. We call the Engine API
+// directly via the SDK's HTTP client, which handles unix socket transport.
 func (c *Client) PluginPrivileges(
 	ctx context.Context,
 	remote string,
