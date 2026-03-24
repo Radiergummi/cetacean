@@ -132,7 +132,7 @@ export default function StackDetail() {
                   </Link>
                 </td>
                 <td className="p-3 font-mono text-xs">
-                  {TaskTemplate.ContainerSpec.Image.split("@")[0]}
+                  {TaskTemplate.ContainerSpec?.Image?.split("@")[0]}
                 </td>
                 <td className="p-3 text-sm">{Mode.Replicated ? "replicated" : "global"}</td>
                 <td className="p-3 text-sm tabular-nums">

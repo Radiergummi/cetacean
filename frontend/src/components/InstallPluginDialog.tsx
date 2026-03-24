@@ -131,7 +131,7 @@ export default function InstallPluginDialog({
                         >
                           <td className="p-2 font-mono text-xs">{Name}</td>
                           <td className="p-2 text-xs text-muted-foreground">{Description}</td>
-                          <td className="p-2 font-mono text-xs">{Value.join(", ")}</td>
+                          <td className="p-2 font-mono text-xs">{(Value ?? []).join(", ")}</td>
                         </tr>
                       ))}
                     </tbody>

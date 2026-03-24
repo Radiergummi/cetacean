@@ -22,17 +22,17 @@ export function deriveServiceSubResources(service: Service): DerivedServiceState
   const containerSpec = taskTemplate.ContainerSpec;
 
   return {
-    envVars: envSliceToMap(containerSpec.Env),
+    envVars: envSliceToMap(containerSpec?.Env),
     serviceResources: taskTemplate.Resources ?? null,
     serviceLabels: spec.Labels ?? {},
-    healthcheck: containerSpec.Healthcheck ?? null,
+    healthcheck: containerSpec?.Healthcheck ?? null,
     specPorts: spec.EndpointSpec?.Ports ?? [],
-    serviceMounts: containerSpec.Mounts ?? [],
+    serviceMounts: containerSpec?.Mounts ?? [],
     containerConfig: containerConfigFromSpec(containerSpec),
   };
 }
 
-function envSliceToMap(env?: string[]): Record<string, string> {
+function envSliceToMap(env?: string[] | null): Record<string, string> {
   const result: Record<string, string> = {};
 
   if (!env) {
@@ -55,9 +55,20 @@ function envSliceToMap(env?: string[]): Record<string, string> {
 function containerConfigFromSpec(
   spec: Service["Spec"]["TaskTemplate"]["ContainerSpec"],
 ): ContainerConfig {
+  if (!spec) {
+    return {
+      dir: "",
+      user: "",
+      hostname: "",
+      tty: false,
+      readOnly: false,
+      stopSignal: "",
+    };
+  }
+
   return {
-    command: spec.Command,
-    args: spec.Args,
+    command: spec.Command ?? undefined,
+    args: spec.Args ?? undefined,
     dir: spec.Dir ?? "",
     user: spec.User ?? "",
     hostname: spec.Hostname ?? "",
@@ -66,15 +77,15 @@ function containerConfigFromSpec(
     readOnly: spec.ReadOnly ?? false,
     stopSignal: spec.StopSignal ?? "",
     stopGracePeriod: spec.StopGracePeriod,
-    capabilityAdd: spec.CapabilityAdd,
-    capabilityDrop: spec.CapabilityDrop,
-    groups: spec.Groups,
-    hosts: spec.Hosts,
+    capabilityAdd: spec.CapabilityAdd ?? undefined,
+    capabilityDrop: spec.CapabilityDrop ?? undefined,
+    groups: spec.Groups ?? undefined,
+    hosts: spec.Hosts ?? undefined,
     dnsConfig: spec.DNSConfig
       ? {
-          nameservers: spec.DNSConfig.Nameservers,
-          search: spec.DNSConfig.Search,
-          options: spec.DNSConfig.Options,
+          nameservers: spec.DNSConfig.Nameservers ?? undefined,
+          search: spec.DNSConfig.Search ?? undefined,
+          options: spec.DNSConfig.Options ?? undefined,
         }
       : undefined,
   };

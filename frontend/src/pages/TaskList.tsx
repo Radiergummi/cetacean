@@ -127,7 +127,7 @@ export default function TaskList() {
     {
       header: "Image",
       cell: ({ Spec }) => (
-        <span className="font-mono text-xs">{Spec.ContainerSpec.Image.split("@")[0]}</span>
+        <span className="font-mono text-xs">{Spec.ContainerSpec?.Image?.split("@")[0]}</span>
       ),
     },
   ];

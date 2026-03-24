@@ -98,9 +98,7 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
                 ServiceID,
                 ServiceName,
                 Slot,
-                Spec: {
-                  ContainerSpec: { Image },
-                },
+                Spec: { ContainerSpec },
                 Status: { ContainerStatus, Err, State, Timestamp },
               }) => {
                 const exitCode = ContainerStatus?.ExitCode;
@@ -176,13 +174,13 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
                           to={`/nodes/${NodeID}`}
                           className="text-link hover:underline"
                         >
-                          {NodeHostname || NodeID.slice(0, 12)}
+                          {NodeHostname || NodeID?.slice(0, 12) || "—"}
                         </Link>
                       </td>
                     )}
 
                     <td className="p-3 text-sm">
-                      <span className="font-mono text-xs">{Image.split("@")[0]}</span>
+                      <span className="font-mono text-xs">{ContainerSpec?.Image?.split("@")[0]}</span>
                     </td>
                     <td className="p-3 text-sm">{DesiredState}</td>
                     <td className="p-3 text-sm text-red-600 dark:text-red-400">{errorMessage}</td>

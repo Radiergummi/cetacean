@@ -212,7 +212,7 @@ export default function PluginDetail() {
         />
         <InfoCard
           label="Type"
-          value={config.Interface.Types?.map(({ Capability }) => Capability).join(", ") || "—"}
+          value={config.Interface.Types?.join(", ") || "—"}
         />
       </MetadataGrid>
 
@@ -326,8 +326,8 @@ export default function PluginDetail() {
               <span className="text-xs font-medium text-muted-foreground">Mounts</span>
               <KVTable
                 rows={configMounts.map(({ Name: mountName, Source, Destination, Type }) => [
-                  mountName || Source,
-                  `${Source} → ${Destination} (${Type})`,
+                  mountName || Source || "—",
+                  `${Source ?? "—"} → ${Destination} (${Type})`,
                 ])}
               />
             </div>
@@ -346,7 +346,7 @@ export default function PluginDetail() {
             <div className="space-y-1">
               <span className="text-xs font-medium text-muted-foreground">Devices</span>
               <KVTable
-                rows={linuxDevices.map(({ Name: deviceName, Path }) => [deviceName, Path])}
+                rows={linuxDevices.map(({ Name: deviceName, Path }) => [deviceName, Path ?? "—"])}
               />
             </div>
           )}

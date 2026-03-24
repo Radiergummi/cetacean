@@ -54,7 +54,7 @@ function formatRetries(retries: number | undefined): string {
   return String(retries);
 }
 
-function extractCommand(test: string[] | undefined): { shell: boolean; command: string } {
+function extractCommand(test: string[] | null | undefined): { shell: boolean; command: string } {
   if (!test || test.length === 0) {
     return { shell: true, command: "" };
   }

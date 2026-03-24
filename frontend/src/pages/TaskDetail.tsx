@@ -100,7 +100,7 @@ export default function TaskDetail() {
   }
 
   const serviceName = task.ServiceName || task.ServiceID.slice(0, 12);
-  const nodeLabel = task.NodeHostname || task.NodeID.slice(0, 12);
+  const nodeLabel = task.NodeHostname || task.NodeID?.slice(0, 12) || "—";
   const taskIdShort = task.ID.slice(0, 12);
   const exitCode = task.Status.ContainerStatus?.ExitCode;
   const containerId = task.Status.ContainerStatus?.ContainerID;
@@ -202,7 +202,7 @@ export default function TaskDetail() {
           label="Slot"
           value={task.Slot ? String(task.Slot) : "\u2014"}
         />
-        <ContainerImage image={task.Spec.ContainerSpec.Image} />
+        <ContainerImage image={task.Spec.ContainerSpec?.Image ?? ""} />
         <Timestamp
           label="Timestamp"
           date={task.Status.Timestamp}

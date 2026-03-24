@@ -333,7 +333,7 @@ export default function ServiceDetail() {
       {/* Overview cards */}
       <MetadataGrid>
         <ContainerImage
-          image={containerSpec.Image}
+          image={containerSpec?.Image ?? ""}
           serviceId={id}
         />
         <ReplicaCard
@@ -343,8 +343,8 @@ export default function ServiceDetail() {
         <ServiceStatusCard service={service} />
         <ResourceLink
           label="Stack"
-          name={labels["com.docker.stack.namespace"]}
-          to={`/stacks/${labels["com.docker.stack.namespace"]}`}
+          name={labels?.["com.docker.stack.namespace"]}
+          to={`/stacks/${labels?.["com.docker.stack.namespace"]}`}
         />
         <Timestamp
           label="Created"
@@ -495,7 +495,7 @@ export default function ServiceDetail() {
         serviceId={id!}
         networks={(taskTemplate?.Networks ?? []).map(({ Target, Aliases }) => ({
           target: Target,
-          aliases: Aliases,
+          aliases: Aliases ?? undefined,
         }))}
         networkNames={networkNames}
         onSaved={refetchService}
