@@ -579,6 +579,10 @@ func (c *Client) RemoveSecret(ctx context.Context, id string) error {
 	return c.docker.SecretRemove(ctx, id)
 }
 
+func (c *Client) RemoveVolume(ctx context.Context, name string) error {
+	return c.docker.VolumeRemove(ctx, name, false)
+}
+
 func (c *Client) UpdateServiceEnv(
 	ctx context.Context,
 	id string,

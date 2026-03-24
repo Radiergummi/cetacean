@@ -536,6 +536,86 @@ func (h *Handlers) HandleRemoveStack(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, resp)
 }
 
+func (h *Handlers) HandleRemoveConfig(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	_, ok := h.cache.GetConfig(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "config not found")
+		return
+	}
+
+	slog.Info("removing config", "config", id)
+
+	err := h.writeClient.RemoveConfig(r.Context(), id)
+	if err != nil {
+		writeDockerError(w, r, err, "config")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handlers) HandleRemoveSecret(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	_, ok := h.cache.GetSecret(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "secret not found")
+		return
+	}
+
+	slog.Info("removing secret", "secret", id)
+
+	err := h.writeClient.RemoveSecret(r.Context(), id)
+	if err != nil {
+		writeDockerError(w, r, err, "secret")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handlers) HandleRemoveNetwork(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	_, ok := h.cache.GetNetwork(id)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "network not found")
+		return
+	}
+
+	slog.Info("removing network", "network", id)
+
+	err := h.writeClient.RemoveNetwork(r.Context(), id)
+	if err != nil {
+		writeDockerError(w, r, err, "network")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handlers) HandleRemoveVolume(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+
+	_, ok := h.cache.GetVolume(name)
+	if !ok {
+		writeProblem(w, r, http.StatusNotFound, "volume not found")
+		return
+	}
+
+	slog.Info("removing volume", "volume", name)
+
+	err := h.writeClient.RemoveVolume(r.Context(), name)
+	if err != nil {
+		writeDockerError(w, r, err, "volume")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *Handlers) HandleRestartService(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 

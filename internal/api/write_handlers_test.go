@@ -15,6 +15,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
+	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/errdefs"
 
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -36,6 +37,7 @@ type mockWriteClient struct {
 	removeNetworkFn                func(ctx context.Context, id string) error
 	removeConfigFn                 func(ctx context.Context, id string) error
 	removeSecretFn                 func(ctx context.Context, id string) error
+	removeVolumeFn                 func(ctx context.Context, name string) error
 	updateServiceLabelsFn          func(ctx context.Context, id string, labels map[string]string) (swarm.Service, error)
 	updateServiceResourcesFn       func(ctx context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error)
 	updateServiceModeFn            func(ctx context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error)
@@ -164,6 +166,13 @@ func (m *mockWriteClient) RemoveConfig(ctx context.Context, id string) error {
 func (m *mockWriteClient) RemoveSecret(ctx context.Context, id string) error {
 	if m.removeSecretFn != nil {
 		return m.removeSecretFn(ctx, id)
+	}
+	return fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) RemoveVolume(ctx context.Context, name string) error {
+	if m.removeVolumeFn != nil {
+		return m.removeVolumeFn(ctx, name)
 	}
 	return fmt.Errorf("not implemented")
 }
@@ -3465,5 +3474,233 @@ func TestHandlePatchServiceMounts_WrongContentType(t *testing.T) {
 
 	if w.Code != http.StatusUnsupportedMediaType {
 		t.Errorf("status=%d, want 415", w.Code)
+	}
+}
+
+func TestHandleRemoveConfig_OK(t *testing.T) {
+	c := cache.New(nil)
+	c.SetConfig(swarm.Config{ID: "cfg1", Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "my-config"}}})
+
+	wc := &mockWriteClient{
+		removeConfigFn: func(_ context.Context, id string) error {
+			return nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/configs/cfg1", nil)
+	req.SetPathValue("id", "cfg1")
+	w := httptest.NewRecorder()
+	h.HandleRemoveConfig(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status=%d, want 204; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleRemoveConfig_NotFound(t *testing.T) {
+	c := cache.New(nil)
+	wc := &mockWriteClient{}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/configs/missing", nil)
+	req.SetPathValue("id", "missing")
+	w := httptest.NewRecorder()
+	h.HandleRemoveConfig(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestHandleRemoveConfig_DockerError(t *testing.T) {
+	c := cache.New(nil)
+	c.SetConfig(swarm.Config{ID: "cfg1", Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "my-config"}}})
+
+	wc := &mockWriteClient{
+		removeConfigFn: func(_ context.Context, id string) error {
+			return fmt.Errorf("engine error")
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/configs/cfg1", nil)
+	req.SetPathValue("id", "cfg1")
+	w := httptest.NewRecorder()
+	h.HandleRemoveConfig(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("status=%d, want 500", w.Code)
+	}
+}
+
+func TestHandleRemoveSecret_OK(t *testing.T) {
+	c := cache.New(nil)
+	c.SetSecret(swarm.Secret{ID: "sec1", Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "my-secret"}}})
+
+	wc := &mockWriteClient{
+		removeSecretFn: func(_ context.Context, id string) error {
+			return nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/secrets/sec1", nil)
+	req.SetPathValue("id", "sec1")
+	w := httptest.NewRecorder()
+	h.HandleRemoveSecret(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status=%d, want 204; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleRemoveSecret_NotFound(t *testing.T) {
+	c := cache.New(nil)
+	wc := &mockWriteClient{}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/secrets/missing", nil)
+	req.SetPathValue("id", "missing")
+	w := httptest.NewRecorder()
+	h.HandleRemoveSecret(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestHandleRemoveSecret_DockerError(t *testing.T) {
+	c := cache.New(nil)
+	c.SetSecret(swarm.Secret{ID: "sec1", Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "my-secret"}}})
+
+	wc := &mockWriteClient{
+		removeSecretFn: func(_ context.Context, id string) error {
+			return fmt.Errorf("engine error")
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/secrets/sec1", nil)
+	req.SetPathValue("id", "sec1")
+	w := httptest.NewRecorder()
+	h.HandleRemoveSecret(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("status=%d, want 500", w.Code)
+	}
+}
+
+func TestHandleRemoveNetwork_OK(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{ID: "net1", Name: "my-network"})
+
+	wc := &mockWriteClient{
+		removeNetworkFn: func(_ context.Context, id string) error {
+			return nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/networks/net1", nil)
+	req.SetPathValue("id", "net1")
+	w := httptest.NewRecorder()
+	h.HandleRemoveNetwork(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status=%d, want 204; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleRemoveNetwork_NotFound(t *testing.T) {
+	c := cache.New(nil)
+	wc := &mockWriteClient{}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/networks/missing", nil)
+	req.SetPathValue("id", "missing")
+	w := httptest.NewRecorder()
+	h.HandleRemoveNetwork(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestHandleRemoveNetwork_DockerError(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{ID: "net1", Name: "my-network"})
+
+	wc := &mockWriteClient{
+		removeNetworkFn: func(_ context.Context, id string) error {
+			return fmt.Errorf("engine error")
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/networks/net1", nil)
+	req.SetPathValue("id", "net1")
+	w := httptest.NewRecorder()
+	h.HandleRemoveNetwork(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("status=%d, want 500", w.Code)
+	}
+}
+
+func TestHandleRemoveVolume_OK(t *testing.T) {
+	c := cache.New(nil)
+	c.SetVolume(volume.Volume{Name: "my-vol"})
+
+	wc := &mockWriteClient{
+		removeVolumeFn: func(_ context.Context, name string) error {
+			return nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/volumes/my-vol", nil)
+	req.SetPathValue("name", "my-vol")
+	w := httptest.NewRecorder()
+	h.HandleRemoveVolume(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status=%d, want 204; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleRemoveVolume_NotFound(t *testing.T) {
+	c := cache.New(nil)
+	wc := &mockWriteClient{}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/volumes/missing", nil)
+	req.SetPathValue("name", "missing")
+	w := httptest.NewRecorder()
+	h.HandleRemoveVolume(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestHandleRemoveVolume_DockerError(t *testing.T) {
+	c := cache.New(nil)
+	c.SetVolume(volume.Volume{Name: "my-vol"})
+
+	wc := &mockWriteClient{
+		removeVolumeFn: func(_ context.Context, name string) error {
+			return fmt.Errorf("engine error")
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("DELETE", "/volumes/my-vol", nil)
+	req.SetPathValue("name", "my-vol")
+	w := httptest.NewRecorder()
+	h.HandleRemoveVolume(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("status=%d, want 500", w.Code)
 	}
 }

@@ -78,6 +78,7 @@ type DockerWriteClient interface {
 	RemoveNetwork(ctx context.Context, id string) error
 	RemoveConfig(ctx context.Context, id string) error
 	RemoveSecret(ctx context.Context, id string) error
+	RemoveVolume(ctx context.Context, name string) error
 	UpdateServiceLabels(
 		ctx context.Context,
 		id string,

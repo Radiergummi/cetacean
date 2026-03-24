@@ -253,6 +253,7 @@ func NewRouter(
 			spa,
 		),
 	)
+	mux.Handle("DELETE /configs/{id}", tier3(h.HandleRemoveConfig))
 
 	// Secrets
 	mux.HandleFunc(
@@ -271,6 +272,7 @@ func NewRouter(
 			spa,
 		),
 	)
+	mux.Handle("DELETE /secrets/{id}", tier3(h.HandleRemoveSecret))
 
 	// Networks
 	mux.HandleFunc(
@@ -289,6 +291,7 @@ func NewRouter(
 			spa,
 		),
 	)
+	mux.Handle("DELETE /networks/{id}", tier3(h.HandleRemoveNetwork))
 
 	// Volumes
 	mux.HandleFunc(
@@ -307,6 +310,7 @@ func NewRouter(
 			spa,
 		),
 	)
+	mux.Handle("DELETE /volumes/{name}", tier3(h.HandleRemoveVolume))
 
 	// Search
 	mux.HandleFunc("GET /search", contentNegotiated(h.HandleSearch, spa))
