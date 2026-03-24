@@ -40,7 +40,7 @@ import { formatDuration } from "../lib/format";
 import { EditablePanel } from "@/components/service-detail/EditablePanel";
 import { Check, Copy, KeyRound, Plus, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+
 
 function JoinTokenDialog({
   label,
@@ -634,13 +634,6 @@ export default function SwarmPage() {
         ) : (
           <div className="space-y-3">
             <PluginTable plugins={plugins} />
-
-            <Link
-              to="/plugins"
-              className="inline-block text-sm text-link hover:underline"
-            >
-              View All →
-            </Link>
           </div>
         )}
       </CollapsibleSection>

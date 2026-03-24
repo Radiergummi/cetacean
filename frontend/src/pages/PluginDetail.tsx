@@ -48,7 +48,7 @@ export default function PluginDetail() {
       .plugin(name)
       .then((result) => {
         setPlugin(result);
-        setDraftArgs(result.Settings.Args.join("\n"));
+        setDraftArgs((result.Settings.Args ?? []).join("\n"));
       })
       .catch((thrown) => {
         setError(thrown instanceof Error ? thrown.message : "Failed to load plugin");
@@ -73,6 +73,12 @@ export default function PluginDetail() {
   }
 
   const { Config: config, Settings: settings } = plugin;
+  const args = settings.Args ?? [];
+  const entrypoint = config.Entrypoint ?? [];
+  const configEnv = config.Env ?? [];
+  const configMounts = config.Mounts ?? [];
+  const capabilities = config.Linux?.Capabilities ?? [];
+  const linuxDevices = config.Linux?.Devices ?? [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -213,16 +219,16 @@ export default function PluginDetail() {
       {/* Settings: Args */}
       <CollapsibleSection title="Settings">
         <div className="space-y-3">
-          {settings.Args.length > 0 && !argsEditing && (
+          {args.length > 0 && !argsEditing && (
             <div className="space-y-1">
               <span className="text-xs font-medium text-muted-foreground">Current Args</span>
               <pre className="rounded-lg bg-muted/50 p-3 font-mono text-xs whitespace-pre-wrap">
-                {settings.Args.join("\n")}
+                {args.join("\n")}
               </pre>
             </div>
           )}
 
-          {settings.Args.length === 0 && !argsEditing && (
+          {args.length === 0 && !argsEditing && (
             <p className="text-sm text-muted-foreground">No args configured.</p>
           )}
 
@@ -262,7 +268,7 @@ export default function PluginDetail() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    setDraftArgs(settings.Args.join("\n"));
+                    setDraftArgs(args.join("\n"));
                     setArgsEditing(false);
                   }}
                 >
@@ -293,7 +299,7 @@ export default function PluginDetail() {
         <div className="space-y-4">
           <KVTable
             rows={[
-              ["Entrypoint", config.Entrypoint.join(" ") || "—"],
+              ["Entrypoint", entrypoint.join(" ") || "—"],
               ["WorkDir", config.WorkDir || "—"],
               config.User && ["User", `${config.User.UID}:${config.User.GID}`],
               ["Network Type", config.Network.Type || "—"],
@@ -301,13 +307,13 @@ export default function PluginDetail() {
             ]}
           />
 
-          {config.Env.length > 0 && (
+          {configEnv.length > 0 && (
             <div className="space-y-1">
               <span className="text-xs font-medium text-muted-foreground">
                 Environment Variables
               </span>
               <KVTable
-                rows={config.Env.map(({ Name: envName, Value, Description }) => [
+                rows={configEnv.map(({ Name: envName, Value, Description }) => [
                   envName,
                   `${Value}${Description ? ` — ${Description}` : ""}`,
                 ])}
@@ -315,11 +321,11 @@ export default function PluginDetail() {
             </div>
           )}
 
-          {config.Mounts.length > 0 && (
+          {configMounts.length > 0 && (
             <div className="space-y-1">
               <span className="text-xs font-medium text-muted-foreground">Mounts</span>
               <KVTable
-                rows={config.Mounts.map(({ Name: mountName, Source, Destination, Type }) => [
+                rows={configMounts.map(({ Name: mountName, Source, Destination, Type }) => [
                   mountName || Source,
                   `${Source} → ${Destination} (${Type})`,
                 ])}
@@ -327,20 +333,20 @@ export default function PluginDetail() {
             </div>
           )}
 
-          {config.Linux.Capabilities.length > 0 && (
+          {capabilities.length > 0 && (
             <div className="space-y-1">
               <span className="text-xs font-medium text-muted-foreground">Linux Capabilities</span>
               <pre className="rounded-lg bg-muted/50 p-3 font-mono text-xs whitespace-pre-wrap">
-                {config.Linux.Capabilities.join(", ")}
+                {capabilities.join(", ")}
               </pre>
             </div>
           )}
 
-          {config.Linux.Devices.length > 0 && (
+          {linuxDevices.length > 0 && (
             <div className="space-y-1">
               <span className="text-xs font-medium text-muted-foreground">Devices</span>
               <KVTable
-                rows={config.Linux.Devices.map(({ Name: deviceName, Path }) => [deviceName, Path])}
+                rows={linuxDevices.map(({ Name: deviceName, Path }) => [deviceName, Path])}
               />
             </div>
           )}
