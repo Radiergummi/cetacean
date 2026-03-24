@@ -10,6 +10,7 @@ import {
   Timestamp,
 } from "../components/data";
 import FetchError from "../components/FetchError";
+import { RemoveResourceAction } from "../components/RemoveResourceAction";
 import { IconButton } from "../components/IconButton";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
@@ -64,6 +65,14 @@ export default function ConfigDetail() {
           { label: "Configs", to: "/configs" },
           { label: <ResourceName name={name} /> },
         ]}
+        actions={
+          <RemoveResourceAction
+            resourceType="config"
+            resourceName={name}
+            listPath={stack ? `/stacks/${stack}` : "/configs"}
+            onRemove={() => api.removeConfig(config.ID)}
+          />
+        }
       />
 
       <MetadataGrid>

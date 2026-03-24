@@ -8,6 +8,7 @@ import {
   Timestamp,
 } from "../components/data";
 import FetchError from "../components/FetchError";
+import { RemoveResourceAction } from "../components/RemoveResourceAction";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
@@ -51,6 +52,14 @@ export default function SecretDetail() {
           { label: "Secrets", to: "/secrets" },
           { label: <ResourceName name={name} /> },
         ]}
+        actions={
+          <RemoveResourceAction
+            resourceType="secret"
+            resourceName={name}
+            listPath={stack ? `/stacks/${stack}` : "/secrets"}
+            onRemove={() => api.removeSecret(secret.ID)}
+          />
+        }
       />
 
       <MetadataGrid>

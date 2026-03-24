@@ -349,6 +349,10 @@ export const api = {
       removed: { services: number; networks: number; configs: number; secrets: number };
       errors?: { type: string; id: string; error: string }[];
     }>(`/stacks/${name}`, "DELETE"),
+  removeConfig: (id: string) => del(`/configs/${id}`),
+  removeSecret: (id: string) => del(`/secrets/${id}`),
+  removeNetwork: (id: string) => del(`/networks/${id}`),
+  removeVolume: (name: string) => del(`/volumes/${name}`),
 
   // Tier 2: sub-resource GETs
   serviceEnv: (id: string, signal?: AbortSignal) =>

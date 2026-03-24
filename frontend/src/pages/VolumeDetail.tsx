@@ -9,6 +9,7 @@ import {
   Timestamp,
 } from "../components/data";
 import FetchError from "../components/FetchError";
+import { RemoveResourceAction } from "../components/RemoveResourceAction";
 import InfoCard from "../components/InfoCard";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
@@ -53,6 +54,14 @@ export default function VolumeDetail() {
           { label: "Volumes", to: "/volumes" },
           { label: <ResourceName name={volume.Name} /> },
         ]}
+        actions={
+          <RemoveResourceAction
+            resourceType="volume"
+            resourceName={volume.Name}
+            listPath={stack ? `/stacks/${stack}` : "/volumes"}
+            onRemove={() => api.removeVolume(volume.Name)}
+          />
+        }
       />
 
       <MetadataGrid>

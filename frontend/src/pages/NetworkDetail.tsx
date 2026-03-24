@@ -11,6 +11,7 @@ import {
   Timestamp,
 } from "../components/data";
 import FetchError from "../components/FetchError";
+import { RemoveResourceAction } from "../components/RemoveResourceAction";
 import InfoCard from "../components/InfoCard";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
@@ -145,6 +146,14 @@ export default function NetworkDetail() {
           { label: "Networks", to: "/networks" },
           { label: <ResourceName name={network.Name} /> },
         ]}
+        actions={
+          <RemoveResourceAction
+            resourceType="network"
+            resourceName={network.Name}
+            listPath={stack ? `/stacks/${stack}` : "/networks"}
+            onRemove={() => api.removeNetwork(network.Id)}
+          />
+        }
       />
 
       <MetadataGrid>
