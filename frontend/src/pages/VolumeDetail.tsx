@@ -38,7 +38,7 @@ export default function VolumeDetail() {
   const volume = data.volume;
   const services = data.services ?? [];
   const { entries: labelEntries, stack } = parseStackLabels(volume.Labels);
-  const options = Object.entries(volume.Options || {});
+  const options = Object.entries(volume.Options ?? {});
 
   return (
     <div className="flex flex-col gap-6">

@@ -130,7 +130,7 @@ export default function NetworkDetail() {
   const network = data.network;
   const services = data.services ?? [];
   const { entries: labelEntries, stack } = parseStackLabels(network.Labels);
-  const options = Object.entries(network.Options || {});
+  const options = Object.entries(network.Options ?? {});
 
   return (
     <div className="flex flex-col gap-6">
