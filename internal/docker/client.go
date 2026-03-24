@@ -160,6 +160,38 @@ func (c *Client) PluginList(ctx context.Context) (types.PluginsListResponse, err
 	return c.docker.PluginList(ctx, filters.Args{})
 }
 
+func (c *Client) PluginInspect(ctx context.Context, name string) (*types.Plugin, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (c *Client) PluginEnable(ctx context.Context, name string) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (c *Client) PluginDisable(ctx context.Context, name string) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (c *Client) PluginRemove(ctx context.Context, name string, force bool) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (c *Client) PluginInstall(ctx context.Context, remote string) (*types.Plugin, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (c *Client) PluginUpgrade(ctx context.Context, name string, remote string) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (c *Client) PluginPrivileges(ctx context.Context, remote string) (types.PluginPrivileges, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (c *Client) PluginConfigure(ctx context.Context, name string, args []string) error {
+	return fmt.Errorf("not implemented")
+}
+
 // FullSync fetches all swarm resources in parallel. Individual resource type
 // failures are logged and their Has* flag stays false so the cache preserves
 // existing data for that type.

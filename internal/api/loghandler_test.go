@@ -52,6 +52,7 @@ func TestHandleServiceLogs_JSON(t *testing.T) {
 		&mockLogStreamer{data: frames.Bytes()},
 		nil,
 		nil,
+		nil,
 		closedReady(),
 		nil,
 		config.OpsImpactful,
@@ -93,7 +94,7 @@ func TestHandleServiceLogs_JSON(t *testing.T) {
 
 func TestHandleServiceLogs_JSON_NotFound(t *testing.T) {
 	c := cache.New(nil)
-	h := NewHandlers(c, nil, &mockLogStreamer{}, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(c, nil, &mockLogStreamer{}, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	req := httptest.NewRequest("GET", "/services/missing/logs", nil)
 	req.SetPathValue("id", "missing")
@@ -122,6 +123,7 @@ func TestHandleServiceLogs_SSE(t *testing.T) {
 		c,
 		nil,
 		&mockLogStreamer{data: frames.Bytes()},
+		nil,
 		nil,
 		nil,
 		closedReady(),
@@ -180,6 +182,7 @@ func TestHandleTaskLogs_JSON(t *testing.T) {
 		&mockLogStreamer{data: frames.Bytes()},
 		nil,
 		nil,
+		nil,
 		closedReady(),
 		nil,
 		config.OpsImpactful,
@@ -217,6 +220,7 @@ func TestHandleServiceLogs_JSON_Empty(t *testing.T) {
 		&mockLogStreamer{data: nil},
 		nil,
 		nil,
+		nil,
 		closedReady(),
 		nil,
 		config.OpsImpactful,
@@ -251,6 +255,7 @@ func TestHandleServiceLogs_DefaultsToJSON(t *testing.T) {
 		&mockLogStreamer{data: nil},
 		nil,
 		nil,
+		nil,
 		closedReady(),
 		nil,
 		config.OpsImpactful,
@@ -279,6 +284,7 @@ func TestHandleServiceLogs_SSE_EventIDs(t *testing.T) {
 		c,
 		nil,
 		&mockLogStreamer{data: frames.Bytes()},
+		nil,
 		nil,
 		nil,
 		closedReady(),
@@ -324,6 +330,7 @@ func TestHandleServiceLogs_JSON_StreamFilter(t *testing.T) {
 		&mockLogStreamer{data: frames.Bytes()},
 		nil,
 		nil,
+		nil,
 		closedReady(),
 		nil,
 		config.OpsImpactful,
@@ -362,6 +369,7 @@ func TestHandleServiceLogs_JSON_StreamFilterStdout(t *testing.T) {
 		&mockLogStreamer{data: frames.Bytes()},
 		nil,
 		nil,
+		nil,
 		closedReady(),
 		nil,
 		config.OpsImpactful,
@@ -398,7 +406,7 @@ func TestHandleServiceLogs_SSE_LastEventID(t *testing.T) {
 		data:   frames.Bytes(),
 		onCall: func(since string) { capturedSince = since },
 	}
-	h := NewHandlers(c, nil, mock, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(c, nil, mock, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	// Simulate EventSource reconnect with Last-Event-ID header
 	req := httptest.NewRequest("GET", "/services/svc1/logs", nil)
@@ -423,7 +431,7 @@ func TestHandleServiceLogs_SSE_LastEventID_OverriddenByAfter(t *testing.T) {
 		data:   buildFrame(1, "2024-01-01T00:00:05.000000000Z line\n"),
 		onCall: func(since string) { capturedSince = since },
 	}
-	h := NewHandlers(c, nil, mock, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(c, nil, mock, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	// Both ?after= and Last-Event-ID present — ?after= should win
 	req := httptest.NewRequest("GET", "/services/svc1/logs?after=2024-01-01T00:00:01Z", nil)
@@ -471,6 +479,7 @@ func TestHandleServiceLogs_SSE_StreamFilter(t *testing.T) {
 		c,
 		nil,
 		&mockLogStreamer{data: frames.Bytes()},
+		nil,
 		nil,
 		nil,
 		closedReady(),

@@ -204,6 +204,7 @@ func main() {
 		dockerClient,
 		dockerClient,
 		dockerClient,
+		dockerClient,
 		watcher.Ready(),
 		promClient,
 		cfg.OperationsLevel,

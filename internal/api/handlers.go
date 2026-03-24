@@ -49,7 +49,6 @@ type DockerLogStreamer interface {
 type DockerSystemClient interface {
 	SwarmInspect(ctx context.Context) (swarm.Swarm, error)
 	DiskUsage(ctx context.Context) (types.DiskUsage, error)
-	PluginList(ctx context.Context) (types.PluginsListResponse, error)
 	LocalNodeID(ctx context.Context) (string, error)
 	UpdateSwarm(
 		ctx context.Context,
@@ -152,12 +151,25 @@ type DockerWriteClient interface {
 	) (swarm.Service, error)
 }
 
+type DockerPluginClient interface {
+	PluginList(ctx context.Context) (types.PluginsListResponse, error)
+	PluginInspect(ctx context.Context, name string) (*types.Plugin, error)
+	PluginEnable(ctx context.Context, name string) error
+	PluginDisable(ctx context.Context, name string) error
+	PluginRemove(ctx context.Context, name string, force bool) error
+	PluginInstall(ctx context.Context, remote string) (*types.Plugin, error)
+	PluginUpgrade(ctx context.Context, name string, remote string) error
+	PluginPrivileges(ctx context.Context, remote string) (types.PluginPrivileges, error)
+	PluginConfigure(ctx context.Context, name string, args []string) error
+}
+
 type Handlers struct {
 	cache               *cache.Cache
 	broadcaster         *Broadcaster
 	dockerClient        DockerLogStreamer
 	systemClient        DockerSystemClient
 	writeClient         DockerWriteClient
+	pluginClient        DockerPluginClient
 	ready               <-chan struct{}
 	promClient          *PromClient
 	operationsLevel     config.OperationsLevel
@@ -173,6 +185,7 @@ func NewHandlers(
 	dc DockerLogStreamer,
 	sc DockerSystemClient,
 	wc DockerWriteClient,
+	pc DockerPluginClient,
 	ready <-chan struct{},
 	promClient *PromClient,
 	operationsLevel config.OperationsLevel,
@@ -183,6 +196,7 @@ func NewHandlers(
 		dockerClient:    dc,
 		systemClient:    sc,
 		writeClient:     wc,
+		pluginClient:    pc,
 		ready:           ready,
 		promClient:      promClient,
 		operationsLevel: operationsLevel,
@@ -688,7 +702,7 @@ func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandlePlugins(w http.ResponseWriter, r *http.Request) {
-	if h.systemClient == nil {
+	if h.pluginClient == nil {
 		writeProblem(w, r, http.StatusNotImplemented, "plugin list not available")
 		return
 	}
@@ -696,7 +710,7 @@ func (h *Handlers) HandlePlugins(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	plugins, err := h.systemClient.PluginList(ctx)
+	plugins, err := h.pluginClient.PluginList(ctx)
 	if err != nil {
 		slog.Error("plugin list failed", "error", err)
 		writeProblem(w, r, http.StatusInternalServerError, "plugin list failed")

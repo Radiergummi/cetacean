@@ -139,7 +139,7 @@ func benchHandler(b *testing.B, name string, fn func(b *testing.B, h *Handlers))
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			fn(b, h)
 		})
@@ -362,7 +362,7 @@ func BenchmarkHandleHistory(b *testing.B) {
 }
 
 func BenchmarkHandleHealth(b *testing.B) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 	for b.Loop() {
 		req := httptest.NewRequestWithContext(b.Context(), "GET", "/-/health", nil)
 		h.HandleHealth(httptest.NewRecorder(), req)
@@ -370,7 +370,7 @@ func BenchmarkHandleHealth(b *testing.B) {
 }
 
 func BenchmarkHandleReady(b *testing.B) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 	for b.Loop() {
 		req := httptest.NewRequestWithContext(b.Context(), "GET", "/-/ready", nil)
 		h.HandleReady(httptest.NewRecorder(), req)
@@ -378,7 +378,7 @@ func BenchmarkHandleReady(b *testing.B) {
 }
 
 func BenchmarkHandleMonitoringStatus_NoPrometheus(b *testing.B) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 	for b.Loop() {
 		req := httptest.NewRequestWithContext(b.Context(), "GET", "/-/metrics/status", nil)
 		h.HandleMonitoringStatus(httptest.NewRecorder(), req)
@@ -558,7 +558,7 @@ func BenchmarkHandleGetNode_ETagHit(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			req := httptest.NewRequestWithContext(b.Context(), "GET", "/nodes/id-0", nil)
 			req.SetPathValue("id", "id-0")
@@ -795,7 +795,7 @@ func BenchmarkHandleSearch_LabelHeavy(b *testing.B) {
 			},
 		})
 	}
-	h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 
 	b.Run("label_hit", func(b *testing.B) {
 		for b.Loop() {
@@ -819,7 +819,7 @@ func BenchmarkHandleListNodes_FullPipeline(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			for b.Loop() {
 				req := httptest.NewRequestWithContext(
@@ -1390,7 +1390,7 @@ func BenchmarkHandleListNodesParallel(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
@@ -1410,7 +1410,7 @@ func BenchmarkHandleListServicesParallel(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
@@ -1426,7 +1426,7 @@ func BenchmarkHandleSearchParallel(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
@@ -1442,7 +1442,7 @@ func BenchmarkHandleGetNodeParallel(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
@@ -1459,7 +1459,7 @@ func BenchmarkHandleNetworkTopologyParallel(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
@@ -1482,7 +1482,7 @@ func BenchmarkMixedWorkloadParallel(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			b.RunParallel(func(pb *testing.PB) {
 				i := 0

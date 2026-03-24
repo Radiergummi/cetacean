@@ -110,7 +110,7 @@ func TestRequireLevel_Integration_ScaleBlockedAtLevel0(t *testing.T) {
 		},
 	})
 
-	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, closedReady(), nil, config.OpsReadOnly)
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, nil, closedReady(), nil, config.OpsReadOnly)
 	handler := requireLevel(config.OpsOperational, config.OpsReadOnly)(h.HandleScaleService)
 
 	body := strings.NewReader(`{"replicas": 3}`)
@@ -142,7 +142,7 @@ func TestRequireLevel_Integration_ScaleAllowedAtLevel1(t *testing.T) {
 			return svc, nil
 		},
 	}
-	h := NewHandlers(c, nil, nil, nil, mock, closedReady(), nil, config.OpsOperational)
+	h := NewHandlers(c, nil, nil, nil, mock, nil, closedReady(), nil, config.OpsOperational)
 	handler := requireLevel(config.OpsOperational, config.OpsOperational)(h.HandleScaleService)
 
 	body := strings.NewReader(`{"replicas": 3}`)
