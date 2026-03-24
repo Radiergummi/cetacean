@@ -63,6 +63,9 @@ docker stack deploy -c compose.monitoring.yaml monitoring  # Deploy standalone m
 | `CETACEAN_SSE_BATCH_INTERVAL` | `100ms` | No |
 | `CETACEAN_PPROF` | `false` | No (enable pprof endpoints at `/debug/pprof/`) |
 | `CETACEAN_OPERATIONS_LEVEL` | `1` | No (0=read-only, 1=operational, 2=configuration, 3=impactful) |
+| `CETACEAN_SNAPSHOT` | `true` | No (enable disk persistence of swarm state) |
+| `CETACEAN_DATA_DIR` | `./data` | No (directory for snapshot file) |
+| `CETACEAN_CONFIG` | — | No (path to TOML config file) |
 | `CETACEAN_AUTH_MODE` | `none` | No (`none`, `oidc`, `tailscale`, `cert`, `headers`) |
 | `CETACEAN_AUTH_OIDC_ISSUER` | — | Yes (if OIDC mode) |
 | `CETACEAN_AUTH_OIDC_CLIENT_ID` | — | Yes (if OIDC mode) |
@@ -73,6 +76,7 @@ docker stack deploy -c compose.monitoring.yaml monitoring  # Deploy standalone m
 | `CETACEAN_AUTH_TAILSCALE_AUTHKEY` | — | Yes (if tsnet mode) |
 | `CETACEAN_AUTH_TAILSCALE_HOSTNAME` | `cetacean` | No |
 | `CETACEAN_AUTH_TAILSCALE_STATE_DIR` | — | No |
+| `CETACEAN_AUTH_TAILSCALE_CAPABILITY` | — | No (app capability key for group extraction) |
 | `CETACEAN_AUTH_CERT_CA` | — | Yes (if cert mode) |
 | `CETACEAN_AUTH_HEADERS_SUBJECT` | — | Yes (if headers mode) |
 | `CETACEAN_AUTH_HEADERS_NAME` | — | No |
@@ -80,6 +84,7 @@ docker stack deploy -c compose.monitoring.yaml monitoring  # Deploy standalone m
 | `CETACEAN_AUTH_HEADERS_GROUPS` | — | No |
 | `CETACEAN_AUTH_HEADERS_SECRET_HEADER` | — | No |
 | `CETACEAN_AUTH_HEADERS_SECRET_VALUE` | — | Yes (if secret header set) |
+| `CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES` | — | No (comma-separated CIDR/IP allowlist) |
 | `CETACEAN_TLS_CERT` | — | No (Yes for cert mode) |
 | `CETACEAN_TLS_KEY` | — | No (Yes for cert mode) |
 

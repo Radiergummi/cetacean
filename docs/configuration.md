@@ -267,6 +267,11 @@ hide disabled action buttons.
 | **Service definition changes** |                                         |             |               |                 |             |
 | Patch environment variables    | `PATCH /services/{id}/env`              |      —      |       —       |        ✔        |      ✔      |
 | Patch service labels           | `PATCH /services/{id}/labels`           |      —      |       —       |        ✔        |      ✔      |
+| Patch configs                  | `PATCH /services/{id}/configs`          |      —      |       —       |        ✔        |      ✔      |
+| Patch secrets                  | `PATCH /services/{id}/secrets`          |      —      |       —       |        ✔        |      ✔      |
+| Patch networks                 | `PATCH /services/{id}/networks`         |      —      |       —       |        ✔        |      ✔      |
+| Patch mounts                   | `PATCH /services/{id}/mounts`           |      —      |       —       |        ✔        |      ✔      |
+| Patch container config         | `PATCH /services/{id}/container-config` |      —      |       —       |        ✔        |      ✔      |
 | Patch resources                | `PATCH /services/{id}/resources`        |      —      |       —       |        ✔        |      ✔      |
 | Update healthcheck             | `PUT\|PATCH /services/{id}/healthcheck` |      —      |       —       |        ✔        |      ✔      |
 | Update placement               | `PUT /services/{id}/placement`          |      —      |       —       |        ✔        |      ✔      |
@@ -281,6 +286,18 @@ hide disabled action buttons.
 | Change endpoint mode           | `PUT /services/{id}/endpoint-mode`      |      —      |       —       |        —        |      ✔      |
 | Remove service                 | `DELETE /services/{id}`                 |      —      |       —       |        —        |      ✔      |
 | Remove task                    | `DELETE /tasks/{id}`                    |      —      |       —       |        —        |      ✔      |
+| Change node role               | `PUT /nodes/{id}/role`                  |      —      |       —       |        —        |      ✔      |
+| Remove node                    | `DELETE /nodes/{id}`                    |      —      |       —       |        —        |      ✔      |
+| Remove stack                   | `DELETE /stacks/{name}`                 |      —      |       —       |        —        |      ✔      |
+| **Swarm configuration**        |                                         |             |               |                 |             |
+| Patch orchestration config     | `PATCH /swarm/orchestration`            |      —      |       —       |        ✔        |      ✔      |
+| Patch Raft config              | `PATCH /swarm/raft`                     |      —      |       —       |        ✔        |      ✔      |
+| Patch dispatcher config        | `PATCH /swarm/dispatcher`               |      —      |       —       |        ✔        |      ✔      |
+| Patch CA config                | `PATCH /swarm/ca`                       |      —      |       —       |        —        |      ✔      |
+| Toggle encryption              | `PATCH /swarm/encryption`               |      —      |       —       |        —        |      ✔      |
+| Rotate join token              | `POST /swarm/rotate-token`              |      —      |       —       |        —        |      ✔      |
+| Rotate unlock key              | `POST /swarm/rotate-unlock-key`         |      —      |       —       |        —        |      ✔      |
+| Force CA rotation              | `POST /swarm/force-rotate-ca`           |      —      |       —       |        —        |      ✔      |
 
 ## Profiling
 

@@ -65,8 +65,8 @@ deploy:
       - node.role == manager
 ```
 
-It's read-only -- it never creates, updates, or deletes anything. The socket is mounted `:ro` in the default compose
-file.
+By default (operations level 1), Cetacean can perform safe operational actions like scaling and restarting services.
+Set `CETACEAN_OPERATIONS_LEVEL=0` for a fully read-only dashboard. See [Configuration](configuration.md#operations-level) for details.
 
 ## Adding Monitoring
 

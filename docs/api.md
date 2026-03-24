@@ -4,9 +4,9 @@ title: API Reference
 
 # Cetacean API Reference
 
-Read-only observability API for Docker Swarm Mode clusters.
+Observability and management API for Docker Swarm Mode clusters.
 
-Cetacean runs as a single binary that connects to the Docker socket, caches swarm state in memory, and serves it over HTTP. All endpoints are GET-only. Authentication is [pluggable](authentication.md) via `CETACEAN_AUTH_MODE` (default: anonymous access).
+Cetacean runs as a single binary that connects to the Docker socket, caches swarm state in memory, and serves it over HTTP. Read endpoints use GET; write operations use PUT, POST, PATCH, and DELETE gated by [operations level](configuration.md#operations-level). Authentication is [pluggable](authentication.md) via `CETACEAN_AUTH_MODE` (default: anonymous access).
 
 The machine-readable OpenAPI spec is available at [`/api`](#api-documentation).
 
@@ -348,6 +348,7 @@ No content negotiation. No discovery `Link` headers.
 | GET | `/-/metrics/status` | Monitoring auto-detection status (Prometheus, node-exporter, cAdvisor). |
 | GET | `/-/metrics/labels` | Proxied Prometheus label names (optional `match[]` filter). |
 | GET | `/-/metrics/labels/{name}` | Proxied Prometheus label values for a given label name. |
+| GET | `/-/docker-latest-version` | Latest Docker Engine version (cached). |
 
 ```bash
 curl http://localhost:9000/-/health
@@ -382,13 +383,42 @@ curl -H "Accept: text/event-stream" "http://localhost:9000/metrics?query=up&step
 |---|---|---|
 | GET | `/cluster` | Cluster snapshot: node/service/task counts, resource totals. |
 | GET | `/cluster/metrics` | CPU, memory, disk utilization (requires Prometheus). |
-| GET | `/swarm` | Swarm inspect: join tokens, raft config, CA config. |
+| GET | `/cluster/capacity` | Cluster resource capacity (max single-node CPU/memory, totals). |
 | GET | `/disk-usage` | Disk usage summary by type (images, containers, volumes, build cache). |
 | GET | `/plugins` | Installed Docker plugins. |
+| GET | `/swarm` | Swarm inspect: join tokens, raft config, CA config. |
+| GET | `/swarm/unlock-key` | Current swarm unlock key (when autolock enabled). |
 
 ```bash
 curl http://localhost:9000/cluster
 curl http://localhost:9000/cluster/metrics
+```
+
+### Swarm Write Operations
+
+Write operations on the swarm configuration. Gated by [operations level](configuration.md#operations-level).
+
+| Method | Path | Tier | Description |
+|---|---|---|---|
+| PATCH | `/swarm/orchestration` | 2 | Patch orchestration config (task history retention). |
+| PATCH | `/swarm/raft` | 2 | Patch Raft config (snapshot interval, election/heartbeat ticks). |
+| PATCH | `/swarm/dispatcher` | 2 | Patch dispatcher config (heartbeat period). |
+| PATCH | `/swarm/ca` | 3 | Patch CA config (node cert expiry). |
+| PATCH | `/swarm/encryption` | 3 | Toggle Raft data-at-rest encryption (autolock). |
+| POST | `/swarm/rotate-token` | 3 | Rotate worker or manager join token. |
+| POST | `/swarm/rotate-unlock-key` | 3 | Rotate swarm unlock key. |
+| POST | `/swarm/force-rotate-ca` | 3 | Force CA certificate rotation. |
+
+PATCH endpoints accept `application/merge-patch+json`.
+
+```bash
+# Update task history retention
+curl -X PATCH -H "Content-Type: application/merge-patch+json" \
+  -d '{"taskHistoryRetentionLimit": 10}' \
+  http://localhost:9000/swarm/orchestration
+
+# Rotate worker join token
+curl -X POST -d '{"role": "worker"}' http://localhost:9000/swarm/rotate-token
 ```
 
 ### Nodes
@@ -403,6 +433,30 @@ curl http://localhost:9000/cluster/metrics
 curl http://localhost:9000/nodes
 curl http://localhost:9000/nodes/abc123
 curl http://localhost:9000/nodes/abc123/tasks
+```
+
+#### Node Write Operations
+
+| Method | Path | Tier | Description |
+|---|---|---|---|
+| PUT | `/nodes/{id}/availability` | 3 | Set node availability (active, drain, pause). |
+| GET | `/nodes/{id}/labels` | — | Get node labels as key/value map. |
+| PATCH | `/nodes/{id}/labels` | 3 | Patch node labels (JSON Patch, RFC 6902). |
+| GET | `/nodes/{id}/role` | — | Get node role (worker or manager). |
+| PUT | `/nodes/{id}/role` | 3 | Promote or demote a node. |
+| DELETE | `/nodes/{id}` | 3 | Remove a node from the swarm. |
+
+```bash
+# Drain a node
+curl -X PUT -d '{"availability": "drain"}' http://localhost:9000/nodes/abc123/availability
+
+# Get node labels
+curl http://localhost:9000/nodes/abc123/labels
+
+# Add a label via JSON Patch
+curl -X PATCH -H "Content-Type: application/json-patch+json" \
+  -d '[{"op": "add", "path": "/env", "value": "production"}]' \
+  http://localhost:9000/nodes/abc123/labels
 ```
 
 ### Services
@@ -442,6 +496,98 @@ curl "http://localhost:9000/services/abc123/logs?limit=100&stream=stderr&after=2
 
 SSE log streams use `Last-Event-ID` for reconnection (set to the timestamp of the last received line).
 
+#### Service Write Operations — Tier 1 (Operational)
+
+| Method | Path | Description |
+|---|---|---|
+| PUT | `/services/{id}/scale` | Set replica count. |
+| PUT | `/services/{id}/image` | Update container image. |
+| POST | `/services/{id}/rollback` | Rollback to previous spec. |
+| POST | `/services/{id}/restart` | Force re-deploy (increments ForceUpdate). |
+
+```bash
+# Scale to 5 replicas
+curl -X PUT -d '{"replicas": 5}' http://localhost:9000/services/abc123/scale
+
+# Update image
+curl -X PUT -d '{"image": "nginx:1.27"}' http://localhost:9000/services/abc123/image
+
+# Rollback
+curl -X POST http://localhost:9000/services/abc123/rollback
+
+# Restart
+curl -X POST http://localhost:9000/services/abc123/restart
+```
+
+#### Service Write Operations — Tier 2 (Configuration)
+
+Sub-resource endpoints for reading and modifying individual service configuration aspects. GET endpoints are always available; write operations require operations level 2.
+
+| Method | Path | Patch Type | Description |
+|---|---|---|---|
+| GET | `/services/{id}/env` | — | Get environment variables. |
+| PATCH | `/services/{id}/env` | JSON Patch | Patch environment variables. |
+| GET | `/services/{id}/labels` | — | Get service labels. |
+| PATCH | `/services/{id}/labels` | JSON Patch | Patch service labels. |
+| GET | `/services/{id}/resources` | — | Get CPU/memory reservations and limits. |
+| PATCH | `/services/{id}/resources` | Merge Patch | Patch resource requirements. |
+| GET | `/services/{id}/healthcheck` | — | Get healthcheck config. |
+| PUT | `/services/{id}/healthcheck` | — | Replace healthcheck config. |
+| PATCH | `/services/{id}/healthcheck` | Merge Patch | Patch healthcheck config. |
+| GET | `/services/{id}/placement` | — | Get placement constraints. |
+| PUT | `/services/{id}/placement` | — | Replace placement constraints. |
+| GET | `/services/{id}/ports` | — | Get published port bindings. |
+| PATCH | `/services/{id}/ports` | Merge Patch | Patch port bindings. |
+| GET | `/services/{id}/update-policy` | — | Get rolling update config. |
+| PATCH | `/services/{id}/update-policy` | Merge Patch | Patch rolling update config. |
+| GET | `/services/{id}/rollback-policy` | — | Get rollback config. |
+| PATCH | `/services/{id}/rollback-policy` | Merge Patch | Patch rollback config. |
+| GET | `/services/{id}/log-driver` | — | Get log driver config. |
+| PATCH | `/services/{id}/log-driver` | Merge Patch | Patch log driver config. |
+| GET | `/services/{id}/configs` | — | Get config references. |
+| PATCH | `/services/{id}/configs` | — | Replace config references. |
+| GET | `/services/{id}/secrets` | — | Get secret references. |
+| PATCH | `/services/{id}/secrets` | — | Replace secret references. |
+| GET | `/services/{id}/networks` | — | Get network attachments. |
+| PATCH | `/services/{id}/networks` | — | Replace network attachments. |
+| GET | `/services/{id}/mounts` | — | Get mount configuration. |
+| PATCH | `/services/{id}/mounts` | — | Replace mount configuration. |
+| GET | `/services/{id}/container-config` | — | Get container-level config. |
+| PATCH | `/services/{id}/container-config` | Merge Patch | Patch container-level config. |
+
+JSON Patch endpoints require `Content-Type: application/json-patch+json`. Merge Patch endpoints require `Content-Type: application/merge-patch+json`. Mismatched content types return `415`.
+
+```bash
+# Get environment variables
+curl http://localhost:9000/services/abc123/env
+
+# Add an env var via JSON Patch
+curl -X PATCH -H "Content-Type: application/json-patch+json" \
+  -d '[{"op": "add", "path": "/DEBUG", "value": "true"}]' \
+  http://localhost:9000/services/abc123/env
+
+# Update resources via Merge Patch
+curl -X PATCH -H "Content-Type: application/merge-patch+json" \
+  -d '{"memoryLimit": 536870912}' \
+  http://localhost:9000/services/abc123/resources
+```
+
+#### Service Write Operations — Tier 3 (Impactful)
+
+| Method | Path | Description |
+|---|---|---|
+| PUT | `/services/{id}/mode` | Change service mode (replicated/global). |
+| PUT | `/services/{id}/endpoint-mode` | Change endpoint mode (vip/dnsrr). |
+| DELETE | `/services/{id}` | Remove a service from the swarm. |
+
+```bash
+# Switch to global mode
+curl -X PUT -d '{"mode": "global"}' http://localhost:9000/services/abc123/mode
+
+# Remove a service
+curl -X DELETE http://localhost:9000/services/abc123
+```
+
 ### Tasks
 
 | Method | Path | Description | Parameters |
@@ -455,6 +601,12 @@ curl http://localhost:9000/tasks
 curl http://localhost:9000/tasks/abc123
 curl -H "Accept: text/event-stream" http://localhost:9000/tasks/abc123/logs
 ```
+
+#### Task Write Operations
+
+| Method | Path | Tier | Description |
+|---|---|---|---|
+| DELETE | `/tasks/{id}` | 3 | Force-remove a task. |
 
 ### Stacks
 
@@ -471,6 +623,12 @@ curl http://localhost:9000/stacks
 curl http://localhost:9000/stacks/summary
 curl http://localhost:9000/stacks/myapp
 ```
+
+#### Stack Write Operations
+
+| Method | Path | Tier | Description |
+|---|---|---|---|
+| DELETE | `/stacks/{name}` | 3 | Remove all services in the stack. |
 
 ### Configs
 
@@ -573,6 +731,18 @@ curl "http://localhost:9000/history?resourceId=abc123"
 ```bash
 curl http://localhost:9000/topology/networks
 curl http://localhost:9000/topology/placement
+```
+
+### Profile
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/profile` | Current user profile (content-negotiated, with ETag). |
+
+Unlike `/auth/whoami`, this endpoint participates in content negotiation and includes ETag support.
+
+```bash
+curl http://localhost:9000/profile
 ```
 
 ### Events

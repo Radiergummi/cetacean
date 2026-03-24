@@ -204,6 +204,24 @@ paths:
         "503":
           description: Prometheus not configured
 
+  /-/docker-latest-version:
+    get:
+      operationId: getDockerLatestVersion
+      tags: [Meta]
+      summary: Latest Docker Engine version
+      description: Returns the latest stable Docker Engine version from the GitHub releases API. Cached.
+      responses:
+        "200":
+          description: Latest version info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: string
+                    example: "27.5.1"
+
   /metrics:
     get:
       operationId: getMetrics
@@ -352,7 +370,7 @@ paths:
           description: Invalid state parameter
 
   /auth/logout:
-    get:
+    post:
       summary: Logout
       operationId: authLogout
       tags: [Authentication]
@@ -522,6 +540,254 @@ paths:
         "304":
           $ref: "#/components/responses/NotModified"
 
+  /swarm/orchestration:
+    patch:
+      operationId: patchSwarmOrchestration
+      tags: [Cluster]
+      summary: Patch swarm orchestration config
+      description: Updates the swarm orchestration configuration (task history retention limit). Requires operations level 2.
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              type: object
+              properties:
+                taskHistoryRetentionLimit:
+                  type: integer
+      responses:
+        "200":
+          description: Updated swarm info
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /swarm/raft:
+    patch:
+      operationId: patchSwarmRaft
+      tags: [Cluster]
+      summary: Patch swarm raft config
+      description: Updates the swarm Raft configuration (snapshot interval, log entries, election/heartbeat ticks). Requires operations level 2.
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              type: object
+              properties:
+                snapshotInterval:
+                  type: integer
+                  format: uint64
+                keepOldSnapshots:
+                  type: integer
+                  format: uint64
+                logEntriesForSlowFollowers:
+                  type: integer
+                  format: uint64
+                electionTick:
+                  type: integer
+                heartbeatTick:
+                  type: integer
+      responses:
+        "200":
+          description: Updated swarm info
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /swarm/dispatcher:
+    patch:
+      operationId: patchSwarmDispatcher
+      tags: [Cluster]
+      summary: Patch swarm dispatcher config
+      description: Updates the swarm dispatcher configuration (heartbeat period). Requires operations level 2.
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              type: object
+              properties:
+                heartbeatPeriod:
+                  type: integer
+                  format: int64
+                  description: Heartbeat period in nanoseconds
+      responses:
+        "200":
+          description: Updated swarm info
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /swarm/ca:
+    patch:
+      operationId: patchSwarmCAConfig
+      tags: [Cluster]
+      summary: Patch swarm CA config
+      description: Updates the swarm CA configuration (node cert expiry, external CAs). Requires operations level 3.
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              type: object
+              properties:
+                nodeCertExpiry:
+                  type: integer
+                  format: int64
+                  description: Node certificate expiry in nanoseconds
+      responses:
+        "200":
+          description: Updated swarm info
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /swarm/encryption:
+    patch:
+      operationId: patchSwarmEncryption
+      tags: [Cluster]
+      summary: Patch swarm encryption config
+      description: Toggles Raft data-at-rest encryption. Requires operations level 3.
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              type: object
+              required: [autoLockManagers]
+              properties:
+                autoLockManagers:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated swarm info
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /swarm/rotate-token:
+    post:
+      operationId: rotateToken
+      tags: [Cluster]
+      summary: Rotate join token
+      description: Rotates the worker or manager join token. Requires operations level 3.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [worker, manager]
+      responses:
+        "200":
+          description: New join tokens
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low
+
+  /swarm/rotate-unlock-key:
+    post:
+      operationId: rotateUnlockKey
+      tags: [Cluster]
+      summary: Rotate unlock key
+      description: Rotates the swarm unlock key. Only works when autolock is enabled. Requires operations level 3.
+      responses:
+        "200":
+          description: New unlock key
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  unlockKey:
+                    type: string
+        "403":
+          description: Operations level too low
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /swarm/force-rotate-ca:
+    post:
+      operationId: forceRotateCA
+      tags: [Cluster]
+      summary: Force CA certificate rotation
+      description: Forces rotation of the cluster root CA certificate. Requires operations level 3.
+      responses:
+        "200":
+          description: CA rotation initiated
+          content:
+            application/json:
+              schema:
+                type: object
+        "403":
+          description: Operations level too low
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /swarm/unlock-key:
+    get:
+      operationId: getUnlockKey
+      tags: [Cluster]
+      summary: Get swarm unlock key
+      description: Returns the current swarm unlock key. Only available when autolock is enabled.
+      responses:
+        "200":
+          description: Current unlock key
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  unlockKey:
+                    type: string
+        "500":
+          description: Failed to retrieve unlock key
+
   /disk-usage:
     get:
       operationId: getDiskUsage
@@ -621,6 +887,22 @@ paths:
           $ref: "#/components/responses/NotModified"
         "404":
           $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: removeNode
+      tags: [Nodes]
+      summary: Remove a node
+      description: Removes a node from the swarm. The node must be drained or down. Requires operations level 3.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "204":
+          description: Node removed
+        "403":
+          description: Operations level too low
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   /nodes/{id}/tasks:
     get:
@@ -729,6 +1011,61 @@ paths:
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
+  /nodes/{id}/role:
+    get:
+      operationId: getNodeRole
+      tags: [Nodes]
+      summary: Get node role
+      description: Returns the current role of the node (worker or manager).
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Node role
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  role:
+                    type: string
+                    enum: [worker, manager]
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: updateNodeRole
+      tags: [Nodes]
+      summary: Update node role
+      description: Promotes or demotes a node. Requires operations level 3.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [worker, manager]
+      responses:
+        "200":
+          description: Updated node
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
   # ── Services ─────────────────────────────────────────────────────────
 
   /services:
@@ -789,6 +1126,20 @@ paths:
                         description: Docker swarm.Service object
         "304":
           $ref: "#/components/responses/NotModified"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: removeService
+      tags: [Services]
+      summary: Remove a service
+      description: Removes a service from the swarm. Requires operations level 3.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "204":
+          description: Service removed
+        "403":
+          description: Operations level too low
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -1290,6 +1641,522 @@ paths:
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
+  /services/{id}/labels:
+    get:
+      operationId: getServiceLabels
+      tags: [Services]
+      summary: Get service labels
+      description: Returns the current labels of the service as a key/value map.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Service labels
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: patchServiceLabels
+      tags: [Services]
+      summary: Patch service labels
+      description: |
+        Applies a JSON Patch (RFC 6902) to the service labels.
+        Requires `Content-Type: application/json-patch+json`. Requires operations level 2.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: "#/components/schemas/JSONPatch"
+      responses:
+        "200":
+          description: Updated service labels
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+
+  /services/{id}/healthcheck:
+    get:
+      operationId: getServiceHealthcheck
+      tags: [Services]
+      summary: Get service healthcheck config
+      description: Returns the healthcheck configuration for the service.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Healthcheck configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Docker container.HealthConfig object
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: putServiceHealthcheck
+      tags: [Services]
+      summary: Replace service healthcheck config
+      description: Replaces the healthcheck configuration for the service. Requires operations level 2.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Docker container.HealthConfig object
+      responses:
+        "200":
+          description: Updated healthcheck configuration
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    patch:
+      operationId: patchServiceHealthcheck
+      tags: [Services]
+      summary: Patch service healthcheck config
+      description: |
+        Applies a JSON Merge Patch (RFC 7396) to the service healthcheck configuration.
+        Requires `Content-Type: application/merge-patch+json`. Requires operations level 2.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              type: object
+              description: Docker container.HealthConfig fields to merge
+      responses:
+        "200":
+          description: Updated healthcheck configuration
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+
+  /services/{id}/configs:
+    get:
+      operationId: getServiceConfigs
+      tags: [Services]
+      summary: Get service config references
+      description: Returns the config references attached to the service.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Config references
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    configID:
+                      type: string
+                    configName:
+                      type: string
+                    fileName:
+                      type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: patchServiceConfigs
+      tags: [Services]
+      summary: Patch service config references
+      description: Replaces the config references for the service. Requires operations level 2.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  configID:
+                    type: string
+                  configName:
+                    type: string
+                  fileName:
+                    type: string
+      responses:
+        "200":
+          description: Updated config references
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /services/{id}/secrets:
+    get:
+      operationId: getServiceSecrets
+      tags: [Services]
+      summary: Get service secret references
+      description: Returns the secret references attached to the service.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Secret references
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    secretID:
+                      type: string
+                    secretName:
+                      type: string
+                    fileName:
+                      type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: patchServiceSecrets
+      tags: [Services]
+      summary: Patch service secret references
+      description: Replaces the secret references for the service. Requires operations level 2.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  secretID:
+                    type: string
+                  secretName:
+                    type: string
+                  fileName:
+                    type: string
+      responses:
+        "200":
+          description: Updated secret references
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /services/{id}/networks:
+    get:
+      operationId: getServiceNetworks
+      tags: [Services]
+      summary: Get service network attachments
+      description: Returns the network attachments for the service.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Network attachments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    target:
+                      type: string
+                    aliases:
+                      type: array
+                      items:
+                        type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: patchServiceNetworks
+      tags: [Services]
+      summary: Patch service network attachments
+      description: Replaces the network attachments for the service. Requires operations level 2.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  target:
+                    type: string
+                  aliases:
+                    type: array
+                    items:
+                      type: string
+      responses:
+        "200":
+          description: Updated network attachments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /services/{id}/mounts:
+    get:
+      operationId: getServiceMounts
+      tags: [Services]
+      summary: Get service mount configuration
+      description: Returns the mount configuration for the service.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Mount configuration
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  description: Docker mount.Mount object
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: patchServiceMounts
+      tags: [Services]
+      summary: Patch service mount configuration
+      description: Replaces the mount configuration for the service. Requires operations level 2.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                description: Docker mount.Mount object
+      responses:
+        "200":
+          description: Updated mount configuration
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /services/{id}/container-config:
+    get:
+      operationId: getServiceContainerConfig
+      tags: [Services]
+      summary: Get service container config
+      description: Returns the container-level configuration (hostname, user, working dir, args, etc.).
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Container configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Subset of Docker container spec fields
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: patchServiceContainerConfig
+      tags: [Services]
+      summary: Patch service container config
+      description: |
+        Applies a JSON Merge Patch (RFC 7396) to the service container configuration.
+        Requires `Content-Type: application/merge-patch+json`. Requires operations level 2.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              type: object
+              description: Container config fields to merge
+      responses:
+        "200":
+          description: Updated container configuration
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+
+  /services/{id}/mode:
+    put:
+      operationId: updateServiceMode
+      tags: [Services]
+      summary: Change service mode
+      description: |
+        Changes the service mode between replicated and global.
+        For replicated mode, specify the initial replica count. Requires operations level 3.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode:
+                  type: string
+                  enum: [replicated, global]
+                replicas:
+                  type: integer
+                  minimum: 0
+                  description: Initial replica count (only for replicated mode)
+      responses:
+        "200":
+          description: Updated service
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /services/{id}/endpoint-mode:
+    put:
+      operationId: updateServiceEndpointMode
+      tags: [Services]
+      summary: Change service endpoint mode
+      description: |
+        Changes the service endpoint mode between vip and dnsrr. Requires operations level 3.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpointMode]
+              properties:
+                endpointMode:
+                  type: string
+                  enum: [vip, dnsrr]
+      responses:
+        "200":
+          description: Updated service
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
   # ── Tasks ────────────────────────────────────────────────────────────
 
   /tasks:
@@ -1548,6 +2415,40 @@ paths:
                         $ref: "#/components/schemas/StackDetail"
         "304":
           $ref: "#/components/responses/NotModified"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: removeStack
+      tags: [Stacks]
+      summary: Remove a stack
+      description: Removes all services in the stack. Requires operations level 3.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Stack name
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Stack removal initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  removed:
+                    type: array
+                    items:
+                      type: string
+                    description: IDs of removed services
+                  failed:
+                    type: array
+                    items:
+                      type: string
+                    description: IDs of services that failed to remove
+        "403":
+          description: Operations level too low
         "404":
           $ref: "#/components/responses/NotFound"
 
