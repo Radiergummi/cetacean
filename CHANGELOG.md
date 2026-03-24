@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Config, secret, network, and volume removal from detail pages with confirmation dialogs
 - Node role change (promote/demote) with radio card selector and quorum impact warnings
 - Node removal with type-to-confirm hostname dialog (only available for down nodes)
 - Stack removal with type-to-confirm dialog (removes all services, configs, secrets, and networks)

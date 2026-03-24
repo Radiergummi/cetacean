@@ -71,6 +71,8 @@ export default function ConfigDetail() {
             resourceName={name}
             listPath={stack ? `/stacks/${stack}` : "/configs"}
             onRemove={() => api.removeConfig(config.ID)}
+            disabled={services.length > 0}
+            disabledTitle="Cannot remove a config that is in use by services"
           />
         }
       />

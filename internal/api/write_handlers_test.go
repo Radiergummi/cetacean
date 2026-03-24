@@ -3479,7 +3479,10 @@ func TestHandlePatchServiceMounts_WrongContentType(t *testing.T) {
 
 func TestHandleRemoveConfig_OK(t *testing.T) {
 	c := cache.New(nil)
-	c.SetConfig(swarm.Config{ID: "cfg1", Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "my-config"}}})
+	c.SetConfig(swarm.Config{
+		ID:   "cfg1",
+		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "my-config"}},
+	})
 
 	wc := &mockWriteClient{
 		removeConfigFn: func(_ context.Context, id string) error {
@@ -3515,7 +3518,10 @@ func TestHandleRemoveConfig_NotFound(t *testing.T) {
 
 func TestHandleRemoveConfig_DockerError(t *testing.T) {
 	c := cache.New(nil)
-	c.SetConfig(swarm.Config{ID: "cfg1", Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "my-config"}}})
+	c.SetConfig(swarm.Config{
+		ID:   "cfg1",
+		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "my-config"}},
+	})
 
 	wc := &mockWriteClient{
 		removeConfigFn: func(_ context.Context, id string) error {
@@ -3536,7 +3542,10 @@ func TestHandleRemoveConfig_DockerError(t *testing.T) {
 
 func TestHandleRemoveSecret_OK(t *testing.T) {
 	c := cache.New(nil)
-	c.SetSecret(swarm.Secret{ID: "sec1", Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "my-secret"}}})
+	c.SetSecret(swarm.Secret{
+		ID:   "sec1",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "my-secret"}},
+	})
 
 	wc := &mockWriteClient{
 		removeSecretFn: func(_ context.Context, id string) error {
@@ -3572,7 +3581,10 @@ func TestHandleRemoveSecret_NotFound(t *testing.T) {
 
 func TestHandleRemoveSecret_DockerError(t *testing.T) {
 	c := cache.New(nil)
-	c.SetSecret(swarm.Secret{ID: "sec1", Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "my-secret"}}})
+	c.SetSecret(swarm.Secret{
+		ID:   "sec1",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "my-secret"}},
+	})
 
 	wc := &mockWriteClient{
 		removeSecretFn: func(_ context.Context, id string) error {

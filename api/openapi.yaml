@@ -2521,6 +2521,22 @@ paths:
           $ref: "#/components/responses/NotModified"
         "404":
           $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: removeConfig
+      tags: [Configs]
+      summary: Remove a config
+      description: Removes a config from the swarm. Fails if the config is in use by a service. Requires operations level 3.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "204":
+          description: Config removed
+        "403":
+          description: Operations level too low
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   # ── Secrets ──────────────────────────────────────────────────────────
 
@@ -2592,6 +2608,22 @@ paths:
           $ref: "#/components/responses/NotModified"
         "404":
           $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: removeSecret
+      tags: [Secrets]
+      summary: Remove a secret
+      description: Removes a secret from the swarm. Fails if the secret is in use by a service. Requires operations level 3.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "204":
+          description: Secret removed
+        "403":
+          description: Operations level too low
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   # ── Networks ─────────────────────────────────────────────────────────
 
@@ -2660,6 +2692,22 @@ paths:
           $ref: "#/components/responses/NotModified"
         "404":
           $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: removeNetwork
+      tags: [Networks]
+      summary: Remove a network
+      description: Removes a network from the swarm. Fails if services are still attached. Requires operations level 3.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "204":
+          description: Network removed
+        "403":
+          description: Operations level too low
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   # ── Volumes ──────────────────────────────────────────────────────────
 
@@ -2735,6 +2783,27 @@ paths:
           $ref: "#/components/responses/NotModified"
         "404":
           $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: removeVolume
+      tags: [Volumes]
+      summary: Remove a volume
+      description: Removes a volume. Fails if the volume is in use by a container. Requires operations level 3.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Volume name
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Volume removed
+        "403":
+          description: Operations level too low
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   # ── Search ───────────────────────────────────────────────────────────
 

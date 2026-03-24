@@ -11,6 +11,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { Trash2 } from "lucide-react";
@@ -21,6 +22,8 @@ interface RemoveResourceActionProps {
   resourceName: string;
   listPath: string;
   onRemove: () => Promise<void>;
+  disabled?: boolean;
+  disabledTitle?: string;
 }
 
 export function RemoveResourceAction({
@@ -28,6 +31,8 @@ export function RemoveResourceAction({
   resourceName,
   listPath,
   onRemove,
+  disabled,
+  disabledTitle,
 }: RemoveResourceActionProps) {
   const { level, loading: levelLoading } = useOperationsLevel();
   const canImpact = !levelLoading && level >= opsLevel.impactful;
@@ -38,21 +43,32 @@ export function RemoveResourceAction({
     return null;
   }
 
+  const trigger = (
+    <AlertDialogTrigger
+      render={
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={disabled || remove.loading}
+        >
+          {remove.loading ? <Spinner className="size-3" /> : <Trash2 className="size-3.5" />}
+          Remove
+        </Button>
+      }
+    />
+  );
+
   return (
     <div className="flex flex-col items-start gap-1">
       <AlertDialog>
-        <AlertDialogTrigger
-          render={
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={remove.loading}
-            >
-              {remove.loading ? <Spinner className="size-3" /> : <Trash2 className="size-3.5" />}
-              Remove
-            </Button>
-          }
-        />
+        {disabled && disabledTitle ? (
+          <Tooltip>
+            <TooltipTrigger render={trigger} />
+            <TooltipContent>{disabledTitle}</TooltipContent>
+          </Tooltip>
+        ) : (
+          trigger
+        )}
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remove {resourceType}?</AlertDialogTitle>

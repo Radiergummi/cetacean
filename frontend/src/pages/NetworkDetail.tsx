@@ -152,6 +152,8 @@ export default function NetworkDetail() {
             resourceName={network.Name}
             listPath={stack ? `/stacks/${stack}` : "/networks"}
             onRemove={() => api.removeNetwork(network.Id)}
+            disabled={services.length > 0}
+            disabledTitle="Cannot remove a network that is in use by services"
           />
         }
       />

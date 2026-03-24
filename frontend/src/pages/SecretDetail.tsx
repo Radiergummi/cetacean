@@ -58,6 +58,8 @@ export default function SecretDetail() {
             resourceName={name}
             listPath={stack ? `/stacks/${stack}` : "/secrets"}
             onRemove={() => api.removeSecret(secret.ID)}
+            disabled={services.length > 0}
+            disabledTitle="Cannot remove a secret that is in use by services"
           />
         }
       />
