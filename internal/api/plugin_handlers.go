@@ -136,7 +136,7 @@ func (h *Handlers) HandleInstallPlugin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, NewDetailResponse("/plugins/"+plugin.Name, "Plugin", map[string]any{
+	writeJSONStatus(w, http.StatusCreated, NewDetailResponse("/plugins/"+plugin.Name, "Plugin", map[string]any{
 		"plugin": plugin,
 	}))
 }
@@ -162,7 +162,15 @@ func (h *Handlers) HandleUpgradePlugin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	plugin, err := h.pluginClient.PluginInspect(r.Context(), name)
+	if err != nil {
+		writeDockerError(w, r, err, "plugin")
+		return
+	}
+
+	writeJSON(w, NewDetailResponse("/plugins/"+name, "Plugin", map[string]any{
+		"plugin": plugin,
+	}))
 }
 
 func (h *Handlers) HandleConfigurePlugin(w http.ResponseWriter, r *http.Request) {
@@ -182,5 +190,13 @@ func (h *Handlers) HandleConfigurePlugin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	plugin, err := h.pluginClient.PluginInspect(r.Context(), name)
+	if err != nil {
+		writeDockerError(w, r, err, "plugin")
+		return
+	}
+
+	writeJSON(w, NewDetailResponse("/plugins/"+name, "Plugin", map[string]any{
+		"plugin": plugin,
+	}))
 }

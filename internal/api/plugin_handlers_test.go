@@ -335,8 +335,8 @@ func TestHandleInstallPlugin_OK(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleInstallPlugin(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status=%d, want 201; body: %s", w.Code, w.Body.String())
 	}
 
 	var resp map[string]any
@@ -353,6 +353,9 @@ func TestHandleUpgradePlugin_OK(t *testing.T) {
 		pluginUpgradeFn: func(_ context.Context, _ string, _ string) error {
 			return nil
 		},
+		pluginInspectFn: func(_ context.Context, name string) (*types.Plugin, error) {
+			return &types.Plugin{Name: name, Enabled: true}, nil
+		},
 	}
 	h := newPluginHandlers(pc)
 
@@ -362,8 +365,16 @@ func TestHandleUpgradePlugin_OK(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleUpgradePlugin(w, req)
 
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("status=%d, want 204; body: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["@type"] != "Plugin" {
+		t.Errorf("@type=%v, want Plugin", resp["@type"])
 	}
 }
 
@@ -371,6 +382,9 @@ func TestHandleConfigurePlugin_OK(t *testing.T) {
 	pc := &mockPluginClient{
 		pluginConfigureFn: func(_ context.Context, _ string, _ []string) error {
 			return nil
+		},
+		pluginInspectFn: func(_ context.Context, name string) (*types.Plugin, error) {
+			return &types.Plugin{Name: name, Enabled: true}, nil
 		},
 	}
 	h := newPluginHandlers(pc)
@@ -381,7 +395,15 @@ func TestHandleConfigurePlugin_OK(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleConfigurePlugin(w, req)
 
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("status=%d, want 204; body: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["@type"] != "Plugin" {
+		t.Errorf("@type=%v, want Plugin", resp["@type"])
 	}
 }
