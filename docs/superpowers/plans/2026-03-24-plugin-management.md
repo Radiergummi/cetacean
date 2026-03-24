@@ -60,6 +60,8 @@ type DockerPluginClient interface {
 }
 ```
 
+Note: `PluginInstall` and `PluginUpgrade` signatures are simplified vs the spec — privileges are not passed as parameters because the Docker SDK's `AcceptAllPermissions: true` option handles privilege acceptance server-side. The two-step UI flow (privileges check → install) is a frontend concern; the backend just auto-accepts.
+
 Remove `PluginList` from `DockerSystemClient` (line 52).
 
 - [ ] **Step 2: Update `Handlers` struct and `NewHandlers`**
@@ -70,7 +72,13 @@ Add `pluginClient DockerPluginClient` field to `Handlers` struct. Add `pc Docker
 
 Pass `dockerClient` as the new `DockerPluginClient` argument to `NewHandlers`.
 
-- [ ] **Step 4: Verify compilation**
+- [ ] **Step 4: Update all existing `NewHandlers` call sites**
+
+Adding a new parameter to `NewHandlers` breaks every existing caller (~230 call sites across `main.go`, `write_handlers_test.go`, `handlers_test.go`, `swarm_handlers_test.go`, `loghandler_test.go`, `topology_test.go`, `middleware_test.go`, `write_middleware_test.go`, `handlers_bench_test.go`, `openapi_test.go`, `integration_test.go`). Add `nil` for the `pc DockerPluginClient` argument in all test helpers (it's unused in those tests). In `main.go`, pass `dockerClient`.
+
+Run: `grep -rn "NewHandlers(" internal/api/ main.go` to find all call sites.
+
+- [ ] **Step 5: Verify compilation**
 
 Run: `go build ./...`
 Expected: PASS (no new handlers yet, just interface + wiring)
@@ -119,13 +127,21 @@ func (c *Client) PluginRemove(ctx context.Context, name string, force bool) erro
 
 - [ ] **Step 4: Add `PluginPrivileges`**
 
-The Docker SDK has no public method for this. Use the SDK client's HTTP transport to call the Docker Engine API directly:
+The Docker SDK has no public method for this. Use the SDK client's HTTP transport to call the Docker Engine API directly. The SDK's `HTTPClient()` has a custom transport that dials the unix socket regardless of the URL host, so we use `http://localhost` as a placeholder host:
 
 ```go
 func (c *Client) PluginPrivileges(ctx context.Context, remote string) (types.PluginPrivileges, error) {
-	resp, err := c.docker.HTTPClient().Get(
-		c.docker.DaemonHost() + "/v1.46/plugins/privileges?remote=" + url.QueryEscape(remote),
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		"http://localhost/v1.46/plugins/privileges?remote="+url.QueryEscape(remote),
+		nil,
 	)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.docker.HTTPClient().Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -143,8 +159,6 @@ func (c *Client) PluginPrivileges(ctx context.Context, remote string) (types.Plu
 	return privileges, nil
 }
 ```
-
-Note: Check whether `DaemonHost()` returns a unix socket path (`unix:///var/run/docker.sock`) or an HTTP URL. If unix, we need to use the SDK's existing HTTP client which already has the unix socket dialer configured — so use `c.docker.HTTPClient()` for the client but construct the URL as `http://localhost/v1.46/plugins/privileges?remote=...` (the host is ignored for unix sockets; the SDK client already handles this). Verify this works against a real Docker daemon in testing.
 
 - [ ] **Step 5: Add `PluginInstall`**
 
@@ -373,7 +387,7 @@ func TestHandlePlugin_NotFound(t *testing.T) {
 }
 ```
 
-Note: You'll need to add `errdefs` import (`"github.com/docker/docker/errdefs"`). Also `newPluginHandlers` needs to match `NewHandlers`'s actual signature after Task 1 — adjust the argument order to match.
+Note: You'll need to add `errdefs` import (`"github.com/docker/docker/errdefs"`) and `"strings"` (used by Task 5 tests). Also `newPluginHandlers` needs to match `NewHandlers`'s actual signature after Task 1 — adjust the argument order to match.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -836,7 +850,7 @@ Replace the existing `GET /plugins` line and add the full block after it (near t
 mux.HandleFunc("GET /plugins", contentNegotiated(h.HandlePlugins, spa))
 mux.HandleFunc("GET /plugins/{name}", contentNegotiated(h.HandlePlugin, spa))
 mux.HandleFunc("GET /swarm/plugins", contentNegotiated(h.HandlePlugins, spa))
-mux.Handle("POST /plugins/privileges", tier2(h.HandlePluginPrivileges))
+mux.HandleFunc("POST /plugins/privileges", h.HandlePluginPrivileges)
 mux.Handle("POST /plugins", tier3(h.HandleInstallPlugin))
 mux.Handle("POST /plugins/{name}/enable", tier2(h.HandleEnablePlugin))
 mux.Handle("POST /plugins/{name}/disable", tier2(h.HandleDisablePlugin))
@@ -845,7 +859,7 @@ mux.Handle("POST /plugins/{name}/upgrade", tier3(h.HandleUpgradePlugin))
 mux.Handle("PATCH /plugins/{name}/settings", tier2(h.HandleConfigurePlugin))
 ```
 
-Note: `POST /plugins/privileges` is tier 2 (not untiered as originally spec'd) because it reaches out to a registry. This was a spec oversight — the privileges check itself is safe but still a network call; placing it at tier 2 means it's available whenever enable/disable/configure are. If the user disagrees, change to untiered (`mux.HandleFunc`).
+Note: `POST /plugins/privileges` is untiered (uses `HandleFunc`, not `tier*`) per the spec — it's a read-only registry query needed for the two-step install UI. Users at any operations level can preview what a plugin requires; the actual install is still tier 3.
 
 - [ ] **Step 2: Run all tests**
 
