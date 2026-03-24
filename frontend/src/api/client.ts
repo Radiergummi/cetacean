@@ -23,6 +23,7 @@ import type {
   SwarmInfo,
   DiskUsageSummary,
   Plugin,
+  PluginPrivilege,
   Identity,
   MonitoringStatus,
   PrometheusResponse,
@@ -215,6 +216,33 @@ export const api = {
   rotateUnlockKey: () => mutationFetch<void>("/swarm/rotate-unlock-key", "POST"),
   forceRotateCA: () => mutationFetch<void>("/swarm/force-rotate-ca", "POST"),
   plugins: () => fetchJSON<CollectionResponse<Plugin>>("/plugins").then((r) => r.items),
+  plugin: (name: string, signal?: AbortSignal) =>
+    fetchJSON<{ plugin: Plugin }>(`/plugins/${encodeURIComponent(name)}`, signal).then(
+      (r) => r.plugin,
+    ),
+  pluginPrivileges: (remote: string) =>
+    mutationFetch<PluginPrivilege[]>("/plugins/privileges", "POST", { remote }, "application/json"),
+  installPlugin: (remote: string) =>
+    mutationFetch<{ plugin: Plugin }>("/plugins", "POST", { remote }, "application/json"),
+  enablePlugin: (name: string) =>
+    post<void>(`/plugins/${encodeURIComponent(name)}/enable`),
+  disablePlugin: (name: string) =>
+    post<void>(`/plugins/${encodeURIComponent(name)}/disable`),
+  removePlugin: (name: string, force?: boolean) =>
+    del(`/plugins/${encodeURIComponent(name)}${force ? "?force=true" : ""}`),
+  upgradePlugin: (name: string, remote: string) =>
+    mutationFetch<void>(
+      `/plugins/${encodeURIComponent(name)}/upgrade`,
+      "POST",
+      { remote },
+      "application/json",
+    ),
+  configurePlugin: (name: string, args: string[]) =>
+    patch<void>(
+      `/plugins/${encodeURIComponent(name)}/settings`,
+      { args },
+      "application/json",
+    ),
   clusterMetrics: () => fetchJSON<ClusterMetrics>("/cluster/metrics"),
   monitoringStatus: () => fetchJSON<MonitoringStatus>("/-/metrics/status"),
   nodes: (params?: ListParams) => fetchJSON<PagedResponse<Node>>(buildListURL("/nodes", params)),

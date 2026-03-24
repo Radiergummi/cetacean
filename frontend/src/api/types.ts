@@ -435,14 +435,67 @@ export interface SwarmInfo {
   managerAddr: string;
 }
 
+export interface PluginPrivilege {
+  Name: string;
+  Description: string;
+  Value: string[];
+}
+
+export interface PluginMount {
+  Name: string;
+  Description: string;
+  Settable: string[];
+  Source: string;
+  Destination: string;
+  Type: string;
+  Options: string[];
+}
+
+export interface PluginDevice {
+  Name: string;
+  Description: string;
+  Settable: string[];
+  Path: string;
+}
+
+export interface PluginEnv {
+  Name: string;
+  Description: string;
+  Settable: string[];
+  Value: string;
+}
+
 export interface Plugin {
   Id?: string;
   Name: string;
   Enabled: boolean;
   PluginReference?: string;
+  Settings: {
+    Mounts: PluginMount[];
+    Env: string[];
+    Args: string[];
+    Devices: PluginDevice[];
+  };
   Config: {
+    DockerVersion?: string;
     Description: string;
-    Interface: { Types: Array<{ Prefix: string; Capability: string; Description: string }> };
+    Documentation?: string;
+    Entrypoint: string[];
+    WorkDir: string;
+    User?: { UID: number; GID: number };
+    Interface: {
+      Types: Array<{ Prefix: string; Capability: string; Description: string }>;
+      Socket: string;
+    };
+    Network: { Type: string };
+    Linux: {
+      Capabilities: string[];
+      AllowAllDevices: boolean;
+      Devices: PluginDevice[];
+    };
+    Mounts: PluginMount[];
+    Env: PluginEnv[];
+    Args: { Name: string; Description: string; Settable: string[]; Value: string[] };
   };
 }
 
