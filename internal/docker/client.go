@@ -211,10 +211,11 @@ func (c *Client) PluginPrivileges(
 	ctx context.Context,
 	remote string,
 ) (types.PluginPrivileges, error) {
+	apiVersion := c.docker.ClientVersion()
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		"http://localhost/v1.46/plugins/privileges?remote="+url.QueryEscape(remote),
+		"http://d/v"+apiVersion+"/plugins/privileges?remote="+url.QueryEscape(remote),
 		nil,
 	)
 	if err != nil {

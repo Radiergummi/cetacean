@@ -19,7 +19,6 @@ import (
 type mockSystemClient struct {
 	swarmInspectFn func(ctx context.Context) (swarm.Swarm, error)
 	diskUsageFn    func(ctx context.Context) (types.DiskUsage, error)
-	pluginListFn   func(ctx context.Context) (types.PluginsListResponse, error)
 	localNodeIDFn  func(ctx context.Context) (string, error)
 	updateSwarmFn  func(ctx context.Context, spec swarm.Spec, version swarm.Version, flags swarm.UpdateFlags) error
 	getUnlockKeyFn func(ctx context.Context) (string, error)
@@ -37,13 +36,6 @@ func (m *mockSystemClient) DiskUsage(ctx context.Context) (types.DiskUsage, erro
 		return m.diskUsageFn(ctx)
 	}
 	return types.DiskUsage{}, fmt.Errorf("not implemented")
-}
-
-func (m *mockSystemClient) PluginList(ctx context.Context) (types.PluginsListResponse, error) {
-	if m.pluginListFn != nil {
-		return m.pluginListFn(ctx)
-	}
-	return types.PluginsListResponse{}, fmt.Errorf("not implemented")
 }
 
 func (m *mockSystemClient) LocalNodeID(ctx context.Context) (string, error) {
