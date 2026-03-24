@@ -4,7 +4,7 @@ export interface Node {
   Spec: {
     Role: "worker" | "manager";
     Availability: string;
-    Labels: Record<string, string>;
+    Labels: Record<string, string> | null;
   };
   Description: {
     Hostname: string;
@@ -30,13 +30,13 @@ export interface Service {
   UpdatedAt?: string;
   Spec: {
     Name: string;
-    Labels: Record<string, string>;
+    Labels: Record<string, string> | null;
     TaskTemplate: {
-      ContainerSpec: {
+      ContainerSpec?: {
         Image: string;
-        Command?: string[];
-        Args?: string[];
-        Env?: string[];
+        Command?: string[] | null;
+        Args?: string[] | null;
+        Env?: string[] | null;
         Dir?: string;
         User?: string;
         Hostname?: string;
@@ -45,17 +45,17 @@ export interface Service {
         StopGracePeriod?: number;
         ReadOnly?: boolean;
         TTY?: boolean;
-        Groups?: string[];
-        Hosts?: string[];
+        Groups?: string[] | null;
+        Hosts?: string[] | null;
         DNSConfig?: {
-          Nameservers?: string[];
-          Search?: string[];
-          Options?: string[];
+          Nameservers?: string[] | null;
+          Search?: string[] | null;
+          Options?: string[] | null;
         };
-        CapabilityAdd?: string[];
-        CapabilityDrop?: string[];
+        CapabilityAdd?: string[] | null;
+        CapabilityDrop?: string[] | null;
         Healthcheck?: {
-          Test?: string[];
+          Test?: string[] | null;
           Interval?: number;
           Timeout?: number;
           Retries?: number;
@@ -66,14 +66,14 @@ export interface Service {
           ConfigID: string;
           ConfigName: string;
           File?: { Name: string; UID: string; GID: string; Mode: number };
-        }>;
+        }> | null;
         Secrets?: Array<{
           SecretID: string;
           SecretName: string;
           File?: { Name: string; UID: string; GID: string; Mode: number };
-        }>;
-        Mounts?: ServiceMount[];
-      };
+        }> | null;
+        Mounts?: ServiceMount[] | null;
+      } | null;
       Resources?: {
         Limits?: { NanoCPUs?: number; MemoryBytes?: number; Pids?: number };
         Reservations?: { NanoCPUs?: number; MemoryBytes?: number };
@@ -85,15 +85,15 @@ export interface Service {
         Window?: number;
       };
       Placement?: {
-        Constraints?: string[];
-        Preferences?: Array<{ Spread?: { SpreadDescriptor: string } }>;
+        Constraints?: string[] | null;
+        Preferences?: Array<{ Spread?: { SpreadDescriptor: string } }> | null;
         MaxReplicas?: number;
       };
       LogDriver?: { Name: string; Options?: Record<string, string> };
-      Networks?: Array<{ Target: string; Aliases?: string[] }>;
+      Networks?: Array<{ Target: string; Aliases?: string[] | null }> | null;
     };
     Mode: {
-      Replicated?: { Replicas: number };
+      Replicated?: { Replicas?: number };
       Global?: Record<string, never>;
     };
     UpdateConfig?: {
@@ -119,7 +119,7 @@ export interface Service {
         TargetPort: number;
         PublishedPort: number;
         PublishMode: string;
-      }>;
+      }> | null;
     };
   };
   Endpoint?: {
@@ -128,18 +128,18 @@ export interface Service {
       TargetPort: number;
       PublishedPort: number;
       PublishMode: string;
-    }>;
+    }> | null;
     VirtualIPs?: Array<{
       NetworkID: string;
       Addr: string;
-    }>;
+    }> | null;
   };
   PreviousSpec?: Service["Spec"];
   UpdateStatus?: {
-    State: string;
-    StartedAt: string;
-    CompletedAt: string;
-    Message: string;
+    State?: string;
+    StartedAt?: string;
+    CompletedAt?: string;
+    Message?: string;
   };
 }
 
@@ -151,10 +151,10 @@ export interface Task {
   ID: string;
   Version: { Index: number };
   ServiceID: string;
-  NodeID: string;
+  NodeID?: string;
   ServiceName?: string;
   NodeHostname?: string;
-  Slot: number;
+  Slot?: number;
   Status: {
     Timestamp: string;
     State: string;
@@ -167,9 +167,9 @@ export interface Task {
   };
   DesiredState: string;
   Spec: {
-    ContainerSpec: {
+    ContainerSpec?: {
       Image: string;
-    };
+    } | null;
   };
 }
 
@@ -180,7 +180,7 @@ export interface Config {
   UpdatedAt: string;
   Spec: {
     Name: string;
-    Labels: Record<string, string>;
+    Labels: Record<string, string> | null;
     Data?: string;
   };
 }
@@ -192,7 +192,7 @@ export interface Secret {
   UpdatedAt: string;
   Spec: {
     Name: string;
-    Labels: Record<string, string>;
+    Labels: Record<string, string> | null;
   };
 }
 
@@ -208,20 +208,20 @@ export interface Network {
   Ingress: boolean;
   IPAM: {
     Driver?: string;
-    Config: Array<{ Subnet: string; Gateway: string; IPRange?: string }>;
+    Config: Array<{ Subnet: string; Gateway: string; IPRange?: string }> | null;
   };
-  Options: Record<string, string>;
-  Labels: Record<string, string>;
+  Options: Record<string, string> | null;
+  Labels: Record<string, string> | null;
 }
 
 export interface Volume {
   Name: string;
   Driver: string;
-  Labels: Record<string, string>;
+  Labels: Record<string, string> | null;
   Mountpoint: string;
   Scope: string;
-  Options: Record<string, string>;
-  CreatedAt: string;
+  Options: Record<string, string> | null;
+  CreatedAt?: string;
 }
 
 export interface Stack {
@@ -401,7 +401,7 @@ export interface SwarmInfo {
     CreatedAt: string;
     UpdatedAt: string;
     Spec: {
-      Annotations: { Name: string; Labels: Record<string, string> };
+      Annotations: { Name: string; Labels: Record<string, string> | null };
       Orchestration: { TaskHistoryRetentionLimit?: number };
       Raft: {
         SnapshotInterval: number;
@@ -413,7 +413,11 @@ export interface SwarmInfo {
       Dispatcher: { HeartbeatPeriod: number };
       CAConfig: {
         NodeCertExpiry: number;
-        ExternalCAs?: Array<{ Protocol: string; URL: string; Options?: Record<string, string> }>;
+        ExternalCAs?: Array<{
+          Protocol: string;
+          URL: string;
+          Options?: Record<string, string>;
+        }> | null;
         ForceRotate: number;
       };
       TaskDefaults: {
@@ -427,7 +431,7 @@ export interface SwarmInfo {
       CertIssuerPublicKey: string;
     };
     RootRotationInProgress: boolean;
-    DefaultAddrPool: string[];
+    DefaultAddrPool: string[] | null;
     SubnetSize: number;
     DataPathPort: number;
     JoinTokens: { Worker: string; Manager: string };
@@ -438,31 +442,31 @@ export interface SwarmInfo {
 export interface PluginPrivilege {
   Name: string;
   Description: string;
-  Value: string[];
+  Value: string[] | null;
 }
 
 export interface PluginMount {
   Name: string;
   Description: string;
-  Settable: string[];
-  Source: string;
+  Settable: string[] | null;
+  Source: string | null;
   Destination: string;
   Type: string;
-  Options: string[];
+  Options: string[] | null;
 }
 
 export interface PluginDevice {
   Name: string;
   Description: string;
-  Settable: string[];
-  Path: string;
+  Settable: string[] | null;
+  Path: string | null;
 }
 
 export interface PluginEnv {
   Name: string;
   Description: string;
-  Settable: string[];
-  Value: string;
+  Settable: string[] | null;
+  Value: string | null;
 }
 
 export interface Plugin {
@@ -471,31 +475,36 @@ export interface Plugin {
   Enabled: boolean;
   PluginReference?: string;
   Settings: {
-    Mounts: PluginMount[];
-    Env: string[];
-    Args: string[];
-    Devices: PluginDevice[];
+    Mounts: PluginMount[] | null;
+    Env: string[] | null;
+    Args: string[] | null;
+    Devices: PluginDevice[] | null;
   };
   Config: {
     DockerVersion?: string;
     Description: string;
     Documentation?: string;
-    Entrypoint: string[];
+    Entrypoint: string[] | null;
     WorkDir: string;
     User?: { UID: number; GID: number };
     Interface: {
-      Types: Array<{ Prefix: string; Capability: string; Description: string }>;
+      Types: string[] | null;
       Socket: string;
     };
     Network: { Type: string };
     Linux: {
-      Capabilities: string[];
+      Capabilities: string[] | null;
       AllowAllDevices: boolean;
-      Devices: PluginDevice[];
+      Devices: PluginDevice[] | null;
     };
-    Mounts: PluginMount[];
-    Env: PluginEnv[];
-    Args: { Name: string; Description: string; Settable: string[]; Value: string[] };
+    Mounts: PluginMount[] | null;
+    Env: PluginEnv[] | null;
+    Args: {
+      Name: string;
+      Description: string;
+      Settable: string[] | null;
+      Value: string[] | null;
+    };
   };
 }
 
@@ -554,11 +563,13 @@ export interface PrometheusResponse {
 }
 
 export type Healthcheck = NonNullable<
-  Service["Spec"]["TaskTemplate"]["ContainerSpec"]["Healthcheck"]
+  NonNullable<Service["Spec"]["TaskTemplate"]["ContainerSpec"]>["Healthcheck"]
 >;
 
 export type Placement = NonNullable<Service["Spec"]["TaskTemplate"]["Placement"]>;
-export type PortConfig = NonNullable<NonNullable<Service["Spec"]["EndpointSpec"]>["Ports"]>[number];
+export type PortConfig = NonNullable<
+  NonNullable<NonNullable<Service["Spec"]["EndpointSpec"]>["Ports"]>[number]
+>;
 export type UpdateConfig = NonNullable<Service["Spec"]["UpdateConfig"]>;
 export type LogDriver = NonNullable<Service["Spec"]["TaskTemplate"]["LogDriver"]>;
 
