@@ -22,11 +22,14 @@ const NetworkList = lazy(() => import("./pages/NetworkList"));
 const NodeDetail = lazy(() => import("./pages/NodeDetail"));
 const NodeList = lazy(() => import("./pages/NodeList"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const PluginDetail = lazy(() => import("./pages/PluginDetail"));
+const PluginList = lazy(() => import("./pages/PluginList"));
 const SearchPage = lazy(() => import("./pages/SearchPage"));
 const SecretDetail = lazy(() => import("./pages/SecretDetail"));
 const SecretList = lazy(() => import("./pages/SecretList"));
 const ServiceDetail = lazy(() => import("./pages/ServiceDetail"));
 const ServiceList = lazy(() => import("./pages/ServiceList"));
+const ServiceSubResource = lazy(() => import("./pages/ServiceSubResource"));
 const StackDetail = lazy(() => import("./pages/StackDetail"));
 const StackList = lazy(() => import("./pages/StackList"));
 const SwarmPage = lazy(() => import("./pages/SwarmPage"));
@@ -259,6 +262,10 @@ export default function App() {
                     element={<ServiceDetail />}
                   />
                   <Route
+                    path="/services/:id/:subResource"
+                    element={<ServiceSubResource />}
+                  />
+                  <Route
                     path="/tasks"
                     element={<TaskList />}
                   />
@@ -297,6 +304,14 @@ export default function App() {
                   <Route
                     path="/volumes/:name"
                     element={<VolumeDetail />}
+                  />
+                  <Route
+                    path="/plugins"
+                    element={<PluginList />}
+                  />
+                  <Route
+                    path="/plugins/:name"
+                    element={<PluginDetail />}
                   />
                   <Route
                     path="/swarm"
