@@ -24,7 +24,17 @@ func closedReady() <-chan struct{} {
 }
 
 func TestHandleHealth(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsImpactful,
+	)
 	req := httptest.NewRequest("GET", "/-/health", nil)
 	w := httptest.NewRecorder()
 	h.HandleHealth(w, req)
@@ -54,7 +64,17 @@ func TestHandleReady_NotReady(t *testing.T) {
 }
 
 func TestHandleReady_Ready(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsImpactful,
+	)
 	req := httptest.NewRequest("GET", "/-/ready", nil)
 	w := httptest.NewRecorder()
 	h.HandleReady(w, req)
@@ -226,7 +246,17 @@ func TestHandleClusterMetrics_WithPrometheus(t *testing.T) {
 }
 
 func TestHandleMonitoringStatus_NoPrometheus(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsImpactful,
+	)
 
 	req := httptest.NewRequest("GET", "/-/metrics/status", nil)
 	w := httptest.NewRecorder()
@@ -687,7 +717,17 @@ func TestHandleGetService_Found(t *testing.T) {
 }
 
 func TestHandleGetService_NotFound(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsImpactful,
+	)
 
 	req := httptest.NewRequest("GET", "/services/missing", nil)
 	req.SetPathValue("id", "missing")
@@ -715,7 +755,17 @@ func TestHandleGetTask_Found(t *testing.T) {
 }
 
 func TestHandleGetTask_NotFound(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsImpactful,
+	)
 
 	req := httptest.NewRequest("GET", "/tasks/missing", nil)
 	req.SetPathValue("id", "missing")
@@ -760,7 +810,17 @@ func TestHandleListTasks(t *testing.T) {
 }
 
 func TestHandleServiceTasks_NotFound(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsImpactful,
+	)
 
 	req := httptest.NewRequest("GET", "/services/missing/tasks", nil)
 	req.SetPathValue("id", "missing")
@@ -773,7 +833,17 @@ func TestHandleServiceTasks_NotFound(t *testing.T) {
 }
 
 func TestHandleNodeTasks_NotFound(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsImpactful,
+	)
 
 	req := httptest.NewRequest("GET", "/nodes/missing/tasks", nil)
 	req.SetPathValue("id", "missing")
@@ -974,7 +1044,17 @@ func TestHandleGetStack_Found(t *testing.T) {
 }
 
 func TestHandleGetStack_NotFound(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsImpactful,
+	)
 
 	req := httptest.NewRequest("GET", "/stacks/missing", nil)
 	req.SetPathValue("name", "missing")
@@ -1087,7 +1167,17 @@ func TestHandleListVolumes(t *testing.T) {
 }
 
 func TestHandleTaskLogs_NotFound(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsImpactful,
+	)
 
 	req := httptest.NewRequest("GET", "/tasks/missing/logs", nil)
 	req.SetPathValue("id", "missing")
@@ -1420,7 +1510,17 @@ func TestHandleListNetworks_Filter(t *testing.T) {
 }
 
 func TestHandleList_FilterInvalid(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsImpactful,
+	)
 
 	w := httptest.NewRecorder()
 	h.HandleListNodes(w, filterReq("/nodes", "invalid ==="))
@@ -1431,7 +1531,17 @@ func TestHandleList_FilterInvalid(t *testing.T) {
 }
 
 func TestHandleList_FilterTooLong(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsImpactful,
+	)
 	long := strings.Repeat("a", 513)
 
 	w := httptest.NewRecorder()
@@ -1897,7 +2007,17 @@ func TestHandleGetConfig_Found(t *testing.T) {
 }
 
 func TestHandleGetConfig_NotFound(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsImpactful,
+	)
 
 	req := httptest.NewRequest("GET", "/configs/missing", nil)
 	req.SetPathValue("id", "missing")
@@ -1953,7 +2073,17 @@ func TestHandleGetSecret_Found(t *testing.T) {
 }
 
 func TestHandleGetSecret_NotFound(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsImpactful,
+	)
 
 	req := httptest.NewRequest("GET", "/secrets/missing", nil)
 	req.SetPathValue("id", "missing")
@@ -2005,7 +2135,17 @@ func TestHandleGetNetwork_Found(t *testing.T) {
 }
 
 func TestHandleGetNetwork_NotFound(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsImpactful,
+	)
 
 	req := httptest.NewRequest("GET", "/networks/missing", nil)
 	req.SetPathValue("id", "missing")
@@ -2059,7 +2199,17 @@ func TestHandleGetVolume_Found(t *testing.T) {
 }
 
 func TestHandleGetVolume_NotFound(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsImpactful,
+	)
 
 	req := httptest.NewRequest("GET", "/volumes/missing", nil)
 	req.SetPathValue("name", "missing")
@@ -2166,7 +2316,17 @@ func TestHandleSearch_MatchesLabels(t *testing.T) {
 }
 
 func TestHandleSearch_EmptyQuery(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsImpactful,
+	)
 	req := httptest.NewRequest("GET", "/search", nil)
 	w := httptest.NewRecorder()
 	h.HandleSearch(w, req)

@@ -207,7 +207,10 @@ func (c *Client) PluginUpgrade(ctx context.Context, name string, remote string) 
 	return nil
 }
 
-func (c *Client) PluginPrivileges(ctx context.Context, remote string) (types.PluginPrivileges, error) {
+func (c *Client) PluginPrivileges(
+	ctx context.Context,
+	remote string,
+) (types.PluginPrivileges, error) {
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,

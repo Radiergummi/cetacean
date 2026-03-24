@@ -94,7 +94,17 @@ func TestHandleServiceLogs_JSON(t *testing.T) {
 
 func TestHandleServiceLogs_JSON_NotFound(t *testing.T) {
 	c := cache.New(nil)
-	h := NewHandlers(c, nil, &mockLogStreamer{}, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(
+		c,
+		nil,
+		&mockLogStreamer{},
+		nil,
+		nil,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsImpactful,
+	)
 
 	req := httptest.NewRequest("GET", "/services/missing/logs", nil)
 	req.SetPathValue("id", "missing")

@@ -65,7 +65,10 @@ func (m *mockPluginClient) PluginRemove(ctx context.Context, name string, force 
 	return fmt.Errorf("not implemented")
 }
 
-func (m *mockPluginClient) PluginInstall(ctx context.Context, remote string) (*types.Plugin, error) {
+func (m *mockPluginClient) PluginInstall(
+	ctx context.Context,
+	remote string,
+) (*types.Plugin, error) {
 	if m.pluginInstallFn != nil {
 		return m.pluginInstallFn(ctx, remote)
 	}
@@ -79,7 +82,10 @@ func (m *mockPluginClient) PluginUpgrade(ctx context.Context, name string, remot
 	return fmt.Errorf("not implemented")
 }
 
-func (m *mockPluginClient) PluginPrivileges(ctx context.Context, remote string) (types.PluginPrivileges, error) {
+func (m *mockPluginClient) PluginPrivileges(
+	ctx context.Context,
+	remote string,
+) (types.PluginPrivileges, error) {
 	if m.pluginPrivilegesFn != nil {
 		return m.pluginPrivilegesFn(ctx, remote)
 	}
@@ -94,7 +100,17 @@ func (m *mockPluginClient) PluginConfigure(ctx context.Context, name string, arg
 }
 
 func newPluginHandlers(pc *mockPluginClient) *Handlers {
-	return NewHandlers(cache.New(nil), nil, nil, nil, nil, pc, closedReady(), nil, config.OpsImpactful)
+	return NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		nil,
+		pc,
+		closedReady(),
+		nil,
+		config.OpsImpactful,
+	)
 }
 
 func TestHandlePlugin_OK(t *testing.T) {

@@ -362,7 +362,17 @@ func BenchmarkHandleHistory(b *testing.B) {
 }
 
 func BenchmarkHandleHealth(b *testing.B) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsImpactful,
+	)
 	for b.Loop() {
 		req := httptest.NewRequestWithContext(b.Context(), "GET", "/-/health", nil)
 		h.HandleHealth(httptest.NewRecorder(), req)
@@ -370,7 +380,17 @@ func BenchmarkHandleHealth(b *testing.B) {
 }
 
 func BenchmarkHandleReady(b *testing.B) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsImpactful,
+	)
 	for b.Loop() {
 		req := httptest.NewRequestWithContext(b.Context(), "GET", "/-/ready", nil)
 		h.HandleReady(httptest.NewRecorder(), req)
@@ -378,7 +398,17 @@ func BenchmarkHandleReady(b *testing.B) {
 }
 
 func BenchmarkHandleMonitoringStatus_NoPrometheus(b *testing.B) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsImpactful,
+	)
 	for b.Loop() {
 		req := httptest.NewRequestWithContext(b.Context(), "GET", "/-/metrics/status", nil)
 		h.HandleMonitoringStatus(httptest.NewRecorder(), req)
