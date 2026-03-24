@@ -63,7 +63,17 @@ func NewRouter(
 	mux.Handle("POST /swarm/force-rotate-ca", tier3(h.HandlePostForceRotateCA))
 	mux.HandleFunc("GET /swarm/unlock-key", h.HandleGetUnlockKey)
 	mux.HandleFunc("GET /disk-usage", contentNegotiated(h.HandleDiskUsage, spa))
+	// Plugins
 	mux.HandleFunc("GET /plugins", contentNegotiated(h.HandlePlugins, spa))
+	mux.HandleFunc("GET /plugins/{name}", contentNegotiated(h.HandlePlugin, spa))
+	mux.HandleFunc("GET /swarm/plugins", contentNegotiated(h.HandlePlugins, spa))
+	mux.HandleFunc("POST /plugins/privileges", h.HandlePluginPrivileges)
+	mux.Handle("POST /plugins", tier3(h.HandleInstallPlugin))
+	mux.Handle("POST /plugins/{name}/enable", tier2(h.HandleEnablePlugin))
+	mux.Handle("POST /plugins/{name}/disable", tier2(h.HandleDisablePlugin))
+	mux.Handle("DELETE /plugins/{name}", tier3(h.HandleRemovePlugin))
+	mux.Handle("POST /plugins/{name}/upgrade", tier3(h.HandleUpgradePlugin))
+	mux.Handle("PATCH /plugins/{name}/settings", tier2(h.HandleConfigurePlugin))
 
 	// Nodes
 	mux.HandleFunc(
