@@ -23,7 +23,6 @@ function ConfirmAction({
   title,
   description,
   loading,
-  error,
   onConfirm,
 }: {
   icon: LucideIcon;
@@ -31,7 +30,6 @@ function ConfirmAction({
   title: string;
   description: string;
   loading: boolean;
-  error: string | null;
   onConfirm: () => void;
 }) {
   return (
@@ -60,7 +58,6 @@ function ConfirmAction({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
     </div>
   );
 }
@@ -69,8 +66,8 @@ export function SwarmActions({ onRotated }: { onRotated: () => void }) {
   const { level, loading: levelLoading } = useOperationsLevel();
   const canImpact = !levelLoading && level >= opsLevel.impactful;
 
-  const rotateWorker = useAsyncAction();
-  const rotateManager = useAsyncAction();
+  const rotateWorker = useAsyncAction({ toast: true });
+  const rotateManager = useAsyncAction({ toast: true });
 
   if (!canImpact) {
     return null;
@@ -84,7 +81,6 @@ export function SwarmActions({ onRotated }: { onRotated: () => void }) {
         title="Rotate worker join token?"
         description="This will invalidate the current worker join token. Existing workers are not affected."
         loading={rotateWorker.loading}
-        error={rotateWorker.error}
         onConfirm={() =>
           void rotateWorker.execute(async () => {
             await api.rotateToken("worker");
@@ -99,7 +95,6 @@ export function SwarmActions({ onRotated }: { onRotated: () => void }) {
         title="Rotate manager join token?"
         description="This will invalidate the current manager join token. Existing managers are not affected."
         loading={rotateManager.loading}
-        error={rotateManager.error}
         onConfirm={() =>
           void rotateManager.execute(async () => {
             await api.rotateToken("manager");

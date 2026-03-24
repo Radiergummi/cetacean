@@ -1,11 +1,8 @@
 package api
 
 import (
-	"fmt"
-	"html"
 	"net/http"
 	"sort"
-	"strings"
 
 	json "github.com/goccy/go-json"
 )
@@ -366,11 +363,6 @@ func sortedErrorCodes() []string {
 func HandleErrorIndex(w http.ResponseWriter, r *http.Request) {
 	codes := sortedErrorCodes()
 
-	if wantsHTML(r) {
-		writeErrorIndexHTML(w, codes)
-		return
-	}
-
 	defs := make([]ErrorDef, len(codes))
 	for i, code := range codes {
 		defs[i] = errorRegistry[code]
@@ -389,82 +381,6 @@ func HandleErrorDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if wantsHTML(r) {
-		writeErrorDetailHTML(w, def)
-		return
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(def)
-}
-
-func wantsHTML(r *http.Request) bool {
-	return parseAccept(r.Header.Get("Accept")) == ContentTypeHTML
-}
-
-const errorPageCSS = `body { font-family: system-ui, sans-serif; max-width: 48rem; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
-h1 { font-size: 1.5rem; }
-a { color: #2563eb; text-decoration: none; }
-a:hover { text-decoration: underline; }
-code { font-family: ui-monospace, monospace; font-size: 0.875em; background: #f5f5f5; padding: 0.125rem 0.25rem; border-radius: 0.25rem; }`
-
-func writeErrorIndexHTML(w http.ResponseWriter, codes []string) {
-	var b strings.Builder
-	fmt.Fprintf(&b, `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Cetacean Error Reference</title>
-<style>
-%s
-table { width: 100%%; border-collapse: collapse; }
-th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #e5e5e5; }
-th { font-weight: 600; }
-</style></head><body>
-<h1>Cetacean Error Reference</h1>
-<table><thead><tr><th>Code</th><th>Title</th><th>HTTP Status</th></tr></thead><tbody>`, errorPageCSS)
-
-	for _, code := range codes {
-		def := errorRegistry[code]
-		fmt.Fprintf(&b, `<tr><td><a href="/api/errors/%s"><code>%s</code></a></td><td>%s</td><td>%d</td></tr>`,
-			html.EscapeString(code),
-			html.EscapeString(code),
-			html.EscapeString(def.Title),
-			def.Status,
-		)
-	}
-
-	b.WriteString(`</tbody></table></body></html>`)
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(b.String())) //nolint:errcheck
-}
-
-func writeErrorDetailHTML(w http.ResponseWriter, def ErrorDef) {
-	var b strings.Builder
-	fmt.Fprintf(&b, `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>%s — Cetacean Error Reference</title>
-<style>
-%s
-dl { display: grid; grid-template-columns: 8rem 1fr; gap: 0.5rem 1rem; }
-dt { font-weight: 600; }
-.suggestion { margin-top: 1.5rem; padding: 1rem; background: #f0f9ff; border-left: 3px solid #2563eb; border-radius: 0.25rem; }
-</style></head><body>
-<p><a href="/api/errors">&larr; All errors</a></p>
-<h1><code>%s</code> — %s</h1>
-<dl>
-<dt>HTTP Status</dt><dd>%d %s</dd>
-</dl>
-<p>%s</p>
-<div class="suggestion"><strong>Suggestion:</strong> %s</div>
-</body></html>`,
-		html.EscapeString(def.Code),
-		errorPageCSS,
-		html.EscapeString(def.Code),
-		html.EscapeString(def.Title),
-		def.Status,
-		html.EscapeString(http.StatusText(def.Status)),
-		html.EscapeString(def.Description),
-		html.EscapeString(def.Suggestion),
-	)
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(b.String())) //nolint:errcheck
 }

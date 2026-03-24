@@ -3,7 +3,6 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	json "github.com/goccy/go-json"
@@ -32,23 +31,6 @@ func TestHandleErrorIndex_JSON(t *testing.T) {
 	}
 }
 
-func TestHandleErrorIndex_HTML(t *testing.T) {
-	req := httptest.NewRequest("GET", "/api/errors", nil)
-	req.Header.Set("Accept", "text/html")
-	w := httptest.NewRecorder()
-
-	HandleErrorIndex(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status=%d, want 200", w.Code)
-	}
-	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
-		t.Errorf("Content-Type=%s, want text/html", ct)
-	}
-	if !strings.Contains(w.Body.String(), "NOD001") {
-		t.Error("HTML response does not contain NOD001")
-	}
-}
 
 func TestHandleErrorDetail_JSON(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/errors/NOD001", nil)
@@ -74,25 +56,6 @@ func TestHandleErrorDetail_JSON(t *testing.T) {
 	}
 }
 
-func TestHandleErrorDetail_HTML(t *testing.T) {
-	req := httptest.NewRequest("GET", "/api/errors/VOL001", nil)
-	req.SetPathValue("code", "VOL001")
-	req.Header.Set("Accept", "text/html")
-	w := httptest.NewRecorder()
-
-	HandleErrorDetail(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status=%d, want 200", w.Code)
-	}
-	body := w.Body.String()
-	if !strings.Contains(body, "VOL001") {
-		t.Error("HTML does not contain error code")
-	}
-	if !strings.Contains(body, "Volume In Use") {
-		t.Error("HTML does not contain error title")
-	}
-}
 
 func TestHandleErrorDetail_NotFound(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/errors/XXX999", nil)

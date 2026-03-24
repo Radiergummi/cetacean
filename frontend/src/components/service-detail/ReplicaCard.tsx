@@ -93,7 +93,7 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
   const [mode, setMode] = useState<Mode>(currentMode);
   const [replicas, setReplicas] = useState<number | undefined>(currentReplicas);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const action = useAsyncAction();
+  const action = useAsyncAction({ toast: true });
 
   function handleOpenChange(nextOpen: boolean) {
     if (nextOpen) {
@@ -255,9 +255,9 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
           />
         )}
 
-        {(validationError || action.error) && (
+        {validationError && (
           <p className="mb-2 text-xs text-red-600 dark:text-red-400">
-            {validationError || action.error}
+            {validationError}
           </p>
         )}
 

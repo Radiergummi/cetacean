@@ -35,7 +35,7 @@ export function RoleEditor({ nodeId, currentRole, isLeader, managerCount }: Role
   const canEdit = !levelLoading && level >= opsLevel.impactful;
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(currentRole);
-  const action = useAsyncAction();
+  const action = useAsyncAction({ toast: true });
 
   function handleOpenChange(next: boolean) {
     if (next) {
@@ -122,10 +122,6 @@ export function RoleEditor({ nodeId, currentRole, isLeader, managerCount }: Role
                         </p>
                       )}
                     </div>
-                  )}
-
-                  {action.error && (
-                    <p className="text-xs text-red-600 dark:text-red-400">{action.error}</p>
                   )}
 
                   <div className="flex justify-end gap-2">

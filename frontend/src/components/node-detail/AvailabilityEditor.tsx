@@ -48,7 +48,7 @@ export function AvailabilityEditor({ nodeId, current }: { nodeId: string; curren
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState<Availability>(current as Availability);
   const [drainPending, setDrainPending] = useState(false);
-  const action = useAsyncAction();
+  const action = useAsyncAction({ toast: true });
 
   function handleOpenChange(nextOpen: boolean) {
     if (nextOpen) {
@@ -146,10 +146,6 @@ export function AvailabilityEditor({ nodeId, current }: { nodeId: string; curren
                 </button>
               ))}
             </div>
-
-            {action.error && (
-              <p className="mb-2 text-xs text-red-600 dark:text-red-400">{action.error}</p>
-            )}
 
             <div className="flex gap-2">
               <Button

@@ -24,7 +24,7 @@ export function EndpointModeEditor({
   const [editing, setEditing] = useState(false);
   const [mode, setMode] = useState<EndpointMode>(currentMode);
   useEscapeCancel(editing, () => setEditing(false));
-  const action = useAsyncAction();
+  const action = useAsyncAction({ toast: true });
 
   function openEdit() {
     setMode(currentMode);
@@ -85,8 +85,6 @@ export function EndpointModeEditor({
               disabled={action.loading}
             />
           </div>
-
-          {action.error && <p className="text-xs text-red-600 dark:text-red-400">{action.error}</p>}
 
           <footer className="flex items-center justify-end gap-2">
             <Button

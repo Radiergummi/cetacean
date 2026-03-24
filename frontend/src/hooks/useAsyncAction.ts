@@ -1,7 +1,12 @@
+import { showErrorToast } from "@/lib/showErrorToast";
 import { getErrorMessage } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
 
-export function useAsyncAction() {
+interface AsyncActionOptions {
+  toast?: boolean;
+}
+
+export function useAsyncAction(options?: AsyncActionOptions) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cause, setCause] = useState<unknown>(null);
@@ -23,8 +28,12 @@ export function useAsyncAction() {
       await action();
     } catch (caught) {
       if (mountedRef.current) {
-        setError(getErrorMessage(caught, errorMessage));
-        setCause(caught);
+        if (options?.toast) {
+          showErrorToast(caught, errorMessage);
+        } else {
+          setError(getErrorMessage(caught, errorMessage));
+          setCause(caught);
+        }
       }
     } finally {
       if (mountedRef.current) {

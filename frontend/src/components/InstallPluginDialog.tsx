@@ -44,8 +44,8 @@ export default function InstallPluginDialog({
 }: InstallPluginDialogProps) {
   const [remote, setRemote] = useState(currentReference ?? "");
   const [privileges, setPrivileges] = useState<PluginPrivilege[] | null>(null);
-  const checkPrivileges = useAsyncAction();
-  const installAction = useAsyncAction();
+  const checkPrivileges = useAsyncAction({ toast: true });
+  const installAction = useAsyncAction({ toast: true });
 
   const isUpgrade = mode === "upgrade";
   const actionLabel = isUpgrade ? "Upgrade" : "Install";
@@ -114,14 +114,6 @@ export default function InstallPluginDialog({
               disabled={checkPrivileges.loading || installAction.loading}
             />
           </label>
-
-          {checkPrivileges.error && (
-            <p className="text-xs text-red-600 dark:text-red-400">{checkPrivileges.error}</p>
-          )}
-
-          {installAction.error && (
-            <p className="text-xs text-red-600 dark:text-red-400">{installAction.error}</p>
-          )}
 
           {privileges && (
             <div className="space-y-2">

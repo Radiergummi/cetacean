@@ -44,8 +44,8 @@ func NewRouter(
 	mux.HandleFunc("GET /api", HandleAPIDoc(openapiSpec))
 	mux.HandleFunc("GET /api/scalar.js", HandleScalarJS(scalarJS))
 	mux.HandleFunc("GET /api/context.jsonld", HandleContext)
-	mux.HandleFunc("GET /api/errors", HandleErrorIndex)
-	mux.HandleFunc("GET /api/errors/{code}", HandleErrorDetail)
+	mux.HandleFunc("GET /api/errors", contentNegotiated(HandleErrorIndex, spa))
+	mux.HandleFunc("GET /api/errors/{code}", contentNegotiated(HandleErrorDetail, spa))
 
 	// SSE events
 	mux.Handle("GET /events", sseOnly(b, spa))

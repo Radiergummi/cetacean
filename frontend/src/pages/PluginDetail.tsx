@@ -50,8 +50,8 @@ export default function PluginDetail() {
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [draftArgs, setDraftArgs] = useState("");
 
-  const enableAction = useAsyncAction();
-  const removeAction = useAsyncAction();
+  const enableAction = useAsyncAction({ toast: true });
+  const removeAction = useAsyncAction({ toast: true });
 
   const fetchPlugin = useCallback(() => {
     setError(null);
@@ -222,14 +222,6 @@ export default function PluginDetail() {
           </>
         }
       />
-
-      {enableAction.error && (
-        <p className="text-xs text-red-600 dark:text-red-400">{enableAction.error}</p>
-      )}
-
-      {removeAction.error && (
-        <p className="text-xs text-red-600 dark:text-red-400">{removeAction.error}</p>
-      )}
 
       {/* Overview */}
       <MetadataGrid>

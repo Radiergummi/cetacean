@@ -43,7 +43,7 @@ export default function TaskDetail() {
   const [error, setError] = useState(false);
   const { level, loading: levelLoading } = useOperationsLevel();
   const canRemove = !levelLoading && level >= opsLevel.impactful;
-  const removal = useAsyncAction();
+  const removal = useAsyncAction({ toast: true });
 
   const fetchTask = useCallback(() => {
     if (!id) {
@@ -168,10 +168,6 @@ export default function TaskDetail() {
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
-
-              {removal.error && (
-                <p className="text-xs text-red-600 dark:text-red-400">{removal.error}</p>
-              )}
             </>
           ) : undefined
         }

@@ -29,7 +29,6 @@ function ConfirmAction({
   disabled,
   disabledTitle,
   loading,
-  error,
   variant = "default",
   onConfirm,
 }: {
@@ -40,7 +39,6 @@ function ConfirmAction({
   disabled?: boolean;
   disabledTitle?: string;
   loading: boolean;
-  error: string | null;
   variant?: "default" | "destructive";
   onConfirm: () => void;
 }) {
@@ -86,7 +84,6 @@ function ConfirmAction({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
     </div>
   );
 }
@@ -97,9 +94,9 @@ export function ServiceActions({ service, serviceId }: { service: Service; servi
   const canImpact = !levelLoading && level >= opsLevel.impactful;
 
   const navigate = useNavigate();
-  const rollback = useAsyncAction();
-  const restart = useAsyncAction();
-  const remove = useAsyncAction();
+  const rollback = useAsyncAction({ toast: true });
+  const restart = useAsyncAction({ toast: true });
+  const remove = useAsyncAction({ toast: true });
 
   if (!canWrite && !canImpact) {
     return null;
@@ -116,7 +113,6 @@ export function ServiceActions({ service, serviceId }: { service: Service; servi
           disabled={!service.PreviousSpec}
           disabledTitle="No previous spec available"
           loading={rollback.loading}
-          error={rollback.error}
           onConfirm={() =>
             void rollback.execute(() => api.rollbackService(serviceId), "Failed to rollback")
           }
@@ -130,7 +126,6 @@ export function ServiceActions({ service, serviceId }: { service: Service; servi
           title="Restart service?"
           description="This triggers a rolling restart of all tasks."
           loading={restart.loading}
-          error={restart.error}
           onConfirm={() =>
             void restart.execute(() => api.restartService(serviceId), "Failed to restart")
           }
@@ -144,7 +139,6 @@ export function ServiceActions({ service, serviceId }: { service: Service; servi
           title="Remove service?"
           description="This will permanently remove the service and all its tasks. This action cannot be undone."
           loading={remove.loading}
-          error={remove.error}
           variant="destructive"
           onConfirm={() =>
             void remove.execute(async () => {

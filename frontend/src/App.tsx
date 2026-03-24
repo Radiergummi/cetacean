@@ -1,4 +1,5 @@
 import ConnectionStatus from "./components/ConnectionStatus";
+import { Toaster } from "./components/ui/sonner";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { LoadingDetail } from "./components/LoadingSkeleton";
 import { GlobalSearch, type GlobalSearchHandle } from "./components/search";
@@ -15,6 +16,8 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { BrowserRouter, Link, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 const ClusterOverview = lazy(() => import("./pages/ClusterOverview"));
+const ErrorIndex = lazy(() => import("./pages/ErrorIndex"));
+const ErrorCodeDetail = lazy(() => import("./pages/ErrorCodeDetail"));
 const ConfigDetail = lazy(() => import("./pages/ConfigDetail"));
 const ConfigList = lazy(() => import("./pages/ConfigList"));
 const NetworkDetail = lazy(() => import("./pages/NetworkDetail"));
@@ -230,6 +233,12 @@ export default function App() {
       <AuthProvider>
         <OperationsLevelProvider>
           <ConnectionTracker>
+            <Toaster
+              theme="system"
+              richColors
+              position="bottom-right"
+              toastOptions={{ duration: 8000 }}
+            />
             <Layout>
               <Suspense fallback={<LoadingDetail />}>
                 <Routes>
@@ -328,6 +337,14 @@ export default function App() {
                   <Route
                     path="/search"
                     element={<SearchPage />}
+                  />
+                  <Route
+                    path="/api/errors"
+                    element={<ErrorIndex />}
+                  />
+                  <Route
+                    path="/api/errors/:code"
+                    element={<ErrorCodeDetail />}
                   />
                   <Route
                     path="/profile"

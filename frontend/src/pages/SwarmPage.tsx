@@ -149,19 +149,19 @@ export default function SwarmPage() {
   const [draftAutoLock, setDraftAutoLock] = useState(false);
 
   // CA force rotate
-  const forceRotateCA = useAsyncAction();
+  const forceRotateCA = useAsyncAction({ toast: true });
 
   // Unlock key
   const [unlockKeyValue, setUnlockKeyValue] = useState<string | null>(null);
   const [showUnlockKey, setShowUnlockKey] = useState(false);
   const [unlockKeyCopied, setUnlockKeyCopied] = useState(false);
-  const fetchUnlockKey = useAsyncAction();
-  const rotateUnlockKey = useAsyncAction();
+  const fetchUnlockKey = useAsyncAction({ toast: true });
+  const rotateUnlockKey = useAsyncAction({ toast: true });
 
   // Unlock swarm
   const [unlockInput, setUnlockInput] = useState("");
   const [unlockOpen, setUnlockOpen] = useState(false);
-  const unlockSwarm = useAsyncAction();
+  const unlockSwarm = useAsyncAction({ toast: true });
 
   if (error) {
     return <FetchError message="Failed to load swarm info" />;
@@ -356,9 +356,6 @@ export default function SwarmPage() {
                   ) ?? []),
                 ]}
               />
-              {forceRotateCA.error && (
-                <p className="text-xs text-red-600 dark:text-red-400">{forceRotateCA.error}</p>
-              )}
             </div>
           }
           edit={
@@ -600,9 +597,6 @@ export default function SwarmPage() {
                     onChange={(event) => setUnlockInput(event.target.value)}
                     className="font-mono"
                   />
-                  {unlockSwarm.error && (
-                    <p className="text-xs text-red-600 dark:text-red-400">{unlockSwarm.error}</p>
-                  )}
                   <DialogFooter>
                     <Button
                       disabled={unlockSwarm.loading || !unlockInput.trim()}
@@ -622,14 +616,6 @@ export default function SwarmPage() {
                 </DialogContent>
               </Dialog>
             </div>
-          )}
-
-          {fetchUnlockKey.error && (
-            <p className="text-xs text-red-600 dark:text-red-400">{fetchUnlockKey.error}</p>
-          )}
-
-          {rotateUnlockKey.error && (
-            <p className="text-xs text-red-600 dark:text-red-400">{rotateUnlockKey.error}</p>
           )}
 
           {showUnlockKey && unlockKeyValue && (

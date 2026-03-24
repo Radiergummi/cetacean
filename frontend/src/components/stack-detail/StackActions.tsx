@@ -32,7 +32,7 @@ export function StackActions({ stackName, resourceCounts }: StackActionsProps) {
   const { level, loading: levelLoading } = useOperationsLevel();
   const canImpact = !levelLoading && level >= opsLevel.impactful;
   const navigate = useNavigate();
-  const remove = useAsyncAction();
+  const remove = useAsyncAction({ toast: true });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [partialErrors, setPartialErrors] = useState<
@@ -72,8 +72,6 @@ export function StackActions({ stackName, resourceCounts }: StackActionsProps) {
         {remove.loading ? <Spinner className="size-3" /> : <Trash2 className="size-3.5" />}
         Remove
       </Button>
-
-      {remove.error && <p className="text-xs text-red-600 dark:text-red-400">{remove.error}</p>}
 
       <AlertDialog
         open={dialogOpen}

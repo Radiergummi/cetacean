@@ -49,7 +49,7 @@ function ImageUpdatePopover({
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
-  const update = useAsyncAction();
+  const update = useAsyncAction({ toast: true });
 
   function handleOpenChange(next: boolean) {
     if (next) {
@@ -111,9 +111,9 @@ function ImageUpdatePopover({
           className="mb-2 font-mono"
           autoFocus
         />
-        {(validationError || update.error) && (
+        {validationError && (
           <p className="mb-2 text-xs text-red-600 dark:text-red-400">
-            {validationError || update.error}
+            {validationError}
           </p>
         )}
         <div className="flex gap-2">
