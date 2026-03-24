@@ -701,28 +701,6 @@ func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 	}))
 }
 
-func (h *Handlers) HandlePlugins(w http.ResponseWriter, r *http.Request) {
-	if h.pluginClient == nil {
-		writeProblem(w, r, http.StatusNotImplemented, "plugin list not available")
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-
-	plugins, err := h.pluginClient.PluginList(ctx)
-	if err != nil {
-		slog.Error("plugin list failed", "error", err)
-		writeProblem(w, r, http.StatusInternalServerError, "plugin list failed")
-		return
-	}
-	if plugins == nil {
-		plugins = types.PluginsListResponse{}
-	}
-
-	writeJSONWithETag(w, r, NewCollectionResponse(plugins, len(plugins), len(plugins), 0))
-}
-
 type DiskUsageSummary struct {
 	Type        string `json:"type"`
 	Count       int    `json:"count"`
