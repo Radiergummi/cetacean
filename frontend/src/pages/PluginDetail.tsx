@@ -212,7 +212,7 @@ export default function PluginDetail() {
         />
         <InfoCard
           label="Type"
-          value={config.Interface.Types.map(({ Capability }) => Capability).join(", ") || "—"}
+          value={config.Interface.Types?.map(({ Capability }) => Capability).join(", ") || "—"}
         />
       </MetadataGrid>
 

@@ -27,7 +27,7 @@ export default function PluginTable({ plugins }: { plugins: Plugin[] }) {
                 </Link>
               </td>
               <td className="p-3 text-sm text-muted-foreground">
-                {Interface.Types.map(({ Capability }) => Capability).join(", ") || "—"}
+                {Interface.Types?.map(({ Capability }) => Capability).join(", ") || "—"}
               </td>
               <td className="p-3">
                 <span
