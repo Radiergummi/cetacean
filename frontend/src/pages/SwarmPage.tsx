@@ -4,6 +4,7 @@ import CollapsibleSection from "../components/CollapsibleSection";
 import { KVTable, MetadataGrid, ResourceId, Timestamp } from "../components/data";
 import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
+import InstallPluginDialog from "../components/InstallPluginDialog";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import { Spinner } from "../components/Spinner";
@@ -33,11 +34,12 @@ import { DurationInput } from "../components/ui/duration-input";
 import { NumberField } from "../components/ui/number-field";
 import { Switch } from "../components/ui/switch";
 import { useAsyncAction } from "../hooks/useAsyncAction";
-import { opsLevel } from "../hooks/useOperationsLevel";
+import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
 import { formatDuration } from "../lib/format";
 import { EditablePanel } from "@/components/service-detail/EditablePanel";
-import { Check, Copy, KeyRound, RefreshCw } from "lucide-react";
+import { Check, Copy, KeyRound, Plus, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 function JoinTokenDialog({
   label,
@@ -109,6 +111,8 @@ export default function SwarmPage() {
   const [data, setData] = useState<SwarmInfo | null>(null);
   const [plugins, setPlugins] = useState<Plugin[]>([]);
   const [error, setError] = useState(false);
+  const [installOpen, setInstallOpen] = useState(false);
+  const { level } = useOperationsLevel();
 
   const fetchSwarmInfo = useCallback(() => {
     api
@@ -609,42 +613,85 @@ export default function SwarmPage() {
       </div>
 
       {/* Plugins */}
-      {plugins.length > 0 && (
-        <CollapsibleSection title="Plugins">
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b text-left text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                  <th className="p-3">Name</th>
-                  <th className="p-3">Type</th>
-                  <th className="p-3">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {plugins.map(({ Config: { Interface }, Enabled, Id, Name }) => (
-                  <tr
-                    key={Id ?? Name}
-                    className="border-b last:border-b-0"
-                  >
-                    <td className="p-3 font-mono text-xs">{Name}</td>
-                    <td className="p-3 text-sm text-muted-foreground">
-                      {Interface.Types.map(({ Capability }) => Capability).join(", ") || "—"}
-                    </td>
-                    <td className="p-3">
-                      <span
-                        data-enabled={Enabled || undefined}
-                        className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground data-enabled:bg-green-500/10 data-enabled:text-green-500"
-                      >
-                        {Enabled ? "Enabled" : "Disabled"}
-                      </span>
-                    </td>
+      <CollapsibleSection
+        title="Plugins"
+        controls={
+          level >= opsLevel.impactful ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setInstallOpen(true)}
+            >
+              <Plus className="size-3.5" />
+              Install Plugin
+            </Button>
+          ) : undefined
+        }
+      >
+        {plugins.length === 0 ? (
+          <p className="py-4 text-sm text-muted-foreground">No plugins installed.</p>
+        ) : (
+          <div className="space-y-3">
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b text-left text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                    <th className="p-3">Name</th>
+                    <th className="p-3">Type</th>
+                    <th className="p-3">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {plugins.map(({ Config: { Interface }, Enabled, Id, Name }) => (
+                    <tr
+                      key={Id ?? Name}
+                      className="border-b last:border-b-0"
+                    >
+                      <td className="p-3 font-mono text-xs">
+                        <Link
+                          to={`/plugins/${encodeURIComponent(Name)}`}
+                          className="text-link hover:underline"
+                        >
+                          {Name}
+                        </Link>
+                      </td>
+                      <td className="p-3 text-sm text-muted-foreground">
+                        {Interface.Types.map(({ Capability }) => Capability).join(", ") || "—"}
+                      </td>
+                      <td className="p-3">
+                        <span
+                          data-enabled={Enabled || undefined}
+                          className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground data-enabled:bg-green-500/10 data-enabled:text-green-500"
+                        >
+                          {Enabled ? "Enabled" : "Disabled"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <Link
+              to="/plugins"
+              className="inline-block text-sm text-link hover:underline"
+            >
+              View All →
+            </Link>
           </div>
-        </CollapsibleSection>
-      )}
+        )}
+      </CollapsibleSection>
+
+      <InstallPluginDialog
+        open={installOpen}
+        onOpenChange={setInstallOpen}
+        onInstalled={() => {
+          api
+            .plugins()
+            .then(setPlugins)
+            .catch(() => {});
+        }}
+      />
     </div>
   );
 }
