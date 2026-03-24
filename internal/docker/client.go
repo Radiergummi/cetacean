@@ -2,9 +2,12 @@ package docker
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/url"
 	"sort"
 	"sync"
 
@@ -161,35 +164,80 @@ func (c *Client) PluginList(ctx context.Context) (types.PluginsListResponse, err
 }
 
 func (c *Client) PluginInspect(ctx context.Context, name string) (*types.Plugin, error) {
-	return nil, fmt.Errorf("not implemented")
+	p, _, err := c.docker.PluginInspectWithRaw(ctx, name)
+	return p, err
 }
 
 func (c *Client) PluginEnable(ctx context.Context, name string) error {
-	return fmt.Errorf("not implemented")
+	return c.docker.PluginEnable(ctx, name, types.PluginEnableOptions{Timeout: 30})
 }
 
 func (c *Client) PluginDisable(ctx context.Context, name string) error {
-	return fmt.Errorf("not implemented")
+	return c.docker.PluginDisable(ctx, name, types.PluginDisableOptions{})
 }
 
 func (c *Client) PluginRemove(ctx context.Context, name string, force bool) error {
-	return fmt.Errorf("not implemented")
+	return c.docker.PluginRemove(ctx, name, types.PluginRemoveOptions{Force: force})
 }
 
 func (c *Client) PluginInstall(ctx context.Context, remote string) (*types.Plugin, error) {
-	return nil, fmt.Errorf("not implemented")
+	rc, err := c.docker.PluginInstall(ctx, remote, types.PluginInstallOptions{
+		RemoteRef:            remote,
+		AcceptAllPermissions: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	_, _ = io.Copy(io.Discard, rc)
+	rc.Close()
+
+	return c.PluginInspect(ctx, remote)
 }
 
 func (c *Client) PluginUpgrade(ctx context.Context, name string, remote string) error {
-	return fmt.Errorf("not implemented")
+	rc, err := c.docker.PluginUpgrade(ctx, name, types.PluginInstallOptions{
+		RemoteRef:            remote,
+		AcceptAllPermissions: true,
+	})
+	if err != nil {
+		return err
+	}
+	_, _ = io.Copy(io.Discard, rc)
+	rc.Close()
+	return nil
 }
 
 func (c *Client) PluginPrivileges(ctx context.Context, remote string) (types.PluginPrivileges, error) {
-	return nil, fmt.Errorf("not implemented")
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		"http://localhost/v1.46/plugins/privileges?remote="+url.QueryEscape(remote),
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.docker.HTTPClient().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("plugin privileges: %s: %s", resp.Status, string(body))
+	}
+
+	var privileges types.PluginPrivileges
+	if err := json.NewDecoder(resp.Body).Decode(&privileges); err != nil {
+		return nil, err
+	}
+	return privileges, nil
 }
 
 func (c *Client) PluginConfigure(ctx context.Context, name string, args []string) error {
-	return fmt.Errorf("not implemented")
+	return c.docker.PluginSet(ctx, name, args)
 }
 
 // FullSync fetches all swarm resources in parallel. Individual resource type
