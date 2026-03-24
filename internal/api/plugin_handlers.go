@@ -47,3 +47,40 @@ func (h *Handlers) HandlePlugin(w http.ResponseWriter, r *http.Request) {
 		"plugin": plugin,
 	}))
 }
+
+func (h *Handlers) HandleEnablePlugin(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	slog.Info("enabling plugin", "plugin", name)
+
+	if err := h.pluginClient.PluginEnable(r.Context(), name); err != nil {
+		writeDockerError(w, r, err, "plugin")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handlers) HandleDisablePlugin(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	slog.Info("disabling plugin", "plugin", name)
+
+	if err := h.pluginClient.PluginDisable(r.Context(), name); err != nil {
+		writeDockerError(w, r, err, "plugin")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handlers) HandleRemovePlugin(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	force := r.URL.Query().Get("force") == "true"
+	slog.Info("removing plugin", "plugin", name, "force", force)
+
+	if err := h.pluginClient.PluginRemove(r.Context(), name, force); err != nil {
+		writeDockerError(w, r, err, "plugin")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
