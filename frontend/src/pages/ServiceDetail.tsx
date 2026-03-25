@@ -272,9 +272,9 @@ export default function ServiceDetail() {
     return <LoadingDetail />;
   }
 
-  const containerSpec = service.Spec.TaskTemplate.ContainerSpec;
   const taskTemplate = service.Spec.TaskTemplate;
-  const placement = taskTemplate.Placement;
+  const containerSpec = taskTemplate?.ContainerSpec;
+  const placement = taskTemplate?.Placement;
   const canEditConfig = !levelLoading && operationsLevel >= opsLevel.configuration;
   const hasPlacementContent =
     (placement?.Constraints && placement.Constraints.length > 0) ||
@@ -691,7 +691,7 @@ function ServiceStatusCard({ service }: { service: Service }) {
 }
 
 function cpuThresholds(service: Service): Threshold[] {
-  const resources = service.Spec.TaskTemplate.Resources;
+  const resources = service.Spec.TaskTemplate?.Resources;
 
   if (!resources) {
     return [];
@@ -725,7 +725,7 @@ function cpuThresholds(service: Service): Threshold[] {
 }
 
 function memoryThresholds(service: Service): Threshold[] {
-  const resources = service.Spec.TaskTemplate.Resources;
+  const resources = service.Spec.TaskTemplate?.Resources;
 
   if (!resources) {
     return [];
