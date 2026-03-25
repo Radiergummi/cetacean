@@ -386,6 +386,10 @@ export const api = {
     mutationFetch<ConfigDetail>("/configs", "POST", { name, data }, "application/json"),
   createSecret: (name: string, data: string) =>
     mutationFetch<SecretDetail>("/secrets", "POST", { name, data }, "application/json"),
+  patchConfigLabels: (id: string, ops: PatchOp[]) =>
+    patch<Record<string, string>>(`/configs/${id}/labels`, ops, "application/json-patch+json"),
+  patchSecretLabels: (id: string, ops: PatchOp[]) =>
+    patch<Record<string, string>>(`/secrets/${id}/labels`, ops, "application/json-patch+json"),
   removeNetwork: (id: string) => del(`/networks/${id}`),
   removeVolume: (name: string, force?: boolean) =>
     del(force ? `/volumes/${name}?force=true` : `/volumes/${name}`),
