@@ -3987,6 +3987,51 @@ func TestHandleCreateSecret_NameConflict(t *testing.T) {
 	}
 }
 
+func TestHandleCreateSecret_InvalidBase64(t *testing.T) {
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		&mockWriteClient{},
+		nil,
+		closedReady(),
+		nil,
+		config.OpsConfiguration,
+	)
+
+	body := `{"name":"my-secret","data":"not-valid-base64!!!"}`
+	req := httptest.NewRequest("POST", "/secrets", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.HandleCreateSecret(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status=%d, want 400", w.Code)
+	}
+}
+
+func TestHandleCreateSecret_InvalidJSON(t *testing.T) {
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		&mockWriteClient{},
+		nil,
+		closedReady(),
+		nil,
+		config.OpsConfiguration,
+	)
+
+	req := httptest.NewRequest("POST", "/secrets", strings.NewReader("{invalid"))
+	w := httptest.NewRecorder()
+	h.HandleCreateSecret(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status=%d, want 400", w.Code)
+	}
+}
+
 func TestHandleCreateSecret_ClearsData(t *testing.T) {
 	c := cache.New(nil)
 	wc := &mockWriteClient{
@@ -4017,5 +4062,135 @@ func TestHandleCreateSecret_ClearsData(t *testing.T) {
 	respBody := w.Body.String()
 	if strings.Contains(respBody, "sensitive") {
 		t.Error("response contains secret data; expected it to be cleared")
+	}
+}
+
+func TestHandleCreateConfig_WhitespaceOnlyName(t *testing.T) {
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		&mockWriteClient{},
+		nil,
+		closedReady(),
+		nil,
+		config.OpsConfiguration,
+	)
+
+	body := `{"name":"   ","data":"aGVsbG8="}`
+	req := httptest.NewRequest("POST", "/configs", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.HandleCreateConfig(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status=%d, want 400", w.Code)
+	}
+}
+
+func TestHandleCreateConfig_CacheMiss(t *testing.T) {
+	c := cache.New(nil)
+	wc := &mockWriteClient{
+		createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
+			return "new-cfg-id", nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration)
+
+	// Do NOT populate the cache — simulates the watcher not having caught up yet.
+	body := `{"name":"my-config","data":"aGVsbG8="}`
+	req := httptest.NewRequest("POST", "/configs", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.HandleCreateConfig(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status=%d, want 201; body: %s", w.Code, w.Body.String())
+	}
+	if loc := w.Header().Get("Location"); loc != "/configs/new-cfg-id" {
+		t.Errorf("Location=%q, want /configs/new-cfg-id", loc)
+	}
+
+	// Verify the response contains the minimal config with ID and name.
+	respBody := w.Body.String()
+	if !strings.Contains(respBody, "new-cfg-id") {
+		t.Errorf("response missing config ID")
+	}
+}
+
+func TestHandleCreateSecret_CacheMiss(t *testing.T) {
+	c := cache.New(nil)
+	wc := &mockWriteClient{
+		createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
+			return "new-sec-id", nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration)
+
+	body := `{"name":"my-secret","data":"c2VjcmV0"}`
+	req := httptest.NewRequest("POST", "/secrets", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.HandleCreateSecret(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status=%d, want 201; body: %s", w.Code, w.Body.String())
+	}
+	if loc := w.Header().Get("Location"); loc != "/secrets/new-sec-id" {
+		t.Errorf("Location=%q, want /secrets/new-sec-id", loc)
+	}
+}
+
+func TestHandleCreateConfig_DockerError(t *testing.T) {
+	wc := &mockWriteClient{
+		createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
+			return "", fmt.Errorf("engine error")
+		},
+	}
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		wc,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsConfiguration,
+	)
+
+	body := `{"name":"my-config","data":"aGVsbG8="}`
+	req := httptest.NewRequest("POST", "/configs", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.HandleCreateConfig(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("status=%d, want 500", w.Code)
+	}
+}
+
+func TestHandleCreateSecret_DockerError(t *testing.T) {
+	wc := &mockWriteClient{
+		createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
+			return "", fmt.Errorf("engine error")
+		},
+	}
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		wc,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsConfiguration,
+	)
+
+	body := `{"name":"my-secret","data":"c2VjcmV0"}`
+	req := httptest.NewRequest("POST", "/secrets", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.HandleCreateSecret(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("status=%d, want 500", w.Code)
 	}
 }
