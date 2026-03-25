@@ -781,9 +781,13 @@ func (h *Handlers) HandleGetConfigLabels(w http.ResponseWriter, r *http.Request)
 	if labels == nil {
 		labels = map[string]string{}
 	}
-	writeJSONWithETag(w, r, NewDetailResponse("/configs/"+id+"/labels", "ConfigLabels", map[string]any{
-		"labels": labels,
-	}))
+	writeJSONWithETag(
+		w,
+		r,
+		NewDetailResponse("/configs/"+id+"/labels", "ConfigLabels", map[string]any{
+			"labels": labels,
+		}),
+	)
 }
 
 func (h *Handlers) HandlePatchConfigLabels(w http.ResponseWriter, r *http.Request) {
@@ -864,9 +868,13 @@ func (h *Handlers) HandleGetSecretLabels(w http.ResponseWriter, r *http.Request)
 	if labels == nil {
 		labels = map[string]string{}
 	}
-	writeJSONWithETag(w, r, NewDetailResponse("/secrets/"+id+"/labels", "SecretLabels", map[string]any{
-		"labels": labels,
-	}))
+	writeJSONWithETag(
+		w,
+		r,
+		NewDetailResponse("/secrets/"+id+"/labels", "SecretLabels", map[string]any{
+			"labels": labels,
+		}),
+	)
 }
 
 func (h *Handlers) HandlePatchSecretLabels(w http.ResponseWriter, r *http.Request) {

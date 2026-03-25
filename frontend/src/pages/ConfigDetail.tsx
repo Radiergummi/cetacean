@@ -2,15 +2,10 @@ import { api } from "../api/client";
 import ActivitySection from "../components/ActivitySection";
 import CodeBlock from "../components/CodeBlock";
 import CollapsibleSection from "../components/CollapsibleSection";
-import {
-  MetadataGrid,
-  ResourceId,
-  ResourceLink,
-  Timestamp,
-} from "../components/data";
+import { MetadataGrid, ResourceId, ResourceLink, Timestamp } from "../components/data";
 import FetchError from "../components/FetchError";
-import { KeyValueEditor } from "../components/KeyValueEditor";
 import { IconButton } from "../components/IconButton";
+import { KeyValueEditor } from "../components/KeyValueEditor";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import { RemoveResourceAction } from "../components/RemoveResourceAction";

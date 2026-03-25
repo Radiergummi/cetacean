@@ -82,8 +82,16 @@ type DockerWriteClient interface {
 	RemoveVolume(ctx context.Context, name string, force bool) error
 	CreateConfig(ctx context.Context, spec swarm.ConfigSpec) (string, error)
 	CreateSecret(ctx context.Context, spec swarm.SecretSpec) (string, error)
-	UpdateConfigLabels(ctx context.Context, id string, labels map[string]string) (swarm.Config, error)
-	UpdateSecretLabels(ctx context.Context, id string, labels map[string]string) (swarm.Secret, error)
+	UpdateConfigLabels(
+		ctx context.Context,
+		id string,
+		labels map[string]string,
+	) (swarm.Config, error)
+	UpdateSecretLabels(
+		ctx context.Context,
+		id string,
+		labels map[string]string,
+	) (swarm.Secret, error)
 	UpdateServiceLabels(
 		ctx context.Context,
 		id string,

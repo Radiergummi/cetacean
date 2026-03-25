@@ -4230,7 +4230,17 @@ func TestHandleGetConfigLabels(t *testing.T) {
 			},
 		},
 	})
-	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, nil, closedReady(), nil, config.OpsConfiguration)
+	h := NewHandlers(
+		c,
+		nil,
+		nil,
+		nil,
+		&mockWriteClient{},
+		nil,
+		closedReady(),
+		nil,
+		config.OpsConfiguration,
+	)
 
 	req := httptest.NewRequest("GET", "/configs/cfg1/labels", nil)
 	req.SetPathValue("id", "cfg1")
@@ -4410,7 +4420,17 @@ func TestHandleGetSecretLabels(t *testing.T) {
 			},
 		},
 	})
-	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, nil, closedReady(), nil, config.OpsConfiguration)
+	h := NewHandlers(
+		c,
+		nil,
+		nil,
+		nil,
+		&mockWriteClient{},
+		nil,
+		closedReady(),
+		nil,
+		config.OpsConfiguration,
+	)
 
 	req := httptest.NewRequest("GET", "/secrets/sec1/labels", nil)
 	req.SetPathValue("id", "sec1")

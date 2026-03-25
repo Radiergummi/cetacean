@@ -1,11 +1,6 @@
 import { api } from "../api/client";
 import ActivitySection from "../components/ActivitySection";
-import {
-  MetadataGrid,
-  ResourceId,
-  ResourceLink,
-  Timestamp,
-} from "../components/data";
+import { MetadataGrid, ResourceId, ResourceLink, Timestamp } from "../components/data";
 import FetchError from "../components/FetchError";
 import { KeyValueEditor } from "../components/KeyValueEditor";
 import { LoadingDetail } from "../components/LoadingSkeleton";
