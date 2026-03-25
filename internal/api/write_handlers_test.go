@@ -3784,3 +3784,178 @@ func TestHandleRemoveVolume_DockerError(t *testing.T) {
 		t.Errorf("status=%d, want 500", w.Code)
 	}
 }
+
+func TestHandleCreateConfig_OK(t *testing.T) {
+	c := cache.New(nil)
+	wc := &mockWriteClient{
+		createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
+			return "new-cfg-id", nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration)
+
+	// Pre-populate cache so the post-create inspect works.
+	c.SetConfig(swarm.Config{
+		ID:   "new-cfg-id",
+		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "my-config"}},
+	})
+
+	body := `{"name":"my-config","data":"aGVsbG8="}`
+	req := httptest.NewRequest("POST", "/configs", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.HandleCreateConfig(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status=%d, want 201; body: %s", w.Code, w.Body.String())
+	}
+	if loc := w.Header().Get("Location"); loc != "/configs/new-cfg-id" {
+		t.Errorf("Location=%q, want /configs/new-cfg-id", loc)
+	}
+}
+
+func TestHandleCreateConfig_MissingName(t *testing.T) {
+	h := NewHandlers(cache.New(nil), nil, nil, nil, &mockWriteClient{}, nil, closedReady(), nil, config.OpsConfiguration)
+
+	body := `{"data":"aGVsbG8="}`
+	req := httptest.NewRequest("POST", "/configs", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.HandleCreateConfig(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status=%d, want 400", w.Code)
+	}
+}
+
+func TestHandleCreateConfig_InvalidBase64(t *testing.T) {
+	h := NewHandlers(cache.New(nil), nil, nil, nil, &mockWriteClient{}, nil, closedReady(), nil, config.OpsConfiguration)
+
+	body := `{"name":"my-config","data":"not-valid-base64!!!"}`
+	req := httptest.NewRequest("POST", "/configs", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.HandleCreateConfig(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status=%d, want 400", w.Code)
+	}
+}
+
+func TestHandleCreateConfig_NameConflict(t *testing.T) {
+	wc := &mockWriteClient{
+		createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
+			return "", errdefs.Conflict(fmt.Errorf("config already exists"))
+		},
+	}
+	h := NewHandlers(cache.New(nil), nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration)
+
+	body := `{"name":"existing","data":"aGVsbG8="}`
+	req := httptest.NewRequest("POST", "/configs", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.HandleCreateConfig(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Errorf("status=%d, want 409; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleCreateConfig_InvalidJSON(t *testing.T) {
+	h := NewHandlers(cache.New(nil), nil, nil, nil, &mockWriteClient{}, nil, closedReady(), nil, config.OpsConfiguration)
+
+	req := httptest.NewRequest("POST", "/configs", strings.NewReader("{invalid"))
+	w := httptest.NewRecorder()
+	h.HandleCreateConfig(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status=%d, want 400", w.Code)
+	}
+}
+
+func TestHandleCreateSecret_OK(t *testing.T) {
+	c := cache.New(nil)
+	wc := &mockWriteClient{
+		createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
+			return "new-sec-id", nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration)
+
+	c.SetSecret(swarm.Secret{
+		ID:   "new-sec-id",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "my-secret"}},
+	})
+
+	body := `{"name":"my-secret","data":"c2VjcmV0"}`
+	req := httptest.NewRequest("POST", "/secrets", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.HandleCreateSecret(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status=%d, want 201; body: %s", w.Code, w.Body.String())
+	}
+	if loc := w.Header().Get("Location"); loc != "/secrets/new-sec-id" {
+		t.Errorf("Location=%q, want /secrets/new-sec-id", loc)
+	}
+}
+
+func TestHandleCreateSecret_MissingName(t *testing.T) {
+	h := NewHandlers(cache.New(nil), nil, nil, nil, &mockWriteClient{}, nil, closedReady(), nil, config.OpsConfiguration)
+
+	body := `{"data":"c2VjcmV0"}`
+	req := httptest.NewRequest("POST", "/secrets", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.HandleCreateSecret(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status=%d, want 400", w.Code)
+	}
+}
+
+func TestHandleCreateSecret_NameConflict(t *testing.T) {
+	wc := &mockWriteClient{
+		createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
+			return "", errdefs.Conflict(fmt.Errorf("secret already exists"))
+		},
+	}
+	h := NewHandlers(cache.New(nil), nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration)
+
+	body := `{"name":"existing","data":"c2VjcmV0"}`
+	req := httptest.NewRequest("POST", "/secrets", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.HandleCreateSecret(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Errorf("status=%d, want 409; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleCreateSecret_ClearsData(t *testing.T) {
+	c := cache.New(nil)
+	wc := &mockWriteClient{
+		createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
+			return "new-sec-id", nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration)
+
+	c.SetSecret(swarm.Secret{
+		ID: "new-sec-id",
+		Spec: swarm.SecretSpec{
+			Annotations: swarm.Annotations{Name: "my-secret"},
+			Data:        []byte("sensitive"),
+		},
+	})
+
+	body := `{"name":"my-secret","data":"c2VjcmV0"}`
+	req := httptest.NewRequest("POST", "/secrets", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.HandleCreateSecret(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status=%d, want 201; body: %s", w.Code, w.Body.String())
+	}
+
+	// Verify the response does not contain secret data.
+	respBody := w.Body.String()
+	if strings.Contains(respBody, "sensitive") {
+		t.Error("response contains secret data; expected it to be cleared")
+	}
+}
