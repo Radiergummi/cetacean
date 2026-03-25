@@ -92,7 +92,10 @@ export default function SecretList() {
 
   return (
     <div>
-      <PageHeader title="Secrets" actions={<CreateSecretForm />} />
+      <PageHeader
+        title="Secrets"
+        actions={<CreateSecretForm />}
+      />
 
       <ListToolbar
         search={search}

@@ -1,8 +1,8 @@
-import { type ChangeEvent, useCallback, useState } from "react";
 import { api } from "../api/client";
 import CreateResourceDialog from "./CreateResourceDialog";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
+import { type ChangeEvent, useCallback, useState } from "react";
 
 type InputMode = "text" | "file";
 
@@ -93,7 +93,7 @@ export default function CreateSecretForm() {
               onChange={(event) => setText(event.target.value)}
               placeholder="Paste secret content…"
               rows={8}
-              className="w-full rounded-lg border border-input bg-transparent px-2.5 py-2 font-mono text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="w-full rounded-lg border border-input bg-transparent px-2.5 py-2 font-mono text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
             />
           ) : (
             <Input

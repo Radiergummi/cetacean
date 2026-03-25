@@ -94,7 +94,10 @@ export default function ConfigList() {
 
   return (
     <div>
-      <PageHeader title="Configs" actions={<CreateConfigForm />} />
+      <PageHeader
+        title="Configs"
+        actions={<CreateConfigForm />}
+      />
       <ListToolbar
         search={search}
         onSearchChange={setSearch}
