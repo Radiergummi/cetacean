@@ -1,17 +1,16 @@
 import { useAsyncAction } from "../hooks/useAsyncAction";
 import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "./ui/alert-dialog";
 import { Button } from "./ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "./ui/dialog";
 import { Plus } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -46,11 +45,11 @@ export default function CreateResourceDialog({
   }
 
   return (
-    <AlertDialog
+    <Dialog
       open={open}
       onOpenChange={handleOpenChange}
     >
-      <AlertDialogTrigger
+      <DialogTrigger
         render={
           <Button
             size="sm"
@@ -63,19 +62,19 @@ export default function CreateResourceDialog({
         }
       />
 
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Create {resourceType}</AlertDialogTitle>
-          <AlertDialogDescription>
+      <DialogContent showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle>Create {resourceType}</DialogTitle>
+          <DialogDescription>
             Create a new {resourceType.toLowerCase()} in the swarm.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
+          </DialogDescription>
+        </DialogHeader>
 
         {children}
 
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+          <Button
             disabled={!canSubmit || action.loading}
             onClick={() => {
               void action.execute(async () => {
@@ -87,9 +86,9 @@ export default function CreateResourceDialog({
             }}
           >
             {action.loading ? "Creating\u2026" : "Create"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

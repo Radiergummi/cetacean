@@ -50,20 +50,7 @@ export default function CreateDataResourceForm({
   const lowerType = resourceType.toLowerCase();
 
   const handleSubmit = useCallback(async () => {
-    let encoded: string;
-
-    if (inputMode === "file") {
-      encoded = fileData!;
-    } else {
-      const bytes = new TextEncoder().encode(text);
-      let binary = "";
-
-      for (const byte of bytes) {
-        binary += String.fromCharCode(byte);
-      }
-
-      encoded = btoa(binary);
-    }
+    const encoded = inputMode === "file" ? fileData! : btoa(text);
     const result = await onCreate(name.trim(), encoded);
     return `${basePath}/${result.id}`;
   }, [name, text, fileData, inputMode, onCreate, basePath]);
