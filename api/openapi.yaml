@@ -2532,6 +2532,54 @@ paths:
           $ref: "#/components/responses/NotModified"
         "400":
           $ref: "#/components/responses/BadRequest"
+    post:
+      operationId: createConfig
+      tags: [Configs]
+      summary: Create a config
+      description: Creates a new config in the swarm. Requires operations level 2.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, data]
+              properties:
+                name:
+                  type: string
+                  description: Config name
+                data:
+                  type: string
+                  format: byte
+                  description: Config data (base64-encoded)
+      responses:
+        "201":
+          description: Config created
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Path to the created config
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      config:
+                        type: object
+                        description: Docker swarm.Config object (data is base64-encoded)
+                      services:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ServiceRef"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low
+        "409":
+          description: Config name conflict
 
   /configs/{id}:
     get:
@@ -2619,6 +2667,54 @@ paths:
           $ref: "#/components/responses/NotModified"
         "400":
           $ref: "#/components/responses/BadRequest"
+    post:
+      operationId: createSecret
+      tags: [Secrets]
+      summary: Create a secret
+      description: Creates a new secret in the swarm. Requires operations level 2.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, data]
+              properties:
+                name:
+                  type: string
+                  description: Secret name
+                data:
+                  type: string
+                  format: byte
+                  description: Secret data (base64-encoded)
+      responses:
+        "201":
+          description: Secret created
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Path to the created secret
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      secret:
+                        type: object
+                        description: Docker swarm.Secret object (data is always cleared)
+                      services:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ServiceRef"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low
+        "409":
+          description: Secret name conflict
 
   /secrets/{id}:
     get:

@@ -659,10 +659,14 @@ curl http://localhost:9000/stacks/myapp
 |---|---|---|---|
 | GET | `/configs` | List configs. | `search`, `filter`, `sort`, `dir`, `limit`, `offset` |
 | GET | `/configs/{id}` | Config detail with cross-referenced services. Data is base64-encoded. | -- |
+| POST | `/configs` | Create a config. Tier 2. | -- |
 
 ```bash
 curl http://localhost:9000/configs
 curl http://localhost:9000/configs/abc123
+
+# Create a config (data is base64-encoded)
+curl -X POST -d '{"name": "my-config", "data": "aGVsbG8="}' http://localhost:9000/configs
 ```
 
 ### Secrets
@@ -673,10 +677,14 @@ Secret data is always redacted in API responses.
 |---|---|---|---|
 | GET | `/secrets` | List secrets. | `search`, `filter`, `sort`, `dir`, `limit`, `offset` |
 | GET | `/secrets/{id}` | Secret detail with cross-referenced services. | -- |
+| POST | `/secrets` | Create a secret. Tier 2. | -- |
 
 ```bash
 curl http://localhost:9000/secrets
 curl http://localhost:9000/secrets/abc123
+
+# Create a secret (data is base64-encoded)
+curl -X POST -d '{"name": "my-secret", "data": "c3VwZXJzZWNyZXQ="}' http://localhost:9000/secrets
 ```
 
 ### Networks
