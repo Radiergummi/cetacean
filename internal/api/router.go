@@ -258,6 +258,8 @@ func NewRouter(
 	)
 	mux.Handle("DELETE /configs/{id}", tier3(h.HandleRemoveConfig))
 	mux.Handle("POST /configs", tier2(h.HandleCreateConfig))
+	mux.HandleFunc("GET /configs/{id}/labels", contentNegotiated(h.HandleGetConfigLabels, spa))
+	mux.Handle("PATCH /configs/{id}/labels", tier2(h.HandlePatchConfigLabels))
 
 	// Secrets
 	mux.HandleFunc(
@@ -278,6 +280,8 @@ func NewRouter(
 	)
 	mux.Handle("DELETE /secrets/{id}", tier3(h.HandleRemoveSecret))
 	mux.Handle("POST /secrets", tier2(h.HandleCreateSecret))
+	mux.HandleFunc("GET /secrets/{id}/labels", contentNegotiated(h.HandleGetSecretLabels, spa))
+	mux.Handle("PATCH /secrets/{id}/labels", tier2(h.HandlePatchSecretLabels))
 
 	// Networks
 	mux.HandleFunc(
