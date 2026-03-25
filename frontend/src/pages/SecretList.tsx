@@ -33,7 +33,7 @@ export default function SecretList() {
       [debouncedSearch, sortKey, sortDir],
     ),
     "secret",
-    (s: Secret) => s.ID,
+    ({ ID }: Secret) => ID,
   );
 
   const columns: Column<Secret>[] = [
