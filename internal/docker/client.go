@@ -583,6 +583,22 @@ func (c *Client) RemoveSecret(ctx context.Context, id string) error {
 	return c.docker.SecretRemove(ctx, id)
 }
 
+func (c *Client) CreateConfig(ctx context.Context, spec swarm.ConfigSpec) (string, error) {
+	resp, err := c.docker.ConfigCreate(ctx, spec)
+	if err != nil {
+		return "", err
+	}
+	return resp.ID, nil
+}
+
+func (c *Client) CreateSecret(ctx context.Context, spec swarm.SecretSpec) (string, error) {
+	resp, err := c.docker.SecretCreate(ctx, spec)
+	if err != nil {
+		return "", err
+	}
+	return resp.ID, nil
+}
+
 func (c *Client) RemoveVolume(ctx context.Context, name string, force bool) error {
 	return c.docker.VolumeRemove(ctx, name, force)
 }
