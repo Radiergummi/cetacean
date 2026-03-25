@@ -1,5 +1,6 @@
 import { api } from "../api/client";
 import type { Secret } from "../api/types";
+import CreateSecretForm from "../components/CreateSecretForm";
 import DataTable, { type Column } from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
@@ -91,7 +92,7 @@ export default function SecretList() {
 
   return (
     <div>
-      <PageHeader title="Secrets" />
+      <PageHeader title="Secrets" actions={<CreateSecretForm />} />
 
       <ListToolbar
         search={search}
