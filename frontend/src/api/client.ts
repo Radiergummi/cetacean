@@ -382,6 +382,10 @@ export const api = {
     }>(`/stacks/${name}`, "DELETE"),
   removeConfig: (id: string) => del(`/configs/${id}`),
   removeSecret: (id: string) => del(`/secrets/${id}`),
+  createConfig: (name: string, data: string) =>
+    mutationFetch<ConfigDetail>("/configs", "POST", { name, data }, "application/json"),
+  createSecret: (name: string, data: string) =>
+    mutationFetch<SecretDetail>("/secrets", "POST", { name, data }, "application/json"),
   removeNetwork: (id: string) => del(`/networks/${id}`),
   removeVolume: (name: string, force?: boolean) =>
     del(force ? `/volumes/${name}?force=true` : `/volumes/${name}`),
