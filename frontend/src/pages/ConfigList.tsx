@@ -1,5 +1,6 @@
 import { api } from "../api/client";
 import type { Config } from "../api/types";
+import CreateConfigForm from "../components/CreateConfigForm";
 import DataTable, { type Column } from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
@@ -93,7 +94,7 @@ export default function ConfigList() {
 
   return (
     <div>
-      <PageHeader title="Configs" />
+      <PageHeader title="Configs" actions={<CreateConfigForm />} />
       <ListToolbar
         search={search}
         onSearchChange={setSearch}
