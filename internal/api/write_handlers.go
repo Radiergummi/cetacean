@@ -28,6 +28,7 @@ var notFoundCodes = map[string]string{
 	"network": "NET002",
 	"config":  "CFG002",
 	"secret":  "SEC002",
+	"plugin":  "PLG004",
 }
 
 func writeDockerError(w http.ResponseWriter, r *http.Request, err error, resource string) {
@@ -40,7 +41,7 @@ func writeDockerError(w http.ResponseWriter, r *http.Request, err error, resourc
 		return
 	}
 	if cerrdefs.IsInvalidArgument(err) {
-		writeProblem(w, r, http.StatusBadRequest, err.Error())
+		writeErrorCode(w, r, "ENG003", err.Error())
 		return
 	}
 	if cerrdefs.IsUnavailable(err) {
@@ -48,7 +49,7 @@ func writeDockerError(w http.ResponseWriter, r *http.Request, err error, resourc
 		return
 	}
 	slog.Error("failed to update "+resource, "error", err)
-	writeProblem(w, r, http.StatusInternalServerError, "failed to update "+resource)
+	writeErrorCode(w, r, "ENG004", "failed to update "+resource)
 }
 
 // writeServiceError handles Docker API errors for service mutations,

@@ -2,6 +2,7 @@ import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
+import { showErrorToast } from "@/lib/showErrorToast";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil } from "lucide-react";
 import type { MouseEvent, ReactNode } from "react";
@@ -75,6 +76,7 @@ export function EditablePanel({
       setEditing(false);
     } catch (error) {
       setSaveError(getErrorMessage(error, "Save failed"));
+      showErrorToast(error, "Save failed");
     } finally {
       setSaving(false);
     }

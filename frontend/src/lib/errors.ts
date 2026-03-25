@@ -59,6 +59,21 @@ const errorDictionary: Record<string, ErrorInfo> = {
     title: "Docker Engine unavailable",
     suggestion: "Check that the Docker daemon is running and the socket is reachable.",
   },
+  ENG003: {
+    title: "Docker validation error",
+    suggestion: "Check the request parameters for correctness.",
+  },
+  ENG004: {
+    title: "Docker Engine error",
+    suggestion: "Check the Cetacean and Docker daemon logs for details.",
+    action: "retry",
+  },
+
+  // PLG: plugin operations
+  PLG004: {
+    title: "Plugin not found",
+    suggestion: "The plugin may have been removed. Refresh the page.",
+  },
 
   // SWM: swarm
   SWM001: {
@@ -68,6 +83,26 @@ const errorDictionary: Record<string, ErrorInfo> = {
   SWM002: {
     title: "Swarm inspect failed",
     suggestion: "The swarm may be temporarily unavailable. Try again.",
+    action: "retry",
+  },
+  SWM003: {
+    title: "Swarm update failed",
+    suggestion: "Check the Cetacean and Docker daemon logs for details.",
+    action: "retry",
+  },
+  SWM006: {
+    title: "Token rotation failed",
+    suggestion: "Check the Docker daemon logs for details.",
+    action: "retry",
+  },
+  SWM007: {
+    title: "Unlock key rotation failed",
+    suggestion: "Check the Docker daemon logs for details.",
+    action: "retry",
+  },
+  SWM008: {
+    title: "Swarm unlock failed",
+    suggestion: "Verify the unlock key is correct and try again.",
     action: "retry",
   },
 
@@ -123,8 +158,7 @@ const errorDictionary: Record<string, ErrorInfo> = {
   // VOL: volume operations
   VOL001: {
     title: "Volume in use",
-    suggestion:
-      "Stop or remove the containers using this volume first, or use force removal.",
+    suggestion: "Stop or remove the containers using this volume first, or use force removal.",
     action: "force-remove",
   },
 

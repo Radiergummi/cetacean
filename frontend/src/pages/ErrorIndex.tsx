@@ -1,8 +1,8 @@
-import PageHeader from "../components/PageHeader";
 import FetchError from "../components/FetchError";
 import { LoadingDetail } from "../components/LoadingSkeleton";
-import { Link } from "react-router-dom";
+import PageHeader from "../components/PageHeader";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 interface ErrorDef {
   code: string;

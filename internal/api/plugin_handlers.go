@@ -137,9 +137,13 @@ func (h *Handlers) HandleInstallPlugin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONStatus(w, http.StatusCreated, NewDetailResponse("/plugins/"+plugin.Name, "Plugin", map[string]any{
-		"plugin": plugin,
-	}))
+	writeJSONStatus(
+		w,
+		http.StatusCreated,
+		NewDetailResponse("/plugins/"+plugin.Name, "Plugin", map[string]any{
+			"plugin": plugin,
+		}),
+	)
 }
 
 func (h *Handlers) HandleUpgradePlugin(w http.ResponseWriter, r *http.Request) {
@@ -184,7 +188,9 @@ func (h *Handlers) HandleConfigurePlugin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	settings := append(req.Args, req.Env...)
+	settings := make([]string, 0, len(req.Args)+len(req.Env))
+	settings = append(settings, req.Args...)
+	settings = append(settings, req.Env...)
 	slog.Info("configuring plugin", "plugin", name, "settings", settings)
 
 	if err := h.pluginClient.PluginConfigure(r.Context(), name, settings); err != nil {

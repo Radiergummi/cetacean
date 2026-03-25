@@ -6,8 +6,8 @@ import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
 import InstallPluginDialog from "../components/InstallPluginDialog";
 import { LoadingDetail } from "../components/LoadingSkeleton";
-import PluginTable from "../components/PluginTable";
 import PageHeader from "../components/PageHeader";
+import PluginTable from "../components/PluginTable";
 import { Spinner } from "../components/Spinner";
 import { SwarmActions } from "../components/swarm-detail/SwarmActions";
 import {
@@ -32,8 +32,8 @@ import {
   DialogTrigger,
 } from "../components/ui/dialog";
 import { DurationInput } from "../components/ui/duration-input";
-import { NumberField } from "../components/ui/number-field";
 import { Input } from "../components/ui/input";
+import { NumberField } from "../components/ui/number-field";
 import { Switch } from "../components/ui/switch";
 import { useAsyncAction } from "../hooks/useAsyncAction";
 import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
@@ -41,7 +41,6 @@ import { formatDuration } from "../lib/format";
 import { EditablePanel } from "@/components/service-detail/EditablePanel";
 import { Check, Copy, KeyRound, LockOpen, Plus, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-
 
 function JoinTokenDialog({
   label,

@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Plugin management: browsable list and detail pages, install/upgrade with privilege review, enable/disable/remove/configure
+- Swarm configuration editors: per-section editing for raft, CA, orchestration, and task defaults, with token rotation and unlock key retrieval
 - Structured error codes across all API error responses with browsable error reference at `/api/errors`
 - Toast notifications for mutation errors with contextual suggestions from the error code registry
 - Config, secret, network, and volume removal from detail pages with confirmation dialogs
@@ -17,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Service mounts editor with card-based UI supporting all Docker mount types (bind, volume, tmpfs, npipe, cluster, image)
 - Service config, secret, and network attachment editors (add/remove references with searchable dropdowns)
 - Container configuration editors: command, runtime options, capabilities, extra hosts, DNS settings
+- Browsable pages for service sub-resource endpoints (env, placement, ports, policies, log driver, mounts, attachments)
 - Docker documentation help links on all service editor fields
 - Deployment diff and recent activity shown side by side on wide screens
 

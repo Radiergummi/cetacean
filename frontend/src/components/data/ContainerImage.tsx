@@ -112,9 +112,7 @@ function ImageUpdatePopover({
           autoFocus
         />
         {validationError && (
-          <p className="mb-2 text-xs text-red-600 dark:text-red-400">
-            {validationError}
-          </p>
+          <p className="mb-2 text-xs text-red-600 dark:text-red-400">{validationError}</p>
         )}
         <div className="flex gap-2">
           <Button
@@ -157,9 +155,7 @@ export default function ContainerImage({
     return null;
   }
 
-  const display = image
-    .split("@")[0]
-    .replace(/^(docker\.io|registry-1\.docker\.io)\//, "");
+  const display = image.split("@")[0].replace(/^(docker\.io|registry-1\.docker\.io)\//, "");
   const href = imageRegistryUrl(image);
   const favicon = registryFavicon(image);
 

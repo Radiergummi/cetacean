@@ -54,7 +54,7 @@ func writeJSONWithETag(w http.ResponseWriter, r *http.Request, v any) {
 	body, err := json.Marshal(v)
 	if err != nil {
 		w.Header().Set("Cache-Control", "no-store")
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		writeErrorCode(w, r, "API009", "failed to serialize response")
 		return
 	}
 

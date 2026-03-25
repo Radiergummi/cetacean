@@ -53,7 +53,7 @@ describe("api client", () => {
 
   it("throws on non-ok response with status text fallback", async () => {
     mockFetch.mockReturnValue(jsonResponse(null, 404));
-    await expect(api.nodes()).rejects.toThrow("404 Not Found");
+    await expect(api.nodes()).rejects.toThrow("Not Found");
   });
 
   it("fetches service logs as JSON", async () => {

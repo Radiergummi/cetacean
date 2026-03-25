@@ -41,7 +41,7 @@ export function RemoveResourceAction({
   const { level, loading: levelLoading } = useOperationsLevel();
   const canImpact = !levelLoading && level >= opsLevel.impactful;
   const navigate = useNavigate();
-  const remove = useAsyncAction();
+  const remove = useAsyncAction({ toast: true });
 
   if (!canImpact) {
     return null;

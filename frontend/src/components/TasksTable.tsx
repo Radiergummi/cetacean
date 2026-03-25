@@ -184,7 +184,9 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
                     )}
 
                     <td className="p-3 text-sm">
-                      <span className="font-mono text-xs">{ContainerSpec?.Image?.split("@")[0]}</span>
+                      <span className="font-mono text-xs">
+                        {ContainerSpec?.Image?.split("@")[0]}
+                      </span>
                     </td>
                     <td className="p-3 text-sm">{DesiredState}</td>
                     <td className="p-3 text-sm text-red-600 dark:text-red-400">{errorMessage}</td>

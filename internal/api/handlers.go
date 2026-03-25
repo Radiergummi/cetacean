@@ -1065,17 +1065,32 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	}
 
 	if !validLogTimestamp(since) {
-		writeErrorCode(w, r, "LOG003", `invalid "after" parameter: must be RFC3339 timestamp or Go duration`)
+		writeErrorCode(
+			w,
+			r,
+			"LOG003",
+			`invalid "after" parameter: must be RFC3339 timestamp or Go duration`,
+		)
 		return
 	}
 	if !validLogTimestamp(until) {
-		writeErrorCode(w, r, "LOG004", `invalid "before" parameter: must be RFC3339 timestamp or Go duration`)
+		writeErrorCode(
+			w,
+			r,
+			"LOG004",
+			`invalid "before" parameter: must be RFC3339 timestamp or Go duration`,
+		)
 		return
 	}
 
 	if ContentTypeFromContext(r.Context()) == ContentTypeSSE {
 		if until != "" {
-			writeErrorCode(w, r, "LOG005", `"before" parameter is not supported for SSE log streams`)
+			writeErrorCode(
+				w,
+				r,
+				"LOG005",
+				`"before" parameter is not supported for SSE log streams`,
+			)
 			return
 		}
 		h.serveLogsSSE(w, r, fetch, since, streamFilter)

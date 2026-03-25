@@ -3,6 +3,7 @@ import type { SearchResourceType, SearchResponse, SearchResult } from "../../api
 import { useOperationsLevel } from "../../hooks/useOperationsLevel";
 import { getActions, matchAction, type PaletteAction, type PaletteStep } from "../../lib/actions";
 import { resourcePath, statusColor, typeLabels, typeOrder } from "../../lib/searchConstants";
+import { showErrorToast } from "../../lib/showErrorToast";
 import { getErrorMessage } from "../../lib/utils";
 import ResourceName from "../ResourceName";
 import { Spinner } from "../Spinner";
@@ -104,6 +105,7 @@ function ActionBreadcrumbs({
 export default function SearchPalette({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState("");
   const [response, setResponse] = useState<SearchResponse | null>(null);
+  const [searching, setSearching] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -163,12 +165,14 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
 
     if (!query.trim()) {
       setResponse(null);
+      setSearching(false);
 
       return;
     }
 
     const controller = new AbortController();
     abortRef.current = controller;
+    setSearching(true);
 
     api
       .search(query, undefined, controller.signal)
@@ -176,10 +180,14 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
         if (!controller.signal.aborted) {
           setResponse(r);
           setHighlightIndex(0);
+          setSearching(false);
         }
       })
-      .catch(() => {
-        // ignore aborted / failed requests
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          setSearching(false);
+          showErrorToast(error, "Search failed");
+        }
       });
   }, []);
 
@@ -318,6 +326,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
         onClose();
       } catch (err) {
         setActionError(getErrorMessage(err, String(err)));
+        showErrorToast(err, "Action failed");
       } finally {
         setActionLoading(false);
       }
@@ -530,7 +539,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
             placeholder={placeholder}
             className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
-          {actionLoading && <Spinner className="size-4 shrink-0" />}
+          {(searching || actionLoading) && <Spinner className="size-4 shrink-0" />}
         </div>
 
         {actionError && (

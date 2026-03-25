@@ -31,7 +31,6 @@ func TestHandleErrorIndex_JSON(t *testing.T) {
 	}
 }
 
-
 func TestHandleErrorDetail_JSON(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/errors/NOD001", nil)
 	req.SetPathValue("code", "NOD001")
@@ -55,7 +54,6 @@ func TestHandleErrorDetail_JSON(t *testing.T) {
 		t.Errorf("status=%d, want 409", def.Status)
 	}
 }
-
 
 func TestHandleErrorDetail_NotFound(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/errors/XXX999", nil)

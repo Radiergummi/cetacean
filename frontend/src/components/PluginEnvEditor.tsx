@@ -71,16 +71,12 @@ export function PluginEnvEditor({
               >
                 <div className="flex items-baseline gap-2">
                   <span className="font-mono text-xs font-medium">{envName}</span>
-                  {isDefault && (
-                    <span className="text-[10px] text-muted-foreground">default</span>
-                  )}
+                  {isDefault && <span className="text-[10px] text-muted-foreground">default</span>}
                 </div>
                 <div className="font-mono text-xs text-muted-foreground">
                   {current ?? defaultValue ?? "—"}
                 </div>
-                {Description && (
-                  <p className="text-xs text-muted-foreground/70">{Description}</p>
-                )}
+                {Description && <p className="text-xs text-muted-foreground/70">{Description}</p>}
               </div>
             );
           })}
@@ -108,9 +104,7 @@ export function PluginEnvEditor({
                 placeholder={defaultValue ?? ""}
                 className="h-8 w-full rounded-md border bg-transparent px-2 font-mono text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               />
-              {Description && (
-                <p className="text-xs text-muted-foreground">{Description}</p>
-              )}
+              {Description && <p className="text-xs text-muted-foreground">{Description}</p>}
             </label>
           ))}
         </div>

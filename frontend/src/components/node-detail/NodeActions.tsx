@@ -25,7 +25,7 @@ export function NodeActions({ node }: { node: Node }) {
   const { level, loading: levelLoading } = useOperationsLevel();
   const canImpact = !levelLoading && level >= opsLevel.impactful;
   const navigate = useNavigate();
-  const remove = useAsyncAction();
+  const remove = useAsyncAction({ toast: true });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
 

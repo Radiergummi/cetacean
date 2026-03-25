@@ -20,6 +20,32 @@ export interface PaletteStep {
   choices?: { label: string; value: string }[];
 }
 
+const removeTargets = [
+  { type: "service", remove: (resource: SearchResult) => api.removeService(resource.id) },
+  { type: "node", remove: (resource: SearchResult) => api.removeNode(resource.id, true) },
+  { type: "stack", remove: (resource: SearchResult) => api.removeStack(resource.id) },
+  { type: "config", remove: (resource: SearchResult) => api.removeConfig(resource.id) },
+  { type: "secret", remove: (resource: SearchResult) => api.removeSecret(resource.id) },
+  { type: "network", remove: (resource: SearchResult) => api.removeNetwork(resource.id) },
+  { type: "volume", remove: (resource: SearchResult) => api.removeVolume(resource.id) },
+] as const;
+
+const removeActions: PaletteAction[] = removeTargets.map(({ type, remove }) => {
+  const label = type.charAt(0).toUpperCase() + type.slice(1);
+
+  return {
+    id: `remove-${type}`,
+    label: `Remove ${label}`,
+    keywords: [`remove ${type}`, `delete ${type}`],
+    requiredLevel: 3,
+    steps: [{ type: "resource" as const, resourceType: type, label }],
+    destructive: true,
+    execute: async (resource: SearchResult) => {
+      await remove(resource);
+    },
+  };
+});
+
 export function getActions(): PaletteAction[] {
   return [
     {
@@ -105,7 +131,7 @@ export function getActions(): PaletteAction[] {
     {
       id: "remove-task",
       label: "Force Remove Task",
-      keywords: ["remove", "kill", "task"],
+      keywords: ["remove task", "kill task", "kill"],
       requiredLevel: 3,
       steps: [{ type: "resource", resourceType: "task", label: "Task" }],
       destructive: true,
@@ -113,6 +139,28 @@ export function getActions(): PaletteAction[] {
         await api.removeTask(task.id);
       },
     },
+    {
+      id: "promote-node",
+      label: "Promote Node",
+      keywords: ["promote"],
+      requiredLevel: 3,
+      steps: [{ type: "resource", resourceType: "node", label: "Node" }],
+      execute: async (node: SearchResult) => {
+        await api.updateNodeRole(node.id, "manager");
+      },
+    },
+    {
+      id: "demote-node",
+      label: "Demote Node",
+      keywords: ["demote"],
+      requiredLevel: 3,
+      steps: [{ type: "resource", resourceType: "node", label: "Node" }],
+      destructive: true,
+      execute: async (node: SearchResult) => {
+        await api.updateNodeRole(node.id, "worker");
+      },
+    },
+    ...removeActions,
     {
       id: "shortcuts",
       label: "Keyboard Shortcuts",

@@ -70,7 +70,7 @@ func NewRouter(
 	mux.HandleFunc("GET /plugins", contentNegotiated(h.HandlePlugins, spa))
 	mux.HandleFunc("GET /plugins/{name}", contentNegotiated(h.HandlePlugin, spa))
 	mux.HandleFunc("GET /swarm/plugins", contentNegotiated(h.HandlePlugins, spa))
-	mux.HandleFunc("POST /plugins/privileges", h.HandlePluginPrivileges)
+	mux.Handle("POST /plugins/privileges", tier3(h.HandlePluginPrivileges))
 	mux.Handle("POST /plugins", tier3(h.HandleInstallPlugin))
 	mux.Handle("POST /plugins/{name}/enable", tier2(h.HandleEnablePlugin))
 	mux.Handle("POST /plugins/{name}/disable", tier2(h.HandleDisablePlugin))

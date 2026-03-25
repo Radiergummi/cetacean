@@ -256,9 +256,7 @@ export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[
         )}
 
         {validationError && (
-          <p className="mb-2 text-xs text-red-600 dark:text-red-400">
-            {validationError}
-          </p>
+          <p className="mb-2 text-xs text-red-600 dark:text-red-400">{validationError}</p>
         )}
 
         <div className="flex gap-2">

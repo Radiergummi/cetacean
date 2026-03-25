@@ -5,11 +5,11 @@ import { ContainerImage, KVTable, MetadataGrid, ResourceId } from "../components
 import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
 import InstallPluginDialog from "../components/InstallPluginDialog";
+import { LoadingDetail } from "../components/LoadingSkeleton";
+import PageHeader from "../components/PageHeader";
 import { PluginEnvEditor } from "../components/PluginEnvEditor";
 import { DockerDocsLink } from "../components/service-detail/DockerDocsLink";
 import { EditablePanel } from "../components/service-detail/EditablePanel";
-import { LoadingDetail } from "../components/LoadingSkeleton";
-import PageHeader from "../components/PageHeader";
 import { Spinner } from "../components/Spinner";
 import {
   AlertDialog,
@@ -144,8 +144,8 @@ export default function PluginDetail() {
                   <AlertDialogHeader>
                     <AlertDialogTitle>Disable plugin?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      This will disable the plugin <strong>{name}</strong>. Services using this plugin
-                      may be affected.
+                      This will disable the plugin <strong>{name}</strong>. Services using this
+                      plugin may be affected.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -248,9 +248,7 @@ export default function PluginDetail() {
           value={
             <span
               className={
-                plugin.Enabled
-                  ? "text-green-700 dark:text-green-400"
-                  : "text-muted-foreground"
+                plugin.Enabled ? "text-green-700 dark:text-green-400" : "text-muted-foreground"
               }
             >
               {plugin.Enabled ? "Enabled" : "Disabled"}
@@ -260,9 +258,7 @@ export default function PluginDetail() {
         <InfoCard
           label="Type"
           value={
-            config.Interface.Types
-              ?.map((type) => pluginTypeLabels[type] ?? type)
-              .join(", ") || "—"
+            config.Interface.Types?.map((type) => pluginTypeLabels[type] ?? type).join(", ") || "—"
           }
         />
       </MetadataGrid>
@@ -271,7 +267,10 @@ export default function PluginDetail() {
       <CollapsibleSection
         title="Settings"
         controls={
-          <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/plugin/set/" variant="label" />
+          <DockerDocsLink
+            href="https://docs.docker.com/reference/cli/docker/plugin/set/"
+            variant="label"
+          />
         }
       >
         <div className="grid gap-4 lg:grid-cols-2">
@@ -319,7 +318,10 @@ export default function PluginDetail() {
       <CollapsibleSection
         title="Configuration"
         controls={
-          <DockerDocsLink href="https://docs.docker.com/engine/extend/config/" variant="label" />
+          <DockerDocsLink
+            href="https://docs.docker.com/engine/extend/config/"
+            variant="label"
+          />
         }
       >
         <div className="space-y-4">

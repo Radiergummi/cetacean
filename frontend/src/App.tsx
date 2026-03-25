@@ -1,11 +1,11 @@
 import ConnectionStatus from "./components/ConnectionStatus";
-import { Toaster } from "./components/ui/sonner";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { LoadingDetail } from "./components/LoadingSkeleton";
 import { GlobalSearch, type GlobalSearchHandle } from "./components/search";
 import ShortcutsHelp from "./components/ShortcutsHelp";
 import ShortcutTooltip from "./components/ShortcutTooltip";
 import ThemeToggle from "./components/ThemeToggle";
+import { Toaster } from "./components/ui/sonner";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { OperationsLevelProvider } from "./hooks/useOperationsLevel";

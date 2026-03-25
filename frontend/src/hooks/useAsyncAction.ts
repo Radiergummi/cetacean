@@ -28,11 +28,11 @@ export function useAsyncAction(options?: AsyncActionOptions) {
       await action();
     } catch (caught) {
       if (mountedRef.current) {
+        setError(getErrorMessage(caught, errorMessage));
+        setCause(caught);
+
         if (options?.toast) {
           showErrorToast(caught, errorMessage);
-        } else {
-          setError(getErrorMessage(caught, errorMessage));
-          setCause(caught);
         }
       }
     } finally {

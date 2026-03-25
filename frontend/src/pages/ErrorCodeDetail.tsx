@@ -1,8 +1,8 @@
-import PageHeader from "../components/PageHeader";
 import FetchError from "../components/FetchError";
 import { LoadingDetail } from "../components/LoadingSkeleton";
-import { useParams } from "react-router-dom";
+import PageHeader from "../components/PageHeader";
 import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 
 interface ErrorDef {
   code: string;
@@ -41,10 +41,7 @@ export default function ErrorCodeDetail() {
     <>
       <PageHeader
         title={`${errorDef.code} — ${errorDef.title}`}
-        breadcrumbs={[
-          { label: "Error Reference", to: "/api/errors" },
-          { label: errorDef.code },
-        ]}
+        breadcrumbs={[{ label: "Error Reference", to: "/api/errors" }, { label: errorDef.code }]}
       />
 
       <div className="space-y-6">

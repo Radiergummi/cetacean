@@ -9,10 +9,10 @@ import {
   Timestamp,
 } from "../components/data";
 import FetchError from "../components/FetchError";
-import { RemoveResourceAction } from "../components/RemoveResourceAction";
 import InfoCard from "../components/InfoCard";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
+import { RemoveResourceAction } from "../components/RemoveResourceAction";
 import ResourceName from "../components/ResourceName";
 import ServiceRefList from "../components/ServiceRefList";
 import { useDetailResource } from "../hooks/useDetailResource";
