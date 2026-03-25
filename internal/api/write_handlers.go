@@ -75,6 +75,26 @@ func writeNodeError(w http.ResponseWriter, r *http.Request, err error) {
 	writeDockerError(w, r, err, "node")
 }
 
+// writeConfigError handles Docker API errors for config mutations,
+// mapping version conflicts to CFG005.
+func writeConfigError(w http.ResponseWriter, r *http.Request, err error) {
+	if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
+		writeErrorCode(w, r, "CFG005", err.Error())
+		return
+	}
+	writeDockerError(w, r, err, "config")
+}
+
+// writeSecretError handles Docker API errors for secret mutations,
+// mapping version conflicts to SEC005.
+func writeSecretError(w http.ResponseWriter, r *http.Request, err error) {
+	if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
+		writeErrorCode(w, r, "SEC005", err.Error())
+		return
+	}
+	writeDockerError(w, r, err, "secret")
+}
+
 // writePatchError maps JSON Patch application errors to error codes.
 func writePatchError(w http.ResponseWriter, r *http.Request, err error) {
 	var tfe *testFailedError

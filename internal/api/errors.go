@@ -498,6 +498,13 @@ var errorRegistry = map[string]ErrorDef{
 		Description: "The config creation request is invalid.",
 		Suggestion:  "Provide a non-empty name and valid base64-encoded data.",
 	},
+	"CFG005": {
+		Code:        "CFG005",
+		Title:       "Config Version Conflict",
+		Status:      http.StatusConflict,
+		Description: "The config was modified concurrently.",
+		Suggestion:  "Retry the operation with the latest version.",
+	},
 
 	// ── SEC: secret operations ────────────────────────────────────────
 	"SEC001": {
@@ -523,6 +530,13 @@ var errorRegistry = map[string]ErrorDef{
 		Status:      http.StatusBadRequest,
 		Description: "The secret creation request is invalid.",
 		Suggestion:  "Provide a non-empty name and valid base64-encoded data.",
+	},
+	"SEC005": {
+		Code:        "SEC005",
+		Title:       "Secret Version Conflict",
+		Status:      http.StatusConflict,
+		Description: "The secret was modified concurrently.",
+		Suggestion:  "Retry the operation with the latest version.",
 	},
 }
 
