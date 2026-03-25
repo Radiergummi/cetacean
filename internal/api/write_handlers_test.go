@@ -4218,3 +4218,273 @@ func TestHandleCreateSecret_DockerError(t *testing.T) {
 		t.Errorf("status=%d, want 500", w.Code)
 	}
 }
+
+func TestHandleGetConfigLabels(t *testing.T) {
+	c := cache.New(nil)
+	c.SetConfig(swarm.Config{
+		ID: "cfg1",
+		Spec: swarm.ConfigSpec{
+			Annotations: swarm.Annotations{
+				Name:   "my-config",
+				Labels: map[string]string{"env": "prod"},
+			},
+		},
+	})
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, nil, closedReady(), nil, config.OpsConfiguration)
+
+	req := httptest.NewRequest("GET", "/configs/cfg1/labels", nil)
+	req.SetPathValue("id", "cfg1")
+	w := httptest.NewRecorder()
+	h.HandleGetConfigLabels(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["@type"] != "ConfigLabels" {
+		t.Errorf("@type=%v, want ConfigLabels", resp["@type"])
+	}
+	labels, ok := resp["labels"].(map[string]any)
+	if !ok {
+		t.Fatal("expected labels key in response")
+	}
+	if labels["env"] != "prod" {
+		t.Errorf("env=%v, want prod", labels["env"])
+	}
+}
+
+func TestHandleGetConfigLabels_NotFound(t *testing.T) {
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		&mockWriteClient{},
+		nil,
+		closedReady(),
+		nil,
+		config.OpsConfiguration,
+	)
+
+	req := httptest.NewRequest("GET", "/configs/missing/labels", nil)
+	req.SetPathValue("id", "missing")
+	w := httptest.NewRecorder()
+	h.HandleGetConfigLabels(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestHandlePatchConfigLabels_JSONPatch(t *testing.T) {
+	c := cache.New(nil)
+	c.SetConfig(swarm.Config{
+		ID: "cfg1",
+		Spec: swarm.ConfigSpec{
+			Annotations: swarm.Annotations{
+				Name:   "my-config",
+				Labels: map[string]string{"existing": "value"},
+			},
+		},
+	})
+
+	wc := &mockWriteClient{
+		updateConfigLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Config, error) {
+			return swarm.Config{
+				ID:   id,
+				Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Labels: labels}},
+			}, nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration)
+
+	body := `[{"op":"add","path":"/new","value":"label"}]`
+	req := httptest.NewRequest("PATCH", "/configs/cfg1/labels", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json-patch+json")
+	req.SetPathValue("id", "cfg1")
+	w := httptest.NewRecorder()
+	h.HandlePatchConfigLabels(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandlePatchConfigLabels_MergePatch(t *testing.T) {
+	c := cache.New(nil)
+	c.SetConfig(swarm.Config{
+		ID: "cfg1",
+		Spec: swarm.ConfigSpec{
+			Annotations: swarm.Annotations{
+				Name:   "my-config",
+				Labels: map[string]string{"existing": "value", "remove": "me"},
+			},
+		},
+	})
+
+	wc := &mockWriteClient{
+		updateConfigLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Config, error) {
+			return swarm.Config{
+				ID:   id,
+				Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Labels: labels}},
+			}, nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration)
+
+	body := `{"new":"label","remove":null}`
+	req := httptest.NewRequest("PATCH", "/configs/cfg1/labels", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.SetPathValue("id", "cfg1")
+	w := httptest.NewRecorder()
+	h.HandlePatchConfigLabels(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandlePatchConfigLabels_WrongContentType(t *testing.T) {
+	c := cache.New(nil)
+	c.SetConfig(swarm.Config{ID: "cfg1"})
+	h := NewHandlers(
+		c,
+		nil,
+		nil,
+		nil,
+		&mockWriteClient{},
+		nil,
+		closedReady(),
+		nil,
+		config.OpsConfiguration,
+	)
+
+	req := httptest.NewRequest("PATCH", "/configs/cfg1/labels", strings.NewReader(`[]`))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("id", "cfg1")
+	w := httptest.NewRecorder()
+	h.HandlePatchConfigLabels(w, req)
+
+	if w.Code != http.StatusUnsupportedMediaType {
+		t.Errorf("status=%d, want 415", w.Code)
+	}
+}
+
+func TestHandlePatchConfigLabels_VersionConflict(t *testing.T) {
+	c := cache.New(nil)
+	c.SetConfig(swarm.Config{
+		ID:   "cfg1",
+		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "my-config"}},
+	})
+
+	wc := &mockWriteClient{
+		updateConfigLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Config, error) {
+			return swarm.Config{}, errdefs.Conflict(fmt.Errorf("version conflict"))
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration)
+
+	body := `[{"op":"add","path":"/new","value":"label"}]`
+	req := httptest.NewRequest("PATCH", "/configs/cfg1/labels", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json-patch+json")
+	req.SetPathValue("id", "cfg1")
+	w := httptest.NewRecorder()
+	h.HandlePatchConfigLabels(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Errorf("status=%d, want 409; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleGetSecretLabels(t *testing.T) {
+	c := cache.New(nil)
+	c.SetSecret(swarm.Secret{
+		ID: "sec1",
+		Spec: swarm.SecretSpec{
+			Annotations: swarm.Annotations{
+				Name:   "my-secret",
+				Labels: map[string]string{"env": "prod"},
+			},
+		},
+	})
+	h := NewHandlers(c, nil, nil, nil, &mockWriteClient{}, nil, closedReady(), nil, config.OpsConfiguration)
+
+	req := httptest.NewRequest("GET", "/secrets/sec1/labels", nil)
+	req.SetPathValue("id", "sec1")
+	w := httptest.NewRecorder()
+	h.HandleGetSecretLabels(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["@type"] != "SecretLabels" {
+		t.Errorf("@type=%v, want SecretLabels", resp["@type"])
+	}
+}
+
+func TestHandlePatchSecretLabels_JSONPatch(t *testing.T) {
+	c := cache.New(nil)
+	c.SetSecret(swarm.Secret{
+		ID: "sec1",
+		Spec: swarm.SecretSpec{
+			Annotations: swarm.Annotations{
+				Name:   "my-secret",
+				Labels: map[string]string{"existing": "value"},
+			},
+		},
+	})
+
+	wc := &mockWriteClient{
+		updateSecretLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Secret, error) {
+			return swarm.Secret{
+				ID:   id,
+				Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Labels: labels}},
+			}, nil
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration)
+
+	body := `[{"op":"add","path":"/new","value":"label"}]`
+	req := httptest.NewRequest("PATCH", "/secrets/sec1/labels", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json-patch+json")
+	req.SetPathValue("id", "sec1")
+	w := httptest.NewRecorder()
+	h.HandlePatchSecretLabels(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandlePatchSecretLabels_VersionConflict(t *testing.T) {
+	c := cache.New(nil)
+	c.SetSecret(swarm.Secret{
+		ID:   "sec1",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "my-secret"}},
+	})
+
+	wc := &mockWriteClient{
+		updateSecretLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Secret, error) {
+			return swarm.Secret{}, errdefs.Conflict(fmt.Errorf("version conflict"))
+		},
+	}
+	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration)
+
+	body := `[{"op":"add","path":"/new","value":"label"}]`
+	req := httptest.NewRequest("PATCH", "/secrets/sec1/labels", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json-patch+json")
+	req.SetPathValue("id", "sec1")
+	w := httptest.NewRecorder()
+	h.HandlePatchSecretLabels(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Errorf("status=%d, want 409; body: %s", w.Code, w.Body.String())
+	}
+}
