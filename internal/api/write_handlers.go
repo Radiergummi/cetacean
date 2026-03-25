@@ -677,7 +677,10 @@ func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Location", "/configs/"+id)
 		w.WriteHeader(http.StatusCreated)
 		writeJSON(w, NewDetailResponse("/configs/"+id, "Config", map[string]any{
-			"config":   swarm.Config{ID: id, Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: req.Name}}},
+			"config": swarm.Config{
+				ID:   id,
+				Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: req.Name}},
+			},
 			"services": []cache.ServiceRef{},
 		}))
 		return
@@ -729,7 +732,10 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Location", "/secrets/"+id)
 		w.WriteHeader(http.StatusCreated)
 		writeJSON(w, NewDetailResponse("/secrets/"+id, "Secret", map[string]any{
-			"secret":   swarm.Secret{ID: id, Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: req.Name}}},
+			"secret": swarm.Secret{
+				ID:   id,
+				Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: req.Name}},
+			},
 			"services": []cache.ServiceRef{},
 		}))
 		return

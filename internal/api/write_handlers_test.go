@@ -3814,7 +3814,17 @@ func TestHandleCreateConfig_OK(t *testing.T) {
 }
 
 func TestHandleCreateConfig_MissingName(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, &mockWriteClient{}, nil, closedReady(), nil, config.OpsConfiguration)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		&mockWriteClient{},
+		nil,
+		closedReady(),
+		nil,
+		config.OpsConfiguration,
+	)
 
 	body := `{"data":"aGVsbG8="}`
 	req := httptest.NewRequest("POST", "/configs", strings.NewReader(body))
@@ -3827,7 +3837,17 @@ func TestHandleCreateConfig_MissingName(t *testing.T) {
 }
 
 func TestHandleCreateConfig_InvalidBase64(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, &mockWriteClient{}, nil, closedReady(), nil, config.OpsConfiguration)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		&mockWriteClient{},
+		nil,
+		closedReady(),
+		nil,
+		config.OpsConfiguration,
+	)
 
 	body := `{"name":"my-config","data":"not-valid-base64!!!"}`
 	req := httptest.NewRequest("POST", "/configs", strings.NewReader(body))
@@ -3845,7 +3865,17 @@ func TestHandleCreateConfig_NameConflict(t *testing.T) {
 			return "", errdefs.Conflict(fmt.Errorf("config already exists"))
 		},
 	}
-	h := NewHandlers(cache.New(nil), nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		wc,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsConfiguration,
+	)
 
 	body := `{"name":"existing","data":"aGVsbG8="}`
 	req := httptest.NewRequest("POST", "/configs", strings.NewReader(body))
@@ -3858,7 +3888,17 @@ func TestHandleCreateConfig_NameConflict(t *testing.T) {
 }
 
 func TestHandleCreateConfig_InvalidJSON(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, &mockWriteClient{}, nil, closedReady(), nil, config.OpsConfiguration)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		&mockWriteClient{},
+		nil,
+		closedReady(),
+		nil,
+		config.OpsConfiguration,
+	)
 
 	req := httptest.NewRequest("POST", "/configs", strings.NewReader("{invalid"))
 	w := httptest.NewRecorder()
@@ -3897,7 +3937,17 @@ func TestHandleCreateSecret_OK(t *testing.T) {
 }
 
 func TestHandleCreateSecret_MissingName(t *testing.T) {
-	h := NewHandlers(cache.New(nil), nil, nil, nil, &mockWriteClient{}, nil, closedReady(), nil, config.OpsConfiguration)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		&mockWriteClient{},
+		nil,
+		closedReady(),
+		nil,
+		config.OpsConfiguration,
+	)
 
 	body := `{"data":"c2VjcmV0"}`
 	req := httptest.NewRequest("POST", "/secrets", strings.NewReader(body))
@@ -3915,7 +3965,17 @@ func TestHandleCreateSecret_NameConflict(t *testing.T) {
 			return "", errdefs.Conflict(fmt.Errorf("secret already exists"))
 		},
 	}
-	h := NewHandlers(cache.New(nil), nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration)
+	h := NewHandlers(
+		cache.New(nil),
+		nil,
+		nil,
+		nil,
+		wc,
+		nil,
+		closedReady(),
+		nil,
+		config.OpsConfiguration,
+	)
 
 	body := `{"name":"existing","data":"c2VjcmV0"}`
 	req := httptest.NewRequest("POST", "/secrets", strings.NewReader(body))
