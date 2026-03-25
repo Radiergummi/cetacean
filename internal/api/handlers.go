@@ -80,6 +80,8 @@ type DockerWriteClient interface {
 	RemoveConfig(ctx context.Context, id string) error
 	RemoveSecret(ctx context.Context, id string) error
 	RemoveVolume(ctx context.Context, name string, force bool) error
+	CreateConfig(ctx context.Context, spec swarm.ConfigSpec) (string, error)
+	CreateSecret(ctx context.Context, spec swarm.SecretSpec) (string, error)
 	UpdateServiceLabels(
 		ctx context.Context,
 		id string,

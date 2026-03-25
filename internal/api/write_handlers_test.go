@@ -38,6 +38,8 @@ type mockWriteClient struct {
 	removeConfigFn                 func(ctx context.Context, id string) error
 	removeSecretFn                 func(ctx context.Context, id string) error
 	removeVolumeFn                 func(ctx context.Context, name string, force bool) error
+	createConfigFn                 func(ctx context.Context, spec swarm.ConfigSpec) (string, error)
+	createSecretFn                 func(ctx context.Context, spec swarm.SecretSpec) (string, error)
 	updateServiceLabelsFn          func(ctx context.Context, id string, labels map[string]string) (swarm.Service, error)
 	updateServiceResourcesFn       func(ctx context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error)
 	updateServiceModeFn            func(ctx context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error)
@@ -168,6 +170,20 @@ func (m *mockWriteClient) RemoveSecret(ctx context.Context, id string) error {
 		return m.removeSecretFn(ctx, id)
 	}
 	return fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) CreateConfig(ctx context.Context, spec swarm.ConfigSpec) (string, error) {
+	if m.createConfigFn != nil {
+		return m.createConfigFn(ctx, spec)
+	}
+	return "", fmt.Errorf("not implemented")
+}
+
+func (m *mockWriteClient) CreateSecret(ctx context.Context, spec swarm.SecretSpec) (string, error) {
+	if m.createSecretFn != nil {
+		return m.createSecretFn(ctx, spec)
+	}
+	return "", fmt.Errorf("not implemented")
 }
 
 func (m *mockWriteClient) RemoveVolume(ctx context.Context, name string, force bool) error {
