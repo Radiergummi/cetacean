@@ -1,6 +1,6 @@
 import { api } from "../api/client";
 import type { Secret } from "../api/types";
-import CreateSecretForm from "../components/CreateSecretForm";
+import CreateDataResourceForm from "../components/CreateDataResourceForm";
 import DataTable, { type Column } from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
@@ -94,7 +94,16 @@ export default function SecretList() {
     <div>
       <PageHeader
         title="Secrets"
-        actions={<CreateSecretForm />}
+        actions={
+          <CreateDataResourceForm
+            resourceType="Secret"
+            basePath="/secrets"
+            onCreate={async (name, data) => {
+              const response = await api.createSecret(name, data);
+              return { id: response.secret.ID };
+            }}
+          />
+        }
       />
 
       <ListToolbar

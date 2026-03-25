@@ -1,6 +1,6 @@
 import { api } from "../api/client";
 import type { Config } from "../api/types";
-import CreateConfigForm from "../components/CreateConfigForm";
+import CreateDataResourceForm from "../components/CreateDataResourceForm";
 import DataTable, { type Column } from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
@@ -96,7 +96,16 @@ export default function ConfigList() {
     <div>
       <PageHeader
         title="Configs"
-        actions={<CreateConfigForm />}
+        actions={
+          <CreateDataResourceForm
+            resourceType="Config"
+            basePath="/configs"
+            onCreate={async (name, data) => {
+              const response = await api.createConfig(name, data);
+              return { id: response.config.ID };
+            }}
+          />
+        }
       />
       <ListToolbar
         search={search}

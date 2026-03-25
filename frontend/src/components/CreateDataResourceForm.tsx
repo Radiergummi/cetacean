@@ -1,4 +1,3 @@
-import { api } from "../api/client";
 import CreateResourceDialog from "./CreateResourceDialog";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -6,7 +5,21 @@ import { type ChangeEvent, useCallback, useState } from "react";
 
 type InputMode = "text" | "file";
 
-export default function CreateSecretForm() {
+interface CreateDataResourceFormProps {
+  resourceType: string;
+  onCreate: (name: string, data: string) => Promise<{ id: string }>;
+  basePath: string;
+}
+
+/**
+ * Form for creating a name+data resource (config or secret).
+ * Handles name input, text/file data toggle, and base64 encoding.
+ */
+export default function CreateDataResourceForm({
+  resourceType,
+  onCreate,
+  basePath,
+}: CreateDataResourceFormProps) {
   const [name, setName] = useState("");
   const [text, setText] = useState("");
   const [fileData, setFileData] = useState<string | null>(null);
@@ -34,11 +47,13 @@ export default function CreateSecretForm() {
     reader.readAsDataURL(file);
   }
 
+  const lowerType = resourceType.toLowerCase();
+
   const handleSubmit = useCallback(async () => {
     const encoded = inputMode === "text" ? btoa(text) : fileData!;
-    const response = await api.createSecret(name.trim(), encoded);
-    return `/secrets/${response.secret.ID}`;
-  }, [name, text, fileData, inputMode]);
+    const result = await onCreate(name.trim(), encoded);
+    return `${basePath}/${result.id}`;
+  }, [name, text, fileData, inputMode, onCreate, basePath]);
 
   function reset() {
     setName("");
@@ -49,19 +64,19 @@ export default function CreateSecretForm() {
 
   return (
     <CreateResourceDialog
-      resourceType="Secret"
+      resourceType={resourceType}
       onSubmit={handleSubmit}
       canSubmit={canSubmit}
       onReset={reset}
     >
       <div className="flex flex-col gap-4 py-2">
         <div className="flex flex-col gap-2">
-          <Label htmlFor="secret-name">Name</Label>
+          <Label htmlFor={`${lowerType}-name`}>Name</Label>
           <Input
-            id="secret-name"
+            id={`${lowerType}-name`}
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="my-secret"
+            placeholder={`my-${lowerType}`}
             autoFocus
           />
         </div>
@@ -91,7 +106,7 @@ export default function CreateSecretForm() {
             <textarea
               value={text}
               onChange={(event) => setText(event.target.value)}
-              placeholder="Paste secret content…"
+              placeholder={`Paste ${lowerType} content…`}
               rows={8}
               className="w-full rounded-lg border border-input bg-transparent px-2.5 py-2 font-mono text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
             />
