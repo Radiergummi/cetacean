@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Label editing for configs and secrets
 - Config and secret creation from the dashboard
 - Plugin management: browsable list and detail pages, install/upgrade with privilege review, enable/disable/remove/configure
 - Swarm configuration editors: per-section editing for raft, CA, orchestration, and task defaults, with token rotation and unlock key retrieval

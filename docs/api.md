@@ -659,6 +659,8 @@ curl http://localhost:9000/stacks/myapp
 |---|---|---|---|
 | GET | `/configs` | List configs. | `search`, `filter`, `sort`, `dir`, `limit`, `offset` |
 | GET | `/configs/{id}` | Config detail with cross-referenced services. Data is base64-encoded. | -- |
+| GET | `/configs/{id}/labels` | Get config labels. | -- |
+| PATCH | `/configs/{id}/labels` | Patch config labels. Tier 2. | -- |
 | POST | `/configs` | Create a config. Tier 2. | -- |
 
 ```bash
@@ -677,6 +679,8 @@ Secret data is always redacted in API responses.
 |---|---|---|---|
 | GET | `/secrets` | List secrets. | `search`, `filter`, `sort`, `dir`, `limit`, `offset` |
 | GET | `/secrets/{id}` | Secret detail with cross-referenced services. | -- |
+| GET | `/secrets/{id}/labels` | Get secret labels. | -- |
+| PATCH | `/secrets/{id}/labels` | Patch secret labels. Tier 2. | -- |
 | POST | `/secrets` | Create a secret. Tier 2. | -- |
 
 ```bash

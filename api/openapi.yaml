@@ -2632,6 +2632,58 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
+  /configs/{id}/labels:
+    get:
+      operationId: getConfigLabels
+      tags: [Configs]
+      summary: Get config labels
+      description: Returns the current labels of the config as a key/value map.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Config labels
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: patchConfigLabels
+      tags: [Configs]
+      summary: Patch config labels
+      description: |
+        Applies a JSON Patch (RFC 6902) to the config labels.
+        Requires `Content-Type: application/json-patch+json`.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: "#/components/schemas/JSONPatch"
+      responses:
+        "200":
+          description: Updated config labels
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+
   # ── Secrets ──────────────────────────────────────────────────────────
 
   /secrets:
@@ -2766,6 +2818,58 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+
+  /secrets/{id}/labels:
+    get:
+      operationId: getSecretLabels
+      tags: [Secrets]
+      summary: Get secret labels
+      description: Returns the current labels of the secret as a key/value map.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Secret labels
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: patchSecretLabels
+      tags: [Secrets]
+      summary: Patch secret labels
+      description: |
+        Applies a JSON Patch (RFC 6902) to the secret labels.
+        Requires `Content-Type: application/json-patch+json`.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      requestBody:
+        required: true
+        content:
+          application/json-patch+json:
+            schema:
+              $ref: "#/components/schemas/JSONPatch"
+      responses:
+        "200":
+          description: Updated secret labels
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
 
   # ── Networks ─────────────────────────────────────────────────────────
 
