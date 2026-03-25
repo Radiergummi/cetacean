@@ -414,6 +414,52 @@ paths:
               schema:
                 type: object
 
+  /api/errors:
+    get:
+      operationId: listErrorCodes
+      tags: [Documentation]
+      summary: Error code reference
+      description: |
+        Lists all well-known error codes with their titles, HTTP status codes,
+        descriptions, and suggestions. Browser requests (Accept: text/html) serve
+        the SPA error reference page.
+      responses:
+        "200":
+          description: Array of error definitions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ErrorDef"
+
+  /api/errors/{code}:
+    get:
+      operationId: getErrorCode
+      tags: [Documentation]
+      summary: Error code detail
+      description: |
+        Returns documentation for a single error code including its title,
+        HTTP status, description, and suggested resolution.
+      parameters:
+        - name: code
+          in: path
+          required: true
+          description: "Error code (e.g. SVC001, NOD003)"
+          schema:
+            type: string
+            pattern: "^[A-Z]{3}\\d{3}$"
+            example: SVC001
+      responses:
+        "200":
+          description: Error definition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDef"
+        "404":
+          description: Unknown error code
+
   # ── Events ───────────────────────────────────────────────────────────
 
   /events:
@@ -3081,7 +3127,10 @@ components:
 
     ProblemDetail:
       type: object
-      description: RFC 9457 Problem Details with JSON-LD @context
+      description: |
+        RFC 9457 Problem Details with JSON-LD @context.
+        Domain-specific errors use `/api/errors/{code}` as the type URI
+        (e.g. `/api/errors/SVC001`). Generic errors use `about:blank`.
       required: [type, title, status]
       properties:
         "@context":
@@ -3089,16 +3138,16 @@ components:
           example: /api/context.jsonld
         type:
           type: string
-          description: Problem type URI
-          example: about:blank
+          description: "Problem type URI — `/api/errors/{code}` for domain errors, `about:blank` for generic"
+          example: /api/errors/SVC001
         title:
           type: string
           description: Short human-readable summary
-          example: Not Found
+          example: Service Version Conflict
         status:
           type: integer
           description: HTTP status code
-          example: 404
+          example: 409
         detail:
           type: string
           description: Human-readable explanation
@@ -3108,6 +3157,30 @@ components:
         requestId:
           type: string
           description: Correlation ID for this request
+
+    ErrorDef:
+      type: object
+      description: Documentation for a well-known error code
+      required: [code, title, status, description, suggestion]
+      properties:
+        code:
+          type: string
+          description: "Stable error code (three-letter prefix + three-digit number)"
+          example: SVC001
+        title:
+          type: string
+          description: Short human-readable title
+          example: Service Version Conflict
+        status:
+          type: integer
+          description: HTTP status code this error produces
+          example: 409
+        description:
+          type: string
+          description: Detailed explanation of the error
+        suggestion:
+          type: string
+          description: Recommended action to resolve the error
 
     # ── JSON-LD Envelopes ────────────────────────────────────────────
 

@@ -185,26 +185,49 @@ Error responses follow [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) (Probl
 }
 ```
 
-### Error types
+### Error codes
 
-| Type URI | Meaning |
-|---|---|
-| `about:blank` | Generic HTTP error (title matches status code) |
-| `urn:cetacean:error:filter-invalid` | Invalid filter expression |
-
-Domain-specific errors may include extra fields:
+Every domain-specific error includes a stable error code in its `type` URI:
 
 ```json
 {
   "@context": "/api/context.jsonld",
-  "type": "urn:cetacean:error:filter-invalid",
-  "title": "Invalid Filter Expression",
-  "status": 400,
-  "detail": "unexpected token at position 12",
-  "instance": "/services",
+  "type": "/api/errors/SVC001",
+  "title": "Service Version Conflict",
+  "status": 409,
+  "detail": "service was modified by another client",
+  "instance": "/services/abc123/scale",
   "requestId": "a1b2c3d4e5f6"
 }
 ```
+
+The code is the last path segment of `type` (e.g. `SVC001`). Codes use a three-letter domain prefix followed by a three-digit number:
+
+| Prefix | Domain |
+|---|---|
+| `API` | Protocol and content negotiation |
+| `AUT` | Authentication |
+| `OPS` | Operations level |
+| `FLT` | Filter expressions |
+| `SEA` | Search |
+| `MTR` | Metrics / Prometheus |
+| `LOG` | Log streaming |
+| `SSE` | SSE connections |
+| `ENG` | Docker Engine |
+| `SWM` | Swarm operations |
+| `PLG` | Plugin operations |
+| `NOD` | Node operations |
+| `SVC` | Service operations |
+| `TSK` | Task operations |
+| `STK` | Stack operations |
+| `VOL` | Volume operations |
+| `NET` | Network operations |
+| `CFG` | Config operations |
+| `SEC` | Secret operations |
+
+Generic HTTP errors (no domain-specific code) use `"type": "about:blank"`.
+
+Browse the full error reference at [`GET /api/errors`](#error-reference) or look up a single code at `GET /api/errors/{code}`.
 
 ## Caching
 
@@ -781,6 +804,8 @@ curl http://localhost:9000/auth/whoami
 | GET | `/api` | OpenAPI spec (JSON) or interactive Scalar playground (HTML via browser). |
 | GET | `/api/context.jsonld` | JSON-LD context document. |
 | GET | `/api/scalar.js` | Embedded Scalar standalone JS bundle. |
+| GET | `/api/errors` | List all error codes (JSON). Browser requests serve the SPA error reference page. |
+| GET | `/api/errors/{code}` | Error code detail: title, HTTP status, description, and suggestion (JSON). |
 
 ```bash
 # Download OpenAPI spec (JSON)
