@@ -599,6 +599,40 @@ func (c *Client) CreateSecret(ctx context.Context, spec swarm.SecretSpec) (strin
 	return resp.ID, nil
 }
 
+func (c *Client) UpdateConfigLabels(
+	ctx context.Context,
+	id string,
+	labels map[string]string,
+) (swarm.Config, error) {
+	cfg, _, err := c.docker.ConfigInspectWithRaw(ctx, id)
+	if err != nil {
+		return swarm.Config{}, err
+	}
+	cfg.Spec.Labels = labels
+	err = c.docker.ConfigUpdate(ctx, cfg.ID, cfg.Version, cfg.Spec)
+	if err != nil {
+		return swarm.Config{}, err
+	}
+	return c.InspectConfig(ctx, id)
+}
+
+func (c *Client) UpdateSecretLabels(
+	ctx context.Context,
+	id string,
+	labels map[string]string,
+) (swarm.Secret, error) {
+	sec, _, err := c.docker.SecretInspectWithRaw(ctx, id)
+	if err != nil {
+		return swarm.Secret{}, err
+	}
+	sec.Spec.Labels = labels
+	err = c.docker.SecretUpdate(ctx, sec.ID, sec.Version, sec.Spec)
+	if err != nil {
+		return swarm.Secret{}, err
+	}
+	return c.InspectSecret(ctx, id)
+}
+
 func (c *Client) RemoveVolume(ctx context.Context, name string, force bool) error {
 	return c.docker.VolumeRemove(ctx, name, force)
 }
