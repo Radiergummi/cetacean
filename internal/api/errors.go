@@ -484,6 +484,20 @@ var errorRegistry = map[string]ErrorDef{
 	"CFG002": {Code: "CFG002", Title: "Config Not Found", Status: http.StatusNotFound,
 		Description: "The specified config does not exist.",
 		Suggestion:  "Check the config ID and try again."},
+	"CFG003": {
+		Code:        "CFG003",
+		Title:       "Config Name Conflict",
+		Status:      http.StatusConflict,
+		Description: "A config with this name already exists.",
+		Suggestion:  "Choose a different name or remove the existing config first.",
+	},
+	"CFG004": {
+		Code:        "CFG004",
+		Title:       "Invalid Config",
+		Status:      http.StatusBadRequest,
+		Description: "The config creation request is invalid.",
+		Suggestion:  "Provide a non-empty name and valid base64-encoded data.",
+	},
 
 	// ── SEC: secret operations ────────────────────────────────────────
 	"SEC001": {
@@ -496,6 +510,20 @@ var errorRegistry = map[string]ErrorDef{
 	"SEC002": {Code: "SEC002", Title: "Secret Not Found", Status: http.StatusNotFound,
 		Description: "The specified secret does not exist.",
 		Suggestion:  "Check the secret ID and try again."},
+	"SEC003": {
+		Code:        "SEC003",
+		Title:       "Secret Name Conflict",
+		Status:      http.StatusConflict,
+		Description: "A secret with this name already exists.",
+		Suggestion:  "Choose a different name or remove the existing secret first.",
+	},
+	"SEC004": {
+		Code:        "SEC004",
+		Title:       "Invalid Secret",
+		Status:      http.StatusBadRequest,
+		Description: "The secret creation request is invalid.",
+		Suggestion:  "Provide a non-empty name and valid base64-encoded data.",
+	},
 }
 
 // writeErrorCode writes an RFC 9457 problem details response using a
