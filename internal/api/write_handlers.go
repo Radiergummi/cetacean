@@ -770,6 +770,172 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 	}))
 }
 
+func (h *Handlers) HandleGetConfigLabels(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	cfg, ok := h.cache.GetConfig(id)
+	if !ok {
+		writeErrorCode(w, r, "CFG002", "config not found")
+		return
+	}
+	labels := cfg.Spec.Labels
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	writeJSONWithETag(w, r, NewDetailResponse("/configs/"+id+"/labels", "ConfigLabels", map[string]any{
+		"labels": labels,
+	}))
+}
+
+func (h *Handlers) HandlePatchConfigLabels(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	ct := r.Header.Get("Content-Type")
+	isJSONPatch := strings.HasPrefix(ct, "application/json-patch+json")
+	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")
+
+	if !isJSONPatch && !isMergePatch {
+		writeErrorCode(
+			w,
+			r,
+			"API004",
+			"Content-Type must be application/json-patch+json or application/merge-patch+json",
+		)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeErrorCode(w, r, "API007", "failed to read request body")
+		return
+	}
+
+	cfg, ok := h.cache.GetConfig(id)
+	if !ok {
+		writeErrorCode(w, r, "CFG002", "config not found")
+		return
+	}
+
+	current := cfg.Spec.Labels
+	if current == nil {
+		current = map[string]string{}
+	}
+
+	var updated map[string]string
+	if isJSONPatch {
+		var ops []PatchOp
+		if err := json.Unmarshal(body, &ops); err != nil {
+			writeErrorCode(w, r, "API006", "invalid request body")
+			return
+		}
+		updated, err = applyJSONPatch(current, ops)
+	} else {
+		updated, err = applyMergePatchStringMap(current, body)
+	}
+
+	if err != nil {
+		writePatchError(w, r, err)
+		return
+	}
+
+	slog.Info("patching config labels", "config", id)
+
+	result, err := h.writeClient.UpdateConfigLabels(r.Context(), id, updated)
+	if err != nil {
+		writeConfigError(w, r, err)
+		return
+	}
+
+	labels := result.Spec.Labels
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	writeJSON(w, labels)
+}
+
+func (h *Handlers) HandleGetSecretLabels(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	sec, ok := h.cache.GetSecret(id)
+	if !ok {
+		writeErrorCode(w, r, "SEC002", "secret not found")
+		return
+	}
+	labels := sec.Spec.Labels
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	writeJSONWithETag(w, r, NewDetailResponse("/secrets/"+id+"/labels", "SecretLabels", map[string]any{
+		"labels": labels,
+	}))
+}
+
+func (h *Handlers) HandlePatchSecretLabels(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	ct := r.Header.Get("Content-Type")
+	isJSONPatch := strings.HasPrefix(ct, "application/json-patch+json")
+	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")
+
+	if !isJSONPatch && !isMergePatch {
+		writeErrorCode(
+			w,
+			r,
+			"API004",
+			"Content-Type must be application/json-patch+json or application/merge-patch+json",
+		)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeErrorCode(w, r, "API007", "failed to read request body")
+		return
+	}
+
+	sec, ok := h.cache.GetSecret(id)
+	if !ok {
+		writeErrorCode(w, r, "SEC002", "secret not found")
+		return
+	}
+
+	current := sec.Spec.Labels
+	if current == nil {
+		current = map[string]string{}
+	}
+
+	var updated map[string]string
+	if isJSONPatch {
+		var ops []PatchOp
+		if err := json.Unmarshal(body, &ops); err != nil {
+			writeErrorCode(w, r, "API006", "invalid request body")
+			return
+		}
+		updated, err = applyJSONPatch(current, ops)
+	} else {
+		updated, err = applyMergePatchStringMap(current, body)
+	}
+
+	if err != nil {
+		writePatchError(w, r, err)
+		return
+	}
+
+	slog.Info("patching secret labels", "secret", id)
+
+	result, err := h.writeClient.UpdateSecretLabels(r.Context(), id, updated)
+	if err != nil {
+		writeSecretError(w, r, err)
+		return
+	}
+
+	labels := result.Spec.Labels
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	writeJSON(w, labels)
+}
+
 func (h *Handlers) HandleRemoveNetwork(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
