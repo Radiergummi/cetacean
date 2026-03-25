@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"io"
 	"log/slog"
@@ -14,6 +15,8 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
+
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 // writeDockerError handles Docker API errors that don't have a domain-specific
@@ -629,6 +632,116 @@ func (h *Handlers) HandleRemoveSecret(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type createResourceRequest struct {
+	Name string `json:"name"`
+	Data string `json:"data"`
+}
+
+func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
+	var req createResourceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErrorCode(w, r, "API006", "invalid request body")
+		return
+	}
+
+	if strings.TrimSpace(req.Name) == "" {
+		writeErrorCode(w, r, "CFG004", "name is required")
+		return
+	}
+
+	data, err := base64.StdEncoding.DecodeString(req.Data)
+	if err != nil {
+		writeErrorCode(w, r, "CFG004", "data must be valid base64")
+		return
+	}
+
+	slog.Info("creating config", "name", req.Name)
+
+	id, err := h.writeClient.CreateConfig(r.Context(), swarm.ConfigSpec{
+		Annotations: swarm.Annotations{Name: req.Name},
+		Data:        data,
+	})
+	if err != nil {
+		if cerrdefs.IsConflict(err) {
+			writeErrorCode(w, r, "CFG003", err.Error())
+			return
+		}
+		writeDockerError(w, r, err, "config")
+		return
+	}
+
+	cfg, ok := h.cache.GetConfig(id)
+	if !ok {
+		w.Header().Set("Location", "/configs/"+id)
+		w.WriteHeader(http.StatusCreated)
+		writeJSON(w, NewDetailResponse("/configs/"+id, "Config", map[string]any{
+			"config":   swarm.Config{ID: id, Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: req.Name}}},
+			"services": []cache.ServiceRef{},
+		}))
+		return
+	}
+
+	w.Header().Set("Location", "/configs/"+id)
+	w.WriteHeader(http.StatusCreated)
+	writeJSON(w, NewDetailResponse("/configs/"+id, "Config", map[string]any{
+		"config":   cfg,
+		"services": h.cache.ServicesUsingConfig(id),
+	}))
+}
+
+func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
+	var req createResourceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErrorCode(w, r, "API006", "invalid request body")
+		return
+	}
+
+	if strings.TrimSpace(req.Name) == "" {
+		writeErrorCode(w, r, "SEC004", "name is required")
+		return
+	}
+
+	data, err := base64.StdEncoding.DecodeString(req.Data)
+	if err != nil {
+		writeErrorCode(w, r, "SEC004", "data must be valid base64")
+		return
+	}
+
+	slog.Info("creating secret", "name", req.Name)
+
+	id, err := h.writeClient.CreateSecret(r.Context(), swarm.SecretSpec{
+		Annotations: swarm.Annotations{Name: req.Name},
+		Data:        data,
+	})
+	if err != nil {
+		if cerrdefs.IsConflict(err) {
+			writeErrorCode(w, r, "SEC003", err.Error())
+			return
+		}
+		writeDockerError(w, r, err, "secret")
+		return
+	}
+
+	sec, ok := h.cache.GetSecret(id)
+	if !ok {
+		w.Header().Set("Location", "/secrets/"+id)
+		w.WriteHeader(http.StatusCreated)
+		writeJSON(w, NewDetailResponse("/secrets/"+id, "Secret", map[string]any{
+			"secret":   swarm.Secret{ID: id, Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: req.Name}}},
+			"services": []cache.ServiceRef{},
+		}))
+		return
+	}
+
+	sec.Spec.Data = nil
+	w.Header().Set("Location", "/secrets/"+id)
+	w.WriteHeader(http.StatusCreated)
+	writeJSON(w, NewDetailResponse("/secrets/"+id, "Secret", map[string]any{
+		"secret":   sec,
+		"services": h.cache.ServicesUsingSecret(id),
+	}))
 }
 
 func (h *Handlers) HandleRemoveNetwork(w http.ResponseWriter, r *http.Request) {
