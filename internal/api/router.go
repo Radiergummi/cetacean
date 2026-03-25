@@ -257,6 +257,7 @@ func NewRouter(
 		),
 	)
 	mux.Handle("DELETE /configs/{id}", tier3(h.HandleRemoveConfig))
+	mux.Handle("POST /configs", tier2(h.HandleCreateConfig))
 
 	// Secrets
 	mux.HandleFunc(
@@ -276,6 +277,7 @@ func NewRouter(
 		),
 	)
 	mux.Handle("DELETE /secrets/{id}", tier3(h.HandleRemoveSecret))
+	mux.Handle("POST /secrets", tier2(h.HandleCreateSecret))
 
 	// Networks
 	mux.HandleFunc(
