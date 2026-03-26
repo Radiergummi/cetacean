@@ -193,7 +193,7 @@ export function EditableTable<T>({
                       {(canRemove?.(item, index) ?? true) && (
                         <Button
                           variant="ghost"
-                          size="icon-xs"
+                          size="icon"
                           onClick={() => removeRow(index)}
                           title="Remove"
                           className="text-muted-foreground hover:text-red-600"
