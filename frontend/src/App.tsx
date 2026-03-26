@@ -9,7 +9,7 @@ import { Toaster } from "./components/ui/sonner";
 import { AuthProvider } from "./hooks/AuthProvider";
 import { useAuth } from "./hooks/useAuth";
 import { useHotkeys } from "./hooks/useHotkeys";
-import { OperationsLevelProvider } from "./hooks/useOperationsLevel";
+import { OperationsLevelProvider } from "./hooks/OperationsLevelProvider";
 import { ConnectionProvider, sseEventTypes } from "./hooks/useResourceStream";
 import { Keyboard, Menu, X } from "lucide-react";
 import type React from "react";
