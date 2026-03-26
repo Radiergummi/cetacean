@@ -1,21 +1,7 @@
 import { api } from "@/api/client";
-import type { Identity } from "@/api/types";
+import { AuthContext, type AuthState } from "./useAuth";
 import type React from "react";
-import { createContext, useContext, useEffect, useState } from "react";
-
-interface AuthState {
-  identity: Identity | null;
-  loading: boolean;
-}
-
-const AuthContext = createContext<AuthState>({
-  identity: null,
-  loading: true,
-});
-
-export function useAuth() {
-  return useContext(AuthContext);
-}
+import { useEffect, useState } from "react";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({
