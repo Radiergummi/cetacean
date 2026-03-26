@@ -7,9 +7,9 @@ import ShortcutTooltip from "./components/ShortcutTooltip";
 import ThemeToggle from "./components/ThemeToggle";
 import { Toaster } from "./components/ui/sonner";
 import { AuthProvider } from "./hooks/AuthProvider";
+import { OperationsLevelProvider } from "./hooks/OperationsLevelProvider";
 import { useAuth } from "./hooks/useAuth";
 import { useHotkeys } from "./hooks/useHotkeys";
-import { OperationsLevelProvider } from "./hooks/OperationsLevelProvider";
 import { ConnectionProvider, sseEventTypes } from "./hooks/useResourceStream";
 import { Keyboard, Menu, X } from "lucide-react";
 import type React from "react";
@@ -101,10 +101,12 @@ function Layout({ children }: { children: React.ReactNode }) {
               </span>
             </div>
 
+            <GlobalSearch
+              ref={searchRef}
+              className="order-last lg:order-none lg:mx-auto"
+            />
+
             <div className="flex items-center gap-3">
-              <div className="lg:absolute lg:left-1/2 lg:-translate-x-1/2">
-                <GlobalSearch ref={searchRef} />
-              </div>
               <ShortcutTooltip keys={["?"]}>
                 <button
                   className="inline-flex size-8 items-center justify-center rounded-md transition hover:bg-muted"

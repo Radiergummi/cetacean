@@ -1,5 +1,5 @@
-import { api } from "@/api/client";
 import { AuthContext, type AuthState } from "./useAuth";
+import { api } from "@/api/client";
 import type React from "react";
 import { useEffect, useState } from "react";
 

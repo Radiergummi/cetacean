@@ -6,7 +6,10 @@ export interface GlobalSearchHandle {
   open: () => void;
 }
 
-const GlobalSearch = forwardRef<GlobalSearchHandle>(function GlobalSearch(_, ref) {
+const GlobalSearch = forwardRef<GlobalSearchHandle, { className?: string }>(function GlobalSearch(
+  { className },
+  ref,
+) {
   const [open, setOpen] = useState(false);
 
   useImperativeHandle(ref, () => ({ open: () => setOpen(true) }), []);
@@ -27,7 +30,7 @@ const GlobalSearch = forwardRef<GlobalSearchHandle>(function GlobalSearch(_, ref
   const close = useCallback(() => setOpen(false), []);
 
   return (
-    <>
+    <div className={className}>
       <button
         className="flex size-8 cursor-pointer items-center justify-center gap-2 rounded-md text-sm transition select-none hover:bg-muted xl:size-auto xl:min-w-3xs xl:justify-between xl:border xl:bg-muted/50 xl:py-1 xl:ps-2 xl:pe-1.5 xl:text-muted-foreground xl:hover:bg-muted"
         onClick={() => setOpen(true)}
@@ -39,7 +42,7 @@ const GlobalSearch = forwardRef<GlobalSearchHandle>(function GlobalSearch(_, ref
         </kbd>
       </button>
       {open && <SearchPalette onClose={close} />}
-    </>
+    </div>
   );
 });
 
