@@ -172,7 +172,7 @@ export function EditableTable<T>({
                   <th className="w-1/2 ps-3 pt-3 pb-1.5 text-left text-sm font-medium">
                     {columns[1]}
                   </th>
-                  <th className="w-12 py-3 ps-3 pb-1.5" />
+                  <th className="w-12 px-3 pt-3 pb-1.5" />
                 </tr>
               </thead>
               <tbody>
@@ -189,7 +189,7 @@ export function EditableTable<T>({
                         ),
                       )}
                     </td>
-                    <td className="py-3 ps-3">
+                    <td className="px-3 py-3">
                       {(canRemove?.(item, index) ?? true) && (
                         <Button
                           variant="ghost"
