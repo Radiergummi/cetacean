@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-03-27
+
+### Fixed
+- Resource pages showing empty states instead of errors when Docker socket is unreachable
+- Container running as unprivileged user unable to access Docker socket
+- Watcher reconnect loop spamming API with sync events on persistent Docker failures
+
 ## [0.8.0] - 2026-03-26
 
 ### Added
