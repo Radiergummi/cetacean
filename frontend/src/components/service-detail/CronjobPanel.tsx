@@ -1,10 +1,9 @@
-import { api } from "@/api/client";
 import type { CronjobIntegration } from "@/api/types";
 import { KVTable } from "@/components/data";
 import { Input } from "@/components/ui/input";
 import { NumberField } from "@/components/ui/number-field";
 import { Switch } from "@/components/ui/switch";
-import { diffLabels } from "@/lib/integrationLabels";
+import { saveIntegrationLabels } from "@/lib/integrationLabels";
 import { CronExpressionParser } from "cron-parser";
 import { useState } from "react";
 import { CronSchedule } from "./CronSchedule";
@@ -44,12 +43,12 @@ export function CronjobPanel({
 }) {
   const { enabled, schedule, skipRunning, replicas, registryAuth, queryRegistry } = integration;
 
-  const [formEnabled, setFormEnabled] = useState(true);
-  const [formSchedule, setFormSchedule] = useState("");
-  const [formSkipRunning, setFormSkipRunning] = useState(false);
-  const [formReplicas, setFormReplicas] = useState(1);
-  const [formRegistryAuth, setFormRegistryAuth] = useState(false);
-  const [formQueryRegistry, setFormQueryRegistry] = useState(false);
+  const [formEnabled, setFormEnabled] = useState(integration.enabled);
+  const [formSchedule, setFormSchedule] = useState(integration.schedule ?? "");
+  const [formSkipRunning, setFormSkipRunning] = useState(integration.skipRunning ?? false);
+  const [formReplicas, setFormReplicas] = useState(integration.replicas ?? 1);
+  const [formRegistryAuth, setFormRegistryAuth] = useState(integration.registryAuth ?? false);
+  const [formQueryRegistry, setFormQueryRegistry] = useState(integration.queryRegistry ?? false);
 
   const cronError = validateCron(formSchedule);
 
@@ -95,20 +94,15 @@ export function CronjobPanel({
       throw new Error(cronError);
     }
 
-    const ops = diffLabels(rawLabels, serializeToLabels());
-    const updated = await api.patchServiceLabels(serviceId, ops);
-    onSaved(updated);
+    await saveIntegrationLabels(rawLabels, serializeToLabels(), serviceId, onSaved);
   }
 
   const editForm = (
     <div className="space-y-3">
-      <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-2">
-          <Switch checked={formEnabled} onCheckedChange={setFormEnabled} />
-          <span className="text-xs font-medium text-foreground">Enabled</span>
-        </label>
-        <p className="text-xs text-muted-foreground">Enable cron-based scheduling for this service</p>
-      </div>
+      <label className="flex items-center gap-2">
+        <Switch checked={formEnabled} onCheckedChange={setFormEnabled} />
+        <span className="text-xs font-medium text-foreground">Enabled</span>
+      </label>
 
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-foreground">Schedule</label>
@@ -118,44 +112,32 @@ export function CronjobPanel({
           onChange={(event) => setFormSchedule(event.target.value)}
           placeholder="*/5 * * * *"
         />
-        {cronError ? (
-          <p className="text-xs text-destructive">{cronError}</p>
-        ) : (
-          <p className="text-xs text-muted-foreground">CRON expression defining when the job runs</p>
-        )}
+        {cronError && <p className="text-xs text-destructive">{cronError}</p>}
       </div>
+
+      <label className="flex items-center gap-2">
+        <Switch checked={formSkipRunning} onCheckedChange={setFormSkipRunning} />
+        <span className="text-xs font-medium text-foreground">Skip running</span>
+      </label>
 
       <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-2">
-          <Switch checked={formSkipRunning} onCheckedChange={setFormSkipRunning} />
-          <span className="text-xs font-medium text-foreground">Skip running</span>
-        </label>
-        <p className="text-xs text-muted-foreground">Skip execution if the previous run is still active</p>
+        <NumberField
+          label="Replicas"
+          value={formReplicas}
+          onChange={(value) => setFormReplicas(value ?? 1)}
+          min={1}
+        />
       </div>
 
-      <NumberField
-        label="Replicas"
-        value={formReplicas}
-        onChange={(value) => setFormReplicas(value ?? 1)}
-        min={1}
-      />
-      <p className="text-xs text-muted-foreground">Number of replicas to start on each scheduled run</p>
+      <label className="flex items-center gap-2">
+        <Switch checked={formRegistryAuth} onCheckedChange={setFormRegistryAuth} />
+        <span className="text-xs font-medium text-foreground">Registry auth</span>
+      </label>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-2">
-          <Switch checked={formRegistryAuth} onCheckedChange={setFormRegistryAuth} />
-          <span className="text-xs font-medium text-foreground">Registry auth</span>
-        </label>
-        <p className="text-xs text-muted-foreground">Send registry authentication credentials to Swarm agents</p>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-2">
-          <Switch checked={formQueryRegistry} onCheckedChange={setFormQueryRegistry} />
-          <span className="text-xs font-medium text-foreground">Query registry</span>
-        </label>
-        <p className="text-xs text-muted-foreground">Contact the registry when updating the service</p>
-      </div>
+      <label className="flex items-center gap-2">
+        <Switch checked={formQueryRegistry} onCheckedChange={setFormQueryRegistry} />
+        <span className="text-xs font-medium text-foreground">Query registry</span>
+      </label>
     </div>
   );
 
@@ -163,6 +145,7 @@ export function CronjobPanel({
     <IntegrationSection
       title="Swarm Cronjob"
       defaultOpen={enabled}
+      enabled={enabled}
       rawLabels={rawLabels}
       docsUrl={docsUrl}
       editable={editable}
@@ -172,21 +155,15 @@ export function CronjobPanel({
       serviceId={serviceId}
       onRawSave={onSaved}
     >
-      {!enabled && (
-        <p className="text-sm text-muted-foreground">Disabled</p>
-      )}
-
-      {enabled && (
-        <KVTable
-          rows={[
-            schedule && ["Schedule", <CronSchedule key="schedule" expression={schedule} />],
-            replicas != null && replicas > 0 && ["Replicas", String(replicas)],
-            skipRunning && ["Skip running", "Skip if previous run still active"],
-            registryAuth && ["Registry auth", "Enabled"],
-            queryRegistry && ["Query registry", "Enabled"],
-          ]}
-        />
-      )}
+      <KVTable
+        rows={[
+          schedule && ["Schedule", <CronSchedule key="schedule" expression={schedule} />],
+          replicas != null && replicas > 0 && ["Replicas", String(replicas)],
+          skipRunning && ["Skip running", "Skip if previous run still active"],
+          registryAuth && ["Registry auth", "Enabled"],
+          queryRegistry && ["Query registry", "Enabled"],
+        ]}
+      />
     </IntegrationSection>
   );
 }

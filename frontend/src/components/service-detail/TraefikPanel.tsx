@@ -1,4 +1,3 @@
-import { api } from "@/api/client";
 import type {
   TraefikIntegration,
   TraefikMiddleware,
@@ -10,18 +9,12 @@ import { Input } from "@/components/ui/input";
 import { MultiCombobox } from "@/components/ui/multi-combobox";
 import { NumberField } from "@/components/ui/number-field";
 import { Switch } from "@/components/ui/switch";
-import { diffLabels } from "@/lib/integrationLabels";
+import { badgeBlue, badgePurple, badgeTeal, saveIntegrationLabels } from "@/lib/integrationLabels";
 import { ArrowRight, Lock } from "lucide-react";
 import { useState } from "react";
 import { IntegrationSection } from "./IntegrationSection";
 
 const docsUrl = "https://doc.traefik.io/traefik/providers/swarm/#routing-configuration-with-labels";
-
-const badgeBase =
-  "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium";
-const badgeBlue = `${badgeBase} bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300`;
-const badgePurple = `${badgeBase} bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300`;
-const badgeTeal = `${badgeBase} bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300`;
 
 // ── Display components ────────────────────────────────────────────
 
@@ -133,6 +126,34 @@ interface MiddlewareFormState {
   config: [string, string][];
 }
 
+function initRouterForms(integration: TraefikIntegration): RouterFormState[] {
+  return (integration.routers ?? []).map((router) => ({
+    name: router.name,
+    rule: router.rule ?? "",
+    entrypoints: router.entrypoints ?? [],
+    middlewares: router.middlewares ?? [],
+    service: router.service ?? "",
+    priority: router.priority || undefined,
+    certResolver: router.tls?.certResolver ?? "",
+  }));
+}
+
+function initServiceForms(integration: TraefikIntegration): ServiceFormState[] {
+  return (integration.services ?? []).map((service) => ({
+    name: service.name,
+    port: service.port || undefined,
+    scheme: service.scheme ?? "",
+  }));
+}
+
+function initMiddlewareForms(integration: TraefikIntegration): MiddlewareFormState[] {
+  return (integration.middlewares ?? []).map((middleware) => ({
+    name: middleware.name,
+    type: middleware.type,
+    config: Object.entries(middleware.config ?? {}),
+  }));
+}
+
 function RouterEditCard({
   state,
   onChange,
@@ -146,8 +167,8 @@ function RouterEditCard({
 
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-foreground">Rule</label>
-        <Input
-          className="font-mono"
+        <textarea
+          className="min-h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           value={state.rule}
           onChange={(event) => onChange({ ...state, rule: event.target.value })}
         />
@@ -360,48 +381,21 @@ export function TraefikPanel({
   const hasServices = services && services.length > 0;
   const hasMiddlewares = middlewares && middlewares.length > 0;
 
-  const [formEnabled, setFormEnabled] = useState(true);
-  const [routerForms, setRouterForms] = useState<RouterFormState[]>([]);
-  const [serviceForms, setServiceForms] = useState<ServiceFormState[]>([]);
-  const [middlewareForms, setMiddlewareForms] = useState<MiddlewareFormState[]>([]);
+  const [formEnabled, setFormEnabled] = useState(integration.enabled);
+  const [routerForms, setRouterForms] = useState<RouterFormState[]>(() => initRouterForms(integration));
+  const [serviceForms, setServiceForms] = useState<ServiceFormState[]>(() => initServiceForms(integration));
+  const [middlewareForms, setMiddlewareForms] = useState<MiddlewareFormState[]>(() => initMiddlewareForms(integration));
 
   function resetForm() {
     setFormEnabled(integration.enabled);
-
-    setRouterForms(
-      (integration.routers ?? []).map((router) => ({
-        name: router.name,
-        rule: router.rule ?? "",
-        entrypoints: router.entrypoints ?? [],
-        middlewares: router.middlewares ?? [],
-        service: router.service ?? "",
-        priority: router.priority || undefined,
-        certResolver: router.tls?.certResolver ?? "",
-      })),
-    );
-
-    setServiceForms(
-      (integration.services ?? []).map((service) => ({
-        name: service.name,
-        port: service.port || undefined,
-        scheme: service.scheme ?? "",
-      })),
-    );
-
-    setMiddlewareForms(
-      (integration.middlewares ?? []).map((middleware) => ({
-        name: middleware.name,
-        type: middleware.type,
-        config: Object.entries(middleware.config ?? {}),
-      })),
-    );
+    setRouterForms(initRouterForms(integration));
+    setServiceForms(initServiceForms(integration));
+    setMiddlewareForms(initMiddlewareForms(integration));
   }
 
   async function handleSave() {
     const newLabels = serializeTraefikLabels(formEnabled, routerForms, serviceForms, middlewareForms);
-    const ops = diffLabels(rawLabels, newLabels);
-    const updated = await api.patchServiceLabels(serviceId, ops);
-    onSaved(updated);
+    await saveIntegrationLabels(rawLabels, newLabels, serviceId, onSaved);
   }
 
   function updateRouter(index: number, updated: RouterFormState) {
@@ -483,6 +477,7 @@ export function TraefikPanel({
     <IntegrationSection
       title="Traefik"
       defaultOpen={enabled}
+      enabled={enabled}
       rawLabels={rawLabels}
       docsUrl={docsUrl}
       editable={editable}
@@ -492,12 +487,7 @@ export function TraefikPanel({
       serviceId={serviceId}
       onRawSave={onSaved}
     >
-      {!enabled && (
-        <p className="text-sm text-muted-foreground">Disabled</p>
-      )}
-
-      {enabled && (
-        <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3">
           {hasRouters && (
             <section className="flex flex-col gap-2">
               <header className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
@@ -543,7 +533,6 @@ export function TraefikPanel({
             </section>
           )}
         </div>
-      )}
     </IntegrationSection>
   );
 }

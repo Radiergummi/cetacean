@@ -1,29 +1,33 @@
-import { api } from "@/api/client";
 import type { DiunIntegration } from "@/api/types";
 import { KVTable } from "@/components/data";
 import KeyValuePills from "@/components/data/KeyValuePills";
 import { Input } from "@/components/ui/input";
 import { NumberField } from "@/components/ui/number-field";
 import { Switch } from "@/components/ui/switch";
-import { diffLabels } from "@/lib/integrationLabels";
+import { badgeBlue, saveIntegrationLabels } from "@/lib/integrationLabels";
 import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { IntegrationSection } from "./IntegrationSection";
 
 const docsUrl = "https://crazymax.dev/diun/providers/swarm/#docker-labels";
 
-const badgeBase = "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium";
-const badgeBlue = `${badgeBase} bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300`;
-
 const notifyOnLabels: Record<string, string> = {
   new: "New image",
   update: "Updated tag",
 };
 
-const sortTagsOptions = ["default", "reverse", "semver", "lexicographical"] as const;
+const sortTagsOptions = [
+  "default",
+  "reverse",
+  "semver",
+  "lexicographical",
+] as const;
 
 function NotifyOnBadges({ value }: { value: string }) {
-  const triggers = value.split(";").map((trigger) => trigger.trim()).filter(Boolean);
+  const triggers = value
+    .split(";")
+    .map((trigger) => trigger.trim())
+    .filter(Boolean);
 
   return (
     <span className="inline-flex flex-wrap gap-1.5">
@@ -53,30 +57,45 @@ export function DiunPanel({
   onSaved: (updated: Record<string, string>) => void;
   editable?: boolean;
 }) {
-  const { enabled, watchRepo, notifyOn, maxTags, includeTags, excludeTags, sortTags, regopt, hubLink, platform, metadata } =
-    integration;
+  const {
+    enabled,
+    watchRepo,
+    notifyOn,
+    maxTags,
+    includeTags,
+    excludeTags,
+    sortTags,
+    regopt,
+    hubLink,
+    platform,
+    metadata,
+  } = integration;
 
   const hasMetadata = metadata && Object.keys(metadata).length > 0;
 
-  const [formEnabled, setFormEnabled] = useState(true);
-  const [formRegopt, setFormRegopt] = useState("");
-  const [formWatchRepo, setFormWatchRepo] = useState(false);
-  const [formNotifyNew, setFormNotifyNew] = useState(true);
-  const [formNotifyUpdate, setFormNotifyUpdate] = useState(true);
-  const [formSortTags, setFormSortTags] = useState("");
-  const [formMaxTags, setFormMaxTags] = useState(0);
-  const [formIncludeTags, setFormIncludeTags] = useState("");
-  const [formExcludeTags, setFormExcludeTags] = useState("");
-  const [formHubLink, setFormHubLink] = useState("");
-  const [formPlatform, setFormPlatform] = useState("");
-  const [formMetadata, setFormMetadata] = useState<[string, string][]>([]);
+  const initialTriggers = (integration.notifyOn ?? "new;update").split(";").map((trigger) => trigger.trim());
+
+  const [formEnabled, setFormEnabled] = useState(integration.enabled);
+  const [formRegopt, setFormRegopt] = useState(integration.regopt ?? "");
+  const [formWatchRepo, setFormWatchRepo] = useState(integration.watchRepo ?? false);
+  const [formNotifyNew, setFormNotifyNew] = useState(initialTriggers.includes("new"));
+  const [formNotifyUpdate, setFormNotifyUpdate] = useState(initialTriggers.includes("update"));
+  const [formSortTags, setFormSortTags] = useState(integration.sortTags ?? "");
+  const [formMaxTags, setFormMaxTags] = useState(integration.maxTags ?? 0);
+  const [formIncludeTags, setFormIncludeTags] = useState(integration.includeTags ?? "");
+  const [formExcludeTags, setFormExcludeTags] = useState(integration.excludeTags ?? "");
+  const [formHubLink, setFormHubLink] = useState(integration.hubLink ?? "");
+  const [formPlatform, setFormPlatform] = useState(integration.platform ?? "");
+  const [formMetadata, setFormMetadata] = useState<[string, string][]>(Object.entries(integration.metadata ?? {}));
 
   function resetForm() {
     setFormEnabled(integration.enabled);
     setFormRegopt(integration.regopt ?? "");
     setFormWatchRepo(integration.watchRepo ?? false);
 
-    const triggers = (integration.notifyOn ?? "new;update").split(";").map((trigger) => trigger.trim());
+    const triggers = (integration.notifyOn ?? "new;update")
+      .split(";")
+      .map((trigger) => trigger.trim());
     setFormNotifyNew(triggers.includes("new"));
     setFormNotifyUpdate(triggers.includes("update"));
 
@@ -150,9 +169,7 @@ export function DiunPanel({
   }
 
   async function handleSave() {
-    const ops = diffLabels(rawLabels, serializeToLabels());
-    const updated = await api.patchServiceLabels(serviceId, ops);
-    onSaved(updated);
+    await saveIntegrationLabels(rawLabels, serializeToLabels(), serviceId, onSaved);
   }
 
   function addMetadataEntry() {
@@ -160,7 +177,9 @@ export function DiunPanel({
   }
 
   function removeMetadataEntry(index: number) {
-    setFormMetadata((previous) => previous.filter((_, entryIndex) => entryIndex !== index));
+    setFormMetadata((previous) =>
+      previous.filter((_, entryIndex) => entryIndex !== index),
+    );
   }
 
   function updateMetadataEntry(index: number, field: 0 | 1, value: string) {
@@ -185,37 +204,32 @@ export function DiunPanel({
             <Switch checked={formEnabled} onCheckedChange={setFormEnabled} />
             <span className="text-xs font-medium text-foreground">Enabled</span>
           </label>
-          <p className="text-xs text-muted-foreground">Enable Diun image update monitoring</p>
+          <p className="text-xs text-muted-foreground">
+            Enable Diun image update monitoring
+          </p>
         </div>
 
         <div className="flex flex-col gap-1.5">
           <label className="flex items-center gap-2">
-            <Switch checked={formWatchRepo} onCheckedChange={setFormWatchRepo} />
-            <span className="text-xs font-medium text-foreground">Watch repo</span>
+            <Switch
+              checked={formWatchRepo}
+              onCheckedChange={setFormWatchRepo}
+            />
+            <span className="text-xs font-medium text-foreground">
+              Watch repo
+            </span>
           </label>
-          <p className="text-xs text-muted-foreground">Watch all tags, not just the deployed tag</p>
+          <p className="text-xs text-muted-foreground">
+            Watch all tags, not just the deployed tag
+          </p>
         </div>
       </div>
 
       <div className="grid items-start gap-x-4 gap-y-3 lg:grid-cols-3">
-
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-foreground">Notify on</span>
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-1.5 text-xs">
-              <Switch checked={formNotifyNew} onCheckedChange={setFormNotifyNew} />
-              New image
-            </label>
-            <label className="flex items-center gap-1.5 text-xs">
-              <Switch checked={formNotifyUpdate} onCheckedChange={setFormNotifyUpdate} />
-              Updated tag
-            </label>
-          </div>
-          <p className="text-xs text-muted-foreground">When to send notifications</p>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-foreground">Sort tags</label>
+          <label className="text-xs font-medium text-foreground">
+            Sort tags
+          </label>
           <select
             className="h-8 w-full rounded-md border bg-background px-2 text-sm"
             value={formSortTags}
@@ -223,10 +237,14 @@ export function DiunPanel({
           >
             <option value="">—</option>
             {sortTagsOptions.map((option) => (
-              <option key={option} value={option}>{option}</option>
+              <option key={option} value={option}>
+                {option}
+              </option>
             ))}
           </select>
-          <p className="text-xs text-muted-foreground">How to sort tags when watch repo is enabled</p>
+          <p className="text-xs text-muted-foreground">
+            How to sort tags when watch repo is enabled
+          </p>
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -236,59 +254,74 @@ export function DiunPanel({
             onChange={(value) => setFormMaxTags(value ?? 0)}
             min={0}
           />
-          <p className="text-xs text-muted-foreground">Maximum tags to watch (0 = unlimited)</p>
+          <p className="text-xs text-muted-foreground">
+            Maximum tags to watch (0 = unlimited)
+          </p>
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-foreground">Include tags</label>
-          <Input
-            className="font-mono"
-            value={formIncludeTags}
-            onChange={(event) => setFormIncludeTags(event.target.value)}
-            placeholder="^v[0-9]"
-          />
-          <p className="text-xs text-muted-foreground">Regex for tag inclusion</p>
+          <span className="text-xs font-medium text-foreground">Notify on</span>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-1.5 text-xs">
+              <Switch
+                checked={formNotifyNew}
+                onCheckedChange={setFormNotifyNew}
+              />
+              New image
+            </label>
+            <label className="flex items-center gap-1.5 text-xs">
+              <Switch
+                checked={formNotifyUpdate}
+                onCheckedChange={setFormNotifyUpdate}
+              />
+              Updated tag
+            </label>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            When to send notifications
+          </p>
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-foreground">Exclude tags</label>
-          <Input
-            className="font-mono"
-            value={formExcludeTags}
-            onChange={(event) => setFormExcludeTags(event.target.value)}
-            placeholder="^latest$"
-          />
-          <p className="text-xs text-muted-foreground">Regex for tag exclusion</p>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-foreground">Registry options</label>
+          <label className="text-xs font-medium text-foreground">
+            Registry options
+          </label>
           <Input
             value={formRegopt}
             onChange={(event) => setFormRegopt(event.target.value)}
             placeholder="my-registry"
           />
-          <p className="text-xs text-muted-foreground">Registry options from Diun configuration</p>
+          <p className="text-xs text-muted-foreground">
+            Registry options from Diun configuration
+          </p>
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-foreground">Hub link</label>
+          <label className="text-xs font-medium text-foreground">
+            Hub link
+          </label>
           <Input
             value={formHubLink}
             onChange={(event) => setFormHubLink(event.target.value)}
             placeholder="https://hub.example.com"
           />
-          <p className="text-xs text-muted-foreground">Override the registry hub link</p>
+          <p className="text-xs text-muted-foreground">
+            Override the registry hub link
+          </p>
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-foreground">Platform</label>
+          <label className="text-xs font-medium text-foreground">
+            Platform
+          </label>
           <Input
             value={formPlatform}
             onChange={(event) => setFormPlatform(event.target.value)}
             placeholder="linux/amd64"
           />
-          <p className="text-xs text-muted-foreground">Platform for image analysis</p>
+          <p className="text-xs text-muted-foreground">
+            Platform for image analysis
+          </p>
         </div>
       </div>
 
@@ -306,17 +339,21 @@ export function DiunPanel({
         </div>
 
         {formMetadata.map(([key, value], index) => (
-          <div key={index} className="flex items-center gap-2">
+          <div key={`${index}-${key}`} className="flex items-center gap-2">
             <Input
               className="flex-1"
               value={key}
-              onChange={(event) => updateMetadataEntry(index, 0, event.target.value)}
+              onChange={(event) =>
+                updateMetadataEntry(index, 0, event.target.value)
+              }
               placeholder="key"
             />
             <Input
               className="flex-1"
               value={value}
-              onChange={(event) => updateMetadataEntry(index, 1, event.target.value)}
+              onChange={(event) =>
+                updateMetadataEntry(index, 1, event.target.value)
+              }
               placeholder="value"
             />
             <button
@@ -336,6 +373,7 @@ export function DiunPanel({
     <IntegrationSection
       title="Diun"
       defaultOpen={enabled}
+      enabled={enabled}
       rawLabels={rawLabels}
       docsUrl={docsUrl}
       editable={editable}
@@ -345,16 +383,14 @@ export function DiunPanel({
       serviceId={serviceId}
       onRawSave={onSaved}
     >
-      {!enabled && (
-        <p className="text-sm text-muted-foreground">Disabled</p>
-      )}
-
-      {enabled && (
-        <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3">
           <KVTable
             rows={[
               watchRepo && ["Watch repo", "Entire repository"],
-              notifyOn && ["Notify on", <NotifyOnBadges key="notify-on" value={notifyOn} />],
+              notifyOn && [
+                "Notify on",
+                <NotifyOnBadges key="notify-on" value={notifyOn} />,
+              ],
               maxTags != null && maxTags > 0 && ["Max tags", String(maxTags)],
               includeTags && ["Include tags", includeTags],
               excludeTags && ["Exclude tags", excludeTags],
@@ -374,7 +410,6 @@ export function DiunPanel({
             </div>
           )}
         </div>
-      )}
     </IntegrationSection>
   );
 }

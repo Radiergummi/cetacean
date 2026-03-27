@@ -5,6 +5,7 @@ import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { showErrorToast } from "@/lib/showErrorToast";
+import { getErrorMessage } from "@/lib/utils";
 import { Code, ExternalLink, Layers, Pencil } from "lucide-react";
 import { useState } from "react";
 
@@ -14,15 +15,12 @@ import { useState } from "react";
  * Supports inline editing in both structured and raw modes.
  *
  * A single `editing` flag controls both modes. Toggling between
- * structured and raw preserves the editing state. In raw edit mode,
- * the KeyValueEditor is mounted with `defaultEditing=true` and
- * `editDisabled` so IntegrationSection's own Save/Cancel are not
- * needed — KVEditor handles its own save. On KVEditor save/cancel,
- * it resets `editing` via the callbacks.
+ * structured and raw preserves the editing state.
  */
 export function IntegrationSection({
   title,
   defaultOpen,
+  enabled,
   rawLabels,
   docsUrl,
   children,
@@ -35,6 +33,7 @@ export function IntegrationSection({
 }: {
   title: string;
   defaultOpen: boolean;
+  enabled: boolean;
   rawLabels: [string, string][];
   docsUrl: string;
   children: React.ReactNode;
@@ -42,15 +41,17 @@ export function IntegrationSection({
   editContent?: React.ReactNode;
   onEditStart?: () => void;
   onSave?: () => Promise<void>;
-  serviceId?: string;
-  onRawSave?: (updated: Record<string, string>) => void;
+  serviceId: string;
+  onRawSave: (updated: Record<string, string>) => void;
 }) {
   const [showRaw, setShowRaw] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   function cancel() {
     setEditing(false);
+    setSaveError(null);
   }
 
   useEscapeCancel(editing && !showRaw, cancel);
@@ -61,11 +62,13 @@ export function IntegrationSection({
     }
 
     setSaving(true);
+    setSaveError(null);
 
     try {
       await onSave();
       setEditing(false);
     } catch (error) {
+      setSaveError(getErrorMessage(error, "Save failed"));
       showErrorToast(error, "Save failed");
     } finally {
       setSaving(false);
@@ -74,6 +77,7 @@ export function IntegrationSection({
 
   function startEditing() {
     onEditStart?.();
+    setSaveError(null);
     setEditing(true);
   }
 
@@ -131,8 +135,8 @@ export function IntegrationSection({
           defaultEditing={editing}
           onCancel={() => setEditing(false)}
           onSave={async (ops) => {
-            const updated = await api.patchServiceLabels(serviceId!, ops);
-            onRawSave?.(updated);
+            const updated = await api.patchServiceLabels(serviceId, ops);
+            onRawSave(updated);
             setEditing(false);
             return updated;
           }}
@@ -141,6 +145,10 @@ export function IntegrationSection({
         <div className="rounded-lg border p-3">
           <div className="space-y-4">
             {editContent}
+
+            {saveError && (
+              <p className="text-xs text-destructive">{saveError}</p>
+            )}
 
             <footer className="flex items-center gap-2">
               <div className="ml-auto flex gap-2">
@@ -155,6 +163,8 @@ export function IntegrationSection({
             </footer>
           </div>
         </div>
+      ) : !enabled ? (
+        <p className="text-sm text-muted-foreground">Disabled</p>
       ) : (
         children
       )}

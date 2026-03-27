@@ -1,9 +1,8 @@
-import { api } from "@/api/client";
 import type { ShepherdIntegration } from "@/api/types";
 import { KVTable } from "@/components/data";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { diffLabels } from "@/lib/integrationLabels";
+import { saveIntegrationLabels } from "@/lib/integrationLabels";
 import { useState } from "react";
 import { IntegrationSection } from "./IntegrationSection";
 
@@ -28,8 +27,8 @@ export function ShepherdPanel({
 }) {
   const { enabled, authConfig } = integration;
 
-  const [formEnabled, setFormEnabled] = useState(false);
-  const [formAuthConfig, setFormAuthConfig] = useState("");
+  const [formEnabled, setFormEnabled] = useState(integration.enabled);
+  const [formAuthConfig, setFormAuthConfig] = useState(integration.authConfig ?? "");
 
   function resetForm() {
     setFormEnabled(integration.enabled);
@@ -41,7 +40,7 @@ export function ShepherdPanel({
       "shepherd.enable": String(formEnabled),
     };
 
-    if (formAuthConfig.trim() !== "") {
+    if (formAuthConfig.trim()) {
       labels["shepherd.auth.config"] = formAuthConfig;
     }
 
@@ -49,20 +48,15 @@ export function ShepherdPanel({
   }
 
   async function handleSave() {
-    const ops = diffLabels(rawLabels, serializeToLabels());
-    const updated = await api.patchServiceLabels(serviceId, ops);
-    onSaved(updated);
+    await saveIntegrationLabels(rawLabels, serializeToLabels(), serviceId, onSaved);
   }
 
   const editForm = (
     <div className="space-y-3">
-      <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-2">
-          <Switch checked={formEnabled} onCheckedChange={setFormEnabled} />
-          <span className="text-xs font-medium text-foreground">Enabled</span>
-        </label>
-        <p className="text-xs text-muted-foreground">Enable automatic image updates for this service</p>
-      </div>
+      <label className="flex items-center gap-2">
+        <Switch checked={formEnabled} onCheckedChange={setFormEnabled} />
+        <span className="text-xs font-medium text-foreground">Enabled</span>
+      </label>
 
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-foreground">Auth config</label>
@@ -71,7 +65,6 @@ export function ShepherdPanel({
           onChange={(event) => setFormAuthConfig(event.target.value)}
           placeholder="registry:credentials"
         />
-        <p className="text-xs text-muted-foreground">Registry auth configuration ID from the registries auth file</p>
       </div>
     </div>
   );
@@ -80,6 +73,7 @@ export function ShepherdPanel({
     <IntegrationSection
       title="Shepherd"
       defaultOpen={enabled}
+      enabled={enabled}
       rawLabels={rawLabels}
       docsUrl={docsUrl}
       editable={editable}
@@ -89,13 +83,7 @@ export function ShepherdPanel({
       serviceId={serviceId}
       onRawSave={onSaved}
     >
-      {!enabled && (
-        <p className="text-sm text-muted-foreground">Disabled</p>
-      )}
-
-      {enabled && (
-        <KVTable rows={[authConfig && ["Auth config", authConfig]]} />
-      )}
+      <KVTable rows={[authConfig && ["Auth config", authConfig]]} />
     </IntegrationSection>
   );
 }

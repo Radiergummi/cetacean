@@ -96,7 +96,7 @@ export function EditableTable<T>({
   }
 
   function removeRow(index: number) {
-    setDraft((previous) => previous.filter((_, i) => i !== index));
+    setDraft((previous) => previous.filter((_, itemIndex) => itemIndex !== index));
   }
 
   function handleAddAnother() {
