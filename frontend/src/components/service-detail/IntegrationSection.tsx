@@ -2,7 +2,6 @@ import { api } from "@/api/client";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import { KeyValueEditor } from "@/components/KeyValueEditor";
 import { Spinner } from "@/components/Spinner";
-import KeyValuePills from "@/components/data/KeyValuePills";
 import { Button } from "@/components/ui/button";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { showErrorToast } from "@/lib/showErrorToast";
@@ -91,14 +90,19 @@ export function IntegrationSection({
           <Button
             variant="outline"
             size="xs"
-            disabled={editing}
-            onClick={() => setShowRaw((previous) => !previous)}
+            onClick={() => {
+              if (editing) {
+                setEditing(false);
+              }
+
+              setShowRaw((previous) => !previous);
+            }}
           >
             {showRaw ? <Layers className="size-3" /> : <Code className="size-3" />}
             {showRaw ? "Structured" : "Labels"}
           </Button>
 
-          {editable && !editing && (
+          {editable && !editing && !showRaw && (
             <Button variant="outline" size="xs" onClick={startEditing}>
               <Pencil className="size-3" />
               Edit
@@ -107,40 +111,36 @@ export function IntegrationSection({
         </>
       }
     >
-      {editing ? (
-        showRaw ? (
-          <KeyValueEditor
-            title=""
-            entries={Object.fromEntries(rawLabels)}
-            defaultOpen
-            onSave={async (ops) => {
-              const updated = await api.patchServiceLabels(serviceId!, ops);
-              onRawSave?.(updated);
-              setEditing(false);
-              return updated;
-            }}
-          />
-        ) : (
-          <div className="rounded-lg border p-3">
-            <div className="space-y-4">
-              {editContent}
+      {showRaw ? (
+        <KeyValueEditor
+          title=""
+          entries={Object.fromEntries(rawLabels)}
+          defaultOpen
+          editDisabled={!editable}
+          onSave={async (ops) => {
+            const updated = await api.patchServiceLabels(serviceId!, ops);
+            onRawSave?.(updated);
+            return updated;
+          }}
+        />
+      ) : editing ? (
+        <div className="rounded-lg border p-3">
+          <div className="space-y-4">
+            {editContent}
 
-              <footer className="flex items-center gap-2">
-                <div className="ml-auto flex gap-2">
-                  <Button size="sm" onClick={save} disabled={saving}>
-                    {saving && <Spinner className="size-3" />}
-                    Save
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={cancel} disabled={saving}>
-                    Cancel
-                  </Button>
-                </div>
-              </footer>
-            </div>
+            <footer className="flex items-center gap-2">
+              <div className="ml-auto flex gap-2">
+                <Button size="sm" onClick={save} disabled={saving}>
+                  {saving && <Spinner className="size-3" />}
+                  Save
+                </Button>
+                <Button variant="outline" size="sm" onClick={cancel} disabled={saving}>
+                  Cancel
+                </Button>
+              </div>
+            </footer>
           </div>
-        )
-      ) : showRaw ? (
-        <KeyValuePills entries={rawLabels} />
+        </div>
       ) : (
         children
       )}
