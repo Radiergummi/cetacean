@@ -500,15 +500,22 @@ export default function ServiceDetail() {
       {integrations.map((integration) => {
         const rawLabels = rawLabelsForIntegration(serviceLabels, integration.name);
 
+        const panelProps = {
+          rawLabels,
+          serviceId: id!,
+          onSaved: setServiceLabels,
+          editable: canEditConfig,
+        };
+
         switch (integration.name) {
           case "traefik":
-            return <TraefikPanel key={integration.name} integration={integration} rawLabels={rawLabels} />;
+            return <TraefikPanel key={integration.name} integration={integration} {...panelProps} />;
           case "shepherd":
-            return <ShepherdPanel key={integration.name} integration={integration} rawLabels={rawLabels} />;
+            return <ShepherdPanel key={integration.name} integration={integration} {...panelProps} />;
           case "swarm-cronjob":
-            return <CronjobPanel key={integration.name} integration={integration} rawLabels={rawLabels} />;
+            return <CronjobPanel key={integration.name} integration={integration} {...panelProps} />;
           case "diun":
-            return <DiunPanel key={integration.name} integration={integration} rawLabels={rawLabels} />;
+            return <DiunPanel key={integration.name} integration={integration} {...panelProps} />;
           default:
             return null;
         }
