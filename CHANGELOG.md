@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-03-27
+
+### Fixed
+- Release Docker image running as unprivileged user, preventing Docker socket access
+- Release Docker image healthcheck not detecting Docker connectivity issues
+- Minimal scratch base image for release builds (was alpine)
+
 ## [0.8.1] - 2026-03-27
 
 ### Fixed
