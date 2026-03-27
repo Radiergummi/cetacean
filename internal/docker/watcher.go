@@ -17,7 +17,7 @@ import (
 
 // DockerClient abstracts the Docker API methods used by the Watcher.
 type DockerClient interface {
-	FullSync(ctx context.Context) cache.FullSyncData
+	FullSync(ctx context.Context) (cache.FullSyncData, error)
 	Inspect(ctx context.Context, resourceType events.Type, id string) (any, error)
 	Events(ctx context.Context) (<-chan events.Message, <-chan error)
 	Logs(
@@ -83,9 +83,10 @@ func (w *Watcher) Ready() <-chan struct{} {
 
 // Run starts the watcher. It blocks until the context is cancelled.
 func (w *Watcher) Run(ctx context.Context) {
-	w.fullSync(ctx)
-	w.writeSnapshot()
-	w.syncOnce.Do(func() { close(w.ready) })
+	if err := w.fullSync(ctx); err == nil {
+		w.writeSnapshot()
+		w.syncOnce.Do(func() { close(w.ready) })
+	}
 
 	// Event stream with reconnect
 	for {
@@ -100,8 +101,10 @@ func (w *Watcher) Run(ctx context.Context) {
 		case <-time.After(1 * time.Second):
 		}
 		slog.Info("re-syncing after reconnect")
-		w.fullSync(ctx)
-		w.writeSnapshot()
+		if err := w.fullSync(ctx); err == nil {
+			w.writeSnapshot()
+			w.syncOnce.Do(func() { close(w.ready) })
+		}
 	}
 }
 
@@ -114,10 +117,15 @@ func (w *Watcher) writeSnapshot() {
 	}
 }
 
-func (w *Watcher) fullSync(ctx context.Context) {
+func (w *Watcher) fullSync(ctx context.Context) error {
 	slog.Info("starting full sync")
 
-	data := w.client.FullSync(ctx)
+	data, err := w.client.FullSync(ctx)
+	if err != nil {
+		slog.Error("full sync failed", "error", err)
+		return err
+	}
+
 	w.store.ReplaceAll(data)
 
 	snap := w.store.Snapshot()
@@ -132,6 +140,8 @@ func (w *Watcher) fullSync(ctx context.Context) {
 		"stacks",
 		snap.StackCount,
 	)
+
+	return nil
 }
 
 const (
@@ -223,7 +233,7 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 				w.processBatch(ctx, batch)
 			}
 			slog.Info("periodic full re-sync")
-			w.fullSync(ctx)
+			_ = w.fullSync(ctx)
 			w.writeSnapshot()
 		}
 	}

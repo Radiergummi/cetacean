@@ -255,7 +255,7 @@ func (c *Client) PluginConfigure(ctx context.Context, name string, args []string
 // FullSync fetches all swarm resources in parallel. Individual resource type
 // failures are logged and their Has* flag stays false so the cache preserves
 // existing data for that type.
-func (c *Client) FullSync(ctx context.Context) cache.FullSyncData {
+func (c *Client) FullSync(ctx context.Context) (cache.FullSyncData, error) {
 	type result struct {
 		name string
 		err  error
@@ -342,14 +342,20 @@ func (c *Client) FullSync(ctx context.Context) cache.FullSyncData {
 		return nil
 	})
 
+	var failed int
 	for range 7 {
 		r := <-ch
 		if r.err != nil {
 			slog.Warn("full sync resource failed", "resource", r.name, "error", r.err)
+			failed++
 		}
 	}
 
-	return data
+	if failed == 7 {
+		return data, fmt.Errorf("all resource syncs failed")
+	}
+
+	return data, nil
 }
 
 // Inspect fetches a single resource by its event type and ID. Returns the

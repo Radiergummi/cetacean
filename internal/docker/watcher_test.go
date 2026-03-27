@@ -50,32 +50,50 @@ func (m *mockClient) setNodes(nodes []swarm.Node) {
 	m.mu.Unlock()
 }
 
-func (m *mockClient) FullSync(ctx context.Context) cache.FullSyncData {
+func (m *mockClient) FullSync(ctx context.Context) (cache.FullSyncData, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var data cache.FullSyncData
+	var failed int
 	if m.listErrors["nodes"] == nil {
 		data.Nodes, data.HasNodes = m.nodes, true
+	} else {
+		failed++
 	}
 	if m.listErrors["services"] == nil {
 		data.Services, data.HasServices = m.services, true
+	} else {
+		failed++
 	}
 	if m.listErrors["tasks"] == nil {
 		data.Tasks, data.HasTasks = m.tasks, true
+	} else {
+		failed++
 	}
 	if m.listErrors["configs"] == nil {
 		data.Configs, data.HasConfigs = m.configs, true
+	} else {
+		failed++
 	}
 	if m.listErrors["secrets"] == nil {
 		data.Secrets, data.HasSecrets = m.secrets, true
+	} else {
+		failed++
 	}
 	if m.listErrors["networks"] == nil {
 		data.Networks, data.HasNetworks = m.networks, true
+	} else {
+		failed++
 	}
 	if m.listErrors["volumes"] == nil {
 		data.Volumes, data.HasVolumes = m.volumes, true
+	} else {
+		failed++
 	}
-	return data
+	if failed == 7 {
+		return data, fmt.Errorf("all resource syncs failed")
+	}
+	return data, nil
 }
 
 func (m *mockClient) Inspect(
