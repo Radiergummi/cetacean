@@ -11,6 +11,7 @@ import { getErrorMessage } from "@/lib/utils";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import ResourceName from "@/components/ResourceName";
 
 interface MountsEditorProps {
   serviceId: string;
@@ -429,7 +430,7 @@ export function MountsEditor({ serviceId, mounts, onSaved }: MountsEditorProps) 
                       to={`/volumes/${Source}`}
                       className="font-mono text-link hover:underline"
                     >
-                      {Source}
+                      <ResourceName name={Source} />
                     </Link>
                   ) : (
                     <span className="font-mono">{Source}</span>
