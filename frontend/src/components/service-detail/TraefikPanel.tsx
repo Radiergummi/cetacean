@@ -7,6 +7,7 @@ import type {
 } from "@/api/types";
 import KeyValuePills from "@/components/data/KeyValuePills";
 import { Input } from "@/components/ui/input";
+import { MultiCombobox } from "@/components/ui/multi-combobox";
 import { Switch } from "@/components/ui/switch";
 import { diffLabels } from "@/lib/integrationLabels";
 import { ArrowRight, Lock } from "lucide-react";
@@ -112,8 +113,8 @@ function MiddlewareRow({ middleware }: { middleware: TraefikMiddleware }) {
 interface RouterFormState {
   name: string;
   rule: string;
-  entrypoints: string;
-  middlewares: string;
+  entrypoints: string[];
+  middlewares: string[];
   service: string;
   priority: string;
   certResolver: string;
@@ -154,22 +155,24 @@ function RouterEditCard({
 
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-foreground">Entrypoints</label>
-        <Input
-          value={state.entrypoints}
-          onChange={(event) => onChange({ ...state, entrypoints: event.target.value })}
-          placeholder="websecure, web"
+        <MultiCombobox
+          values={state.entrypoints}
+          onChange={(entrypoints) => onChange({ ...state, entrypoints })}
+          options={[]}
+          placeholder="Add entrypoint..."
         />
-        <p className="text-xs text-muted-foreground">Comma-separated list of entrypoints this router listens on</p>
+        <p className="text-xs text-muted-foreground">Entrypoints this router listens on</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-foreground">Middlewares</label>
-        <Input
-          value={state.middlewares}
-          onChange={(event) => onChange({ ...state, middlewares: event.target.value })}
-          placeholder="auth, compress"
+        <MultiCombobox
+          values={state.middlewares}
+          onChange={(middlewares) => onChange({ ...state, middlewares })}
+          options={[]}
+          placeholder="Add middleware..."
         />
-        <p className="text-xs text-muted-foreground">Comma-separated list of middleware names to apply</p>
+        <p className="text-xs text-muted-foreground">Middleware names to apply to this router</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -291,12 +294,12 @@ function serializeTraefikLabels(
       labels[`${prefix}.rule`] = router.rule;
     }
 
-    if (router.entrypoints.trim()) {
-      labels[`${prefix}.entrypoints`] = router.entrypoints;
+    if (router.entrypoints.length > 0) {
+      labels[`${prefix}.entrypoints`] = router.entrypoints.join(",");
     }
 
-    if (router.middlewares.trim()) {
-      labels[`${prefix}.middlewares`] = router.middlewares;
+    if (router.middlewares.length > 0) {
+      labels[`${prefix}.middlewares`] = router.middlewares.join(",");
     }
 
     if (router.service.trim()) {
@@ -373,8 +376,8 @@ export function TraefikPanel({
       (integration.routers ?? []).map((router) => ({
         name: router.name,
         rule: router.rule ?? "",
-        entrypoints: router.entrypoints?.join(", ") ?? "",
-        middlewares: router.middlewares?.join(", ") ?? "",
+        entrypoints: router.entrypoints ?? [],
+        middlewares: router.middlewares ?? [],
         service: router.service ?? "",
         priority: router.priority ? String(router.priority) : "",
         certResolver: router.tls?.certResolver ?? "",
