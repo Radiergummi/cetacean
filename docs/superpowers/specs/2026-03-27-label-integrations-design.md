@@ -10,6 +10,8 @@ Many swarm ecosystem tools (Traefik, Shepherd, Swarm Cronjob, Diun) are configur
 - **Backend parsing** — the API returns structured integration data so all consumers benefit, not just the UI.
 - **Hardcoded per-tool detectors** — each tool gets its own parser module. The label structures vary too much between tools for a generic config-driven approach to be worthwhile.
 - **One panel per integration** — each detected integration renders as its own `CollapsibleSection` on the service detail page, above the labels section.
+- **HTTP only** — the Traefik parser handles `traefik.http.*` labels. TCP/UDP routers (`traefik.tcp.*`, `traefik.udp.*`) are out of scope for v1 but all `traefik.*` labels are consumed to avoid partial display.
+- **Request-time detection** — `Detect()` runs on each service detail request. Label parsing is cheap; caching at mutation time adds complexity for negligible gain.
 
 ## Backend
 
@@ -20,19 +22,18 @@ Many swarm ecosystem tools (Traefik, Shepherd, Swarm Cronjob, Diun) are configur
 ```go
 // Result holds detected integrations for a service.
 type Result struct {
-    Integrations []Integration     // Detected integrations (omitted from JSON if empty).
+    Integrations []any             // Detected integrations (omitted from JSON if empty).
     Remaining    map[string]string // Labels not claimed by any integration.
 }
+```
 
-// Integration is a detected label-based integration.
-// Each integration type embeds this and adds its own fields.
-type Integration struct {
-    Name string `json:"name"`
-}
+Each integration type is a concrete struct added directly to the `[]any` slice. This matches how `DetailResponse.extra` already works — Go's `encoding/json` serializes the concrete type's fields.
 
-// TraefikIntegration is the Traefik-specific integration result.
+**`traefik.go`** — Traefik types and detector:
+
+```go
 type TraefikIntegration struct {
-    Integration
+    Name        string              `json:"name"`
     Enabled     bool                `json:"enabled"`
     Routers     []TraefikRouter     `json:"routers,omitempty"`
     Services    []TraefikService    `json:"services,omitempty"`
@@ -40,19 +41,24 @@ type TraefikIntegration struct {
 }
 
 type TraefikRouter struct {
-    Name        string            `json:"name"`
-    Rule        string            `json:"rule,omitempty"`
-    Entrypoints []string          `json:"entrypoints,omitempty"`
-    TLS         *TraefikTLS       `json:"tls,omitempty"`
-    Middlewares []string          `json:"middlewares,omitempty"`
-    Service     string            `json:"service,omitempty"`
-    Priority    int               `json:"priority,omitempty"`
+    Name        string      `json:"name"`
+    Rule        string      `json:"rule,omitempty"`
+    Entrypoints []string    `json:"entrypoints,omitempty"`
+    TLS         *TraefikTLS `json:"tls,omitempty"`
+    Middlewares []string    `json:"middlewares,omitempty"`
+    Service     string      `json:"service,omitempty"`
+    Priority    int         `json:"priority,omitempty"`
 }
 
 type TraefikTLS struct {
-    CertResolver string   `json:"certResolver,omitempty"`
-    Domains      []string `json:"domains,omitempty"`
-    Options      string   `json:"options,omitempty"`
+    CertResolver string              `json:"certResolver,omitempty"`
+    Domains      []TraefikTLSDomain  `json:"domains,omitempty"`
+    Options      string              `json:"options,omitempty"`
+}
+
+type TraefikTLSDomain struct {
+    Main string   `json:"main"`
+    SANs []string `json:"sans,omitempty"`
 }
 
 type TraefikService struct {
@@ -68,13 +74,14 @@ type TraefikMiddleware struct {
 }
 ```
 
-**`Detect(labels map[string]string) Result`** — Runs all registered detectors. Returns detected integrations and remaining (unconsumed) labels.
+`TraefikService` is a simplified representation covering the common `loadbalancer.server.port` and `loadbalancer.server.scheme` cases. Advanced LB settings (sticky sessions, passHostHeader, weighted services) are not parsed in v1. `TraefikMiddleware.Config` flattens middleware-specific settings into a string map, which loses nesting for complex middlewares (e.g., headers with multiple sub-keys) — acceptable for a read-only display.
 
-**`traefik.go`** — Traefik detector:
-- Matches labels prefixed with `traefik.`.
-- Parses the dot-notation hierarchy into typed objects: routers, services, middlewares.
-- `traefik.enable` maps to the `enabled` field.
-- Returns consumed label keys so they can be excluded from remaining labels.
+The Traefik detector:
+- Consumes all labels prefixed with `traefik.` (including TCP/UDP labels that are not parsed into typed objects).
+- Parses `traefik.http.*` into routers, services, and middlewares.
+- Maps `traefik.enable` to the `enabled` field.
+
+**`Detect(labels map[string]string) Result`** — Runs all registered detectors. Returns detected integrations and remaining (unconsumed) labels.
 
 ### Response shape
 
@@ -86,7 +93,6 @@ The service detail endpoint adds an `integrations` field:
   "@id": "/services/abc",
   "@type": "Service",
   "service": { "Spec": { "Labels": { "all": "raw labels still here" } } },
-  "services": [],
   "integrations": [
     {
       "name": "traefik",
@@ -113,24 +119,30 @@ The service detail endpoint adds an `integrations` field:
 ```
 
 - `integrations` is omitted when no integrations are detected (not an empty array).
-- Raw labels in `service.Spec.Labels` are unchanged — the frontend filters consumed keys by prefix.
+- Raw labels in `service.Spec.Labels` are unchanged — the frontend filters consumed keys from the labels editor.
+- SSE: integrations are computed at request time, so SSE change events trigger a re-fetch which re-runs detection. No SSE-specific changes needed.
 
 ### Integration point
 
 In the service detail handler (`api/handlers.go`), after fetching the service from cache, call `integrations.Detect(service.Spec.Labels)`. Add the result's `Integrations` slice to the detail response extras.
 
-For list endpoints: no change. Integrations are only computed for detail views.
+For list endpoints and stack detail: no change. Integrations are only computed for service detail views.
 
 ## Frontend
 
 ### Types (`api/types.ts`)
 
 ```typescript
+interface TraefikTLSDomain {
+  main: string;
+  sans?: string[];
+}
+
 interface TraefikRouter {
   name: string;
   rule?: string;
   entrypoints?: string[];
-  tls?: { certResolver?: string; domains?: string[]; options?: string };
+  tls?: { certResolver?: string; domains?: TraefikTLSDomain[]; options?: string };
   middlewares?: string[];
   service?: string;
   priority?: number;
@@ -191,16 +203,16 @@ function IntegrationPanel({ integration }: { integration: Integration }) {
 
 ### Label filtering
 
-The frontend filters consumed keys by prefix rather than receiving a consumed-keys list from the backend. This keeps the API simpler — the presence of an integration with `name: "traefik"` implies all `traefik.*` labels are consumed. This is a correct assumption for prefix-based integrations.
+The frontend filters consumed keys by prefix (`traefik.`). This is safe because the backend consumes all `traefik.*` labels (including unparsed TCP/UDP ones), so no information is lost — the integration panel shows the parsed HTTP config, and no `traefik.*` labels remain in the "remaining" set.
 
 ## OpenAPI
 
-Add the integration types to `api/openapi.yaml` under the service detail response schema.
+Add the integration types to `api/openapi.yaml` under the service detail response schema. Use `name` as the discriminator field for the integration union type.
 
 ## Testing
 
 ### Backend
-- `internal/integrations/traefik_test.go` — Table-driven tests: typical label sets, edge cases (no traefik labels, `traefik.enable=false` only, routers without services, middlewares with no matching type, multiple routers).
+- `internal/integrations/traefik_test.go` — Table-driven tests: typical label sets, edge cases (no traefik labels, `traefik.enable=false` only, routers without services, middlewares with no matching type, multiple routers, TCP/UDP labels consumed but not parsed).
 - `internal/integrations/integrations_test.go` — `Detect()` tests: no integrations, single integration, remaining labels correct.
 - Service detail handler test: verify `integrations` appears when Traefik labels are present, omitted when absent.
 
