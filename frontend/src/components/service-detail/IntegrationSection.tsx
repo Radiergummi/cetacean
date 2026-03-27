@@ -75,10 +75,6 @@ export function IntegrationSection({
   }
 
   function toggleRaw() {
-    if (editing) {
-      setEditing(false);
-    }
-
     setShowRaw((previous) => !previous);
   }
 
@@ -104,7 +100,7 @@ export function IntegrationSection({
             {showRaw ? "Structured" : "Labels"}
           </Button>
 
-          {editable && !editing && !showRaw && (
+          {editable && !editing && (
             <Button variant="outline" size="xs" onClick={startEditing}>
               <Pencil className="size-3" />
               Edit
@@ -120,6 +116,7 @@ export function IntegrationSection({
           entries={Object.fromEntries(rawLabels)}
           defaultOpen
           editDisabled={!editable}
+          defaultEditing={editing}
           onSave={async (ops) => {
             const updated = await api.patchServiceLabels(serviceId!, ops);
             onRawSave?.(updated);

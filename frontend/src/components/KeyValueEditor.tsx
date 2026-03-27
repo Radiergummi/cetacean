@@ -25,6 +25,8 @@ interface KeyValueEditorProps {
   validateKey?: (key: string) => string | null;
   /** Render without CollapsibleSection wrapper. */
   bare?: boolean;
+  /** Start in edit mode. */
+  defaultEditing?: boolean;
 }
 
 export function KeyValueEditor({
@@ -43,6 +45,7 @@ export function KeyValueEditor({
   isKeyReadOnly,
   validateKey,
   bare = false,
+  defaultEditing = false,
 }: KeyValueEditorProps) {
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("");
@@ -63,6 +66,7 @@ export function KeyValueEditor({
       defaultOpen={defaultOpen}
       editDisabled={editDisabled}
       bare={bare}
+      defaultEditing={defaultEditing}
       emptyLabel={`No ${title.toLowerCase()}`}
       emptyHint="Click Edit to add entries."
       keyFn={([key]) => key}

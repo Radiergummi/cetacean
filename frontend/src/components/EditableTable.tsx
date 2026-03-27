@@ -16,6 +16,8 @@ interface EditableTableProps<T> {
   editDisabled?: boolean;
   /** Render without CollapsibleSection wrapper (no title, no collapse toggle). */
   bare?: boolean;
+  /** Start in edit mode. */
+  defaultEditing?: boolean;
 
   // Read-only view
   renderReadOnly: (items: T[]) => ReactNode;
@@ -51,6 +53,7 @@ export function EditableTable<T>({
   defaultOpen = false,
   editDisabled = false,
   bare = false,
+  defaultEditing = false,
   renderReadOnly,
   emptyLabel,
   emptyHint,
@@ -67,10 +70,10 @@ export function EditableTable<T>({
   onSave,
   onEditStart,
 }: EditableTableProps<T>) {
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(defaultEditing);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [draft, setDraft] = useState<T[]>([]);
+  const [draft, setDraft] = useState<T[]>(defaultEditing ? [...items] : []);
   const [adding, setAdding] = useState(false);
 
   useEscapeCancel(editing, () => cancelEdit());
