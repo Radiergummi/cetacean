@@ -11,10 +11,21 @@ const badgeBase = "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-
 const badgeBlue = `${badgeBase} bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300`;
 const badgePurple = `${badgeBase} bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300`;
 
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+        {title}
+      </span>
+      {children}
+    </div>
+  );
+}
+
 function RouterCard({ router }: { router: TraefikRouter }) {
   return (
-    <span className="inline-flex flex-col gap-1.5 rounded-lg border px-3 py-2 text-sm">
-      <span className="flex items-center gap-2 flex-wrap">
+    <div className="inline-flex flex-col gap-1.5 rounded-lg border px-3 py-2 text-sm">
+      <span className="flex flex-wrap items-center gap-2">
         <span className="font-bold">{router.name}</span>
 
         {router.tls && (
@@ -46,13 +57,13 @@ function RouterCard({ router }: { router: TraefikRouter }) {
           &rarr; {router.service}
         </span>
       )}
-    </span>
+    </div>
   );
 }
 
 function ServiceRow({ service }: { service: TraefikService }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+    <div className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
       <span className="font-bold">{service.name}</span>
 
       {service.port != null && (
@@ -62,7 +73,7 @@ function ServiceRow({ service }: { service: TraefikService }) {
       {service.scheme && (
         <span className={badgeBlue}>{service.scheme}</span>
       )}
-    </span>
+    </div>
   );
 }
 
@@ -87,52 +98,47 @@ function MiddlewareRow({ middleware }: { middleware: TraefikMiddleware }) {
 export function TraefikPanel({ integration }: TraefikPanelProps) {
   const { enabled, routers, services, middlewares } = integration;
 
-  const hasRouters = routers && routers.length > 0;
-  const hasServices = services && services.length > 0;
-  const hasMiddlewares = middlewares && middlewares.length > 0;
+  if (!enabled) {
+    return (
+      <CollapsibleSection title="Traefik" defaultOpen={false}>
+        <span className="text-sm text-muted-foreground">Disabled</span>
+      </CollapsibleSection>
+    );
+  }
 
   return (
-    <CollapsibleSection title="Traefik" defaultOpen={enabled}>
-      {!enabled && (
-        <span className="text-sm text-muted-foreground">Disabled</span>
-      )}
-
-      {enabled && (
-        <div className="flex flex-col gap-4">
-          {hasRouters && (
-            <div className="flex flex-col gap-2">
-              <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase">Routers</span>
-              <div className="flex flex-wrap gap-2">
-                {routers.map((router) => (
-                  <RouterCard key={router.name} router={router} />
-                ))}
-              </div>
+    <CollapsibleSection title="Traefik" defaultOpen>
+      <div className="flex flex-col gap-4">
+        {!!routers?.length && (
+          <Section title="Routers">
+            <div className="flex flex-wrap gap-2">
+              {routers.map((router) => (
+                <RouterCard key={router.name} router={router} />
+              ))}
             </div>
-          )}
+          </Section>
+        )}
 
-          {hasServices && (
-            <div className="flex flex-col gap-2">
-              <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase">Services</span>
-              <div className="flex flex-wrap gap-2">
-                {services.map((service) => (
-                  <ServiceRow key={service.name} service={service} />
-                ))}
-              </div>
+        {!!services?.length && (
+          <Section title="Services">
+            <div className="flex flex-wrap gap-2">
+              {services.map((service) => (
+                <ServiceRow key={service.name} service={service} />
+              ))}
             </div>
-          )}
+          </Section>
+        )}
 
-          {hasMiddlewares && (
+        {!!middlewares?.length && (
+          <Section title="Middlewares">
             <div className="flex flex-col gap-2">
-              <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase">Middlewares</span>
-              <div className="flex flex-col gap-2">
-                {middlewares.map((middleware) => (
-                  <MiddlewareRow key={middleware.name} middleware={middleware} />
-                ))}
-              </div>
+              {middlewares.map((middleware) => (
+                <MiddlewareRow key={middleware.name} middleware={middleware} />
+              ))}
             </div>
-          )}
-        </div>
-      )}
+          </Section>
+        )}
+      </div>
     </CollapsibleSection>
   );
 }

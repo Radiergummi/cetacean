@@ -166,29 +166,32 @@ func getOrCreateMiddleware(m map[string]*TraefikMiddleware, name string) *Traefi
 }
 
 func parseRouterField(r *TraefikRouter, field, value string) {
-	switch {
-	case field == "rule":
+	if strings.HasPrefix(field, "tls.domains[") {
+		parseTLSDomain(r, field, value)
+		return
+	}
+
+	switch field {
+	case "rule":
 		r.Rule = value
-	case field == "entrypoints":
+	case "entrypoints":
 		r.Entrypoints = splitComma(value)
-	case field == "middlewares":
+	case "middlewares":
 		r.Middlewares = splitComma(value)
-	case field == "service":
+	case "service":
 		r.Service = value
-	case field == "priority":
+	case "priority":
 		if n, err := strconv.Atoi(value); err == nil {
 			r.Priority = n
 		}
-	case field == "tls":
+	case "tls":
 		ensureTLS(r)
-	case field == "tls.certresolver":
+	case "tls.certresolver":
 		ensureTLS(r)
 		r.TLS.CertResolver = value
-	case field == "tls.options":
+	case "tls.options":
 		ensureTLS(r)
 		r.TLS.Options = value
-	case strings.HasPrefix(field, "tls.domains["):
-		parseTLSDomain(r, field, value)
 	}
 }
 
