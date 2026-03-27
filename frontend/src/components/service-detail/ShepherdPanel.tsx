@@ -1,7 +1,6 @@
 import { api } from "@/api/client";
 import type { ShepherdIntegration } from "@/api/types";
 import { KVTable } from "@/components/data";
-import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { diffLabels } from "@/lib/integrationLabels";
@@ -57,22 +56,22 @@ export function ShepherdPanel({
 
   const editForm = (
     <div className="space-y-3">
-      <label className="flex items-center gap-2">
-        <Switch checked={formEnabled} onCheckedChange={setFormEnabled} />
-        <span className="text-xs font-medium text-foreground">Enabled</span>
-        <HelpTooltip text="Enable automatic image updates for this service" />
-      </label>
+      <div className="flex flex-col gap-1.5">
+        <label className="flex items-center gap-2">
+          <Switch checked={formEnabled} onCheckedChange={setFormEnabled} />
+          <span className="text-xs font-medium text-foreground">Enabled</span>
+        </label>
+        <p className="text-xs text-muted-foreground">Enable automatic image updates for this service</p>
+      </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-          Auth config
-          <HelpTooltip text="Registry auth configuration ID from the registries auth file" />
-        </label>
+        <label className="text-xs font-medium text-foreground">Auth config</label>
         <Input
           value={formAuthConfig}
           onChange={(event) => setFormAuthConfig(event.target.value)}
           placeholder="registry:credentials"
         />
+        <p className="text-xs text-muted-foreground">Registry auth configuration ID from the registries auth file</p>
       </div>
     </div>
   );

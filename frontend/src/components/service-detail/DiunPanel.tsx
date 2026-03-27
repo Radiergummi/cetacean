@@ -2,7 +2,6 @@ import { api } from "@/api/client";
 import type { DiunIntegration } from "@/api/types";
 import { KVTable } from "@/components/data";
 import KeyValuePills from "@/components/data/KeyValuePills";
-import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { diffLabels } from "@/lib/integrationLabels";
@@ -179,35 +178,34 @@ export function DiunPanel({
 
   const editForm = (
     <div className="space-y-3">
-      <label className="flex items-center gap-2">
-        <Switch checked={formEnabled} onCheckedChange={setFormEnabled} />
-        <span className="text-xs font-medium text-foreground">Enabled</span>
-        <HelpTooltip text="Enable Diun image update monitoring for this service" />
-      </label>
+      <div className="flex flex-col gap-1.5">
+        <label className="flex items-center gap-2">
+          <Switch checked={formEnabled} onCheckedChange={setFormEnabled} />
+          <span className="text-xs font-medium text-foreground">Enabled</span>
+        </label>
+        <p className="text-xs text-muted-foreground">Enable Diun image update monitoring for this service</p>
+      </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-          Registry options
-          <HelpTooltip text="Registry options name from Diun configuration to use for image analysis" />
-        </label>
+        <label className="text-xs font-medium text-foreground">Registry options</label>
         <Input
           value={formRegopt}
           onChange={(event) => setFormRegopt(event.target.value)}
           placeholder="my-registry"
         />
+        <p className="text-xs text-muted-foreground">Registry options name from Diun configuration</p>
       </div>
 
-      <label className="flex items-center gap-2">
-        <Switch checked={formWatchRepo} onCheckedChange={setFormWatchRepo} />
-        <span className="text-xs font-medium text-foreground">Watch repo</span>
-        <HelpTooltip text="Watch all tags in the image repository, not just the deployed tag" />
-      </label>
+      <div className="flex flex-col gap-1.5">
+        <label className="flex items-center gap-2">
+          <Switch checked={formWatchRepo} onCheckedChange={setFormWatchRepo} />
+          <span className="text-xs font-medium text-foreground">Watch repo</span>
+        </label>
+        <p className="text-xs text-muted-foreground">Watch all tags in the image repository, not just the deployed tag</p>
+      </div>
 
       <div className="flex flex-col gap-1.5">
-        <span className="flex items-center gap-1 text-xs font-medium text-foreground">
-          Notify on
-          <HelpTooltip text="When to send notifications: on new images, updated tags, or both" />
-        </span>
+        <span className="text-xs font-medium text-foreground">Notify on</span>
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-1.5 text-xs">
             <Switch checked={formNotifyNew} onCheckedChange={setFormNotifyNew} />
@@ -218,13 +216,11 @@ export function DiunPanel({
             Updated tag
           </label>
         </div>
+        <p className="text-xs text-muted-foreground">When to send notifications</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-          Sort tags
-          <HelpTooltip text="How to sort tags when watch_repo is enabled" />
-        </label>
+        <label className="text-xs font-medium text-foreground">Sort tags</label>
         <select
           className="h-8 w-full rounded-md border bg-background px-2 text-sm"
           value={formSortTags}
@@ -235,13 +231,11 @@ export function DiunPanel({
             <option key={option} value={option}>{option}</option>
           ))}
         </select>
+        <p className="text-xs text-muted-foreground">How to sort tags when watch repo is enabled</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-          Max tags
-          <HelpTooltip text="Maximum number of tags to watch (0 = unlimited)" />
-        </label>
+        <label className="text-xs font-medium text-foreground">Max tags</label>
         <Input
           type="number"
           className="w-24"
@@ -249,56 +243,49 @@ export function DiunPanel({
           value={formMaxTags}
           onChange={(event) => setFormMaxTags(Number(event.target.value))}
         />
+        <p className="text-xs text-muted-foreground">Maximum number of tags to watch (0 = unlimited)</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-          Include tags
-          <HelpTooltip text="Regular expression to filter which tags to include" />
-        </label>
+        <label className="text-xs font-medium text-foreground">Include tags</label>
         <Input
           className="font-mono"
           value={formIncludeTags}
           onChange={(event) => setFormIncludeTags(event.target.value)}
           placeholder="^v[0-9]"
         />
+        <p className="text-xs text-muted-foreground">Regular expression to filter which tags to include</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-          Exclude tags
-          <HelpTooltip text="Regular expression to filter which tags to exclude" />
-        </label>
+        <label className="text-xs font-medium text-foreground">Exclude tags</label>
         <Input
           className="font-mono"
           value={formExcludeTags}
           onChange={(event) => setFormExcludeTags(event.target.value)}
           placeholder="^latest$"
         />
+        <p className="text-xs text-muted-foreground">Regular expression to filter which tags to exclude</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-          Hub link
-          <HelpTooltip text="Override the automatic registry hub link for notifications" />
-        </label>
+        <label className="text-xs font-medium text-foreground">Hub link</label>
         <Input
           value={formHubLink}
           onChange={(event) => setFormHubLink(event.target.value)}
           placeholder="https://hub.example.com"
         />
+        <p className="text-xs text-muted-foreground">Override the automatic registry hub link for notifications</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-          Platform
-          <HelpTooltip text="Platform to use for image analysis (e.g., linux/amd64)" />
-        </label>
+        <label className="text-xs font-medium text-foreground">Platform</label>
         <Input
           value={formPlatform}
           onChange={(event) => setFormPlatform(event.target.value)}
           placeholder="linux/amd64"
         />
+        <p className="text-xs text-muted-foreground">Platform to use for image analysis</p>
       </div>
 
       <div className="flex flex-col gap-1.5">

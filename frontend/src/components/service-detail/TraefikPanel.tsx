@@ -9,7 +9,6 @@ import KeyValuePills from "@/components/data/KeyValuePills";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { diffLabels } from "@/lib/integrationLabels";
-import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { ArrowRight, Lock } from "lucide-react";
 import { useState } from "react";
 import { IntegrationSection } from "./IntegrationSection";
@@ -144,75 +143,63 @@ function RouterEditCard({
       <header className="font-medium text-muted-foreground">{state.name}</header>
 
       <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-          Rule
-          <HelpTooltip text="Routing rule expression (e.g., Host(`example.com`) && PathPrefix(`/api`))" />
-        </label>
+        <label className="text-xs font-medium text-foreground">Rule</label>
         <Input
           className="font-mono"
           value={state.rule}
           onChange={(event) => onChange({ ...state, rule: event.target.value })}
         />
+        <p className="text-xs text-muted-foreground">Routing rule expression, e.g. Host(`example.com`)</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-          Entrypoints
-          <HelpTooltip text="Comma-separated list of entrypoints this router listens on" />
-        </label>
+        <label className="text-xs font-medium text-foreground">Entrypoints</label>
         <Input
           value={state.entrypoints}
           onChange={(event) => onChange({ ...state, entrypoints: event.target.value })}
           placeholder="websecure, web"
         />
+        <p className="text-xs text-muted-foreground">Comma-separated list of entrypoints this router listens on</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-          Middlewares
-          <HelpTooltip text="Comma-separated list of middleware names to apply" />
-        </label>
+        <label className="text-xs font-medium text-foreground">Middlewares</label>
         <Input
           value={state.middlewares}
           onChange={(event) => onChange({ ...state, middlewares: event.target.value })}
           placeholder="auth, compress"
         />
+        <p className="text-xs text-muted-foreground">Comma-separated list of middleware names to apply</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-          Service
-          <HelpTooltip text="Backend Traefik service to forward requests to" />
-        </label>
+        <label className="text-xs font-medium text-foreground">Service</label>
         <Input
           value={state.service}
           onChange={(event) => onChange({ ...state, service: event.target.value })}
         />
+        <p className="text-xs text-muted-foreground">Backend Traefik service to forward requests to</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-          Priority
-          <HelpTooltip text="Router priority — higher values win on rule conflicts" />
-        </label>
+        <label className="text-xs font-medium text-foreground">Priority</label>
         <Input
           type="number"
           className="w-24"
           value={state.priority}
           onChange={(event) => onChange({ ...state, priority: event.target.value })}
         />
+        <p className="text-xs text-muted-foreground">Higher values win on rule conflicts</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-          TLS cert resolver
-          <HelpTooltip text="Certificate resolver for automatic TLS (e.g., letsencrypt)" />
-        </label>
+        <label className="text-xs font-medium text-foreground">TLS cert resolver</label>
         <Input
           value={state.certResolver}
           onChange={(event) => onChange({ ...state, certResolver: event.target.value })}
           placeholder="letsencrypt"
         />
+        <p className="text-xs text-muted-foreground">Certificate resolver for automatic TLS</p>
       </div>
     </article>
   );
@@ -230,29 +217,25 @@ function ServiceEditCard({
       <header className="font-medium text-muted-foreground">{state.name}</header>
 
       <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-          Port
-          <HelpTooltip text="Backend server port for load balancing" />
-        </label>
+        <label className="text-xs font-medium text-foreground">Port</label>
         <Input
           type="number"
           className="w-24"
           value={state.port}
           onChange={(event) => onChange({ ...state, port: event.target.value })}
         />
+        <p className="text-xs text-muted-foreground">Backend server port for load balancing</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-          Scheme
-          <HelpTooltip text="Backend protocol (http, https, or h2c)" />
-        </label>
+        <label className="text-xs font-medium text-foreground">Scheme</label>
         <Input
           className="w-32"
           value={state.scheme}
           onChange={(event) => onChange({ ...state, scheme: event.target.value })}
           placeholder="http"
         />
+        <p className="text-xs text-muted-foreground">Backend protocol (http, https, or h2c)</p>
       </div>
     </article>
   );
@@ -442,12 +425,12 @@ export function TraefikPanel({
 
   const editForm = (
     <div className="grid gap-4 lg:grid-cols-3">
-      <div className="lg:col-span-3">
+      <div className="flex flex-col gap-1.5 lg:col-span-3">
         <label className="flex items-center gap-2">
           <Switch checked={formEnabled} onCheckedChange={setFormEnabled} />
           <span className="text-xs font-medium text-foreground">Enabled</span>
-          <HelpTooltip text="Enable Traefik routing for this service" />
         </label>
+        <p className="text-xs text-muted-foreground">Enable Traefik routing for this service</p>
       </div>
 
       {routerForms.length > 0 && (

@@ -1,7 +1,6 @@
 import { api } from "@/api/client";
 import type { CronjobIntegration } from "@/api/types";
 import { KVTable } from "@/components/data";
-import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { diffLabels } from "@/lib/integrationLabels";
@@ -102,37 +101,39 @@ export function CronjobPanel({
 
   const editForm = (
     <div className="space-y-3">
-      <label className="flex items-center gap-2">
-        <Switch checked={formEnabled} onCheckedChange={setFormEnabled} />
-        <span className="text-xs font-medium text-foreground">Enabled</span>
-        <HelpTooltip text="Enable cron-based scheduling for this service" />
-      </label>
+      <div className="flex flex-col gap-1.5">
+        <label className="flex items-center gap-2">
+          <Switch checked={formEnabled} onCheckedChange={setFormEnabled} />
+          <span className="text-xs font-medium text-foreground">Enabled</span>
+        </label>
+        <p className="text-xs text-muted-foreground">Enable cron-based scheduling for this service</p>
+      </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-          Schedule
-          <HelpTooltip text="CRON expression defining when the job runs (e.g., '*/5 * * * *' for every 5 minutes)" />
-        </label>
+        <label className="text-xs font-medium text-foreground">Schedule</label>
         <Input
           className="font-mono"
           value={formSchedule}
           onChange={(event) => setFormSchedule(event.target.value)}
           placeholder="*/5 * * * *"
         />
-        {cronError && <span className="text-xs text-destructive">{cronError}</span>}
+        {cronError ? (
+          <p className="text-xs text-destructive">{cronError}</p>
+        ) : (
+          <p className="text-xs text-muted-foreground">CRON expression defining when the job runs</p>
+        )}
       </div>
 
-      <label className="flex items-center gap-2">
-        <Switch checked={formSkipRunning} onCheckedChange={setFormSkipRunning} />
-        <span className="text-xs font-medium text-foreground">Skip running</span>
-        <HelpTooltip text="Skip execution if the previous run is still active" />
-      </label>
+      <div className="flex flex-col gap-1.5">
+        <label className="flex items-center gap-2">
+          <Switch checked={formSkipRunning} onCheckedChange={setFormSkipRunning} />
+          <span className="text-xs font-medium text-foreground">Skip running</span>
+        </label>
+        <p className="text-xs text-muted-foreground">Skip execution if the previous run is still active</p>
+      </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-          Replicas
-          <HelpTooltip text="Number of replicas to start on each scheduled run" />
-        </label>
+        <label className="text-xs font-medium text-foreground">Replicas</label>
         <Input
           type="number"
           className="w-24"
@@ -140,19 +141,24 @@ export function CronjobPanel({
           value={formReplicas}
           onChange={(event) => setFormReplicas(Number(event.target.value))}
         />
+        <p className="text-xs text-muted-foreground">Number of replicas to start on each scheduled run</p>
       </div>
 
-      <label className="flex items-center gap-2">
-        <Switch checked={formRegistryAuth} onCheckedChange={setFormRegistryAuth} />
-        <span className="text-xs font-medium text-foreground">Registry auth</span>
-        <HelpTooltip text="Send registry authentication credentials to Swarm agents" />
-      </label>
+      <div className="flex flex-col gap-1.5">
+        <label className="flex items-center gap-2">
+          <Switch checked={formRegistryAuth} onCheckedChange={setFormRegistryAuth} />
+          <span className="text-xs font-medium text-foreground">Registry auth</span>
+        </label>
+        <p className="text-xs text-muted-foreground">Send registry authentication credentials to Swarm agents</p>
+      </div>
 
-      <label className="flex items-center gap-2">
-        <Switch checked={formQueryRegistry} onCheckedChange={setFormQueryRegistry} />
-        <span className="text-xs font-medium text-foreground">Query registry</span>
-        <HelpTooltip text="Contact the registry when updating the service" />
-      </label>
+      <div className="flex flex-col gap-1.5">
+        <label className="flex items-center gap-2">
+          <Switch checked={formQueryRegistry} onCheckedChange={setFormQueryRegistry} />
+          <span className="text-xs font-medium text-foreground">Query registry</span>
+        </label>
+        <p className="text-xs text-muted-foreground">Contact the registry when updating the service</p>
+      </div>
     </div>
   );
 
