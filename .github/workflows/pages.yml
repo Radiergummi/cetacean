@@ -31,8 +31,10 @@ jobs:
           title: Changelog
           ---
 
+          {% raw %}
           FRONT
           cat CHANGELOG.md >> docs/changelog.md
+          echo '{% endraw %}' >> docs/changelog.md
 
       - uses: actions/configure-pages@v5
 
