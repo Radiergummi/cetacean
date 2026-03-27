@@ -223,6 +223,7 @@ function ServiceEditCard({
         value={state.port}
         onChange={(port) => onChange({ ...state, port })}
         min={1}
+        format={{ useGrouping: false }}
       />
       <p className="text-xs text-muted-foreground">Backend server port for load balancing</p>
 

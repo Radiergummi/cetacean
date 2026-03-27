@@ -16,6 +16,8 @@ interface NumberFieldProps {
   label: React.ReactNode;
   tooltip?: string;
   clearable?: boolean;
+  /** Intl.NumberFormat options (e.g. { useGrouping: false } to disable thousands separators). */
+  format?: Intl.NumberFormatOptions;
 }
 
 export function NumberField({
@@ -27,6 +29,7 @@ export function NumberField({
   label,
   tooltip,
   clearable,
+  format,
 }: NumberFieldProps) {
   // Track the slider value separately so that clearing the number input
   // (which sends undefined) doesn't snap the slider back to min.
@@ -90,6 +93,7 @@ export function NumberField({
           allowWheelScrub
           min={min}
           max={max}
+          format={format}
           step={step}
           className="min-w-0 flex-1"
         >
