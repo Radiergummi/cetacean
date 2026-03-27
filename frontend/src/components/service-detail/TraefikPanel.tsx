@@ -190,7 +190,6 @@ function RouterEditCard({
         value={state.priority}
         onChange={(priority) => onChange({ ...state, priority })}
         min={0}
-        clearable
       />
       <p className="text-xs text-muted-foreground">Higher values win on rule conflicts</p>
 

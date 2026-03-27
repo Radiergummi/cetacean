@@ -240,7 +240,6 @@ export function DiunPanel({
         value={formMaxTags || undefined}
         onChange={(value) => setFormMaxTags(value ?? 0)}
         min={0}
-        clearable
       />
       <p className="text-xs text-muted-foreground">Maximum number of tags to watch (0 = unlimited)</p>
 
