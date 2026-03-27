@@ -1,6 +1,9 @@
 import type { CronjobIntegration } from "@/api/types";
 import { KVTable } from "@/components/data";
+import { CronSchedule } from "./CronSchedule";
 import { IntegrationSection } from "./IntegrationSection";
+
+const docsUrl = "https://github.com/crazy-max/swarm-cronjob#usage";
 
 /**
  * Read-only panel displaying parsed Swarm Cronjob configuration.
@@ -15,7 +18,7 @@ export function CronjobPanel({
   const { enabled, schedule, skipRunning, replicas } = integration;
 
   return (
-    <IntegrationSection title="Swarm Cronjob" defaultOpen={enabled} rawLabels={rawLabels}>
+    <IntegrationSection title="Swarm Cronjob" defaultOpen={enabled} rawLabels={rawLabels} docsUrl={docsUrl}>
       {!enabled && (
         <p className="text-sm text-muted-foreground">Disabled</p>
       )}
@@ -23,7 +26,7 @@ export function CronjobPanel({
       {enabled && (
         <KVTable
           rows={[
-            schedule && ["Schedule", schedule],
+            schedule && ["Schedule", <CronSchedule key="schedule" expression={schedule} />],
             replicas != null && replicas > 0 && ["Replicas", String(replicas)],
             skipRunning && ["Skip running", "Skip if previous run still active"],
           ]}

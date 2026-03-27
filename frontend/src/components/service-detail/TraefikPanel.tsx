@@ -8,6 +8,8 @@ import KeyValuePills from "@/components/data/KeyValuePills";
 import { ArrowRight, Lock } from "lucide-react";
 import { IntegrationSection } from "./IntegrationSection";
 
+const docsUrl = "https://doc.traefik.io/traefik/providers/swarm/#routing-configuration-with-labels";
+
 interface TraefikPanelProps {
   integration: TraefikIntegration;
   rawLabels: [string, string][];
@@ -114,7 +116,7 @@ export function TraefikPanel({ integration, rawLabels }: TraefikPanelProps) {
   const hasMiddlewares = middlewares && middlewares.length > 0;
 
   return (
-    <IntegrationSection title="Traefik" defaultOpen={enabled} rawLabels={rawLabels}>
+    <IntegrationSection title="Traefik" defaultOpen={enabled} rawLabels={rawLabels} docsUrl={docsUrl}>
       {!enabled && (
         <p className="text-sm text-muted-foreground">Disabled</p>
       )}
