@@ -239,8 +239,9 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 				w.processBatch(ctx, batch)
 			}
 			slog.Info("periodic full re-sync")
-			_ = w.fullSync(ctx)
-			w.writeSnapshot()
+			if err := w.fullSync(ctx); err == nil {
+				w.writeSnapshot()
+			}
 		}
 	}
 }
