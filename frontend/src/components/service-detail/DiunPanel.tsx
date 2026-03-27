@@ -179,15 +179,15 @@ export function DiunPanel({
 
   const editForm = (
     <div className="space-y-3">
-      <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-2">
-          <Switch checked={formEnabled} onCheckedChange={setFormEnabled} />
-          <span className="text-xs font-medium text-foreground">Enabled</span>
-        </label>
-        <p className="text-xs text-muted-foreground">Enable Diun image update monitoring for this service</p>
-      </div>
+      <div className="flex flex-wrap gap-x-6 gap-y-3">
+        <div className="flex flex-col gap-1.5">
+          <label className="flex items-center gap-2">
+            <Switch checked={formEnabled} onCheckedChange={setFormEnabled} />
+            <span className="text-xs font-medium text-foreground">Enabled</span>
+          </label>
+          <p className="text-xs text-muted-foreground">Enable Diun image update monitoring</p>
+        </div>
 
-      <div className="grid items-start gap-x-4 gap-y-3 lg:grid-cols-3">
         <div className="flex flex-col gap-1.5">
           <label className="flex items-center gap-2">
             <Switch checked={formWatchRepo} onCheckedChange={setFormWatchRepo} />
@@ -195,6 +195,9 @@ export function DiunPanel({
           </label>
           <p className="text-xs text-muted-foreground">Watch all tags, not just the deployed tag</p>
         </div>
+      </div>
+
+      <div className="grid items-start gap-x-4 gap-y-3 lg:grid-cols-3">
 
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-foreground">Notify on</span>
