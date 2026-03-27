@@ -13,10 +13,12 @@ import { useState } from "react";
  * the structured view and raw label display, plus a docs link.
  * Supports inline editing in both structured and raw modes.
  *
- * Structured mode uses IntegrationSection-managed edit state
- * (Edit/Save/Cancel in the header and footer). Raw mode delegates
- * entirely to KeyValueEditor's built-in edit lifecycle.
- * Toggling between modes cancels any active structured edit.
+ * A single `editing` flag controls both modes. Toggling between
+ * structured and raw preserves the editing state. In raw edit mode,
+ * the KeyValueEditor is mounted with `defaultEditing=true` and
+ * `editDisabled` so IntegrationSection's own Save/Cancel are not
+ * needed — KVEditor handles its own save. On KVEditor save/cancel,
+ * it resets `editing` via the callbacks.
  */
 export function IntegrationSection({
   title,
@@ -51,7 +53,7 @@ export function IntegrationSection({
     setEditing(false);
   }
 
-  useEscapeCancel(editing, cancel);
+  useEscapeCancel(editing && !showRaw, cancel);
 
   async function save() {
     if (!onSave) {
@@ -75,14 +77,6 @@ export function IntegrationSection({
     setEditing(true);
   }
 
-  function toggleRaw() {
-    if (editing) {
-      setEditing(false);
-    }
-
-    setShowRaw((previous) => !previous);
-  }
-
   return (
     <CollapsibleSection
       title={title}
@@ -100,12 +94,24 @@ export function IntegrationSection({
             <ExternalLink className="size-3" />
           </a>
 
-          <Button variant="outline" size="xs" onClick={toggleRaw}>
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={() => {
+              setShowRaw((previous) => {
+                if (editing && previous) {
+                  onEditStart?.();
+                }
+
+                return !previous;
+              });
+            }}
+          >
             {showRaw ? <Layers className="size-3" /> : <Code className="size-3" />}
             {showRaw ? "Structured" : "Labels"}
           </Button>
 
-          {editable && !showRaw && !editing && (
+          {editable && !editing && (
             <Button variant="outline" size="xs" onClick={startEditing}>
               <Pencil className="size-3" />
               Edit
@@ -116,14 +122,18 @@ export function IntegrationSection({
     >
       {showRaw ? (
         <KeyValueEditor
+          key={editing ? "editing" : "display"}
           title=""
           bare
           entries={Object.fromEntries(rawLabels)}
           defaultOpen
-          editDisabled={!editable}
+          editDisabled={!editing}
+          defaultEditing={editing}
+          onCancel={() => setEditing(false)}
           onSave={async (ops) => {
             const updated = await api.patchServiceLabels(serviceId!, ops);
             onRawSave?.(updated);
+            setEditing(false);
             return updated;
           }}
         />

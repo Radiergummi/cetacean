@@ -43,6 +43,8 @@ interface EditableTableProps<T> {
   onSave: (items: T[]) => Promise<void>;
   /** Called when the user opens edit mode. Use for lazy data fetching. */
   onEditStart?: () => void;
+  /** Called when the user cancels editing. */
+  onCancel?: () => void;
 }
 
 export function EditableTable<T>({
@@ -69,6 +71,7 @@ export function EditableTable<T>({
   onAddReset,
   onSave,
   onEditStart,
+  onCancel,
 }: EditableTableProps<T>) {
   const [editing, setEditing] = useState(defaultEditing);
   const [saving, setSaving] = useState(false);
@@ -89,6 +92,7 @@ export function EditableTable<T>({
   function cancelEdit() {
     setEditing(false);
     setSaveError(null);
+    onCancel?.();
   }
 
   function removeRow(index: number) {

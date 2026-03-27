@@ -27,6 +27,8 @@ interface KeyValueEditorProps {
   bare?: boolean;
   /** Start in edit mode. */
   defaultEditing?: boolean;
+  /** Called when the user cancels editing. */
+  onCancel?: () => void;
 }
 
 export function KeyValueEditor({
@@ -46,6 +48,7 @@ export function KeyValueEditor({
   validateKey,
   bare = false,
   defaultEditing = false,
+  onCancel,
 }: KeyValueEditorProps) {
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("");
@@ -67,6 +70,7 @@ export function KeyValueEditor({
       editDisabled={editDisabled}
       bare={bare}
       defaultEditing={defaultEditing}
+      onCancel={onCancel}
       emptyLabel={`No ${title.toLowerCase()}`}
       emptyHint="Click Edit to add entries."
       keyFn={([key]) => key}
