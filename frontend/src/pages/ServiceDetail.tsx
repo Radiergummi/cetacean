@@ -300,7 +300,7 @@ export default function ServiceDetail() {
     healthcheck != null && !(healthcheck.Test?.length === 1 && healthcheck.Test[0] === "NONE");
   const hasPortsContent = specPorts != null && specPorts.length > 0;
   const hasEnvContent = envVars != null && Object.keys(envVars).length > 0;
-  const hasLabelsContent = serviceLabels != null && Object.keys(serviceLabels).length > 0;
+  const hasLabelsContent = filteredLabels != null && Object.keys(filteredLabels).length > 0;
   const hasResourcesContent =
     serviceResources != null &&
     (serviceResources.Limits?.NanoCPUs != null ||

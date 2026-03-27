@@ -2,7 +2,7 @@ package integrations
 
 import (
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -128,9 +128,9 @@ func detectTraefik(labels map[string]string) *TraefikIntegration {
 		Enabled: !enableSet || enableVal == "true",
 	}
 
-	integration.Routers = sortedRouters(routerMap)
-	integration.Services = sortedServices(serviceMap)
-	integration.Middlewares = sortedMiddlewares(mwMap)
+	integration.Routers = sortedValues(routerMap, func(r TraefikRouter) string { return r.Name })
+	integration.Services = sortedValues(serviceMap, func(s TraefikService) string { return s.Name })
+	integration.Middlewares = sortedValues(mwMap, func(m TraefikMiddleware) string { return m.Name })
 
 	return integration
 }
@@ -166,32 +166,29 @@ func getOrCreateMiddleware(m map[string]*TraefikMiddleware, name string) *Traefi
 }
 
 func parseRouterField(r *TraefikRouter, field, value string) {
-	if strings.HasPrefix(field, "tls.domains[") {
-		parseTLSDomain(r, field, value)
-		return
-	}
-
-	switch field {
-	case "rule":
+	switch {
+	case field == "rule":
 		r.Rule = value
-	case "entrypoints":
+	case field == "entrypoints":
 		r.Entrypoints = splitComma(value)
-	case "middlewares":
+	case field == "middlewares":
 		r.Middlewares = splitComma(value)
-	case "service":
+	case field == "service":
 		r.Service = value
-	case "priority":
+	case field == "priority":
 		if n, err := strconv.Atoi(value); err == nil {
 			r.Priority = n
 		}
-	case "tls":
+	case field == "tls":
 		ensureTLS(r)
-	case "tls.certresolver":
+	case field == "tls.certresolver":
 		ensureTLS(r)
 		r.TLS.CertResolver = value
-	case "tls.options":
+	case field == "tls.options":
 		ensureTLS(r)
 		r.TLS.Options = value
+	case strings.HasPrefix(field, "tls.domains["):
+		parseTLSDomain(r, field, value)
 	}
 }
 
@@ -265,35 +262,13 @@ func splitComma(s string) []string {
 	return result
 }
 
-func sortedRouters(m map[string]*TraefikRouter) []TraefikRouter {
-	result := make([]TraefikRouter, 0, len(m))
-	for _, r := range m {
-		result = append(result, *r)
+func sortedValues[T any](m map[string]*T, name func(T) string) []T {
+	result := make([]T, 0, len(m))
+	for _, v := range m {
+		result = append(result, *v)
 	}
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].Name < result[j].Name
-	})
-	return result
-}
-
-func sortedServices(m map[string]*TraefikService) []TraefikService {
-	result := make([]TraefikService, 0, len(m))
-	for _, s := range m {
-		result = append(result, *s)
-	}
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].Name < result[j].Name
-	})
-	return result
-}
-
-func sortedMiddlewares(m map[string]*TraefikMiddleware) []TraefikMiddleware {
-	result := make([]TraefikMiddleware, 0, len(m))
-	for _, mw := range m {
-		result = append(result, *mw)
-	}
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].Name < result[j].Name
+	slices.SortFunc(result, func(a, b T) int {
+		return strings.Compare(name(a), name(b))
 	})
 	return result
 }
