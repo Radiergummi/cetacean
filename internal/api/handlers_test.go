@@ -2455,3 +2455,58 @@ func TestSegmentPrefixMatch(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleGetService_WithTraefikIntegration(t *testing.T) {
+	c := cache.New(nil)
+	svc := swarm.Service{ID: "svc1"}
+	svc.Spec.Name = "web"
+	svc.Spec.Labels = map[string]string{
+		"traefik.enable":                                     "true",
+		"traefik.http.routers.web.rule":                      "Host(`example.com`)",
+		"traefik.http.services.web.loadbalancer.server.port": "8080",
+		"app.version":                                        "1.0",
+	}
+	c.SetService(svc)
+	h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("GET", "/services/svc1", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetService(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var body map[string]json.RawMessage
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := body["integrations"]; !ok {
+		t.Error("expected integrations field in response")
+	}
+}
+
+func TestHandleGetService_NoIntegrationsField(t *testing.T) {
+	c := cache.New(nil)
+	svc := swarm.Service{ID: "svc1"}
+	svc.Spec.Name = "plain"
+	svc.Spec.Labels = map[string]string{
+		"app.version": "1.0",
+	}
+	c.SetService(svc)
+	h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+
+	req := httptest.NewRequest("GET", "/services/svc1", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetService(w, req)
+
+	var body map[string]json.RawMessage
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := body["integrations"]; ok {
+		t.Error("expected no integrations field when none detected")
+	}
+}
