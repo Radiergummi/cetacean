@@ -235,8 +235,13 @@ func (h *Handlers) isReady() bool {
 }
 
 func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
+	status := "ok"
+	if !h.isReady() {
+		status = "error"
+	}
+
 	writeJSON(w, map[string]any{
-		"status":          "ok",
+		"status":          status,
 		"version":         version.Version,
 		"commit":          version.Commit,
 		"buildDate":       version.Date,

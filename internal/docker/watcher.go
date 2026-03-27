@@ -88,22 +88,28 @@ func (w *Watcher) Run(ctx context.Context) {
 		w.syncOnce.Do(func() { close(w.ready) })
 	}
 
-	// Event stream with reconnect
+	// Event stream with reconnect and exponential backoff.
+	backoff := 1 * time.Second
+	const maxBackoff = 30 * time.Second
+
 	for {
 		if ctx.Err() != nil {
 			return
 		}
 		w.watchEvents(ctx)
-		slog.Warn("event stream disconnected, reconnecting in 1s")
+		slog.Warn("event stream disconnected", "retry_in", backoff)
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(1 * time.Second):
+		case <-time.After(backoff):
 		}
 		slog.Info("re-syncing after reconnect")
 		if err := w.fullSync(ctx); err == nil {
 			w.writeSnapshot()
 			w.syncOnce.Do(func() { close(w.ready) })
+			backoff = 1 * time.Second // Reset on success.
+		} else {
+			backoff = min(backoff*2, maxBackoff)
 		}
 	}
 }

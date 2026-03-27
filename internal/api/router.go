@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/pprof"
+	"strings"
 
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/config"
@@ -346,12 +347,42 @@ func NewRouter(
 	var handler http.Handler = mux
 	handler = requestLogger(handler)
 	handler = discoveryLinks(handler)
+	handler = requireReady(h)(handler)
 	handler = negotiate(handler)
 	handler = auth.Middleware(authProvider)(handler)
 	handler = securityHeaders(handler)
 	handler = recovery(handler)
 	handler = requestID(handler)
 	return handler
+}
+
+func requireReady(h *Handlers) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !h.isReady() && isResourcePath(r.URL.Path) {
+				writeProblem(w, r, http.StatusBadGateway, "Docker daemon is not reachable")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func isResourcePath(path string) bool {
+	switch {
+	case strings.HasPrefix(path, "/-/"):
+		return false
+	case strings.HasPrefix(path, "/api"):
+		return false
+	case strings.HasPrefix(path, "/auth/"):
+		return false
+	case strings.HasPrefix(path, "/assets/"):
+		return false
+	case path == "/":
+		return false
+	default:
+		return true
+	}
 }
 
 func securityHeaders(next http.Handler) http.Handler {
