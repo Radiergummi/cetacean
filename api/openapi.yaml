@@ -4299,8 +4299,14 @@ components:
         propertyName: name
         mapping:
           traefik: "#/components/schemas/TraefikIntegration"
+          shepherd: "#/components/schemas/ShepherdIntegration"
+          swarm-cronjob: "#/components/schemas/CronjobIntegration"
+          diun: "#/components/schemas/DiunIntegration"
       oneOf:
         - $ref: "#/components/schemas/TraefikIntegration"
+        - $ref: "#/components/schemas/ShepherdIntegration"
+        - $ref: "#/components/schemas/CronjobIntegration"
+        - $ref: "#/components/schemas/DiunIntegration"
 
     TraefikIntegration:
       type: object
@@ -4413,3 +4419,77 @@ components:
           type: object
           additionalProperties: true
           description: Middleware configuration key-value pairs
+
+    ShepherdIntegration:
+      type: object
+      description: Shepherd auto-update integration detected from service labels
+      required: [name]
+      properties:
+        name:
+          type: string
+          enum: [shepherd]
+        enabled:
+          type: boolean
+        authConfig:
+          type: string
+          description: Registry auth configuration ID
+
+    CronjobIntegration:
+      type: object
+      description: Swarm Cronjob integration detected from service labels
+      required: [name]
+      properties:
+        name:
+          type: string
+          enum: [swarm-cronjob]
+        enabled:
+          type: boolean
+        schedule:
+          type: string
+          description: Cron expression
+        skipRunning:
+          type: boolean
+        replicas:
+          type: integer
+        registryAuth:
+          type: boolean
+        queryRegistry:
+          type: boolean
+
+    DiunIntegration:
+      type: object
+      description: Diun image update notifier integration detected from service labels
+      required: [name]
+      properties:
+        name:
+          type: string
+          enum: [diun]
+        enabled:
+          type: boolean
+        regopt:
+          type: string
+          description: Registry options name
+        watchRepo:
+          type: boolean
+        notifyOn:
+          type: string
+          description: "Semicolon-separated triggers (new, update)"
+        sortTags:
+          type: string
+          enum: [default, reverse, semver, lexicographical]
+        maxTags:
+          type: integer
+        includeTags:
+          type: string
+          description: Regex for tag inclusion
+        excludeTags:
+          type: string
+          description: Regex for tag exclusion
+        hubLink:
+          type: string
+        platform:
+          type: string
+        metadata:
+          type: object
+          additionalProperties:
+            type: string

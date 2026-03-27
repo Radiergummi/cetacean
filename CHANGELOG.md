@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Detect Traefik configuration from service labels and display as a structured panel on the service detail page
+- Detect label-based integrations (Traefik, Shepherd, Swarm Cronjob, Diun) on services and display as structured panels on the service detail page
+- Edit integration settings inline with structured forms or raw label editing, writing changes back as Docker label mutations
 
 ## [0.8.2] - 2026-03-27
 
