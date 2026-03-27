@@ -457,7 +457,7 @@ func TestFullSync(t *testing.T) {
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")
 
-	w.fullSync(context.Background())
+	_ = w.fullSync(context.Background())
 
 	snap := c.Snapshot()
 	if snap.NodeCount != 2 {
@@ -481,7 +481,7 @@ func TestFullSync_PartialFailure(t *testing.T) {
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")
 
-	w.fullSync(context.Background())
+	_ = w.fullSync(context.Background())
 
 	snap := c.Snapshot()
 	if snap.NodeCount != 1 {
