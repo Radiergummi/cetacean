@@ -23,10 +23,7 @@ func detectDiun(labels map[string]string) *DiunIntegration {
 	var enableVal string
 	var enableSet bool
 
-	integration := &DiunIntegration{
-		Name:    "diun",
-		Enabled: true,
-	}
+	integration := &DiunIntegration{Name: "diun"}
 
 	for k, v := range labels {
 		suffix, ok := strings.CutPrefix(k, "diun.")
@@ -68,9 +65,7 @@ func detectDiun(labels map[string]string) *DiunIntegration {
 		return nil
 	}
 
-	if enableSet {
-		integration.Enabled = enableVal == "true"
-	}
+	integration.Enabled = !enableSet || enableVal == "true"
 
 	return integration
 }

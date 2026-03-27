@@ -15,12 +15,34 @@ type CronjobIntegration struct {
 }
 
 func detectCronjob(labels map[string]string) *CronjobIntegration {
-	var found bool
+	var (
+		found     bool
+		enableSet bool
+		enableVal string
+	)
 
-	for k := range labels {
-		if strings.HasPrefix(k, "swarm.cronjob.") {
-			found = true
-			break
+	integration := &CronjobIntegration{Name: "swarm-cronjob"}
+
+	for k, v := range labels {
+		suffix, ok := strings.CutPrefix(k, "swarm.cronjob.")
+		if !ok {
+			continue
+		}
+
+		found = true
+
+		switch suffix {
+		case "enable":
+			enableSet = true
+			enableVal = v
+		case "schedule":
+			integration.Schedule = v
+		case "skip-running":
+			integration.SkipRunning = v == "true"
+		case "replicas":
+			if n, err := strconv.Atoi(v); err == nil {
+				integration.Replicas = n
+			}
 		}
 	}
 
@@ -28,28 +50,7 @@ func detectCronjob(labels map[string]string) *CronjobIntegration {
 		return nil
 	}
 
-	integration := &CronjobIntegration{
-		Name:    "swarm-cronjob",
-		Enabled: true,
-	}
-
-	if v, ok := labels["swarm.cronjob.enable"]; ok {
-		integration.Enabled = v == "true"
-	}
-
-	if v, ok := labels["swarm.cronjob.schedule"]; ok {
-		integration.Schedule = v
-	}
-
-	if v, ok := labels["swarm.cronjob.skip-running"]; ok {
-		integration.SkipRunning = v == "true"
-	}
-
-	if v, ok := labels["swarm.cronjob.replicas"]; ok {
-		if n, err := strconv.Atoi(v); err == nil {
-			integration.Replicas = n
-		}
-	}
+	integration.Enabled = !enableSet || enableVal == "true"
 
 	return integration
 }

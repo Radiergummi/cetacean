@@ -116,7 +116,7 @@ export function TraefikPanel({ integration, rawLabels }: TraefikPanelProps) {
   return (
     <IntegrationSection title="Traefik" defaultOpen={enabled} rawLabels={rawLabels}>
       {!enabled && (
-        <span className="text-sm text-muted-foreground">Disabled</span>
+        <p className="text-sm text-muted-foreground">Disabled</p>
       )}
 
       {enabled && (

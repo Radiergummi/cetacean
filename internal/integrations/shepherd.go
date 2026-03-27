@@ -13,11 +13,34 @@ type ShepherdIntegration struct {
 }
 
 func detectShepherd(labels map[string]string) *ShepherdIntegration {
-	var found bool
-	for k := range labels {
-		if strings.HasPrefix(k, "shepherd.") {
-			found = true
-			break
+	var (
+		found     bool
+		enableSet bool
+		enableVal string
+	)
+
+	integration := &ShepherdIntegration{Name: "shepherd"}
+
+	for k, v := range labels {
+		suffix, ok := strings.CutPrefix(k, "shepherd.")
+		if !ok {
+			continue
+		}
+
+		found = true
+
+		switch suffix {
+		case "enable":
+			enableSet = true
+			enableVal = v
+		case "schedule":
+			integration.Schedule = v
+		case "image-filter":
+			integration.ImageFilter = v
+		case "latest":
+			integration.Latest = v == "true"
+		case "update-opts":
+			integration.UpdateOpts = v
 		}
 	}
 
@@ -25,30 +48,7 @@ func detectShepherd(labels map[string]string) *ShepherdIntegration {
 		return nil
 	}
 
-	integration := &ShepherdIntegration{
-		Name:    "shepherd",
-		Enabled: true,
-	}
-
-	if v, ok := labels["shepherd.enable"]; ok {
-		integration.Enabled = v == "true"
-	}
-
-	if v, ok := labels["shepherd.schedule"]; ok {
-		integration.Schedule = v
-	}
-
-	if v, ok := labels["shepherd.image-filter"]; ok {
-		integration.ImageFilter = v
-	}
-
-	if v, ok := labels["shepherd.latest"]; ok {
-		integration.Latest = v == "true"
-	}
-
-	if v, ok := labels["shepherd.update-opts"]; ok {
-		integration.UpdateOpts = v
-	}
+	integration.Enabled = !enableSet || enableVal == "true"
 
 	return integration
 }

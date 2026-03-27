@@ -17,7 +17,7 @@ export function CronjobPanel({
   return (
     <IntegrationSection title="Swarm Cronjob" defaultOpen={enabled} rawLabels={rawLabels}>
       {!enabled && (
-        <span className="text-sm text-muted-foreground">Disabled</span>
+        <p className="text-sm text-muted-foreground">Disabled</p>
       )}
 
       {enabled && (

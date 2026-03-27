@@ -63,12 +63,12 @@ import { escapePromQL } from "../lib/utils";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 
-const integrationLabelPrefix: Record<string, string> = {
+const integrationLabelPrefix = {
   traefik: "traefik.",
   shepherd: "shepherd.",
   "swarm-cronjob": "swarm.cronjob.",
   diun: "diun.",
-};
+} as const;
 
 function rawLabelsForIntegration(
   labels: Record<string, string> | null,
@@ -78,7 +78,7 @@ function rawLabelsForIntegration(
     return [];
   }
 
-  const prefix = integrationLabelPrefix[integrationName];
+  const prefix = integrationLabelPrefix[integrationName as keyof typeof integrationLabelPrefix];
 
   if (!prefix) {
     return [];
@@ -301,7 +301,7 @@ export default function ServiceDetail() {
     }
 
     const prefixes = integrations
-      .map(({ name }) => integrationLabelPrefix[name])
+      .map(({ name: integrationName }) => integrationLabelPrefix[integrationName as keyof typeof integrationLabelPrefix])
       .filter(Boolean);
 
     if (prefixes.length === 0) {
