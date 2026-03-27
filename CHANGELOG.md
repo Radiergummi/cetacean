@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Detect Traefik configuration from service labels and display as a structured panel on the service detail page
+
 ## [0.8.2] - 2026-03-27
 
 ### Fixed
