@@ -121,20 +121,23 @@ export function IntegrationSection({
             }}
           />
         ) : (
-          <>
-            {editContent}
+          <div className="rounded-lg border p-3">
+            <div className="space-y-4">
+              {editContent}
 
-            <div className="flex items-center justify-end gap-2 pt-3">
-              <Button variant="ghost" size="xs" onClick={cancel} disabled={saving}>
-                Cancel
-              </Button>
-
-              <Button size="xs" onClick={save} disabled={saving}>
-                {saving && <Spinner className="size-3" />}
-                Save
-              </Button>
+              <footer className="flex items-center gap-2">
+                <div className="ml-auto flex gap-2">
+                  <Button size="sm" onClick={save} disabled={saving}>
+                    {saving && <Spinner className="size-3" />}
+                    Save
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={cancel} disabled={saving}>
+                    Cancel
+                  </Button>
+                </div>
+              </footer>
             </div>
-          </>
+          </div>
         )
       ) : showRaw ? (
         <KeyValuePills entries={rawLabels} />
