@@ -7,13 +7,9 @@ interface TraefikPanelProps {
   integration: TraefikIntegration;
 }
 
-function Badge({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-      {children}
-    </span>
-  );
-}
+const badgeBase = "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium";
+const badgeBlue = `${badgeBase} bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300`;
+const badgePurple = `${badgeBase} bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300`;
 
 function RouterCard({ router }: { router: TraefikRouter }) {
   return (
@@ -37,16 +33,11 @@ function RouterCard({ router }: { router: TraefikRouter }) {
 
       <span className="flex flex-wrap items-center gap-1.5">
         {router.entrypoints?.map((entrypoint) => (
-          <Badge key={entrypoint}>{entrypoint}</Badge>
+          <span key={entrypoint} className={badgeBlue}>{entrypoint}</span>
         ))}
 
         {router.middlewares?.map((middleware) => (
-          <span
-            key={middleware}
-            className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
-          >
-            {middleware}
-          </span>
+          <span key={middleware} className={badgePurple}>{middleware}</span>
         ))}
       </span>
 
@@ -69,7 +60,7 @@ function ServiceRow({ service }: { service: TraefikService }) {
       )}
 
       {service.scheme && (
-        <Badge>{service.scheme}</Badge>
+        <span className={badgeBlue}>{service.scheme}</span>
       )}
     </span>
   );
@@ -80,7 +71,7 @@ function MiddlewareRow({ middleware }: { middleware: TraefikMiddleware }) {
     <div className="flex flex-col gap-1.5 rounded-lg border px-3 py-2 text-sm">
       <span className="flex items-center gap-2">
         <span className="font-bold">{middleware.name}</span>
-        <Badge>{middleware.type}</Badge>
+        <span className={badgeBlue}>{middleware.type}</span>
       </span>
 
       {middleware.config && Object.keys(middleware.config).length > 0 && (

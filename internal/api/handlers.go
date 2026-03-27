@@ -915,8 +915,8 @@ func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
 	if changes := DiffServiceSpecs(svc.PreviousSpec, &svc.Spec); len(changes) > 0 {
 		extra["changes"] = changes
 	}
-	if result := integrations.Detect(svc.Spec.Labels); len(result.Integrations) > 0 {
-		extra["integrations"] = result.Integrations
+	if detected := integrations.Detect(svc.Spec.Labels); len(detected) > 0 {
+		extra["integrations"] = detected
 	}
 	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id, "Service", extra))
 }

@@ -269,31 +269,13 @@ export default function ServiceDetail() {
   );
 
   const filteredLabels = useMemo(() => {
-    if (!serviceLabels || integrations.length === 0) {
+    if (!serviceLabels || !integrations.some(({ name }) => name === "traefik")) {
       return serviceLabels;
     }
 
-    const prefixes: string[] = [];
-
-    for (const integration of integrations) {
-      if (integration.name === "traefik") {
-        prefixes.push("traefik.");
-      }
-    }
-
-    if (prefixes.length === 0) {
-      return serviceLabels;
-    }
-
-    const filtered: Record<string, string> = {};
-
-    for (const [key, value] of Object.entries(serviceLabels)) {
-      if (!prefixes.some((prefix) => key.startsWith(prefix))) {
-        filtered[key] = value;
-      }
-    }
-
-    return filtered;
+    return Object.fromEntries(
+      Object.entries(serviceLabels).filter(([key]) => !key.startsWith("traefik.")),
+    );
   }, [serviceLabels, integrations]);
 
   if (error) {

@@ -57,40 +57,35 @@ type TraefikMiddleware struct {
 var tlsDomainIndexRegexp = regexp.MustCompile(`^tls\.domains\[(\d+)\]\.(.+)$`)
 
 func detectTraefik(labels map[string]string) *TraefikIntegration {
-	// Collect all traefik labels.
-	traefikLabels := make(map[string]string)
+	var (
+		found      bool
+		enableSet  bool
+		enableVal  string
+		routerMap  map[string]*TraefikRouter
+		serviceMap map[string]*TraefikService
+		mwMap      map[string]*TraefikMiddleware
+	)
+
 	for k, v := range labels {
-		if strings.HasPrefix(k, "traefik.") {
-			traefikLabels[k] = v
-		}
-	}
-
-	if len(traefikLabels) == 0 {
-		return nil
-	}
-
-	integration := &TraefikIntegration{
-		Name:    "traefik",
-		Enabled: true,
-	}
-
-	// Check explicit enable flag.
-	if val, ok := traefikLabels["traefik.enable"]; ok {
-		integration.Enabled = val == "true"
-	}
-
-	// Parse HTTP routers, services, and middlewares.
-	routerMap := make(map[string]*TraefikRouter)
-	serviceMap := make(map[string]*TraefikService)
-	middlewareMap := make(map[string]*TraefikMiddleware)
-
-	for k, v := range traefikLabels {
-		suffix, ok := strings.CutPrefix(k, "traefik.http.")
+		suffix, ok := strings.CutPrefix(k, "traefik.")
 		if !ok {
 			continue
 		}
 
-		parts := strings.SplitN(suffix, ".", 3)
+		found = true
+
+		if suffix == "enable" {
+			enableSet = true
+			enableVal = v
+			continue
+		}
+
+		httpSuffix, ok := strings.CutPrefix(suffix, "http.")
+		if !ok {
+			continue
+		}
+
+		parts := strings.SplitN(httpSuffix, ".", 3)
 		if len(parts) < 3 {
 			continue
 		}
@@ -101,20 +96,41 @@ func detectTraefik(labels map[string]string) *TraefikIntegration {
 
 		switch category {
 		case "routers":
+			if routerMap == nil {
+				routerMap = make(map[string]*TraefikRouter)
+			}
+
 			r := getOrCreateRouter(routerMap, name)
 			parseRouterField(r, field, v)
 		case "services":
+			if serviceMap == nil {
+				serviceMap = make(map[string]*TraefikService)
+			}
+
 			s := getOrCreateService(serviceMap, name)
 			parseServiceField(s, field, v)
 		case "middlewares":
-			m := getOrCreateMiddleware(middlewareMap, name)
+			if mwMap == nil {
+				mwMap = make(map[string]*TraefikMiddleware)
+			}
+
+			m := getOrCreateMiddleware(mwMap, name)
 			parseMiddlewareField(m, field, v)
 		}
 	}
 
+	if !found {
+		return nil
+	}
+
+	integration := &TraefikIntegration{
+		Name:    "traefik",
+		Enabled: !enableSet || enableVal == "true",
+	}
+
 	integration.Routers = sortedRouters(routerMap)
 	integration.Services = sortedServices(serviceMap)
-	integration.Middlewares = sortedMiddlewares(middlewareMap)
+	integration.Middlewares = sortedMiddlewares(mwMap)
 
 	return integration
 }
@@ -171,9 +187,8 @@ func parseRouterField(r *TraefikRouter, field, value string) {
 	case field == "tls.options":
 		ensureTLS(r)
 		r.TLS.Options = value
-	case strings.HasPrefix(field, "tls.domains"):
-		ensureTLS(r)
-		parseTLSDomain(r.TLS, field, value)
+	case strings.HasPrefix(field, "tls.domains["):
+		parseTLSDomain(r, field, value)
 	}
 }
 
@@ -183,7 +198,7 @@ func ensureTLS(r *TraefikRouter) {
 	}
 }
 
-func parseTLSDomain(tls *TraefikTLS, field, value string) {
+func parseTLSDomain(r *TraefikRouter, field, value string) {
 	matches := tlsDomainIndexRegexp.FindStringSubmatch(field)
 	if matches == nil {
 		return
@@ -194,17 +209,19 @@ func parseTLSDomain(tls *TraefikTLS, field, value string) {
 		return
 	}
 
+	ensureTLS(r)
+
 	// Grow slice to accommodate index.
-	for len(tls.Domains) <= index {
-		tls.Domains = append(tls.Domains, TraefikTLSDomain{})
+	for len(r.TLS.Domains) <= index {
+		r.TLS.Domains = append(r.TLS.Domains, TraefikTLSDomain{})
 	}
 
 	subField := matches[2]
 	switch subField {
 	case "main":
-		tls.Domains[index].Main = value
+		r.TLS.Domains[index].Main = value
 	case "sans":
-		tls.Domains[index].SANs = splitComma(value)
+		r.TLS.Domains[index].SANs = splitComma(value)
 	}
 }
 

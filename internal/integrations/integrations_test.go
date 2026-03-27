@@ -8,11 +8,8 @@ func TestDetect_NoIntegrations(t *testing.T) {
 		"app.version":               "1.0",
 	}
 	result := Detect(labels)
-	if len(result.Integrations) != 0 {
-		t.Errorf("expected no integrations, got %d", len(result.Integrations))
-	}
-	if len(result.Remaining) != 2 {
-		t.Errorf("expected 2 remaining labels, got %d", len(result.Remaining))
+	if len(result) != 0 {
+		t.Errorf("expected no integrations, got %d", len(result))
 	}
 }
 
@@ -25,14 +22,8 @@ func TestDetect_TraefikDetected(t *testing.T) {
 		"app.version":                                        "1.0",
 	}
 	result := Detect(labels)
-	if len(result.Integrations) != 1 {
-		t.Fatalf("expected 1 integration, got %d", len(result.Integrations))
-	}
-	if len(result.Remaining) != 2 {
-		t.Errorf("expected 2 remaining labels, got %d: %v", len(result.Remaining), result.Remaining)
-	}
-	if _, ok := result.Remaining["traefik.enable"]; ok {
-		t.Error("traefik labels should not be in remaining")
+	if len(result) != 1 {
+		t.Fatalf("expected 1 integration, got %d", len(result))
 	}
 }
 
@@ -42,13 +33,7 @@ func TestDetect_TCPLabelsConsumed(t *testing.T) {
 		"app.version":                 "1.0",
 	}
 	result := Detect(labels)
-	if len(result.Integrations) != 1 {
-		t.Fatalf("expected 1 integration, got %d", len(result.Integrations))
-	}
-	if len(result.Remaining) != 1 {
-		t.Errorf("expected 1 remaining label, got %d: %v", len(result.Remaining), result.Remaining)
-	}
-	if _, ok := result.Remaining["traefik.tcp.routers.db.rule"]; ok {
-		t.Error("traefik.tcp labels should not be in remaining")
+	if len(result) != 1 {
+		t.Fatalf("expected 1 integration, got %d", len(result))
 	}
 }
