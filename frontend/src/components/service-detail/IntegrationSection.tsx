@@ -13,9 +13,10 @@ import { useState } from "react";
  * the structured view and raw label display, plus a docs link.
  * Supports inline editing in both structured and raw modes.
  *
- * - Structured display: renders `children`
- * - Structured edit: renders `editContent` with Save/Cancel footer
- * - Raw display + edit: renders a bare `KeyValueEditor` (no nested section)
+ * Structured mode uses IntegrationSection-managed edit state
+ * (Edit/Save/Cancel in the header and footer). Raw mode delegates
+ * entirely to KeyValueEditor's built-in edit lifecycle.
+ * Toggling between modes cancels any active structured edit.
  */
 export function IntegrationSection({
   title,
@@ -75,6 +76,10 @@ export function IntegrationSection({
   }
 
   function toggleRaw() {
+    if (editing) {
+      setEditing(false);
+    }
+
     setShowRaw((previous) => !previous);
   }
 
@@ -100,7 +105,7 @@ export function IntegrationSection({
             {showRaw ? "Structured" : "Labels"}
           </Button>
 
-          {editable && !editing && (
+          {editable && !showRaw && !editing && (
             <Button variant="outline" size="xs" onClick={startEditing}>
               <Pencil className="size-3" />
               Edit
@@ -111,13 +116,11 @@ export function IntegrationSection({
     >
       {showRaw ? (
         <KeyValueEditor
-          key={editing ? "editing" : "display"}
           title=""
           bare
           entries={Object.fromEntries(rawLabels)}
           defaultOpen
           editDisabled={!editable}
-          defaultEditing={editing}
           onSave={async (ops) => {
             const updated = await api.patchServiceLabels(serviceId!, ops);
             onRawSave?.(updated);
