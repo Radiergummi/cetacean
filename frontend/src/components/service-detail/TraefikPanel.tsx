@@ -8,6 +8,7 @@ import type {
 import KeyValuePills from "@/components/data/KeyValuePills";
 import { Input } from "@/components/ui/input";
 import { MultiCombobox } from "@/components/ui/multi-combobox";
+import { NumberField } from "@/components/ui/number-field";
 import { Switch } from "@/components/ui/switch";
 import { diffLabels } from "@/lib/integrationLabels";
 import { ArrowRight, Lock } from "lucide-react";
@@ -116,13 +117,13 @@ interface RouterFormState {
   entrypoints: string[];
   middlewares: string[];
   service: string;
-  priority: string;
+  priority: number | undefined;
   certResolver: string;
 }
 
 interface ServiceFormState {
   name: string;
-  port: string;
+  port: number | undefined;
   scheme: string;
 }
 
@@ -184,16 +185,14 @@ function RouterEditCard({
         <p className="text-xs text-muted-foreground">Backend Traefik service to forward requests to</p>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Priority</label>
-        <Input
-          type="number"
-          className="w-24"
-          value={state.priority}
-          onChange={(event) => onChange({ ...state, priority: event.target.value })}
-        />
-        <p className="text-xs text-muted-foreground">Higher values win on rule conflicts</p>
-      </div>
+      <NumberField
+        label="Priority"
+        value={state.priority}
+        onChange={(priority) => onChange({ ...state, priority })}
+        min={0}
+        clearable
+      />
+      <p className="text-xs text-muted-foreground">Higher values win on rule conflicts</p>
 
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-foreground">TLS cert resolver</label>
@@ -219,16 +218,13 @@ function ServiceEditCard({
     <article className="space-y-3 rounded-lg border p-3">
       <header className="font-medium text-muted-foreground">{state.name}</header>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Port</label>
-        <Input
-          type="number"
-          className="w-24"
-          value={state.port}
-          onChange={(event) => onChange({ ...state, port: event.target.value })}
-        />
-        <p className="text-xs text-muted-foreground">Backend server port for load balancing</p>
-      </div>
+      <NumberField
+        label="Port"
+        value={state.port}
+        onChange={(port) => onChange({ ...state, port })}
+        min={1}
+      />
+      <p className="text-xs text-muted-foreground">Backend server port for load balancing</p>
 
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-foreground">Scheme</label>
@@ -306,8 +302,8 @@ function serializeTraefikLabels(
       labels[`${prefix}.service`] = router.service;
     }
 
-    if (router.priority.trim() && router.priority !== "0") {
-      labels[`${prefix}.priority`] = router.priority;
+    if (router.priority != null && router.priority > 0) {
+      labels[`${prefix}.priority`] = String(router.priority);
     }
 
     if (router.certResolver.trim()) {
@@ -319,8 +315,8 @@ function serializeTraefikLabels(
   for (const service of serviceForms) {
     const prefix = `traefik.http.services.${service.name}.loadbalancer.server`;
 
-    if (service.port.trim()) {
-      labels[`${prefix}.port`] = service.port;
+    if (service.port != null) {
+      labels[`${prefix}.port`] = String(service.port);
     }
 
     if (service.scheme.trim()) {
@@ -379,7 +375,7 @@ export function TraefikPanel({
         entrypoints: router.entrypoints ?? [],
         middlewares: router.middlewares ?? [],
         service: router.service ?? "",
-        priority: router.priority ? String(router.priority) : "",
+        priority: router.priority || undefined,
         certResolver: router.tls?.certResolver ?? "",
       })),
     );
@@ -387,7 +383,7 @@ export function TraefikPanel({
     setServiceForms(
       (integration.services ?? []).map((service) => ({
         name: service.name,
-        port: service.port ? String(service.port) : "",
+        port: service.port || undefined,
         scheme: service.scheme ?? "",
       })),
     );

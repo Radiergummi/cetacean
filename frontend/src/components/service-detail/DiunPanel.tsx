@@ -3,6 +3,7 @@ import type { DiunIntegration } from "@/api/types";
 import { KVTable } from "@/components/data";
 import KeyValuePills from "@/components/data/KeyValuePills";
 import { Input } from "@/components/ui/input";
+import { NumberField } from "@/components/ui/number-field";
 import { Switch } from "@/components/ui/switch";
 import { diffLabels } from "@/lib/integrationLabels";
 import { Plus, Trash2 } from "lucide-react";
@@ -234,17 +235,14 @@ export function DiunPanel({
         <p className="text-xs text-muted-foreground">How to sort tags when watch repo is enabled</p>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Max tags</label>
-        <Input
-          type="number"
-          className="w-24"
-          min={0}
-          value={formMaxTags}
-          onChange={(event) => setFormMaxTags(Number(event.target.value))}
-        />
-        <p className="text-xs text-muted-foreground">Maximum number of tags to watch (0 = unlimited)</p>
-      </div>
+      <NumberField
+        label="Max tags"
+        value={formMaxTags || undefined}
+        onChange={(value) => setFormMaxTags(value ?? 0)}
+        min={0}
+        clearable
+      />
+      <p className="text-xs text-muted-foreground">Maximum number of tags to watch (0 = unlimited)</p>
 
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-foreground">Include tags</label>

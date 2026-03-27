@@ -2,6 +2,7 @@ import { api } from "@/api/client";
 import type { CronjobIntegration } from "@/api/types";
 import { KVTable } from "@/components/data";
 import { Input } from "@/components/ui/input";
+import { NumberField } from "@/components/ui/number-field";
 import { Switch } from "@/components/ui/switch";
 import { diffLabels } from "@/lib/integrationLabels";
 import { CronExpressionParser } from "cron-parser";
@@ -132,17 +133,13 @@ export function CronjobPanel({
         <p className="text-xs text-muted-foreground">Skip execution if the previous run is still active</p>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Replicas</label>
-        <Input
-          type="number"
-          className="w-24"
-          min={1}
-          value={formReplicas}
-          onChange={(event) => setFormReplicas(Number(event.target.value))}
-        />
-        <p className="text-xs text-muted-foreground">Number of replicas to start on each scheduled run</p>
-      </div>
+      <NumberField
+        label="Replicas"
+        value={formReplicas}
+        onChange={(value) => setFormReplicas(value ?? 1)}
+        min={1}
+      />
+      <p className="text-xs text-muted-foreground">Number of replicas to start on each scheduled run</p>
 
       <div className="flex flex-col gap-1.5">
         <label className="flex items-center gap-2">
