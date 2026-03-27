@@ -1170,6 +1170,11 @@ paths:
                       service:
                         type: object
                         description: Docker swarm.Service object
+                      integrations:
+                        type: array
+                        description: Detected third-party integrations (e.g. Traefik)
+                        items:
+                          $ref: "#/components/schemas/Integration"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -4285,3 +4290,126 @@ components:
               additionalProperties:
                 type: string
               description: Log driver options
+
+    # ── Integrations ──────────────────────────────────────────────────
+
+    Integration:
+      description: A detected third-party integration on a service
+      discriminator:
+        propertyName: name
+        mapping:
+          traefik: "#/components/schemas/TraefikIntegration"
+      oneOf:
+        - $ref: "#/components/schemas/TraefikIntegration"
+
+    TraefikIntegration:
+      type: object
+      description: Traefik reverse proxy integration detected from service labels
+      required: [name]
+      properties:
+        name:
+          type: string
+          enum: [traefik]
+          description: Discriminator field identifying the integration type
+        enabled:
+          type: boolean
+          description: Whether the Traefik integration is enabled
+        routers:
+          type: array
+          items:
+            $ref: "#/components/schemas/TraefikRouter"
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/TraefikService"
+        middlewares:
+          type: array
+          items:
+            $ref: "#/components/schemas/TraefikMiddleware"
+
+    TraefikRouter:
+      type: object
+      description: A Traefik router detected from service labels
+      properties:
+        name:
+          type: string
+          description: Router name
+        rule:
+          type: string
+          description: Routing rule expression (e.g. "Host(`example.com`)")
+        entrypoints:
+          type: array
+          items:
+            type: string
+          description: Entrypoint names this router listens on
+        tls:
+          $ref: "#/components/schemas/TraefikTLS"
+        middlewares:
+          type: array
+          items:
+            type: string
+          description: Middleware names attached to this router
+        service:
+          type: string
+          description: Backend service name this router forwards to
+        priority:
+          type: integer
+          description: Router priority (higher wins on rule conflicts)
+
+    TraefikTLS:
+      type: object
+      description: TLS configuration for a Traefik router
+      properties:
+        certResolver:
+          type: string
+          description: Certificate resolver name (e.g. "letsencrypt")
+        domains:
+          type: array
+          items:
+            $ref: "#/components/schemas/TraefikTLSDomain"
+          description: Explicit domain entries for certificate generation
+        options:
+          type: string
+          description: TLS options name
+
+    TraefikTLSDomain:
+      type: object
+      description: A domain entry in Traefik TLS configuration
+      properties:
+        main:
+          type: string
+          description: Primary domain name
+        sans:
+          type: array
+          items:
+            type: string
+          description: Subject alternative names
+
+    TraefikService:
+      type: object
+      description: A Traefik service detected from service labels
+      properties:
+        name:
+          type: string
+          description: Service name
+        port:
+          type: integer
+          description: Backend port number
+        scheme:
+          type: string
+          description: Backend scheme (e.g. "http", "https", "h2c")
+
+    TraefikMiddleware:
+      type: object
+      description: A Traefik middleware detected from service labels
+      properties:
+        name:
+          type: string
+          description: Middleware name
+        type:
+          type: string
+          description: Middleware type (e.g. "redirectScheme", "basicAuth")
+        config:
+          type: object
+          additionalProperties: true
+          description: Middleware configuration key-value pairs
