@@ -100,32 +100,30 @@ export function CronjobPanel({
   }
 
   const editForm = (
-    <div className="flex flex-col gap-3">
-      <label className="flex items-center justify-between">
-        <span className="text-sm">Enabled</span>
+    <div className="space-y-3">
+      <label className="flex items-center gap-2">
         <Switch checked={formEnabled} onCheckedChange={setFormEnabled} />
+        <span className="text-xs font-medium text-foreground">Enabled</span>
       </label>
 
-      <label className="flex items-center justify-between gap-4">
-        <span className="text-sm">Schedule</span>
-        <div className="flex flex-col items-end gap-1">
-          <Input
-            className="w-64 font-mono"
-            value={formSchedule}
-            onChange={(event) => setFormSchedule(event.target.value)}
-            placeholder="*/5 * * * *"
-          />
-          {cronError && <span className="text-xs text-destructive">{cronError}</span>}
-        </div>
-      </label>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-foreground">Schedule</label>
+        <Input
+          className="font-mono"
+          value={formSchedule}
+          onChange={(event) => setFormSchedule(event.target.value)}
+          placeholder="*/5 * * * *"
+        />
+        {cronError && <span className="text-xs text-destructive">{cronError}</span>}
+      </div>
 
-      <label className="flex items-center justify-between">
-        <span className="text-sm">Skip running</span>
+      <label className="flex items-center gap-2">
         <Switch checked={formSkipRunning} onCheckedChange={setFormSkipRunning} />
+        <span className="text-xs font-medium text-foreground">Skip running</span>
       </label>
 
-      <label className="flex items-center justify-between gap-4">
-        <span className="text-sm">Replicas</span>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-foreground">Replicas</label>
         <Input
           type="number"
           className="w-24"
@@ -133,16 +131,16 @@ export function CronjobPanel({
           value={formReplicas}
           onChange={(event) => setFormReplicas(Number(event.target.value))}
         />
-      </label>
+      </div>
 
-      <label className="flex items-center justify-between">
-        <span className="text-sm">Registry auth</span>
+      <label className="flex items-center gap-2">
         <Switch checked={formRegistryAuth} onCheckedChange={setFormRegistryAuth} />
+        <span className="text-xs font-medium text-foreground">Registry auth</span>
       </label>
 
-      <label className="flex items-center justify-between">
-        <span className="text-sm">Query registry</span>
+      <label className="flex items-center gap-2">
         <Switch checked={formQueryRegistry} onCheckedChange={setFormQueryRegistry} />
+        <span className="text-xs font-medium text-foreground">Query registry</span>
       </label>
     </div>
   );

@@ -55,24 +55,20 @@ export function ShepherdPanel({
   }
 
   const editForm = (
-    <div className="flex flex-col gap-3">
-      <label className="flex items-center justify-between">
-        <span className="text-sm">Enabled</span>
-        <Switch
-          checked={formEnabled}
-          onCheckedChange={setFormEnabled}
-        />
+    <div className="space-y-3">
+      <label className="flex items-center gap-2">
+        <Switch checked={formEnabled} onCheckedChange={setFormEnabled} />
+        <span className="text-xs font-medium text-foreground">Enabled</span>
       </label>
 
-      <label className="flex items-center justify-between gap-4">
-        <span className="text-sm">Auth config</span>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-foreground">Auth config</label>
         <Input
-          className="w-64"
           value={formAuthConfig}
           onChange={(event) => setFormAuthConfig(event.target.value)}
           placeholder="registry:credentials"
         />
-      </label>
+      </div>
     </div>
   );
 

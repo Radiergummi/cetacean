@@ -139,66 +139,62 @@ function RouterEditCard({
   onChange: (updated: RouterFormState) => void;
 }) {
   return (
-    <article className="flex flex-col gap-2 rounded-lg border px-3 py-2 text-sm">
+    <article className="space-y-3 rounded-lg border p-3">
       <header className="font-medium text-muted-foreground">{state.name}</header>
 
-      <label className="flex items-center justify-between gap-4">
-        <span className="text-xs text-muted-foreground">Rule</span>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-foreground">Rule</label>
         <Input
-          className="flex-1 font-mono"
+          className="font-mono"
           value={state.rule}
           onChange={(event) => onChange({ ...state, rule: event.target.value })}
         />
-      </label>
+      </div>
 
-      <label className="flex items-center justify-between gap-4">
-        <span className="text-xs text-muted-foreground">Entrypoints</span>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-foreground">Entrypoints</label>
         <Input
-          className="flex-1"
           value={state.entrypoints}
           onChange={(event) => onChange({ ...state, entrypoints: event.target.value })}
           placeholder="websecure, web"
         />
-      </label>
+      </div>
 
-      <label className="flex items-center justify-between gap-4">
-        <span className="text-xs text-muted-foreground">Middlewares</span>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-foreground">Middlewares</label>
         <Input
-          className="flex-1"
           value={state.middlewares}
           onChange={(event) => onChange({ ...state, middlewares: event.target.value })}
           placeholder="auth, compress"
         />
-      </label>
+      </div>
 
-      <label className="flex items-center justify-between gap-4">
-        <span className="text-xs text-muted-foreground">Service</span>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-foreground">Service</label>
         <Input
-          className="flex-1"
           value={state.service}
           onChange={(event) => onChange({ ...state, service: event.target.value })}
         />
-      </label>
+      </div>
 
-      <label className="flex items-center justify-between gap-4">
-        <span className="text-xs text-muted-foreground">Priority</span>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-foreground">Priority</label>
         <Input
           type="number"
           className="w-24"
           value={state.priority}
           onChange={(event) => onChange({ ...state, priority: event.target.value })}
         />
-      </label>
+      </div>
 
-      <label className="flex items-center justify-between gap-4">
-        <span className="text-xs text-muted-foreground">TLS cert resolver</span>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-foreground">TLS cert resolver</label>
         <Input
-          className="flex-1"
           value={state.certResolver}
           onChange={(event) => onChange({ ...state, certResolver: event.target.value })}
           placeholder="letsencrypt"
         />
-      </label>
+      </div>
     </article>
   );
 }
@@ -211,28 +207,28 @@ function ServiceEditCard({
   onChange: (updated: ServiceFormState) => void;
 }) {
   return (
-    <article className="flex flex-col gap-2 rounded-lg border px-3 py-2 text-sm">
+    <article className="space-y-3 rounded-lg border p-3">
       <header className="font-medium text-muted-foreground">{state.name}</header>
 
-      <label className="flex items-center justify-between gap-4">
-        <span className="text-xs text-muted-foreground">Port</span>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-foreground">Port</label>
         <Input
           type="number"
           className="w-24"
           value={state.port}
           onChange={(event) => onChange({ ...state, port: event.target.value })}
         />
-      </label>
+      </div>
 
-      <label className="flex items-center justify-between gap-4">
-        <span className="text-xs text-muted-foreground">Scheme</span>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-foreground">Scheme</label>
         <Input
           className="w-32"
           value={state.scheme}
           onChange={(event) => onChange({ ...state, scheme: event.target.value })}
           placeholder="http"
         />
-      </label>
+      </div>
     </article>
   );
 }
@@ -245,17 +241,16 @@ function MiddlewareEditCard({
   onChange: (updated: MiddlewareFormState) => void;
 }) {
   return (
-    <article className="flex flex-col gap-2 rounded-lg border px-3 py-2 text-sm">
+    <article className="space-y-3 rounded-lg border p-3">
       <header className="flex items-center justify-between gap-2">
         <span className="font-medium text-muted-foreground">{state.name}</span>
         <span className={badgeBlue}>{state.type}</span>
       </header>
 
       {state.config.map(([key, value], index) => (
-        <label key={key} className="flex items-center justify-between gap-4">
-          <span className="text-xs text-muted-foreground font-mono">{key}</span>
+        <div key={key} className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-foreground font-mono">{key}</label>
           <Input
-            className="flex-1"
             value={value}
             onChange={(event) => {
               const updated = [...state.config] as [string, string][];
@@ -263,7 +258,7 @@ function MiddlewareEditCard({
               onChange({ ...state, config: updated });
             }}
           />
-        </label>
+        </div>
       ))}
     </article>
   );
@@ -422,10 +417,10 @@ export function TraefikPanel({
 
   const editForm = (
     <div className="grid gap-4 lg:grid-cols-3">
-      <div className="flex flex-col gap-2 lg:col-span-3">
-        <label className="flex items-center justify-between">
-          <span className="text-sm">Enabled</span>
+      <div className="lg:col-span-3">
+        <label className="flex items-center gap-2">
           <Switch checked={formEnabled} onCheckedChange={setFormEnabled} />
+          <span className="text-xs font-medium text-foreground">Enabled</span>
         </label>
       </div>
 

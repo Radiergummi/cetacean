@@ -177,45 +177,44 @@ export function DiunPanel({
   }
 
   const editForm = (
-    <div className="flex flex-col gap-3">
-      <label className="flex items-center justify-between">
-        <span className="text-sm">Enabled</span>
+    <div className="space-y-3">
+      <label className="flex items-center gap-2">
         <Switch checked={formEnabled} onCheckedChange={setFormEnabled} />
+        <span className="text-xs font-medium text-foreground">Enabled</span>
       </label>
 
-      <label className="flex items-center justify-between gap-4">
-        <span className="text-sm">Registry options</span>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-foreground">Registry options</label>
         <Input
-          className="w-64"
           value={formRegopt}
           onChange={(event) => setFormRegopt(event.target.value)}
           placeholder="my-registry"
         />
-      </label>
+      </div>
 
-      <label className="flex items-center justify-between">
-        <span className="text-sm">Watch repo</span>
+      <label className="flex items-center gap-2">
         <Switch checked={formWatchRepo} onCheckedChange={setFormWatchRepo} />
+        <span className="text-xs font-medium text-foreground">Watch repo</span>
       </label>
 
-      <div className="flex items-center justify-between">
-        <span className="text-sm">Notify on</span>
+      <div className="flex flex-col gap-1.5">
+        <span className="text-xs font-medium text-foreground">Notify on</span>
         <div className="flex items-center gap-3">
-          <label className="flex items-center gap-1.5 text-sm">
+          <label className="flex items-center gap-1.5 text-xs">
             <Switch checked={formNotifyNew} onCheckedChange={setFormNotifyNew} />
             New image
           </label>
-          <label className="flex items-center gap-1.5 text-sm">
+          <label className="flex items-center gap-1.5 text-xs">
             <Switch checked={formNotifyUpdate} onCheckedChange={setFormNotifyUpdate} />
             Updated tag
           </label>
         </div>
       </div>
 
-      <label className="flex items-center justify-between gap-4">
-        <span className="text-sm">Sort tags</span>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-foreground">Sort tags</label>
         <select
-          className="h-8 rounded-md border bg-background px-2 text-sm"
+          className="h-8 w-full rounded-md border bg-background px-2 text-sm"
           value={formSortTags}
           onChange={(event) => setFormSortTags(event.target.value)}
         >
@@ -224,10 +223,10 @@ export function DiunPanel({
             <option key={option} value={option}>{option}</option>
           ))}
         </select>
-      </label>
+      </div>
 
-      <label className="flex items-center justify-between gap-4">
-        <span className="text-sm">Max tags</span>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-foreground">Max tags</label>
         <Input
           type="number"
           className="w-24"
@@ -235,51 +234,49 @@ export function DiunPanel({
           value={formMaxTags}
           onChange={(event) => setFormMaxTags(Number(event.target.value))}
         />
-      </label>
+      </div>
 
-      <label className="flex items-center justify-between gap-4">
-        <span className="text-sm">Include tags</span>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-foreground">Include tags</label>
         <Input
-          className="w-64 font-mono"
+          className="font-mono"
           value={formIncludeTags}
           onChange={(event) => setFormIncludeTags(event.target.value)}
           placeholder="^v[0-9]"
         />
-      </label>
+      </div>
 
-      <label className="flex items-center justify-between gap-4">
-        <span className="text-sm">Exclude tags</span>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-foreground">Exclude tags</label>
         <Input
-          className="w-64 font-mono"
+          className="font-mono"
           value={formExcludeTags}
           onChange={(event) => setFormExcludeTags(event.target.value)}
           placeholder="^latest$"
         />
-      </label>
+      </div>
 
-      <label className="flex items-center justify-between gap-4">
-        <span className="text-sm">Hub link</span>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-foreground">Hub link</label>
         <Input
-          className="w-64"
           value={formHubLink}
           onChange={(event) => setFormHubLink(event.target.value)}
           placeholder="https://hub.example.com"
         />
-      </label>
+      </div>
 
-      <label className="flex items-center justify-between gap-4">
-        <span className="text-sm">Platform</span>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-foreground">Platform</label>
         <Input
-          className="w-64"
           value={formPlatform}
           onChange={(event) => setFormPlatform(event.target.value)}
           placeholder="linux/amd64"
         />
-      </label>
+      </div>
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
-          <span className="text-sm">Metadata</span>
+          <span className="text-xs font-medium text-foreground">Metadata</span>
           <button
             type="button"
             onClick={addMetadataEntry}
