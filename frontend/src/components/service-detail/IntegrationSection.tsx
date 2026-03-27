@@ -111,6 +111,7 @@ export function IntegrationSection({
     >
       {showRaw ? (
         <KeyValueEditor
+          key={editing ? "editing" : "display"}
           title=""
           bare
           entries={Object.fromEntries(rawLabels)}
