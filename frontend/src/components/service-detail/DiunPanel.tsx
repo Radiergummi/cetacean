@@ -187,102 +187,113 @@ export function DiunPanel({
         <p className="text-xs text-muted-foreground">Enable Diun image update monitoring for this service</p>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Registry options</label>
-        <Input
-          value={formRegopt}
-          onChange={(event) => setFormRegopt(event.target.value)}
-          placeholder="my-registry"
-        />
-        <p className="text-xs text-muted-foreground">Registry options name from Diun configuration</p>
-      </div>
+      <div className="grid gap-3 lg:grid-cols-3">
+        {/* Column 1: Notifications */}
+        <div className="space-y-3">
+          <div className="flex flex-col gap-1.5">
+            <label className="flex items-center gap-2">
+              <Switch checked={formWatchRepo} onCheckedChange={setFormWatchRepo} />
+              <span className="text-xs font-medium text-foreground">Watch repo</span>
+            </label>
+            <p className="text-xs text-muted-foreground">Watch all tags, not just the deployed tag</p>
+          </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="flex items-center gap-2">
-          <Switch checked={formWatchRepo} onCheckedChange={setFormWatchRepo} />
-          <span className="text-xs font-medium text-foreground">Watch repo</span>
-        </label>
-        <p className="text-xs text-muted-foreground">Watch all tags in the image repository, not just the deployed tag</p>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <span className="text-xs font-medium text-foreground">Notify on</span>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-1.5 text-xs">
-            <Switch checked={formNotifyNew} onCheckedChange={setFormNotifyNew} />
-            New image
-          </label>
-          <label className="flex items-center gap-1.5 text-xs">
-            <Switch checked={formNotifyUpdate} onCheckedChange={setFormNotifyUpdate} />
-            Updated tag
-          </label>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-foreground">Notify on</span>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-1.5 text-xs">
+                <Switch checked={formNotifyNew} onCheckedChange={setFormNotifyNew} />
+                New image
+              </label>
+              <label className="flex items-center gap-1.5 text-xs">
+                <Switch checked={formNotifyUpdate} onCheckedChange={setFormNotifyUpdate} />
+                Updated tag
+              </label>
+            </div>
+            <p className="text-xs text-muted-foreground">When to send notifications</p>
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground">When to send notifications</p>
-      </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Sort tags</label>
-        <select
-          className="h-8 w-full rounded-md border bg-background px-2 text-sm"
-          value={formSortTags}
-          onChange={(event) => setFormSortTags(event.target.value)}
-        >
-          <option value="">—</option>
-          {sortTagsOptions.map((option) => (
-            <option key={option} value={option}>{option}</option>
-          ))}
-        </select>
-        <p className="text-xs text-muted-foreground">How to sort tags when watch repo is enabled</p>
-      </div>
+        {/* Column 2: Tag filtering */}
+        <div className="space-y-3">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-foreground">Sort tags</label>
+            <select
+              className="h-8 w-full rounded-md border bg-background px-2 text-sm"
+              value={formSortTags}
+              onChange={(event) => setFormSortTags(event.target.value)}
+            >
+              <option value="">—</option>
+              {sortTagsOptions.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">How to sort tags when watch repo is enabled</p>
+          </div>
 
-      <NumberField
-        label="Max tags"
-        value={formMaxTags || undefined}
-        onChange={(value) => setFormMaxTags(value ?? 0)}
-        min={0}
-      />
-      <p className="text-xs text-muted-foreground">Maximum number of tags to watch (0 = unlimited)</p>
+          <NumberField
+            label="Max tags"
+            value={formMaxTags || undefined}
+            onChange={(value) => setFormMaxTags(value ?? 0)}
+            min={0}
+          />
+          <p className="text-xs text-muted-foreground">Maximum number of tags to watch (0 = unlimited)</p>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Include tags</label>
-        <Input
-          className="font-mono"
-          value={formIncludeTags}
-          onChange={(event) => setFormIncludeTags(event.target.value)}
-          placeholder="^v[0-9]"
-        />
-        <p className="text-xs text-muted-foreground">Regular expression to filter which tags to include</p>
-      </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-foreground">Include tags</label>
+            <Input
+              className="font-mono"
+              value={formIncludeTags}
+              onChange={(event) => setFormIncludeTags(event.target.value)}
+              placeholder="^v[0-9]"
+            />
+            <p className="text-xs text-muted-foreground">Regex for tag inclusion</p>
+          </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Exclude tags</label>
-        <Input
-          className="font-mono"
-          value={formExcludeTags}
-          onChange={(event) => setFormExcludeTags(event.target.value)}
-          placeholder="^latest$"
-        />
-        <p className="text-xs text-muted-foreground">Regular expression to filter which tags to exclude</p>
-      </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-foreground">Exclude tags</label>
+            <Input
+              className="font-mono"
+              value={formExcludeTags}
+              onChange={(event) => setFormExcludeTags(event.target.value)}
+              placeholder="^latest$"
+            />
+            <p className="text-xs text-muted-foreground">Regex for tag exclusion</p>
+          </div>
+        </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Hub link</label>
-        <Input
-          value={formHubLink}
-          onChange={(event) => setFormHubLink(event.target.value)}
-          placeholder="https://hub.example.com"
-        />
-        <p className="text-xs text-muted-foreground">Override the automatic registry hub link for notifications</p>
-      </div>
+        {/* Column 3: Registry & platform */}
+        <div className="space-y-3">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-foreground">Registry options</label>
+            <Input
+              value={formRegopt}
+              onChange={(event) => setFormRegopt(event.target.value)}
+              placeholder="my-registry"
+            />
+            <p className="text-xs text-muted-foreground">Registry options name from Diun configuration</p>
+          </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Platform</label>
-        <Input
-          value={formPlatform}
-          onChange={(event) => setFormPlatform(event.target.value)}
-          placeholder="linux/amd64"
-        />
-        <p className="text-xs text-muted-foreground">Platform to use for image analysis</p>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-foreground">Hub link</label>
+            <Input
+              value={formHubLink}
+              onChange={(event) => setFormHubLink(event.target.value)}
+              placeholder="https://hub.example.com"
+            />
+            <p className="text-xs text-muted-foreground">Override the registry hub link for notifications</p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-foreground">Platform</label>
+            <Input
+              value={formPlatform}
+              onChange={(event) => setFormPlatform(event.target.value)}
+              placeholder="linux/amd64"
+            />
+            <p className="text-xs text-muted-foreground">Platform to use for image analysis</p>
+          </div>
+        </div>
       </div>
 
       <div className="flex flex-col gap-1.5">
