@@ -158,8 +158,7 @@ func getOrCreateMiddleware(m map[string]*TraefikMiddleware, name string) *Traefi
 		return mw
 	}
 	mw := &TraefikMiddleware{
-		Name:   name,
-		Config: make(map[string]string),
+		Name: name,
 	}
 	m[name] = mw
 	return mw
@@ -180,7 +179,9 @@ func parseRouterField(r *TraefikRouter, field, value string) {
 			r.Priority = n
 		}
 	case field == "tls":
-		ensureTLS(r)
+		if value != "false" {
+			ensureTLS(r)
+		}
 	case field == "tls.certresolver":
 		ensureTLS(r)
 		r.TLS.CertResolver = value
@@ -246,6 +247,10 @@ func parseMiddlewareField(mw *TraefikMiddleware, field, value string) {
 	}
 
 	if len(parts) == 2 {
+		if mw.Config == nil {
+			mw.Config = make(map[string]string)
+		}
+
 		mw.Config[parts[1]] = value
 	}
 }

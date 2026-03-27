@@ -268,17 +268,15 @@ export default function ServiceDetail() {
     [name, service],
   );
 
-  const hasTraefikIntegration = integrations.some(({ name }) => name === "traefik");
-
   const filteredLabels = useMemo(() => {
-    if (!serviceLabels || !hasTraefikIntegration) {
+    if (!serviceLabels || !integrations.some(({ name }) => name === "traefik")) {
       return serviceLabels;
     }
 
     return Object.fromEntries(
       Object.entries(serviceLabels).filter(([key]) => !key.startsWith("traefik.")),
     );
-  }, [serviceLabels, hasTraefikIntegration]);
+  }, [serviceLabels, integrations]);
 
   if (error) {
     return <FetchError message="Failed to load service" />;
