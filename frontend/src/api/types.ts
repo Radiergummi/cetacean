@@ -329,9 +329,51 @@ export interface ServiceRef {
   name: string;
 }
 
+export interface TraefikTLSDomain {
+  main: string;
+  sans?: string[];
+}
+
+export interface TraefikRouter {
+  name: string;
+  rule?: string;
+  entrypoints?: string[];
+  tls?: {
+    certResolver?: string;
+    domains?: TraefikTLSDomain[];
+    options?: string;
+  };
+  middlewares?: string[];
+  service?: string;
+  priority?: number;
+}
+
+export interface TraefikService {
+  name: string;
+  port?: number;
+  scheme?: string;
+}
+
+export interface TraefikMiddleware {
+  name: string;
+  type: string;
+  config?: Record<string, string>;
+}
+
+export interface TraefikIntegration {
+  name: "traefik";
+  enabled: boolean;
+  routers?: TraefikRouter[];
+  services?: TraefikService[];
+  middlewares?: TraefikMiddleware[];
+}
+
+export type Integration = TraefikIntegration;
+
 export interface ServiceDetail {
   service: Service;
   changes?: SpecChange[];
+  integrations?: Integration[];
 }
 
 export interface ConfigDetail {
