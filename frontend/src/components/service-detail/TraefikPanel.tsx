@@ -4,12 +4,13 @@ import type {
   TraefikRouter,
   TraefikService,
 } from "@/api/types";
-import CollapsibleSection from "@/components/CollapsibleSection";
 import KeyValuePills from "@/components/data/KeyValuePills";
 import { ArrowRight, Lock } from "lucide-react";
+import { IntegrationSection } from "./IntegrationSection";
 
 interface TraefikPanelProps {
   integration: TraefikIntegration;
+  rawLabels: [string, string][];
 }
 
 const badgeBase =
@@ -105,7 +106,7 @@ function MiddlewareRow({ middleware }: { middleware: TraefikMiddleware }) {
 /**
  * Read-only panel displaying parsed Traefik integration data for a service.
  */
-export function TraefikPanel({ integration }: TraefikPanelProps) {
+export function TraefikPanel({ integration, rawLabels }: TraefikPanelProps) {
   const { enabled, routers, services, middlewares } = integration;
 
   const hasRouters = routers && routers.length > 0;
@@ -113,7 +114,7 @@ export function TraefikPanel({ integration }: TraefikPanelProps) {
   const hasMiddlewares = middlewares && middlewares.length > 0;
 
   return (
-    <CollapsibleSection title="Traefik" defaultOpen={enabled}>
+    <IntegrationSection title="Traefik" defaultOpen={enabled} rawLabels={rawLabels}>
       {!enabled && (
         <span className="text-sm text-muted-foreground">Disabled</span>
       )}
@@ -166,6 +167,6 @@ export function TraefikPanel({ integration }: TraefikPanelProps) {
           )}
         </div>
       )}
-    </CollapsibleSection>
+    </IntegrationSection>
   );
 }

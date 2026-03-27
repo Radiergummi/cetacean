@@ -368,7 +368,40 @@ export interface TraefikIntegration {
   middlewares?: TraefikMiddleware[];
 }
 
-export type Integration = TraefikIntegration;
+export interface ShepherdIntegration {
+  name: "shepherd";
+  enabled: boolean;
+  schedule?: string;
+  imageFilter?: string;
+  latest?: boolean;
+  updateOpts?: string;
+}
+
+export interface CronjobIntegration {
+  name: "swarm-cronjob";
+  enabled: boolean;
+  schedule?: string;
+  skipRunning?: boolean;
+  replicas?: number;
+}
+
+export interface DiunIntegration {
+  name: "diun";
+  enabled: boolean;
+  watchRepo?: boolean;
+  notifyOn?: string;
+  maxTags?: number;
+  includeTags?: string;
+  excludeTags?: string;
+  sortTags?: string;
+  metadata?: Record<string, string>;
+}
+
+export type Integration =
+  | TraefikIntegration
+  | ShepherdIntegration
+  | CronjobIntegration
+  | DiunIntegration;
 
 export interface ServiceDetail {
   service: Service;

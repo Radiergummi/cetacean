@@ -9,5 +9,17 @@ func Detect(labels map[string]string) []any {
 		integrations = append(integrations, t)
 	}
 
+	if s := detectShepherd(labels); s != nil {
+		integrations = append(integrations, s)
+	}
+
+	if c := detectCronjob(labels); c != nil {
+		integrations = append(integrations, c)
+	}
+
+	if d := detectDiun(labels); d != nil {
+		integrations = append(integrations, d)
+	}
+
 	return integrations
 }

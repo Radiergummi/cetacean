@@ -45,6 +45,9 @@ import {
   ServiceActions,
   type ServiceResourceShape,
 } from "../components/service-detail";
+import { CronjobPanel } from "../components/service-detail/CronjobPanel";
+import { DiunPanel } from "../components/service-detail/DiunPanel";
+import { ShepherdPanel } from "../components/service-detail/ShepherdPanel";
 import { TraefikPanel } from "../components/service-detail/TraefikPanel";
 import TasksTable from "../components/TasksTable";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
@@ -59,6 +62,30 @@ import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
 import { escapePromQL } from "../lib/utils";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
+
+const integrationLabelPrefix: Record<string, string> = {
+  traefik: "traefik.",
+  shepherd: "shepherd.",
+  "swarm-cronjob": "swarm.cronjob.",
+  diun: "diun.",
+};
+
+function rawLabelsForIntegration(
+  labels: Record<string, string> | null,
+  integrationName: string,
+): [string, string][] {
+  if (!labels) {
+    return [];
+  }
+
+  const prefix = integrationLabelPrefix[integrationName];
+
+  if (!prefix) {
+    return [];
+  }
+
+  return Object.entries(labels).filter(([key]) => key.startsWith(prefix));
+}
 
 export default function ServiceDetail() {
   const { id } = useParams<{ id: string }>();
@@ -269,12 +296,22 @@ export default function ServiceDetail() {
   );
 
   const filteredLabels = useMemo(() => {
-    if (!serviceLabels || !integrations.some(({ name }) => name === "traefik")) {
+    if (!serviceLabels || integrations.length === 0) {
+      return serviceLabels;
+    }
+
+    const prefixes = integrations
+      .map(({ name }) => integrationLabelPrefix[name])
+      .filter(Boolean);
+
+    if (prefixes.length === 0) {
       return serviceLabels;
     }
 
     return Object.fromEntries(
-      Object.entries(serviceLabels).filter(([key]) => !key.startsWith("traefik.")),
+      Object.entries(serviceLabels).filter(
+        ([key]) => !prefixes.some((prefix) => key.startsWith(prefix)),
+      ),
     );
   }, [serviceLabels, integrations]);
 
@@ -461,9 +498,17 @@ export default function ServiceDetail() {
 
       {/* Integrations */}
       {integrations.map((integration) => {
+        const rawLabels = rawLabelsForIntegration(serviceLabels, integration.name);
+
         switch (integration.name) {
           case "traefik":
-            return <TraefikPanel key={integration.name} integration={integration} />;
+            return <TraefikPanel key={integration.name} integration={integration} rawLabels={rawLabels} />;
+          case "shepherd":
+            return <ShepherdPanel key={integration.name} integration={integration} rawLabels={rawLabels} />;
+          case "swarm-cronjob":
+            return <CronjobPanel key={integration.name} integration={integration} rawLabels={rawLabels} />;
+          case "diun":
+            return <DiunPanel key={integration.name} integration={integration} rawLabels={rawLabels} />;
           default:
             return null;
         }
