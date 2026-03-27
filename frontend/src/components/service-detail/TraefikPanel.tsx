@@ -9,6 +9,7 @@ import KeyValuePills from "@/components/data/KeyValuePills";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { diffLabels } from "@/lib/integrationLabels";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { ArrowRight, Lock } from "lucide-react";
 import { useState } from "react";
 import { IntegrationSection } from "./IntegrationSection";
@@ -143,7 +144,10 @@ function RouterEditCard({
       <header className="font-medium text-muted-foreground">{state.name}</header>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Rule</label>
+        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+          Rule
+          <HelpTooltip text="Routing rule expression (e.g., Host(`example.com`) && PathPrefix(`/api`))" />
+        </label>
         <Input
           className="font-mono"
           value={state.rule}
@@ -152,7 +156,10 @@ function RouterEditCard({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Entrypoints</label>
+        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+          Entrypoints
+          <HelpTooltip text="Comma-separated list of entrypoints this router listens on" />
+        </label>
         <Input
           value={state.entrypoints}
           onChange={(event) => onChange({ ...state, entrypoints: event.target.value })}
@@ -161,7 +168,10 @@ function RouterEditCard({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Middlewares</label>
+        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+          Middlewares
+          <HelpTooltip text="Comma-separated list of middleware names to apply" />
+        </label>
         <Input
           value={state.middlewares}
           onChange={(event) => onChange({ ...state, middlewares: event.target.value })}
@@ -170,7 +180,10 @@ function RouterEditCard({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Service</label>
+        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+          Service
+          <HelpTooltip text="Backend Traefik service to forward requests to" />
+        </label>
         <Input
           value={state.service}
           onChange={(event) => onChange({ ...state, service: event.target.value })}
@@ -178,7 +191,10 @@ function RouterEditCard({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Priority</label>
+        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+          Priority
+          <HelpTooltip text="Router priority — higher values win on rule conflicts" />
+        </label>
         <Input
           type="number"
           className="w-24"
@@ -188,7 +204,10 @@ function RouterEditCard({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">TLS cert resolver</label>
+        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+          TLS cert resolver
+          <HelpTooltip text="Certificate resolver for automatic TLS (e.g., letsencrypt)" />
+        </label>
         <Input
           value={state.certResolver}
           onChange={(event) => onChange({ ...state, certResolver: event.target.value })}
@@ -211,7 +230,10 @@ function ServiceEditCard({
       <header className="font-medium text-muted-foreground">{state.name}</header>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Port</label>
+        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+          Port
+          <HelpTooltip text="Backend server port for load balancing" />
+        </label>
         <Input
           type="number"
           className="w-24"
@@ -221,7 +243,10 @@ function ServiceEditCard({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Scheme</label>
+        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+          Scheme
+          <HelpTooltip text="Backend protocol (http, https, or h2c)" />
+        </label>
         <Input
           className="w-32"
           value={state.scheme}
@@ -421,6 +446,7 @@ export function TraefikPanel({
         <label className="flex items-center gap-2">
           <Switch checked={formEnabled} onCheckedChange={setFormEnabled} />
           <span className="text-xs font-medium text-foreground">Enabled</span>
+          <HelpTooltip text="Enable Traefik routing for this service" />
         </label>
       </div>
 

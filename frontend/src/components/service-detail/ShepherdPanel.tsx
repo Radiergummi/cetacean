@@ -1,6 +1,7 @@
 import { api } from "@/api/client";
 import type { ShepherdIntegration } from "@/api/types";
 import { KVTable } from "@/components/data";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { diffLabels } from "@/lib/integrationLabels";
@@ -59,10 +60,14 @@ export function ShepherdPanel({
       <label className="flex items-center gap-2">
         <Switch checked={formEnabled} onCheckedChange={setFormEnabled} />
         <span className="text-xs font-medium text-foreground">Enabled</span>
+        <HelpTooltip text="Enable automatic image updates for this service" />
       </label>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-foreground">Auth config</label>
+        <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+          Auth config
+          <HelpTooltip text="Registry auth configuration ID from the registries auth file" />
+        </label>
         <Input
           value={formAuthConfig}
           onChange={(event) => setFormAuthConfig(event.target.value)}
