@@ -12,6 +12,5 @@ COPY --link binaries/linux/${TARGETARCH}/cetacean /usr/local/bin/cetacean
 
 EXPOSE 9000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
-  CMD wget -qO- http://localhost:9000/-/health || exit 1
-USER nobody:nobody
+  CMD ["cetacean", "healthcheck"]
 ENTRYPOINT ["cetacean"]
