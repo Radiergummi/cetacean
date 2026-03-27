@@ -11,7 +11,11 @@ import { useState } from "react";
 /**
  * Wrapper for integration panels that provides a toggle between
  * the structured view and raw label display, plus a docs link.
- * Optionally supports inline editing in both structured and raw modes.
+ * Supports inline editing in both structured and raw modes.
+ *
+ * - Structured display: renders `children`
+ * - Structured edit: renders `editContent` with Save/Cancel footer
+ * - Raw display + edit: renders a bare `KeyValueEditor` (no nested section)
  */
 export function IntegrationSection({
   title,
@@ -70,6 +74,14 @@ export function IntegrationSection({
     setEditing(true);
   }
 
+  function toggleRaw() {
+    if (editing) {
+      setEditing(false);
+    }
+
+    setShowRaw((previous) => !previous);
+  }
+
   return (
     <CollapsibleSection
       title={title}
@@ -87,17 +99,7 @@ export function IntegrationSection({
             <ExternalLink className="size-3" />
           </a>
 
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={() => {
-              if (editing) {
-                setEditing(false);
-              }
-
-              setShowRaw((previous) => !previous);
-            }}
-          >
+          <Button variant="outline" size="xs" onClick={toggleRaw}>
             {showRaw ? <Layers className="size-3" /> : <Code className="size-3" />}
             {showRaw ? "Structured" : "Labels"}
           </Button>
@@ -114,6 +116,7 @@ export function IntegrationSection({
       {showRaw ? (
         <KeyValueEditor
           title=""
+          bare
           entries={Object.fromEntries(rawLabels)}
           defaultOpen
           editDisabled={!editable}

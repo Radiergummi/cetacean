@@ -14,6 +14,8 @@ interface EditableTableProps<T> {
   columns: [string, string];
   defaultOpen?: boolean;
   editDisabled?: boolean;
+  /** Render without CollapsibleSection wrapper (no title, no collapse toggle). */
+  bare?: boolean;
 
   // Read-only view
   renderReadOnly: (items: T[]) => ReactNode;
@@ -48,6 +50,7 @@ export function EditableTable<T>({
   columns,
   defaultOpen = false,
   editDisabled = false,
+  bare = false,
   renderReadOnly,
   emptyLabel,
   emptyHint,
@@ -145,12 +148,8 @@ export function EditableTable<T>({
     </>
   ) : null;
 
-  return (
-    <CollapsibleSection
-      title={title}
-      defaultOpen={defaultOpen}
-      controls={controls}
-    >
+  const content = (
+    <>
       {!editing ? (
         items.length === 0 ? (
           <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed py-6 text-center text-muted-foreground">
@@ -262,6 +261,20 @@ export function EditableTable<T>({
           </div>
         </div>
       )}
+    </>
+  );
+
+  if (bare) {
+    return content;
+  }
+
+  return (
+    <CollapsibleSection
+      title={title}
+      defaultOpen={defaultOpen}
+      controls={controls}
+    >
+      {content}
     </CollapsibleSection>
   );
 }
