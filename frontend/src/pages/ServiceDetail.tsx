@@ -3,6 +3,7 @@ import type {
   ContainerConfig,
   Healthcheck,
   HistoryEntry,
+  Integration,
   PortConfig,
   Service,
   ServiceMount,
@@ -44,6 +45,7 @@ import {
   ServiceActions,
   type ServiceResourceShape,
 } from "../components/service-detail";
+import { TraefikPanel } from "../components/service-detail/TraefikPanel";
 import TasksTable from "../components/TasksTable";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
@@ -71,6 +73,7 @@ export default function ServiceDetail() {
   const [specPorts, setSpecPorts] = useState<PortConfig[] | null>(null);
   const [serviceMounts, setServiceMounts] = useState<ServiceMount[] | null>(null);
   const [containerConfig, setContainerConfig] = useState<ContainerConfig | null>(null);
+  const [integrations, setIntegrations] = useState<Integration[]>([]);
   const monitoring = useMonitoringStatus();
   const { level: operationsLevel, loading: levelLoading } = useOperationsLevel();
   const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
@@ -104,6 +107,7 @@ export default function ServiceDetail() {
         .then((response) => {
           setService(response.service);
           setChanges(response.changes ?? []);
+          setIntegrations(response.integrations ?? []);
           applyDerivedState(response.service);
         })
         .catch(() => {
@@ -263,6 +267,34 @@ export default function ServiceDetail() {
         : [],
     [name, service],
   );
+
+  const filteredLabels = useMemo(() => {
+    if (!serviceLabels || integrations.length === 0) {
+      return serviceLabels;
+    }
+
+    const prefixes: string[] = [];
+
+    for (const integration of integrations) {
+      if (integration.name === "traefik") {
+        prefixes.push("traefik.");
+      }
+    }
+
+    if (prefixes.length === 0) {
+      return serviceLabels;
+    }
+
+    const filtered: Record<string, string> = {};
+
+    for (const [key, value] of Object.entries(serviceLabels)) {
+      if (!prefixes.some((prefix) => key.startsWith(prefix))) {
+        filtered[key] = value;
+      }
+    }
+
+    return filtered;
+  }, [serviceLabels, integrations]);
 
   if (error) {
     return <FetchError message="Failed to load service" />;
@@ -445,12 +477,22 @@ export default function ServiceDetail() {
         />
       )}
 
+      {/* Integrations */}
+      {integrations.map((integration) => {
+        switch (integration.name) {
+          case "traefik":
+            return <TraefikPanel key={integration.name} integration={integration} />;
+          default:
+            return null;
+        }
+      })}
+
       {/* Labels */}
       {serviceLabels !== null && (hasLabelsContent || canEditConfig) && (
         <KeyValueEditor
           title="Labels"
-          entries={serviceLabels}
-          defaultOpen={Object.keys(serviceLabels).length > 0}
+          entries={filteredLabels ?? {}}
+          defaultOpen={Object.keys(filteredLabels ?? {}).length > 0}
           keyPlaceholder="com.example.my-label"
           valuePlaceholder="value"
           editDisabled={levelLoading || operationsLevel < opsLevel.configuration}
