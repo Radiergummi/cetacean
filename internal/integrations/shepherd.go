@@ -4,12 +4,9 @@ import "strings"
 
 // ShepherdIntegration represents parsed Shepherd auto-update configuration.
 type ShepherdIntegration struct {
-	Name        string `json:"name"`
-	Enabled     bool   `json:"enabled"`
-	Schedule    string `json:"schedule,omitempty"`
-	ImageFilter string `json:"imageFilter,omitempty"`
-	Latest      bool   `json:"latest,omitempty"`
-	UpdateOpts  string `json:"updateOpts,omitempty"`
+	Name       string `json:"name"`
+	Enabled    bool   `json:"enabled"`
+	AuthConfig string `json:"authConfig,omitempty"`
 }
 
 func detectShepherd(labels map[string]string) *ShepherdIntegration {
@@ -33,14 +30,8 @@ func detectShepherd(labels map[string]string) *ShepherdIntegration {
 		case "enable":
 			enableSet = true
 			enableVal = v
-		case "schedule":
-			integration.Schedule = v
-		case "image-filter":
-			integration.ImageFilter = v
-		case "latest":
-			integration.Latest = v == "true"
-		case "update-opts":
-			integration.UpdateOpts = v
+		case "auth.config":
+			integration.AuthConfig = v
 		}
 	}
 

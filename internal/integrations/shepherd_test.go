@@ -4,11 +4,8 @@ import "testing"
 
 func TestDetectShepherd_Basic(t *testing.T) {
 	labels := map[string]string{
-		"shepherd.enable":       "true",
-		"shepherd.schedule":     "0 * * * *",
-		"shepherd.image-filter": "myapp.*",
-		"shepherd.latest":       "true",
-		"shepherd.update-opts":  "--no-resolve-image",
+		"shepherd.enable":      "true",
+		"shepherd.auth.config": "myregistry",
 	}
 
 	result := detectShepherd(labels)
@@ -24,20 +21,8 @@ func TestDetectShepherd_Basic(t *testing.T) {
 		t.Error("expected enabled=true")
 	}
 
-	if result.Schedule != "0 * * * *" {
-		t.Errorf("expected schedule '0 * * * *', got %q", result.Schedule)
-	}
-
-	if result.ImageFilter != "myapp.*" {
-		t.Errorf("expected imageFilter 'myapp.*', got %q", result.ImageFilter)
-	}
-
-	if !result.Latest {
-		t.Error("expected latest=true")
-	}
-
-	if result.UpdateOpts != "--no-resolve-image" {
-		t.Errorf("expected updateOpts '--no-resolve-image', got %q", result.UpdateOpts)
+	if result.AuthConfig != "myregistry" {
+		t.Errorf("expected authConfig 'myregistry', got %q", result.AuthConfig)
 	}
 }
 
@@ -55,8 +40,7 @@ func TestDetectShepherd_NoLabels(t *testing.T) {
 
 func TestDetectShepherd_EnabledFalse(t *testing.T) {
 	labels := map[string]string{
-		"shepherd.enable":   "false",
-		"shepherd.schedule": "0 0 * * *",
+		"shepherd.enable": "false",
 	}
 
 	result := detectShepherd(labels)
@@ -67,15 +51,12 @@ func TestDetectShepherd_EnabledFalse(t *testing.T) {
 	if result.Enabled {
 		t.Error("expected enabled=false")
 	}
-
-	if result.Schedule != "0 0 * * *" {
-		t.Errorf("expected schedule '0 0 * * *', got %q", result.Schedule)
-	}
 }
 
-func TestDetectShepherd_EnableOnly(t *testing.T) {
+func TestDetectShepherd_AuthConfig(t *testing.T) {
 	labels := map[string]string{
-		"shepherd.enable": "true",
+		"shepherd.enable":      "true",
+		"shepherd.auth.config": "ghcr.io",
 	}
 
 	result := detectShepherd(labels)
@@ -87,19 +68,7 @@ func TestDetectShepherd_EnableOnly(t *testing.T) {
 		t.Error("expected enabled=true")
 	}
 
-	if result.Schedule != "" {
-		t.Errorf("expected empty schedule, got %q", result.Schedule)
-	}
-
-	if result.ImageFilter != "" {
-		t.Errorf("expected empty imageFilter, got %q", result.ImageFilter)
-	}
-
-	if result.Latest {
-		t.Error("expected latest=false")
-	}
-
-	if result.UpdateOpts != "" {
-		t.Errorf("expected empty updateOpts, got %q", result.UpdateOpts)
+	if result.AuthConfig != "ghcr.io" {
+		t.Errorf("expected authConfig 'ghcr.io', got %q", result.AuthConfig)
 	}
 }

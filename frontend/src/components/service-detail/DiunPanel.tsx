@@ -37,7 +37,7 @@ export function DiunPanel({
   integration: DiunIntegration;
   rawLabels: [string, string][];
 }) {
-  const { enabled, watchRepo, notifyOn, maxTags, includeTags, excludeTags, sortTags, metadata } =
+  const { enabled, watchRepo, notifyOn, maxTags, includeTags, excludeTags, sortTags, regopt, hubLink, platform, metadata } =
     integration;
 
   const hasMetadata = metadata && Object.keys(metadata).length > 0;
@@ -58,6 +58,9 @@ export function DiunPanel({
               includeTags && ["Include tags", includeTags],
               excludeTags && ["Exclude tags", excludeTags],
               sortTags && ["Sort tags", sortTags],
+              regopt && ["Registry options", regopt],
+              hubLink && ["Hub link", hubLink],
+              platform && ["Platform", platform],
             ]}
           />
 

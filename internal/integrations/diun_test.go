@@ -134,3 +134,29 @@ func TestDetectDiun_WatchRepoOnly(t *testing.T) {
 		t.Error("WatchRepo = false, want true")
 	}
 }
+
+func TestDetectDiun_ExtraFields(t *testing.T) {
+	labels := map[string]string{
+		"diun.enable":   "true",
+		"diun.regopt":   "ghcr.io",
+		"diun.hub_link": "https://hub.docker.com/r/myapp",
+		"diun.platform": "linux/amd64",
+	}
+
+	got := detectDiun(labels)
+	if got == nil {
+		t.Fatal("expected non-nil result")
+	}
+
+	if got.RegOpt != "ghcr.io" {
+		t.Errorf("RegOpt = %q, want %q", got.RegOpt, "ghcr.io")
+	}
+
+	if got.HubLink != "https://hub.docker.com/r/myapp" {
+		t.Errorf("HubLink = %q, want %q", got.HubLink, "https://hub.docker.com/r/myapp")
+	}
+
+	if got.Platform != "linux/amd64" {
+		t.Errorf("Platform = %q, want %q", got.Platform, "linux/amd64")
+	}
+}

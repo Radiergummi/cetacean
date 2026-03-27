@@ -15,7 +15,7 @@ export function CronjobPanel({
   integration: CronjobIntegration;
   rawLabels: [string, string][];
 }) {
-  const { enabled, schedule, skipRunning, replicas } = integration;
+  const { enabled, schedule, skipRunning, replicas, registryAuth, queryRegistry } = integration;
 
   return (
     <IntegrationSection title="Swarm Cronjob" defaultOpen={enabled} rawLabels={rawLabels} docsUrl={docsUrl}>
@@ -29,6 +29,8 @@ export function CronjobPanel({
             schedule && ["Schedule", <CronSchedule key="schedule" expression={schedule} />],
             replicas != null && replicas > 0 && ["Replicas", String(replicas)],
             skipRunning && ["Skip running", "Skip if previous run still active"],
+            registryAuth && ["Registry auth", "Enabled"],
+            queryRegistry && ["Query registry", "Enabled"],
           ]}
         />
       )}

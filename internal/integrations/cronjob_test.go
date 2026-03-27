@@ -99,3 +99,25 @@ func TestDetectCronjob_ScheduleOnly(t *testing.T) {
 		t.Errorf("expected replicas=0 (default), got %d", result.Replicas)
 	}
 }
+
+func TestDetectCronjob_RegistryFields(t *testing.T) {
+	labels := map[string]string{
+		"swarm.cronjob.enable":         "true",
+		"swarm.cronjob.schedule":       "0 */5 * * *",
+		"swarm.cronjob.registry-auth":  "true",
+		"swarm.cronjob.query-registry": "true",
+	}
+
+	result := detectCronjob(labels)
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+
+	if !result.RegistryAuth {
+		t.Error("expected registryAuth=true")
+	}
+
+	if !result.QueryRegistry {
+		t.Error("expected queryRegistry=true")
+	}
+}

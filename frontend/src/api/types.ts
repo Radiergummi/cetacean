@@ -371,10 +371,7 @@ export interface TraefikIntegration {
 export interface ShepherdIntegration {
   name: "shepherd";
   enabled: boolean;
-  schedule?: string;
-  imageFilter?: string;
-  latest?: boolean;
-  updateOpts?: string;
+  authConfig?: string;
 }
 
 export interface CronjobIntegration {
@@ -383,6 +380,8 @@ export interface CronjobIntegration {
   schedule?: string;
   skipRunning?: boolean;
   replicas?: number;
+  registryAuth?: boolean;
+  queryRegistry?: boolean;
 }
 
 export interface DiunIntegration {
@@ -394,6 +393,9 @@ export interface DiunIntegration {
   includeTags?: string;
   excludeTags?: string;
   sortTags?: string;
+  regopt?: string;
+  hubLink?: string;
+  platform?: string;
   metadata?: Record<string, string>;
 }
 

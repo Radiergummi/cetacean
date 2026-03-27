@@ -7,11 +7,13 @@ import (
 
 // CronjobIntegration represents parsed Swarm Cronjob configuration.
 type CronjobIntegration struct {
-	Name        string `json:"name"`
-	Enabled     bool   `json:"enabled"`
-	Schedule    string `json:"schedule,omitempty"`
-	SkipRunning bool   `json:"skipRunning,omitempty"`
-	Replicas    int    `json:"replicas,omitempty"`
+	Name          string `json:"name"`
+	Enabled       bool   `json:"enabled"`
+	Schedule      string `json:"schedule,omitempty"`
+	SkipRunning   bool   `json:"skipRunning,omitempty"`
+	Replicas      int    `json:"replicas,omitempty"`
+	RegistryAuth  bool   `json:"registryAuth,omitempty"`
+	QueryRegistry bool   `json:"queryRegistry,omitempty"`
 }
 
 func detectCronjob(labels map[string]string) *CronjobIntegration {
@@ -43,6 +45,10 @@ func detectCronjob(labels map[string]string) *CronjobIntegration {
 			if n, err := strconv.Atoi(v); err == nil {
 				integration.Replicas = n
 			}
+		case "registry-auth":
+			integration.RegistryAuth = v == "true"
+		case "query-registry":
+			integration.QueryRegistry = v == "true"
 		}
 	}
 

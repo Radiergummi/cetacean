@@ -15,6 +15,9 @@ type DiunIntegration struct {
 	IncludeTags string            `json:"includeTags,omitempty"`
 	ExcludeTags string            `json:"excludeTags,omitempty"`
 	SortTags    string            `json:"sortTags,omitempty"`
+	RegOpt      string            `json:"regopt,omitempty"`
+	HubLink     string            `json:"hubLink,omitempty"`
+	Platform    string            `json:"platform,omitempty"`
 	Metadata    map[string]string `json:"metadata,omitempty"`
 }
 
@@ -51,6 +54,12 @@ func detectDiun(labels map[string]string) *DiunIntegration {
 			integration.ExcludeTags = v
 		case "sort_tags":
 			integration.SortTags = v
+		case "regopt":
+			integration.RegOpt = v
+		case "hub_link":
+			integration.HubLink = v
+		case "platform":
+			integration.Platform = v
 		default:
 			if metaKey, ok := strings.CutPrefix(suffix, "metadata."); ok {
 				if integration.Metadata == nil {
