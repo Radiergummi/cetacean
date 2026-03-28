@@ -173,7 +173,7 @@ export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
                   ) : (
                     <Wrench className="size-3" />
                   )}
-                  Fix
+                  Apply suggested value
                 </button>
               )}
             </div>
