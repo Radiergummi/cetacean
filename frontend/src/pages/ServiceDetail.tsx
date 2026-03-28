@@ -400,7 +400,7 @@ export default function ServiceDetail() {
                 }}
               >
                 <sizingHint.Icon className="size-3.5" />
-                {sizingHint.text}
+                {sizingHint.descriptiveText}
               </button>
             )}
             <ServiceActions

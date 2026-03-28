@@ -27,28 +27,47 @@ function hintIcon(category: SizingRecommendation["category"]): LucideIcon {
   return ArrowDown;
 }
 
-function formatHintLabel(hint: SizingRecommendation): { Icon: LucideIcon; text: string } {
-  const Icon = hintIcon(hint.category);
+const categoryLabels: Record<SizingRecommendation["category"], string> = {
+  "over-provisioned": "over-provisioned",
+  "approaching-limit": "near limit",
+  "at-limit": "at limit",
+  "no-limits": "No limits",
+  "no-reservations": "No reservations",
+};
 
-  if (hint.category === "no-limits") {
-    return { Icon, text: "No limits" };
-  }
-
-  if (hint.category === "no-reservations") {
-    return { Icon, text: "No reservations" };
+/**
+ * Compact label for the table column (e.g., "CPU 85%").
+ */
+function formatCompactLabel(hint: SizingRecommendation): string {
+  if (hint.category === "no-limits" || hint.category === "no-reservations") {
+    return categoryLabels[hint.category];
   }
 
   const percentage = Math.round((hint.current / hint.configured) * 100);
 
-  return { Icon, text: `${hint.resource.toUpperCase()} ${percentage}%` };
+  return `${hint.resource.toUpperCase()} ${percentage}%`;
+}
+
+/**
+ * Descriptive label for the detail page badge (e.g., "CPU over-provisioned").
+ */
+function formatDescriptiveLabel(hint: SizingRecommendation): string {
+  if (hint.category === "no-limits" || hint.category === "no-reservations") {
+    return categoryLabels[hint.category];
+  }
+
+  return `${hint.resource.toUpperCase()} ${categoryLabels[hint.category]}`;
 }
 
 /**
  * Returns the highest-severity hint info, or null if the hints array is empty.
+ * `compactText` is for the table column ("CPU 85%"), `descriptiveText` for the
+ * detail page badge ("CPU near limit").
  */
 export function highestSeverityHint(hints: SizingRecommendation[]): {
   Icon: LucideIcon;
-  text: string;
+  compactText: string;
+  descriptiveText: string;
   severity: SizingSeverity;
   allHints: SizingRecommendation[];
 } | null {
@@ -60,11 +79,11 @@ export function highestSeverityHint(hints: SizingRecommendation[]): {
     (first, second) => severityRank[second.severity] - severityRank[first.severity],
   );
   const top = sorted[0];
-  const { Icon, text } = formatHintLabel(top);
 
   return {
-    Icon,
-    text,
+    Icon: hintIcon(top.category),
+    compactText: formatCompactLabel(top),
+    descriptiveText: formatDescriptiveLabel(top),
     severity: top.severity,
     allHints: sorted,
   };
@@ -92,7 +111,7 @@ export function SizingBadge({ hints }: { hints: SizingRecommendation[] }) {
   const badge = (
     <span className={`inline-flex items-center gap-1 ${severityStyles[top.severity]}`}>
       <Icon className="size-3.5" />
-      {top.text}
+      {top.compactText}
     </span>
   );
 
