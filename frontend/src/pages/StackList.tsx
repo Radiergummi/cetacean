@@ -195,7 +195,7 @@ function StackCard({ stack }: { stack: StackSummary }) {
         <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-yellow-500 group-data-[health=critical]:bg-red-500 group-data-[health=healthy]:bg-green-500" />
         <span className="truncate font-medium">{stack.name}</span>
         {stack.updatingServices > 0 && (
-          <span className="ml-auto rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+          <span className="ms-auto rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
             Updating {stack.updatingServices}
           </span>
         )}

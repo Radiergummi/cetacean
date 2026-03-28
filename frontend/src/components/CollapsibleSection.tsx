@@ -90,7 +90,7 @@ export default function CollapsibleSection({
           open={open}
           onToggle={toggle}
         />
-        {open && controls && <div className="flex items-center gap-2 sm:ml-auto">{controls}</div>}
+        {open && controls && <div className="flex items-center gap-2 sm:ms-auto">{controls}</div>}
       </div>
       {open && children}
     </div>

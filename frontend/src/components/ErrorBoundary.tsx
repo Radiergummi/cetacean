@@ -33,7 +33,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             <span className="truncate">{this.state.error.message}</span>
             <button
               onClick={() => this.setState({ error: null })}
-              className="ml-auto shrink-0 text-xs font-medium underline hover:no-underline"
+              className="ms-auto shrink-0 text-xs font-medium underline hover:no-underline"
             >
               Retry
             </button>

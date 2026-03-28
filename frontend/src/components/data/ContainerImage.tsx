@@ -3,7 +3,11 @@ import { api } from "@/api/client";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { imageRegistryUrl } from "@/lib/imageUrl";
@@ -78,27 +82,18 @@ function ImageUpdatePopover({
   }
 
   return (
-    <Popover
-      open={open}
-      onOpenChange={handleOpenChange}
-      modal
-    >
+    <Popover open={open} onOpenChange={handleOpenChange} modal>
       <PopoverTrigger
         render={
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            title="Update image"
-          >
+          <Button variant="ghost" size="icon-xs" title="Update image">
             <Pencil className="size-3.5" />
           </Button>
         }
       />
-      <PopoverContent
-        className="w-80"
-        align="end"
-      >
-        <p className="mb-1 text-xs font-medium text-muted-foreground">New image</p>
+      <PopoverContent className="w-80" align="end">
+        <p className="mb-1 text-xs font-medium text-muted-foreground">
+          New image
+        </p>
         <Input
           value={value}
           onChange={(event) => setValue(event.target.value)}
@@ -112,7 +107,9 @@ function ImageUpdatePopover({
           autoFocus
         />
         {validationError && (
-          <p className="mb-2 text-xs text-red-600 dark:text-red-400">{validationError}</p>
+          <p className="mb-2 text-xs text-red-600 dark:text-red-400">
+            {validationError}
+          </p>
         )}
         <div className="flex gap-2">
           <Button
@@ -155,7 +152,9 @@ export default function ContainerImage({
     return null;
   }
 
-  const display = image.split("@")[0].replace(/^(docker\.io|registry-1\.docker\.io)\//, "");
+  const display = image
+    .split("@")[0]
+    .replace(/^(docker\.io|registry-1\.docker\.io)\//, "");
   const href = imageRegistryUrl(image);
   const favicon = registryFavicon(image);
 
@@ -164,7 +163,8 @@ export default function ContainerImage({
       {favicon && (
         <img
           src={favicon}
-          alt=""
+          alt="Registry Icon"
+          aria-hidden="true"
           className="h-4 w-4 shrink-0"
         />
       )}
@@ -189,19 +189,11 @@ export default function ContainerImage({
     serviceId && canEdit ? (
       <>
         {link}
-        <ImageUpdatePopover
-          serviceId={serviceId}
-          currentImage={image}
-        />
+        <ImageUpdatePopover serviceId={serviceId} currentImage={image} />
       </>
     ) : (
       link
     );
 
-  return (
-    <InfoCard
-      label={label}
-      value={value}
-    />
-  );
+  return <InfoCard label={label} value={value} />;
 }

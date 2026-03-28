@@ -246,7 +246,7 @@ export function EditableTable<T>({
               >
                 Add another
               </Button>
-              <div className="ml-auto flex gap-2">
+              <div className="ms-auto flex gap-2">
                 <Button
                   size="sm"
                   onClick={() => void save()}

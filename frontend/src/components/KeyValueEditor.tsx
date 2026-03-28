@@ -86,7 +86,7 @@ export function KeyValueEditor({
         <span className="font-mono text-xs">
           {key}
           {isKeyReadOnly?.(key) && (
-            <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-sans text-[10px] text-muted-foreground">
+            <span className="ms-2 rounded bg-muted px-1.5 py-0.5 font-sans text-[10px] text-muted-foreground">
               read-only
             </span>
           )}

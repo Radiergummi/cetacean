@@ -151,7 +151,7 @@ export function IntegrationSection({
             )}
 
             <footer className="flex items-center gap-2">
-              <div className="ml-auto flex gap-2">
+              <div className="ms-auto flex gap-2">
                 <Button size="sm" onClick={save} disabled={saving}>
                   {saving && <Spinner className="size-3" />}
                   Save

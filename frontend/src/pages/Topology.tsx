@@ -13,9 +13,19 @@ import ServiceCardNode from "../components/topology/ServiceCardNode";
 import { useMatchesBreakpoint } from "../hooks/useMatchesBreakpoint";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { computeLayout } from "../lib/layoutElk";
-import { buildLogicalFlow, buildPhysicalFlow, hashColor } from "../lib/topologyTransform";
+import {
+  buildLogicalFlow,
+  buildPhysicalFlow,
+  hashColor,
+} from "../lib/topologyTransform";
 import { getErrorMessage } from "../lib/utils";
-import { ReactFlow, ReactFlowProvider, Background, type Node, type Edge } from "@xyflow/react";
+import {
+  ReactFlow,
+  ReactFlowProvider,
+  Background,
+  type Node,
+  type Edge,
+} from "@xyflow/react";
 import { Info, Network, Server, X } from "lucide-react";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
@@ -62,7 +72,7 @@ function StackLegend({
         {isMobile && (
           <button
             onClick={() => setOpen(false)}
-            className="ml-2 text-muted-foreground hover:text-foreground"
+            className="ms-2 text-muted-foreground hover:text-foreground"
           >
             <X className="size-3" />
           </button>
@@ -70,10 +80,7 @@ function StackLegend({
       </div>
       <div className="flex flex-col gap-1">
         {[...stackColors.entries()].map(([stack, color]) => (
-          <span
-            key={stack}
-            className="flex items-center gap-1.5"
-          >
+          <span key={stack} className="flex items-center gap-1.5">
             <span
               className="inline-block size-3 shrink-0 rounded-full"
               style={{ backgroundColor: color }}
@@ -149,8 +156,17 @@ function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
   return { nodes, edges, ready };
 }
 
-function LogicalView({ data, isMobile }: { data: NetworkTopology; isMobile: boolean }) {
-  const { nodes: rawNodes, edges: rawEdges } = useMemo(() => buildLogicalFlow(data), [data]);
+function LogicalView({
+  data,
+  isMobile,
+}: {
+  data: NetworkTopology;
+  isMobile: boolean;
+}) {
+  const { nodes: rawNodes, edges: rawEdges } = useMemo(
+    () => buildLogicalFlow(data),
+    [data],
+  );
   const { nodes, edges, ready } = useElkLayout(rawNodes, rawEdges);
 
   const stackColors = useMemo(() => {
@@ -180,7 +196,9 @@ function LogicalView({ data, isMobile }: { data: NetworkTopology; isMobile: bool
     <HighlightProvider edges={rawEdges}>
       <div
         className="relative"
-        style={{ height: isMobile ? "calc(100dvh - 3rem)" : "calc(100vh - 12rem)" }}
+        style={{
+          height: isMobile ? "calc(100dvh - 3rem)" : "calc(100vh - 12rem)",
+        }}
       >
         <ReactFlow
           nodes={nodes}
@@ -194,16 +212,19 @@ function LogicalView({ data, isMobile }: { data: NetworkTopology; isMobile: bool
         >
           <Background />
         </ReactFlow>
-        <StackLegend
-          stackColors={stackColors}
-          isMobile={isMobile}
-        />
+        <StackLegend stackColors={stackColors} isMobile={isMobile} />
       </div>
     </HighlightProvider>
   );
 }
 
-function PhysicalView({ data, isMobile }: { data: PlacementTopology; isMobile: boolean }) {
+function PhysicalView({
+  data,
+  isMobile,
+}: {
+  data: PlacementTopology;
+  isMobile: boolean;
+}) {
   const { nodes } = useMemo(() => buildPhysicalFlow(data), [data]);
 
   if (data.nodes.length === 0) {
@@ -216,7 +237,11 @@ function PhysicalView({ data, isMobile }: { data: PlacementTopology; isMobile: b
   }
 
   return (
-    <div style={{ height: isMobile ? "calc(100dvh - 3rem)" : "calc(100vh - 12rem)" }}>
+    <div
+      style={{
+        height: isMobile ? "calc(100dvh - 3rem)" : "calc(100vh - 12rem)",
+      }}
+    >
       <ReactFlow
         nodes={nodes}
         edges={[]}
@@ -237,7 +262,9 @@ export default function Topology() {
   const isMobile = useMatchesBreakpoint("md", "below");
   const [view, setView] = useState<View>("logical");
   const [networkData, setNetworkData] = useState<NetworkTopology | null>(null);
-  const [placementData, setPlacementData] = useState<PlacementTopology | null>(null);
+  const [placementData, setPlacementData] = useState<PlacementTopology | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const initialLoadRef = useRef(true);
@@ -248,7 +275,10 @@ export default function Topology() {
     }
     setError(null);
     try {
-      const [net, place] = await Promise.all([api.topologyNetworks(), api.topologyPlacement()]);
+      const [net, place] = await Promise.all([
+        api.topologyNetworks(),
+        api.topologyPlacement(),
+      ]);
       setNetworkData(net);
       setPlacementData(place);
     } catch (error) {
@@ -321,19 +351,13 @@ export default function Topology() {
       <div className="rounded-lg ring-1 ring-border">
         {!loading && !error && view === "logical" && networkData && (
           <ReactFlowProvider>
-            <LogicalView
-              data={networkData}
-              isMobile={isMobile}
-            />
+            <LogicalView data={networkData} isMobile={isMobile} />
           </ReactFlowProvider>
         )}
 
         {!loading && !error && view === "physical" && placementData && (
           <ReactFlowProvider>
-            <PhysicalView
-              data={placementData}
-              isMobile={isMobile}
-            />
+            <PhysicalView data={placementData} isMobile={isMobile} />
           </ReactFlowProvider>
         )}
       </div>

@@ -41,7 +41,10 @@ export default function ErrorCodeDetail() {
     <>
       <PageHeader
         title={`${errorDef.code} — ${errorDef.title}`}
-        breadcrumbs={[{ label: "Error Reference", to: "/api/errors" }, { label: errorDef.code }]}
+        breadcrumbs={[
+          { label: "Error Reference", to: "/api/errors" },
+          { label: errorDef.code },
+        ]}
       />
 
       <div className="space-y-6">
@@ -55,7 +58,7 @@ export default function ErrorCodeDetail() {
 
         <p className="text-sm">{errorDef.description}</p>
 
-        <div className="rounded-md border-l-2 border-blue-500 bg-blue-50 p-4 dark:bg-blue-950/30">
+        <div className="rounded-md border-s-2 border-blue-500 bg-blue-50 p-4 dark:bg-blue-950/30">
           <p className="text-sm">
             <span className="font-medium">Suggestion: </span>
             {errorDef.suggestion}
