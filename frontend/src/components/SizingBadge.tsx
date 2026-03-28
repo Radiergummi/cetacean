@@ -1,6 +1,6 @@
 import type { SizingRecommendation } from "@/api/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { hintIcon, highestSeverity, severityRank, severityStyles } from "@/lib/sizingUtils";
+import { hintIcon, severityRank, severityStyles } from "@/lib/sizingUtils";
 import { Check } from "lucide-react";
 
 /**
@@ -40,7 +40,7 @@ export function SizingBadge({ hints }: { hints: SizingRecommendation[] }) {
   );
   const top = sorted[0];
   const Icon = hintIcon(top.category);
-  const severity = highestSeverity(hints);
+  const severity = top.severity;
 
   const badge = (
     <span className={`inline-flex items-center gap-1 ${severityStyles[severity]}`}>

@@ -9,10 +9,11 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/prom"
 )
 
-func mockQuery(cpuResults, memResults, cpuP95Results, memP95Results []PromResult) QueryFunc {
-	return func(_ context.Context, query string) ([]PromResult, error) {
+func mockQuery(cpuResults, memResults, cpuP95Results, memP95Results []prom.Result) QueryFunc {
+	return func(_ context.Context, query string) ([]prom.Result, error) {
 		isP95 := strings.Contains(query, "quantile")
 
 		if strings.Contains(query, "cpu_usage") {
@@ -64,10 +65,10 @@ func TestMonitor_SingleTick(t *testing.T) {
 		},
 	})
 
-	instantCPU := []PromResult{{Labels: map[string]string{serviceLabelKey: "web"}, Value: 90}}
-	instantMem := []PromResult{{Labels: map[string]string{serviceLabelKey: "web"}, Value: float64(400 << 20)}}
-	p95CPU := []PromResult{{Labels: map[string]string{serviceLabelKey: "web"}, Value: 40}}
-	p95Mem := []PromResult{{Labels: map[string]string{serviceLabelKey: "web"}, Value: float64(300 << 20)}}
+	instantCPU := []prom.Result{{Labels: map[string]string{serviceLabelKey: "web"}, Value: 90}}
+	instantMem := []prom.Result{{Labels: map[string]string{serviceLabelKey: "web"}, Value: float64(400 << 20)}}
+	p95CPU := []prom.Result{{Labels: map[string]string{serviceLabelKey: "web"}, Value: 40}}
+	p95Mem := []prom.Result{{Labels: map[string]string{serviceLabelKey: "web"}, Value: float64(300 << 20)}}
 
 	query := mockQuery(instantCPU, instantMem, p95CPU, p95Mem)
 
@@ -102,7 +103,7 @@ func TestMonitor_SingleTick(t *testing.T) {
 
 func TestMonitor_NewReturnsNilWhenDisabled(t *testing.T) {
 	cfg := &config.SizingConfig{Enabled: false}
-	m := New(func(context.Context, string) ([]PromResult, error) { return nil, nil }, cache.New(nil), cfg)
+	m := New(func(context.Context, string) ([]prom.Result, error) { return nil, nil }, cache.New(nil), cfg)
 
 	if m != nil {
 		t.Error("expected nil monitor when disabled")

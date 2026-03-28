@@ -10,6 +10,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/prom"
 )
 
 const (
@@ -20,15 +21,8 @@ const (
 	memoryInstantQuery = `avg_over_time(sum by (` + serviceLabelKey + `)(container_memory_usage_bytes{` + serviceFilter + `})[1h:])`
 )
 
-// PromResult holds a single Prometheus query result.
-// Defined locally to avoid circular imports with the api package.
-type PromResult struct {
-	Labels map[string]string
-	Value  float64
-}
-
 // QueryFunc executes a Prometheus instant query and returns results.
-type QueryFunc func(ctx context.Context, query string) ([]PromResult, error)
+type QueryFunc func(ctx context.Context, query string) ([]prom.Result, error)
 
 // Monitor periodically evaluates service resource sizing.
 type Monitor struct {

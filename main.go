@@ -205,18 +205,7 @@ func main() {
 			slog.Error("failed to load sizing config", "error", err)
 			os.Exit(1)
 		}
-		queryFunc := sizing.QueryFunc(func(ctx context.Context, query string) ([]sizing.PromResult, error) {
-			results, err := promClient.InstantQuery(ctx, query)
-			if err != nil {
-				return nil, err
-			}
-			out := make([]sizing.PromResult, len(results))
-			for i, r := range results {
-				out[i] = sizing.PromResult{Labels: r.Labels, Value: r.Value}
-			}
-			return out, nil
-		})
-		sizingMonitor = sizing.New(queryFunc, stateCache, sizingCfg)
+		sizingMonitor = sizing.New(promClient.InstantQuery, stateCache, sizingCfg)
 		if sizingMonitor != nil {
 			go sizingMonitor.Run(ctx)
 			slog.Info("sizing monitor started", "interval", sizingCfg.Interval)

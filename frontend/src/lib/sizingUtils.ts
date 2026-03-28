@@ -22,11 +22,6 @@ export const bannerStyles: Record<SizingSeverity, string> = {
   info: "border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200",
 };
 
-export const iconStyles: Record<SizingSeverity, string> = {
-  critical: "text-red-600 dark:text-red-400",
-  warning: "text-amber-600 dark:text-amber-400",
-  info: "text-blue-600 dark:text-blue-400",
-};
 
 export function hintIcon(category: SizingRecommendation["category"]): LucideIcon {
   if (category === "no-limits" || category === "no-reservations") {

@@ -1,7 +1,7 @@
 import { api } from "@/api/client";
 import type { SizingRecommendation } from "@/api/types";
 import { formatBytes, formatCores } from "@/lib/format";
-import { bannerStyles, highestSeverity, hintIcon, iconStyles } from "@/lib/sizingUtils";
+import { bannerStyles, highestSeverity, hintIcon, severityStyles } from "@/lib/sizingUtils";
 import { getErrorMessage } from "@/lib/utils";
 import { Info, Loader2, Wrench } from "lucide-react";
 import { useState } from "react";
@@ -79,7 +79,7 @@ export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
 
   return (
     <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 ${bannerStyles[severity]}`}>
-      <Info className={`mt-0.5 size-5 shrink-0 ${iconStyles[severity]}`} />
+      <Info className={`mt-0.5 size-5 shrink-0 ${severityStyles[severity]}`} />
 
       <div className="flex-1 space-y-2">
         {hints.map((hint, index) => {

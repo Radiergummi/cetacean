@@ -50,15 +50,29 @@ func roundMemory(bytes float64) float64 {
 // like "30 minutes", "24 hours", "7 days".
 func formatDuration(d time.Duration) string {
 	if d < time.Hour {
-		return fmt.Sprintf("%d minutes", int(d.Minutes()))
+		minutes := int(d.Minutes())
+		if minutes == 1 {
+			return "1 minute"
+		}
+
+		return fmt.Sprintf("%d minutes", minutes)
 	}
 
-	hours := d.Hours()
+	hours := int(d.Hours())
+	if hours == 1 {
+		return "1 hour"
+	}
+
 	if hours < 48 {
-		return fmt.Sprintf("%d hours", int(hours))
+		return fmt.Sprintf("%d hours", hours)
 	}
 
-	return fmt.Sprintf("%d days", int(hours/24))
+	days := hours / 24
+	if days == 1 {
+		return "1 day"
+	}
+
+	return fmt.Sprintf("%d days", days)
 }
 
 func ptr(v float64) *float64 {

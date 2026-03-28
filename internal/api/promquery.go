@@ -11,6 +11,7 @@ import (
 	"time"
 
 	json "github.com/goccy/go-json"
+	"github.com/radiergummi/cetacean/internal/prom"
 )
 
 type PromClient struct {
@@ -25,12 +26,7 @@ func NewPromClient(baseURL string) *PromClient {
 	}
 }
 
-type PromResult struct {
-	Labels map[string]string
-	Value  float64
-}
-
-func (pc *PromClient) InstantQuery(ctx context.Context, query string) ([]PromResult, error) {
+func (pc *PromClient) InstantQuery(ctx context.Context, query string) ([]prom.Result, error) {
 	u := pc.baseURL + "/api/v1/query?query=" + url.QueryEscape(query)
 	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
 	if err != nil {
@@ -62,7 +58,7 @@ func (pc *PromClient) InstantQuery(ctx context.Context, query string) ([]PromRes
 		return nil, fmt.Errorf("prometheus error: %s: %s", body.ErrorType, body.Error)
 	}
 
-	results := make([]PromResult, 0, len(body.Data.Result))
+	results := make([]prom.Result, 0, len(body.Data.Result))
 	for _, r := range body.Data.Result {
 		var valStr string
 		if err := json.Unmarshal(r.Value[1], &valStr); err != nil {
@@ -72,7 +68,7 @@ func (pc *PromClient) InstantQuery(ctx context.Context, query string) ([]PromRes
 		if err != nil {
 			continue
 		}
-		results = append(results, PromResult{
+		results = append(results, prom.Result{
 			Labels: r.Metric,
 			Value:  val,
 		})
