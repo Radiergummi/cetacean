@@ -196,23 +196,29 @@ export function ResourcesEditor({
       <div className="space-y-3">
         {header}
         {hints && hints.length > 0 && (
-          <div className={`rounded-md border p-3 text-sm ${
-            hints.some(({ severity }) => severity === "critical")
-              ? "border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300"
-              : hints.some(({ severity }) => severity === "warning")
-                ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
-                : "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300"
-          }`}>
+          <div
+            className={`rounded-md border p-3 text-sm ${
+              hints.some(({ severity }) => severity === "critical")
+                ? "border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300"
+                : hints.some(({ severity }) => severity === "warning")
+                  ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
+                  : "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300"
+            }`}
+          >
             <ul className="space-y-1">
               {hints.map((hint, index) => (
-                <li key={index} className="flex items-center justify-between gap-2">
+                <li
+                  key={index}
+                  className="flex items-center justify-between gap-2"
+                >
                   <span>
                     {hint.message}
-                    {hint.suggested != null && ` — consider ${
-                      hint.resource === "memory"
-                        ? formatBytes(hint.suggested)
-                        : formatCores(hint.suggested / 1e9)
-                    }`}
+                    {hint.suggested != null &&
+                      ` — consider ${
+                        hint.resource === "memory"
+                          ? formatBytes(hint.suggested)
+                          : formatCores(hint.suggested / 1e9)
+                      }`}
                   </span>
                   {hint.suggested != null && canEdit && (
                     <button

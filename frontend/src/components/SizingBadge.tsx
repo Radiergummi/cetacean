@@ -76,9 +76,7 @@ export function SizingBadge({ hints }: { hints: SizingRecommendation[] }) {
     return <span className="text-green-600 dark:text-green-400">✓ OK</span>;
   }
 
-  const badge = (
-    <span className={severityStyles[top.severity]}>{top.label}</span>
-  );
+  const badge = <span className={severityStyles[top.severity]}>{top.label}</span>;
 
   if (top.allHints.length <= 1) {
     return badge;

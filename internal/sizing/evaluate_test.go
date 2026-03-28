@@ -291,13 +291,13 @@ func TestRoundCPU(t *testing.T) {
 		input    float64 // NanoCPUs
 		expected float64 // NanoCPUs
 	}{
-		{0, 50_000_000},                    // min 0.05 cores
-		{10_000_000, 50_000_000},           // 0.01 → rounds to 0.05
-		{120_000_000, 100_000_000},         // 0.12 → rounds to 0.10
-		{1_000_000_000, 1_000_000_000},     // 1.0 → stays 1.0
-		{1_050_000_000, 1_050_000_000},     // 1.05 → stays 1.05
-		{1_060_000_000, 1_050_000_000},     // 1.06 → rounds to 1.05
-		{1_500_000_000, 1_500_000_000},     // 1.5 → stays 1.5
+		{0, 50_000_000},                // min 0.05 cores
+		{10_000_000, 50_000_000},       // 0.01 → rounds to 0.05
+		{120_000_000, 100_000_000},     // 0.12 → rounds to 0.10
+		{1_000_000_000, 1_000_000_000}, // 1.0 → stays 1.0
+		{1_050_000_000, 1_050_000_000}, // 1.05 → stays 1.05
+		{1_060_000_000, 1_050_000_000}, // 1.06 → rounds to 1.05
+		{1_500_000_000, 1_500_000_000}, // 1.5 → stays 1.5
 	}
 
 	for _, tc := range tests {
@@ -315,11 +315,11 @@ func TestRoundMemory(t *testing.T) {
 		input    float64
 		expected float64
 	}{
-		{0, mb64},               // min 64MB
-		{1, mb64},               // rounds up to 64MB
-		{mb64, mb64},            // exact
-		{mb64 + 1, 2 * mb64},   // just over → rounds up
-		{2 * mb64, 2 * mb64},   // exact
+		{0, mb64},            // min 64MB
+		{1, mb64},            // rounds up to 64MB
+		{mb64, mb64},         // exact
+		{mb64 + 1, 2 * mb64}, // just over → rounds up
+		{2 * mb64, 2 * mb64}, // exact
 	}
 
 	for _, tc := range tests {

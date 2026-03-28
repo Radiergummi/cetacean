@@ -1,6 +1,6 @@
+import { useMonitoringStatus } from "./useMonitoringStatus";
 import { api } from "@/api/client";
 import type { ServiceSizing } from "@/api/types";
-import { useMonitoringStatus } from "./useMonitoringStatus";
 import { useEffect, useState } from "react";
 
 interface SizingHints {
@@ -15,9 +15,7 @@ const emptySizingHints: SizingHints = {
 
 export function useSizingHints(): SizingHints {
   const monitoring = useMonitoringStatus();
-  const enabled =
-    monitoring?.prometheusConfigured &&
-    monitoring?.prometheusReachable;
+  const enabled = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
 
   const [hints, setHints] = useState<SizingHints>(emptySizingHints);
 
@@ -29,24 +27,27 @@ export function useSizingHints(): SizingHints {
 
     let cancelled = false;
 
-    api.serviceSizing().then((results) => {
-      if (cancelled) {
-        return;
-      }
+    api
+      .serviceSizing()
+      .then((results) => {
+        if (cancelled) {
+          return;
+        }
 
-      const byServiceId = new Map<string, ServiceSizing>();
+        const byServiceId = new Map<string, ServiceSizing>();
 
-      for (const sizing of results) {
-        byServiceId.set(sizing.serviceId, sizing);
-      }
+        for (const sizing of results) {
+          byServiceId.set(sizing.serviceId, sizing);
+        }
 
-      setHints({
-        byServiceId,
-        hasData: true,
+        setHints({
+          byServiceId,
+          hasData: true,
+        });
+      })
+      .catch(() => {
+        // Sizing hints are non-critical — fail silently
       });
-    }).catch(() => {
-      // Sizing hints are non-critical — fail silently
-    });
 
     return () => {
       cancelled = true;

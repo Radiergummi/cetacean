@@ -10,8 +10,6 @@ import type {
   SpecChange,
   Task,
 } from "../api/types";
-import { highestSeverityHint } from "../components/SizingBadge";
-import { useSizingHints } from "../hooks/useSizingHints";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
 import { ContainerImage, KVTable, MetadataGrid, ResourceLink, Timestamp } from "../components/data";
@@ -51,11 +49,13 @@ import { CronjobPanel } from "../components/service-detail/CronjobPanel";
 import { DiunPanel } from "../components/service-detail/DiunPanel";
 import { ShepherdPanel } from "../components/service-detail/ShepherdPanel";
 import { TraefikPanel } from "../components/service-detail/TraefikPanel";
+import { highestSeverityHint } from "../components/SizingBadge";
 import TasksTable from "../components/TasksTable";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
 import { useResourceStream } from "../hooks/useResourceStream";
+import { useSizingHints } from "../hooks/useSizingHints";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
 import { deriveServiceSubResources } from "../lib/deriveServiceState";
@@ -306,7 +306,10 @@ export default function ServiceDetail() {
     }
 
     const prefixes = integrations
-      .map(({ name: integrationName }) => integrationLabelPrefix[integrationName as keyof typeof integrationLabelPrefix])
+      .map(
+        ({ name: integrationName }) =>
+          integrationLabelPrefix[integrationName as keyof typeof integrationLabelPrefix],
+      )
       .filter(Boolean);
 
     if (prefixes.length === 0) {
@@ -391,7 +394,9 @@ export default function ServiceDetail() {
                       : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
                 }`}
                 onClick={() => {
-                  document.getElementById("resources-section")?.scrollIntoView({ behavior: "smooth" });
+                  document
+                    .getElementById("resources-section")
+                    ?.scrollIntoView({ behavior: "smooth" });
                 }}
               >
                 {sizingHint.label}
@@ -533,13 +538,37 @@ export default function ServiceDetail() {
 
         switch (integration.name) {
           case "traefik":
-            return <TraefikPanel key={integration.name} integration={integration} {...panelProps} />;
+            return (
+              <TraefikPanel
+                key={integration.name}
+                integration={integration}
+                {...panelProps}
+              />
+            );
           case "shepherd":
-            return <ShepherdPanel key={integration.name} integration={integration} {...panelProps} />;
+            return (
+              <ShepherdPanel
+                key={integration.name}
+                integration={integration}
+                {...panelProps}
+              />
+            );
           case "swarm-cronjob":
-            return <CronjobPanel key={integration.name} integration={integration} {...panelProps} />;
+            return (
+              <CronjobPanel
+                key={integration.name}
+                integration={integration}
+                {...panelProps}
+              />
+            );
           case "diun":
-            return <DiunPanel key={integration.name} integration={integration} {...panelProps} />;
+            return (
+              <DiunPanel
+                key={integration.name}
+                integration={integration}
+                {...panelProps}
+              />
+            );
           default:
             return null;
         }
@@ -640,7 +669,10 @@ export default function ServiceDetail() {
             )}
 
             {serviceResources !== null && (hasResourcesContent || canEditConfig) && (
-              <div id="resources-section" className="flex flex-col gap-3 rounded-lg border p-3">
+              <div
+                id="resources-section"
+                className="flex flex-col gap-3 rounded-lg border p-3"
+              >
                 <ResourcesEditor
                   serviceId={id!}
                   resources={serviceResources}
