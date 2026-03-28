@@ -1,5 +1,6 @@
 import { api } from "@/api/client";
 import type { SizingRecommendation } from "@/api/types";
+import { Button } from "@/components/ui/button";
 import { formatBytes, formatCores } from "@/lib/format";
 import { bannerStyles, highestSeverity, hintIcon, severityStyles } from "@/lib/sizingUtils";
 import { getErrorMessage } from "@/lib/utils";
@@ -104,9 +105,9 @@ export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
               </div>
 
               {canFix && hasPatch && (
-                <button
-                  type="button"
-                  className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium opacity-75 transition-opacity hover:opacity-100 disabled:opacity-50"
+                <Button
+                  variant="outline"
+                  size="xs"
                   disabled={applying !== null}
                   onClick={() => applySuggestion(hint, index)}
                 >
@@ -116,7 +117,7 @@ export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
                     <Wrench className="size-3" />
                   )}
                   Apply suggested value
-                </button>
+                </Button>
               )}
             </div>
           );
