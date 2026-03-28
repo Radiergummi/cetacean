@@ -713,3 +713,29 @@ export interface ServiceMount {
   };
   ClusterOptions?: Record<string, unknown>;
 }
+
+export type SizingCategory =
+  | "over-provisioned"
+  | "approaching-limit"
+  | "at-limit"
+  | "no-limits"
+  | "no-reservations";
+
+export type SizingSeverity = "info" | "warning" | "critical";
+
+export interface SizingRecommendation {
+  category: SizingCategory;
+  severity: SizingSeverity;
+  resource: string;
+  message: string;
+  current: number;
+  configured: number;
+  suggested?: number;
+}
+
+export interface ServiceSizing {
+  serviceId: string;
+  serviceName: string;
+  hints: SizingRecommendation[];
+  computedAt: string;
+}
