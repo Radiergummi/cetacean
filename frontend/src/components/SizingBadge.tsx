@@ -1,5 +1,7 @@
 import type { SizingRecommendation, SizingSeverity } from "@/api/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ArrowDown, ArrowUp, Check, ShieldOff } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 const severityRank: Record<SizingSeverity, number> = {
   critical: 3,
@@ -13,41 +15,43 @@ const severityStyles: Record<SizingSeverity, string> = {
   info: "text-blue-600 dark:text-blue-400",
 };
 
-function hintIcon(category: SizingRecommendation["category"]): string {
+function hintIcon(category: SizingRecommendation["category"]): LucideIcon {
   if (category === "no-limits" || category === "no-reservations") {
-    return "☐";
+    return ShieldOff;
   }
 
   if (category === "at-limit" || category === "approaching-limit") {
-    return "▲";
+    return ArrowUp;
   }
 
-  return "▼";
+  return ArrowDown;
 }
 
-function formatHintLabel(hint: SizingRecommendation): string {
-  const icon = hintIcon(hint.category);
+function formatHintLabel(hint: SizingRecommendation): { Icon: LucideIcon; text: string } {
+  const Icon = hintIcon(hint.category);
 
   if (hint.category === "no-limits") {
-    return `${icon} No limits`;
+    return { Icon, text: "No limits" };
   }
 
   if (hint.category === "no-reservations") {
-    return `${icon} No reservations`;
+    return { Icon, text: "No reservations" };
   }
 
   const percentage = Math.round((hint.current / hint.configured) * 100);
 
-  return `${icon} ${hint.resource.toUpperCase()} ${percentage}%`;
+  return { Icon, text: `${hint.resource.toUpperCase()} ${percentage}%` };
 }
 
 /**
- * Returns the highest-severity hint plus label and all hints,
- * or null if the hints array is empty.
+ * Returns the highest-severity hint info, or null if the hints array is empty.
  */
-export function highestSeverityHint(
-  hints: SizingRecommendation[],
-): { label: string; severity: SizingSeverity; allHints: SizingRecommendation[] } | null {
+export function highestSeverityHint(hints: SizingRecommendation[]): {
+  Icon: LucideIcon;
+  text: string;
+  severity: SizingSeverity;
+  allHints: SizingRecommendation[];
+} | null {
   if (hints.length === 0) {
     return null;
   }
@@ -56,9 +60,11 @@ export function highestSeverityHint(
     (first, second) => severityRank[second.severity] - severityRank[first.severity],
   );
   const top = sorted[0];
+  const { Icon, text } = formatHintLabel(top);
 
   return {
-    label: formatHintLabel(top),
+    Icon,
+    text,
     severity: top.severity,
     allHints: sorted,
   };
@@ -66,17 +72,29 @@ export function highestSeverityHint(
 
 /**
  * Displays the highest-severity sizing hint for a service.
- * Shows green "✓ OK" when there are no hints.
+ * Shows green check when there are no hints.
  * Wraps in a tooltip listing all hints when there are multiple.
  */
 export function SizingBadge({ hints }: { hints: SizingRecommendation[] }) {
   const top = highestSeverityHint(hints);
 
   if (top === null) {
-    return <span className="text-green-600 dark:text-green-400">✓ OK</span>;
+    return (
+      <span className="inline-flex items-center gap-1 text-green-600 dark:text-green-400">
+        <Check className="size-3.5" />
+        OK
+      </span>
+    );
   }
 
-  const badge = <span className={severityStyles[top.severity]}>{top.label}</span>;
+  const { Icon } = top;
+
+  const badge = (
+    <span className={`inline-flex items-center gap-1 ${severityStyles[top.severity]}`}>
+      <Icon className="size-3.5" />
+      {top.text}
+    </span>
+  );
 
   if (top.allHints.length <= 1) {
     return badge;

@@ -386,7 +386,7 @@ export default function ServiceDetail() {
             {sizingHint && (
               <button
                 type="button"
-                className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
                   sizingHint.severity === "critical"
                     ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
                     : sizingHint.severity === "warning"
@@ -399,7 +399,8 @@ export default function ServiceDetail() {
                     ?.scrollIntoView({ behavior: "smooth" });
                 }}
               >
-                {sizingHint.label}
+                <sizingHint.Icon className="size-3.5" />
+                {sizingHint.text}
               </button>
             )}
             <ServiceActions
