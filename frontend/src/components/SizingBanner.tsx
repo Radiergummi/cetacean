@@ -1,7 +1,10 @@
+import { api } from "@/api/client";
 import type { SizingRecommendation, SizingSeverity } from "@/api/types";
 import { formatBytes, formatCores } from "@/lib/format";
-import { ArrowUp, Info, TrendingDown, TriangleAlert } from "lucide-react";
+import { getErrorMessage } from "@/lib/utils";
+import { ArrowUp, Info, Loader2, TrendingDown, TriangleAlert, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useState } from "react";
 
 const severityRank: Record<SizingSeverity, number> = {
   critical: 3,
@@ -60,17 +63,69 @@ function formatSuggestion(hint: SizingRecommendation): string | null {
 }
 
 interface Props {
+  serviceId: string;
   hints: SizingRecommendation[];
-  onScrollToResources?: () => void;
+  canFix: boolean;
+  onFixed?: () => void;
+}
+
+/**
+ * Builds a merge-patch body for a single sizing hint's suggested value.
+ */
+function buildPatch(hint: SizingRecommendation): Record<string, unknown> | null {
+  if (hint.suggested == null) {
+    return null;
+  }
+
+  if (hint.resource === "cpu") {
+    if (hint.category === "over-provisioned") {
+      return { Reservations: { NanoCPUs: Math.round(hint.suggested) } };
+    }
+
+    return { Limits: { NanoCPUs: Math.round(hint.suggested) } };
+  }
+
+  if (hint.resource === "memory") {
+    if (hint.category === "over-provisioned") {
+      return { Reservations: { MemoryBytes: Math.round(hint.suggested) } };
+    }
+
+    return { Limits: { MemoryBytes: Math.round(hint.suggested) } };
+  }
+
+  return null;
 }
 
 /**
  * Full-width banner showing all sizing hints for a service, with
- * detailed messages and suggested values.
+ * detailed messages, suggested values, and Fix buttons.
  */
-export function SizingBanner({ hints, onScrollToResources }: Props) {
+export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
+  const [applying, setApplying] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
   if (hints.length === 0) {
     return null;
+  }
+
+  async function applyFix(hint: SizingRecommendation, index: number) {
+    const patch = buildPatch(hint);
+
+    if (!patch) {
+      return;
+    }
+
+    setApplying(index);
+    setError(null);
+
+    try {
+      await api.patchServiceResources(serviceId, patch);
+      onFixed?.();
+    } catch (error) {
+      setError(getErrorMessage(error, "Failed to apply suggestion"));
+    } finally {
+      setApplying(null);
+    }
   }
 
   const severity = highestSeverity(hints);
@@ -83,6 +138,8 @@ export function SizingBanner({ hints, onScrollToResources }: Props) {
         {hints.map((hint, index) => {
           const HintIcon = hintIcon(hint.category);
           const suggestion = formatSuggestion(hint);
+          const patch = buildPatch(hint);
+          const isApplying = applying === index;
 
           return (
             <div
@@ -104,18 +161,26 @@ export function SizingBanner({ hints, onScrollToResources }: Props) {
                 </div>
               </div>
 
-              {onScrollToResources && (
+              {canFix && patch && (
                 <button
                   type="button"
-                  className="shrink-0 text-xs font-medium underline opacity-75 hover:opacity-100"
-                  onClick={onScrollToResources}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium opacity-75 transition-opacity hover:opacity-100 disabled:opacity-50"
+                  disabled={applying !== null}
+                  onClick={() => applyFix(hint, index)}
                 >
-                  Edit resources
+                  {isApplying ? (
+                    <Loader2 className="size-3 animate-spin" />
+                  ) : (
+                    <Wrench className="size-3" />
+                  )}
+                  Fix
                 </button>
               )}
             </div>
           );
         })}
+
+        {error && <p className="text-xs font-medium text-red-700 dark:text-red-400">{error}</p>}
       </div>
     </div>
   );

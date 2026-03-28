@@ -390,9 +390,16 @@ export default function ServiceDetail() {
       />
 
       <SizingBanner
+        serviceId={id!}
         hints={sizingHints}
-        onScrollToResources={() => {
-          document.getElementById("resources-section")?.scrollIntoView({ behavior: "smooth" });
+        canFix={canEditConfig}
+        onFixed={() => {
+          if (id) {
+            api.service(id).then((response) => {
+              setService(response.service);
+              applyDerivedState(response.service);
+            });
+          }
         }}
       />
 
