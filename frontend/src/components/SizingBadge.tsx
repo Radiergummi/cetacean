@@ -60,7 +60,7 @@ export function highestSeverityHint(
   return {
     label: formatHintLabel(top),
     severity: top.severity,
-    allHints: hints,
+    allHints: sorted,
   };
 }
 

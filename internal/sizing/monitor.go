@@ -118,10 +118,13 @@ func (m *Monitor) tick(ctx context.Context) {
 	}
 
 	services := m.cache.ListServices()
+	now := time.Now()
 
 	var newResults []ServiceSizing
+	activeIDs := make(map[string]struct{}, len(services))
 
 	for _, svc := range services {
+		activeIDs[svc.ID] = struct{}{}
 		spec := extractSpec(svc)
 
 		var metrics *serviceMetrics
@@ -145,8 +148,15 @@ func (m *Monitor) tick(ctx context.Context) {
 			ServiceID:   svc.ID,
 			ServiceName: spec.name,
 			Hints:       result.hints,
-			ComputedAt:  time.Now(),
+			ComputedAt:  now,
 		})
+	}
+
+	// Clean up tick state for removed services.
+	for id := range m.previous {
+		if _, ok := activeIDs[id]; !ok {
+			delete(m.previous, id)
+		}
 	}
 
 	m.mu.Lock()

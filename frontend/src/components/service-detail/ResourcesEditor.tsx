@@ -84,7 +84,7 @@ export function ResourcesEditor({
   const [capacity, setCapacity] = useState<ClusterCapacity | null>(null);
   const [capacityError, setCapacityError] = useState(false);
 
-  function openEdit(suggested?: { resource: string; value: number }) {
+  function openEdit(suggested?: { resource: "cpu" | "memory"; value: number }) {
     const cpuReservation =
       Reservations?.NanoCPUs != null ? Reservations.NanoCPUs / 1e9 : undefined;
     const cpuLimit = Limits?.NanoCPUs != null ? Limits.NanoCPUs / 1e9 : undefined;
@@ -239,7 +239,10 @@ export function ResourcesEditor({
                       type="button"
                       className="shrink-0 text-xs font-medium underline"
                       onClick={() =>
-                        openEdit({ resource: hint.resource, value: hint.suggested! })
+                        openEdit({
+                          resource: hint.resource as "cpu" | "memory",
+                          value: hint.suggested!,
+                        })
                       }
                     >
                       Apply
