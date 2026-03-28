@@ -1,65 +1,39 @@
 import { api } from "@/api/client";
-import type { SizingRecommendation, SizingSeverity } from "@/api/types";
+import type { SizingRecommendation } from "@/api/types";
 import { formatBytes, formatCores } from "@/lib/format";
+import { bannerStyles, highestSeverity, hintIcon, iconStyles } from "@/lib/sizingUtils";
 import { getErrorMessage } from "@/lib/utils";
-import { ArrowUp, Info, Loader2, TrendingDown, TriangleAlert, Wrench } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { Info, Loader2, Wrench } from "lucide-react";
 import { useState } from "react";
 
-const severityRank: Record<SizingSeverity, number> = {
-  critical: 3,
-  warning: 2,
-  info: 1,
-};
-
-function hintIcon(category: SizingRecommendation["category"]): LucideIcon {
-  if (category === "no-limits" || category === "no-reservations") {
-    return TriangleAlert;
+/**
+ * Builds a merge-patch body for a single sizing hint's suggested value.
+ * Over-provisioned patches the reservation; limit-based hints patch the limit.
+ */
+function buildPatch(hint: SizingRecommendation): Record<string, unknown> | null {
+  if (hint.suggested == null) {
+    return null;
   }
 
-  if (category === "at-limit" || category === "approaching-limit") {
-    return ArrowUp;
-  }
+  const isOverProvisioned = hint.category === "over-provisioned";
+  const field = isOverProvisioned ? "Reservations" : "Limits";
+  const key = hint.resource === "memory" ? "MemoryBytes" : "NanoCPUs";
 
-  return TrendingDown;
+  return { [field]: { [key]: Math.round(hint.suggested) } };
 }
-
-function highestSeverity(hints: SizingRecommendation[]): SizingSeverity {
-  let max: SizingSeverity = "info";
-
-  for (const { severity } of hints) {
-    if (severityRank[severity] > severityRank[max]) {
-      max = severity;
-    }
-  }
-
-  return max;
-}
-
-const bannerStyles: Record<SizingSeverity, string> = {
-  critical:
-    "border-red-300 bg-red-50 text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200",
-  warning:
-    "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200",
-  info: "border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200",
-};
-
-const iconStyles: Record<SizingSeverity, string> = {
-  critical: "text-red-600 dark:text-red-400",
-  warning: "text-amber-600 dark:text-amber-400",
-  info: "text-blue-600 dark:text-blue-400",
-};
 
 function formatSuggestion(hint: SizingRecommendation): string | null {
   if (hint.suggested == null) {
     return null;
   }
 
-  if (hint.resource === "memory") {
-    return formatBytes(hint.suggested);
-  }
+  const target = hint.category === "over-provisioned" ? "reservation" : "limit";
+  const value =
+    hint.resource === "memory"
+      ? formatBytes(hint.suggested)
+      : formatCores(hint.suggested / 1e9);
 
-  return formatCores(hint.suggested / 1e9);
+  return `Suggested: ${hint.resource === "memory" ? "memory" : "CPU"} ${target} ${value}`;
 }
 
 interface Props {
@@ -70,35 +44,8 @@ interface Props {
 }
 
 /**
- * Builds a merge-patch body for a single sizing hint's suggested value.
- */
-function buildPatch(hint: SizingRecommendation): Record<string, unknown> | null {
-  if (hint.suggested == null) {
-    return null;
-  }
-
-  if (hint.resource === "cpu") {
-    if (hint.category === "over-provisioned") {
-      return { Reservations: { NanoCPUs: Math.round(hint.suggested) } };
-    }
-
-    return { Limits: { NanoCPUs: Math.round(hint.suggested) } };
-  }
-
-  if (hint.resource === "memory") {
-    if (hint.category === "over-provisioned") {
-      return { Reservations: { MemoryBytes: Math.round(hint.suggested) } };
-    }
-
-    return { Limits: { MemoryBytes: Math.round(hint.suggested) } };
-  }
-
-  return null;
-}
-
-/**
  * Full-width banner showing all sizing hints for a service, with
- * detailed messages, suggested values, and Fix buttons.
+ * detailed messages, suggested values, and apply buttons.
  */
 export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
   const [applying, setApplying] = useState<number | null>(null);
@@ -108,7 +55,7 @@ export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
     return null;
   }
 
-  async function applyFix(hint: SizingRecommendation, index: number) {
+  async function applySuggestion(hint: SizingRecommendation, index: number) {
     const patch = buildPatch(hint);
 
     if (!patch) {
@@ -138,7 +85,7 @@ export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
         {hints.map((hint, index) => {
           const HintIcon = hintIcon(hint.category);
           const suggestion = formatSuggestion(hint);
-          const patch = buildPatch(hint);
+          const hasPatch = hint.suggested != null;
           const isApplying = applying === index;
 
           return (
@@ -152,21 +99,16 @@ export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
                 <div>
                   <p className="text-sm font-medium">{hint.message}</p>
 
-                  {suggestion && (
-                    <p className="text-xs opacity-75">
-                      Suggested: {hint.resource === "memory" ? "memory limit" : "CPU limit"}{" "}
-                      {suggestion}
-                    </p>
-                  )}
+                  {suggestion && <p className="text-xs opacity-75">{suggestion}</p>}
                 </div>
               </div>
 
-              {canFix && patch && (
+              {canFix && hasPatch && (
                 <button
                   type="button"
                   className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium opacity-75 transition-opacity hover:opacity-100 disabled:opacity-50"
                   disabled={applying !== null}
-                  onClick={() => applyFix(hint, index)}
+                  onClick={() => applySuggestion(hint, index)}
                 >
                   {isApplying ? (
                     <Loader2 className="size-3 animate-spin" />

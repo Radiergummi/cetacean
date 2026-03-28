@@ -12,7 +12,13 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-const serviceLabelKey = "container_label_com_docker_swarm_service_name"
+const (
+	serviceLabelKey = "container_label_com_docker_swarm_service_name"
+	serviceFilter   = `container_label_com_docker_swarm_service_id!=""`
+
+	cpuInstantQuery    = `sum by (` + serviceLabelKey + `)(rate(container_cpu_usage_seconds_total{` + serviceFilter + `}[5m])) * 100`
+	memoryInstantQuery = `avg_over_time(sum by (` + serviceLabelKey + `)(container_memory_usage_bytes{` + serviceFilter + `})[1h:])`
+)
 
 // PromResult holds a single Prometheus query result.
 // Defined locally to avoid circular imports with the api package.
@@ -110,23 +116,29 @@ func (m *Monitor) tick(ctx context.Context) {
 	lookbackStr := formatPromDuration(m.cfg.Lookback)
 
 	go func() {
-		data, err := m.queryByService(tickCtx, `sum by (container_label_com_docker_swarm_service_name)(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_id!=""}[5m])) * 100`)
+		data, err := m.queryByService(tickCtx, cpuInstantQuery)
 		cpuCh <- queryResult{data, err}
 	}()
 
 	go func() {
-		data, err := m.queryByService(tickCtx, `avg_over_time(sum by (container_label_com_docker_swarm_service_name)(container_memory_usage_bytes{container_label_com_docker_swarm_service_id!=""})[1h:])`)
+		data, err := m.queryByService(tickCtx, memoryInstantQuery)
 		memCh <- queryResult{data, err}
 	}()
 
 	go func() {
-		query := fmt.Sprintf(`quantile by (container_label_com_docker_swarm_service_name)(0.95, sum by (container_label_com_docker_swarm_service_name)(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_id!=""}[5m]))[%s:]) * 100`, lookbackStr)
+		query := fmt.Sprintf(
+			`quantile by (%s)(0.95, sum by (%s)(rate(container_cpu_usage_seconds_total{%s}[5m]))[%s:]) * 100`,
+			serviceLabelKey, serviceLabelKey, serviceFilter, lookbackStr,
+		)
 		data, err := m.queryByService(tickCtx, query)
 		cpuP95Ch <- queryResult{data, err}
 	}()
 
 	go func() {
-		query := fmt.Sprintf(`quantile by (container_label_com_docker_swarm_service_name)(0.95, sum by (container_label_com_docker_swarm_service_name)(container_memory_usage_bytes{container_label_com_docker_swarm_service_id!=""})[%s:])`, lookbackStr)
+		query := fmt.Sprintf(
+			`quantile by (%s)(0.95, sum by (%s)(container_memory_usage_bytes{%s})[%s:])`,
+			serviceLabelKey, serviceLabelKey, serviceFilter, lookbackStr,
+		)
 		data, err := m.queryByService(tickCtx, query)
 		memP95Ch <- queryResult{data, err}
 	}()
