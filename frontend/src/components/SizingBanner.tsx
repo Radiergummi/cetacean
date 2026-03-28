@@ -2,7 +2,12 @@ import { api } from "@/api/client";
 import type { SizingRecommendation } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { formatBytes, formatCores } from "@/lib/format";
-import { bannerStyles, highestSeverity, hintIcon, severityStyles } from "@/lib/sizingUtils";
+import {
+  bannerStyles,
+  highestSeverity,
+  hintIcon,
+  severityStyles,
+} from "@/lib/sizingUtils";
 import { getErrorMessage } from "@/lib/utils";
 import { Info, Loader2, Wrench } from "lucide-react";
 import { useState } from "react";
@@ -11,7 +16,9 @@ import { useState } from "react";
  * Builds a merge-patch body for a single sizing hint's suggested value.
  * Over-provisioned patches the reservation; limit-based hints patch the limit.
  */
-function buildPatch(hint: SizingRecommendation): Record<string, unknown> | null {
+function buildPatch(
+  hint: SizingRecommendation,
+): Record<string, unknown> | null {
   if (hint.suggested == null) {
     return null;
   }
@@ -50,24 +57,28 @@ interface Props {
  */
 export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
   const [applying, setApplying] = useState<number | null>(null);
+  const [dismissed, setDismissed] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
-  if (hints.length === 0) {
+  const visibleHints = hints.filter((_, index) => !dismissed.has(index));
+
+  if (visibleHints.length === 0) {
     return null;
   }
 
-  async function applySuggestion(hint: SizingRecommendation, index: number) {
+  async function applySuggestion(hint: SizingRecommendation, originalIndex: number) {
     const patch = buildPatch(hint);
 
     if (!patch) {
       return;
     }
 
-    setApplying(index);
+    setApplying(originalIndex);
     setError(null);
 
     try {
       await api.patchServiceResources(serviceId, patch);
+      setDismissed((previous) => new Set([...previous, originalIndex]));
       onFixed?.();
     } catch (caughtError) {
       setError(getErrorMessage(caughtError, "Failed to apply suggestion"));
@@ -76,23 +87,29 @@ export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
     }
   }
 
-  const severity = highestSeverity(hints);
+  const severity = highestSeverity(visibleHints);
 
   return (
-    <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 ${bannerStyles[severity]}`}>
+    <div
+      className={`flex items-start gap-3 rounded-lg border px-4 py-3 ${bannerStyles[severity]}`}
+    >
       <Info className={`mt-0.5 size-5 shrink-0 ${severityStyles[severity]}`} />
 
       <div className="flex-1 space-y-2">
-        {hints.map((hint, index) => {
+        {hints.map((hint, originalIndex) => {
+          if (dismissed.has(originalIndex)) {
+            return null;
+          }
+
           const HintIcon = hintIcon(hint.category);
           const suggestion = formatSuggestion(hint);
           const hasPatch = hint.suggested != null;
-          const isApplying = applying === index;
+          const isApplying = applying === originalIndex;
 
           return (
             <div
-              key={index}
-              className="flex items-start justify-between gap-4"
+              key={originalIndex}
+              className="flex items-center justify-between gap-4"
             >
               <div className="flex items-start gap-2">
                 <HintIcon className="mt-0.5 size-4 shrink-0 opacity-60" />
@@ -100,7 +117,9 @@ export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
                 <div>
                   <p className="text-sm font-medium">{hint.message}</p>
 
-                  {suggestion && <p className="text-xs opacity-75">{suggestion}</p>}
+                  {suggestion && (
+                    <p className="text-xs opacity-75">{suggestion}</p>
+                  )}
                 </div>
               </div>
 
@@ -109,7 +128,7 @@ export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
                   variant="outline"
                   size="xs"
                   disabled={applying !== null}
-                  onClick={() => applySuggestion(hint, index)}
+                  onClick={() => applySuggestion(hint, originalIndex)}
                 >
                   {isApplying ? (
                     <Loader2 className="size-3 animate-spin" />
@@ -123,7 +142,11 @@ export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
           );
         })}
 
-        {error && <p className="text-xs font-medium text-red-700 dark:text-red-400">{error}</p>}
+        {error && (
+          <p className="text-xs font-medium text-red-700 dark:text-red-400">
+            {error}
+          </p>
+        )}
       </div>
     </div>
   );
