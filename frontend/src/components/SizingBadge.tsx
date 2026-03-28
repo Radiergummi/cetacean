@@ -1,6 +1,6 @@
 import type { SizingRecommendation, SizingSeverity } from "@/api/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowDown, ArrowUp, Check, TriangleAlert } from "lucide-react";
+import { ArrowUp, Check, TrendingDown, TriangleAlert } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 const severityRank: Record<SizingSeverity, number> = {
@@ -24,7 +24,7 @@ function hintIcon(category: SizingRecommendation["category"]): LucideIcon {
     return ArrowUp;
   }
 
-  return ArrowDown;
+  return TrendingDown;
 }
 
 const categoryLabels: Record<SizingRecommendation["category"], string> = {

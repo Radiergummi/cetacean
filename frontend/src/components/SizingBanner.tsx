@@ -1,6 +1,6 @@
 import type { SizingRecommendation, SizingSeverity } from "@/api/types";
 import { formatBytes, formatCores } from "@/lib/format";
-import { ArrowDown, ArrowUp, TriangleAlert } from "lucide-react";
+import { ArrowUp, TrendingDown, TriangleAlert } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 const severityRank: Record<SizingSeverity, number> = {
@@ -18,7 +18,7 @@ function hintIcon(category: SizingRecommendation["category"]): LucideIcon {
     return ArrowUp;
   }
 
-  return ArrowDown;
+  return TrendingDown;
 }
 
 function highestSeverity(hints: SizingRecommendation[]): SizingSeverity {

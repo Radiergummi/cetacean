@@ -3,6 +3,7 @@ package sizing
 import (
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/radiergummi/cetacean/internal/config"
 )
@@ -55,6 +56,32 @@ func roundMemory(bytes float64) float64 {
 	}
 
 	return rounded
+}
+
+// formatTickDuration converts a tick count and interval to a human-readable
+// duration string like "3 minutes", "1 hour", "2 hours".
+func formatTickDuration(ticks int, interval time.Duration) string {
+	d := time.Duration(ticks) * interval
+
+	if d < time.Minute {
+		return fmt.Sprintf("%d seconds", int(d.Seconds()))
+	}
+
+	if d < time.Hour {
+		minutes := int(d.Minutes())
+		if minutes == 1 {
+			return "1 minute"
+		}
+
+		return fmt.Sprintf("%d minutes", minutes)
+	}
+
+	hours := d.Hours()
+	if hours < 1.5 {
+		return "1 hour"
+	}
+
+	return fmt.Sprintf("%.0f hours", hours)
 }
 
 func ptr(v float64) *float64 {
@@ -197,7 +224,7 @@ func evaluate(spec serviceSpec, metrics *serviceMetrics, state *previousState, c
 						Category:   CategoryOverProvisioned,
 						Severity:   SeverityInfo,
 						Resource:   "cpu",
-						Message:    fmt.Sprintf("CPU usage has been below %.0f%% of reservation for %d ticks", cfg.OverProvisioned*100, newState.cpuLowTicks),
+						Message:    fmt.Sprintf("CPU usage has been below %.0f%% of reservation for the past %s", cfg.OverProvisioned*100, formatTickDuration(newState.cpuLowTicks, cfg.Interval)),
 						Current:    metrics.cpu,
 						Configured: cpuReservationPct,
 						Suggested:  ptr(suggested),
@@ -252,7 +279,7 @@ func evaluate(spec serviceSpec, metrics *serviceMetrics, state *previousState, c
 						Category:   CategoryOverProvisioned,
 						Severity:   SeverityInfo,
 						Resource:   "memory",
-						Message:    fmt.Sprintf("Memory usage has been below %.0f%% of reservation for %d ticks", cfg.OverProvisioned*100, newState.memoryLowTicks),
+						Message:    fmt.Sprintf("Memory usage has been below %.0f%% of reservation for the past %s", cfg.OverProvisioned*100, formatTickDuration(newState.memoryLowTicks, cfg.Interval)),
 						Current:    metrics.memory,
 						Configured: float64(spec.memoryReservation),
 						Suggested:  ptr(suggested),
