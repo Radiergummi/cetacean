@@ -11,13 +11,23 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-func mockQuery(cpuResults, memResults []PromResult) QueryFunc {
+func mockQuery(cpuResults, memResults, cpuP95Results, memP95Results []PromResult) QueryFunc {
 	return func(_ context.Context, query string) ([]PromResult, error) {
+		isP95 := strings.Contains(query, "quantile")
+
 		if strings.Contains(query, "cpu_usage") {
+			if isP95 {
+				return cpuP95Results, nil
+			}
+
 			return cpuResults, nil
 		}
 
 		if strings.Contains(query, "memory_usage") {
+			if isP95 {
+				return memP95Results, nil
+			}
+
 			return memResults, nil
 		}
 
@@ -54,14 +64,16 @@ func TestMonitor_SingleTick(t *testing.T) {
 		},
 	})
 
-	query := mockQuery(
-		[]PromResult{{Labels: map[string]string{serviceLabelKey: "web"}, Value: 90}},
-		[]PromResult{{Labels: map[string]string{serviceLabelKey: "web"}, Value: float64(400 << 20)}},
-	)
+	instantCPU := []PromResult{{Labels: map[string]string{serviceLabelKey: "web"}, Value: 90}}
+	instantMem := []PromResult{{Labels: map[string]string{serviceLabelKey: "web"}, Value: float64(400 << 20)}}
+	p95CPU := []PromResult{{Labels: map[string]string{serviceLabelKey: "web"}, Value: 40}}
+	p95Mem := []PromResult{{Labels: map[string]string{serviceLabelKey: "web"}, Value: float64(300 << 20)}}
+
+	query := mockQuery(instantCPU, instantMem, p95CPU, p95Mem)
 
 	cfg := &config.SizingConfig{
 		Enabled: true, Interval: time.Second, HeadroomMultiplier: 2.0,
-		OverProvisioned: 0.20, ApproachingLimit: 0.80, AtLimit: 0.95, SustainedTicks: 3,
+		OverProvisioned: 0.20, ApproachingLimit: 0.80, AtLimit: 0.95, Lookback: 168 * time.Hour,
 	}
 
 	m := New(query, c, cfg)

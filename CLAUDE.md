@@ -93,7 +93,7 @@ docker stack deploy -c compose.monitoring.yaml monitoring  # Deploy standalone m
 | `CETACEAN_SIZING_THRESHOLD_OVER_PROVISIONED` | `0.20` | No |
 | `CETACEAN_SIZING_THRESHOLD_APPROACHING_LIMIT` | `0.80` | No |
 | `CETACEAN_SIZING_THRESHOLD_AT_LIMIT` | `0.95` | No |
-| `CETACEAN_SIZING_SUSTAINED_TICKS` | `3` | No |
+| `CETACEAN_SIZING_LOOKBACK` | `168h` | No |
 
 ## Architecture
 

@@ -69,7 +69,7 @@ type fileSizingThresholds struct {
 	OverProvisioned  *float64 `toml:"over_provisioned"`
 	ApproachingLimit *float64 `toml:"approaching_limit"`
 	AtLimit          *float64 `toml:"at_limit"`
-	SustainedTicks   *int     `toml:"sustained_ticks"`
+	Lookback         *string  `toml:"lookback"`
 }
 
 type fileServer struct {

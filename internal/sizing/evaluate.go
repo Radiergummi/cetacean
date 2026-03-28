@@ -23,18 +23,6 @@ type serviceMetrics struct {
 	memory float64 // bytes
 }
 
-// previousState tracks sustained-tick counters between evaluations.
-type previousState struct {
-	cpuLowTicks    int
-	memoryLowTicks int
-}
-
-// evaluateResult holds both the recommendations and updated tick state.
-type evaluateResult struct {
-	hints    []Recommendation
-	newState previousState
-}
-
 // roundCPU rounds a NanoCPU value to the nearest 0.05 cores, with a minimum of 0.05 cores.
 // Returns NanoCPUs.
 func roundCPU(nanoCPUs float64) float64 {
@@ -58,30 +46,19 @@ func roundMemory(bytes float64) float64 {
 	return rounded
 }
 
-// formatTickDuration converts a tick count and interval to a human-readable
-// duration string like "3 minutes", "1 hour", "2 hours".
-func formatTickDuration(ticks int, interval time.Duration) string {
-	d := time.Duration(ticks) * interval
-
-	if d < time.Minute {
-		return fmt.Sprintf("%d seconds", int(d.Seconds()))
-	}
-
+// formatDuration converts a time.Duration to a human-readable string
+// like "30 minutes", "24 hours", "7 days".
+func formatDuration(d time.Duration) string {
 	if d < time.Hour {
-		minutes := int(d.Minutes())
-		if minutes == 1 {
-			return "1 minute"
-		}
-
-		return fmt.Sprintf("%d minutes", minutes)
+		return fmt.Sprintf("%d minutes", int(d.Minutes()))
 	}
 
 	hours := d.Hours()
-	if hours < 1.5 {
-		return "1 hour"
+	if hours < 48 {
+		return fmt.Sprintf("%d hours", int(hours))
 	}
 
-	return fmt.Sprintf("%.0f hours", hours)
+	return fmt.Sprintf("%d days", int(hours/24))
 }
 
 func ptr(v float64) *float64 {
@@ -89,14 +66,11 @@ func ptr(v float64) *float64 {
 }
 
 // evaluate computes sizing recommendations for a service.
-// metrics and state may be nil (no Prometheus data / first tick).
-func evaluate(spec serviceSpec, metrics *serviceMetrics, state *previousState, cfg *config.SizingConfig) evaluateResult {
+// instant is used for at-limit and approaching-limit checks (current rate).
+// p95 is used for over-provisioned checks (p95 over lookback window).
+// Both may be nil independently.
+func evaluate(spec serviceSpec, instant *serviceMetrics, p95 *serviceMetrics, cfg *config.SizingConfig) []Recommendation {
 	var hints []Recommendation
-
-	newState := previousState{}
-	if state != nil {
-		newState = *state
-	}
 
 	// --- Config-only checks (always run, even without metrics) ---
 
@@ -173,123 +147,109 @@ func evaluate(spec serviceSpec, metrics *serviceMetrics, state *previousState, c
 		}
 	}
 
-	// --- Metrics-based checks (only when metrics are available) ---
+	// --- At-limit / approaching-limit checks (instant metrics) ---
 
-	if metrics == nil {
-		return evaluateResult{hints: hints, newState: newState}
-	}
+	if instant != nil {
+		if !noCPULimit {
+			cpuLimitPct := float64(spec.cpuLimit) / 1e9 * 100
+			cpuRatio := instant.cpu / cpuLimitPct
 
-	// CPU checks
-	if !noCPULimit {
-		cpuLimitPct := float64(spec.cpuLimit) / 1e9 * 100
-		cpuRatio := metrics.cpu / cpuLimitPct
+			switch {
+			case cpuRatio > cfg.AtLimit:
+				suggested := roundCPU(instant.cpu / 100 * 1e9 * cfg.HeadroomMultiplier)
+				hints = append(hints, Recommendation{
+					Category:   CategoryAtLimit,
+					Severity:   SeverityCritical,
+					Resource:   "cpu",
+					Message:    fmt.Sprintf("CPU usage is at %.0f%% of limit", cpuRatio*100),
+					Current:    instant.cpu,
+					Configured: cpuLimitPct,
+					Suggested:  ptr(suggested),
+				})
 
-		switch {
-		case cpuRatio > cfg.AtLimit:
-			suggested := roundCPU(metrics.cpu / 100 * 1e9 * cfg.HeadroomMultiplier)
-			hints = append(hints, Recommendation{
-				Category:   CategoryAtLimit,
-				Severity:   SeverityCritical,
-				Resource:   "cpu",
-				Message:    fmt.Sprintf("CPU usage is at %.0f%% of limit", cpuRatio*100),
-				Current:    metrics.cpu,
-				Configured: cpuLimitPct,
-				Suggested:  ptr(suggested),
-			})
-			newState.cpuLowTicks = 0
-
-		case cpuRatio > cfg.ApproachingLimit:
-			suggested := roundCPU(metrics.cpu / 100 * 1e9 * cfg.HeadroomMultiplier)
-			hints = append(hints, Recommendation{
-				Category:   CategoryApproachingLimit,
-				Severity:   SeverityWarning,
-				Resource:   "cpu",
-				Message:    fmt.Sprintf("CPU usage is at %.0f%% of limit", cpuRatio*100),
-				Current:    metrics.cpu,
-				Configured: cpuLimitPct,
-				Suggested:  ptr(suggested),
-			})
-			newState.cpuLowTicks = 0
+			case cpuRatio > cfg.ApproachingLimit:
+				suggested := roundCPU(instant.cpu / 100 * 1e9 * cfg.HeadroomMultiplier)
+				hints = append(hints, Recommendation{
+					Category:   CategoryApproachingLimit,
+					Severity:   SeverityWarning,
+					Resource:   "cpu",
+					Message:    fmt.Sprintf("CPU usage is at %.0f%% of limit", cpuRatio*100),
+					Current:    instant.cpu,
+					Configured: cpuLimitPct,
+					Suggested:  ptr(suggested),
+				})
+			}
 		}
 
-		if !noCPUReservation && cpuRatio <= cfg.ApproachingLimit {
+		if !noMemLimit {
+			memRatio := instant.memory / float64(spec.memoryLimit)
+
+			switch {
+			case memRatio > cfg.AtLimit:
+				suggested := roundMemory(instant.memory * cfg.HeadroomMultiplier)
+				hints = append(hints, Recommendation{
+					Category:   CategoryAtLimit,
+					Severity:   SeverityCritical,
+					Resource:   "memory",
+					Message:    fmt.Sprintf("Memory usage is at %.0f%% of limit", memRatio*100),
+					Current:    instant.memory,
+					Configured: float64(spec.memoryLimit),
+					Suggested:  ptr(suggested),
+				})
+
+			case memRatio > cfg.ApproachingLimit:
+				suggested := roundMemory(instant.memory * cfg.HeadroomMultiplier)
+				hints = append(hints, Recommendation{
+					Category:   CategoryApproachingLimit,
+					Severity:   SeverityWarning,
+					Resource:   "memory",
+					Message:    fmt.Sprintf("Memory usage is at %.0f%% of limit", memRatio*100),
+					Current:    instant.memory,
+					Configured: float64(spec.memoryLimit),
+					Suggested:  ptr(suggested),
+				})
+			}
+		}
+	}
+
+	// --- Over-provisioned checks (p95 metrics over lookback window) ---
+
+	if p95 != nil {
+		if !noCPULimit && !noCPUReservation {
 			cpuReservationPct := float64(spec.cpuReservation) / 1e9 * 100
-			cpuResRatio := metrics.cpu / cpuReservationPct
+			cpuResRatio := p95.cpu / cpuReservationPct
 
 			if cpuResRatio < cfg.OverProvisioned {
-				newState.cpuLowTicks++
-				if newState.cpuLowTicks >= cfg.SustainedTicks {
-					suggested := roundCPU(metrics.cpu / 100 * 1e9 * cfg.HeadroomMultiplier)
-					hints = append(hints, Recommendation{
-						Category:   CategoryOverProvisioned,
-						Severity:   SeverityInfo,
-						Resource:   "cpu",
-						Message:    fmt.Sprintf("CPU usage has been below %.0f%% of reservation for the past %s", cfg.OverProvisioned*100, formatTickDuration(newState.cpuLowTicks, cfg.Interval)),
-						Current:    metrics.cpu,
-						Configured: cpuReservationPct,
-						Suggested:  ptr(suggested),
-					})
-				}
-			} else {
-				newState.cpuLowTicks = 0
+				suggested := roundCPU(p95.cpu / 100 * 1e9 * cfg.HeadroomMultiplier)
+				hints = append(hints, Recommendation{
+					Category:   CategoryOverProvisioned,
+					Severity:   SeverityInfo,
+					Resource:   "cpu",
+					Message:    fmt.Sprintf("p95 CPU usage over the past %s is %.0f%% of reservation", formatDuration(cfg.Lookback), cpuResRatio*100),
+					Current:    p95.cpu,
+					Configured: cpuReservationPct,
+					Suggested:  ptr(suggested),
+				})
 			}
 		}
-	}
 
-	// Memory checks
-	if !noMemLimit {
-		memRatio := metrics.memory / float64(spec.memoryLimit)
-
-		switch {
-		case memRatio > cfg.AtLimit:
-			suggested := roundMemory(metrics.memory * cfg.HeadroomMultiplier)
-			hints = append(hints, Recommendation{
-				Category:   CategoryAtLimit,
-				Severity:   SeverityCritical,
-				Resource:   "memory",
-				Message:    fmt.Sprintf("Memory usage is at %.0f%% of limit", memRatio*100),
-				Current:    metrics.memory,
-				Configured: float64(spec.memoryLimit),
-				Suggested:  ptr(suggested),
-			})
-			newState.memoryLowTicks = 0
-
-		case memRatio > cfg.ApproachingLimit:
-			suggested := roundMemory(metrics.memory * cfg.HeadroomMultiplier)
-			hints = append(hints, Recommendation{
-				Category:   CategoryApproachingLimit,
-				Severity:   SeverityWarning,
-				Resource:   "memory",
-				Message:    fmt.Sprintf("Memory usage is at %.0f%% of limit", memRatio*100),
-				Current:    metrics.memory,
-				Configured: float64(spec.memoryLimit),
-				Suggested:  ptr(suggested),
-			})
-			newState.memoryLowTicks = 0
-		}
-
-		if !noMemReservation && memRatio <= cfg.ApproachingLimit {
-			memResRatio := metrics.memory / float64(spec.memoryReservation)
+		if !noMemLimit && !noMemReservation {
+			memResRatio := p95.memory / float64(spec.memoryReservation)
 
 			if memResRatio < cfg.OverProvisioned {
-				newState.memoryLowTicks++
-				if newState.memoryLowTicks >= cfg.SustainedTicks {
-					suggested := roundMemory(metrics.memory * cfg.HeadroomMultiplier)
-					hints = append(hints, Recommendation{
-						Category:   CategoryOverProvisioned,
-						Severity:   SeverityInfo,
-						Resource:   "memory",
-						Message:    fmt.Sprintf("Memory usage has been below %.0f%% of reservation for the past %s", cfg.OverProvisioned*100, formatTickDuration(newState.memoryLowTicks, cfg.Interval)),
-						Current:    metrics.memory,
-						Configured: float64(spec.memoryReservation),
-						Suggested:  ptr(suggested),
-					})
-				}
-			} else {
-				newState.memoryLowTicks = 0
+				suggested := roundMemory(p95.memory * cfg.HeadroomMultiplier)
+				hints = append(hints, Recommendation{
+					Category:   CategoryOverProvisioned,
+					Severity:   SeverityInfo,
+					Resource:   "memory",
+					Message:    fmt.Sprintf("p95 memory usage over the past %s is %.0f%% of reservation", formatDuration(cfg.Lookback), memResRatio*100),
+					Current:    p95.memory,
+					Configured: float64(spec.memoryReservation),
+					Suggested:  ptr(suggested),
+				})
 			}
 		}
 	}
 
-	return evaluateResult{hints: hints, newState: newState}
+	return hints
 }

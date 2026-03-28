@@ -10,7 +10,7 @@ func TestLoadSizing_Defaults(t *testing.T) {
 		"CETACEAN_SIZING_ENABLED", "CETACEAN_SIZING_INTERVAL",
 		"CETACEAN_SIZING_HEADROOM_MULTIPLIER", "CETACEAN_SIZING_THRESHOLD_OVER_PROVISIONED",
 		"CETACEAN_SIZING_THRESHOLD_APPROACHING_LIMIT", "CETACEAN_SIZING_THRESHOLD_AT_LIMIT",
-		"CETACEAN_SIZING_SUSTAINED_TICKS",
+		"CETACEAN_SIZING_LOOKBACK",
 	} {
 		t.Setenv(key, "")
 	}
@@ -37,8 +37,8 @@ func TestLoadSizing_Defaults(t *testing.T) {
 	if cfg.AtLimit != 0.95 {
 		t.Errorf("at-limit: got %f, want 0.95", cfg.AtLimit)
 	}
-	if cfg.SustainedTicks != 3 {
-		t.Errorf("sustained-ticks: got %d, want 3", cfg.SustainedTicks)
+	if cfg.Lookback != 168*time.Hour {
+		t.Errorf("lookback: got %v, want 168h", cfg.Lookback)
 	}
 }
 
@@ -49,7 +49,7 @@ func TestLoadSizing_EnvOverrides(t *testing.T) {
 	t.Setenv("CETACEAN_SIZING_THRESHOLD_OVER_PROVISIONED", "0.10")
 	t.Setenv("CETACEAN_SIZING_THRESHOLD_APPROACHING_LIMIT", "0.70")
 	t.Setenv("CETACEAN_SIZING_THRESHOLD_AT_LIMIT", "0.90")
-	t.Setenv("CETACEAN_SIZING_SUSTAINED_TICKS", "5")
+	t.Setenv("CETACEAN_SIZING_LOOKBACK", "24h")
 
 	cfg, err := LoadSizing(nil)
 	if err != nil {
@@ -73,8 +73,8 @@ func TestLoadSizing_EnvOverrides(t *testing.T) {
 	if cfg.AtLimit != 0.90 {
 		t.Errorf("at-limit: got %f, want 0.90", cfg.AtLimit)
 	}
-	if cfg.SustainedTicks != 5 {
-		t.Errorf("sustained-ticks: got %d, want 5", cfg.SustainedTicks)
+	if cfg.Lookback != 24*time.Hour {
+		t.Errorf("lookback: got %v, want 24h", cfg.Lookback)
 	}
 }
 
@@ -83,7 +83,7 @@ func TestLoadSizing_FileConfig(t *testing.T) {
 		"CETACEAN_SIZING_ENABLED", "CETACEAN_SIZING_INTERVAL",
 		"CETACEAN_SIZING_HEADROOM_MULTIPLIER", "CETACEAN_SIZING_THRESHOLD_OVER_PROVISIONED",
 		"CETACEAN_SIZING_THRESHOLD_APPROACHING_LIMIT", "CETACEAN_SIZING_THRESHOLD_AT_LIMIT",
-		"CETACEAN_SIZING_SUSTAINED_TICKS",
+		"CETACEAN_SIZING_LOOKBACK",
 	} {
 		t.Setenv(key, "")
 	}
@@ -126,7 +126,7 @@ func TestLoadSizing_InvalidThreshold(t *testing.T) {
 	t.Setenv("CETACEAN_SIZING_ENABLED", "")
 	t.Setenv("CETACEAN_SIZING_INTERVAL", "")
 	t.Setenv("CETACEAN_SIZING_HEADROOM_MULTIPLIER", "")
-	t.Setenv("CETACEAN_SIZING_SUSTAINED_TICKS", "")
+	t.Setenv("CETACEAN_SIZING_LOOKBACK", "")
 
 	_, err := LoadSizing(nil)
 	if err == nil {

@@ -7,23 +7,23 @@ type SizingConfig struct {
 	Enabled            bool
 	Interval           time.Duration
 	HeadroomMultiplier float64
-	OverProvisioned    float64 // below this fraction of reservation = over-provisioned
-	ApproachingLimit   float64 // above this fraction of limit = approaching
-	AtLimit            float64 // above this fraction of limit = at limit
-	SustainedTicks     int     // consecutive ticks required for over-provisioned
+	OverProvisioned    float64       // below this fraction of reservation = over-provisioned
+	ApproachingLimit   float64       // above this fraction of limit = approaching
+	AtLimit            float64       // above this fraction of limit = at limit
+	Lookback           time.Duration // p95 lookback window for over-provisioned checks
 }
 
 // LoadSizing resolves sizing configuration from file config, env vars, and defaults.
 // Accepts *fileConfig (unexported) — callers in main.go pass the pointer through without naming the type.
 func LoadSizing(fc *fileConfig) (*SizingConfig, error) {
 	var (
-		fEnabled   *bool
-		fInterval  *string
-		fHeadroom  *float64
-		fOverProv  *float64
-		fApproach  *float64
-		fAtLimit   *float64
-		fSustained *int
+		fEnabled  *bool
+		fInterval *string
+		fHeadroom *float64
+		fOverProv *float64
+		fApproach *float64
+		fAtLimit  *float64
+		fLookback *string
 	)
 
 	if fc != nil && fc.Sizing != nil {
@@ -34,7 +34,7 @@ func LoadSizing(fc *fileConfig) (*SizingConfig, error) {
 			fOverProv = fc.Sizing.Thresholds.OverProvisioned
 			fApproach = fc.Sizing.Thresholds.ApproachingLimit
 			fAtLimit = fc.Sizing.Thresholds.AtLimit
-			fSustained = fc.Sizing.Thresholds.SustainedTicks
+			fLookback = fc.Sizing.Thresholds.Lookback
 		}
 	}
 
@@ -63,7 +63,7 @@ func LoadSizing(fc *fileConfig) (*SizingConfig, error) {
 		return nil, err
 	}
 
-	sustained, err := resolveInt(nil, "CETACEAN_SIZING_SUSTAINED_TICKS", fSustained, 3, 1, 100)
+	lookback, err := resolveDuration(nil, "CETACEAN_SIZING_LOOKBACK", fLookback, 168*time.Hour)
 	if err != nil {
 		return nil, err
 	}
@@ -75,6 +75,6 @@ func LoadSizing(fc *fileConfig) (*SizingConfig, error) {
 		OverProvisioned:    overProv,
 		ApproachingLimit:   approach,
 		AtLimit:            atLimit,
-		SustainedTicks:     sustained,
+		Lookback:           lookback,
 	}, nil
 }

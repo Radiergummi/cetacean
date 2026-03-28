@@ -2,6 +2,7 @@ package sizing
 
 import (
 	"testing"
+	"time"
 
 	"github.com/radiergummi/cetacean/internal/config"
 )
@@ -13,7 +14,7 @@ func defaultConfig() *config.SizingConfig {
 		ApproachingLimit:   0.80,
 		AtLimit:            0.95,
 		HeadroomMultiplier: 2.0,
-		SustainedTicks:     3,
+		Lookback:           168 * time.Hour,
 	}
 }
 
@@ -32,11 +33,11 @@ func TestEvaluate_NoLimits(t *testing.T) {
 	spec := serviceSpec{name: "test"}
 	result := evaluate(spec, nil, nil, defaultConfig())
 
-	if len(result.hints) != 1 {
-		t.Fatalf("expected 1 hint, got %d: %+v", len(result.hints), result.hints)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 hint, got %d: %+v", len(result), result)
 	}
 
-	hint := result.hints[0]
+	hint := result[0]
 
 	if hint.Category != CategoryNoLimits {
 		t.Errorf("expected category %q, got %q", CategoryNoLimits, hint.Category)
@@ -58,12 +59,12 @@ func TestEvaluate_NoLimits_OnlyMemory(t *testing.T) {
 	}
 	result := evaluate(spec, nil, nil, defaultConfig())
 
-	if len(result.hints) != 2 {
-		t.Fatalf("expected 2 hints (no-memory-limit + no-cpu-reservation), got %d: %+v", len(result.hints), result.hints)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 hints (no-memory-limit + no-cpu-reservation), got %d: %+v", len(result), result)
 	}
 
 	categories := map[Category]bool{}
-	for _, h := range result.hints {
+	for _, h := range result {
 		categories[h.Category] = true
 	}
 
@@ -85,11 +86,11 @@ func TestEvaluate_NoReservations(t *testing.T) {
 	}
 	result := evaluate(spec, nil, nil, defaultConfig())
 
-	if len(result.hints) != 1 {
-		t.Fatalf("expected 1 hint, got %d: %+v", len(result.hints), result.hints)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 hint, got %d: %+v", len(result), result)
 	}
 
-	hint := result.hints[0]
+	hint := result[0]
 
 	if hint.Category != CategoryNoReservations {
 		t.Errorf("expected category %q, got %q", CategoryNoReservations, hint.Category)
@@ -112,14 +113,14 @@ func TestEvaluate_AtLimit(t *testing.T) {
 	result := evaluate(spec, metrics, nil, defaultConfig())
 
 	var atLimitHint *Recommendation
-	for i := range result.hints {
-		if result.hints[i].Category == CategoryAtLimit && result.hints[i].Resource == "cpu" {
-			atLimitHint = &result.hints[i]
+	for i := range result {
+		if result[i].Category == CategoryAtLimit && result[i].Resource == "cpu" {
+			atLimitHint = &result[i]
 		}
 	}
 
 	if atLimitHint == nil {
-		t.Fatalf("expected at-limit hint for cpu, got: %+v", result.hints)
+		t.Fatalf("expected at-limit hint for cpu, got: %+v", result)
 	}
 
 	if atLimitHint.Severity != SeverityCritical {
@@ -139,14 +140,14 @@ func TestEvaluate_ApproachingLimit(t *testing.T) {
 	result := evaluate(spec, metrics, nil, defaultConfig())
 
 	var approachingHint *Recommendation
-	for i := range result.hints {
-		if result.hints[i].Category == CategoryApproachingLimit && result.hints[i].Resource == "cpu" {
-			approachingHint = &result.hints[i]
+	for i := range result {
+		if result[i].Category == CategoryApproachingLimit && result[i].Resource == "cpu" {
+			approachingHint = &result[i]
 		}
 	}
 
 	if approachingHint == nil {
-		t.Fatalf("expected approaching-limit hint for cpu, got: %+v", result.hints)
+		t.Fatalf("expected approaching-limit hint for cpu, got: %+v", result)
 	}
 
 	if approachingHint.Severity != SeverityWarning {
@@ -158,44 +159,22 @@ func TestEvaluate_ApproachingLimit(t *testing.T) {
 	}
 }
 
-func TestEvaluate_OverProvisioned_NotSustained(t *testing.T) {
+func TestEvaluate_OverProvisioned(t *testing.T) {
 	spec := specWithLimits()
 	// 1 core reservation → 100%. 5% is well below 20% threshold.
-	metrics := &serviceMetrics{cpu: 5}
-	prev := &previousState{cpuLowTicks: 1}
+	p95 := &serviceMetrics{cpu: 5}
 
-	result := evaluate(spec, metrics, prev, defaultConfig())
-
-	for _, h := range result.hints {
-		if h.Category == CategoryOverProvisioned && h.Resource == "cpu" {
-			t.Errorf("did not expect over-provisioned hint after only 2 ticks (1 previous + 1 current)")
-		}
-	}
-
-	// Tick counter should have incremented.
-	if result.newState.cpuLowTicks != 2 {
-		t.Errorf("expected cpuLowTicks=2, got %d", result.newState.cpuLowTicks)
-	}
-}
-
-func TestEvaluate_OverProvisioned_Sustained(t *testing.T) {
-	spec := specWithLimits()
-	// 1 core reservation → 100%. 5% is well below 20% threshold.
-	metrics := &serviceMetrics{cpu: 5}
-	// 2 previous ticks + this tick = 3 total, which meets SustainedTicks=3.
-	prev := &previousState{cpuLowTicks: 2}
-
-	result := evaluate(spec, metrics, prev, defaultConfig())
+	result := evaluate(spec, nil, p95, defaultConfig())
 
 	var overProvHint *Recommendation
-	for i := range result.hints {
-		if result.hints[i].Category == CategoryOverProvisioned && result.hints[i].Resource == "cpu" {
-			overProvHint = &result.hints[i]
+	for i := range result {
+		if result[i].Category == CategoryOverProvisioned && result[i].Resource == "cpu" {
+			overProvHint = &result[i]
 		}
 	}
 
 	if overProvHint == nil {
-		t.Fatalf("expected over-provisioned hint for cpu, got: %+v", result.hints)
+		t.Fatalf("expected over-provisioned hint for cpu, got: %+v", result)
 	}
 
 	if overProvHint.Severity != SeverityInfo {
@@ -215,9 +194,9 @@ func TestEvaluate_Healthy(t *testing.T) {
 		memory: 128 * 1024 * 1024, // 128MB, well within 512MB limit and above 20% of 256MB reservation
 	}
 
-	result := evaluate(spec, metrics, nil, defaultConfig())
+	result := evaluate(spec, metrics, metrics, defaultConfig())
 
-	for _, h := range result.hints {
+	for _, h := range result {
 		if h.Category == CategoryAtLimit || h.Category == CategoryApproachingLimit || h.Category == CategoryOverProvisioned {
 			t.Errorf("unexpected hint for healthy service: %+v", h)
 		}
@@ -230,7 +209,7 @@ func TestEvaluate_NoMetrics_ConfigOnlyHints(t *testing.T) {
 
 	result := evaluate(spec, nil, nil, defaultConfig())
 
-	for _, h := range result.hints {
+	for _, h := range result {
 		if h.Category == CategoryAtLimit || h.Category == CategoryApproachingLimit || h.Category == CategoryOverProvisioned {
 			t.Errorf("unexpected metrics-based hint when metrics are nil: %+v", h)
 		}
@@ -238,7 +217,7 @@ func TestEvaluate_NoMetrics_ConfigOnlyHints(t *testing.T) {
 
 	// Should still have the config-only no-limits hint.
 	found := false
-	for _, h := range result.hints {
+	for _, h := range result {
 		if h.Category == CategoryNoLimits {
 			found = true
 		}
@@ -264,14 +243,14 @@ func TestEvaluate_SuggestedValueRounding(t *testing.T) {
 	result := evaluate(spec, metrics, nil, defaultConfig())
 
 	var atLimitHint *Recommendation
-	for i := range result.hints {
-		if result.hints[i].Category == CategoryAtLimit && result.hints[i].Resource == "memory" {
-			atLimitHint = &result.hints[i]
+	for i := range result {
+		if result[i].Category == CategoryAtLimit && result[i].Resource == "memory" {
+			atLimitHint = &result[i]
 		}
 	}
 
 	if atLimitHint == nil {
-		t.Fatalf("expected at-limit hint for memory, got: %+v", result.hints)
+		t.Fatalf("expected at-limit hint for memory, got: %+v", result)
 	}
 
 	if atLimitHint.Suggested == nil {
@@ -300,27 +279,26 @@ func TestEvaluate_OverProvisioned_ReservationNotLimit(t *testing.T) {
 	// 5% CPU usage: well below 20% of reservation (1 core = 100%), but only 0.5% of limit.
 	// If we used limit ratio, 0.5% < 20% would also be true, but the Configured field
 	// should be the reservation, not the limit.
-	metrics := &serviceMetrics{
+	p95 := &serviceMetrics{
 		cpu:    5,
 		memory: float64(10 * 1024 * 1024), // 10MB: below 20% of 128MB reservation
 	}
-	prev := &previousState{cpuLowTicks: 2, memoryLowTicks: 2}
 
-	result := evaluate(spec, metrics, prev, defaultConfig())
+	result := evaluate(spec, nil, p95, defaultConfig())
 
 	var cpuHint, memHint *Recommendation
-	for i := range result.hints {
-		if result.hints[i].Category == CategoryOverProvisioned && result.hints[i].Resource == "cpu" {
-			cpuHint = &result.hints[i]
+	for i := range result {
+		if result[i].Category == CategoryOverProvisioned && result[i].Resource == "cpu" {
+			cpuHint = &result[i]
 		}
 
-		if result.hints[i].Category == CategoryOverProvisioned && result.hints[i].Resource == "memory" {
-			memHint = &result.hints[i]
+		if result[i].Category == CategoryOverProvisioned && result[i].Resource == "memory" {
+			memHint = &result[i]
 		}
 	}
 
 	if cpuHint == nil {
-		t.Fatalf("expected over-provisioned hint for cpu, got: %+v", result.hints)
+		t.Fatalf("expected over-provisioned hint for cpu, got: %+v", result)
 	}
 
 	// Configured must be the reservation percentage (100%), not the limit percentage (1000%).
@@ -331,7 +309,7 @@ func TestEvaluate_OverProvisioned_ReservationNotLimit(t *testing.T) {
 	}
 
 	if memHint == nil {
-		t.Fatalf("expected over-provisioned hint for memory, got: %+v", result.hints)
+		t.Fatalf("expected over-provisioned hint for memory, got: %+v", result)
 	}
 
 	// Configured must be the reservation bytes, not the limit bytes.

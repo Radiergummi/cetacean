@@ -2,6 +2,7 @@ package sizing
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -29,9 +30,8 @@ type Monitor struct {
 	cache *cache.Cache
 	cfg   *config.SizingConfig
 
-	mu       sync.RWMutex
-	results  []ServiceSizing
-	previous map[string]*previousState
+	mu      sync.RWMutex
+	results []ServiceSizing
 }
 
 // New creates a new sizing monitor. Returns nil if query is nil or sizing is disabled.
@@ -41,10 +41,9 @@ func New(query QueryFunc, c *cache.Cache, cfg *config.SizingConfig) *Monitor {
 	}
 
 	return &Monitor{
-		query:    query,
-		cache:    c,
-		cfg:      cfg,
-		previous: make(map[string]*previousState),
+		query: query,
+		cache: c,
+		cfg:   cfg,
 	}
 }
 
@@ -84,6 +83,16 @@ func (m *Monitor) Results() []ServiceSizing {
 	return out
 }
 
+// formatPromDuration formats a time.Duration as a Prometheus duration string.
+func formatPromDuration(d time.Duration) string {
+	hours := int(d.Hours())
+	if hours%24 == 0 && hours >= 24 {
+		return fmt.Sprintf("%dd", hours/24)
+	}
+
+	return fmt.Sprintf("%dh", hours)
+}
+
 func (m *Monitor) tick(ctx context.Context) {
 	tickCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -95,6 +104,10 @@ func (m *Monitor) tick(ctx context.Context) {
 
 	cpuCh := make(chan queryResult, 1)
 	memCh := make(chan queryResult, 1)
+	cpuP95Ch := make(chan queryResult, 1)
+	memP95Ch := make(chan queryResult, 1)
+
+	lookbackStr := formatPromDuration(m.cfg.Lookback)
 
 	go func() {
 		data, err := m.queryByService(tickCtx, `sum by (container_label_com_docker_swarm_service_name)(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_id!=""}[5m])) * 100`)
@@ -106,8 +119,22 @@ func (m *Monitor) tick(ctx context.Context) {
 		memCh <- queryResult{data, err}
 	}()
 
+	go func() {
+		query := fmt.Sprintf(`quantile by (container_label_com_docker_swarm_service_name)(0.95, sum by (container_label_com_docker_swarm_service_name)(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_id!=""}[5m]))[%s:]) * 100`, lookbackStr)
+		data, err := m.queryByService(tickCtx, query)
+		cpuP95Ch <- queryResult{data, err}
+	}()
+
+	go func() {
+		query := fmt.Sprintf(`quantile by (container_label_com_docker_swarm_service_name)(0.95, sum by (container_label_com_docker_swarm_service_name)(container_memory_usage_bytes{container_label_com_docker_swarm_service_id!=""})[%s:])`, lookbackStr)
+		data, err := m.queryByService(tickCtx, query)
+		memP95Ch <- queryResult{data, err}
+	}()
+
 	cpuResult := <-cpuCh
 	memResult := <-memCh
+	cpuP95Result := <-cpuP95Ch
+	memP95Result := <-memP95Ch
 
 	if cpuResult.err != nil {
 		slog.Warn("sizing: CPU query failed", "error", cpuResult.err)
@@ -117,46 +144,48 @@ func (m *Monitor) tick(ctx context.Context) {
 		slog.Warn("sizing: memory query failed", "error", memResult.err)
 	}
 
+	if cpuP95Result.err != nil {
+		slog.Warn("sizing: p95 CPU query failed", "error", cpuP95Result.err)
+	}
+
+	if memP95Result.err != nil {
+		slog.Warn("sizing: p95 memory query failed", "error", memP95Result.err)
+	}
+
 	services := m.cache.ListServices()
 	now := time.Now()
 
 	var newResults []ServiceSizing
-	activeIDs := make(map[string]struct{}, len(services))
 
 	for _, svc := range services {
-		activeIDs[svc.ID] = struct{}{}
 		spec := extractSpec(svc)
 
-		var metrics *serviceMetrics
+		var instant *serviceMetrics
 		if cpuResult.err == nil && memResult.err == nil {
 			cpu := cpuResult.data[spec.name]
 			mem := memResult.data[spec.name]
-			metrics = &serviceMetrics{cpu: cpu, memory: mem}
+			instant = &serviceMetrics{cpu: cpu, memory: mem}
 		}
 
-		prev := m.previous[svc.ID]
-		result := evaluate(spec, metrics, prev, m.cfg)
+		var p95 *serviceMetrics
+		if cpuP95Result.err == nil && memP95Result.err == nil {
+			cpu := cpuP95Result.data[spec.name]
+			mem := memP95Result.data[spec.name]
+			p95 = &serviceMetrics{cpu: cpu, memory: mem}
+		}
 
-		state := result.newState
-		m.previous[svc.ID] = &state
+		hints := evaluate(spec, instant, p95, m.cfg)
 
-		if len(result.hints) == 0 {
+		if len(hints) == 0 {
 			continue
 		}
 
 		newResults = append(newResults, ServiceSizing{
 			ServiceID:   svc.ID,
 			ServiceName: spec.name,
-			Hints:       result.hints,
+			Hints:       hints,
 			ComputedAt:  now,
 		})
-	}
-
-	// Clean up tick state for removed services.
-	for id := range m.previous {
-		if _, ok := activeIDs[id]; !ok {
-			delete(m.previous, id)
-		}
 	}
 
 	m.mu.Lock()
