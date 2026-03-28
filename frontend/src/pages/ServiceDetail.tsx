@@ -350,7 +350,7 @@ export default function ServiceDetail() {
       serviceResources.Limits?.MemoryBytes != null ||
       serviceResources.Reservations?.NanoCPUs != null ||
       serviceResources.Reservations?.MemoryBytes != null ||
-      taskTemplate.Resources?.Limits?.Pids != null);
+      taskTemplate?.Resources?.Limits?.Pids != null);
   const labels = service.Spec.Labels;
 
   const runningTasks = tasks?.filter(({ Status }) => Status?.State === "running").length ?? 0;
@@ -395,10 +395,15 @@ export default function ServiceDetail() {
         canFix={canEditConfig}
         onFixed={() => {
           if (id) {
-            api.service(id).then((response) => {
-              setService(response.service);
-              applyDerivedState(response.service);
-            });
+            api
+              .service(id)
+              .then((response) => {
+                setService(response.service);
+                applyDerivedState(response.service);
+              })
+              .catch(() => {
+                // Refetch failed — page will refresh on next SSE event
+              });
           }
         }}
       />
