@@ -110,6 +110,7 @@ func newPluginHandlers(pc *mockPluginClient) *Handlers {
 		closedReady(),
 		nil,
 		config.OpsImpactful,
+		nil,
 	)
 }
 

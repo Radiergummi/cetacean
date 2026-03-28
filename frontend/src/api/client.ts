@@ -39,6 +39,7 @@ import type {
   ServiceSecretRef,
   ServiceNetworkRef,
   ServiceMount,
+  ServiceSizing,
 } from "./types";
 
 const headers = { Accept: "application/json" };
@@ -274,6 +275,7 @@ export const api = {
     fetchJSON<{ node: Node }>(`/nodes/${id}`, signal).then((r) => r.node),
   services: (params?: ListParams) =>
     fetchJSON<PagedResponse<ServiceListItem>>(buildListURL("/services", params)),
+  serviceSizing: () => fetchJSON<ServiceSizing[]>("/services/sizing"),
   service: (id: string, signal?: AbortSignal) =>
     fetchJSON<ServiceDetail>(`/services/${id}`, signal),
   tasks: (params?: ListParams) => fetchJSON<PagedResponse<Task>>(buildListURL("/tasks", params)),

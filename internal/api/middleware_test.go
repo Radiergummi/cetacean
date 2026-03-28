@@ -263,7 +263,7 @@ func TestRequestIDFrom_Empty(t *testing.T) {
 
 func TestNewRouter_Smoke(t *testing.T) {
 	c := cache.New(nil)
-	h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
 	b := NewBroadcaster(0)
 	defer b.Close()
 	prom := NewPrometheusProxy("http://localhost:9090")

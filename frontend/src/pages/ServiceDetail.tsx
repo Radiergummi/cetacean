@@ -49,11 +49,13 @@ import { CronjobPanel } from "../components/service-detail/CronjobPanel";
 import { DiunPanel } from "../components/service-detail/DiunPanel";
 import { ShepherdPanel } from "../components/service-detail/ShepherdPanel";
 import { TraefikPanel } from "../components/service-detail/TraefikPanel";
+import { highestSeverityHint } from "../components/SizingBadge";
 import TasksTable from "../components/TasksTable";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
 import { useResourceStream } from "../hooks/useResourceStream";
+import { useSizingHints } from "../hooks/useSizingHints";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
 import { deriveServiceSubResources } from "../lib/deriveServiceState";
@@ -109,6 +111,9 @@ export default function ServiceDetail() {
   const [networkNames, setNetworkNames] = useState<Record<string, string>>({});
   const [cpuActual, setCpuActual] = useState<number | undefined>();
   const [memActual, setMemActual] = useState<number | undefined>();
+  const sizing = useSizingHints();
+  const serviceSizing = id ? sizing.byServiceId.get(id) : undefined;
+  const sizingHint = serviceSizing ? highestSeverityHint(serviceSizing.hints) : null;
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -301,7 +306,10 @@ export default function ServiceDetail() {
     }
 
     const prefixes = integrations
-      .map(({ name: integrationName }) => integrationLabelPrefix[integrationName as keyof typeof integrationLabelPrefix])
+      .map(
+        ({ name: integrationName }) =>
+          integrationLabelPrefix[integrationName as keyof typeof integrationLabelPrefix],
+      )
       .filter(Boolean);
 
     if (prefixes.length === 0) {
@@ -374,10 +382,31 @@ export default function ServiceDetail() {
           { label: <ResourceName name={name} /> },
         ]}
         actions={
-          <ServiceActions
-            service={service}
-            serviceId={id!}
-          />
+          <>
+            {sizingHint && (
+              <button
+                type="button"
+                className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                  sizingHint.severity === "critical"
+                    ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                    : sizingHint.severity === "warning"
+                      ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                      : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                }`}
+                onClick={() => {
+                  document
+                    .getElementById("resources-section")
+                    ?.scrollIntoView({ behavior: "smooth" });
+                }}
+              >
+                {sizingHint.label}
+              </button>
+            )}
+            <ServiceActions
+              service={service}
+              serviceId={id!}
+            />
+          </>
         }
       />
 
@@ -509,13 +538,37 @@ export default function ServiceDetail() {
 
         switch (integration.name) {
           case "traefik":
-            return <TraefikPanel key={integration.name} integration={integration} {...panelProps} />;
+            return (
+              <TraefikPanel
+                key={integration.name}
+                integration={integration}
+                {...panelProps}
+              />
+            );
           case "shepherd":
-            return <ShepherdPanel key={integration.name} integration={integration} {...panelProps} />;
+            return (
+              <ShepherdPanel
+                key={integration.name}
+                integration={integration}
+                {...panelProps}
+              />
+            );
           case "swarm-cronjob":
-            return <CronjobPanel key={integration.name} integration={integration} {...panelProps} />;
+            return (
+              <CronjobPanel
+                key={integration.name}
+                integration={integration}
+                {...panelProps}
+              />
+            );
           case "diun":
-            return <DiunPanel key={integration.name} integration={integration} {...panelProps} />;
+            return (
+              <DiunPanel
+                key={integration.name}
+                integration={integration}
+                {...panelProps}
+              />
+            );
           default:
             return null;
         }
@@ -616,7 +669,10 @@ export default function ServiceDetail() {
             )}
 
             {serviceResources !== null && (hasResourcesContent || canEditConfig) && (
-              <div className="flex flex-col gap-3 rounded-lg border p-3">
+              <div
+                id="resources-section"
+                className="flex flex-col gap-3 rounded-lg border p-3"
+              >
                 <ResourcesEditor
                   serviceId={id!}
                   resources={serviceResources}
@@ -630,6 +686,7 @@ export default function ServiceDetail() {
                     memLimit,
                     memActual,
                   }}
+                  hints={serviceSizing?.hints}
                 />
               </div>
             )}

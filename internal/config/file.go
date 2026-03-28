@@ -55,6 +55,21 @@ type fileConfig struct {
 	Storage *fileStorage `toml:"storage"`
 	TLS     *fileTLS     `toml:"tls"`
 	Auth    *fileAuth    `toml:"auth"`
+	Sizing  *fileSizing  `toml:"sizing"`
+}
+
+type fileSizing struct {
+	Enabled    *bool                 `toml:"enabled"`
+	Interval   *string               `toml:"interval"`
+	Headroom   *float64              `toml:"headroom_multiplier"`
+	Thresholds *fileSizingThresholds `toml:"thresholds"`
+}
+
+type fileSizingThresholds struct {
+	OverProvisioned  *float64 `toml:"over_provisioned"`
+	ApproachingLimit *float64 `toml:"approaching_limit"`
+	AtLimit          *float64 `toml:"at_limit"`
+	SustainedTicks   *int     `toml:"sustained_ticks"`
 }
 
 type fileServer struct {
