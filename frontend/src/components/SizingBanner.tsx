@@ -68,8 +68,8 @@ export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
     try {
       await api.patchServiceResources(serviceId, patch);
       onFixed?.();
-    } catch (error) {
-      setError(getErrorMessage(error, "Failed to apply suggestion"));
+    } catch (caughtError) {
+      setError(getErrorMessage(caughtError, "Failed to apply suggestion"));
     } finally {
       setApplying(null);
     }

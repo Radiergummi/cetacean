@@ -67,12 +67,7 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%d hours", hours)
 	}
 
-	days := hours / 24
-	if days == 1 {
-		return "1 day"
-	}
-
-	return fmt.Sprintf("%d days", days)
+	return fmt.Sprintf("%d days", hours/24)
 }
 
 func ptr(v float64) *float64 {

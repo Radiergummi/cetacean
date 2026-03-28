@@ -35,21 +35,24 @@ export function SizingBadge({ hints }: { hints: SizingRecommendation[] }) {
     );
   }
 
-  const sorted = [...hints].sort(
-    (first, second) => severityRank[second.severity] - severityRank[first.severity],
-  );
-  const top = sorted[0];
+  let top = hints[0];
+
+  for (const hint of hints) {
+    if (severityRank[hint.severity] > severityRank[top.severity]) {
+      top = hint;
+    }
+  }
+
   const Icon = hintIcon(top.category);
-  const severity = top.severity;
 
   const badge = (
-    <span className={`inline-flex items-center gap-1 ${severityStyles[severity]}`}>
+    <span className={`inline-flex items-center gap-1 ${severityStyles[top.severity]}`}>
       <Icon className="size-3.5" />
       {formatCompactLabel(top)}
     </span>
   );
 
-  if (sorted.length <= 1) {
+  if (hints.length <= 1) {
     return badge;
   }
 
@@ -58,7 +61,7 @@ export function SizingBadge({ hints }: { hints: SizingRecommendation[] }) {
       <TooltipTrigger render={badge} />
       <TooltipContent>
         <ul className="space-y-1">
-          {sorted.map((hint, index) => (
+          {hints.map((hint, index) => (
             <li key={index}>{hint.message}</li>
           ))}
         </ul>

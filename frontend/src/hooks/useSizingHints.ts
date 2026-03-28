@@ -2,6 +2,7 @@ import { useMonitoringStatus } from "./useMonitoringStatus";
 import { api } from "@/api/client";
 import type { ServiceSizing } from "@/api/types";
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 
 interface SizingHints {
   byServiceId: Map<string, ServiceSizing>;
@@ -16,6 +17,7 @@ const emptySizingHints: SizingHints = {
 export function useSizingHints(): SizingHints {
   const monitoring = useMonitoringStatus();
   const enabled = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
+  const { pathname } = useLocation();
 
   const [hints, setHints] = useState<SizingHints>(emptySizingHints);
 
@@ -52,7 +54,7 @@ export function useSizingHints(): SizingHints {
     return () => {
       cancelled = true;
     };
-  }, [enabled]);
+  }, [enabled, pathname]);
 
   return hints;
 }
