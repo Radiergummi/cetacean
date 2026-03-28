@@ -11,9 +11,11 @@ import PageHeader from "../components/PageHeader";
 import ResourceCard from "../components/ResourceCard";
 import ResourceName from "../components/ResourceName";
 import SortIndicator from "../components/SortIndicator";
+import { SizingBadge } from "../components/SizingBadge";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { useServiceMetrics } from "../hooks/useServiceMetrics";
+import { useSizingHints } from "../hooks/useSizingHints";
 import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useViewMode } from "../hooks/useViewMode";
@@ -69,6 +71,7 @@ export default function ServiceList() {
     monitoring?.prometheusReachable &&
     !!monitoring?.cadvisor?.targets;
   const { getForService } = useServiceMetrics();
+  const sizing = useSizingHints();
 
   const baseColumns: Column<ServiceListItem>[] = [
     {
@@ -179,7 +182,19 @@ export default function ServiceList() {
       ]
     : [];
 
-  const columns: Column<ServiceListItem>[] = [...baseColumns, ...metricsColumns];
+  const sizingColumns: Column<ServiceListItem>[] = sizing.hasData
+    ? [
+        {
+          header: "Sizing",
+          cell: ({ ID }) => {
+            const serviceSizing = sizing.byServiceId.get(ID);
+            return <SizingBadge hints={serviceSizing?.hints ?? []} />;
+          },
+        },
+      ]
+    : [];
+
+  const columns: Column<ServiceListItem>[] = [...baseColumns, ...metricsColumns, ...sizingColumns];
 
   if (loading) {
     return (
