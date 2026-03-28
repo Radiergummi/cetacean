@@ -49,7 +49,7 @@ import { CronjobPanel } from "../components/service-detail/CronjobPanel";
 import { DiunPanel } from "../components/service-detail/DiunPanel";
 import { ShepherdPanel } from "../components/service-detail/ShepherdPanel";
 import { TraefikPanel } from "../components/service-detail/TraefikPanel";
-import { highestSeverityHint } from "../components/SizingBadge";
+import { SizingBanner } from "../components/SizingBanner";
 import TasksTable from "../components/TasksTable";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
@@ -113,7 +113,7 @@ export default function ServiceDetail() {
   const [memActual, setMemActual] = useState<number | undefined>();
   const sizing = useSizingHints();
   const serviceSizing = id ? sizing.byServiceId.get(id) : undefined;
-  const sizingHint = serviceSizing ? highestSeverityHint(serviceSizing.hints) : null;
+  const sizingHints = serviceSizing?.hints ?? [];
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -382,33 +382,18 @@ export default function ServiceDetail() {
           { label: <ResourceName name={name} /> },
         ]}
         actions={
-          <>
-            {sizingHint && (
-              <button
-                type="button"
-                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                  sizingHint.severity === "critical"
-                    ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                    : sizingHint.severity === "warning"
-                      ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                      : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                }`}
-                onClick={() => {
-                  document
-                    .getElementById("resources-section")
-                    ?.scrollIntoView({ behavior: "smooth" });
-                }}
-              >
-                <sizingHint.Icon className="size-3.5" />
-                {sizingHint.descriptiveText}
-              </button>
-            )}
-            <ServiceActions
-              service={service}
-              serviceId={id!}
-            />
-          </>
+          <ServiceActions
+            service={service}
+            serviceId={id!}
+          />
         }
+      />
+
+      <SizingBanner
+        hints={sizingHints}
+        onScrollToResources={() => {
+          document.getElementById("resources-section")?.scrollIntoView({ behavior: "smooth" });
+        }}
       />
 
       {/* Overview cards */}
@@ -687,7 +672,6 @@ export default function ServiceDetail() {
                     memLimit,
                     memActual,
                   }}
-                  hints={serviceSizing?.hints}
                 />
               </div>
             )}
