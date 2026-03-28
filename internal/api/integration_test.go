@@ -33,7 +33,7 @@ func setupIntegrationRouter(t *testing.T) http.Handler {
 	})
 
 	b := NewBroadcaster(100 * time.Millisecond)
-	h := NewHandlers(c, b, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(c, b, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
 	spa := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte("<html>SPA</html>")) //nolint:errcheck

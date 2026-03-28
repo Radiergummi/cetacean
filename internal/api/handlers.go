@@ -27,6 +27,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/filter"
 	"github.com/radiergummi/cetacean/internal/integrations"
+	"github.com/radiergummi/cetacean/internal/sizing"
 	"github.com/radiergummi/cetacean/internal/version"
 )
 
@@ -188,6 +189,7 @@ type Handlers struct {
 	ready               <-chan struct{}
 	promClient          *PromClient
 	operationsLevel     config.OperationsLevel
+	sizingMonitor       *sizing.Monitor
 	localNodeMu         sync.Mutex
 	localNodeID         string
 	localNodeDone       bool
@@ -204,6 +206,7 @@ func NewHandlers(
 	ready <-chan struct{},
 	promClient *PromClient,
 	operationsLevel config.OperationsLevel,
+	sizingMonitor *sizing.Monitor,
 ) *Handlers {
 	return &Handlers{
 		cache:           c,
@@ -215,7 +218,13 @@ func NewHandlers(
 		ready:           ready,
 		promClient:      promClient,
 		operationsLevel: operationsLevel,
+		sizingMonitor:   sizingMonitor,
 	}
+}
+
+func (h *Handlers) HandleServicesSizing(w http.ResponseWriter, r *http.Request) {
+	results := h.sizingMonitor.Results()
+	writeJSONWithETag(w, r, results)
 }
 
 func (h *Handlers) streamList(w http.ResponseWriter, r *http.Request, typ string) {

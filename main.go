@@ -21,6 +21,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/docker"
+	"github.com/radiergummi/cetacean/internal/sizing"
 	"github.com/radiergummi/cetacean/internal/version"
 	"tailscale.com/tsnet"
 )
@@ -197,6 +198,31 @@ func main() {
 	} else {
 		slog.Warn("prometheus not configured, metrics disabled")
 	}
+	var sizingMonitor *sizing.Monitor
+	if promClient != nil {
+		sizingCfg, err := config.LoadSizing(fc)
+		if err != nil {
+			slog.Error("failed to load sizing config", "error", err)
+			os.Exit(1)
+		}
+		queryFunc := sizing.QueryFunc(func(ctx context.Context, query string) ([]sizing.PromResult, error) {
+			results, err := promClient.InstantQuery(ctx, query)
+			if err != nil {
+				return nil, err
+			}
+			out := make([]sizing.PromResult, len(results))
+			for i, r := range results {
+				out[i] = sizing.PromResult{Labels: r.Labels, Value: r.Value}
+			}
+			return out, nil
+		})
+		sizingMonitor = sizing.New(queryFunc, stateCache, sizingCfg)
+		if sizingMonitor != nil {
+			go sizingMonitor.Run(ctx)
+			slog.Info("sizing monitor started", "interval", sizingCfg.Interval)
+		}
+	}
+
 	slog.Info("operations level", "level", cfg.OperationsLevel)
 	handlers := api.NewHandlers(
 		stateCache,
@@ -208,6 +234,7 @@ func main() {
 		watcher.Ready(),
 		promClient,
 		cfg.OperationsLevel,
+		sizingMonitor,
 	)
 
 	// SPA
