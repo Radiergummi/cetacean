@@ -1,6 +1,6 @@
 import type { SizingRecommendation, SizingSeverity } from "@/api/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowDown, ArrowUp, Check, ShieldOff } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, TriangleAlert } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 const severityRank: Record<SizingSeverity, number> = {
@@ -17,7 +17,7 @@ const severityStyles: Record<SizingSeverity, string> = {
 
 function hintIcon(category: SizingRecommendation["category"]): LucideIcon {
   if (category === "no-limits" || category === "no-reservations") {
-    return ShieldOff;
+    return TriangleAlert;
   }
 
   if (category === "at-limit" || category === "approaching-limit") {
