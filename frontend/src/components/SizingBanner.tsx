@@ -1,6 +1,6 @@
 import type { SizingRecommendation, SizingSeverity } from "@/api/types";
 import { formatBytes, formatCores } from "@/lib/format";
-import { ArrowUp, TrendingDown, TriangleAlert } from "lucide-react";
+import { ArrowUp, Info, TrendingDown, TriangleAlert } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 const severityRank: Record<SizingSeverity, number> = {
@@ -74,11 +74,10 @@ export function SizingBanner({ hints, onScrollToResources }: Props) {
   }
 
   const severity = highestSeverity(hints);
-  const Icon = hintIcon(hints[0].category);
 
   return (
     <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 ${bannerStyles[severity]}`}>
-      <Icon className={`mt-0.5 size-5 shrink-0 ${iconStyles[severity]}`} />
+      <Info className={`mt-0.5 size-5 shrink-0 ${iconStyles[severity]}`} />
 
       <div className="flex-1 space-y-2">
         {hints.map((hint, index) => {
@@ -91,7 +90,7 @@ export function SizingBanner({ hints, onScrollToResources }: Props) {
               className="flex items-start justify-between gap-4"
             >
               <div className="flex items-start gap-2">
-                {hints.length > 1 && <HintIcon className="mt-0.5 size-4 shrink-0 opacity-60" />}
+                <HintIcon className="mt-0.5 size-4 shrink-0 opacity-60" />
 
                 <div>
                   <p className="text-sm font-medium">{hint.message}</p>
