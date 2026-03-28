@@ -1,7 +1,7 @@
 import { DockerDocsLink } from "./DockerDocsLink";
 import { ResourceRangeSlider } from "./resource-range-slider";
 import { api } from "@/api/client";
-import type { ClusterCapacity } from "@/api/types";
+import type { ClusterCapacity, SizingRecommendation } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
@@ -53,12 +53,14 @@ export function ResourcesEditor({
   pids,
   allocation,
   onSaved,
+  hints,
 }: {
   serviceId: string;
   resources: ServiceResourceShape;
   pids?: number;
   allocation?: AllocationData;
   onSaved: (updated: ServiceResourceShape) => void;
+  hints?: SizingRecommendation[];
 }) {
   const { level, loading: levelLoading } = useOperationsLevel();
   const canEdit = !levelLoading && level >= opsLevel.configuration;
@@ -193,6 +195,39 @@ export function ResourcesEditor({
     return (
       <div className="space-y-3">
         {header}
+        {hints && hints.length > 0 && (
+          <div className={`rounded-md border p-3 text-sm ${
+            hints.some(({ severity }) => severity === "critical")
+              ? "border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300"
+              : hints.some(({ severity }) => severity === "warning")
+                ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
+                : "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300"
+          }`}>
+            <ul className="space-y-1">
+              {hints.map((hint, index) => (
+                <li key={index} className="flex items-center justify-between gap-2">
+                  <span>
+                    {hint.message}
+                    {hint.suggested != null && ` — consider ${
+                      hint.resource === "memory"
+                        ? formatBytes(hint.suggested)
+                        : formatCores(hint.suggested / 1e9)
+                    }`}
+                  </span>
+                  {hint.suggested != null && canEdit && (
+                    <button
+                      type="button"
+                      className="shrink-0 text-xs font-medium underline"
+                      onClick={() => openEdit()}
+                    >
+                      Apply
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {!hasResources && pids == null ? (
           <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed py-6 text-center text-muted-foreground">
             <p className="text-sm">No resource limits configured</p>

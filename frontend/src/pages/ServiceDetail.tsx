@@ -10,6 +10,8 @@ import type {
   SpecChange,
   Task,
 } from "../api/types";
+import { highestSeverityHint } from "../components/SizingBadge";
+import { useSizingHints } from "../hooks/useSizingHints";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
 import { ContainerImage, KVTable, MetadataGrid, ResourceLink, Timestamp } from "../components/data";
@@ -109,6 +111,9 @@ export default function ServiceDetail() {
   const [networkNames, setNetworkNames] = useState<Record<string, string>>({});
   const [cpuActual, setCpuActual] = useState<number | undefined>();
   const [memActual, setMemActual] = useState<number | undefined>();
+  const sizing = useSizingHints();
+  const serviceSizing = id ? sizing.byServiceId.get(id) : undefined;
+  const sizingHint = serviceSizing ? highestSeverityHint(serviceSizing.hints) : null;
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -374,10 +379,29 @@ export default function ServiceDetail() {
           { label: <ResourceName name={name} /> },
         ]}
         actions={
-          <ServiceActions
-            service={service}
-            serviceId={id!}
-          />
+          <>
+            {sizingHint && (
+              <button
+                type="button"
+                className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                  sizingHint.severity === "critical"
+                    ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                    : sizingHint.severity === "warning"
+                      ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                      : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                }`}
+                onClick={() => {
+                  document.getElementById("resources-section")?.scrollIntoView({ behavior: "smooth" });
+                }}
+              >
+                {sizingHint.label}
+              </button>
+            )}
+            <ServiceActions
+              service={service}
+              serviceId={id!}
+            />
+          </>
         }
       />
 
@@ -616,7 +640,7 @@ export default function ServiceDetail() {
             )}
 
             {serviceResources !== null && (hasResourcesContent || canEditConfig) && (
-              <div className="flex flex-col gap-3 rounded-lg border p-3">
+              <div id="resources-section" className="flex flex-col gap-3 rounded-lg border p-3">
                 <ResourcesEditor
                   serviceId={id!}
                   resources={serviceResources}
@@ -630,6 +654,7 @@ export default function ServiceDetail() {
                     memLimit,
                     memActual,
                   }}
+                  hints={serviceSizing?.hints}
                 />
               </div>
             )}
