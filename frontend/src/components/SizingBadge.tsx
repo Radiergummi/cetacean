@@ -36,7 +36,7 @@ function formatHintLabel(hint: SizingRecommendation): string {
     return `${icon} No reservations`;
   }
 
-  const percentage = Math.round(hint.current * 100);
+  const percentage = Math.round((hint.current / hint.configured) * 100);
 
   return `${icon} ${hint.resource.toUpperCase()} ${percentage}%`;
 }

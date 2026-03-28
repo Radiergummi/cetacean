@@ -286,6 +286,61 @@ func TestEvaluate_SuggestedValueRounding(t *testing.T) {
 	}
 }
 
+// TestEvaluate_OverProvisioned_ReservationNotLimit verifies that the over-provisioned
+// check compares usage against the reservation, not the limit.
+// With a 10x ratio between limit and reservation, the two would give different results.
+func TestEvaluate_OverProvisioned_ReservationNotLimit(t *testing.T) {
+	spec := serviceSpec{
+		name:              "test-service",
+		cpuLimit:          10_000_000_000, // 10 cores limit
+		cpuReservation:    1_000_000_000,  // 1 core reservation
+		memoryLimit:       1024 * 1024 * 1024,
+		memoryReservation: 128 * 1024 * 1024,
+	}
+	// 5% CPU usage: well below 20% of reservation (1 core = 100%), but only 0.5% of limit.
+	// If we used limit ratio, 0.5% < 20% would also be true, but the Configured field
+	// should be the reservation, not the limit.
+	metrics := &serviceMetrics{
+		cpu:    5,
+		memory: float64(10 * 1024 * 1024), // 10MB: below 20% of 128MB reservation
+	}
+	prev := &previousState{cpuLowTicks: 2, memoryLowTicks: 2}
+
+	result := evaluate(spec, metrics, prev, defaultConfig())
+
+	var cpuHint, memHint *Recommendation
+	for i := range result.hints {
+		if result.hints[i].Category == CategoryOverProvisioned && result.hints[i].Resource == "cpu" {
+			cpuHint = &result.hints[i]
+		}
+
+		if result.hints[i].Category == CategoryOverProvisioned && result.hints[i].Resource == "memory" {
+			memHint = &result.hints[i]
+		}
+	}
+
+	if cpuHint == nil {
+		t.Fatalf("expected over-provisioned hint for cpu, got: %+v", result.hints)
+	}
+
+	// Configured must be the reservation percentage (100%), not the limit percentage (1000%).
+	cpuReservationPct := float64(spec.cpuReservation) / 1e9 * 100 // 100%
+	if cpuHint.Configured != cpuReservationPct {
+		t.Errorf("cpu Configured = %v, want reservation pct %v (not limit pct %v)",
+			cpuHint.Configured, cpuReservationPct, float64(spec.cpuLimit)/1e9*100)
+	}
+
+	if memHint == nil {
+		t.Fatalf("expected over-provisioned hint for memory, got: %+v", result.hints)
+	}
+
+	// Configured must be the reservation bytes, not the limit bytes.
+	if memHint.Configured != float64(spec.memoryReservation) {
+		t.Errorf("memory Configured = %v, want reservation %v (not limit %v)",
+			memHint.Configured, float64(spec.memoryReservation), float64(spec.memoryLimit))
+	}
+}
+
 func TestRoundCPU(t *testing.T) {
 	tests := []struct {
 		input    float64 // NanoCPUs

@@ -183,25 +183,29 @@ func evaluate(spec serviceSpec, metrics *serviceMetrics, state *previousState, c
 				Suggested:  ptr(suggested),
 			})
 			newState.cpuLowTicks = 0
+		}
 
-		case !noCPUReservation && cpuRatio < cfg.OverProvisioned:
-			newState.cpuLowTicks++
-			if newState.cpuLowTicks >= cfg.SustainedTicks {
-				cpuReservationPct := float64(spec.cpuReservation) / 1e9 * 100
-				suggested := roundCPU(metrics.cpu / 100 * 1e9 * cfg.HeadroomMultiplier)
-				hints = append(hints, Recommendation{
-					Category:   CategoryOverProvisioned,
-					Severity:   SeverityInfo,
-					Resource:   "cpu",
-					Message:    fmt.Sprintf("CPU usage has been below %.0f%% of reservation for %d ticks", cfg.OverProvisioned*100, newState.cpuLowTicks),
-					Current:    metrics.cpu,
-					Configured: cpuReservationPct,
-					Suggested:  ptr(suggested),
-				})
+		if !noCPUReservation && cpuRatio <= cfg.ApproachingLimit {
+			cpuReservationPct := float64(spec.cpuReservation) / 1e9 * 100
+			cpuResRatio := metrics.cpu / cpuReservationPct
+
+			if cpuResRatio < cfg.OverProvisioned {
+				newState.cpuLowTicks++
+				if newState.cpuLowTicks >= cfg.SustainedTicks {
+					suggested := roundCPU(metrics.cpu / 100 * 1e9 * cfg.HeadroomMultiplier)
+					hints = append(hints, Recommendation{
+						Category:   CategoryOverProvisioned,
+						Severity:   SeverityInfo,
+						Resource:   "cpu",
+						Message:    fmt.Sprintf("CPU usage has been below %.0f%% of reservation for %d ticks", cfg.OverProvisioned*100, newState.cpuLowTicks),
+						Current:    metrics.cpu,
+						Configured: cpuReservationPct,
+						Suggested:  ptr(suggested),
+					})
+				}
+			} else {
+				newState.cpuLowTicks = 0
 			}
-
-		default:
-			newState.cpuLowTicks = 0
 		}
 	}
 
@@ -235,24 +239,28 @@ func evaluate(spec serviceSpec, metrics *serviceMetrics, state *previousState, c
 				Suggested:  ptr(suggested),
 			})
 			newState.memoryLowTicks = 0
+		}
 
-		case !noMemReservation && memRatio < cfg.OverProvisioned:
-			newState.memoryLowTicks++
-			if newState.memoryLowTicks >= cfg.SustainedTicks {
-				suggested := roundMemory(metrics.memory * cfg.HeadroomMultiplier)
-				hints = append(hints, Recommendation{
-					Category:   CategoryOverProvisioned,
-					Severity:   SeverityInfo,
-					Resource:   "memory",
-					Message:    fmt.Sprintf("Memory usage has been below %.0f%% of reservation for %d ticks", cfg.OverProvisioned*100, newState.memoryLowTicks),
-					Current:    metrics.memory,
-					Configured: float64(spec.memoryReservation),
-					Suggested:  ptr(suggested),
-				})
+		if !noMemReservation && memRatio <= cfg.ApproachingLimit {
+			memResRatio := metrics.memory / float64(spec.memoryReservation)
+
+			if memResRatio < cfg.OverProvisioned {
+				newState.memoryLowTicks++
+				if newState.memoryLowTicks >= cfg.SustainedTicks {
+					suggested := roundMemory(metrics.memory * cfg.HeadroomMultiplier)
+					hints = append(hints, Recommendation{
+						Category:   CategoryOverProvisioned,
+						Severity:   SeverityInfo,
+						Resource:   "memory",
+						Message:    fmt.Sprintf("Memory usage has been below %.0f%% of reservation for %d ticks", cfg.OverProvisioned*100, newState.memoryLowTicks),
+						Current:    metrics.memory,
+						Configured: float64(spec.memoryReservation),
+						Suggested:  ptr(suggested),
+					})
+				}
+			} else {
+				newState.memoryLowTicks = 0
 			}
-
-		default:
-			newState.memoryLowTicks = 0
 		}
 	}
 

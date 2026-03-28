@@ -84,16 +84,30 @@ export function ResourcesEditor({
   const [capacity, setCapacity] = useState<ClusterCapacity | null>(null);
   const [capacityError, setCapacityError] = useState(false);
 
-  function openEdit() {
-    setCpu({
-      reservation: Reservations?.NanoCPUs != null ? Reservations.NanoCPUs / 1e9 : undefined,
-      limit: Limits?.NanoCPUs != null ? Limits.NanoCPUs / 1e9 : undefined,
-    });
-    setMemory({
-      reservation:
-        Reservations?.MemoryBytes != null ? Reservations.MemoryBytes / (1024 * 1024) : undefined,
-      limit: Limits?.MemoryBytes != null ? Limits.MemoryBytes / (1024 * 1024) : undefined,
-    });
+  function openEdit(suggested?: { resource: string; value: number }) {
+    const cpuReservation =
+      Reservations?.NanoCPUs != null ? Reservations.NanoCPUs / 1e9 : undefined;
+    const cpuLimit = Limits?.NanoCPUs != null ? Limits.NanoCPUs / 1e9 : undefined;
+    const memReservation =
+      Reservations?.MemoryBytes != null ? Reservations.MemoryBytes / (1024 * 1024) : undefined;
+    const memLimit = Limits?.MemoryBytes != null ? Limits.MemoryBytes / (1024 * 1024) : undefined;
+
+    if (suggested?.resource === "cpu") {
+      const suggestedCores = suggested.value / 1e9;
+
+      setCpu({ reservation: suggestedCores, limit: cpuLimit });
+    } else {
+      setCpu({ reservation: cpuReservation, limit: cpuLimit });
+    }
+
+    if (suggested?.resource === "memory") {
+      const suggestedMB = suggested.value / (1024 * 1024);
+
+      setMemory({ reservation: suggestedMB, limit: memLimit });
+    } else {
+      setMemory({ reservation: memReservation, limit: memLimit });
+    }
+
     setCapacity(null);
     setCapacityError(false);
     api
@@ -182,7 +196,7 @@ export function ResourcesEditor({
         <Button
           variant="outline"
           size="xs"
-          onClick={openEdit}
+          onClick={() => openEdit()}
         >
           <Pencil className="size-3" />
           Edit
@@ -224,7 +238,9 @@ export function ResourcesEditor({
                     <button
                       type="button"
                       className="shrink-0 text-xs font-medium underline"
-                      onClick={() => openEdit()}
+                      onClick={() =>
+                        openEdit({ resource: hint.resource, value: hint.suggested! })
+                      }
                     >
                       Apply
                     </button>
