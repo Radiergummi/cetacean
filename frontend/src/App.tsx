@@ -41,6 +41,7 @@ const TaskDetail = lazy(() => import("./pages/TaskDetail"));
 const TaskList = lazy(() => import("./pages/TaskList"));
 const MetricsConsole = lazy(() => import("./pages/MetricsConsole"));
 const Topology = lazy(() => import("./pages/Topology"));
+const RecommendationsPage = lazy(() => import("./pages/RecommendationsPage"));
 const VolumeDetail = lazy(() => import("./pages/VolumeDetail"));
 const VolumeList = lazy(() => import("./pages/VolumeList"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
@@ -78,6 +79,7 @@ function Layout({ children }: { children: React.ReactNode }) {
     "g a": useCallback(() => navigate("/tasks"), [navigate]),
     "g i": useCallback(() => navigate("/swarm"), [navigate]),
     "g t": useCallback(() => navigate("/topology"), [navigate]),
+    "g r": useCallback(() => navigate("/recommendations"), [navigate]),
     "g m": useCallback(() => navigate("/metrics"), [navigate]),
   });
 
@@ -164,6 +166,7 @@ function NavLinks() {
     { to: "/volumes", label: "Volumes", keys: ["g", "v"] },
     { to: "/swarm", label: "Swarm", keys: ["g", "i"] },
     { to: "/topology", label: "Topology", keys: ["g", "t"] },
+    { to: "/recommendations", label: "Recs", keys: ["g", "r"] },
     { to: "/metrics", label: "Metrics", keys: ["g", "m"] },
   ];
   return (
@@ -336,6 +339,10 @@ export default function App() {
                   <Route
                     path="/topology"
                     element={<Topology />}
+                  />
+                  <Route
+                    path="/recommendations"
+                    element={<RecommendationsPage />}
                   />
                   <Route
                     path="/search"
