@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { Service, ServiceListItem } from "../api/types";
+import type { Recommendation, Service, ServiceListItem } from "../api/types";
 import DataTable, { type Column } from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import ErrorBoundary from "../components/ErrorBoundary";
@@ -20,7 +20,7 @@ import { useServiceMetrics } from "../hooks/useServiceMetrics";
 import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useViewMode } from "../hooks/useViewMode";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 function ReplicaHealth({ running, desired }: { running: number; desired: number }) {
@@ -73,6 +73,26 @@ export default function ServiceList() {
     !!monitoring?.cadvisor?.targets;
   const { getForService } = useServiceMetrics();
   const { items: recommendations, hasData: hasRecommendations } = useRecommendations();
+
+  const recommendationsByService = useMemo(() => {
+    const map = new Map<string, Recommendation[]>();
+
+    for (const recommendation of recommendations) {
+      if (recommendation.scope !== "service" || !sizingCategories.has(recommendation.category)) {
+        continue;
+      }
+
+      const existing = map.get(recommendation.targetId);
+
+      if (existing) {
+        existing.push(recommendation);
+      } else {
+        map.set(recommendation.targetId, [recommendation]);
+      }
+    }
+
+    return map;
+  }, [recommendations]);
 
   const baseColumns: Column<ServiceListItem>[] = [
     {
@@ -188,9 +208,7 @@ export default function ServiceList() {
         {
           header: "Sizing",
           cell: ({ ID }) => {
-            const hints = recommendations.filter(
-              (r) => r.targetId === ID && sizingCategories.has(r.category),
-            );
+            const hints = recommendationsByService.get(ID) ?? [];
             return <SizingBadge hints={hints} />;
           },
         },

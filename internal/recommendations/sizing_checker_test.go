@@ -59,8 +59,11 @@ func TestSizingChecker_Check(t *testing.T) {
 	query := mockQuery(instantCPU, instantMem, p95CPU, p95Mem)
 
 	cfg := &config.SizingConfig{
-		Enabled: true, Interval: time.Second, HeadroomMultiplier: 2.0,
-		OverProvisioned: 0.20, ApproachingLimit: 0.80, AtLimit: 0.95, Lookback: 168 * time.Hour,
+		HeadroomMultiplier: 2.0,
+		OverProvisioned:    0.20,
+		ApproachingLimit:   0.80,
+		AtLimit:            0.95,
+		Lookback:           168 * time.Hour,
 	}
 
 	sc := NewSizingChecker(query, c, cfg)

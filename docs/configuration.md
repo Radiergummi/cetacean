@@ -305,15 +305,13 @@ When Prometheus is configured, Cetacean periodically compares actual service res
 
 | Env var                                       | Config file key                    | Default | Description                                                    |
 |-----------------------------------------------|------------------------------------|---------|----------------------------------------------------------------|
-| `CETACEAN_SIZING_ENABLED`                     | `sizing.enabled`                   | `true`  | Enable the sizing monitor (requires Prometheus)                |
-| `CETACEAN_SIZING_INTERVAL`                    | `sizing.interval`                  | `60s`   | How often to re-evaluate sizing                                |
 | `CETACEAN_SIZING_HEADROOM_MULTIPLIER`         | `sizing.headroom_multiplier`       | `2.0`   | Multiplier for suggested values (actual × multiplier)          |
 | `CETACEAN_SIZING_THRESHOLD_OVER_PROVISIONED`  | `sizing.thresholds.over_provisioned` | `0.20`  | Below this fraction of reservation = over-provisioned        |
 | `CETACEAN_SIZING_THRESHOLD_APPROACHING_LIMIT` | `sizing.thresholds.approaching_limit` | `0.80` | Above this fraction of limit = approaching limit             |
 | `CETACEAN_SIZING_THRESHOLD_AT_LIMIT`          | `sizing.thresholds.at_limit`       | `0.95`  | Above this fraction of limit = at limit                       |
 | `CETACEAN_SIZING_LOOKBACK`                    | `sizing.thresholds.lookback`       | `168h`  | p95 lookback window for over-provisioned checks                   |
 
-The sizing monitor is automatically disabled when Prometheus is not configured. Set `CETACEAN_SIZING_ENABLED=false` to disable it explicitly.
+The sizing monitor is automatically disabled when Prometheus is not configured.
 
 ## Profiling
 

@@ -9,7 +9,6 @@ import (
 
 func defaultConfig() *config.SizingConfig {
 	return &config.SizingConfig{
-		Enabled:            true,
 		OverProvisioned:    0.20,
 		ApproachingLimit:   0.80,
 		AtLimit:            0.95,

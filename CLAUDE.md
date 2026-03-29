@@ -87,8 +87,6 @@ docker stack deploy -c compose.monitoring.yaml monitoring  # Deploy standalone m
 | `CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES` | — | No (comma-separated CIDR/IP allowlist) |
 | `CETACEAN_TLS_CERT` | — | No (Yes for cert mode) |
 | `CETACEAN_TLS_KEY` | — | No (Yes for cert mode) |
-| `CETACEAN_SIZING_ENABLED` | `true` | No (disable sizing monitor) |
-| `CETACEAN_SIZING_INTERVAL` | `60s` | No |
 | `CETACEAN_SIZING_HEADROOM_MULTIPLIER` | `2.0` | No |
 | `CETACEAN_SIZING_THRESHOLD_OVER_PROVISIONED` | `0.20` | No |
 | `CETACEAN_SIZING_THRESHOLD_APPROACHING_LIMIT` | `0.80` | No |

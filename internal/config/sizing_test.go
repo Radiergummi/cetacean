@@ -7,7 +7,6 @@ import (
 
 func TestLoadSizing_Defaults(t *testing.T) {
 	for _, key := range []string{
-		"CETACEAN_SIZING_ENABLED", "CETACEAN_SIZING_INTERVAL",
 		"CETACEAN_SIZING_HEADROOM_MULTIPLIER", "CETACEAN_SIZING_THRESHOLD_OVER_PROVISIONED",
 		"CETACEAN_SIZING_THRESHOLD_APPROACHING_LIMIT", "CETACEAN_SIZING_THRESHOLD_AT_LIMIT",
 		"CETACEAN_SIZING_LOOKBACK",
@@ -18,12 +17,6 @@ func TestLoadSizing_Defaults(t *testing.T) {
 	cfg, err := LoadSizing(nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
-	}
-	if !cfg.Enabled {
-		t.Error("expected enabled by default")
-	}
-	if cfg.Interval != 60*time.Second {
-		t.Errorf("interval: got %v, want 60s", cfg.Interval)
 	}
 	if cfg.HeadroomMultiplier != 2.0 {
 		t.Errorf("headroom: got %f, want 2.0", cfg.HeadroomMultiplier)
@@ -43,8 +36,6 @@ func TestLoadSizing_Defaults(t *testing.T) {
 }
 
 func TestLoadSizing_EnvOverrides(t *testing.T) {
-	t.Setenv("CETACEAN_SIZING_ENABLED", "false")
-	t.Setenv("CETACEAN_SIZING_INTERVAL", "30s")
 	t.Setenv("CETACEAN_SIZING_HEADROOM_MULTIPLIER", "1.5")
 	t.Setenv("CETACEAN_SIZING_THRESHOLD_OVER_PROVISIONED", "0.10")
 	t.Setenv("CETACEAN_SIZING_THRESHOLD_APPROACHING_LIMIT", "0.70")
@@ -54,12 +45,6 @@ func TestLoadSizing_EnvOverrides(t *testing.T) {
 	cfg, err := LoadSizing(nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.Enabled {
-		t.Error("expected disabled")
-	}
-	if cfg.Interval != 30*time.Second {
-		t.Errorf("interval: got %v, want 30s", cfg.Interval)
 	}
 	if cfg.HeadroomMultiplier != 1.5 {
 		t.Errorf("headroom: got %f, want 1.5", cfg.HeadroomMultiplier)
@@ -80,7 +65,6 @@ func TestLoadSizing_EnvOverrides(t *testing.T) {
 
 func TestLoadSizing_FileConfig(t *testing.T) {
 	for _, key := range []string{
-		"CETACEAN_SIZING_ENABLED", "CETACEAN_SIZING_INTERVAL",
 		"CETACEAN_SIZING_HEADROOM_MULTIPLIER", "CETACEAN_SIZING_THRESHOLD_OVER_PROVISIONED",
 		"CETACEAN_SIZING_THRESHOLD_APPROACHING_LIMIT", "CETACEAN_SIZING_THRESHOLD_AT_LIMIT",
 		"CETACEAN_SIZING_LOOKBACK",
@@ -88,12 +72,10 @@ func TestLoadSizing_FileConfig(t *testing.T) {
 		t.Setenv(key, "")
 	}
 
-	interval := "45s"
 	multiplier := 3.0
 	overProv := 0.15
 	fc := &fileConfig{
 		Sizing: &fileSizing{
-			Interval: &interval,
 			Headroom: &multiplier,
 			Thresholds: &fileSizingThresholds{
 				OverProvisioned: &overProv,
@@ -104,9 +86,6 @@ func TestLoadSizing_FileConfig(t *testing.T) {
 	cfg, err := LoadSizing(fc)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.Interval != 45*time.Second {
-		t.Errorf("interval: got %v, want 45s", cfg.Interval)
 	}
 	if cfg.HeadroomMultiplier != 3.0 {
 		t.Errorf("headroom: got %f, want 3.0", cfg.HeadroomMultiplier)
@@ -123,8 +102,6 @@ func TestLoadSizing_InvalidThreshold(t *testing.T) {
 	t.Setenv("CETACEAN_SIZING_THRESHOLD_OVER_PROVISIONED", "1.5")
 	t.Setenv("CETACEAN_SIZING_THRESHOLD_APPROACHING_LIMIT", "")
 	t.Setenv("CETACEAN_SIZING_THRESHOLD_AT_LIMIT", "")
-	t.Setenv("CETACEAN_SIZING_ENABLED", "")
-	t.Setenv("CETACEAN_SIZING_INTERVAL", "")
 	t.Setenv("CETACEAN_SIZING_HEADROOM_MULTIPLIER", "")
 	t.Setenv("CETACEAN_SIZING_LOOKBACK", "")
 

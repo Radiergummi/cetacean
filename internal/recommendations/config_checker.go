@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/docker/docker/api/types/swarm"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -40,7 +41,7 @@ func (cc *ConfigChecker) Check(_ context.Context) []Recommendation {
 		}
 
 		rp := svc.Spec.TaskTemplate.RestartPolicy
-		if rp == nil || rp.Condition == "none" {
+		if rp == nil || rp.Condition == swarm.RestartPolicyConditionNone {
 			recs = append(recs, Recommendation{
 				Category:   CategoryNoRestartPolicy,
 				Severity:   SeverityWarning,

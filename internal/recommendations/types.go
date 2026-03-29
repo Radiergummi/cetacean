@@ -47,10 +47,10 @@ type Recommendation struct {
 	Scope      Scope    `json:"scope"`
 	TargetID   string   `json:"targetId"`
 	TargetName string   `json:"targetName"`
-	Resource   string   `json:"resource"`
+	Resource   string   `json:"resource,omitempty"`
 	Message    string   `json:"message"`
-	Current    float64  `json:"current"`
-	Configured float64  `json:"configured"`
+	Current    float64  `json:"current,omitempty"`
+	Configured float64  `json:"configured,omitempty"`
 	Suggested  *float64 `json:"suggested,omitempty"`
 	FixAction  *string  `json:"fixAction,omitempty"`
 }

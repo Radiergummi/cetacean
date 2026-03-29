@@ -59,8 +59,6 @@ type fileConfig struct {
 }
 
 type fileSizing struct {
-	Enabled    *bool                 `toml:"enabled"`
-	Interval   *string               `toml:"interval"`
 	Headroom   *float64              `toml:"headroom_multiplier"`
 	Thresholds *fileSizingThresholds `toml:"thresholds"`
 }

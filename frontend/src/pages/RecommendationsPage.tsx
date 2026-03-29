@@ -43,16 +43,11 @@ function targetLink(hint: Recommendation): string | null {
 interface CardProps {
   hint: Recommendation;
   originalIndex: number;
-  dismissed: Set<number>;
   applying: number | null;
   onApply: (hint: Recommendation, originalIndex: number) => void;
 }
 
-function RecommendationCard({ hint, originalIndex, dismissed, applying, onApply }: CardProps) {
-  if (dismissed.has(originalIndex)) {
-    return null;
-  }
-
+function RecommendationCard({ hint, originalIndex, applying, onApply }: CardProps) {
   const CategoryIcon = hintIcon(hint.category);
   const hasFix = hint.fixAction != null && hint.suggested != null;
   const isApplying = applying === originalIndex;
@@ -196,7 +191,6 @@ export default function RecommendationsPage() {
               key={index}
               hint={hint}
               originalIndex={index}
-              dismissed={dismissed}
               applying={applying}
               onApply={handleApply}
             />

@@ -30,7 +30,7 @@ func (cc *ClusterChecker) Check(_ context.Context) []Recommendation {
 	// Single-replica services
 	for _, svc := range cc.cache.ListServices() {
 		if svc.Spec.Mode.Replicated != nil && svc.Spec.Mode.Replicated.Replicas != nil && *svc.Spec.Mode.Replicated.Replicas == 1 {
-			suggested := ptr(2)
+			suggested := ptr(2.0)
 			recs = append(recs, Recommendation{
 				Category:   CategorySingleReplica,
 				Severity:   SeverityInfo,
