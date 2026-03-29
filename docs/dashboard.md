@@ -181,6 +181,10 @@ The topology page (`/topology`) offers two views:
 
 Both are interactive graph visualizations. Click a service or node to navigate to its detail page.
 
+## Recommendations
+
+The recommendations page (`/recommendations`, `g r`) shows cluster health recommendations across four domains: sizing, config hygiene, operational health, and cluster topology. The dashboard includes a severity summary card, and service detail pages show per-service banners. See [docs/recommendations.md](recommendations.md) for the full reference.
+
 ## Themes
 
 Click the theme toggle in the nav bar to cycle through:

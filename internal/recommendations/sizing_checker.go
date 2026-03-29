@@ -1,10 +1,9 @@
-package sizing
+package recommendations
 
 import (
 	"context"
 	"fmt"
 	"log/slog"
-	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -24,76 +23,27 @@ const (
 // QueryFunc executes a Prometheus instant query and returns results.
 type QueryFunc func(ctx context.Context, query string) ([]prom.Result, error)
 
-// Monitor periodically evaluates service resource sizing.
-type Monitor struct {
+// SizingChecker implements Checker for resource right-sizing recommendations.
+type SizingChecker struct {
 	query QueryFunc
 	cache *cache.Cache
 	cfg   *config.SizingConfig
-
-	mu      sync.RWMutex
-	results []ServiceSizing
 }
 
-// New creates a new sizing monitor. Returns nil if query is nil or sizing is disabled.
-func New(query QueryFunc, c *cache.Cache, cfg *config.SizingConfig) *Monitor {
-	if query == nil || cfg == nil || !cfg.Enabled {
-		return nil
-	}
-
-	return &Monitor{
+// NewSizingChecker creates a new sizing checker.
+func NewSizingChecker(query QueryFunc, c *cache.Cache, cfg *config.SizingConfig) *SizingChecker {
+	return &SizingChecker{
 		query: query,
 		cache: c,
 		cfg:   cfg,
 	}
 }
 
-// Run starts the periodic evaluation loop. Blocks until ctx is cancelled.
-func (m *Monitor) Run(ctx context.Context) {
-	if m == nil {
-		return
-	}
+func (sc *SizingChecker) Name() string             { return "sizing" }
+func (sc *SizingChecker) Interval() time.Duration   { return 5 * time.Minute }
 
-	m.tick(ctx)
-
-	ticker := time.NewTicker(m.cfg.Interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			m.tick(ctx)
-		}
-	}
-}
-
-// Results returns the latest sizing results. Safe to call on nil receiver.
-func (m *Monitor) Results() []ServiceSizing {
-	if m == nil {
-		return []ServiceSizing{}
-	}
-
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	out := make([]ServiceSizing, len(m.results))
-	copy(out, m.results)
-
-	return out
-}
-
-// formatPromDuration formats a time.Duration as a Prometheus duration string.
-func formatPromDuration(d time.Duration) string {
-	hours := int(d.Hours())
-	if hours%24 == 0 && hours >= 24 {
-		return fmt.Sprintf("%dd", hours/24)
-	}
-
-	return fmt.Sprintf("%dh", hours)
-}
-
-func (m *Monitor) tick(ctx context.Context) {
+// Check runs all sizing queries and evaluates every service.
+func (sc *SizingChecker) Check(ctx context.Context) []Recommendation {
 	tickCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -107,33 +57,33 @@ func (m *Monitor) tick(ctx context.Context) {
 	cpuP95Ch := make(chan queryResult, 1)
 	memP95Ch := make(chan queryResult, 1)
 
-	lookbackStr := formatPromDuration(m.cfg.Lookback)
+	lookbackStr := formatPromDuration(sc.cfg.Lookback)
 
 	go func() {
-		data, err := m.queryByService(tickCtx, cpuInstantQuery)
+		data, err := queryByService(tickCtx, sc.query, cpuInstantQuery)
 		cpuCh <- queryResult{data, err}
 	}()
 
 	go func() {
-		data, err := m.queryByService(tickCtx, memoryInstantQuery)
+		data, err := queryByService(tickCtx, sc.query, memoryInstantQuery)
 		memCh <- queryResult{data, err}
 	}()
 
 	go func() {
 		query := fmt.Sprintf(
-			`quantile by (%s)(0.95, sum by (%s)(rate(container_cpu_usage_seconds_total{%s}[5m]))[%s:]) * 100`,
-			serviceLabelKey, serviceLabelKey, serviceFilter, lookbackStr,
+			`quantile_over_time(0.95, (sum by (%s)(rate(container_cpu_usage_seconds_total{%s}[5m])))[%s:5m]) * 100`,
+			serviceLabelKey, serviceFilter, lookbackStr,
 		)
-		data, err := m.queryByService(tickCtx, query)
+		data, err := queryByService(tickCtx, sc.query, query)
 		cpuP95Ch <- queryResult{data, err}
 	}()
 
 	go func() {
 		query := fmt.Sprintf(
-			`quantile by (%s)(0.95, sum by (%s)(container_memory_usage_bytes{%s})[%s:])`,
-			serviceLabelKey, serviceLabelKey, serviceFilter, lookbackStr,
+			`quantile_over_time(0.95, (sum by (%s)(container_memory_usage_bytes{%s}))[%s:5m])`,
+			serviceLabelKey, serviceFilter, lookbackStr,
 		)
-		data, err := m.queryByService(tickCtx, query)
+		data, err := queryByService(tickCtx, sc.query, query)
 		memP95Ch <- queryResult{data, err}
 	}()
 
@@ -158,10 +108,9 @@ func (m *Monitor) tick(ctx context.Context) {
 		slog.Warn("sizing: p95 memory query failed", "error", memP95Result.err)
 	}
 
-	services := m.cache.ListServices()
-	now := time.Now()
+	services := sc.cache.ListServices()
 
-	var newResults []ServiceSizing
+	var recs []Recommendation
 
 	for _, svc := range services {
 		spec := extractSpec(svc)
@@ -180,27 +129,28 @@ func (m *Monitor) tick(ctx context.Context) {
 			p95 = &serviceMetrics{cpu: cpu, memory: mem}
 		}
 
-		hints := evaluate(spec, instant, p95, m.cfg)
-
-		if len(hints) == 0 {
-			continue
-		}
-
-		newResults = append(newResults, ServiceSizing{
-			ServiceID:   svc.ID,
-			ServiceName: spec.name,
-			Hints:       hints,
-			ComputedAt:  now,
-		})
+		hints := evaluate(spec, instant, p95, sc.cfg)
+		recs = append(recs, hints...)
 	}
 
-	m.mu.Lock()
-	m.results = newResults
-	m.mu.Unlock()
+	return recs
+}
+
+// formatPromDuration formats a time.Duration as a Prometheus duration string.
+func formatPromDuration(d time.Duration) string {
+	hours := int(d.Hours())
+	if hours%24 == 0 && hours >= 24 {
+		return fmt.Sprintf("%dd", hours/24)
+	}
+
+	return fmt.Sprintf("%dh", hours)
 }
 
 func extractSpec(svc swarm.Service) serviceSpec {
-	s := serviceSpec{name: svc.Spec.Name}
+	s := serviceSpec{
+		id:   svc.ID,
+		name: svc.Spec.Name,
+	}
 
 	if res := svc.Spec.TaskTemplate.Resources; res != nil {
 		if res.Limits != nil {
@@ -217,8 +167,8 @@ func extractSpec(svc swarm.Service) serviceSpec {
 	return s
 }
 
-func (m *Monitor) queryByService(ctx context.Context, query string) (map[string]float64, error) {
-	results, err := m.query(ctx, query)
+func queryByService(ctx context.Context, query QueryFunc, promQuery string) (map[string]float64, error) {
+	results, err := query(ctx, promQuery)
 	if err != nil {
 		return nil, err
 	}

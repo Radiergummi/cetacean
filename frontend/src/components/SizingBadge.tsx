@@ -1,4 +1,4 @@
-import type { SizingRecommendation } from "@/api/types";
+import type { Recommendation } from "@/api/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { hintIcon, severityRank, severityStyles } from "@/lib/sizingUtils";
 import { Check } from "lucide-react";
@@ -6,7 +6,7 @@ import { Check } from "lucide-react";
 /**
  * Compact label for the table column (e.g., "CPU 85%", "No limits").
  */
-function formatCompactLabel(hint: SizingRecommendation): string {
+function formatCompactLabel(hint: Recommendation): string {
   if (hint.category === "no-limits") {
     return "No limits";
   }
@@ -25,7 +25,7 @@ function formatCompactLabel(hint: SizingRecommendation): string {
  * Shows green check when there are no hints.
  * Wraps in a tooltip listing all hints when there are multiple.
  */
-export function SizingBadge({ hints }: { hints: SizingRecommendation[] }) {
+export function SizingBadge({ hints }: { hints: Recommendation[] }) {
   if (hints.length === 0) {
     return (
       <span className="inline-flex items-center gap-1 text-green-600 dark:text-green-400">

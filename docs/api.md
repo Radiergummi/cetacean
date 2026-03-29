@@ -768,6 +768,18 @@ curl http://localhost:9000/topology/networks
 curl http://localhost:9000/topology/placement
 ```
 
+### Recommendations
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/recommendations` | All active cluster health recommendations, sorted by severity. Includes severity summary. |
+
+Returns a JSON-LD `RecommendationCollection` with `items` (array of recommendations), `total`, `summary` (severity counts), and `computedAt`. Four domains: resource sizing, config hygiene (missing health checks, restart policies), operational (flaky services, disk/memory pressure), and cluster topology (single replicas, manager workloads, uneven distribution).
+
+```bash
+curl http://localhost:9000/recommendations
+```
+
 ### Profile
 
 | Method | Path | Description |

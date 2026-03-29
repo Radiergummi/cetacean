@@ -3141,6 +3141,42 @@ paths:
         "304":
           $ref: "#/components/responses/NotModified"
 
+  /recommendations:
+    get:
+      operationId: getRecommendations
+      tags: [Recommendations]
+      summary: Cluster health recommendations
+      description: |
+        Returns all active recommendations across four domains: resource sizing,
+        config hygiene, operational health, and cluster topology. Items are sorted
+        by severity (critical first). Includes a summary with severity counts.
+      responses:
+        "200":
+          description: Recommendation collection
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Recommendation"
+                      total:
+                        type: integer
+                      summary:
+                        $ref: "#/components/schemas/RecommendationSummary"
+                      computedAt:
+                        type: string
+                        format: date-time
+        "304":
+          $ref: "#/components/responses/NotModified"
+
 # ════════════════════════════════════════════════════════════════════════
 # Components
 # ════════════════════════════════════════════════════════════════════════
@@ -3705,6 +3741,60 @@ components:
           type: number
           format: double
           description: Populated from Prometheus (0 if unavailable)
+
+    # ── Recommendations ─────────────────────────────────────────────
+
+    Recommendation:
+      type: object
+      properties:
+        category:
+          type: string
+          enum:
+            - over-provisioned
+            - approaching-limit
+            - at-limit
+            - no-limits
+            - no-reservations
+            - no-healthcheck
+            - no-restart-policy
+            - flaky-service
+            - node-disk-full
+            - node-memory-pressure
+            - single-replica
+            - manager-has-workloads
+            - uneven-distribution
+        severity:
+          type: string
+          enum: [info, warning, critical]
+        scope:
+          type: string
+          enum: [service, node, cluster]
+        targetId:
+          type: string
+        targetName:
+          type: string
+        resource:
+          type: string
+        message:
+          type: string
+        current:
+          type: number
+        configured:
+          type: number
+        suggested:
+          type: number
+        fixAction:
+          type: string
+
+    RecommendationSummary:
+      type: object
+      properties:
+        critical:
+          type: integer
+        warning:
+          type: integer
+        info:
+          type: integer
 
     # ── Cluster ──────────────────────────────────────────────────────
 

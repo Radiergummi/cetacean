@@ -9,6 +9,7 @@ import {
   StackDrillDownChart,
 } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
+import RecommendationSummary from "../components/RecommendationSummary";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { TrendingDown, TrendingUp } from "lucide-react";
@@ -153,6 +154,9 @@ export default function ClusterOverview() {
       <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
         <CollapsibleSection title="Capacity">
           <CapacitySection snapshot={snapshot} />
+          <div className="mt-4">
+            <RecommendationSummary />
+          </div>
         </CollapsibleSection>
         <CollapsibleSection title="Recent Activity">
           <div className="max-h-80 overflow-y-auto rounded-lg border bg-card p-4">

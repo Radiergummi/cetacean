@@ -1,4 +1,4 @@
-package sizing
+package recommendations
 
 import (
 	"context"
@@ -36,21 +36,7 @@ func mockQuery(cpuResults, memResults, cpuP95Results, memP95Results []prom.Resul
 	}
 }
 
-func TestMonitor_NilSafe(t *testing.T) {
-	var m *Monitor
-
-	results := m.Results()
-
-	if results == nil {
-		t.Error("nil monitor should return non-nil empty slice")
-	}
-
-	if len(results) != 0 {
-		t.Error("nil monitor should return empty results")
-	}
-}
-
-func TestMonitor_SingleTick(t *testing.T) {
+func TestSizingChecker_Check(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
 		ID: "svc1",
@@ -73,48 +59,47 @@ func TestMonitor_SingleTick(t *testing.T) {
 	query := mockQuery(instantCPU, instantMem, p95CPU, p95Mem)
 
 	cfg := &config.SizingConfig{
-		Enabled: true, Interval: time.Second, HeadroomMultiplier: 2.0,
-		OverProvisioned: 0.20, ApproachingLimit: 0.80, AtLimit: 0.95, Lookback: 168 * time.Hour,
+		HeadroomMultiplier: 2.0,
+		OverProvisioned:    0.20,
+		ApproachingLimit:   0.80,
+		AtLimit:            0.95,
+		Lookback:           168 * time.Hour,
 	}
 
-	m := New(query, c, cfg)
-	m.tick(context.Background())
+	sc := NewSizingChecker(query, c, cfg)
+	recs := sc.Check(context.Background())
 
-	results := m.Results()
-	if len(results) == 0 {
-		t.Fatal("expected at least one service sizing result")
+	if len(recs) == 0 {
+		t.Fatal("expected at least one recommendation")
 	}
 
-	for _, ss := range results {
-		if ss.ServiceName == "web" {
-			for _, h := range ss.Hints {
-				if h.Resource == "cpu" && h.Category == CategoryApproachingLimit {
-					return // success — CPU at 90% of 100% limit
-				}
+	for _, r := range recs {
+		if r.Resource == "cpu" && r.Category == CategoryApproachingLimit {
+			if r.Scope != ScopeService {
+				t.Errorf("expected scope %q, got %q", ScopeService, r.Scope)
 			}
 
-			t.Errorf("expected approaching-limit CPU hint, got: %+v", ss.Hints)
-			return
+			if r.TargetID != "svc1" {
+				t.Errorf("expected targetId %q, got %q", "svc1", r.TargetID)
+			}
+
+			return // success — CPU at 90% of 100% limit
 		}
 	}
 
-	t.Error("expected sizing result for service 'web'")
+	t.Errorf("expected approaching-limit CPU hint, got: %+v", recs)
 }
 
-func TestMonitor_NewReturnsNilWhenDisabled(t *testing.T) {
-	cfg := &config.SizingConfig{Enabled: false}
-	m := New(func(context.Context, string) ([]prom.Result, error) { return nil, nil }, cache.New(nil), cfg)
-
-	if m != nil {
-		t.Error("expected nil monitor when disabled")
+func TestSizingChecker_Name(t *testing.T) {
+	sc := NewSizingChecker(nil, nil, nil)
+	if sc.Name() != "sizing" {
+		t.Errorf("expected name %q, got %q", "sizing", sc.Name())
 	}
 }
 
-func TestMonitor_NewReturnsNilWhenNoQuery(t *testing.T) {
-	cfg := &config.SizingConfig{Enabled: true}
-	m := New(nil, cache.New(nil), cfg)
-
-	if m != nil {
-		t.Error("expected nil monitor when query is nil")
+func TestSizingChecker_Interval(t *testing.T) {
+	sc := NewSizingChecker(nil, nil, nil)
+	if sc.Interval() != 5*time.Minute {
+		t.Errorf("expected interval %v, got %v", 5*time.Minute, sc.Interval())
 	}
 }

@@ -27,7 +27,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/filter"
 	"github.com/radiergummi/cetacean/internal/integrations"
-	"github.com/radiergummi/cetacean/internal/sizing"
+	"github.com/radiergummi/cetacean/internal/recommendations"
 	"github.com/radiergummi/cetacean/internal/version"
 )
 
@@ -189,7 +189,7 @@ type Handlers struct {
 	ready               <-chan struct{}
 	promClient          *PromClient
 	operationsLevel     config.OperationsLevel
-	sizingMonitor       *sizing.Monitor
+	recEngine           *recommendations.Engine
 	localNodeMu         sync.Mutex
 	localNodeID         string
 	localNodeDone       bool
@@ -206,7 +206,7 @@ func NewHandlers(
 	ready <-chan struct{},
 	promClient *PromClient,
 	operationsLevel config.OperationsLevel,
-	sizingMonitor *sizing.Monitor,
+	recEngine *recommendations.Engine,
 ) *Handlers {
 	return &Handlers{
 		cache:           c,
@@ -218,13 +218,19 @@ func NewHandlers(
 		ready:           ready,
 		promClient:      promClient,
 		operationsLevel: operationsLevel,
-		sizingMonitor:   sizingMonitor,
+		recEngine:       recEngine,
 	}
 }
 
-func (h *Handlers) HandleServicesSizing(w http.ResponseWriter, r *http.Request) {
-	results := h.sizingMonitor.Results()
-	writeJSONWithETag(w, r, results)
+func (h *Handlers) HandleRecommendations(w http.ResponseWriter, r *http.Request) {
+	results := h.recEngine.Results()
+	summary := recommendations.ComputeSummary(results)
+	writeJSONWithETag(w, r, NewDetailResponse("/recommendations", "RecommendationCollection", map[string]any{
+		"items":      results,
+		"total":      len(results),
+		"summary":    summary,
+		"computedAt": h.recEngine.LastTick(),
+	}))
 }
 
 func (h *Handlers) streamList(w http.ResponseWriter, r *http.Request, typ string) {

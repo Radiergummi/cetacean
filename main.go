@@ -21,7 +21,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/docker"
-	"github.com/radiergummi/cetacean/internal/sizing"
+	"github.com/radiergummi/cetacean/internal/recommendations"
 	"github.com/radiergummi/cetacean/internal/version"
 	"tailscale.com/tsnet"
 )
@@ -198,18 +198,30 @@ func main() {
 	} else {
 		slog.Warn("prometheus not configured, metrics disabled")
 	}
-	var sizingMonitor *sizing.Monitor
+	// Recommendations engine
+	sizingCfg, err := config.LoadSizing(fc)
+	if err != nil {
+		slog.Error("failed to load sizing config", "error", err)
+		os.Exit(1)
+	}
+
+	var checkers []recommendations.Checker
+	// Always register cache-only checkers.
+	checkers = append(checkers,
+		recommendations.NewConfigChecker(stateCache),
+		recommendations.NewClusterChecker(stateCache),
+	)
+	// Register Prometheus-dependent checkers when available.
 	if promClient != nil {
-		sizingCfg, err := config.LoadSizing(fc)
-		if err != nil {
-			slog.Error("failed to load sizing config", "error", err)
-			os.Exit(1)
-		}
-		sizingMonitor = sizing.New(promClient.InstantQuery, stateCache, sizingCfg)
-		if sizingMonitor != nil {
-			go sizingMonitor.Run(ctx)
-			slog.Info("sizing monitor started", "interval", sizingCfg.Interval)
-		}
+		checkers = append(checkers,
+			recommendations.NewSizingChecker(promClient.InstantQuery, stateCache, sizingCfg),
+			recommendations.NewOperationalChecker(promClient.InstantQuery, stateCache, sizingCfg.Lookback),
+		)
+	}
+	recEngine := recommendations.NewEngine(checkers...)
+	if recEngine != nil {
+		go recEngine.Run(ctx)
+		slog.Info("recommendation engine started", "checkers", len(checkers))
 	}
 
 	slog.Info("operations level", "level", cfg.OperationsLevel)
@@ -223,7 +235,7 @@ func main() {
 		watcher.Ready(),
 		promClient,
 		cfg.OperationsLevel,
-		sizingMonitor,
+		recEngine,
 	)
 
 	// SPA
