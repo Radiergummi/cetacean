@@ -109,7 +109,7 @@ function Layout({ children }: { children: React.ReactNode }) {
               className="order-last lg:order-none lg:mx-auto"
             />
 
-            <div className="flex items-center gap-3">
+            <div className="ml-auto flex items-center gap-3 lg:ml-0">
               <ShortcutTooltip keys={["?"]}>
                 <button
                   className="inline-flex size-8 items-center justify-center rounded-md transition hover:bg-muted"
@@ -122,15 +122,15 @@ function Layout({ children }: { children: React.ReactNode }) {
               <RecommendationsIndicator />
               <ThemeToggle />
               <UserBadge />
-            </div>
 
-            <button
-              className="inline-flex size-8 items-center justify-center rounded-md transition hover:bg-muted lg:hidden"
-              onClick={() => setMenuOpen(!menuOpen)}
-              aria-label="Toggle menu"
-            >
-              {menuOpen ? <X className="size-5 text-sm" /> : <Menu className="size-5 text-sm" />}
-            </button>
+              <button
+                className="inline-flex size-8 items-center justify-center rounded-md transition hover:bg-muted lg:hidden"
+                onClick={() => setMenuOpen(!menuOpen)}
+                aria-label="Toggle menu"
+              >
+                {menuOpen ? <X className="size-5 text-sm" /> : <Menu className="size-5 text-sm" />}
+              </button>
+            </div>
           </div>
 
           <div className="-mb-px hidden h-10 items-center justify-center gap-1 lg:flex">
