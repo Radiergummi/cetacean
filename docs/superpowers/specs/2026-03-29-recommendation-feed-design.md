@@ -113,15 +113,18 @@ CategoryUnevenDistribution   Category = "uneven-distribution"
 ```go
 type Checker interface {
     Name() string
+    Interval() time.Duration
     Check(ctx context.Context) []Recommendation
 }
 ```
 
+Each checker declares its own interval. The engine manages per-checker timers.
+
 Four implementations:
-- `SizingChecker` — refactored from current `internal/sizing/monitor.go`. Takes `QueryFunc`, `*cache.Cache`, `*config.SizingConfig`.
-- `ConfigChecker` — cache-only. Takes `*cache.Cache`.
-- `OperationalChecker` — Prometheus-dependent. Takes `QueryFunc`, `*cache.Cache`, lookback duration.
-- `ClusterChecker` — cache-only. Takes `*cache.Cache`.
+- `SizingChecker` — refactored from current `internal/sizing/monitor.go`. Takes `QueryFunc`, `*cache.Cache`, `*config.SizingConfig`. **Interval: 5 minutes** (p95 subqueries are expensive).
+- `ConfigChecker` — cache-only. Takes `*cache.Cache`. **Interval: 60 seconds** (cheap cache iteration).
+- `OperationalChecker` — Prometheus-dependent. Takes `QueryFunc`, `*cache.Cache`, lookback duration. **Interval: 5 minutes** (multiple Prometheus queries).
+- `ClusterChecker` — cache-only. Takes `*cache.Cache`. **Interval: 60 seconds** (cheap cache iteration).
 
 Each checker is independently testable — pure function of its inputs.
 
@@ -129,18 +132,24 @@ Each checker is independently testable — pure function of its inputs.
 
 ```go
 type Engine struct {
-    checkers []Checker
-    interval time.Duration
+    checkers []checkerState
     mu       sync.RWMutex
     results  []Recommendation
+}
+
+type checkerState struct {
+    checker  Checker
+    last     []Recommendation
+    lastRun  time.Time
 }
 ```
 
 - Created in `main.go` with all applicable checkers (sizing/operational only registered when Prometheus is configured)
-- `Run(ctx)` starts a tick loop at the configured interval
-- Each tick runs all checkers (in parallel — cache-only checkers don't block on Prometheus), merges results
-- `Results()` returns the full list, nil-safe
+- `Run(ctx)` starts a single tick loop at the minimum checker interval (60s). On each tick, runs only the checkers whose interval has elapsed since their last run. Merges results from all checkers (using cached results from checkers that didn't run this tick).
+- `Results()` returns the full merged list, nil-safe
 - `Summary()` returns severity counts, nil-safe
+
+This avoids running expensive Prometheus queries every 60 seconds while keeping cache-only checks responsive.
 
 ### Migration from `internal/sizing`
 
@@ -171,7 +180,18 @@ Content-negotiated (JSON for API, SPA for browser). No auth tier gating (read-on
 
 The dashboard reads `summary` and `total`. The full page reads `items`. The service detail page and service list filter `items` client-side by `targetId`.
 
+The response is small (at most a few hundred recommendations for a large cluster) and ETag-cacheable, so client-side filtering is acceptable for v1. Server-side `?scope=`/`?targetId=` filtering can be added later if needed.
+
 ## Frontend
+
+### Data Fetching (`useRecommendations`)
+
+A single `useRecommendations()` hook with **module-level caching** (same pattern as `useMonitoringStatus`):
+- Caches the response for 60 seconds at module scope
+- Deduplicates in-flight requests (single promise)
+- All consumers (dashboard card, service list, service detail, recommendations page) share the cached result — no duplicate requests
+- Refetches on navigation (pathname change) if TTL has expired
+- Returns `{ items, summary, total, hasData }` — consumers filter as needed
 
 ### Recommendations Page (`/recommendations`)
 
