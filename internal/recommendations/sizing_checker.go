@@ -71,7 +71,7 @@ func (sc *SizingChecker) Check(ctx context.Context) []Recommendation {
 
 	go func() {
 		query := fmt.Sprintf(
-			`quantile_over_time(0.95, sum by (%s)(rate(container_cpu_usage_seconds_total{%s}[5m]))[%s:]) * 100`,
+			`quantile_over_time(0.95, (sum by (%s)(rate(container_cpu_usage_seconds_total{%s}[5m])))[%s:5m]) * 100`,
 			serviceLabelKey, serviceFilter, lookbackStr,
 		)
 		data, err := queryByService(tickCtx, sc.query, query)
@@ -80,7 +80,7 @@ func (sc *SizingChecker) Check(ctx context.Context) []Recommendation {
 
 	go func() {
 		query := fmt.Sprintf(
-			`quantile_over_time(0.95, sum by (%s)(container_memory_usage_bytes{%s})[%s:])`,
+			`quantile_over_time(0.95, (sum by (%s)(container_memory_usage_bytes{%s}))[%s:5m])`,
 			serviceLabelKey, serviceFilter, lookbackStr,
 		)
 		data, err := queryByService(tickCtx, sc.query, query)
