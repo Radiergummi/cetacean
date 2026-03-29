@@ -98,8 +98,8 @@ func NewRouter(
 	)
 	mux.HandleFunc("GET /nodes/{id}/tasks", contentNegotiated(h.HandleNodeTasks, spa))
 
-	// Sizing hints
-	mux.HandleFunc("GET /services/sizing", contentNegotiated(h.HandleServicesSizing, spa))
+	// Recommendations
+	mux.HandleFunc("GET /recommendations", contentNegotiated(h.HandleRecommendations, spa))
 
 	// Services
 	mux.HandleFunc(
