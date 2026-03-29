@@ -71,8 +71,8 @@ func (sc *SizingChecker) Check(ctx context.Context) []Recommendation {
 
 	go func() {
 		query := fmt.Sprintf(
-			`quantile by (%s)(0.95, sum by (%s)(rate(container_cpu_usage_seconds_total{%s}[5m]))[%s:]) * 100`,
-			serviceLabelKey, serviceLabelKey, serviceFilter, lookbackStr,
+			`quantile_over_time(0.95, sum by (%s)(rate(container_cpu_usage_seconds_total{%s}[5m]))[%s:]) * 100`,
+			serviceLabelKey, serviceFilter, lookbackStr,
 		)
 		data, err := queryByService(tickCtx, sc.query, query)
 		cpuP95Ch <- queryResult{data, err}
@@ -80,8 +80,8 @@ func (sc *SizingChecker) Check(ctx context.Context) []Recommendation {
 
 	go func() {
 		query := fmt.Sprintf(
-			`quantile by (%s)(0.95, sum by (%s)(container_memory_usage_bytes{%s})[%s:])`,
-			serviceLabelKey, serviceLabelKey, serviceFilter, lookbackStr,
+			`quantile_over_time(0.95, sum by (%s)(container_memory_usage_bytes{%s})[%s:])`,
+			serviceLabelKey, serviceFilter, lookbackStr,
 		)
 		data, err := queryByService(tickCtx, sc.query, query)
 		memP95Ch <- queryResult{data, err}
