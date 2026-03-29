@@ -2,6 +2,7 @@ import { api, type ClusterSnapshot } from "../api/client";
 import type { HistoryEntry } from "../api/types";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
+import RecommendationSummary from "../components/RecommendationSummary";
 import {
   CapacitySection,
   MetricsPanel,
@@ -153,6 +154,9 @@ export default function ClusterOverview() {
       <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
         <CollapsibleSection title="Capacity">
           <CapacitySection snapshot={snapshot} />
+          <div className="mt-4">
+            <RecommendationSummary />
+          </div>
         </CollapsibleSection>
         <CollapsibleSection title="Recent Activity">
           <div className="max-h-80 overflow-y-auto rounded-lg border bg-card p-4">
