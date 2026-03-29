@@ -159,16 +159,9 @@ func (oc *OperationalChecker) nodeRecs(entries []queryEntry, category Category, 
 			targetID = ref.id
 		}
 
-		var severity Severity
-		if category == CategoryNodeDiskFull || category == CategoryNodeMemPressure {
-			severity = SeverityCritical
-		} else {
-			severity = SeverityWarning
-		}
-
 		recs = append(recs, Recommendation{
 			Category:   category,
-			Severity:   severity,
+			Severity:   SeverityCritical,
 			Scope:      ScopeNode,
 			TargetID:   targetID,
 			TargetName: targetName,

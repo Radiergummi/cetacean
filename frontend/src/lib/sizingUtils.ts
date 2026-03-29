@@ -1,6 +1,5 @@
 import type { Recommendation, RecommendationSeverity } from "@/api/types";
 import {
-  AlertTriangle,
   ArrowUp,
   Copy,
   RefreshCw,
@@ -10,6 +9,14 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+
+export const sizingCategories = new Set<string>([
+  "over-provisioned",
+  "approaching-limit",
+  "at-limit",
+  "no-limits",
+  "no-reservations",
+]);
 
 export const severityRank: Record<RecommendationSeverity, number> = {
   critical: 3,
@@ -49,7 +56,7 @@ export function hintIcon(category: Recommendation["category"]): LucideIcon {
   }
 
   if (category === "node-disk-full" || category === "node-memory-pressure") {
-    return AlertTriangle;
+    return TriangleAlert;
   }
 
   if (category === "single-replica") {

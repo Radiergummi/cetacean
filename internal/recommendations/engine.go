@@ -3,6 +3,7 @@ package recommendations
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 )
@@ -141,9 +142,7 @@ func (e *Engine) LastTick() time.Time {
 
 func sortBySeverity(recs []Recommendation) {
 	rank := map[Severity]int{SeverityCritical: 0, SeverityWarning: 1, SeverityInfo: 2}
-	for i := 1; i < len(recs); i++ {
-		for j := i; j > 0 && rank[recs[j].Severity] < rank[recs[j-1].Severity]; j-- {
-			recs[j], recs[j-1] = recs[j-1], recs[j]
-		}
-	}
+	slices.SortFunc(recs, func(a, b Recommendation) int {
+		return rank[a.Severity] - rank[b.Severity]
+	})
 }

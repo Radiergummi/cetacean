@@ -4,20 +4,14 @@ import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { useRecommendations } from "@/hooks/useRecommendations";
 import { applyRecommendation } from "@/lib/applyRecommendation";
-import { hintIcon, severityStyles } from "@/lib/sizingUtils";
+import { hintIcon, severityStyles, sizingCategories } from "@/lib/sizingUtils";
 import { getErrorMessage } from "@/lib/utils";
-import { Check, Loader2, Wrench } from "lucide-react";
+import { Loader2, Wrench } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 const filterGroups: Record<string, Set<string>> = {
-  sizing: new Set([
-    "over-provisioned",
-    "approaching-limit",
-    "at-limit",
-    "no-limits",
-    "no-reservations",
-  ]),
+  sizing: sizingCategories,
   config: new Set(["no-healthcheck", "no-restart-policy"]),
   operational: new Set(["flaky-service", "node-disk-full", "node-memory-pressure"]),
   cluster: new Set(["single-replica", "manager-has-workloads", "uneven-distribution"]),
@@ -62,7 +56,6 @@ function RecommendationCard({ hint, originalIndex, dismissed, applying, onApply 
   const CategoryIcon = hintIcon(hint.category);
   const hasFix = hint.fixAction != null && hint.suggested != null;
   const isApplying = applying === originalIndex;
-  const isDone = dismissed.has(originalIndex);
   const link = targetLink(hint);
 
   return (
@@ -96,7 +89,7 @@ function RecommendationCard({ hint, originalIndex, dismissed, applying, onApply 
         </div>
       </div>
 
-      {hasFix && !isDone && (
+      {hasFix && (
         <Button
           variant="outline"
           size="xs"
@@ -106,13 +99,6 @@ function RecommendationCard({ hint, originalIndex, dismissed, applying, onApply 
           {isApplying ? <Loader2 className="size-3 animate-spin" /> : <Wrench className="size-3" />}
           Apply suggested value
         </Button>
-      )}
-
-      {isDone && (
-        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-          <Check className="size-3" />
-          Applied
-        </span>
       )}
     </div>
   );

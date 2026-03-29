@@ -15,6 +15,7 @@ import SortIndicator from "../components/SortIndicator";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useRecommendations } from "../hooks/useRecommendations";
 import { useSearchParam } from "../hooks/useSearchParam";
+import { sizingCategories } from "../lib/sizingUtils";
 import { useServiceMetrics } from "../hooks/useServiceMetrics";
 import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
@@ -72,14 +73,6 @@ export default function ServiceList() {
     !!monitoring?.cadvisor?.targets;
   const { getForService } = useServiceMetrics();
   const { items: recommendations, hasData: hasRecommendations } = useRecommendations();
-
-  const sizingCategories = new Set([
-    "over-provisioned",
-    "approaching-limit",
-    "at-limit",
-    "no-limits",
-    "no-reservations",
-  ]);
 
   const baseColumns: Column<ServiceListItem>[] = [
     {
