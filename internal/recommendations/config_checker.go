@@ -41,7 +41,7 @@ func (cc *ConfigChecker) Check(_ context.Context) []Recommendation {
 		}
 
 		rp := svc.Spec.TaskTemplate.RestartPolicy
-		if rp == nil || rp.Condition == swarm.RestartPolicyConditionNone {
+		if rp != nil && rp.Condition == swarm.RestartPolicyConditionNone {
 			recs = append(recs, Recommendation{
 				Category:   CategoryNoRestartPolicy,
 				Severity:   SeverityWarning,

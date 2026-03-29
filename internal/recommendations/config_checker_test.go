@@ -115,6 +115,33 @@ func TestConfigChecker_NoRestartPolicy(t *testing.T) {
 	}
 }
 
+func TestConfigChecker_NilRestartPolicyIsDefault(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc-nil-rp",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "default-restart"},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{
+					Healthcheck: &container.HealthConfig{
+						Test: []string{"CMD", "true"},
+					},
+				},
+				// RestartPolicy is nil — Docker defaults to "any", should NOT be flagged
+			},
+		},
+	})
+
+	cc := NewConfigChecker(c)
+	recs := cc.Check(context.Background())
+
+	for _, r := range recs {
+		if r.Category == CategoryNoRestartPolicy && r.TargetID == "svc-nil-rp" {
+			t.Error("nil RestartPolicy should not trigger no-restart-policy (Docker defaults to 'any')")
+		}
+	}
+}
+
 func TestConfigChecker_HealthyService(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
