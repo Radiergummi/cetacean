@@ -122,15 +122,15 @@ function Layout({ children }: { children: React.ReactNode }) {
               <RecommendationsIndicator />
               <ThemeToggle />
               <UserBadge />
-
-              <button
-                className="inline-flex size-8 items-center justify-center rounded-md transition hover:bg-muted lg:hidden"
-                onClick={() => setMenuOpen(!menuOpen)}
-                aria-label="Toggle menu"
-              >
-                {menuOpen ? <X className="size-5 text-sm" /> : <Menu className="size-5 text-sm" />}
-              </button>
             </div>
+
+            <button
+              className="inline-flex size-8 items-center justify-center rounded-md transition hover:bg-muted lg:hidden"
+              onClick={() => setMenuOpen(!menuOpen)}
+              aria-label="Toggle menu"
+            >
+              {menuOpen ? <X className="size-5 text-sm" /> : <Menu className="size-5 text-sm" />}
+            </button>
           </div>
 
           <div className="-mb-px hidden h-10 items-center justify-center gap-1 lg:flex">
