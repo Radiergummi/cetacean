@@ -1,9 +1,9 @@
-import { api } from "@/api/client";
 import type { Recommendation } from "@/api/types";
 import EmptyState from "@/components/EmptyState";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { useRecommendations } from "@/hooks/useRecommendations";
+import { applyRecommendation } from "@/lib/applyRecommendation";
 import { hintIcon, severityStyles } from "@/lib/sizingUtils";
 import { getErrorMessage } from "@/lib/utils";
 import { Check, Loader2, Wrench } from "lucide-react";
@@ -33,34 +33,6 @@ const filterLabels: Record<FilterTab, string> = {
   operational: "Operational",
   cluster: "Cluster",
 };
-
-async function applyFix(hint: Recommendation): Promise<void> {
-  if (hint.fixAction == null || hint.suggested == null) {
-    return;
-  }
-
-  if (hint.fixAction.startsWith("PATCH") && hint.fixAction.includes("/resources")) {
-    const isOverProvisioned = hint.category === "over-provisioned";
-    const field = isOverProvisioned ? "Reservations" : "Limits";
-    const key = hint.resource === "memory" ? "MemoryBytes" : "NanoCPUs";
-    const patch = { [field]: { [key]: Math.round(hint.suggested) } };
-    await api.patchServiceResources(hint.targetId, patch);
-
-    return;
-  }
-
-  if (hint.fixAction.startsWith("PUT") && hint.fixAction.includes("/scale")) {
-    await api.scaleService(hint.targetId, Math.round(hint.suggested));
-
-    return;
-  }
-
-  if (hint.fixAction.startsWith("PUT") && hint.fixAction.includes("/availability")) {
-    await api.updateNodeAvailability(hint.targetId, "drain");
-
-    return;
-  }
-}
 
 function targetLink(hint: Recommendation): string | null {
   if (hint.scope === "service") {
@@ -175,24 +147,26 @@ export default function RecommendationsPage() {
     );
   }
 
-  const filteredItems = items.filter((_, index) => {
-    if (dismissed.has(index)) {
-      return false;
-    }
+  const filteredItems = items
+    .map((hint, index) => ({ hint, index }))
+    .filter(({ hint, index }) => {
+      if (dismissed.has(index)) {
+        return false;
+      }
 
-    if (activeFilter === "all") {
-      return true;
-    }
+      if (activeFilter === "all") {
+        return true;
+      }
 
-    return filterGroups[activeFilter]?.has(items[index].category) ?? false;
-  });
+      return filterGroups[activeFilter]?.has(hint.category) ?? false;
+    });
 
   async function handleApply(hint: Recommendation, originalIndex: number) {
     setApplying(originalIndex);
     setError(null);
 
     try {
-      await applyFix(hint);
+      await applyRecommendation(hint);
       setDismissed((previous) => new Set([...previous, originalIndex]));
     } catch (caughtError) {
       setError(getErrorMessage(caughtError, "Failed to apply suggestion"));
@@ -231,22 +205,16 @@ export default function RecommendationsPage() {
         <EmptyState message="No recommendations — your cluster looks healthy" />
       ) : (
         <div className="space-y-2">
-          {items.map((hint, originalIndex) => {
-            if (activeFilter !== "all" && !filterGroups[activeFilter]?.has(hint.category)) {
-              return null;
-            }
-
-            return (
-              <RecommendationCard
-                key={originalIndex}
-                hint={hint}
-                originalIndex={originalIndex}
-                dismissed={dismissed}
-                applying={applying}
-                onApply={handleApply}
-              />
-            );
-          })}
+          {filteredItems.map(({ hint, index }) => (
+            <RecommendationCard
+              key={index}
+              hint={hint}
+              originalIndex={index}
+              dismissed={dismissed}
+              applying={applying}
+              onApply={handleApply}
+            />
+          ))}
         </div>
       )}
     </div>

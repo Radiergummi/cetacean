@@ -229,7 +229,7 @@ func (h *Handlers) HandleRecommendations(w http.ResponseWriter, r *http.Request)
 		"items":      results,
 		"total":      len(results),
 		"summary":    summary,
-		"computedAt": time.Now(),
+		"computedAt": h.recEngine.LastTick(),
 	}))
 }
 

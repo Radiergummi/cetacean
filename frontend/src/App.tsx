@@ -166,7 +166,7 @@ function NavLinks() {
     { to: "/volumes", label: "Volumes", keys: ["g", "v"] },
     { to: "/swarm", label: "Swarm", keys: ["g", "i"] },
     { to: "/topology", label: "Topology", keys: ["g", "t"] },
-    { to: "/recommendations", label: "Recs", keys: ["g", "r"] },
+    { to: "/recommendations", label: "Recommendations", keys: ["g", "r"] },
     { to: "/metrics", label: "Metrics", keys: ["g", "m"] },
   ];
   return (

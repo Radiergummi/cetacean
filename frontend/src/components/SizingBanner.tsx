@@ -1,43 +1,11 @@
-import { api } from "@/api/client";
 import type { Recommendation } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { formatBytes, formatCores } from "@/lib/format";
+import { applyRecommendation } from "@/lib/applyRecommendation";
 import { bannerStyles, highestSeverity, hintIcon, severityStyles } from "@/lib/sizingUtils";
 import { getErrorMessage } from "@/lib/utils";
 import { Info, Loader2, Wrench } from "lucide-react";
 import { useState } from "react";
-
-/**
- * Builds a patch or action for a single recommendation's suggested value.
- * Returns a function that performs the fix, or null if no fix is available.
- */
-async function applyFix(hint: Recommendation, serviceId: string): Promise<void> {
-  if (hint.fixAction == null || hint.suggested == null) {
-    return;
-  }
-
-  if (hint.fixAction.startsWith("PATCH") && hint.fixAction.includes("/resources")) {
-    const isOverProvisioned = hint.category === "over-provisioned";
-    const field = isOverProvisioned ? "Reservations" : "Limits";
-    const key = hint.resource === "memory" ? "MemoryBytes" : "NanoCPUs";
-    const patch = { [field]: { [key]: Math.round(hint.suggested) } };
-    await api.patchServiceResources(serviceId, patch);
-
-    return;
-  }
-
-  if (hint.fixAction.startsWith("PUT") && hint.fixAction.includes("/scale")) {
-    await api.scaleService(hint.targetId, Math.round(hint.suggested));
-
-    return;
-  }
-
-  if (hint.fixAction.startsWith("PUT") && hint.fixAction.includes("/availability")) {
-    await api.updateNodeAvailability(hint.targetId, "drain");
-
-    return;
-  }
-}
 
 function formatSuggestion(hint: Recommendation): string | null {
   if (hint.suggested == null) {
@@ -52,7 +20,6 @@ function formatSuggestion(hint: Recommendation): string | null {
 }
 
 interface Props {
-  serviceId: string;
   hints: Recommendation[];
   canFix: boolean;
   onFixed?: () => void;
@@ -62,7 +29,7 @@ interface Props {
  * Full-width banner showing all sizing hints for a service, with
  * detailed messages, suggested values, and apply buttons.
  */
-export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
+export function SizingBanner({ hints, canFix, onFixed }: Props) {
   const [applying, setApplying] = useState<number | null>(null);
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +49,7 @@ export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
     setError(null);
 
     try {
-      await applyFix(hint, serviceId);
+      await applyRecommendation(hint);
       setDismissed((previous) => new Set([...previous, originalIndex]));
       onFixed?.();
     } catch (caughtError) {

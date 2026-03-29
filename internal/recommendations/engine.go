@@ -25,6 +25,7 @@ type Engine struct {
 	checkers []checkerState
 	mu       sync.RWMutex
 	results  []Recommendation
+	lastTick time.Time
 }
 
 // NewEngine creates an engine with the given checkers.
@@ -76,6 +77,8 @@ func (e *Engine) Summary() Summary {
 	return ComputeSummary(e.Results())
 }
 
+// tick runs eligible checkers and merges results. Only called from the
+// single goroutine in Run, so checker state writes are safe without locks.
 func (e *Engine) tick(ctx context.Context, force bool) {
 	now := time.Now()
 
@@ -120,9 +123,20 @@ func (e *Engine) tick(ctx context.Context, force bool) {
 
 	e.mu.Lock()
 	e.results = merged
+	e.lastTick = now
 	e.mu.Unlock()
 
 	slog.Debug("recommendations: tick complete", "checkers_run", len(toRun), "total", len(merged))
+}
+
+// LastTick returns the time of the most recent completed tick. Nil-safe.
+func (e *Engine) LastTick() time.Time {
+	if e == nil {
+		return time.Time{}
+	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.lastTick
 }
 
 func sortBySeverity(recs []Recommendation) {

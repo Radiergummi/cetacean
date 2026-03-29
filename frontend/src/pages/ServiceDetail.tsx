@@ -389,7 +389,6 @@ export default function ServiceDetail() {
       />
 
       <SizingBanner
-        serviceId={id!}
         hints={serviceRecommendations}
         canFix={canEditConfig}
         onFixed={() => {

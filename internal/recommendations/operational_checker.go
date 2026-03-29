@@ -43,7 +43,7 @@ func (oc *OperationalChecker) Check(ctx context.Context) []Recommendation {
 
 	go func() {
 		query := fmt.Sprintf(
-			`sum by (%s)(increase(container_last_seen{%s}[%s]))`,
+			`sum by (%s)(changes(container_last_seen{%s}[%s]))`,
 			serviceLabelKey, serviceFilter, lookbackStr,
 		)
 		entries, err := queryEntries(tickCtx, oc.query, query, serviceLabelKey)
