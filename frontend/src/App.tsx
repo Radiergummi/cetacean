@@ -11,7 +11,8 @@ import { OperationsLevelProvider } from "./hooks/OperationsLevelProvider";
 import { useAuth } from "./hooks/useAuth";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { ConnectionProvider, sseEventTypes } from "./hooks/useResourceStream";
-import { Keyboard, Menu, X } from "lucide-react";
+import { useRecommendations } from "./hooks/useRecommendations";
+import { Keyboard, Lightbulb, Menu, X } from "lucide-react";
 import type React from "react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { BrowserRouter, Link, Route, Routes, useLocation, useNavigate } from "react-router-dom";
@@ -118,6 +119,7 @@ function Layout({ children }: { children: React.ReactNode }) {
                   <Keyboard className="size-4" />
                 </button>
               </ShortcutTooltip>
+              <RecommendationsIndicator />
               <ThemeToggle />
               <UserBadge />
 
@@ -153,6 +155,28 @@ function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
+function RecommendationsIndicator() {
+  const { total } = useRecommendations();
+  const navigate = useNavigate();
+
+  return (
+    <ShortcutTooltip keys={["g", "r"]}>
+      <button
+        className="relative inline-flex size-8 items-center justify-center rounded-md transition hover:bg-muted"
+        onClick={() => navigate("/recommendations")}
+        aria-label="Recommendations"
+      >
+        <Lightbulb className="size-4" />
+        {total > 0 && (
+          <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white">
+            {total > 99 ? "99" : total}
+          </span>
+        )}
+      </button>
+    </ShortcutTooltip>
+  );
+}
+
 function NavLinks() {
   const location = useLocation();
   const links = [
@@ -166,7 +190,6 @@ function NavLinks() {
     { to: "/volumes", label: "Volumes", keys: ["g", "v"] },
     { to: "/swarm", label: "Swarm", keys: ["g", "i"] },
     { to: "/topology", label: "Topology", keys: ["g", "t"] },
-    { to: "/recommendations", label: "Recommendations", keys: ["g", "r"] },
     { to: "/metrics", label: "Metrics", keys: ["g", "m"] },
   ];
   return (
