@@ -3,7 +3,7 @@ import EmptyState from "@/components/EmptyState";
 import PageHeader from "@/components/PageHeader";
 import ResourceName from "@/components/ResourceName";
 import { Button } from "@/components/ui/button";
-import { useRecommendations } from "@/hooks/useRecommendations";
+import { invalidateRecommendations, useRecommendations } from "@/hooks/useRecommendations";
 import { applyRecommendation } from "@/lib/applyRecommendation";
 import { hintIcon, severityStyles, sizingCategories } from "@/lib/sizingUtils";
 import { getErrorMessage } from "@/lib/utils";
@@ -152,6 +152,7 @@ export default function RecommendationsPage() {
     try {
       await applyRecommendation(hint);
       setDismissed((previous) => new Set([...previous, originalIndex]));
+      invalidateRecommendations();
     } catch (caughtError) {
       setError(getErrorMessage(caughtError, "Failed to apply suggestion"));
     } finally {

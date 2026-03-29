@@ -1,6 +1,6 @@
 import { api } from "@/api/client";
 import type { Recommendation, RecommendationSummary, RecommendationsResponse } from "@/api/types";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 
 interface RecommendationsState {
@@ -21,6 +21,9 @@ let cached: RecommendationsState = emptyState;
 let cacheTime = 0;
 let inflight: Promise<RecommendationsResponse> | null = null;
 const cacheTTL = 60_000;
+
+/** Subscribers notified when the cache is invalidated. */
+const subscribers = new Set<() => void>();
 
 async function fetchCached(): Promise<RecommendationsState> {
   const now = Date.now();
@@ -48,9 +51,39 @@ async function fetchCached(): Promise<RecommendationsState> {
   return cached;
 }
 
+/**
+ * Invalidates the module-level cache and re-fetches for all consumers.
+ * Call this after applying a recommendation fix.
+ */
+export function invalidateRecommendations() {
+  cacheTime = 0;
+
+  fetchCached()
+    .then(() => {
+      for (const notify of subscribers) {
+        notify();
+      }
+    })
+    .catch(() => {});
+}
+
 export function useRecommendations(): RecommendationsState {
   const { pathname } = useLocation();
   const [state, setState] = useState<RecommendationsState>(cached.hasData ? cached : emptyState);
+
+  const refresh = useCallback(() => {
+    fetchCached()
+      .then((result) => setState(result))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    subscribers.add(refresh);
+
+    return () => {
+      subscribers.delete(refresh);
+    };
+  }, [refresh]);
 
   useEffect(() => {
     let cancelled = false;

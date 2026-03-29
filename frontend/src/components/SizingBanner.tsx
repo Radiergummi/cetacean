@@ -1,6 +1,7 @@
 import type { Recommendation } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { formatBytes, formatCores } from "@/lib/format";
+import { invalidateRecommendations } from "@/hooks/useRecommendations";
 import { applyRecommendation } from "@/lib/applyRecommendation";
 import { bannerStyles, highestSeverity, hintIcon, severityStyles } from "@/lib/sizingUtils";
 import { getErrorMessage } from "@/lib/utils";
@@ -65,6 +66,7 @@ export function SizingBanner({ hints, canFix, onFixed }: Props) {
     try {
       await applyRecommendation(hint);
       setDismissed((previous) => new Set([...previous, originalIndex]));
+      invalidateRecommendations();
       onFixed?.();
     } catch (caughtError) {
       setError(getErrorMessage(caughtError, "Failed to apply suggestion"));
