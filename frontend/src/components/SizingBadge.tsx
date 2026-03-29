@@ -3,16 +3,31 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { hintIcon, severityRank, severityStyles } from "@/lib/sizingUtils";
 import { Check } from "lucide-react";
 
+const categoryLabels: Partial<Record<Recommendation["category"], string>> = {
+  "no-limits": "No limits",
+  "no-reservations": "No reservations",
+  "no-healthcheck": "No healthcheck",
+  "no-restart-policy": "No restart policy",
+  "single-replica": "Single replica",
+  "manager-has-workloads": "Manager active",
+  "uneven-distribution": "Uneven distribution",
+  "flaky-service": "Flaky",
+  "node-disk-full": "Disk full",
+  "node-memory-pressure": "Memory pressure",
+};
+
 /**
  * Compact label for the table column (e.g., "CPU 85%", "No limits").
  */
 function formatCompactLabel(hint: Recommendation): string {
-  if (hint.category === "no-limits") {
-    return "No limits";
+  const label = categoryLabels[hint.category];
+
+  if (label) {
+    return label;
   }
 
-  if (hint.category === "no-reservations") {
-    return "No reservations";
+  if (!hint.resource || !hint.configured) {
+    return hint.category;
   }
 
   const percentage = Math.round((hint.current / hint.configured) * 100);

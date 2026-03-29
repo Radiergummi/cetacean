@@ -12,6 +12,18 @@ function formatSuggestion(hint: Recommendation): string | null {
     return null;
   }
 
+  if (hint.category === "single-replica") {
+    return `Suggested: ${hint.suggested} replicas`;
+  }
+
+  if (hint.category === "manager-has-workloads") {
+    return "Suggested: drain manager node";
+  }
+
+  if (!hint.resource) {
+    return null;
+  }
+
   const target = hint.category === "over-provisioned" ? "reservation" : "limit";
   const value =
     hint.resource === "memory" ? formatBytes(hint.suggested) : formatCores(hint.suggested / 1e9);
