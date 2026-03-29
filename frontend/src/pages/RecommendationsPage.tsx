@@ -1,6 +1,7 @@
 import type { Recommendation } from "@/api/types";
 import EmptyState from "@/components/EmptyState";
 import PageHeader from "@/components/PageHeader";
+import ResourceName from "@/components/ResourceName";
 import { Button } from "@/components/ui/button";
 import { useRecommendations } from "@/hooks/useRecommendations";
 import { applyRecommendation } from "@/lib/applyRecommendation";
@@ -76,10 +77,12 @@ function RecommendationCard({ hint, originalIndex, applying, onApply }: CardProp
               to={link}
               className="text-xs text-muted-foreground hover:underline"
             >
-              {hint.targetName}
+              <ResourceName name={hint.targetName} />
             </Link>
           ) : (
-            <span className="text-xs text-muted-foreground">{hint.targetName}</span>
+            <span className="text-xs text-muted-foreground">
+              <ResourceName name={hint.targetName} />
+            </span>
           )}
         </div>
       </div>
