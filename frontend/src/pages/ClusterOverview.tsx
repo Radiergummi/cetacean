@@ -2,7 +2,6 @@ import { api, type ClusterSnapshot } from "../api/client";
 import type { HistoryEntry } from "../api/types";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
-import RecommendationSummary from "../components/RecommendationSummary";
 import {
   CapacitySection,
   MetricsPanel,
@@ -10,6 +9,7 @@ import {
   StackDrillDownChart,
 } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
+import RecommendationSummary from "../components/RecommendationSummary";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { TrendingDown, TrendingUp } from "lucide-react";

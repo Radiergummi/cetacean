@@ -27,15 +27,9 @@ export default function RecommendationSummary() {
         </Link>
       </div>
       <div className="mt-1 flex gap-3 text-xs">
-        {summary.critical > 0 && (
-          <span className="text-red-600">{summary.critical} critical</span>
-        )}
-        {summary.warning > 0 && (
-          <span className="text-amber-600">{summary.warning} warnings</span>
-        )}
-        {summary.info > 0 && (
-          <span className="text-blue-600">{summary.info} info</span>
-        )}
+        {summary.critical > 0 && <span className="text-red-600">{summary.critical} critical</span>}
+        {summary.warning > 0 && <span className="text-amber-600">{summary.warning} warnings</span>}
+        {summary.info > 0 && <span className="text-blue-600">{summary.info} info</span>}
       </div>
     </div>
   );

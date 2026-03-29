@@ -4,14 +4,20 @@ import EmptyState from "@/components/EmptyState";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { useRecommendations } from "@/hooks/useRecommendations";
-import { getErrorMessage } from "@/lib/utils";
 import { hintIcon, severityStyles } from "@/lib/sizingUtils";
+import { getErrorMessage } from "@/lib/utils";
 import { Check, Loader2, Wrench } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 const filterGroups: Record<string, Set<string>> = {
-  sizing: new Set(["over-provisioned", "approaching-limit", "at-limit", "no-limits", "no-reservations"]),
+  sizing: new Set([
+    "over-provisioned",
+    "approaching-limit",
+    "at-limit",
+    "no-limits",
+    "no-reservations",
+  ]),
   config: new Set(["no-healthcheck", "no-restart-policy"]),
   operational: new Set(["flaky-service", "node-disk-full", "node-memory-pressure"]),
   cluster: new Set(["single-replica", "manager-has-workloads", "uneven-distribution"]),
@@ -125,11 +131,7 @@ function RecommendationCard({ hint, originalIndex, dismissed, applying, onApply 
           disabled={applying !== null}
           onClick={() => onApply(hint, originalIndex)}
         >
-          {isApplying ? (
-            <Loader2 className="size-3 animate-spin" />
-          ) : (
-            <Wrench className="size-3" />
-          )}
+          {isApplying ? <Loader2 className="size-3 animate-spin" /> : <Wrench className="size-3" />}
           Apply suggested value
         </Button>
       )}
@@ -152,7 +154,9 @@ export default function RecommendationsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const rawFilter = searchParams.get("filter") ?? "all";
-  const activeFilter: FilterTab = filterTabs.includes(rawFilter as FilterTab) ? (rawFilter as FilterTab) : "all";
+  const activeFilter: FilterTab = filterTabs.includes(rawFilter as FilterTab)
+    ? (rawFilter as FilterTab)
+    : "all";
 
   function setFilter(tab: FilterTab) {
     setSearchParams(
@@ -221,9 +225,7 @@ export default function RecommendationsPage() {
         })}
       </div>
 
-      {error && (
-        <p className="text-sm font-medium text-red-700 dark:text-red-400">{error}</p>
-      )}
+      {error && <p className="text-sm font-medium text-red-700 dark:text-red-400">{error}</p>}
 
       {filteredItems.length === 0 ? (
         <EmptyState message="No recommendations — your cluster looks healthy" />

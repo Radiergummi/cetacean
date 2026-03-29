@@ -13,9 +13,9 @@ import ResourceName from "../components/ResourceName";
 import { SizingBadge } from "../components/SizingBadge";
 import SortIndicator from "../components/SortIndicator";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { useRecommendations } from "../hooks/useRecommendations";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { useServiceMetrics } from "../hooks/useServiceMetrics";
-import { useRecommendations } from "../hooks/useRecommendations";
 import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useViewMode } from "../hooks/useViewMode";
@@ -74,7 +74,11 @@ export default function ServiceList() {
   const { items: recommendations, hasData: hasRecommendations } = useRecommendations();
 
   const sizingCategories = new Set([
-    "over-provisioned", "approaching-limit", "at-limit", "no-limits", "no-reservations",
+    "over-provisioned",
+    "approaching-limit",
+    "at-limit",
+    "no-limits",
+    "no-reservations",
   ]);
 
   const baseColumns: Column<ServiceListItem>[] = [

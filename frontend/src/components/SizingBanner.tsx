@@ -2,12 +2,7 @@ import { api } from "@/api/client";
 import type { Recommendation } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { formatBytes, formatCores } from "@/lib/format";
-import {
-  bannerStyles,
-  highestSeverity,
-  hintIcon,
-  severityStyles,
-} from "@/lib/sizingUtils";
+import { bannerStyles, highestSeverity, hintIcon, severityStyles } from "@/lib/sizingUtils";
 import { getErrorMessage } from "@/lib/utils";
 import { Info, Loader2, Wrench } from "lucide-react";
 import { useState } from "react";
@@ -51,9 +46,7 @@ function formatSuggestion(hint: Recommendation): string | null {
 
   const target = hint.category === "over-provisioned" ? "reservation" : "limit";
   const value =
-    hint.resource === "memory"
-      ? formatBytes(hint.suggested)
-      : formatCores(hint.suggested / 1e9);
+    hint.resource === "memory" ? formatBytes(hint.suggested) : formatCores(hint.suggested / 1e9);
 
   return `Suggested: ${hint.resource === "memory" ? "memory" : "CPU"} ${target} ${value}`;
 }
@@ -102,9 +95,7 @@ export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
   const severity = highestSeverity(visibleHints);
 
   return (
-    <div
-      className={`flex items-start gap-3 rounded-lg border px-4 py-3 ${bannerStyles[severity]}`}
-    >
+    <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 ${bannerStyles[severity]}`}>
       <Info className={`mt-0.5 size-5 shrink-0 ${severityStyles[severity]}`} />
 
       <div className="flex-1 space-y-2">
@@ -129,9 +120,7 @@ export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
                 <div>
                   <p className="text-sm font-medium">{hint.message}</p>
 
-                  {suggestion && (
-                    <p className="text-xs opacity-75">{suggestion}</p>
-                  )}
+                  {suggestion && <p className="text-xs opacity-75">{suggestion}</p>}
                 </div>
               </div>
 
@@ -154,11 +143,7 @@ export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
           );
         })}
 
-        {error && (
-          <p className="text-xs font-medium text-red-700 dark:text-red-400">
-            {error}
-          </p>
-        )}
+        {error && <p className="text-xs font-medium text-red-700 dark:text-red-400">{error}</p>}
       </div>
     </div>
   );
