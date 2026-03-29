@@ -40,7 +40,7 @@ A unified recommendation engine that aggregates cluster health checks across fou
 
 | Check | Condition | Severity | Auto-fixable |
 |---|---|---|---|
-| Flaky service | High task restart rate over lookback window | warning | No |
+| Flaky service | > 5 task restarts over lookback window (default 7d) | warning | No |
 | Node disk full | Disk usage > 90% | critical | No |
 | Node memory pressure | Memory usage > 90% | critical | No |
 
@@ -52,7 +52,7 @@ A unified recommendation engine that aggregates cluster health checks across fou
 | Manager running workloads | Manager node with active availability | warning | Yes (PUT availability=drain) |
 | Uneven task distribution | Max/min tasks-per-node ratio > 3x | info | No |
 
-All sizing thresholds are configurable via the existing `[sizing]` config section. Other checkers use fixed thresholds in v1.
+All sizing thresholds are configurable via the existing `[sizing]` config section (renamed to `[recommendations.sizing]`). The engine interval is configured via `CETACEAN_RECOMMENDATIONS_INTERVAL` (default `60s`), replacing `CETACEAN_SIZING_INTERVAL`. A top-level `CETACEAN_RECOMMENDATIONS_ENABLED` (default `true`) disables the entire engine. Other checkers use fixed thresholds in v1.
 
 ## Data Model
 
@@ -83,9 +83,28 @@ type Recommendation struct {
 New fields vs. the current sizing `Recommendation`:
 - `Scope`: service, node, or cluster
 - `TargetID` / `TargetName`: what the recommendation applies to (service ID, node ID, or empty for cluster)
-- `FixAction`: nullable API action string (e.g., `"PATCH /services/{id}/resources"`) — frontend uses this to determine if and how to render a fix button. Nil means the recommendation is informational only.
+- `FixAction`: nullable API action string — the frontend substitutes `targetId` into the path to build the request. Nil means the recommendation is informational only.
 
-`Category` and `Severity` types remain unchanged. New category constants are added for the new checks.
+`Category` and `Severity` types remain unchanged. New category constants:
+
+```go
+// Sizing (existing)
+CategoryOverProvisioned, CategoryApproachingLimit, CategoryAtLimit, CategoryNoLimits, CategoryNoReservations
+
+// Config hygiene
+CategoryNoHealthcheck  Category = "no-healthcheck"
+CategoryNoRestartPolicy Category = "no-restart-policy"
+
+// Operational
+CategoryFlakyService    Category = "flaky-service"
+CategoryNodeDiskFull    Category = "node-disk-full"
+CategoryNodeMemPressure Category = "node-memory-pressure"
+
+// Cluster
+CategorySingleReplica       Category = "single-replica"
+CategoryManagerHasWorkloads  Category = "manager-has-workloads"
+CategoryUnevenDistribution   Category = "uneven-distribution"
+```
 
 ## Architecture
 
@@ -191,7 +210,7 @@ The dashboard reads `summary` and `total`. The full page reads `items`. The serv
 | Prometheus not configured | Engine runs config + cluster checkers only. Sizing + operational checkers not registered. |
 | Prometheus unreachable | Sizing + operational checkers return empty on failed queries. Config + cluster results still shown. |
 | No cAdvisor | Sizing checker returns config-only hints (no-limits, no-reservations). Operational checker may have partial results. |
-| Engine disabled | Endpoint returns empty collection. Dashboard card hidden. Service list column hidden. |
+| Engine disabled (`CETACEAN_RECOMMENDATIONS_ENABLED=false`) | Endpoint returns empty collection. Dashboard card hidden. Service list column hidden. |
 
 ## Testing
 
