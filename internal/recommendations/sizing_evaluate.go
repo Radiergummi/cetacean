@@ -1,4 +1,4 @@
-package sizing
+package recommendations
 
 import (
 	"fmt"
@@ -10,6 +10,7 @@ import (
 
 // serviceSpec holds the resource configuration from a swarm service.
 type serviceSpec struct {
+	id                string
 	name              string
 	cpuLimit          int64 // NanoCPUs
 	cpuReservation    int64 // NanoCPUs
@@ -74,6 +75,10 @@ func ptr(v float64) *float64 {
 	return &v
 }
 
+func strPtr(v string) *string {
+	return &v
+}
+
 // evaluate computes sizing recommendations for a service.
 // instant is used for at-limit and approaching-limit checks (current rate).
 // p95 is used for over-provisioned checks (p95 over lookback window).
@@ -90,6 +95,9 @@ func evaluate(spec serviceSpec, instant *serviceMetrics, p95 *serviceMetrics, cf
 		hints = append(hints, Recommendation{
 			Category:   CategoryNoLimits,
 			Severity:   SeverityWarning,
+			Scope:      ScopeService,
+			TargetID:   spec.id,
+			TargetName: spec.name,
 			Resource:   "cpu+memory",
 			Message:    "Service has no CPU or memory limits set",
 			Current:    0,
@@ -100,6 +108,9 @@ func evaluate(spec serviceSpec, instant *serviceMetrics, p95 *serviceMetrics, cf
 			hints = append(hints, Recommendation{
 				Category:   CategoryNoLimits,
 				Severity:   SeverityWarning,
+				Scope:      ScopeService,
+				TargetID:   spec.id,
+				TargetName: spec.name,
 				Resource:   "cpu",
 				Message:    "Service has no CPU limit set",
 				Current:    0,
@@ -111,6 +122,9 @@ func evaluate(spec serviceSpec, instant *serviceMetrics, p95 *serviceMetrics, cf
 			hints = append(hints, Recommendation{
 				Category:   CategoryNoLimits,
 				Severity:   SeverityWarning,
+				Scope:      ScopeService,
+				TargetID:   spec.id,
+				TargetName: spec.name,
 				Resource:   "memory",
 				Message:    "Service has no memory limit set",
 				Current:    0,
@@ -127,6 +141,9 @@ func evaluate(spec serviceSpec, instant *serviceMetrics, p95 *serviceMetrics, cf
 		hints = append(hints, Recommendation{
 			Category:   CategoryNoReservations,
 			Severity:   SeverityInfo,
+			Scope:      ScopeService,
+			TargetID:   spec.id,
+			TargetName: spec.name,
 			Resource:   "cpu+memory",
 			Message:    "Service has limits but no CPU or memory reservations set",
 			Current:    0,
@@ -137,6 +154,9 @@ func evaluate(spec serviceSpec, instant *serviceMetrics, p95 *serviceMetrics, cf
 			hints = append(hints, Recommendation{
 				Category:   CategoryNoReservations,
 				Severity:   SeverityInfo,
+				Scope:      ScopeService,
+				TargetID:   spec.id,
+				TargetName: spec.name,
 				Resource:   "cpu",
 				Message:    "Service has a CPU limit but no reservation set",
 				Current:    0,
@@ -148,6 +168,9 @@ func evaluate(spec serviceSpec, instant *serviceMetrics, p95 *serviceMetrics, cf
 			hints = append(hints, Recommendation{
 				Category:   CategoryNoReservations,
 				Severity:   SeverityInfo,
+				Scope:      ScopeService,
+				TargetID:   spec.id,
+				TargetName: spec.name,
 				Resource:   "memory",
 				Message:    "Service has a memory limit but no reservation set",
 				Current:    0,
@@ -157,6 +180,8 @@ func evaluate(spec serviceSpec, instant *serviceMetrics, p95 *serviceMetrics, cf
 	}
 
 	// --- At-limit / approaching-limit checks (instant metrics) ---
+
+	resourcesFixAction := strPtr("PATCH /services/{id}/resources")
 
 	if instant != nil {
 		if !noCPULimit {
@@ -169,11 +194,15 @@ func evaluate(spec serviceSpec, instant *serviceMetrics, p95 *serviceMetrics, cf
 				hints = append(hints, Recommendation{
 					Category:   CategoryAtLimit,
 					Severity:   SeverityCritical,
+					Scope:      ScopeService,
+					TargetID:   spec.id,
+					TargetName: spec.name,
 					Resource:   "cpu",
 					Message:    fmt.Sprintf("CPU usage is at %.0f%% of limit", cpuRatio*100),
 					Current:    instant.cpu,
 					Configured: cpuLimitPct,
 					Suggested:  ptr(suggested),
+					FixAction:  resourcesFixAction,
 				})
 
 			case cpuRatio > cfg.ApproachingLimit:
@@ -181,11 +210,15 @@ func evaluate(spec serviceSpec, instant *serviceMetrics, p95 *serviceMetrics, cf
 				hints = append(hints, Recommendation{
 					Category:   CategoryApproachingLimit,
 					Severity:   SeverityWarning,
+					Scope:      ScopeService,
+					TargetID:   spec.id,
+					TargetName: spec.name,
 					Resource:   "cpu",
 					Message:    fmt.Sprintf("CPU usage is at %.0f%% of limit", cpuRatio*100),
 					Current:    instant.cpu,
 					Configured: cpuLimitPct,
 					Suggested:  ptr(suggested),
+					FixAction:  resourcesFixAction,
 				})
 			}
 		}
@@ -199,11 +232,15 @@ func evaluate(spec serviceSpec, instant *serviceMetrics, p95 *serviceMetrics, cf
 				hints = append(hints, Recommendation{
 					Category:   CategoryAtLimit,
 					Severity:   SeverityCritical,
+					Scope:      ScopeService,
+					TargetID:   spec.id,
+					TargetName: spec.name,
 					Resource:   "memory",
 					Message:    fmt.Sprintf("Memory usage is at %.0f%% of limit", memRatio*100),
 					Current:    instant.memory,
 					Configured: float64(spec.memoryLimit),
 					Suggested:  ptr(suggested),
+					FixAction:  resourcesFixAction,
 				})
 
 			case memRatio > cfg.ApproachingLimit:
@@ -211,11 +248,15 @@ func evaluate(spec serviceSpec, instant *serviceMetrics, p95 *serviceMetrics, cf
 				hints = append(hints, Recommendation{
 					Category:   CategoryApproachingLimit,
 					Severity:   SeverityWarning,
+					Scope:      ScopeService,
+					TargetID:   spec.id,
+					TargetName: spec.name,
 					Resource:   "memory",
 					Message:    fmt.Sprintf("Memory usage is at %.0f%% of limit", memRatio*100),
 					Current:    instant.memory,
 					Configured: float64(spec.memoryLimit),
 					Suggested:  ptr(suggested),
+					FixAction:  resourcesFixAction,
 				})
 			}
 		}
@@ -233,11 +274,15 @@ func evaluate(spec serviceSpec, instant *serviceMetrics, p95 *serviceMetrics, cf
 				hints = append(hints, Recommendation{
 					Category:   CategoryOverProvisioned,
 					Severity:   SeverityInfo,
+					Scope:      ScopeService,
+					TargetID:   spec.id,
+					TargetName: spec.name,
 					Resource:   "cpu",
 					Message:    fmt.Sprintf("p95 CPU usage over the past %s is %.0f%% of reservation", formatDuration(cfg.Lookback), cpuResRatio*100),
 					Current:    p95.cpu,
 					Configured: cpuReservationPct,
 					Suggested:  ptr(suggested),
+					FixAction:  resourcesFixAction,
 				})
 			}
 		}
@@ -250,11 +295,15 @@ func evaluate(spec serviceSpec, instant *serviceMetrics, p95 *serviceMetrics, cf
 				hints = append(hints, Recommendation{
 					Category:   CategoryOverProvisioned,
 					Severity:   SeverityInfo,
+					Scope:      ScopeService,
+					TargetID:   spec.id,
+					TargetName: spec.name,
 					Resource:   "memory",
 					Message:    fmt.Sprintf("p95 memory usage over the past %s is %.0f%% of reservation", formatDuration(cfg.Lookback), memResRatio*100),
 					Current:    p95.memory,
 					Configured: float64(spec.memoryReservation),
 					Suggested:  ptr(suggested),
+					FixAction:  resourcesFixAction,
 				})
 			}
 		}

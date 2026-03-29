@@ -1,4 +1,4 @@
-package sizing
+package recommendations
 
 import (
 	"testing"
@@ -21,6 +21,7 @@ func defaultConfig() *config.SizingConfig {
 // specWithLimits returns a spec with 2 CPU cores and 512MB limits, 1 CPU / 256MB reservations.
 func specWithLimits() serviceSpec {
 	return serviceSpec{
+		id:                "test-id",
 		name:              "test-service",
 		cpuLimit:          2_000_000_000, // 2 cores
 		cpuReservation:    1_000_000_000, // 1 core
@@ -30,7 +31,7 @@ func specWithLimits() serviceSpec {
 }
 
 func TestEvaluate_NoLimits(t *testing.T) {
-	spec := serviceSpec{name: "test"}
+	spec := serviceSpec{id: "test-id", name: "test"}
 	result := evaluate(spec, nil, nil, defaultConfig())
 
 	if len(result) != 1 {
@@ -54,6 +55,7 @@ func TestEvaluate_NoLimits(t *testing.T) {
 
 func TestEvaluate_NoLimits_OnlyMemory(t *testing.T) {
 	spec := serviceSpec{
+		id:       "test-id",
 		name:     "test",
 		cpuLimit: 1_000_000_000, // has CPU limit
 	}
@@ -79,6 +81,7 @@ func TestEvaluate_NoLimits_OnlyMemory(t *testing.T) {
 
 func TestEvaluate_NoReservations(t *testing.T) {
 	spec := serviceSpec{
+		id:          "test-id",
 		name:        "test",
 		cpuLimit:    2_000_000_000,
 		memoryLimit: 512 * 1024 * 1024,
@@ -129,6 +132,18 @@ func TestEvaluate_AtLimit(t *testing.T) {
 
 	if atLimitHint.Suggested == nil {
 		t.Fatal("expected suggested value to be present")
+	}
+
+	if atLimitHint.Scope != ScopeService {
+		t.Errorf("expected scope %q, got %q", ScopeService, atLimitHint.Scope)
+	}
+
+	if atLimitHint.TargetID != "test-id" {
+		t.Errorf("expected targetId %q, got %q", "test-id", atLimitHint.TargetID)
+	}
+
+	if atLimitHint.FixAction == nil || *atLimitHint.FixAction != "PATCH /services/{id}/resources" {
+		t.Errorf("expected fixAction %q, got %v", "PATCH /services/{id}/resources", atLimitHint.FixAction)
 	}
 }
 
@@ -205,7 +220,7 @@ func TestEvaluate_Healthy(t *testing.T) {
 
 func TestEvaluate_NoMetrics_ConfigOnlyHints(t *testing.T) {
 	// Service has no limits set.
-	spec := serviceSpec{name: "test"}
+	spec := serviceSpec{id: "test-id", name: "test"}
 
 	result := evaluate(spec, nil, nil, defaultConfig())
 
@@ -232,6 +247,7 @@ func TestEvaluate_SuggestedValueRounding(t *testing.T) {
 	// 512MB limit; 98% usage = ~501MB → over AtLimit.
 	// Suggested = 501MB * 2.0 = ~1002MB → rounds up to 1024MB (nearest 64MB).
 	spec := serviceSpec{
+		id:                "test-id",
 		name:              "test",
 		memoryLimit:       512 * 1024 * 1024,
 		memoryReservation: 256 * 1024 * 1024,
@@ -270,6 +286,7 @@ func TestEvaluate_SuggestedValueRounding(t *testing.T) {
 // With a 10x ratio between limit and reservation, the two would give different results.
 func TestEvaluate_OverProvisioned_ReservationNotLimit(t *testing.T) {
 	spec := serviceSpec{
+		id:                "test-id",
 		name:              "test-service",
 		cpuLimit:          10_000_000_000, // 10 cores limit
 		cpuReservation:    1_000_000_000,  // 1 core reservation
