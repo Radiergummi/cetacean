@@ -55,7 +55,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/toolti
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
 import { useResourceStream } from "../hooks/useResourceStream";
-import { useSizingHints } from "../hooks/useSizingHints";
+import { useRecommendations } from "../hooks/useRecommendations";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
 import { deriveServiceSubResources } from "../lib/deriveServiceState";
@@ -111,9 +111,8 @@ export default function ServiceDetail() {
   const [networkNames, setNetworkNames] = useState<Record<string, string>>({});
   const [cpuActual, setCpuActual] = useState<number | undefined>();
   const [memActual, setMemActual] = useState<number | undefined>();
-  const sizing = useSizingHints();
-  const serviceSizing = id ? sizing.byServiceId.get(id) : undefined;
-  const sizingHints = serviceSizing?.hints ?? [];
+  const { items: recommendations } = useRecommendations();
+  const serviceRecommendations = recommendations.filter((r) => r.targetId === id);
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -391,7 +390,7 @@ export default function ServiceDetail() {
 
       <SizingBanner
         serviceId={id!}
-        hints={sizingHints}
+        hints={serviceRecommendations}
         canFix={canEditConfig}
         onFixed={() => {
           if (id) {

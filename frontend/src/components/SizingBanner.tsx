@@ -1,5 +1,5 @@
 import { api } from "@/api/client";
-import type { SizingRecommendation } from "@/api/types";
+import type { Recommendation } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { formatBytes, formatCores } from "@/lib/format";
 import {
@@ -13,24 +13,38 @@ import { Info, Loader2, Wrench } from "lucide-react";
 import { useState } from "react";
 
 /**
- * Builds a merge-patch body for a single sizing hint's suggested value.
- * Over-provisioned patches the reservation; limit-based hints patch the limit.
+ * Builds a patch or action for a single recommendation's suggested value.
+ * Returns a function that performs the fix, or null if no fix is available.
  */
-function buildPatch(
-  hint: SizingRecommendation,
-): Record<string, unknown> | null {
-  if (hint.suggested == null) {
-    return null;
+async function applyFix(hint: Recommendation, serviceId: string): Promise<void> {
+  if (hint.fixAction == null || hint.suggested == null) {
+    return;
   }
 
-  const isOverProvisioned = hint.category === "over-provisioned";
-  const field = isOverProvisioned ? "Reservations" : "Limits";
-  const key = hint.resource === "memory" ? "MemoryBytes" : "NanoCPUs";
+  if (hint.fixAction.startsWith("PATCH") && hint.fixAction.includes("/resources")) {
+    const isOverProvisioned = hint.category === "over-provisioned";
+    const field = isOverProvisioned ? "Reservations" : "Limits";
+    const key = hint.resource === "memory" ? "MemoryBytes" : "NanoCPUs";
+    const patch = { [field]: { [key]: Math.round(hint.suggested) } };
+    await api.patchServiceResources(serviceId, patch);
 
-  return { [field]: { [key]: Math.round(hint.suggested) } };
+    return;
+  }
+
+  if (hint.fixAction.startsWith("PUT") && hint.fixAction.includes("/scale")) {
+    await api.scaleService(hint.targetId, Math.round(hint.suggested));
+
+    return;
+  }
+
+  if (hint.fixAction.startsWith("PUT") && hint.fixAction.includes("/availability")) {
+    await api.updateNodeAvailability(hint.targetId, "drain");
+
+    return;
+  }
 }
 
-function formatSuggestion(hint: SizingRecommendation): string | null {
+function formatSuggestion(hint: Recommendation): string | null {
   if (hint.suggested == null) {
     return null;
   }
@@ -46,7 +60,7 @@ function formatSuggestion(hint: SizingRecommendation): string | null {
 
 interface Props {
   serviceId: string;
-  hints: SizingRecommendation[];
+  hints: Recommendation[];
   canFix: boolean;
   onFixed?: () => void;
 }
@@ -66,10 +80,8 @@ export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
     return null;
   }
 
-  async function applySuggestion(hint: SizingRecommendation, originalIndex: number) {
-    const patch = buildPatch(hint);
-
-    if (!patch) {
+  async function applySuggestion(hint: Recommendation, originalIndex: number) {
+    if (hint.fixAction == null || hint.suggested == null) {
       return;
     }
 
@@ -77,7 +89,7 @@ export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
     setError(null);
 
     try {
-      await api.patchServiceResources(serviceId, patch);
+      await applyFix(hint, serviceId);
       setDismissed((previous) => new Set([...previous, originalIndex]));
       onFixed?.();
     } catch (caughtError) {
@@ -103,7 +115,7 @@ export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
 
           const HintIcon = hintIcon(hint.category);
           const suggestion = formatSuggestion(hint);
-          const hasPatch = hint.suggested != null;
+          const hasFix = hint.fixAction != null && hint.suggested != null;
           const isApplying = applying === originalIndex;
 
           return (
@@ -123,7 +135,7 @@ export function SizingBanner({ serviceId, hints, canFix, onFixed }: Props) {
                 </div>
               </div>
 
-              {canFix && hasPatch && (
+              {canFix && hasFix && (
                 <Button
                   variant="outline"
                   size="xs"

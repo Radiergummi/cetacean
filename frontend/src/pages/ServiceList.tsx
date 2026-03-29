@@ -15,7 +15,7 @@ import SortIndicator from "../components/SortIndicator";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { useServiceMetrics } from "../hooks/useServiceMetrics";
-import { useSizingHints } from "../hooks/useSizingHints";
+import { useRecommendations } from "../hooks/useRecommendations";
 import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useViewMode } from "../hooks/useViewMode";
@@ -71,7 +71,11 @@ export default function ServiceList() {
     monitoring?.prometheusReachable &&
     !!monitoring?.cadvisor?.targets;
   const { getForService } = useServiceMetrics();
-  const sizing = useSizingHints();
+  const { items: recommendations, hasData: hasRecommendations } = useRecommendations();
+
+  const sizingCategories = new Set([
+    "over-provisioned", "approaching-limit", "at-limit", "no-limits", "no-reservations",
+  ]);
 
   const baseColumns: Column<ServiceListItem>[] = [
     {
@@ -182,13 +186,15 @@ export default function ServiceList() {
       ]
     : [];
 
-  const sizingColumns: Column<ServiceListItem>[] = sizing.hasData
+  const sizingColumns: Column<ServiceListItem>[] = hasRecommendations
     ? [
         {
           header: "Sizing",
           cell: ({ ID }) => {
-            const serviceSizing = sizing.byServiceId.get(ID);
-            return <SizingBadge hints={serviceSizing?.hints ?? []} />;
+            const hints = recommendations.filter(
+              (r) => r.targetId === ID && sizingCategories.has(r.category),
+            );
+            return <SizingBadge hints={hints} />;
           },
         },
       ]

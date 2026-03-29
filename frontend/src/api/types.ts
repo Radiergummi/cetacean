@@ -714,28 +714,47 @@ export interface ServiceMount {
   ClusterOptions?: Record<string, unknown>;
 }
 
-export type SizingCategory =
+export type RecommendationCategory =
   | "over-provisioned"
   | "approaching-limit"
   | "at-limit"
   | "no-limits"
-  | "no-reservations";
+  | "no-reservations"
+  | "no-healthcheck"
+  | "no-restart-policy"
+  | "flaky-service"
+  | "node-disk-full"
+  | "node-memory-pressure"
+  | "single-replica"
+  | "manager-has-workloads"
+  | "uneven-distribution";
 
-export type SizingSeverity = "info" | "warning" | "critical";
+export type RecommendationSeverity = "info" | "warning" | "critical";
+export type RecommendationScope = "service" | "node" | "cluster";
 
-export interface SizingRecommendation {
-  category: SizingCategory;
-  severity: SizingSeverity;
+export interface Recommendation {
+  category: RecommendationCategory;
+  severity: RecommendationSeverity;
+  scope: RecommendationScope;
+  targetId: string;
+  targetName: string;
   resource: string;
   message: string;
   current: number;
   configured: number;
   suggested?: number;
+  fixAction?: string;
 }
 
-export interface ServiceSizing {
-  serviceId: string;
-  serviceName: string;
-  hints: SizingRecommendation[];
+export interface RecommendationSummary {
+  critical: number;
+  warning: number;
+  info: number;
+}
+
+export interface RecommendationsResponse {
+  items: Recommendation[];
+  total: number;
+  summary: RecommendationSummary;
   computedAt: string;
 }
