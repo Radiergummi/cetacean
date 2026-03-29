@@ -299,19 +299,9 @@ hide disabled action buttons.
 | Rotate unlock key              | `POST /swarm/rotate-unlock-key`         |      —      |       —       |        —        |      ✔      |
 | Force CA rotation              | `POST /swarm/force-rotate-ca`           |      —      |       —       |        —        |      ✔      |
 
-## Resource Sizing Hints
+## Recommendations
 
-When Prometheus is configured, Cetacean periodically compares actual service resource usage against configured limits and reservations, surfacing actionable right-sizing hints on the service list and detail pages.
-
-| Env var                                       | Config file key                    | Default | Description                                                    |
-|-----------------------------------------------|------------------------------------|---------|----------------------------------------------------------------|
-| `CETACEAN_SIZING_HEADROOM_MULTIPLIER`         | `sizing.headroom_multiplier`       | `2.0`   | Multiplier for suggested values (actual × multiplier)          |
-| `CETACEAN_SIZING_THRESHOLD_OVER_PROVISIONED`  | `sizing.thresholds.over_provisioned` | `0.20`  | Below this fraction of reservation = over-provisioned        |
-| `CETACEAN_SIZING_THRESHOLD_APPROACHING_LIMIT` | `sizing.thresholds.approaching_limit` | `0.80` | Above this fraction of limit = approaching limit             |
-| `CETACEAN_SIZING_THRESHOLD_AT_LIMIT`          | `sizing.thresholds.at_limit`       | `0.95`  | Above this fraction of limit = at limit                       |
-| `CETACEAN_SIZING_LOOKBACK`                    | `sizing.thresholds.lookback`       | `168h`  | p95 lookback window for over-provisioned checks                   |
-
-The sizing monitor is automatically disabled when Prometheus is not configured.
+Cetacean continuously evaluates cluster health and surfaces recommendations on the dashboard, service list, and detail pages. Sizing thresholds are configurable; see [docs/recommendations.md](recommendations.md) for the full reference including all check categories, configuration options, and where recommendations appear.
 
 ## Profiling
 

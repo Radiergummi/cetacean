@@ -183,18 +183,7 @@ Both are interactive graph visualizations. Click a service or node to navigate t
 
 ## Recommendations
 
-The recommendations page (`/recommendations`, `g r`) shows all active cluster health recommendations sorted by severity. Four categories:
-
-- **Sizing** -- over-provisioned services, approaching/at resource limits, missing limits or reservations
-- **Config** -- missing health checks, missing restart policies
-- **Operational** -- flaky services with high restart rates, nodes with full disks or high memory pressure
-- **Cluster** -- single-replica services, manager nodes running workloads, uneven task distribution
-
-Filter by category using the tabs at the top of the page. Safely auto-fixable recommendations have an "Apply suggested value" button.
-
-The dashboard shows a summary card below the capacity bars with severity counts and a link to the full page. The card is hidden when there are no recommendations.
-
-Service detail pages show a banner with all recommendations for that service.
+The recommendations page (`/recommendations`, `g r`) shows cluster health recommendations across four domains: sizing, config hygiene, operational health, and cluster topology. The dashboard includes a severity summary card, and service detail pages show per-service banners. See [docs/recommendations.md](recommendations.md) for the full reference.
 
 ## Themes
 

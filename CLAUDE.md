@@ -214,4 +214,5 @@ None — all previously known test failures have been fixed.
 - `docs/monitoring.md` — Prometheus, node-exporter, cAdvisor setup
 - `docs/authentication.md` — Authentication providers (none, OIDC, Tailscale, cert, headers)
 - `docs/dashboard.md` — UI guide: navigation, keyboard shortcuts, search, charts, logs
+- `docs/recommendations.md` — Recommendation engine: categories, thresholds, configuration, UI, API
 - `docs/api.md` — API reference: endpoints, query parameters, filters, response formats, SSE
