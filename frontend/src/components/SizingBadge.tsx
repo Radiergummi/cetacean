@@ -30,7 +30,7 @@ function formatCompactLabel(hint: Recommendation): string {
     return hint.category;
   }
 
-  const percentage = Math.round((hint.current / hint.configured) * 100);
+  const percentage = Math.round(((hint.current ?? 0) / hint.configured) * 100);
 
   return `${hint.resource.toUpperCase()} ${percentage}%`;
 }
