@@ -75,6 +75,7 @@ type fileServer struct {
 	Pprof           *bool    `toml:"pprof"`
 	SSE             *fileSSE `toml:"sse"`
 	OperationsLevel *int     `toml:"operations_level"`
+	BasePath        *string  `toml:"base_path"`
 }
 
 type fileSSE struct {

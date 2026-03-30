@@ -15,6 +15,7 @@ type Flags struct {
 	LogLevel      *string
 	LogFormat     *string
 	Pprof         *bool
+	BasePath      *string
 	Version       bool
 
 	// Auth
@@ -86,6 +87,7 @@ func ParseFlags(args []string) (*Flags, error) {
 		"Log format (env: CETACEAN_LOG_FORMAT, default \"json\")",
 	)
 	pprof := fs.Bool("pprof", false, "Enable pprof (env: CETACEAN_PPROF)")
+	basePath := fs.String("base-path", "", "URL base path (env: CETACEAN_BASE_PATH)")
 	fs.BoolVar(&f.Version, "version", false, "Print version and exit")
 
 	// Auth
@@ -153,6 +155,8 @@ func ParseFlags(args []string) (*Flags, error) {
 			f.LogFormat = logFormat
 		case "pprof":
 			f.Pprof = pprof
+		case "base-path":
+			f.BasePath = basePath
 		case "auth-mode":
 			f.AuthMode = authMode
 		case "auth-oidc-issuer":
