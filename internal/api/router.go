@@ -21,6 +21,7 @@ func NewRouter(
 	scalarJS []byte,
 	enablePprof bool,
 	authProvider auth.Provider,
+	basePath string,
 ) http.Handler {
 	mux := http.NewServeMux()
 
@@ -359,7 +360,7 @@ func NewRouter(
 	handler = securityHeaders(handler)
 	handler = recovery(handler)
 	handler = requestID(handler)
-	return handler
+	return basePathMiddleware(basePath, handler)
 }
 
 func requireReady(h *Handlers) func(http.Handler) http.Handler {

@@ -261,6 +261,7 @@ func main() {
 		scalarJS,
 		cfg.Pprof,
 		authProvider,
+		cfg.BasePath,
 	)
 
 	var serverTLSConfig *tls.Config
@@ -311,6 +312,8 @@ func main() {
 		"server started",
 		"addr",
 		cfg.ListenAddr,
+		"base_path",
+		cfg.BasePath,
 		"version",
 		version.Version,
 		"commit",
@@ -337,6 +340,7 @@ func runHealthcheck() int {
 	if addr == "" {
 		addr = ":9000"
 	}
+	basePath := config.NormalizeBasePath(os.Getenv("CETACEAN_BASE_PATH"))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -344,7 +348,7 @@ func runHealthcheck() int {
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		"http://localhost"+addr+"/-/ready",
+		"http://localhost"+addr+basePath+"/-/ready",
 		nil,
 	)
 	if err != nil {
