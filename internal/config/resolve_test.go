@@ -182,6 +182,8 @@ func TestResolveBool(t *testing.T) {
 	})
 }
 
+func ptr[T any](v T) *T { return &v }
+
 func TestResolveFloat(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -196,20 +198,20 @@ func TestResolveFloat(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "default", def: 0.20, min: 0, max: 1, want: 0.20},
-		{name: "flag wins", flag: new(float64), def: 0.20, min: 0, max: 1, want: 0.5},
+		{name: "flag wins", flag: ptr(0.5), def: 0.20, min: 0, max: 1, want: 0.5},
 		{
 			name:   "env wins over file",
 			envKey: "TEST_FLOAT",
 			envVal: "0.75",
-			file:   new(float64),
+			file:   ptr(0.3),
 			def:    0.20,
 			min:    0,
 			max:    1,
 			want:   0.75,
 		},
-		{name: "file wins over default", file: new(float64), def: 0.20, min: 0, max: 1, want: 0.4},
-		{name: "below min", flag: new(float64), min: 0, max: 1, wantErr: true},
-		{name: "above max", flag: new(float64), min: 0, max: 1, wantErr: true},
+		{name: "file wins over default", file: ptr(0.4), def: 0.20, min: 0, max: 1, want: 0.4},
+		{name: "below min", flag: ptr(-0.1), min: 0, max: 1, wantErr: true},
+		{name: "above max", flag: ptr(1.5), min: 0, max: 1, wantErr: true},
 		{
 			name:    "invalid env",
 			envKey:  "TEST_FLOAT",

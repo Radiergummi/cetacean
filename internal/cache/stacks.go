@@ -28,14 +28,8 @@ func (c *Cache) addToStack(resource EventType, id string, labels map[string]stri
 		s.Networks = appendUnique(s.Networks, id)
 	case EventVolume:
 		s.Volumes = appendUnique(s.Volumes, id)
-	case EventNode:
-		// Handle EventNode case
-	case EventTask:
-		// Handle EventTask case
-	case EventStack:
-		// Handle EventStack case
-	case EventSync:
-		// Handle EventSync case
+	default:
+		// Nodes, tasks, stacks, and sync events do not belong to a stack.
 	}
 	c.stacks[ns] = s
 }
@@ -61,14 +55,8 @@ func (c *Cache) removeFromStack(resource EventType, id string, labels map[string
 		s.Networks = removeStr(s.Networks, id)
 	case EventVolume:
 		s.Volumes = removeStr(s.Volumes, id)
-	case EventNode:
-		// Handle EventNode case
-	case EventTask:
-		// Handle EventTask case
-	case EventStack:
-		// Handle EventStack case
-	case EventSync:
-		// Handle EventSync case
+	default:
+		// Nodes, tasks, stacks, and sync events do not belong to a stack.
 	}
 	if len(s.Services) == 0 {
 		delete(c.stacks, ns)
@@ -148,11 +136,5 @@ func appendUnique(sl []string, v string) []string {
 }
 
 func removeStr(sl []string, v string) []string {
-	out := make([]string, 0, len(sl))
-	for _, s := range sl {
-		if s != v {
-			out = append(out, s)
-		}
-	}
-	return out
+	return slices.DeleteFunc(sl, func(s string) bool { return s == v })
 }

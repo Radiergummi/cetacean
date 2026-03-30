@@ -260,6 +260,7 @@ func (c *Cache) ListNodes() []swarm.Node {
 // --- Services ---
 
 func (c *Cache) SetService(s swarm.Service) {
+	newRefs := serviceRefs(s)
 	c.mu.Lock()
 	var oldRefs refSet
 	if old, ok := c.services[s.ID]; ok {
@@ -270,7 +271,6 @@ func (c *Cache) SetService(s swarm.Service) {
 	c.services[s.ID] = s
 	c.addToStack(EventService, s.ID, s.Spec.Labels)
 	c.addServiceRefIndex(s)
-	newRefs := serviceRefs(s)
 	c.mu.Unlock()
 
 	c.notify(Event{Type: EventService, Action: "update", ID: s.ID, Resource: s})

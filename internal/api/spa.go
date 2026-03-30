@@ -26,25 +26,20 @@ func NewSPAHandler(fsys fs.FS, basePath string) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/")
-		if path == "" {
-			path = "index.html"
+		if path == "" || path == "index.html" {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write(preparedIndex)
+			return
 		}
 
 		f, err := fsys.Open(path)
 		if err != nil {
 			// Fall back to prepared index.html for client-side routing.
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.Write(preparedIndex)
+			_, _ = w.Write(preparedIndex)
 			return
 		}
 		_ = f.Close()
-
-		// For index.html itself, serve the prepared version.
-		if path == "index.html" {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.Write(preparedIndex)
-			return
-		}
 
 		// All other static files served as-is.
 		fileServer.ServeHTTP(w, r)
