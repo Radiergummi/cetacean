@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -55,11 +56,11 @@ func basePathMiddleware(basePath string, next http.Handler) http.Handler {
 
 		if strings.HasSuffix(stripped, "/") {
 			trimmed := strings.TrimRight(stripped, "/")
-			location := basePath + trimmed
-			if r.URL.RawQuery != "" {
-				location += "?" + r.URL.RawQuery
+			target := url.URL{
+				Path:     basePath + trimmed,
+				RawQuery: r.URL.RawQuery,
 			}
-			http.Redirect(w, r, location, http.StatusMovedPermanently)
+			http.Redirect(w, r, target.String(), http.StatusMovedPermanently)
 			return
 		}
 
