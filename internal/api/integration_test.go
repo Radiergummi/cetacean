@@ -1,8 +1,9 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
+
+	json "github.com/goccy/go-json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
@@ -32,7 +34,7 @@ func setupIntegrationRouter(t *testing.T) http.Handler {
 		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
 	})
 
-	b := NewBroadcaster(100 * time.Millisecond)
+	b := sse.NewBroadcaster(100*time.Millisecond, noopErrorWriter)
 	h := NewHandlers(c, b, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
 	spa := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")

@@ -5,14 +5,16 @@ import (
 	"net/http/pprof"
 	"strings"
 
+	"github.com/radiergummi/cetacean/internal/api/prometheus"
+	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
 func NewRouter(
 	h *Handlers,
-	b *Broadcaster,
-	metricsProxy *PrometheusProxy,
+	b *sse.Broadcaster,
+	metricsProxy *prometheus.Proxy,
 	spa http.Handler,
 	openapiSpec []byte,
 	scalarJS []byte,
@@ -238,7 +240,7 @@ func NewRouter(
 	mux.HandleFunc(
 		"GET /stacks/{name}",
 		contentNegotiatedWithSSE(h.HandleGetStack, func(w http.ResponseWriter, r *http.Request) {
-			h.broadcaster.serveSSE(w, r, stackMatcher(h.cache, r.PathValue("name")))
+			h.broadcaster.ServeSSE(w, r, sse.StackMatcher(h.cache, r.PathValue("name")))
 		}, spa),
 	)
 	mux.Handle("DELETE /stacks/{name}", tier3(h.HandleRemoveStack))

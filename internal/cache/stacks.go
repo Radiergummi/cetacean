@@ -74,38 +74,40 @@ func (c *Cache) rebuildStacks() {
 		return s
 	}
 
+	// IDs come from map keys, so they are unique within each resource type.
+	// No need for appendUnique during a full rebuild.
 	for id, svc := range c.services {
 		if ns, ok := svc.Spec.Labels[stackLabel]; ok {
 			s := ensure(ns)
-			s.Services = appendUnique(s.Services, id)
+			s.Services = append(s.Services, id)
 		}
 	}
 
 	for id, cfg := range c.configs {
 		if ns, ok := cfg.Spec.Labels[stackLabel]; ok {
 			s := ensure(ns)
-			s.Configs = appendUnique(s.Configs, id)
+			s.Configs = append(s.Configs, id)
 		}
 	}
 
 	for id, sec := range c.secrets {
 		if ns, ok := sec.Spec.Labels[stackLabel]; ok {
 			s := ensure(ns)
-			s.Secrets = appendUnique(s.Secrets, id)
+			s.Secrets = append(s.Secrets, id)
 		}
 	}
 
 	for id, net := range c.networks {
 		if ns, ok := net.Labels[stackLabel]; ok {
 			s := ensure(ns)
-			s.Networks = appendUnique(s.Networks, id)
+			s.Networks = append(s.Networks, id)
 		}
 	}
 
 	for name, vol := range c.volumes {
 		if ns, ok := vol.Labels[stackLabel]; ok {
 			s := ensure(ns)
-			s.Volumes = appendUnique(s.Volumes, name)
+			s.Volumes = append(s.Volumes, name)
 		}
 	}
 

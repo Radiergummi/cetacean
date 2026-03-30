@@ -540,9 +540,13 @@ var errorRegistry = map[string]ErrorDef{
 	},
 }
 
-// writeErrorCode writes an RFC 9457 problem details response using a
-// well-known error code from the registry. The detail field carries the
-// specific error message from the Docker Engine.
+// WriteErrorCode writes an RFC 9457 problem details response using a
+// well-known error code from the registry. Exported so sub-packages (sse,
+// prometheus) can use it as an ErrorWriter callback.
+func WriteErrorCode(w http.ResponseWriter, r *http.Request, code string, detail string) {
+	writeErrorCode(w, r, code, detail)
+}
+
 func writeErrorCode(w http.ResponseWriter, r *http.Request, code string, detail string) {
 	def, ok := errorRegistry[code]
 	if !ok {

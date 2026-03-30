@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/api"
+	promapi "github.com/radiergummi/cetacean/internal/api/prometheus"
+	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
@@ -150,7 +152,7 @@ func main() {
 	}
 
 	// SSE broadcaster
-	broadcaster := api.NewBroadcaster(cfg.SSEBatchInterval)
+	broadcaster := sse.NewBroadcaster(cfg.SSEBatchInterval, api.WriteErrorCode)
 	defer broadcaster.Close()
 
 	// State cache — broadcasts changes via SSE
@@ -189,11 +191,11 @@ func main() {
 	go watcher.Run(ctx)
 
 	// API — pass ready channel so /-/ready reports sync status
-	var promClient *api.PromClient
-	var metricsProxy *api.PrometheusProxy
+	var promClient *promapi.Client
+	var metricsProxy *promapi.Proxy
 	if cfg.PrometheusURL != "" {
-		promClient = api.NewPromClient(cfg.PrometheusURL)
-		metricsProxy = api.NewPrometheusProxy(cfg.PrometheusURL)
+		promClient = promapi.NewClient(cfg.PrometheusURL)
+		metricsProxy = promapi.NewProxy(cfg.PrometheusURL, api.WriteErrorCode)
 		slog.Info("prometheus configured", "url", cfg.PrometheusURL)
 	} else {
 		slog.Warn("prometheus not configured, metrics disabled")

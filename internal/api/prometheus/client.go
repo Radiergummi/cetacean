@@ -1,4 +1,4 @@
-package api
+package prometheus
 
 import (
 	"context"
@@ -14,19 +14,19 @@ import (
 	"github.com/radiergummi/cetacean/internal/prom"
 )
 
-type PromClient struct {
+type Client struct {
 	baseURL string
 	client  *http.Client
 }
 
-func NewPromClient(baseURL string) *PromClient {
-	return &PromClient{
+func NewClient(baseURL string) *Client {
+	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		client:  &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
-func (pc *PromClient) InstantQuery(ctx context.Context, query string) ([]prom.Result, error) {
+func (pc *Client) InstantQuery(ctx context.Context, query string) ([]prom.Result, error) {
 	u := pc.baseURL + "/api/v1/query?query=" + url.QueryEscape(query)
 	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
 	if err != nil {
@@ -76,7 +76,7 @@ func (pc *PromClient) InstantQuery(ctx context.Context, query string) ([]prom.Re
 	return results, nil
 }
 
-func (pc *PromClient) RangeQueryRaw(
+func (pc *Client) RangeQueryRaw(
 	ctx context.Context,
 	query, start, end, step string,
 ) ([]byte, error) {
@@ -102,7 +102,7 @@ func (pc *PromClient) RangeQueryRaw(
 	return body, nil
 }
 
-func (pc *PromClient) InstantQueryRaw(ctx context.Context, query string) ([]byte, error) {
+func (pc *Client) InstantQueryRaw(ctx context.Context, query string) ([]byte, error) {
 	u := pc.baseURL + "/api/v1/query?query=" + url.QueryEscape(query)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {

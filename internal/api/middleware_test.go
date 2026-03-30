@@ -7,6 +7,8 @@ import (
 	"testing"
 	"testing/fstest"
 
+	promapi "github.com/radiergummi/cetacean/internal/api/prometheus"
+	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
@@ -264,9 +266,9 @@ func TestRequestIDFrom_Empty(t *testing.T) {
 func TestNewRouter_Smoke(t *testing.T) {
 	c := cache.New(nil)
 	h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
-	b := NewBroadcaster(0)
+	b := sse.NewBroadcaster(0, noopErrorWriter)
 	defer b.Close()
-	prom := NewPrometheusProxy("http://localhost:9090")
+	prom := promapi.NewProxy("http://localhost:9090", noopErrorWriter)
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}
 	spa := NewSPAHandler(fs.FS(fsys))
 

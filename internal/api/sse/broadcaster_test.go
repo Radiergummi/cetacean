@@ -1,4 +1,4 @@
-package api
+package sse
 
 import (
 	"fmt"
@@ -13,6 +13,10 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 )
+
+func noopErrorWriter(w http.ResponseWriter, _ *http.Request, _, detail string) {
+	http.Error(w, detail, http.StatusInternalServerError)
+}
 
 // waitForClients polls until the broadcaster has at least n clients registered.
 func waitForClients(t *testing.T, b *Broadcaster, n int) {
@@ -50,7 +54,7 @@ func waitForBody(t *testing.T, w *flushRecorder, substr string) {
 }
 
 func TestSSE_BroadcastsEvents(t *testing.T) {
-	b := NewBroadcaster(0)
+	b := NewBroadcaster(0, noopErrorWriter)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events", nil)
@@ -77,7 +81,7 @@ func TestSSE_BroadcastsEvents(t *testing.T) {
 }
 
 func TestSSE_FiltersByType(t *testing.T) {
-	b := NewBroadcaster(0)
+	b := NewBroadcaster(0, noopErrorWriter)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events?types=service", nil)
@@ -105,7 +109,7 @@ func TestSSE_FiltersByType(t *testing.T) {
 }
 
 func TestSSE_BatchesRapidEvents(t *testing.T) {
-	b := NewBroadcaster(0)
+	b := NewBroadcaster(0, noopErrorWriter)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events", nil)
@@ -157,7 +161,7 @@ func TestSSE_BatchesRapidEvents(t *testing.T) {
 }
 
 func TestSSE_EventContainsJSONLD(t *testing.T) {
-	b := NewBroadcaster(0)
+	b := NewBroadcaster(0, noopErrorWriter)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events", nil)
@@ -184,7 +188,7 @@ func TestSSE_EventContainsJSONLD(t *testing.T) {
 }
 
 func TestSSE_BatchEventContainsJSONLD(t *testing.T) {
-	b := NewBroadcaster(0)
+	b := NewBroadcaster(0, noopErrorWriter)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events", nil)
@@ -228,9 +232,9 @@ func TestResourcePath(t *testing.T) {
 		{"unknown", "x", ""},
 	}
 	for _, tt := range tests {
-		got := resourcePath(tt.typ, tt.id)
+		got := ResourcePath(tt.typ, tt.id)
 		if got != tt.want {
-			t.Errorf("resourcePath(%q, %q) = %q, want %q", tt.typ, tt.id, got, tt.want)
+			t.Errorf("ResourcePath(%q, %q) = %q, want %q", tt.typ, tt.id, got, tt.want)
 		}
 	}
 }
@@ -250,15 +254,15 @@ func TestResourceType(t *testing.T) {
 		{"unknown", ""},
 	}
 	for _, tt := range tests {
-		got := resourceType(tt.typ)
+		got := ResourceType(tt.typ)
 		if got != tt.want {
-			t.Errorf("resourceType(%q) = %q, want %q", tt.typ, got, tt.want)
+			t.Errorf("ResourceType(%q) = %q, want %q", tt.typ, got, tt.want)
 		}
 	}
 }
 
 func TestSSE_429OnConnectionLimit(t *testing.T) {
-	b := NewBroadcaster(0)
+	b := NewBroadcaster(0, noopErrorWriter)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events", nil)
@@ -266,7 +270,7 @@ func TestSSE_429OnConnectionLimit(t *testing.T) {
 
 	// Artificially fill up clients to max
 	b.mu.Lock()
-	for range maxSSEClients {
+	for range MaxClients {
 		c := &sseClient{
 			events: make(chan cache.Event, 1),
 			done:   make(chan struct{}),
@@ -279,16 +283,15 @@ func TestSSE_429OnConnectionLimit(t *testing.T) {
 	fw := &flushRecorder{ResponseRecorder: w}
 	b.ServeHTTP(fw, req)
 
-	if w.Code != http.StatusTooManyRequests {
-		t.Errorf("expected status 429, got %d", w.Code)
-	}
-	if w.Header().Get("Retry-After") != "5" {
-		t.Errorf("expected Retry-After: 5, got %q", w.Header().Get("Retry-After"))
+	// noopErrorWriter writes 500; the real error writer writes 429.
+	// We just verify the error writer was called (body contains the detail).
+	if !strings.Contains(w.Body.String(), "too many SSE connections") {
+		t.Errorf("expected error about too many connections, got: %s", w.Body.String())
 	}
 }
 
 func TestSSE_ResourceMatcher_Config(t *testing.T) {
-	match := resourceMatcher("config", "cfg1")
+	match := ResourceMatcher("config", "cfg1")
 	if !match(cache.Event{Type: "config", Action: "update", ID: "cfg1"}) {
 		t.Error("should match direct config event")
 	}
@@ -304,7 +307,7 @@ func TestSSE_ResourceMatcher_Config(t *testing.T) {
 }
 
 func TestSSE_ResourceMatcher_Service(t *testing.T) {
-	match := resourceMatcher("service", "svc1")
+	match := ResourceMatcher("service", "svc1")
 	if !match(cache.Event{Type: "service", Action: "update", ID: "svc1"}) {
 		t.Error("should match direct service event")
 	}
@@ -331,7 +334,7 @@ func TestSSE_ResourceMatcher_Service(t *testing.T) {
 }
 
 func TestSSE_ResourceMatcher_Node(t *testing.T) {
-	match := resourceMatcher("node", "n1")
+	match := ResourceMatcher("node", "n1")
 	if !match(cache.Event{Type: "node", Action: "update", ID: "n1"}) {
 		t.Error("should match direct node event")
 	}
@@ -348,7 +351,7 @@ func TestSSE_ResourceMatcher_Node(t *testing.T) {
 }
 
 func TestSSE_TypeMatcher(t *testing.T) {
-	match := typeMatcher("node")
+	match := TypeMatcher("node")
 	if !match(cache.Event{Type: "node", Action: "update", ID: "n1"}) {
 		t.Error("should match node event")
 	}

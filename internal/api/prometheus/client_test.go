@@ -1,4 +1,4 @@
-package api
+package prometheus
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestPromClient_InstantQuery(t *testing.T) {
+func TestClient_InstantQuery(t *testing.T) {
 	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/query" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
@@ -25,7 +25,7 @@ func TestPromClient_InstantQuery(t *testing.T) {
 	}))
 	defer prom.Close()
 
-	pc := NewPromClient(prom.URL)
+	pc := NewClient(prom.URL)
 	results, err := pc.InstantQuery(
 		context.Background(),
 		`sum by (container_label_com_docker_stack_namespace)(container_memory_usage_bytes)`,
@@ -44,21 +44,21 @@ func TestPromClient_InstantQuery(t *testing.T) {
 	}
 }
 
-func TestPromClient_InstantQuery_Unreachable(t *testing.T) {
-	pc := NewPromClient("http://127.0.0.1:1")
+func TestClient_InstantQuery_Unreachable(t *testing.T) {
+	pc := NewClient("http://127.0.0.1:1")
 	_, err := pc.InstantQuery(context.Background(), "up")
 	if err == nil {
 		t.Fatal("expected error for unreachable prometheus")
 	}
 }
 
-func TestPromClient_InstantQuery_ErrorResponse(t *testing.T) {
+func TestClient_InstantQuery_ErrorResponse(t *testing.T) {
 	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"status": "error", "errorType": "bad_data", "error": "invalid query"}`))
 	}))
 	defer prom.Close()
 
-	pc := NewPromClient(prom.URL)
+	pc := NewClient(prom.URL)
 	_, err := pc.InstantQuery(context.Background(), "bad{")
 	if err == nil {
 		t.Fatal("expected error for error response")
@@ -83,7 +83,7 @@ func TestRangeQueryRaw(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	pc := NewPromClient(srv.URL)
+	pc := NewClient(srv.URL)
 	raw, err := pc.RangeQueryRaw(context.Background(), "up", "1710000000", "1710000015", "15")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -94,7 +94,7 @@ func TestRangeQueryRaw(t *testing.T) {
 }
 
 func TestInstantQueryRaw(t *testing.T) {
-	body := `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"up"},"value":[1710000030,"1"]}]}}`
+	body := `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"up"},"values":[]}]}}`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/query" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
@@ -104,7 +104,7 @@ func TestInstantQueryRaw(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	pc := NewPromClient(srv.URL)
+	pc := NewClient(srv.URL)
 	raw, err := pc.InstantQueryRaw(context.Background(), "up")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -121,7 +121,7 @@ func TestRangeQueryRaw_PrometheusError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	pc := NewPromClient(srv.URL)
+	pc := NewClient(srv.URL)
 	_, err := pc.RangeQueryRaw(context.Background(), "bad{", "0", "1", "1")
 	if err == nil {
 		t.Fatal("expected error for 400 response")
@@ -129,7 +129,7 @@ func TestRangeQueryRaw_PrometheusError(t *testing.T) {
 }
 
 func TestInstantQueryRaw_ConnectionRefused(t *testing.T) {
-	pc := NewPromClient("http://127.0.0.1:1")
+	pc := NewClient("http://127.0.0.1:1")
 	_, err := pc.InstantQueryRaw(context.Background(), "up")
 	if err == nil {
 		t.Fatal("expected error for connection refused")

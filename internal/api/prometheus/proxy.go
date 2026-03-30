@@ -1,4 +1,4 @@
-package api
+package prometheus
 
 import (
 	"io"
@@ -9,24 +9,36 @@ import (
 	"time"
 )
 
-type PrometheusProxy struct {
-	baseURL string
-	client  *http.Client
+// ErrorWriter is a callback for writing HTTP error responses.
+// This decouples the Prometheus package from the API error registry.
+type ErrorWriter func(w http.ResponseWriter, r *http.Request, code, detail string)
+
+// defaultWriteError is a package-level error writer used by nil-receiver
+// handlers. Set by NewProxy so the nil-proxy case still produces structured
+// error responses matching the rest of the API.
+var defaultWriteError ErrorWriter
+
+type Proxy struct {
+	baseURL    string
+	client     *http.Client
+	writeError ErrorWriter
 }
 
-func NewPrometheusProxy(baseURL string) *PrometheusProxy {
-	return &PrometheusProxy{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		client:  &http.Client{Timeout: 30 * time.Second},
+func NewProxy(baseURL string, writeError ErrorWriter) *Proxy {
+	defaultWriteError = writeError
+	return &Proxy{
+		baseURL:    strings.TrimRight(baseURL, "/"),
+		client:     &http.Client{Timeout: 30 * time.Second},
+		writeError: writeError,
 	}
 }
 
-// maxPrometheusResponseBytes limits proxy response size to 10MB.
-const maxPrometheusResponseBytes = 10 << 20
+// maxResponseBytes limits proxy response size to 10MB.
+const maxResponseBytes = 10 << 20
 
 // proxyTo sends a proxied request to the given Prometheus API path with the given params.
 // Does not read r.URL.Path — the caller determines the target path.
-func (p *PrometheusProxy) proxyTo(
+func (p *Proxy) proxyTo(
 	w http.ResponseWriter,
 	r *http.Request,
 	promPath string,
@@ -40,14 +52,14 @@ func (p *PrometheusProxy) proxyTo(
 	outReq, err := http.NewRequestWithContext(r.Context(), "GET", targetURL, nil)
 	if err != nil {
 		slog.Error("failed to create prometheus request", "error", err)
-		writeErrorCode(w, r, "MTR007", "failed to create prometheus request")
+		p.writeError(w, r, "MTR007", "failed to create prometheus request")
 		return
 	}
 
 	resp, err := p.client.Do(outReq)
 	if err != nil {
 		slog.Error("prometheus unreachable", "url", p.baseURL, "error", err)
-		writeErrorCode(w, r, "MTR002", "prometheus unreachable")
+		p.writeError(w, r, "MTR002", "prometheus unreachable")
 		return
 	}
 	defer resp.Body.Close()
@@ -55,15 +67,15 @@ func (p *PrometheusProxy) proxyTo(
 	w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(resp.StatusCode)
-	if _, err := io.Copy(w, io.LimitReader(resp.Body, maxPrometheusResponseBytes)); err != nil {
+	if _, err := io.Copy(w, io.LimitReader(resp.Body, maxResponseBytes)); err != nil {
 		slog.Warn("prometheus proxy copy error", "error", err)
 	}
 }
 
 // HandleMetricsLabels proxies to /api/v1/labels with optional match[] param.
-func (p *PrometheusProxy) HandleMetricsLabels(w http.ResponseWriter, r *http.Request) {
+func (p *Proxy) HandleMetricsLabels(w http.ResponseWriter, r *http.Request) {
 	if p == nil {
-		writeErrorCode(w, r, "MTR001", "prometheus not configured")
+		writeNilProxyError(w, r)
 		return
 	}
 	allowed := url.Values{}
@@ -79,14 +91,14 @@ func (p *PrometheusProxy) HandleMetricsLabels(w http.ResponseWriter, r *http.Req
 }
 
 // HandleMetricsLabelValues proxies to /api/v1/label/{name}/values.
-func (p *PrometheusProxy) HandleMetricsLabelValues(w http.ResponseWriter, r *http.Request) {
+func (p *Proxy) HandleMetricsLabelValues(w http.ResponseWriter, r *http.Request) {
 	if p == nil {
-		writeErrorCode(w, r, "MTR001", "prometheus not configured")
+		writeNilProxyError(w, r)
 		return
 	}
 	name := r.PathValue("name")
 	if name == "" {
-		writeErrorCode(w, r, "MTR006", "missing label name")
+		p.writeError(w, r, "MTR006", "missing label name")
 		return
 	}
 	allowed := url.Values{}
@@ -98,16 +110,16 @@ func (p *PrometheusProxy) HandleMetricsLabelValues(w http.ResponseWriter, r *htt
 
 // HandleMetrics is a content-negotiated handler that proxies Prometheus queries.
 // It routes instant vs range queries by the presence of start+end params.
-func (p *PrometheusProxy) HandleMetrics(w http.ResponseWriter, r *http.Request) {
+func (p *Proxy) HandleMetrics(w http.ResponseWriter, r *http.Request) {
 	if p == nil {
-		writeErrorCode(w, r, "MTR001", "prometheus not configured")
+		writeNilProxyError(w, r)
 		return
 	}
 
 	q := r.URL.Query()
 	query := q.Get("query")
 	if query == "" {
-		writeErrorCode(w, r, "MTR003", "missing required parameter: query")
+		p.writeError(w, r, "MTR003", "missing required parameter: query")
 		return
 	}
 
@@ -124,4 +136,13 @@ func (p *PrometheusProxy) HandleMetrics(w http.ResponseWriter, r *http.Request) 
 	}
 
 	p.proxyTo(w, r, promPath, allowed)
+}
+
+func writeNilProxyError(w http.ResponseWriter, r *http.Request) {
+	if defaultWriteError != nil {
+		defaultWriteError(w, r, "MTR001", "prometheus not configured")
+		return
+	}
+
+	http.Error(w, "prometheus not configured", http.StatusServiceUnavailable)
 }

@@ -1,8 +1,9 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
+
+	json "github.com/goccy/go-json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,9 +14,14 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
 
+	promapi "github.com/radiergummi/cetacean/internal/api/prometheus"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 )
+
+func noopErrorWriter(w http.ResponseWriter, _ *http.Request, _, detail string) {
+	http.Error(w, detail, http.StatusInternalServerError)
+}
 
 func closedReady() <-chan struct{} {
 	ch := make(chan struct{})
@@ -212,7 +218,7 @@ func TestHandleClusterMetrics_WithPrometheus(t *testing.T) {
 		nil,
 		nil,
 		closedReady(),
-		NewPromClient(prom.URL),
+		promapi.NewClient(prom.URL),
 		config.OpsImpactful,
 		nil,
 	)
@@ -315,7 +321,7 @@ func TestHandleMonitoringStatus_WithPrometheus(t *testing.T) {
 		nil,
 		nil,
 		closedReady(),
-		NewPromClient(prom.URL),
+		promapi.NewClient(prom.URL),
 		config.OpsImpactful,
 		nil,
 	)
@@ -368,7 +374,7 @@ func TestHandleMonitoringStatus_PrometheusUnreachable(t *testing.T) {
 		nil,
 		nil,
 		closedReady(),
-		NewPromClient("http://127.0.0.1:19999"),
+		promapi.NewClient("http://127.0.0.1:19999"),
 		config.OpsImpactful,
 		nil,
 	)
@@ -1826,7 +1832,7 @@ func TestHandleStackSummary(t *testing.T) {
 		nil,
 		nil,
 		closedReady(),
-		NewPromClient(prom.URL),
+		promapi.NewClient(prom.URL),
 		config.OpsImpactful,
 		nil,
 	)
@@ -1887,7 +1893,7 @@ func TestHandleStackSummary_PrometheusDown(t *testing.T) {
 		nil,
 		nil,
 		closedReady(),
-		NewPromClient("http://127.0.0.1:1"),
+		promapi.NewClient("http://127.0.0.1:1"),
 		config.OpsImpactful,
 		nil,
 	)
