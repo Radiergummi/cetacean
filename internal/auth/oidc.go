@@ -28,6 +28,7 @@ type OIDCProviderConfig struct {
 	RedirectURL  string
 	Scopes       []string
 	SessionKey   string // hex-encoded 32-byte key; random if empty
+	BasePath     string // URL base path prefix (e.g., "/cetacean")
 }
 
 // OIDCProvider implements Provider using OpenID Connect authorization code flow.
@@ -39,6 +40,7 @@ type OIDCProvider struct {
 	issRequired           bool   // true if IdP advertises authorization_response_iss_parameter_supported
 	endSessionEndpoint    string // RFC 9722 RP-initiated logout; empty if not supported
 	postLogoutRedirectURL string // derived from RedirectURL origin
+	basePath              string
 }
 
 // NewOIDCProvider creates an OIDCProvider by performing OIDC discovery on the issuer.
@@ -71,7 +73,7 @@ func NewOIDCProvider(ctx context.Context, cfg OIDCProviderConfig) (*OIDCProvider
 	var postLogoutRedirectURL string
 	if disco.EndSessionEndpoint != "" {
 		if u, err := url.Parse(cfg.RedirectURL); err == nil {
-			postLogoutRedirectURL = u.Scheme + "://" + u.Host + "/"
+			postLogoutRedirectURL = u.Scheme + "://" + u.Host + cfg.BasePath + "/"
 		}
 	}
 
@@ -93,6 +95,7 @@ func NewOIDCProvider(ctx context.Context, cfg OIDCProviderConfig) (*OIDCProvider
 		issRequired:           disco.IssSupported,
 		endSessionEndpoint:    disco.EndSessionEndpoint,
 		postLogoutRedirectURL: postLogoutRedirectURL,
+		basePath:              cfg.BasePath,
 	}, nil
 }
 
@@ -179,7 +182,7 @@ func (p *OIDCProvider) redirectToLogin(w http.ResponseWriter, r *http.Request, r
 	http.SetCookie(w, &http.Cookie{
 		Name:     "cetacean_auth_state",
 		Value:    state,
-		Path:     "/auth",
+		Path:     p.basePath + "/auth",
 		MaxAge:   300,
 		HttpOnly: true,
 		Secure:   true,
@@ -189,7 +192,7 @@ func (p *OIDCProvider) redirectToLogin(w http.ResponseWriter, r *http.Request, r
 	http.SetCookie(w, &http.Cookie{
 		Name:     "cetacean_auth_nonce",
 		Value:    nonce,
-		Path:     "/auth",
+		Path:     p.basePath + "/auth",
 		MaxAge:   300,
 		HttpOnly: true,
 		Secure:   true,
@@ -199,7 +202,7 @@ func (p *OIDCProvider) redirectToLogin(w http.ResponseWriter, r *http.Request, r
 	http.SetCookie(w, &http.Cookie{
 		Name:     "cetacean_auth_verifier",
 		Value:    verifier,
-		Path:     "/auth",
+		Path:     p.basePath + "/auth",
 		MaxAge:   300,
 		HttpOnly: true,
 		Secure:   true,
@@ -209,7 +212,7 @@ func (p *OIDCProvider) redirectToLogin(w http.ResponseWriter, r *http.Request, r
 	http.SetCookie(w, &http.Cookie{
 		Name:     "cetacean_auth_redirect",
 		Value:    redirect,
-		Path:     "/auth",
+		Path:     p.basePath + "/auth",
 		MaxAge:   300,
 		HttpOnly: true,
 		Secure:   true,
@@ -229,7 +232,7 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	// they're included in every response — both error and success paths.
 	// This prevents PKCE verifiers and state values from lingering in the
 	// browser after a failed callback.
-	clearAuthFlowCookies(w)
+	p.clearAuthFlowCookies(w)
 
 	// Check for IdP-returned errors (e.g. access_denied).
 	if errCode := r.URL.Query().Get("error"); errCode != "" {
@@ -359,7 +362,7 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 
 // clearAuthFlowCookies deletes all temporary cookies used during the OIDC
 // authorization code flow.
-func clearAuthFlowCookies(w http.ResponseWriter) {
+func (p *OIDCProvider) clearAuthFlowCookies(w http.ResponseWriter) {
 	for _, name := range []string{
 		"cetacean_auth_state",
 		"cetacean_auth_nonce",
@@ -368,7 +371,7 @@ func clearAuthFlowCookies(w http.ResponseWriter) {
 	} {
 		http.SetCookie(w, &http.Cookie{
 			Name:     name,
-			Path:     "/auth",
+			Path:     p.basePath + "/auth",
 			MaxAge:   -1,
 			HttpOnly: true,
 			Secure:   true,
