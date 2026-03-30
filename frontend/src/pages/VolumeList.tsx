@@ -13,7 +13,7 @@ import { useSearchParam } from "../hooks/useSearchParam";
 import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useViewMode } from "../hooks/useViewMode";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function VolumeList() {
@@ -34,41 +34,44 @@ export default function VolumeList() {
     ({ Name }: Volume) => Name,
   );
 
-  const columns: Column<Volume>[] = [
-    {
-      header: (
-        <SortIndicator
-          label="Name"
-          active={sortKey === "name"}
-          dir={sortDir}
-        />
-      ),
-      cell: ({ Name }) => <ResourceName name={Name} />,
-      onHeaderClick: () => toggle("name"),
-    },
-    {
-      header: (
-        <SortIndicator
-          label="Driver"
-          active={sortKey === "driver"}
-          dir={sortDir}
-        />
-      ),
-      cell: ({ Driver }) => Driver,
-      onHeaderClick: () => toggle("driver"),
-    },
-    {
-      header: (
-        <SortIndicator
-          label="Scope"
-          active={sortKey === "scope"}
-          dir={sortDir}
-        />
-      ),
-      cell: ({ Scope }) => Scope,
-      onHeaderClick: () => toggle("scope"),
-    },
-  ];
+  const columns: Column<Volume>[] = useMemo(
+    () => [
+      {
+        header: (
+          <SortIndicator
+            label="Name"
+            active={sortKey === "name"}
+            dir={sortDir}
+          />
+        ),
+        cell: ({ Name }) => <ResourceName name={Name} />,
+        onHeaderClick: () => toggle("name"),
+      },
+      {
+        header: (
+          <SortIndicator
+            label="Driver"
+            active={sortKey === "driver"}
+            dir={sortDir}
+          />
+        ),
+        cell: ({ Driver }) => Driver,
+        onHeaderClick: () => toggle("driver"),
+      },
+      {
+        header: (
+          <SortIndicator
+            label="Scope"
+            active={sortKey === "scope"}
+            dir={sortDir}
+          />
+        ),
+        cell: ({ Scope }) => Scope,
+        onHeaderClick: () => toggle("scope"),
+      },
+    ],
+    [sortKey, sortDir, toggle],
+  );
   const [viewMode, setViewMode] = useViewMode("volumes");
 
   if (loading) {

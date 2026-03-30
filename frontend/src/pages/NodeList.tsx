@@ -17,7 +17,7 @@ import { useSearchParam } from "../hooks/useSearchParam";
 import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useViewMode } from "../hooks/useViewMode";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 export default function NodeList() {
@@ -43,119 +43,129 @@ export default function NodeList() {
   const hasNodeExporter = hasPrometheus && !!monitoring?.nodeExporter?.targets;
   const { getForNode } = useNodeMetrics();
 
-  const baseColumns: Column<Node>[] = [
-    {
-      header: (
-        <SortIndicator
-          label="Hostname"
-          active={sortKey === "hostname"}
-          dir={sortDir}
-        />
-      ),
-      cell: ({ Description, ID }) => (
-        <Link
-          to={`/nodes/${ID}`}
-          className="font-medium text-link hover:underline"
-          onClick={(event) => event.stopPropagation()}
-        >
-          {Description.Hostname || ID}
-        </Link>
-      ),
-      onHeaderClick: () => toggle("hostname"),
-    },
-    {
-      header: (
-        <SortIndicator
-          label="Role"
-          active={sortKey === "role"}
-          dir={sortDir}
-        />
-      ),
-      cell: ({ ManagerStatus, Spec }) => (
-        <span className="flex items-center gap-1.5">
-          {Spec.Role}
-          {ManagerStatus?.Leader && (
-            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary">
-              Leader
-            </span>
-          )}
-        </span>
-      ),
-      onHeaderClick: () => toggle("role"),
-    },
-    {
-      header: (
-        <SortIndicator
-          label="Availability"
-          active={sortKey === "availability"}
-          dir={sortDir}
-        />
-      ),
-      cell: ({ Spec }) => Spec.Availability,
-      onHeaderClick: () => toggle("availability"),
-    },
-    {
-      header: (
-        <SortIndicator
-          label="Status"
-          active={sortKey === "status"}
-          dir={sortDir}
-        />
-      ),
-      cell: ({ Status }) => <TaskStatusBadge state={Status.State} />,
-      onHeaderClick: () => toggle("status"),
-    },
-    {
-      header: "Address",
-      cell: ({ Status }) => <span className="tabular-nums">{Status.Addr}</span>,
-    },
-  ];
-
-  const metricsColumns: Column<Node>[] = hasNodeExporter
-    ? [
-        {
-          header: "CPU",
-          cell: ({ Description, Status }) => {
-            const metrics = getForNode(Description.Hostname, Status.Addr);
-            return (
-              <span className="tabular-nums">
-                {metrics.cpu != null ? `${Math.round(metrics.cpu)}%` : "\u2014"}
+  const baseColumns: Column<Node>[] = useMemo(
+    () => [
+      {
+        header: (
+          <SortIndicator
+            label="Hostname"
+            active={sortKey === "hostname"}
+            dir={sortDir}
+          />
+        ),
+        cell: ({ Description, ID }) => (
+          <Link
+            to={`/nodes/${ID}`}
+            className="font-medium text-link hover:underline"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {Description.Hostname || ID}
+          </Link>
+        ),
+        onHeaderClick: () => toggle("hostname"),
+      },
+      {
+        header: (
+          <SortIndicator
+            label="Role"
+            active={sortKey === "role"}
+            dir={sortDir}
+          />
+        ),
+        cell: ({ ManagerStatus, Spec }) => (
+          <span className="flex items-center gap-1.5">
+            {Spec.Role}
+            {ManagerStatus?.Leader && (
+              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary">
+                Leader
               </span>
-            );
-          },
-        },
-        {
-          header: "Memory",
-          cell: ({ Description, Status }) => {
-            const metrics = getForNode(Description.Hostname, Status.Addr);
-            return (
-              <span className="tabular-nums">
-                {metrics.memory != null ? `${Math.round(metrics.memory)}%` : "\u2014"}
-              </span>
-            );
-          },
-        },
-        {
-          header: "CPU (1h)",
-          cell: ({ Description, Status }) => {
-            const metrics = getForNode(Description.Hostname, Status.Addr);
-            if (metrics.cpuHistory.length > 1) {
-              return <Sparkline data={metrics.cpuHistory} />;
-            }
-            return <span className="text-muted-foreground">{"\u2014"}</span>;
-          },
-        },
-      ]
-    : [];
+            )}
+          </span>
+        ),
+        onHeaderClick: () => toggle("role"),
+      },
+      {
+        header: (
+          <SortIndicator
+            label="Availability"
+            active={sortKey === "availability"}
+            dir={sortDir}
+          />
+        ),
+        cell: ({ Spec }) => Spec.Availability,
+        onHeaderClick: () => toggle("availability"),
+      },
+      {
+        header: (
+          <SortIndicator
+            label="Status"
+            active={sortKey === "status"}
+            dir={sortDir}
+          />
+        ),
+        cell: ({ Status }) => <TaskStatusBadge state={Status.State} />,
+        onHeaderClick: () => toggle("status"),
+      },
+      {
+        header: "Address",
+        cell: ({ Status }) => <span className="tabular-nums">{Status.Addr}</span>,
+      },
+    ],
+    [sortKey, sortDir, toggle],
+  );
 
-  const columns: Column<Node>[] = [
-    ...baseColumns,
-    ...metricsColumns,
-    {
-      header: "Engine",
-      cell: ({ Description }) => Description.Engine.EngineVersion,
-    },
-  ];
+  const metricsColumns: Column<Node>[] = useMemo(
+    () =>
+      hasNodeExporter
+        ? [
+            {
+              header: "CPU",
+              cell: ({ Description, Status }) => {
+                const metrics = getForNode(Description.Hostname, Status.Addr);
+                return (
+                  <span className="tabular-nums">
+                    {metrics.cpu != null ? `${Math.round(metrics.cpu)}%` : "\u2014"}
+                  </span>
+                );
+              },
+            },
+            {
+              header: "Memory",
+              cell: ({ Description, Status }) => {
+                const metrics = getForNode(Description.Hostname, Status.Addr);
+                return (
+                  <span className="tabular-nums">
+                    {metrics.memory != null ? `${Math.round(metrics.memory)}%` : "\u2014"}
+                  </span>
+                );
+              },
+            },
+            {
+              header: "CPU (1h)",
+              cell: ({ Description, Status }) => {
+                const metrics = getForNode(Description.Hostname, Status.Addr);
+                if (metrics.cpuHistory.length > 1) {
+                  return <Sparkline data={metrics.cpuHistory} />;
+                }
+                return <span className="text-muted-foreground">{"\u2014"}</span>;
+              },
+            },
+          ]
+        : [],
+    [hasNodeExporter, getForNode],
+  );
+
+  const columns: Column<Node>[] = useMemo(
+    () => [
+      ...baseColumns,
+      ...metricsColumns,
+      {
+        header: "Engine",
+        cell: ({ Description }) => Description.Engine.EngineVersion,
+      },
+    ],
+    [baseColumns, metricsColumns],
+  );
 
   if (loading) {
     return (

@@ -94,128 +94,144 @@ export default function ServiceList() {
     return map;
   }, [recommendations]);
 
-  const baseColumns: Column<ServiceListItem>[] = [
-    {
-      header: (
-        <SortIndicator
-          label="Name"
-          active={sortKey === "name"}
-          dir={sortDir}
-        />
-      ),
-      cell: ({ ID, Spec }) => (
-        <Link
-          to={`/services/${ID}`}
-          className="font-medium text-link hover:underline"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <ResourceName name={Spec.Name} />
-        </Link>
-      ),
-      onHeaderClick: () => toggle("name"),
-    },
-    {
-      header: "Image",
-      cell: ({ Spec }) => (
-        <span className="font-mono text-xs">
-          {Spec.TaskTemplate.ContainerSpec?.Image?.split("@")[0]}
-        </span>
-      ),
-    },
-    {
-      header: (
-        <SortIndicator
-          label="Mode"
-          active={sortKey === "mode"}
-          dir={sortDir}
-        />
-      ),
-      cell: ({ Spec }) => (Spec.Mode.Replicated ? "replicated" : "global"),
-      onHeaderClick: () => toggle("mode"),
-    },
-    {
-      header: "Ports",
-      cell: ({ Endpoint }) => {
-        const ports = Endpoint?.Ports;
-
-        if (!ports || ports.length === 0) {
-          return null;
-        }
-
-        return (
-          <span className="font-mono text-xs text-muted-foreground">
-            {ports.map(({ Protocol, PublishedPort }) => `${PublishedPort}/${Protocol}`).join(", ")}
-          </span>
-        );
-      },
-    },
-    {
-      header: "Replicas",
-      cell: ({ RunningTasks, Spec }) => {
-        const desired = Spec.Mode.Replicated?.Replicas;
-
-        if (desired == null) {
-          return "\u2014";
-        }
-
-        return (
-          <ReplicaHealth
-            running={RunningTasks}
-            desired={desired}
+  const baseColumns: Column<ServiceListItem>[] = useMemo(
+    () => [
+      {
+        header: (
+          <SortIndicator
+            label="Name"
+            active={sortKey === "name"}
+            dir={sortDir}
           />
-        );
+        ),
+        cell: ({ ID, Spec }) => (
+          <Link
+            to={`/services/${ID}`}
+            className="font-medium text-link hover:underline"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <ResourceName name={Spec.Name} />
+          </Link>
+        ),
+        onHeaderClick: () => toggle("name"),
       },
-    },
-    {
-      header: "Status",
-      cell: (service) => <ServiceStatusBadge service={service} />,
-    },
-  ];
+      {
+        header: "Image",
+        cell: ({ Spec }) => (
+          <span className="font-mono text-xs">
+            {Spec.TaskTemplate.ContainerSpec?.Image?.split("@")[0]}
+          </span>
+        ),
+      },
+      {
+        header: (
+          <SortIndicator
+            label="Mode"
+            active={sortKey === "mode"}
+            dir={sortDir}
+          />
+        ),
+        cell: ({ Spec }) => (Spec.Mode.Replicated ? "replicated" : "global"),
+        onHeaderClick: () => toggle("mode"),
+      },
+      {
+        header: "Ports",
+        cell: ({ Endpoint }) => {
+          const ports = Endpoint?.Ports;
 
-  const metricsColumns: Column<ServiceListItem>[] = hasCadvisor
-    ? [
-        {
-          header: "CPU (1h)",
-          cell: ({ Spec }) => {
-            const metrics = getForService(Spec.Name);
-            return (
-              <TaskSparkline
-                data={metrics.cpuHistory}
-                currentValue={metrics.cpu}
-                type="cpu"
-              />
-            );
-          },
-        },
-        {
-          header: "Memory (1h)",
-          cell: ({ Spec }) => {
-            const metrics = getForService(Spec.Name);
-            return (
-              <TaskSparkline
-                data={metrics.memoryHistory}
-                currentValue={metrics.memory}
-                type="memory"
-              />
-            );
-          },
-        },
-      ]
-    : [];
+          if (!ports || ports.length === 0) {
+            return null;
+          }
 
-  const sizingColumns: Column<ServiceListItem>[] = hasRecommendations
-    ? [
-        {
-          header: "Sizing",
-          cell: ({ ID }) => {
-            const hints = recommendationsByService.get(ID) ?? [];
-            return <SizingBadge hints={hints} />;
-          },
+          return (
+            <span className="font-mono text-xs text-muted-foreground">
+              {ports
+                .map(({ Protocol, PublishedPort }) => `${PublishedPort}/${Protocol}`)
+                .join(", ")}
+            </span>
+          );
         },
-      ]
-    : [];
+      },
+      {
+        header: "Replicas",
+        cell: ({ RunningTasks, Spec }) => {
+          const desired = Spec.Mode.Replicated?.Replicas;
 
-  const columns: Column<ServiceListItem>[] = [...baseColumns, ...metricsColumns, ...sizingColumns];
+          if (desired == null) {
+            return "\u2014";
+          }
+
+          return (
+            <ReplicaHealth
+              running={RunningTasks}
+              desired={desired}
+            />
+          );
+        },
+      },
+      {
+        header: "Status",
+        cell: (service) => <ServiceStatusBadge service={service} />,
+      },
+    ],
+    [sortKey, sortDir, toggle],
+  );
+
+  const metricsColumns: Column<ServiceListItem>[] = useMemo(
+    () =>
+      hasCadvisor
+        ? [
+            {
+              header: "CPU (1h)",
+              cell: ({ Spec }) => {
+                const metrics = getForService(Spec.Name);
+                return (
+                  <TaskSparkline
+                    data={metrics.cpuHistory}
+                    currentValue={metrics.cpu}
+                    type="cpu"
+                  />
+                );
+              },
+            },
+            {
+              header: "Memory (1h)",
+              cell: ({ Spec }) => {
+                const metrics = getForService(Spec.Name);
+                return (
+                  <TaskSparkline
+                    data={metrics.memoryHistory}
+                    currentValue={metrics.memory}
+                    type="memory"
+                  />
+                );
+              },
+            },
+          ]
+        : [],
+    [hasCadvisor, getForService],
+  );
+
+  const sizingColumns: Column<ServiceListItem>[] = useMemo(
+    () =>
+      hasRecommendations
+        ? [
+            {
+              header: "Sizing",
+              cell: ({ ID }) => {
+                const hints = recommendationsByService.get(ID) ?? [];
+                return <SizingBadge hints={hints} />;
+              },
+            },
+          ]
+        : [],
+    [hasRecommendations, recommendationsByService],
+  );
+
+  const columns: Column<ServiceListItem>[] = useMemo(
+    () => [...baseColumns, ...metricsColumns, ...sizingColumns],
+    [baseColumns, metricsColumns, sizingColumns],
+  );
 
   if (loading) {
     return (

@@ -10,7 +10,7 @@ import { useResourceStream } from "../hooks/useResourceStream";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { useViewMode } from "../hooks/useViewMode";
 import { formatBytes, formatPercentage } from "../lib/format";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 function HealthDot({ health }: { health: "healthy" | "warning" | "critical" }) {
@@ -73,42 +73,45 @@ export default function StackList() {
     ? summaries.filter(({ name }) => name.toLowerCase().includes(search.toLowerCase()))
     : summaries;
 
-  const columns: Column<StackSummary>[] = [
-    {
-      header: "Name",
-      cell: (stack) => (
-        <span className="flex items-center gap-2">
-          <HealthDot health={stackHealth(stack)} />
-          <Link
-            to={`/stacks/${stack.name}`}
-            className="font-medium text-link hover:underline"
-            onClick={(event) => event.stopPropagation()}
-          >
-            {stack.name}
-          </Link>
-        </span>
-      ),
-    },
-    {
-      header: "Tasks",
-      cell: (stack) => <TaskHealth stack={stack} />,
-    },
-    {
-      header: "Services",
-      cell: ({ serviceCount }) => serviceCount,
-    },
-    {
-      header: "Status",
-      cell: ({ updatingServices }) =>
-        updatingServices > 0 ? (
-          <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
-            Updating {updatingServices}
+  const columns: Column<StackSummary>[] = useMemo(
+    () => [
+      {
+        header: "Name",
+        cell: (stack) => (
+          <span className="flex items-center gap-2">
+            <HealthDot health={stackHealth(stack)} />
+            <Link
+              to={`/stacks/${stack.name}`}
+              className="font-medium text-link hover:underline"
+              onClick={(event) => event.stopPropagation()}
+            >
+              {stack.name}
+            </Link>
           </span>
-        ) : (
-          <span className="text-sm font-medium text-green-600 dark:text-green-400">Stable</span>
         ),
-    },
-  ];
+      },
+      {
+        header: "Tasks",
+        cell: (stack) => <TaskHealth stack={stack} />,
+      },
+      {
+        header: "Services",
+        cell: ({ serviceCount }) => serviceCount,
+      },
+      {
+        header: "Status",
+        cell: ({ updatingServices }) =>
+          updatingServices > 0 ? (
+            <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+              Updating {updatingServices}
+            </span>
+          ) : (
+            <span className="text-sm font-medium text-green-600 dark:text-green-400">Stable</span>
+          ),
+      },
+    ],
+    [],
+  );
 
   if (loading) {
     return (

@@ -94,14 +94,35 @@ async function throwResponseError(res: Response): Promise<never> {
   throw new ApiError(type, title, res.status, detail);
 }
 
+/** Default request timeout in milliseconds. */
+const defaultTimeoutMilliseconds = 30_000;
+
+/**
+ * Combines two AbortSignals so the fetch aborts if either fires.
+ * Returns the timeout signal directly if no caller signal is provided.
+ */
+function composeSignals(caller: AbortSignal | undefined, timeout: AbortSignal): AbortSignal {
+  if (!caller) {
+    return timeout;
+  }
+
+  return AbortSignal.any([caller, timeout]);
+}
+
 async function fetchJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(apiPath(path), { headers, signal });
+  const res = await fetch(apiPath(path), {
+    headers,
+    signal: composeSignals(signal, AbortSignal.timeout(defaultTimeoutMilliseconds)),
+  });
+
   if (!res.ok) {
     if (res.status === 401 && res.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
       redirectToLogin();
     }
+
     await throwResponseError(res);
   }
+
   return res.json();
 }
 
@@ -117,14 +138,19 @@ async function mutationFetch<T>(
     method,
     headers: h,
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(defaultTimeoutMilliseconds),
   });
+
   if (!res.ok) {
     if (res.status === 401 && res.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
       redirectToLogin();
     }
+
     await throwResponseError(res);
   }
+
   if (res.status === 204) return undefined as T;
+
   return res.json();
 }
 

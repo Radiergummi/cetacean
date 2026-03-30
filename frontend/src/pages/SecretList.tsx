@@ -15,7 +15,7 @@ import { useSearchParam } from "../hooks/useSearchParam";
 import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useViewMode } from "../hooks/useViewMode";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function SecretList() {
@@ -36,41 +36,44 @@ export default function SecretList() {
     ({ ID }: Secret) => ID,
   );
 
-  const columns: Column<Secret>[] = [
-    {
-      header: (
-        <SortIndicator
-          label="Name"
-          active={sortKey === "name"}
-          dir={sortDir}
-        />
-      ),
-      cell: ({ ID, Spec: { Name } }) => <ResourceName name={Name || ID} />,
-      onHeaderClick: () => toggle("name"),
-    },
-    {
-      header: (
-        <SortIndicator
-          label="Created"
-          active={sortKey === "created"}
-          dir={sortDir}
-        />
-      ),
-      cell: ({ CreatedAt }) => (CreatedAt ? <TimeAgo date={CreatedAt} /> : "\u2014"),
-      onHeaderClick: () => toggle("created"),
-    },
-    {
-      header: (
-        <SortIndicator
-          label="Updated"
-          active={sortKey === "updated"}
-          dir={sortDir}
-        />
-      ),
-      cell: ({ UpdatedAt }) => (UpdatedAt ? <TimeAgo date={UpdatedAt} /> : "\u2014"),
-      onHeaderClick: () => toggle("updated"),
-    },
-  ];
+  const columns: Column<Secret>[] = useMemo(
+    () => [
+      {
+        header: (
+          <SortIndicator
+            label="Name"
+            active={sortKey === "name"}
+            dir={sortDir}
+          />
+        ),
+        cell: ({ ID, Spec: { Name } }) => <ResourceName name={Name || ID} />,
+        onHeaderClick: () => toggle("name"),
+      },
+      {
+        header: (
+          <SortIndicator
+            label="Created"
+            active={sortKey === "created"}
+            dir={sortDir}
+          />
+        ),
+        cell: ({ CreatedAt }) => (CreatedAt ? <TimeAgo date={CreatedAt} /> : "\u2014"),
+        onHeaderClick: () => toggle("created"),
+      },
+      {
+        header: (
+          <SortIndicator
+            label="Updated"
+            active={sortKey === "updated"}
+            dir={sortDir}
+          />
+        ),
+        cell: ({ UpdatedAt }) => (UpdatedAt ? <TimeAgo date={UpdatedAt} /> : "\u2014"),
+        onHeaderClick: () => toggle("updated"),
+      },
+    ],
+    [sortKey, sortDir, toggle],
+  );
   const [viewMode, setViewMode] = useViewMode("secrets");
 
   if (loading) {
