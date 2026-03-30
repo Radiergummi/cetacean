@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"io"
@@ -682,7 +683,7 @@ func BenchmarkETagMatch(b *testing.B) {
 
 func BenchmarkDetailResponseMarshalJSON(b *testing.B) {
 	b.Run("small", func(b *testing.B) {
-		dr := NewDetailResponse("/nodes/n1", "Node", map[string]any{
+		dr := NewDetailResponse(context.Background(), "/nodes/n1", "Node", map[string]any{
 			"node": swarm.Node{ID: "n1"},
 		})
 		for b.Loop() {
@@ -703,7 +704,7 @@ func BenchmarkDetailResponseMarshalJSON(b *testing.B) {
 				},
 			}
 		}
-		dr := NewDetailResponse("/configs/cfg1", "Config", map[string]any{
+		dr := NewDetailResponse(context.Background(), "/configs/cfg1", "Config", map[string]any{
 			"config":   swarm.Config{ID: "cfg1"},
 			"services": services,
 		})

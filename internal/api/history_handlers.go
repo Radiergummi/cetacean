@@ -25,5 +25,5 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 	if entries == nil {
 		entries = []cache.HistoryEntry{}
 	}
-	writeJSONWithETag(w, r, NewCollectionResponse(entries, len(entries), len(entries), 0))
+	writeJSONWithETag(w, r, NewCollectionResponse(r.Context(), entries, len(entries), len(entries), 0))
 }

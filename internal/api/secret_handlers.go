@@ -20,7 +20,7 @@ func (h *Handlers) HandleGetSecret(w http.ResponseWriter, r *http.Request) {
 	}
 	// Never expose secret data — clear it before responding.
 	sec.Spec.Data = nil
-	writeJSONWithETag(w, r, NewDetailResponse("/secrets/"+id, "Secret", map[string]any{
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", map[string]any{
 		"secret":   sec,
 		"services": h.cache.ServicesUsingSecret(id),
 	}))
@@ -46,7 +46,7 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 		"created": func(s swarm.Secret) string { return s.CreatedAt.String() },
 		"updated": func(s swarm.Secret) string { return s.UpdatedAt.String() },
 	})
-	resp := applyPagination(secrets, p)
+	resp := applyPagination(r.Context(), secrets, p)
 	writePaginationLinks(w, r, resp.Total, resp.Limit, resp.Offset)
 	writeJSONWithETag(w, r, resp)
 }

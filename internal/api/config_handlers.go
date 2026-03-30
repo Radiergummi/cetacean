@@ -18,7 +18,7 @@ func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "CFG002", fmt.Sprintf("config %q not found", id))
 		return
 	}
-	writeJSONWithETag(w, r, NewDetailResponse("/configs/"+id, "Config", map[string]any{
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/configs/"+id, "Config", map[string]any{
 		"config":   cfg,
 		"services": h.cache.ServicesUsingConfig(id),
 	}))
@@ -41,7 +41,7 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 		"created": func(c swarm.Config) string { return c.CreatedAt.String() },
 		"updated": func(c swarm.Config) string { return c.UpdatedAt.String() },
 	})
-	resp := applyPagination(configs, p)
+	resp := applyPagination(r.Context(), configs, p)
 	writePaginationLinks(w, r, resp.Total, resp.Limit, resp.Offset)
 	writeJSONWithETag(w, r, resp)
 }

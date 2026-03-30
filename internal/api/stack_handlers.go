@@ -29,7 +29,7 @@ func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
 	stacks = sortItems(stacks, p.Sort, p.Dir, map[string]func(cache.Stack) string{
 		"name": func(s cache.Stack) string { return s.Name },
 	})
-	resp := applyPagination(stacks, p)
+	resp := applyPagination(r.Context(), stacks, p)
 	writePaginationLinks(w, r, resp.Total, resp.Limit, resp.Offset)
 	writeJSONWithETag(w, r, resp)
 }
@@ -41,7 +41,7 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "STK001", fmt.Sprintf("stack %q not found", name))
 		return
 	}
-	writeJSONWithETag(w, r, NewDetailResponse("/stacks/"+name, "Stack", map[string]any{
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/stacks/"+name, "Stack", map[string]any{
 		"stack": detail,
 	}))
 }
@@ -81,7 +81,7 @@ func (h *Handlers) HandleStackSummary(w http.ResponseWriter, r *http.Request) {
 	if summaries == nil {
 		summaries = []cache.StackSummary{}
 	}
-	writeJSONWithETag(w, r, NewCollectionResponse(summaries, len(summaries), len(summaries), 0))
+	writeJSONWithETag(w, r, NewCollectionResponse(r.Context(), summaries, len(summaries), len(summaries), 0))
 }
 
 func (h *Handlers) queryStackMetric(ctx context.Context, query string) map[string]float64 {

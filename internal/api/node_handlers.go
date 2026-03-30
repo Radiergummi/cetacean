@@ -29,7 +29,7 @@ func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 		"status":       func(n swarm.Node) string { return string(n.Status.State) },
 		"availability": func(n swarm.Node) string { return string(n.Spec.Availability) },
 	})
-	resp := applyPagination(nodes, p)
+	resp := applyPagination(r.Context(), nodes, p)
 	writePaginationLinks(w, r, resp.Total, resp.Limit, resp.Offset)
 	writeJSONWithETag(w, r, resp)
 }
@@ -41,7 +41,7 @@ func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
-	writeJSONWithETag(w, r, NewDetailResponse("/nodes/"+id, "Node", map[string]any{
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/nodes/"+id, "Node", map[string]any{
 		"node": node,
 	}))
 }
@@ -54,5 +54,5 @@ func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tasks := h.enrichTasks(h.cache.ListTasksByNode(id))
-	writeJSONWithETag(w, r, NewCollectionResponse(tasks, len(tasks), len(tasks), 0))
+	writeJSONWithETag(w, r, NewCollectionResponse(r.Context(), tasks, len(tasks), len(tasks), 0))
 }

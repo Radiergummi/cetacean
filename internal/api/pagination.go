@@ -2,6 +2,7 @@ package api
 
 import (
 	"cmp"
+	"context"
 	"fmt"
 	"net/http"
 	"slices"
@@ -49,7 +50,7 @@ func parsePagination(r *http.Request) PageParams {
 	return p
 }
 
-func applyPagination[T any](items []T, p PageParams) CollectionResponse[T] {
+func applyPagination[T any](ctx context.Context, items []T, p PageParams) CollectionResponse[T] {
 	total := len(items)
 
 	start := min(p.Offset, total)
@@ -60,7 +61,7 @@ func applyPagination[T any](items []T, p PageParams) CollectionResponse[T] {
 		result = []T{}
 	}
 
-	return NewCollectionResponse(result, total, p.Limit, p.Offset)
+	return NewCollectionResponse(ctx, result, total, p.Limit, p.Offset)
 }
 
 func writePaginationLinks(w http.ResponseWriter, r *http.Request, total, limit, offset int) {
@@ -68,7 +69,7 @@ func writePaginationLinks(w http.ResponseWriter, r *http.Request, total, limit, 
 		q := r.URL.Query()
 		q.Set("limit", strconv.Itoa(limit))
 		q.Set("offset", strconv.Itoa(newOffset))
-		return fmt.Sprintf("<%s?%s>", r.URL.Path, q.Encode())
+		return fmt.Sprintf("<%s?%s>", absPath(r.Context(), r.URL.Path), q.Encode())
 	}
 
 	var links []string

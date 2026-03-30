@@ -73,9 +73,9 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 
 	sec, ok := h.cache.GetSecret(id)
 	if !ok {
-		w.Header().Set("Location", "/secrets/"+id)
+		w.Header().Set("Location", absPath(r.Context(), "/secrets/"+id))
 		w.WriteHeader(http.StatusCreated)
-		writeJSON(w, NewDetailResponse("/secrets/"+id, "Secret", map[string]any{
+		writeJSON(w, NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", map[string]any{
 			"secret": swarm.Secret{
 				ID:   id,
 				Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: req.Name}},
@@ -86,9 +86,9 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sec.Spec.Data = nil
-	w.Header().Set("Location", "/secrets/"+id)
+	w.Header().Set("Location", absPath(r.Context(), "/secrets/"+id))
 	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, NewDetailResponse("/secrets/"+id, "Secret", map[string]any{
+	writeJSON(w, NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", map[string]any{
 		"secret":   sec,
 		"services": h.cache.ServicesUsingSecret(id),
 	}))
@@ -108,7 +108,7 @@ func (h *Handlers) HandleGetSecretLabels(w http.ResponseWriter, r *http.Request)
 	writeJSONWithETag(
 		w,
 		r,
-		NewDetailResponse("/secrets/"+id+"/labels", "SecretLabels", map[string]any{
+		NewDetailResponse(r.Context(), "/secrets/"+id+"/labels", "SecretLabels", map[string]any{
 			"labels": labels,
 		}),
 	)

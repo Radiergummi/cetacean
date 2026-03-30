@@ -18,7 +18,7 @@ func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "VOL002", fmt.Sprintf("volume %q not found", name))
 		return
 	}
-	writeJSONWithETag(w, r, NewDetailResponse("/volumes/"+name, "Volume", map[string]any{
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/volumes/"+name, "Volume", map[string]any{
 		"volume":   vol,
 		"services": h.cache.ServicesUsingVolume(name),
 	}))
@@ -41,7 +41,7 @@ func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 		"driver": func(v volume.Volume) string { return v.Driver },
 		"scope":  func(v volume.Volume) string { return v.Scope },
 	})
-	resp := applyPagination(volumes, p)
+	resp := applyPagination(r.Context(), volumes, p)
 	writePaginationLinks(w, r, resp.Total, resp.Limit, resp.Offset)
 	writeJSONWithETag(w, r, resp)
 }

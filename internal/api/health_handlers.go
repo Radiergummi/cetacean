@@ -16,7 +16,7 @@ import (
 func (h *Handlers) HandleRecommendations(w http.ResponseWriter, r *http.Request) {
 	results := h.recEngine.Results()
 	summary := recommendations.ComputeSummary(results)
-	writeJSONWithETag(w, r, NewDetailResponse("/recommendations", "RecommendationCollection", map[string]any{
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/recommendations", "RecommendationCollection", map[string]any{
 		"items":      results,
 		"total":      len(results),
 		"summary":    summary,

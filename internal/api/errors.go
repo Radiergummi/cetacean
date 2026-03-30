@@ -554,7 +554,7 @@ func writeErrorCode(w http.ResponseWriter, r *http.Request, code string, detail 
 		return
 	}
 	writeProblemTyped(w, r, ProblemDetail{
-		Type:   "/api/errors/" + code,
+		Type:   absPath(r.Context(), "/api/errors/"+code),
 		Title:  def.Title,
 		Status: def.Status,
 		Detail: detail,

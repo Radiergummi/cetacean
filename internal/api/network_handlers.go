@@ -18,7 +18,7 @@ func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "NET002", fmt.Sprintf("network %q not found", id))
 		return
 	}
-	writeJSONWithETag(w, r, NewDetailResponse("/networks/"+id, "Network", map[string]any{
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/networks/"+id, "Network", map[string]any{
 		"network":  net,
 		"services": h.cache.ServicesUsingNetwork(id),
 	}))
@@ -47,7 +47,7 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 		"driver": func(n network.Summary) string { return n.Driver },
 		"scope":  func(n network.Summary) string { return n.Scope },
 	})
-	resp := applyPagination(networks, p)
+	resp := applyPagination(r.Context(), networks, p)
 	writePaginationLinks(w, r, resp.Total, resp.Limit, resp.Offset)
 	writeJSONWithETag(w, r, resp)
 }

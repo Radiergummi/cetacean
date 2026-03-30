@@ -69,12 +69,12 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 		"service": func(t swarm.Task) string { return t.ServiceID },
 		"node":    func(t swarm.Task) string { return t.NodeID },
 	})
-	paged := applyPagination(tasks, p)
+	paged := applyPagination(r.Context(), tasks, p)
 	writePaginationLinks(w, r, paged.Total, paged.Limit, paged.Offset)
 	writeJSONWithETag(
 		w,
 		r,
-		NewCollectionResponse(h.enrichTasks(paged.Items), paged.Total, paged.Limit, paged.Offset),
+		NewCollectionResponse(r.Context(), h.enrichTasks(paged.Items), paged.Total, paged.Limit, paged.Offset),
 	)
 }
 
@@ -86,7 +86,7 @@ func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	et := h.enrichTask(task)
-	writeJSONWithETag(w, r, NewDetailResponse("/tasks/"+id, "Task", map[string]any{
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/tasks/"+id, "Task", map[string]any{
 		"task":    et,
 		"service": map[string]any{"@id": "/services/" + et.ServiceID, "name": et.ServiceName},
 		"node":    map[string]any{"@id": "/nodes/" + et.NodeID, "hostname": et.NodeHostname},

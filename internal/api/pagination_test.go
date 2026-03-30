@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -59,7 +60,7 @@ func TestApplyPagination(t *testing.T) {
 	}
 
 	p := PageParams{Limit: 3, Offset: 2}
-	result := applyPagination(items, p)
+	result := applyPagination(context.Background(), items, p)
 
 	if result.Total != 10 {
 		t.Errorf("expected total 10, got %d", result.Total)
@@ -88,7 +89,7 @@ func TestApplyPagination_BeyondEnd(t *testing.T) {
 	items := []int{1, 2, 3}
 
 	p := PageParams{Limit: 10, Offset: 100}
-	result := applyPagination(items, p)
+	result := applyPagination(context.Background(), items, p)
 
 	if result.Total != 3 {
 		t.Errorf("expected total 3, got %d", result.Total)

@@ -73,9 +73,9 @@ func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 
 	cfg, ok := h.cache.GetConfig(id)
 	if !ok {
-		w.Header().Set("Location", "/configs/"+id)
+		w.Header().Set("Location", absPath(r.Context(), "/configs/"+id))
 		w.WriteHeader(http.StatusCreated)
-		writeJSON(w, NewDetailResponse("/configs/"+id, "Config", map[string]any{
+		writeJSON(w, NewDetailResponse(r.Context(), "/configs/"+id, "Config", map[string]any{
 			"config": swarm.Config{
 				ID:   id,
 				Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: req.Name}},
@@ -85,9 +85,9 @@ func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Location", "/configs/"+id)
+	w.Header().Set("Location", absPath(r.Context(), "/configs/"+id))
 	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, NewDetailResponse("/configs/"+id, "Config", map[string]any{
+	writeJSON(w, NewDetailResponse(r.Context(), "/configs/"+id, "Config", map[string]any{
 		"config":   cfg,
 		"services": h.cache.ServicesUsingConfig(id),
 	}))
@@ -107,7 +107,7 @@ func (h *Handlers) HandleGetConfigLabels(w http.ResponseWriter, r *http.Request)
 	writeJSONWithETag(
 		w,
 		r,
-		NewDetailResponse("/configs/"+id+"/labels", "ConfigLabels", map[string]any{
+		NewDetailResponse(r.Context(), "/configs/"+id+"/labels", "ConfigLabels", map[string]any{
 			"labels": labels,
 		}),
 	)

@@ -46,7 +46,7 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 			return "Replicated"
 		},
 	})
-	paged := applyPagination(services, p)
+	paged := applyPagination(r.Context(), services, p)
 
 	items := make([]ServiceListItem, len(paged.Items))
 	for i, svc := range paged.Items {
@@ -57,7 +57,7 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writePaginationLinks(w, r, paged.Total, paged.Limit, paged.Offset)
-	writeJSONWithETag(w, r, NewCollectionResponse(items, paged.Total, paged.Limit, paged.Offset))
+	writeJSONWithETag(w, r, NewCollectionResponse(r.Context(), items, paged.Total, paged.Limit, paged.Offset))
 }
 
 func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
@@ -76,7 +76,7 @@ func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
 	if detected := integrations.Detect(svc.Spec.Labels); len(detected) > 0 {
 		extra["integrations"] = detected
 	}
-	writeJSONWithETag(w, r, NewDetailResponse("/services/"+id, "Service", extra))
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/services/"+id, "Service", extra))
 }
 
 func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {
@@ -87,7 +87,7 @@ func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tasks := h.enrichTasks(h.cache.ListTasksByService(id))
-	writeJSONWithETag(w, r, NewCollectionResponse(tasks, len(tasks), len(tasks), 0))
+	writeJSONWithETag(w, r, NewCollectionResponse(r.Context(), tasks, len(tasks), len(tasks), 0))
 }
 
 func (h *Handlers) HandleServiceLogs(w http.ResponseWriter, r *http.Request) {

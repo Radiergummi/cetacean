@@ -57,7 +57,7 @@ func (h *Handlers) HandleUpdateNodeAvailability(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	writeJSON(w, NewDetailResponse("/nodes/"+id, "Node", map[string]any{
+	writeJSON(w, NewDetailResponse(r.Context(), "/nodes/"+id, "Node", map[string]any{
 		"node": updated,
 	}))
 }
@@ -101,7 +101,7 @@ func (h *Handlers) HandleUpdateNodeRole(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	writeJSON(w, NewDetailResponse("/nodes/"+id, "Node", map[string]any{
+	writeJSON(w, NewDetailResponse(r.Context(), "/nodes/"+id, "Node", map[string]any{
 		"node": updated,
 	}))
 }
@@ -166,7 +166,7 @@ func (h *Handlers) HandleGetNodeLabels(w http.ResponseWriter, r *http.Request) {
 	if labels == nil {
 		labels = map[string]string{}
 	}
-	writeJSONWithETag(w, r, NewDetailResponse("/nodes/"+id+"/labels", "NodeLabels", map[string]any{
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/nodes/"+id+"/labels", "NodeLabels", map[string]any{
 		"labels": labels,
 	}))
 }

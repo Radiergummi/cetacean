@@ -60,7 +60,7 @@ func (h *Handlers) HandleCluster(w http.ResponseWriter, r *http.Request) {
 	if id := h.getLocalNodeID(); id != "" {
 		extra["localNodeID"] = id
 	}
-	writeJSONWithETag(w, r, NewDetailResponse("/cluster", "Cluster", extra))
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/cluster", "Cluster", extra))
 }
 
 type ClusterMetrics struct {
@@ -84,7 +84,7 @@ func (h *Handlers) HandleClusterCapacity(w http.ResponseWriter, r *http.Request)
 		"totalMemory":   snap.TotalMemory,
 		"nodeCount":     snap.NodeCount,
 	}
-	writeJSONWithETag(w, r, NewDetailResponse("/cluster/capacity", "ClusterCapacity", extra))
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/cluster/capacity", "ClusterCapacity", extra))
 }
 
 func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) {
@@ -295,7 +295,7 @@ func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSONWithETag(w, r, NewDetailResponse("/swarm", "Swarm", map[string]any{
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/swarm", "Swarm", map[string]any{
 		"swarm":       sw,
 		"managerAddr": managerAddr,
 	}))
@@ -393,5 +393,5 @@ func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
 		TotalSize: bcSize, Reclaimable: bcReclaimable,
 	})
 
-	writeJSONWithETag(w, r, NewCollectionResponse(summaries, len(summaries), len(summaries), 0))
+	writeJSONWithETag(w, r, NewCollectionResponse(r.Context(), summaries, len(summaries), len(summaries), 0))
 }
