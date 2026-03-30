@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Prometheus proxy returning raw 404/502 responses instead of structured errors when the configured URL is wrong
 - Prometheus query client ignoring HTTP error status codes, producing misleading "parse error" messages
 - Base path detection using page URL instead of `<base>` tag, causing broken API requests when navigating in the dev server
+- API requests hanging indefinitely when Prometheus or Docker is unresponsive (now timeout after 30 seconds)
+- Empty state messages not announced by screen readers
 
 ## [0.9.1] - 2026-03-30
 
