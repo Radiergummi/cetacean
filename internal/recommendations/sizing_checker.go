@@ -39,8 +39,8 @@ func NewSizingChecker(query QueryFunc, c *cache.Cache, cfg *config.SizingConfig)
 	}
 }
 
-func (sc *SizingChecker) Name() string             { return "sizing" }
-func (sc *SizingChecker) Interval() time.Duration   { return 5 * time.Minute }
+func (sc *SizingChecker) Name() string            { return "sizing" }
+func (sc *SizingChecker) Interval() time.Duration { return 5 * time.Minute }
 
 // Check runs all sizing queries and evaluates every service.
 func (sc *SizingChecker) Check(ctx context.Context) []Recommendation {
@@ -72,7 +72,9 @@ func (sc *SizingChecker) Check(ctx context.Context) []Recommendation {
 	go func() {
 		query := fmt.Sprintf(
 			`quantile_over_time(0.95, (sum by (%s)(rate(container_cpu_usage_seconds_total{%s}[5m])))[%s:5m]) * 100`,
-			serviceLabelKey, serviceFilter, lookbackStr,
+			serviceLabelKey,
+			serviceFilter,
+			lookbackStr,
 		)
 		data, err := queryByService(tickCtx, sc.query, query)
 		cpuP95Ch <- queryResult{data, err}
@@ -167,7 +169,11 @@ func extractSpec(svc swarm.Service) serviceSpec {
 	return s
 }
 
-func queryByService(ctx context.Context, query QueryFunc, promQuery string) (map[string]float64, error) {
+func queryByService(
+	ctx context.Context,
+	query QueryFunc,
+	promQuery string,
+) (map[string]float64, error) {
 	results, err := query(ctx, promQuery)
 	if err != nil {
 		return nil, err

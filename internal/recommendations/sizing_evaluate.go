@@ -71,19 +71,16 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%d days", hours/24)
 }
 
-func ptr(v float64) *float64 {
-	return &v
-}
-
-func strPtr(v string) *string {
-	return &v
-}
-
 // evaluate computes sizing recommendations for a service.
 // instant is used for at-limit and approaching-limit checks (current rate).
 // p95 is used for over-provisioned checks (p95 over lookback window).
 // Both may be nil independently.
-func evaluate(spec serviceSpec, instant *serviceMetrics, p95 *serviceMetrics, cfg *config.SizingConfig) []Recommendation {
+func evaluate(
+	spec serviceSpec,
+	instant *serviceMetrics,
+	p95 *serviceMetrics,
+	cfg *config.SizingConfig,
+) []Recommendation {
 	var hints []Recommendation
 
 	// --- Config-only checks (always run, even without metrics) ---
@@ -181,7 +178,8 @@ func evaluate(spec serviceSpec, instant *serviceMetrics, p95 *serviceMetrics, cf
 
 	// --- At-limit / approaching-limit checks (instant metrics) ---
 
-	resourcesFixAction := strPtr("PATCH /services/{id}/resources")
+	resourcesFixAction := new(string)
+	*resourcesFixAction = "PATCH /services/{id}/resources"
 
 	if instant != nil {
 		if !noCPULimit {
@@ -201,7 +199,7 @@ func evaluate(spec serviceSpec, instant *serviceMetrics, p95 *serviceMetrics, cf
 					Message:    fmt.Sprintf("CPU usage is at %.0f%% of limit", cpuRatio*100),
 					Current:    instant.cpu,
 					Configured: cpuLimitPct,
-					Suggested:  ptr(suggested),
+					Suggested:  &suggested,
 					FixAction:  resourcesFixAction,
 				})
 
@@ -217,7 +215,7 @@ func evaluate(spec serviceSpec, instant *serviceMetrics, p95 *serviceMetrics, cf
 					Message:    fmt.Sprintf("CPU usage is at %.0f%% of limit", cpuRatio*100),
 					Current:    instant.cpu,
 					Configured: cpuLimitPct,
-					Suggested:  ptr(suggested),
+					Suggested:  &suggested,
 					FixAction:  resourcesFixAction,
 				})
 			}
@@ -239,7 +237,7 @@ func evaluate(spec serviceSpec, instant *serviceMetrics, p95 *serviceMetrics, cf
 					Message:    fmt.Sprintf("Memory usage is at %.0f%% of limit", memRatio*100),
 					Current:    instant.memory,
 					Configured: float64(spec.memoryLimit),
-					Suggested:  ptr(suggested),
+					Suggested:  &suggested,
 					FixAction:  resourcesFixAction,
 				})
 
@@ -255,7 +253,7 @@ func evaluate(spec serviceSpec, instant *serviceMetrics, p95 *serviceMetrics, cf
 					Message:    fmt.Sprintf("Memory usage is at %.0f%% of limit", memRatio*100),
 					Current:    instant.memory,
 					Configured: float64(spec.memoryLimit),
-					Suggested:  ptr(suggested),
+					Suggested:  &suggested,
 					FixAction:  resourcesFixAction,
 				})
 			}
@@ -278,10 +276,14 @@ func evaluate(spec serviceSpec, instant *serviceMetrics, p95 *serviceMetrics, cf
 					TargetID:   spec.id,
 					TargetName: spec.name,
 					Resource:   "cpu",
-					Message:    fmt.Sprintf("p95 CPU usage over the past %s is %.0f%% of reservation", formatDuration(cfg.Lookback), cpuResRatio*100),
+					Message: fmt.Sprintf(
+						"p95 CPU usage over the past %s is %.0f%% of reservation",
+						formatDuration(cfg.Lookback),
+						cpuResRatio*100,
+					),
 					Current:    p95.cpu,
 					Configured: cpuReservationPct,
-					Suggested:  ptr(suggested),
+					Suggested:  &suggested,
 					FixAction:  resourcesFixAction,
 				})
 			}
@@ -299,10 +301,14 @@ func evaluate(spec serviceSpec, instant *serviceMetrics, p95 *serviceMetrics, cf
 					TargetID:   spec.id,
 					TargetName: spec.name,
 					Resource:   "memory",
-					Message:    fmt.Sprintf("p95 memory usage over the past %s is %.0f%% of reservation", formatDuration(cfg.Lookback), memResRatio*100),
+					Message: fmt.Sprintf(
+						"p95 memory usage over the past %s is %.0f%% of reservation",
+						formatDuration(cfg.Lookback),
+						memResRatio*100,
+					),
 					Current:    p95.memory,
 					Configured: float64(spec.memoryReservation),
-					Suggested:  ptr(suggested),
+					Suggested:  &suggested,
 					FixAction:  resourcesFixAction,
 				})
 			}

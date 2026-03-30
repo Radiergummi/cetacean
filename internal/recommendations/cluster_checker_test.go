@@ -16,7 +16,9 @@ func TestClusterChecker_SingleReplica(t *testing.T) {
 			ID: "svc1",
 			Spec: swarm.ServiceSpec{
 				Annotations: swarm.Annotations{Name: "web"},
-				Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: &replicas}},
+				Mode: swarm.ServiceMode{
+					Replicated: &swarm.ReplicatedService{Replicas: &replicas},
+				},
 			},
 		})
 
@@ -54,7 +56,9 @@ func TestClusterChecker_SingleReplica(t *testing.T) {
 			ID: "svc1",
 			Spec: swarm.ServiceSpec{
 				Annotations: swarm.Annotations{Name: "web"},
-				Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: &replicas}},
+				Mode: swarm.ServiceMode{
+					Replicated: &swarm.ReplicatedService{Replicas: &replicas},
+				},
 			},
 		})
 
@@ -140,7 +144,9 @@ func TestClusterChecker_ManagerHasWorkloads(t *testing.T) {
 
 		for _, rec := range recs {
 			if rec.Category == CategoryManagerHasWorkloads {
-				t.Error("expected no CategoryManagerHasWorkloads recommendation for drained manager")
+				t.Error(
+					"expected no CategoryManagerHasWorkloads recommendation for drained manager",
+				)
 			}
 		}
 	})
@@ -181,8 +187,20 @@ func TestClusterChecker_UnevenDistribution(t *testing.T) {
 		}
 
 		// 2 tasks on node B
-		c.SetTask(swarm.Task{ID: "taskB0", NodeID: "nodeB", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
-		c.SetTask(swarm.Task{ID: "taskB1", NodeID: "nodeB", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}})
+		c.SetTask(
+			swarm.Task{
+				ID:     "taskB0",
+				NodeID: "nodeB",
+				Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
+			},
+		)
+		c.SetTask(
+			swarm.Task{
+				ID:     "taskB1",
+				NodeID: "nodeB",
+				Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
+			},
+		)
 
 		checker := NewClusterChecker(c)
 		recs := checker.Check(context.Background())
@@ -225,7 +243,9 @@ func TestClusterChecker_UnevenDistribution(t *testing.T) {
 
 		for _, rec := range recs {
 			if rec.Category == CategoryUnevenDistribution {
-				t.Error("expected no CategoryUnevenDistribution recommendation for even distribution")
+				t.Error(
+					"expected no CategoryUnevenDistribution recommendation for even distribution",
+				)
 			}
 		}
 	})

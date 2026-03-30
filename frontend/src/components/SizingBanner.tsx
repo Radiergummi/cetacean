@@ -1,8 +1,8 @@
 import type { Recommendation } from "@/api/types";
 import { Button } from "@/components/ui/button";
-import { formatBytes, formatCores } from "@/lib/format";
 import { invalidateRecommendations } from "@/hooks/useRecommendations";
 import { applyRecommendation } from "@/lib/applyRecommendation";
+import { formatBytes, formatCores } from "@/lib/format";
 import { bannerStyles, highestSeverity, hintIcon, severityStyles } from "@/lib/sizingUtils";
 import { getErrorMessage } from "@/lib/utils";
 import { Info, Loader2, Wrench } from "lucide-react";

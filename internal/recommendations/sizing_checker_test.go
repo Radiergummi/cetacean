@@ -52,9 +52,13 @@ func TestSizingChecker_Check(t *testing.T) {
 	})
 
 	instantCPU := []prom.Result{{Labels: map[string]string{serviceLabelKey: "web"}, Value: 90}}
-	instantMem := []prom.Result{{Labels: map[string]string{serviceLabelKey: "web"}, Value: float64(400 << 20)}}
+	instantMem := []prom.Result{
+		{Labels: map[string]string{serviceLabelKey: "web"}, Value: float64(400 << 20)},
+	}
 	p95CPU := []prom.Result{{Labels: map[string]string{serviceLabelKey: "web"}, Value: 40}}
-	p95Mem := []prom.Result{{Labels: map[string]string{serviceLabelKey: "web"}, Value: float64(300 << 20)}}
+	p95Mem := []prom.Result{
+		{Labels: map[string]string{serviceLabelKey: "web"}, Value: float64(300 << 20)},
+	}
 
 	query := mockQuery(instantCPU, instantMem, p95CPU, p95Mem)
 

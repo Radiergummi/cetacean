@@ -19,8 +19,7 @@ export default function KVTable({ rows }: { rows: Row[] }) {
     ): row is
       | [string, React.ReactNode]
       | [string, React.ReactNode, string]
-      | [string, React.ReactNode, string | undefined, string] =>
-      !!row && !!row[1],
+      | [string, React.ReactNode, string | undefined, string] => !!row && !!row[1],
   );
 
   if (valid.length === 0) {
@@ -32,11 +31,13 @@ export default function KVTable({ rows }: { rows: Row[] }) {
       <table className="w-full">
         <tbody>
           {valid.map(([key, value, tooltip, copyText]) => {
-            const copyable =
-              copyText ?? (typeof value === "string" ? value : undefined);
+            const copyable = copyText ?? (typeof value === "string" ? value : undefined);
 
             return (
-              <tr key={key} className="border-b border-b-muted last:border-b-0">
+              <tr
+                key={key}
+                className="border-b border-b-muted last:border-b-0"
+              >
                 <td className="min-w-1/3 p-3 text-sm font-medium text-muted-foreground">
                   <span className="inline-flex items-center gap-1.5">
                     {key}
@@ -47,7 +48,10 @@ export default function KVTable({ rows }: { rows: Row[] }) {
                   <span className="flex items-center gap-2">
                     <span className="min-w-0">{value}</span>
                     {copyable && (
-                      <CopyButton text={copyable} className="ms-auto" />
+                      <CopyButton
+                        text={copyable}
+                        className="ms-auto"
+                      />
                     )}
                   </span>
                 </td>

@@ -137,7 +137,9 @@ func TestConfigChecker_NilRestartPolicyIsDefault(t *testing.T) {
 
 	for _, r := range recs {
 		if r.Category == CategoryNoRestartPolicy && r.TargetID == "svc-nil-rp" {
-			t.Error("nil RestartPolicy should not trigger no-restart-policy (Docker defaults to 'any')")
+			t.Error(
+				"nil RestartPolicy should not trigger no-restart-policy (Docker defaults to 'any')",
+			)
 		}
 	}
 }

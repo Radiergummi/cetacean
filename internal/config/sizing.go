@@ -32,22 +32,50 @@ func LoadSizing(fc *fileConfig) (*SizingConfig, error) {
 		}
 	}
 
-	headroom, err := resolveFloat(nil, "CETACEAN_SIZING_HEADROOM_MULTIPLIER", fHeadroom, 2.0, 1.0, 10.0)
+	headroom, err := resolveFloat(
+		nil,
+		"CETACEAN_SIZING_HEADROOM_MULTIPLIER",
+		fHeadroom,
+		2.0,
+		1.0,
+		10.0,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	overProv, err := resolveFloat(nil, "CETACEAN_SIZING_THRESHOLD_OVER_PROVISIONED", fOverProv, 0.20, 0.0, 1.0)
+	overProv, err := resolveFloat(
+		nil,
+		"CETACEAN_SIZING_THRESHOLD_OVER_PROVISIONED",
+		fOverProv,
+		0.20,
+		0.0,
+		1.0,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	approach, err := resolveFloat(nil, "CETACEAN_SIZING_THRESHOLD_APPROACHING_LIMIT", fApproach, 0.80, 0.0, 1.0)
+	approach, err := resolveFloat(
+		nil,
+		"CETACEAN_SIZING_THRESHOLD_APPROACHING_LIMIT",
+		fApproach,
+		0.80,
+		0.0,
+		1.0,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	atLimit, err := resolveFloat(nil, "CETACEAN_SIZING_THRESHOLD_AT_LIMIT", fAtLimit, 0.95, 0.0, 1.0)
+	atLimit, err := resolveFloat(
+		nil,
+		"CETACEAN_SIZING_THRESHOLD_AT_LIMIT",
+		fAtLimit,
+		0.95,
+		0.0,
+		1.0,
+	)
 	if err != nil {
 		return nil, err
 	}

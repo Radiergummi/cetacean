@@ -41,10 +41,7 @@ export default function ErrorCodeDetail() {
     <>
       <PageHeader
         title={`${errorDef.code} — ${errorDef.title}`}
-        breadcrumbs={[
-          { label: "Error Reference", to: "/api/errors" },
-          { label: errorDef.code },
-        ]}
+        breadcrumbs={[{ label: "Error Reference", to: "/api/errors" }, { label: errorDef.code }]}
       />
 
       <div className="space-y-6">

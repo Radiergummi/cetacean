@@ -216,9 +216,14 @@ func main() {
 	)
 	// Register Prometheus-dependent checkers when available.
 	if promClient != nil {
-		checkers = append(checkers,
+		checkers = append(
+			checkers,
 			recommendations.NewSizingChecker(promClient.InstantQuery, stateCache, sizingCfg),
-			recommendations.NewOperationalChecker(promClient.InstantQuery, stateCache, sizingCfg.Lookback),
+			recommendations.NewOperationalChecker(
+				promClient.InstantQuery,
+				stateCache,
+				sizingCfg.Lookback,
+			),
 		)
 	}
 	recEngine := recommendations.NewEngine(checkers...)

@@ -1,4 +1,3 @@
-import { apiPath } from "@/lib/basePath";
 import type {
   Node,
   ServiceDetail,
@@ -42,6 +41,7 @@ import type {
   ServiceMount,
   RecommendationsResponse,
 } from "./types";
+import { apiPath } from "@/lib/basePath";
 
 const headers = { Accept: "application/json" };
 

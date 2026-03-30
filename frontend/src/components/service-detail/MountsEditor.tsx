@@ -1,6 +1,7 @@
 import { api } from "@/api/client";
 import type { ServiceMount } from "@/api/types";
 import CollapsibleSection from "@/components/CollapsibleSection";
+import ResourceName from "@/components/ResourceName";
 import { DockerDocsLink } from "@/components/service-detail/DockerDocsLink";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,6 @@ import { getErrorMessage } from "@/lib/utils";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import ResourceName from "@/components/ResourceName";
 
 interface MountsEditorProps {
   serviceId: string;
@@ -25,23 +25,9 @@ const defaultMount: ServiceMount = {
   Target: "",
 };
 
-const mountTypes = [
-  "bind",
-  "volume",
-  "tmpfs",
-  "npipe",
-  "cluster",
-  "image",
-] as const;
+const mountTypes = ["bind", "volume", "tmpfs", "npipe", "cluster", "image"] as const;
 
-const propagationOptions = [
-  "private",
-  "rprivate",
-  "shared",
-  "rshared",
-  "slave",
-  "rslave",
-] as const;
+const propagationOptions = ["private", "rprivate", "shared", "rshared", "slave", "rslave"] as const;
 
 const selectClassName =
   "flex h-8 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
@@ -63,11 +49,7 @@ function sourceLabel(type: string): string {
   }
 }
 
-export function MountsEditor({
-  serviceId,
-  mounts,
-  onSaved,
-}: MountsEditorProps) {
+export function MountsEditor({ serviceId, mounts, onSaved }: MountsEditorProps) {
   const { level, loading: levelLoading } = useOperationsLevel();
   const canEdit = !levelLoading && level >= opsLevel.configuration;
 
@@ -164,7 +146,10 @@ export function MountsEditor({
           ) : (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
               {draft.map((mount, index) => (
-                <div key={index} className="relative rounded-lg border p-3">
+                <div
+                  key={index}
+                  className="relative rounded-lg border p-3"
+                >
                   <Button
                     variant="outline"
                     size="xs"
@@ -177,19 +162,19 @@ export function MountsEditor({
                   <div className="grid grid-cols-2 gap-3 pe-10">
                     <div className="flex flex-col gap-1.5">
                       <label className="flex items-center gap-1 text-xs font-medium text-foreground">
-                        Type{" "}
-                        <DockerDocsLink href="https://docs.docker.com/engine/storage/" />
+                        Type <DockerDocsLink href="https://docs.docker.com/engine/storage/" />
                       </label>
 
                       <select
                         value={mount.Type}
-                        onChange={(event) =>
-                          handleTypeChange(index, event.target.value)
-                        }
+                        onChange={(event) => handleTypeChange(index, event.target.value)}
                         className={selectClassName}
                       >
                         {mountTypes.map((type) => (
-                          <option key={type} value={type}>
+                          <option
+                            key={type}
+                            value={type}
+                          >
                             {type}
                           </option>
                         ))}
@@ -210,9 +195,7 @@ export function MountsEditor({
                               Source: event.target.value,
                             })
                           }
-                          placeholder={
-                            mount.Type === "bind" ? "/host/path" : ""
-                          }
+                          placeholder={mount.Type === "bind" ? "/host/path" : ""}
                         />
                       </div>
                     )}
@@ -270,7 +253,10 @@ export function MountsEditor({
                           className={selectClassName}
                         >
                           {propagationOptions.map((option) => (
-                            <option key={option} value={option}>
+                            <option
+                              key={option}
+                              value={option}
+                            >
                               {option}
                             </option>
                           ))}
@@ -337,8 +323,7 @@ export function MountsEditor({
                                 ...mount,
                                 TmpfsOptions: {
                                   ...mount.TmpfsOptions,
-                                  SizeBytes:
-                                    Number(event.target.value) || undefined,
+                                  SizeBytes: Number(event.target.value) || undefined,
                                 },
                               })
                             }
@@ -397,20 +382,24 @@ export function MountsEditor({
             </div>
           )}
 
-          {saveError && (
-            <p className="text-xs text-red-600 dark:text-red-400">
-              {saveError}
-            </p>
-          )}
+          {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
 
           <footer className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={addMount}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={addMount}
+            >
               <Plus className="size-3" />
               Add mount
             </Button>
 
             <div className="ms-auto flex gap-2">
-              <Button size="sm" onClick={save} disabled={saving}>
+              <Button
+                size="sm"
+                onClick={save}
+                disabled={saving}
+              >
                 {saving && <Spinner className="size-3" />}
                 Save
               </Button>
@@ -430,9 +419,7 @@ export function MountsEditor({
         <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed py-6 text-center text-muted-foreground">
           <p className="text-sm">No mounts configured</p>
           {canEdit && (
-            <p className="text-xs">
-              Click Edit to add bind mounts, volumes, or tmpfs mounts.
-            </p>
+            <p className="text-xs">Click Edit to add bind mounts, volumes, or tmpfs mounts.</p>
           )}
         </div>
       ) : (

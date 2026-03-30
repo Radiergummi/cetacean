@@ -1,3 +1,5 @@
+import { CronSchedule } from "./CronSchedule";
+import { IntegrationSection } from "./IntegrationSection";
 import type { CronjobIntegration } from "@/api/types";
 import { KVTable } from "@/components/data";
 import { Input } from "@/components/ui/input";
@@ -6,8 +8,6 @@ import { Switch } from "@/components/ui/switch";
 import { saveIntegrationLabels } from "@/lib/integrationLabels";
 import { CronExpressionParser } from "cron-parser";
 import { useState } from "react";
-import { CronSchedule } from "./CronSchedule";
-import { IntegrationSection } from "./IntegrationSection";
 
 const docsUrl = "https://github.com/crazy-max/swarm-cronjob#usage";
 
@@ -100,7 +100,10 @@ export function CronjobPanel({
   const editForm = (
     <div className="space-y-3">
       <label className="flex items-center gap-2">
-        <Switch checked={formEnabled} onCheckedChange={setFormEnabled} />
+        <Switch
+          checked={formEnabled}
+          onCheckedChange={setFormEnabled}
+        />
         <span className="text-xs font-medium text-foreground">Enabled</span>
       </label>
 
@@ -116,7 +119,10 @@ export function CronjobPanel({
       </div>
 
       <label className="flex items-center gap-2">
-        <Switch checked={formSkipRunning} onCheckedChange={setFormSkipRunning} />
+        <Switch
+          checked={formSkipRunning}
+          onCheckedChange={setFormSkipRunning}
+        />
         <span className="text-xs font-medium text-foreground">Skip running</span>
       </label>
 
@@ -130,12 +136,18 @@ export function CronjobPanel({
       </div>
 
       <label className="flex items-center gap-2">
-        <Switch checked={formRegistryAuth} onCheckedChange={setFormRegistryAuth} />
+        <Switch
+          checked={formRegistryAuth}
+          onCheckedChange={setFormRegistryAuth}
+        />
         <span className="text-xs font-medium text-foreground">Registry auth</span>
       </label>
 
       <label className="flex items-center gap-2">
-        <Switch checked={formQueryRegistry} onCheckedChange={setFormQueryRegistry} />
+        <Switch
+          checked={formQueryRegistry}
+          onCheckedChange={setFormQueryRegistry}
+        />
         <span className="text-xs font-medium text-foreground">Query registry</span>
       </label>
     </div>
@@ -157,7 +169,13 @@ export function CronjobPanel({
     >
       <KVTable
         rows={[
-          schedule && ["Schedule", <CronSchedule key="schedule" expression={schedule} />],
+          schedule && [
+            "Schedule",
+            <CronSchedule
+              key="schedule"
+              expression={schedule}
+            />,
+          ],
           replicas != null && replicas > 0 && ["Replicas", String(replicas)],
           skipRunning && ["Skip running", "Skip if previous run still active"],
           registryAuth && ["Registry auth", "Enabled"],

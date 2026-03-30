@@ -83,10 +83,10 @@ func TestDetectDiun_EnabledFalse(t *testing.T) {
 
 func TestDetectDiun_Metadata(t *testing.T) {
 	labels := map[string]string{
-		"diun.enable":          "true",
-		"diun.metadata.team":   "platform",
-		"diun.metadata.env":    "production",
-		"diun.metadata.owner":  "alice",
+		"diun.enable":         "true",
+		"diun.metadata.team":  "platform",
+		"diun.metadata.env":   "production",
+		"diun.metadata.owner": "alice",
 	}
 
 	got := detectDiun(labels)

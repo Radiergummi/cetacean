@@ -5,12 +5,7 @@ import { LogEmptyState } from "./LogEmptyState";
 import { LogOverlays } from "./LogOverlays";
 import { LogSearch } from "./LogSearch";
 import { LogTable } from "./LogTable";
-import {
-  LevelFilter,
-  StreamFilterToggle,
-  TimeRangeSelector,
-  ToolbarButton,
-} from "./LogToolbar";
+import { LevelFilter, StreamFilterToggle, TimeRangeSelector, ToolbarButton } from "./LogToolbar";
 import { useLogData } from "./useLogData";
 import { useLogFilter } from "./useLogFilter";
 import { useLogTimeRange } from "./useLogTimeRange";
@@ -43,25 +38,16 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
   const logId = (serviceId || taskId)!;
   const isTask = !!taskId;
 
-  const { open, toggle: toggleCollapse } = useSectionCollapse(
-    header ? String(header) : "Logs",
-  );
-  const [wrapLines, setWrapLines] = useState(
-    () => matchMedia("(max-width: 767px)").matches,
-  );
-  const [streamFilter, setStreamFilter] = useState<"all" | "stdout" | "stderr">(
-    "all",
-  );
+  const { open, toggle: toggleCollapse } = useSectionCollapse(header ? String(header) : "Logs");
+  const [wrapLines, setWrapLines] = useState(() => matchMedia("(max-width: 767px)").matches);
+  const [streamFilter, setStreamFilter] = useState<"all" | "stdout" | "stderr">("all");
   const [pinnedLines, setPinnedLines] = useState<LogLine[]>([]);
   const [height, setHeight] = useState(defaultHeight);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const pinnedKeys = useMemo(
-    () => new Set(pinnedLines.map(logLineKey)),
-    [pinnedLines],
-  );
+  const pinnedKeys = useMemo(() => new Set(pinnedLines.map(logLineKey)), [pinnedLines]);
 
   const handlePin = useCallback((line: LogLine) => {
     const key = logLineKey(line);
@@ -135,8 +121,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
       target.setPointerCapture(pointerId);
 
       function onMove(moveEvent: PointerEvent) {
-        const delta =
-          moveEvent.clientY - startY + (window.scrollY - startScroll);
+        const delta = moveEvent.clientY - startY + (window.scrollY - startScroll);
         setHeight(Math.max(minHeight, startHeight + delta));
         target.scrollIntoView({ block: "nearest" });
       }
@@ -156,9 +141,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
   const formatLogs = useCallback(
     () =>
       filtered
-        .map(({ message, timestamp }) =>
-          timestamp ? `${timestamp} ${message}` : message,
-        )
+        .map(({ message, timestamp }) => (timestamp ? `${timestamp} ${message}` : message))
         .join("\n"),
     [filtered],
   );
@@ -191,11 +174,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
     return <div className="flex min-h-8 items-center">{toggle}</div>;
   }
 
-  const hasContent =
-    !data.loading &&
-    !data.error &&
-    data.lines.length > 0 &&
-    filtered.length > 0;
+  const hasContent = !data.loading && !data.error && data.lines.length > 0 && filtered.length > 0;
 
   const toolbar = (
     <nav
@@ -234,13 +213,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
       <ToolbarButton
         onClick={data.toggleLive}
         title={data.live ? "Stop live" : "Live tail"}
-        icon={
-          data.live ? (
-            <Square className="size-3.5" />
-          ) : (
-            <Play className="size-3.5" />
-          )
-        }
+        icon={data.live ? <Square className="size-3.5" /> : <Play className="size-3.5" />}
         active={data.live}
       />
       <ToolbarButton
@@ -252,8 +225,14 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
 
       <div className="mx-0.5 hidden h-5 w-px bg-border md:block" />
 
-      <StreamFilterToggle value={streamFilter} onChange={setStreamFilter} />
-      <LevelFilter value={levelFilter} onChange={setLevelFilter} />
+      <StreamFilterToggle
+        value={streamFilter}
+        onChange={setStreamFilter}
+      />
+      <LevelFilter
+        value={levelFilter}
+        onChange={setLevelFilter}
+      />
 
       <div className="mx-0.5 hidden h-5 w-px bg-border md:block" />
 
@@ -328,11 +307,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
     <div
       ref={containerRef}
       id="logs"
-      className={
-        isFullscreen
-          ? "flex h-full flex-col bg-background"
-          : "flex flex-col gap-1"
-      }
+      className={isFullscreen ? "flex h-full flex-col bg-background" : "flex flex-col gap-1"}
     >
       {toolbar}
 
@@ -351,11 +326,7 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
           style={isFullscreen ? undefined : { height }}
         />
       ) : (
-        <div
-          className={
-            isFullscreen ? "relative flex min-h-0 flex-1 flex-col" : "relative"
-          }
-        >
+        <div className={isFullscreen ? "relative flex min-h-0 flex-1 flex-col" : "relative"}>
           <LogTable
             containerRef={data.containerRef}
             handleScroll={data.handleScroll}
@@ -365,14 +336,8 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
             search={search}
             caseSensitive={caseSensitive}
             useRegex={useRegex}
-            highlightIndex={
-              search && filtered.length > 0
-                ? filtered[matchIndex]?.index
-                : undefined
-            }
-            scrollToFiltered={
-              search && filtered.length > 0 ? matchIndex : undefined
-            }
+            highlightIndex={search && filtered.length > 0 ? filtered[matchIndex]?.index : undefined}
+            scrollToFiltered={search && filtered.length > 0 ? matchIndex : undefined}
             following={data.following}
             onTaskFilter={setTaskFilter}
             pinnedKeys={pinnedKeys}

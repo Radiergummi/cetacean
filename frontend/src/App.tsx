@@ -1,4 +1,3 @@
-import { apiPath, basePath } from "./lib/basePath";
 import ConnectionStatus from "./components/ConnectionStatus";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { LoadingDetail } from "./components/LoadingSkeleton";
@@ -11,8 +10,9 @@ import { AuthProvider } from "./hooks/AuthProvider";
 import { OperationsLevelProvider } from "./hooks/OperationsLevelProvider";
 import { useAuth } from "./hooks/useAuth";
 import { useHotkeys } from "./hooks/useHotkeys";
-import { ConnectionProvider, sseEventTypes } from "./hooks/useResourceStream";
 import { useRecommendations } from "./hooks/useRecommendations";
+import { ConnectionProvider, sseEventTypes } from "./hooks/useResourceStream";
+import { apiPath, basePath } from "./lib/basePath";
 import { Keyboard, Lightbulb, Menu, X } from "lucide-react";
 import type React from "react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
@@ -169,7 +169,7 @@ function RecommendationsIndicator() {
       >
         <Lightbulb className="size-4" />
         {total > 0 && (
-          <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white">
+          <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white">
             {total > 99 ? "99" : total}
           </span>
         )}

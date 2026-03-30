@@ -61,7 +61,11 @@ func TestEvaluate_NoLimits_OnlyMemory(t *testing.T) {
 	result := evaluate(spec, nil, nil, defaultConfig())
 
 	if len(result) != 2 {
-		t.Fatalf("expected 2 hints (no-memory-limit + no-cpu-reservation), got %d: %+v", len(result), result)
+		t.Fatalf(
+			"expected 2 hints (no-memory-limit + no-cpu-reservation), got %d: %+v",
+			len(result),
+			result,
+		)
 	}
 
 	categories := map[Category]bool{}
@@ -142,7 +146,11 @@ func TestEvaluate_AtLimit(t *testing.T) {
 	}
 
 	if atLimitHint.FixAction == nil || *atLimitHint.FixAction != "PATCH /services/{id}/resources" {
-		t.Errorf("expected fixAction %q, got %v", "PATCH /services/{id}/resources", atLimitHint.FixAction)
+		t.Errorf(
+			"expected fixAction %q, got %v",
+			"PATCH /services/{id}/resources",
+			atLimitHint.FixAction,
+		)
 	}
 }
 
@@ -211,7 +219,8 @@ func TestEvaluate_Healthy(t *testing.T) {
 	result := evaluate(spec, metrics, metrics, defaultConfig())
 
 	for _, h := range result {
-		if h.Category == CategoryAtLimit || h.Category == CategoryApproachingLimit || h.Category == CategoryOverProvisioned {
+		if h.Category == CategoryAtLimit || h.Category == CategoryApproachingLimit ||
+			h.Category == CategoryOverProvisioned {
 			t.Errorf("unexpected hint for healthy service: %+v", h)
 		}
 	}
@@ -224,7 +233,8 @@ func TestEvaluate_NoMetrics_ConfigOnlyHints(t *testing.T) {
 	result := evaluate(spec, nil, nil, defaultConfig())
 
 	for _, h := range result {
-		if h.Category == CategoryAtLimit || h.Category == CategoryApproachingLimit || h.Category == CategoryOverProvisioned {
+		if h.Category == CategoryAtLimit || h.Category == CategoryApproachingLimit ||
+			h.Category == CategoryOverProvisioned {
 			t.Errorf("unexpected metrics-based hint when metrics are nil: %+v", h)
 		}
 	}

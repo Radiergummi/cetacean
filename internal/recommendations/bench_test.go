@@ -24,7 +24,7 @@ func benchSizingConfig() *config.SizingConfig {
 
 func populateCache(c *cache.Cache, n int) {
 	replicas := uint64(1)
-	for i := 0; i < n; i++ {
+	for i := range make([]struct{}, n) {
 		name := fmt.Sprintf("service-%d", i)
 		id := fmt.Sprintf("svc-id-%d", i)
 		c.SetService(swarm.Service{

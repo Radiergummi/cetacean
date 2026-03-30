@@ -29,13 +29,18 @@ export function CronSchedule({ expression }: { expression: string }) {
       {nextOccurrences && (
         <Tooltip>
           <TooltipTrigger
-            render={<Clock className="size-3.5 text-muted-foreground/50 hover:text-muted-foreground" />}
+            render={
+              <Clock className="size-3.5 text-muted-foreground/50 hover:text-muted-foreground" />
+            }
           />
           <TooltipContent>
             <div className="flex flex-col gap-0.5 text-xs">
               <span className="font-medium">Next occurrences</span>
               {nextOccurrences.map((date) => (
-                <span key={date.getTime()} className="font-mono tabular-nums">
+                <span
+                  key={date.getTime()}
+                  className="font-mono tabular-nums"
+                >
                   {date.toLocaleString()}
                 </span>
               ))}

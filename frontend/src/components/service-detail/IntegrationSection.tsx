@@ -116,7 +116,11 @@ export function IntegrationSection({
           </Button>
 
           {editable && !editing && (
-            <Button variant="outline" size="xs" onClick={startEditing}>
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={startEditing}
+            >
               <Pencil className="size-3" />
               Edit
             </Button>
@@ -146,17 +150,24 @@ export function IntegrationSection({
           <div className="space-y-4">
             {editContent}
 
-            {saveError && (
-              <p className="text-xs text-destructive">{saveError}</p>
-            )}
+            {saveError && <p className="text-xs text-destructive">{saveError}</p>}
 
             <footer className="flex items-center gap-2">
               <div className="ms-auto flex gap-2">
-                <Button size="sm" onClick={save} disabled={saving}>
+                <Button
+                  size="sm"
+                  onClick={save}
+                  disabled={saving}
+                >
                   {saving && <Spinner className="size-3" />}
                   Save
                 </Button>
-                <Button variant="outline" size="sm" onClick={cancel} disabled={saving}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={cancel}
+                  disabled={saving}
+                >
                   Cancel
                 </Button>
               </div>

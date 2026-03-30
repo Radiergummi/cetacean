@@ -1,13 +1,5 @@
 import type { Recommendation, RecommendationSeverity } from "@/api/types";
-import {
-  ArrowUp,
-  Copy,
-  RefreshCw,
-  Scale,
-  Shield,
-  TrendingDown,
-  TriangleAlert,
-} from "lucide-react";
+import { ArrowUp, Copy, RefreshCw, Scale, Shield, TrendingDown, TriangleAlert } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export const sizingCategories = new Set<string>([

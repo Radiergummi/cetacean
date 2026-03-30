@@ -1,7 +1,7 @@
-import { splitStackPrefix } from "@/lib/searchConstants";
 import { useMetricsPanelContext } from "./MetricsPanelContext";
 import type { Threshold } from "./TimeSeriesChart";
 import TimeSeriesChart from "./TimeSeriesChart";
+import { splitStackPrefix } from "@/lib/searchConstants";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 interface Props {
@@ -108,9 +108,7 @@ export default function StackDrillDownChart({
         {showLegend && seriesInfo.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
             {seriesInfo.map(({ color, label }, index) => {
-              const displayLabel = drillStack
-                ? splitStackPrefix(label).name
-                : label;
+              const displayLabel = drillStack ? splitStackPrefix(label).name : label;
               const dimmed = isolatedLabel != null && isolatedLabel !== label;
               const faded = index >= 10 && !showAll;
 

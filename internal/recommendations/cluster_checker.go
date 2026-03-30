@@ -29,8 +29,10 @@ func (cc *ClusterChecker) Check(_ context.Context) []Recommendation {
 
 	// Single-replica services
 	for _, svc := range cc.cache.ListServices() {
-		if svc.Spec.Mode.Replicated != nil && svc.Spec.Mode.Replicated.Replicas != nil && *svc.Spec.Mode.Replicated.Replicas == 1 {
-			suggested := ptr(2.0)
+		if svc.Spec.Mode.Replicated != nil && svc.Spec.Mode.Replicated.Replicas != nil &&
+			*svc.Spec.Mode.Replicated.Replicas == 1 {
+			suggested := new(float64)
+			*suggested = 2.0
 			recs = append(recs, Recommendation{
 				Category:   CategorySingleReplica,
 				Severity:   SeverityInfo,
@@ -39,14 +41,15 @@ func (cc *ClusterChecker) Check(_ context.Context) []Recommendation {
 				TargetName: svc.Spec.Name,
 				Message:    "Service has only 1 replica (no redundancy)",
 				Suggested:  suggested,
-				FixAction:  strPtr("PUT /services/{id}/scale"),
+				FixAction:  func() *string { s := "PUT /services/{id}/scale"; return &s }(),
 			})
 		}
 	}
 
 	// Manager nodes with active availability
 	for _, node := range cc.cache.ListNodes() {
-		if node.Spec.Role == swarm.NodeRoleManager && node.Spec.Availability == swarm.NodeAvailabilityActive {
+		if node.Spec.Role == swarm.NodeRoleManager &&
+			node.Spec.Availability == swarm.NodeAvailabilityActive {
 			recs = append(recs, Recommendation{
 				Category:   CategoryManagerHasWorkloads,
 				Severity:   SeverityWarning,
@@ -54,7 +57,7 @@ func (cc *ClusterChecker) Check(_ context.Context) []Recommendation {
 				TargetID:   node.ID,
 				TargetName: node.Description.Hostname,
 				Message:    "Manager node has active availability (may run workloads)",
-				FixAction:  strPtr("PUT /nodes/{id}/availability"),
+				FixAction:  func() *string { s := "PUT /nodes/{id}/availability"; return &s }(),
 			})
 		}
 	}
@@ -86,7 +89,11 @@ func (cc *ClusterChecker) Check(_ context.Context) []Recommendation {
 				Category: CategoryUnevenDistribution,
 				Severity: SeverityInfo,
 				Scope:    ScopeCluster,
-				Message:  fmt.Sprintf("Task distribution is uneven: %d tasks on busiest node vs %d on least busy", maxTasks, minTasks),
+				Message: fmt.Sprintf(
+					"Task distribution is uneven: %d tasks on busiest node vs %d on least busy",
+					maxTasks,
+					minTasks,
+				),
 			})
 		}
 	}

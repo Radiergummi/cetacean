@@ -18,7 +18,11 @@ type OperationalChecker struct {
 }
 
 // NewOperationalChecker creates a new operational checker.
-func NewOperationalChecker(query QueryFunc, c *cache.Cache, lookback time.Duration) *OperationalChecker {
+func NewOperationalChecker(
+	query QueryFunc,
+	c *cache.Cache,
+	lookback time.Duration,
+) *OperationalChecker {
 	return &OperationalChecker{query: query, cache: c, lookback: lookback}
 }
 
@@ -91,7 +95,9 @@ func (oc *OperationalChecker) Check(ctx context.Context) []Recommendation {
 	}
 
 	if memResult.err == nil {
-		recs = append(recs, oc.nodeRecs(memResult.results, CategoryNodeMemPressure, "memory usage")...)
+		recs = append(
+			recs,
+			oc.nodeRecs(memResult.results, CategoryNodeMemPressure, "memory usage")...)
 	}
 
 	return recs
@@ -118,14 +124,22 @@ func (oc *OperationalChecker) flakyServiceRecs(entries []queryEntry) []Recommend
 			Scope:      ScopeService,
 			TargetID:   targetID,
 			TargetName: entry.key,
-			Message:    fmt.Sprintf("Service has had %d task restarts over the past %s", int(math.Round(restarts)), formatPromDuration(oc.lookback)),
+			Message: fmt.Sprintf(
+				"Service has had %d task restarts over the past %s",
+				int(math.Round(restarts)),
+				formatPromDuration(oc.lookback),
+			),
 		})
 	}
 
 	return recs
 }
 
-func (oc *OperationalChecker) nodeRecs(entries []queryEntry, category Category, resource string) []Recommendation {
+func (oc *OperationalChecker) nodeRecs(
+	entries []queryEntry,
+	category Category,
+	resource string,
+) []Recommendation {
 	nodesByAddr := make(map[string]nodeRef)
 	nodesByHostname := make(map[string]nodeRef)
 
@@ -182,7 +196,11 @@ type queryEntry struct {
 	value float64
 }
 
-func queryEntries(ctx context.Context, query QueryFunc, promQuery, labelKey string) ([]queryEntry, error) {
+func queryEntries(
+	ctx context.Context,
+	query QueryFunc,
+	promQuery, labelKey string,
+) ([]queryEntry, error) {
 	results, err := query(ctx, promQuery)
 	if err != nil {
 		return nil, err

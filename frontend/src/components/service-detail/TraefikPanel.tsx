@@ -1,3 +1,4 @@
+import { IntegrationSection } from "./IntegrationSection";
 import type {
   TraefikIntegration,
   TraefikMiddleware,
@@ -12,7 +13,6 @@ import { Switch } from "@/components/ui/switch";
 import { badgeBlue, badgePurple, badgeTeal, saveIntegrationLabels } from "@/lib/integrationLabels";
 import { ArrowRight, Lock } from "lucide-react";
 import { useState } from "react";
-import { IntegrationSection } from "./IntegrationSection";
 
 const docsUrl = "https://doc.traefik.io/traefik/providers/swarm/#routing-configuration-with-labels";
 
@@ -33,31 +33,37 @@ function RouterCard({ router }: { router: TraefikRouter }) {
       </header>
 
       {router.rule && (
-        <code className="text-xs font-mono text-muted-foreground break-all bg-muted rounded-md p-2">
+        <code className="rounded-md bg-muted p-2 font-mono text-xs break-all text-muted-foreground">
           {router.rule}
         </code>
       )}
 
       <span className="flex flex-wrap items-center gap-1.5">
         {router.middlewares?.map((middleware) => (
-          <span key={middleware} className={badgePurple}>
+          <span
+            key={middleware}
+            className={badgePurple}
+          >
             {middleware}
           </span>
         ))}
       </span>
 
       {(router.entrypoints?.length || router.service) && (
-        <footer className="flex items-center gap-1 mt-1">
+        <footer className="mt-1 flex items-center gap-1">
           <ArrowRight className="size-3" />
           {router.entrypoints?.map((entrypoint) => (
-            <span key={entrypoint} className={badgeTeal}>
+            <span
+              key={entrypoint}
+              className={badgeTeal}
+            >
               {entrypoint}
             </span>
           ))}
 
           {router.service && (
             <>
-              <span className="text-xs text-muted-foreground leading-none ms-auto">
+              <span className="ms-auto text-xs leading-none text-muted-foreground">
                 {router.service}
               </span>
               <ArrowRight className="size-3" />
@@ -71,13 +77,13 @@ function RouterCard({ router }: { router: TraefikRouter }) {
 
 function ServiceRow({ service }: { service: TraefikService }) {
   return (
-    <article className="flex justify-between items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+    <article className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm">
       <header>
         <span className="font-medium">{service.name}</span>
       </header>
 
       {service.port != null && (
-        <span className="text-xs text-muted-foreground me-auto bg-muted py-0.5 px-1.5 rounded-sm">
+        <span className="me-auto rounded-sm bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
           :{service.port}
         </span>
       )}
@@ -172,7 +178,9 @@ function RouterEditCard({
           value={state.rule}
           onChange={(event) => onChange({ ...state, rule: event.target.value })}
         />
-        <p className="text-xs text-muted-foreground">Routing rule expression, e.g. Host(`example.com`)</p>
+        <p className="text-xs text-muted-foreground">
+          Routing rule expression, e.g. Host(`example.com`)
+        </p>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -203,7 +211,9 @@ function RouterEditCard({
           value={state.service}
           onChange={(event) => onChange({ ...state, service: event.target.value })}
         />
-        <p className="text-xs text-muted-foreground">Backend Traefik service to forward requests to</p>
+        <p className="text-xs text-muted-foreground">
+          Backend Traefik service to forward requests to
+        </p>
       </div>
 
       <NumberField
@@ -276,8 +286,11 @@ function MiddlewareEditCard({
       </header>
 
       {state.config.map(([key, value], index) => (
-        <div key={key} className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-foreground font-mono">{key}</label>
+        <div
+          key={key}
+          className="flex flex-col gap-1.5"
+        >
+          <label className="font-mono text-xs font-medium text-foreground">{key}</label>
           <Input
             value={value}
             onChange={(event) => {
@@ -382,9 +395,15 @@ export function TraefikPanel({
   const hasMiddlewares = middlewares && middlewares.length > 0;
 
   const [formEnabled, setFormEnabled] = useState(integration.enabled);
-  const [routerForms, setRouterForms] = useState<RouterFormState[]>(() => initRouterForms(integration));
-  const [serviceForms, setServiceForms] = useState<ServiceFormState[]>(() => initServiceForms(integration));
-  const [middlewareForms, setMiddlewareForms] = useState<MiddlewareFormState[]>(() => initMiddlewareForms(integration));
+  const [routerForms, setRouterForms] = useState<RouterFormState[]>(() =>
+    initRouterForms(integration),
+  );
+  const [serviceForms, setServiceForms] = useState<ServiceFormState[]>(() =>
+    initServiceForms(integration),
+  );
+  const [middlewareForms, setMiddlewareForms] = useState<MiddlewareFormState[]>(() =>
+    initMiddlewareForms(integration),
+  );
 
   function resetForm() {
     setFormEnabled(integration.enabled);
@@ -394,7 +413,12 @@ export function TraefikPanel({
   }
 
   async function handleSave() {
-    const newLabels = serializeTraefikLabels(formEnabled, routerForms, serviceForms, middlewareForms);
+    const newLabels = serializeTraefikLabels(
+      formEnabled,
+      routerForms,
+      serviceForms,
+      middlewareForms,
+    );
     await saveIntegrationLabels(rawLabels, newLabels, serviceId, onSaved);
   }
 
@@ -420,7 +444,10 @@ export function TraefikPanel({
     <div className="grid gap-4 lg:grid-cols-3">
       <div className="flex flex-col gap-1.5 lg:col-span-3">
         <label className="flex items-center gap-2">
-          <Switch checked={formEnabled} onCheckedChange={setFormEnabled} />
+          <Switch
+            checked={formEnabled}
+            onCheckedChange={setFormEnabled}
+          />
           <span className="text-xs font-medium text-foreground">Enabled</span>
         </label>
         <p className="text-xs text-muted-foreground">Enable Traefik routing for this service</p>
@@ -488,51 +515,60 @@ export function TraefikPanel({
       onRawSave={onSaved}
     >
       <div className="grid gap-4 lg:grid-cols-3">
-          {hasRouters && (
-            <section className="flex flex-col gap-2">
-              <header className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                Routers
-              </header>
-              <ul className="flex flex-col gap-2">
-                {routers.map((router) => (
-                  <li key={router.name} className="contents">
-                    <RouterCard router={router} />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
+        {hasRouters && (
+          <section className="flex flex-col gap-2">
+            <header className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+              Routers
+            </header>
+            <ul className="flex flex-col gap-2">
+              {routers.map((router) => (
+                <li
+                  key={router.name}
+                  className="contents"
+                >
+                  <RouterCard router={router} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
-          {hasServices && (
-            <section className="flex flex-col gap-2">
-              <header className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                Services
-              </header>
-              <ul className="flex flex-col gap-2">
-                {services.map((service) => (
-                  <li key={service.name} className="contents">
-                    <ServiceRow service={service} />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
+        {hasServices && (
+          <section className="flex flex-col gap-2">
+            <header className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+              Services
+            </header>
+            <ul className="flex flex-col gap-2">
+              {services.map((service) => (
+                <li
+                  key={service.name}
+                  className="contents"
+                >
+                  <ServiceRow service={service} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
-          {hasMiddlewares && (
-            <section className="flex flex-col gap-2">
-              <header className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                Middlewares
-              </header>
-              <ul className="flex flex-col gap-2">
-                {middlewares.map((middleware) => (
-                  <li key={middleware.name} className="contents">
-                    <MiddlewareRow middleware={middleware} />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-        </div>
+        {hasMiddlewares && (
+          <section className="flex flex-col gap-2">
+            <header className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+              Middlewares
+            </header>
+            <ul className="flex flex-col gap-2">
+              {middlewares.map((middleware) => (
+                <li
+                  key={middleware.name}
+                  className="contents"
+                >
+                  <MiddlewareRow middleware={middleware} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </div>
     </IntegrationSection>
   );
 }

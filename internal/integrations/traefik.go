@@ -13,7 +13,7 @@ type TraefikIntegration struct {
 	Enabled     bool                `json:"enabled"`
 	Routers     []TraefikRouter     `json:"routers,omitempty"`
 	Services    []TraefikService    `json:"services,omitempty"`
-	Middlewares []TraefikMiddleware  `json:"middlewares,omitempty"`
+	Middlewares []TraefikMiddleware `json:"middlewares,omitempty"`
 }
 
 // TraefikRouter represents a parsed Traefik HTTP router.
@@ -130,7 +130,10 @@ func detectTraefik(labels map[string]string) *TraefikIntegration {
 
 	integration.Routers = sortedValues(routerMap, func(r TraefikRouter) string { return r.Name })
 	integration.Services = sortedValues(serviceMap, func(s TraefikService) string { return s.Name })
-	integration.Middlewares = sortedValues(mwMap, func(m TraefikMiddleware) string { return m.Name })
+	integration.Middlewares = sortedValues(
+		mwMap,
+		func(m TraefikMiddleware) string { return m.Name },
+	)
 
 	return integration
 }

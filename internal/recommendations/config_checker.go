@@ -18,7 +18,7 @@ func NewConfigChecker(c *cache.Cache) *ConfigChecker {
 	return &ConfigChecker{cache: c}
 }
 
-func (cc *ConfigChecker) Name() string           { return "config" }
+func (cc *ConfigChecker) Name() string            { return "config" }
 func (cc *ConfigChecker) Interval() time.Duration { return 60 * time.Second }
 
 // Check inspects all services for missing health checks and restart policies.

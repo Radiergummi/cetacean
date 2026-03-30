@@ -6,17 +6,17 @@ import (
 
 func TestDetectTraefik_BasicRouter(t *testing.T) {
 	labels := map[string]string{
-		"traefik.enable":                                              "true",
-		"traefik.http.routers.myapp.rule":                             "Host(`myapp.example.com`)",
-		"traefik.http.routers.myapp.entrypoints":                      "websecure",
-		"traefik.http.routers.myapp.middlewares":                       "auth@docker,compress@docker",
-		"traefik.http.routers.myapp.service":                          "myapp",
-		"traefik.http.routers.myapp.priority":                         "100",
-		"traefik.http.routers.myapp.tls":                              "true",
-		"traefik.http.routers.myapp.tls.certresolver":                 "letsencrypt",
-		"traefik.http.services.myapp.loadbalancer.server.port":        "8080",
-		"traefik.http.services.myapp.loadbalancer.server.scheme":      "http",
-		"traefik.http.middlewares.auth.basicauth.users":               "admin:$$2y$$...",
+		"traefik.enable":                                                  "true",
+		"traefik.http.routers.myapp.rule":                                 "Host(`myapp.example.com`)",
+		"traefik.http.routers.myapp.entrypoints":                          "websecure",
+		"traefik.http.routers.myapp.middlewares":                          "auth@docker,compress@docker",
+		"traefik.http.routers.myapp.service":                              "myapp",
+		"traefik.http.routers.myapp.priority":                             "100",
+		"traefik.http.routers.myapp.tls":                                  "true",
+		"traefik.http.routers.myapp.tls.certresolver":                     "letsencrypt",
+		"traefik.http.services.myapp.loadbalancer.server.port":            "8080",
+		"traefik.http.services.myapp.loadbalancer.server.scheme":          "http",
+		"traefik.http.middlewares.auth.basicauth.users":                   "admin:$$2y$$...",
 		"traefik.http.middlewares.compress.compress.excludedcontenttypes": "text/event-stream",
 	}
 
@@ -43,7 +43,8 @@ func TestDetectTraefik_BasicRouter(t *testing.T) {
 	if len(r.Entrypoints) != 1 || r.Entrypoints[0] != "websecure" {
 		t.Errorf("unexpected entrypoints: %v", r.Entrypoints)
 	}
-	if len(r.Middlewares) != 2 || r.Middlewares[0] != "auth@docker" || r.Middlewares[1] != "compress@docker" {
+	if len(r.Middlewares) != 2 || r.Middlewares[0] != "auth@docker" ||
+		r.Middlewares[1] != "compress@docker" {
 		t.Errorf("unexpected middlewares: %v", r.Middlewares)
 	}
 	if r.Service != "myapp" {
@@ -182,8 +183,8 @@ func TestDetectTraefik_TLSDomains(t *testing.T) {
 
 func TestDetectTraefik_MiddlewareConfig(t *testing.T) {
 	labels := map[string]string{
-		"traefik.http.middlewares.ratelimit.ratelimit.average":  "100",
-		"traefik.http.middlewares.ratelimit.ratelimit.burst":    "50",
+		"traefik.http.middlewares.ratelimit.ratelimit.average":    "100",
+		"traefik.http.middlewares.ratelimit.ratelimit.burst":      "50",
 		"traefik.http.middlewares.redirect.redirectscheme.scheme": "https",
 	}
 

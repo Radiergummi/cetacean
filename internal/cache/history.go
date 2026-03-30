@@ -147,7 +147,11 @@ func (h *History) List(q HistoryQuery) []HistoryEntry {
 	return result
 }
 
-func (h *History) listByResource(resourceID string, typeFilter EventType, limit int) []HistoryEntry {
+func (h *History) listByResource(
+	resourceID string,
+	typeFilter EventType,
+	limit int,
+) []HistoryEntry {
 	ring := h.byResource[resourceID]
 	if ring == nil {
 		return nil

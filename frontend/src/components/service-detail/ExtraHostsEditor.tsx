@@ -64,9 +64,7 @@ export function ExtraHostsEditor({
 
   function updateRow(index: number, field: keyof HostRow, value: string) {
     setRows((previous) =>
-      previous.map((row, i) =>
-        i === index ? { ...row, [field]: value } : row,
-      ),
+      previous.map((row, i) => (i === index ? { ...row, [field]: value } : row)),
     );
   }
 
@@ -100,7 +98,11 @@ export function ExtraHostsEditor({
       onOpen={resetForm}
       onSave={save}
       actions={
-        <Button variant="outline" size="sm" onClick={addRow}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={addRow}
+        >
           <Plus className="size-3" />
           Add host
         </Button>
@@ -109,12 +111,8 @@ export function ExtraHostsEditor({
         <table className="w-full text-sm">
           <thead>
             <tr>
-              <th className="pe-4 pb-1 text-left font-normal text-muted-foreground">
-                IP Address
-              </th>
-              <th className="pb-1 text-left font-normal text-muted-foreground">
-                Hostname
-              </th>
+              <th className="pe-4 pb-1 text-left font-normal text-muted-foreground">IP Address</th>
+              <th className="pb-1 text-left font-normal text-muted-foreground">Hostname</th>
             </tr>
           </thead>
           <tbody>
@@ -137,41 +135,30 @@ export function ExtraHostsEditor({
             const ipTouched = row.ip.length > 0;
             const hostnameTouched = row.hostname.length > 0;
             const ipInvalid = ipTouched && !isValidIp(row.ip);
-            const hostnameInvalid =
-              hostnameTouched && !isValidHostname(row.hostname);
+            const hostnameInvalid = hostnameTouched && !isValidHostname(row.hostname);
 
             return (
-              <div key={index} className="flex items-start gap-2">
+              <div
+                key={index}
+                className="flex items-start gap-2"
+              >
                 <div className="flex w-40 flex-col gap-0.5">
                   <Input
                     value={row.ip}
-                    onChange={(event) =>
-                      updateRow(index, "ip", event.target.value)
-                    }
+                    onChange={(event) => updateRow(index, "ip", event.target.value)}
                     placeholder="192.168.1.1"
                     className={cn("font-mono", ipInvalid && "border-red-500")}
                   />
-                  {ipInvalid && (
-                    <p className="text-[10px] text-red-500">
-                      Invalid IP address
-                    </p>
-                  )}
+                  {ipInvalid && <p className="text-[10px] text-red-500">Invalid IP address</p>}
                 </div>
                 <div className="flex flex-1 flex-col gap-0.5">
                   <Input
                     value={row.hostname}
-                    onChange={(event) =>
-                      updateRow(index, "hostname", event.target.value)
-                    }
+                    onChange={(event) => updateRow(index, "hostname", event.target.value)}
                     placeholder="myhost"
-                    className={cn(
-                      "font-mono",
-                      hostnameInvalid && "border-red-500",
-                    )}
+                    className={cn("font-mono", hostnameInvalid && "border-red-500")}
                   />
-                  {hostnameInvalid && (
-                    <p className="text-[10px] text-red-500">Invalid hostname</p>
-                  )}
+                  {hostnameInvalid && <p className="text-[10px] text-red-500">Invalid hostname</p>}
                 </div>
                 <Button
                   variant="outline"

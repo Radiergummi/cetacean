@@ -15,11 +15,11 @@ import SortIndicator from "../components/SortIndicator";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useRecommendations } from "../hooks/useRecommendations";
 import { useSearchParam } from "../hooks/useSearchParam";
-import { sizingCategories } from "../lib/sizingUtils";
 import { useServiceMetrics } from "../hooks/useServiceMetrics";
 import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useViewMode } from "../hooks/useViewMode";
+import { sizingCategories } from "../lib/sizingUtils";
 import { useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 

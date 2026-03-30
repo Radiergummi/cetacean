@@ -106,7 +106,9 @@ func TestHandleCluster(t *testing.T) {
 	}
 
 	var body map[string]any
-	json.NewDecoder(w.Body).Decode(&body)
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if body["@context"] == nil {
 		t.Error("response missing @context")
 	}
@@ -166,7 +168,9 @@ func TestHandleClusterCapacity(t *testing.T) {
 	}
 
 	var body map[string]any
-	json.NewDecoder(w.Body).Decode(&body)
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if body["@type"] != "ClusterCapacity" {
 		t.Errorf("@type=%v, want ClusterCapacity", body["@type"])
 	}
@@ -420,7 +424,9 @@ func TestHandleListNodes(t *testing.T) {
 	}
 
 	var resp CollectionResponse[swarm.Node]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 2 {
 		t.Errorf("expected 2 nodes, got %d", len(resp.Items))
 	}
@@ -477,7 +483,9 @@ func TestHandleServiceTasks(t *testing.T) {
 	}
 
 	var resp CollectionResponse[EnrichedTask]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 task, got %d", len(resp.Items))
 	}
@@ -509,7 +517,9 @@ func TestHandleNodeTasks(t *testing.T) {
 	}
 
 	var resp CollectionResponse[EnrichedTask]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 task, got %d", len(resp.Items))
 	}
@@ -539,7 +549,9 @@ func TestHandleListServices_Paginated(t *testing.T) {
 	}
 
 	var resp CollectionResponse[ServiceListItem]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if resp.Total != 3 {
 		t.Fatalf("expected total 3, got %d", resp.Total)
 	}
@@ -590,7 +602,9 @@ func TestHandleListServices_RunningTasks(t *testing.T) {
 	h.HandleListServices(w, req)
 
 	var resp CollectionResponse[ServiceListItem]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 service, got %d", len(resp.Items))
 	}
@@ -618,7 +632,9 @@ func TestHandleListNodes_Paginated(t *testing.T) {
 	}
 
 	var resp CollectionResponse[swarm.Node]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if resp.Total != 2 {
 		t.Fatalf("expected total 2, got %d", resp.Total)
 	}
@@ -649,7 +665,9 @@ func TestHandleListServices_Search(t *testing.T) {
 	}
 
 	var resp CollectionResponse[ServiceListItem]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 service, got %d", len(resp.Items))
 	}
@@ -679,7 +697,9 @@ func TestHandleHistory(t *testing.T) {
 	h.HandleHistory(w, req)
 
 	var resp CollectionResponse[cache.HistoryEntry]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 2 {
 		t.Errorf("got %d entries, want 2", len(resp.Items))
 	}
@@ -705,7 +725,9 @@ func TestHandleHistory_FilterByResource(t *testing.T) {
 	h.HandleHistory(w, req)
 
 	var resp CollectionResponse[cache.HistoryEntry]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 1 {
 		t.Errorf("got %d entries, want 1", len(resp.Items))
 	}
@@ -817,7 +839,9 @@ func TestHandleListTasks(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	var resp CollectionResponse[swarm.Task]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if resp.Total != 2 {
 		t.Errorf("total=%d, want 2", resp.Total)
 	}
@@ -887,7 +911,9 @@ func TestHandleListStacks(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	var resp CollectionResponse[cache.Stack]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if resp.Total != 1 {
 		t.Fatalf("total=%d, want 1", resp.Total)
 	}
@@ -911,7 +937,9 @@ func TestHandleListStacks_SortByName(t *testing.T) {
 	h.HandleListStacks(w, req)
 
 	var resp CollectionResponse[cache.Stack]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if resp.Items[0].Name != "alpha" {
 		t.Errorf("first=%s, want alpha", resp.Items[0].Name)
 	}
@@ -938,7 +966,9 @@ func TestHandleListConfigs_SortByName(t *testing.T) {
 	h.HandleListConfigs(w, req)
 
 	var resp CollectionResponse[swarm.Config]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if resp.Items[0].Spec.Name != "alpha" {
 		t.Errorf("first=%s, want alpha", resp.Items[0].Spec.Name)
 	}
@@ -965,7 +995,9 @@ func TestHandleListSecrets_SortByName(t *testing.T) {
 	h.HandleListSecrets(w, req)
 
 	var resp CollectionResponse[swarm.Secret]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if resp.Items[0].Spec.Name != "alpha" {
 		t.Errorf("first=%s, want alpha", resp.Items[0].Spec.Name)
 	}
@@ -982,7 +1014,9 @@ func TestHandleListNetworks_SortByName(t *testing.T) {
 	h.HandleListNetworks(w, req)
 
 	var resp CollectionResponse[network.Summary]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if resp.Items[0].Name != "alpha" {
 		t.Errorf("first=%s, want alpha", resp.Items[0].Name)
 	}
@@ -999,7 +1033,9 @@ func TestHandleListVolumes_SortByName(t *testing.T) {
 	h.HandleListVolumes(w, req)
 
 	var resp CollectionResponse[volume.Volume]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if resp.Items[0].Name != "alpha" {
 		t.Errorf("first=%s, want alpha", resp.Items[0].Name)
 	}
@@ -1022,7 +1058,9 @@ func TestHandleListStacks_Search(t *testing.T) {
 	h.HandleListStacks(w, req)
 
 	var resp CollectionResponse[cache.Stack]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 stack, got %d", len(resp.Items))
 	}
@@ -1050,7 +1088,9 @@ func TestHandleGetStack_Found(t *testing.T) {
 		Type    string            `json:"@type"`
 		Stack   cache.StackDetail `json:"stack"`
 	}
-	json.NewDecoder(w.Body).Decode(&wrapper)
+	if err := json.NewDecoder(w.Body).Decode(&wrapper); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if wrapper.Stack.Name != "mystack" {
 		t.Errorf("name=%s, want mystack", wrapper.Stack.Name)
 	}
@@ -1107,7 +1147,9 @@ func TestHandleListConfigs(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	var resp CollectionResponse[swarm.Config]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 config, got %d", len(resp.Items))
 	}
@@ -1137,7 +1179,9 @@ func TestHandleListSecrets(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	var resp CollectionResponse[swarm.Secret]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 secret, got %d", len(resp.Items))
 	}
@@ -1157,7 +1201,9 @@ func TestHandleListNetworks(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	var resp CollectionResponse[network.Summary]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 network, got %d", len(resp.Items))
 	}
@@ -1177,7 +1223,9 @@ func TestHandleListVolumes(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	var resp CollectionResponse[volume.Volume]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 volume, got %d", len(resp.Items))
 	}
@@ -1241,7 +1289,9 @@ func TestHandleHistory_CustomLimit(t *testing.T) {
 	h.HandleHistory(w, req)
 
 	var resp CollectionResponse[cache.HistoryEntry]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 2 {
 		t.Errorf("got %d entries, want 2", len(resp.Items))
 	}
@@ -1262,7 +1312,9 @@ func TestHandleListNodes_SortByRole(t *testing.T) {
 	h.HandleListNodes(w, req)
 
 	var resp CollectionResponse[swarm.Node]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 2 {
 		t.Fatalf("expected 2, got %d", len(resp.Items))
 	}
@@ -1285,7 +1337,9 @@ func TestHandleListNodes_SortByStatus(t *testing.T) {
 	h.HandleListNodes(w, req)
 
 	var resp CollectionResponse[swarm.Node]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if string(resp.Items[0].Status.State) != "down" {
 		t.Errorf("first=%s, want down", resp.Items[0].Status.State)
 	}
@@ -1304,7 +1358,9 @@ func TestHandleListNodes_SortByAvailability(t *testing.T) {
 	h.HandleListNodes(w, req)
 
 	var resp CollectionResponse[swarm.Node]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if string(resp.Items[0].Spec.Availability) != "active" {
 		t.Errorf("first=%s, want active", resp.Items[0].Spec.Availability)
 	}
@@ -1329,7 +1385,9 @@ func TestHandleListServices_SortByMode(t *testing.T) {
 	h.HandleListServices(w, req)
 
 	var resp CollectionResponse[ServiceListItem]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 2 {
 		t.Fatalf("expected 2, got %d", len(resp.Items))
 	}
@@ -1350,7 +1408,9 @@ func TestHandleListTasks_SortByService(t *testing.T) {
 	h.HandleListTasks(w, req)
 
 	var resp CollectionResponse[swarm.Task]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if resp.Items[0].ServiceID != "svc-a" {
 		t.Errorf("first serviceID=%s, want svc-a", resp.Items[0].ServiceID)
 	}
@@ -1367,7 +1427,9 @@ func TestHandleListTasks_SortByNode(t *testing.T) {
 	h.HandleListTasks(w, req)
 
 	var resp CollectionResponse[swarm.Task]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if resp.Items[0].NodeID != "node-a" {
 		t.Errorf("first nodeID=%s, want node-a", resp.Items[0].NodeID)
 	}
@@ -1384,7 +1446,9 @@ func TestHandleListNetworks_SortByDriver(t *testing.T) {
 	h.HandleListNetworks(w, req)
 
 	var resp CollectionResponse[network.Summary]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if resp.Items[0].Driver != "bridge" {
 		t.Errorf("first driver=%s, want bridge", resp.Items[0].Driver)
 	}
@@ -1401,7 +1465,9 @@ func TestHandleListVolumes_SortByDriver(t *testing.T) {
 	h.HandleListVolumes(w, req)
 
 	var resp CollectionResponse[volume.Volume]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if resp.Items[0].Driver != "local" {
 		t.Errorf("first driver=%s, want local", resp.Items[0].Driver)
 	}
@@ -1434,7 +1500,9 @@ func TestHandleListNodes_Filter(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	var resp CollectionResponse[swarm.Node]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 node, got %d", len(resp.Items))
 	}
@@ -1475,7 +1543,9 @@ func TestHandleListTasks_Filter(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	var resp CollectionResponse[swarm.Task]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 task, got %d", len(resp.Items))
 	}
@@ -1502,7 +1572,9 @@ func TestHandleListServices_Filter(t *testing.T) {
 	h.HandleListServices(w, filterReq("/services", `image contains "nginx"`))
 
 	var resp CollectionResponse[ServiceListItem]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 service, got %d", len(resp.Items))
 	}
@@ -1521,7 +1593,9 @@ func TestHandleListNetworks_Filter(t *testing.T) {
 	h.HandleListNetworks(w, filterReq("/networks", `driver == "overlay"`))
 
 	var resp CollectionResponse[network.Summary]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 network, got %d", len(resp.Items))
 	}
@@ -1582,7 +1656,9 @@ func TestHandleList_FilterEmpty(t *testing.T) {
 	h.HandleListNodes(w, filterReq("/nodes", ""))
 
 	var resp CollectionResponse[swarm.Node]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if resp.Total != 1 {
 		t.Errorf("expected 1 node with empty filter, got %d", resp.Total)
 	}
@@ -1600,7 +1676,9 @@ func TestHandleList_FilterNoMatch(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	var resp CollectionResponse[swarm.Node]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if resp.Total != 0 {
 		t.Errorf("expected 0 nodes, got %d", resp.Total)
 	}
@@ -1616,7 +1694,9 @@ func TestHandleListVolumes_Filter(t *testing.T) {
 	h.HandleListVolumes(w, filterReq("/volumes", `driver == "nfs"`))
 
 	var resp CollectionResponse[volume.Volume]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 volume, got %d", len(resp.Items))
 	}
@@ -1645,7 +1725,9 @@ func TestHandleListConfigs_Filter(t *testing.T) {
 	h.HandleListConfigs(w, filterReq("/configs", `name contains "app"`))
 
 	var resp CollectionResponse[swarm.Config]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 config, got %d", len(resp.Items))
 	}
@@ -1671,7 +1753,9 @@ func TestHandleListSecrets_Filter(t *testing.T) {
 	h.HandleListSecrets(w, filterReq("/secrets", `name startsWith "tls"`))
 
 	var resp CollectionResponse[swarm.Secret]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 secret, got %d", len(resp.Items))
 	}
@@ -1693,7 +1777,9 @@ func TestHandleListStacks_Filter(t *testing.T) {
 	h.HandleListStacks(w, filterReq("/stacks", `services > 0`))
 
 	var resp CollectionResponse[cache.Stack]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 2 {
 		t.Fatalf("expected 2 stacks, got %d", len(resp.Items))
 	}
@@ -1719,7 +1805,9 @@ func TestHandleList_FilterWithSearchAndPagination(t *testing.T) {
 	h.HandleListNodes(w, req)
 
 	var resp CollectionResponse[swarm.Node]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if resp.Total != 1 {
 		t.Fatalf("expected 1, got %d", resp.Total)
 	}
@@ -1741,7 +1829,9 @@ func TestHandleList_FilterMissingField(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	var resp CollectionResponse[swarm.Node]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if resp.Total != 0 {
 		t.Errorf("expected 0 nodes for missing field filter, got %d", resp.Total)
 	}
@@ -1762,7 +1852,9 @@ func TestHandleListNodes_Search(t *testing.T) {
 	h.HandleListNodes(w, req)
 
 	var resp CollectionResponse[swarm.Node]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 node, got %d", len(resp.Items))
 	}
@@ -1845,7 +1937,9 @@ func TestHandleStackSummary(t *testing.T) {
 	}
 
 	var resp CollectionResponse[cache.StackSummary]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 summary, got %d", len(resp.Items))
 	}
@@ -1905,7 +1999,9 @@ func TestHandleStackSummary_PrometheusDown(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	var resp CollectionResponse[cache.StackSummary]
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Errorf("failed to decode response body: %v", err)
+	}
 	if len(resp.Items) != 1 {
 		t.Fatalf("expected 1 summary, got %d", len(resp.Items))
 	}

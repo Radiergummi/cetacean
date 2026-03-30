@@ -17,19 +17,6 @@ type ResourceMap[T any] struct {
 	onDelete func(key string, old T)           // called under write lock
 }
 
-func newResourceMap[T any](
-	mu *sync.RWMutex,
-	onSet func(key string, old *T, new_ *T),
-	onDelete func(key string, old T),
-) ResourceMap[T] {
-	return ResourceMap[T]{
-		mu:       mu,
-		items:    make(map[string]T),
-		onSet:    onSet,
-		onDelete: onDelete,
-	}
-}
-
 func (r *ResourceMap[T]) set(key string, v *T) {
 	if r.onSet != nil {
 		if old, ok := r.items[key]; ok {
@@ -102,6 +89,3 @@ func (r *ResourceMap[T]) Len() int {
 
 // Replace atomically swaps the entire map contents. Hooks are not called.
 // Caller must hold the write lock.
-func (r *ResourceMap[T]) replace(items map[string]T) {
-	r.items = items
-}

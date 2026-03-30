@@ -10,27 +10,22 @@ interface ActivityFeedProps {
   hideType?: boolean;
 }
 
-export default function ActivityFeed({
-  entries,
-  loading,
-  hideType,
-}: ActivityFeedProps) {
+export default function ActivityFeed({ entries, loading, hideType }: ActivityFeedProps) {
   if (loading) {
     return (
       <div className="space-y-3">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-5 w-3/4 rounded bg-muted" />
+          <div
+            key={i}
+            className="h-5 w-3/4 rounded bg-muted"
+          />
         ))}
       </div>
     );
   }
 
   if (entries.length === 0) {
-    return (
-      <p className="py-6 text-center text-sm text-muted-foreground">
-        No recent activity
-      </p>
-    );
+    return <p className="py-6 text-center text-sm text-muted-foreground">No recent activity</p>;
   }
 
   return (

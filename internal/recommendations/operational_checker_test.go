@@ -102,7 +102,7 @@ func TestOperationalChecker_FlakyServiceBelowThreshold(t *testing.T) {
 func TestOperationalChecker_NodeDiskAboveThreshold(t *testing.T) {
 	c := newOperationalCache(nil, []swarm.Node{
 		{
-			ID: "node1",
+			ID:          "node1",
 			Description: swarm.NodeDescription{Hostname: "worker1"},
 			Status:      swarm.NodeStatus{Addr: "192.168.1.10"},
 		},
@@ -141,7 +141,7 @@ func TestOperationalChecker_NodeDiskAboveThreshold(t *testing.T) {
 func TestOperationalChecker_NodeDiskBelowThreshold(t *testing.T) {
 	c := newOperationalCache(nil, []swarm.Node{
 		{
-			ID: "node1",
+			ID:          "node1",
 			Description: swarm.NodeDescription{Hostname: "worker1"},
 			Status:      swarm.NodeStatus{Addr: "192.168.1.10"},
 		},
@@ -163,7 +163,7 @@ func TestOperationalChecker_NodeDiskBelowThreshold(t *testing.T) {
 func TestOperationalChecker_NodeMemoryAboveThreshold(t *testing.T) {
 	c := newOperationalCache(nil, []swarm.Node{
 		{
-			ID: "node1",
+			ID:          "node1",
 			Description: swarm.NodeDescription{Hostname: "worker1"},
 			Status:      swarm.NodeStatus{Addr: "192.168.1.10"},
 		},
@@ -198,7 +198,7 @@ func TestOperationalChecker_AllHealthy(t *testing.T) {
 		},
 		[]swarm.Node{
 			{
-				ID: "node1",
+				ID:          "node1",
 				Description: swarm.NodeDescription{Hostname: "worker1"},
 				Status:      swarm.NodeStatus{Addr: "192.168.1.10"},
 			},

@@ -5,7 +5,7 @@ import "testing"
 func TestDetect_NoIntegrations(t *testing.T) {
 	labels := map[string]string{
 		"com.docker.stack.namespace": "mystack",
-		"app.version":               "1.0",
+		"app.version":                "1.0",
 	}
 	result := Detect(labels)
 	if len(result) != 0 {

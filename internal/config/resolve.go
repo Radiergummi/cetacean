@@ -137,7 +137,12 @@ func checkIntRange(v, min, max int, source string) (int, error) {
 // resolveFloat returns the first set value in precedence order:
 // flag > env > file > hardcoded default. Returns an error if any
 // explicitly set value is not a valid float or is out of [min, max].
-func resolveFloat(flag *float64, envKey string, file *float64, def, min, max float64) (float64, error) {
+func resolveFloat(
+	flag *float64,
+	envKey string,
+	file *float64,
+	def, min, max float64,
+) (float64, error) {
 	var raw string
 	var source string
 	switch envVal := os.Getenv(envKey); {
