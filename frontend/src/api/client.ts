@@ -1,3 +1,4 @@
+import { apiPath } from "@/lib/basePath";
 import type {
   Node,
   ServiceDetail,
@@ -70,7 +71,7 @@ export class ApiError extends Error {
 
 function redirectToLogin(): never {
   const redirect = encodeURIComponent(window.location.pathname + window.location.search);
-  window.location.href = `/auth/login?redirect=${redirect}`;
+  window.location.href = apiPath(`/auth/login?redirect=${redirect}`);
 
   // Throw to prevent callers from continuing while the browser navigates away.
   throw new Error("redirecting to login");
@@ -94,7 +95,7 @@ async function throwResponseError(res: Response): Promise<never> {
 }
 
 async function fetchJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(path, { headers, signal });
+  const res = await fetch(apiPath(path), { headers, signal });
   if (!res.ok) {
     if (res.status === 401 && res.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
       redirectToLogin();
@@ -112,7 +113,7 @@ async function mutationFetch<T>(
 ): Promise<T> {
   const h: Record<string, string> = { Accept: "application/json" };
   if (contentType) h["Content-Type"] = contentType;
-  const res = await fetch(path, {
+  const res = await fetch(apiPath(path), {
     method,
     headers: h,
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -203,7 +204,7 @@ function buildLogStreamURL(path: string, opts?: { after?: string; stream?: strin
   if (opts?.after) params.set("after", opts.after);
   if (opts?.stream) params.set("stream", opts.stream);
   const qs = params.toString();
-  return `${path}${qs ? `?${qs}` : ""}`;
+  return apiPath(`${path}${qs ? `?${qs}` : ""}`);
 }
 
 export interface ListParams {
@@ -338,7 +339,7 @@ export const api = {
   },
   metricsStreamURL: (query: string, step: number, range: number): string => {
     const params = new URLSearchParams({ query, step: String(step), range: String(range) });
-    return `/metrics?${params}`;
+    return apiPath(`/metrics?${params}`);
   },
   diskUsage: () =>
     fetchJSON<CollectionResponse<DiskUsageSummary>>("/disk-usage").then((r) => r.items),

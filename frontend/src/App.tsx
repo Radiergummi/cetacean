@@ -1,3 +1,4 @@
+import { apiPath, basePath } from "./lib/basePath";
 import ConnectionStatus from "./components/ConnectionStatus";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { LoadingDetail } from "./components/LoadingSkeleton";
@@ -236,7 +237,7 @@ function ConnectionTracker({ children }: { children: React.ReactNode }) {
   const lastEventAtRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const es = new EventSource("/events");
+    const es = new EventSource(apiPath("/events"));
     es.onopen = () => setConnected(true);
     es.onerror = () => setConnected(false);
 
@@ -258,7 +259,7 @@ function ConnectionTracker({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={basePath}>
       <AuthProvider>
         <OperationsLevelProvider>
           <ConnectionTracker>

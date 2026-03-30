@@ -1,3 +1,4 @@
+import { apiPath } from "@/lib/basePath";
 import InfoCard from "@/components/InfoCard";
 import { LoadingDetail } from "@/components/LoadingSkeleton";
 import PageHeader from "@/components/PageHeader";
@@ -31,7 +32,7 @@ export default function ProfilePage() {
         subtitle={`Authenticated via ${providerLabels[identity.provider] ?? identity.provider}`}
         actions={
           identity.provider === "oidc" ? (
-            <form method="POST" action="/auth/logout">
+            <form method="POST" action={apiPath("/auth/logout")}>
               <Button variant="outline" size="sm" type="submit">
                 <LogOut className="me-1.5 size-4" />
                 Sign out
