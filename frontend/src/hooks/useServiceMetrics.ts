@@ -42,10 +42,22 @@ export function useServiceMetrics() {
       const step = 120;
 
       Promise.all([
-        api.metricsQuery(cpuQuery).catch(() => null),
-        api.metricsQuery(memQuery).catch(() => null),
-        api.metricsQueryRange(cpuQuery, String(start), String(now), String(step)).catch(() => null),
-        api.metricsQueryRange(memQuery, String(start), String(now), String(step)).catch(() => null),
+        api.metricsQuery(cpuQuery).catch((error) => {
+          console.warn(error);
+          return null;
+        }),
+        api.metricsQuery(memQuery).catch((error) => {
+          console.warn(error);
+          return null;
+        }),
+        api.metricsQueryRange(cpuQuery, String(start), String(now), String(step)).catch((error) => {
+          console.warn(error);
+          return null;
+        }),
+        api.metricsQueryRange(memQuery, String(start), String(now), String(step)).catch((error) => {
+          console.warn(error);
+          return null;
+        }),
       ]).then(([cpuResponse, memResponse, cpuRangeResponse, memRangeResponse]) => {
         if (cancelled) {
           return;

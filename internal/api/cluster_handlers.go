@@ -75,13 +75,22 @@ type ResourceMetric struct {
 
 func (h *Handlers) HandleClusterCapacity(w http.ResponseWriter, r *http.Request) {
 	snap := h.cache.Snapshot()
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/cluster/capacity", "ClusterCapacity", ClusterCapacityResponse{
-		MaxNodeCPU:    snap.MaxNodeCPU,
-		MaxNodeMemory: snap.MaxNodeMemory,
-		TotalCPU:      snap.TotalCPU,
-		TotalMemory:   snap.TotalMemory,
-		NodeCount:     snap.NodeCount,
-	}))
+	writeJSONWithETag(
+		w,
+		r,
+		NewDetailResponse(
+			r.Context(),
+			"/cluster/capacity",
+			"ClusterCapacity",
+			ClusterCapacityResponse{
+				MaxNodeCPU:    snap.MaxNodeCPU,
+				MaxNodeMemory: snap.MaxNodeMemory,
+				TotalCPU:      snap.TotalCPU,
+				TotalMemory:   snap.TotalMemory,
+				NodeCount:     snap.NodeCount,
+			},
+		),
+	)
 }
 
 func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) {
@@ -197,6 +206,7 @@ func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) 
 type MonitoringStatus struct {
 	PrometheusConfigured bool          `json:"prometheusConfigured"`
 	PrometheusReachable  bool          `json:"prometheusReachable"`
+	Error                string        `json:"error,omitempty"`
 	NodeExporter         *TargetStatus `json:"nodeExporter"`
 	Cadvisor             *TargetStatus `json:"cadvisor"`
 }
@@ -262,6 +272,8 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 		_, err := h.promClient.InstantQuery(ctx, `vector(1)`)
 		if err == nil {
 			status.PrometheusReachable = true
+		} else {
+			status.Error = err.Error()
 		}
 	}
 

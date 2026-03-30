@@ -18,10 +18,14 @@ func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "VOL002", fmt.Sprintf("volume %q not found", name))
 		return
 	}
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/volumes/"+name, "Volume", VolumeResponse{
-		Volume:   vol,
-		Services: h.cache.ServicesUsingVolume(name),
-	}))
+	writeJSONWithETag(
+		w,
+		r,
+		NewDetailResponse(r.Context(), "/volumes/"+name, "Volume", VolumeResponse{
+			Volume:   vol,
+			Services: h.cache.ServicesUsingVolume(name),
+		}),
+	)
 }
 
 func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {

@@ -15,7 +15,6 @@ import (
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
-	"github.com/radiergummi/cetacean/internal/config"
 )
 
 func TestResponsesMatchOpenAPISpec(t *testing.T) {
@@ -82,7 +81,7 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 		Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
 	})
 
-	h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
+	h := newTestHandlers(t, withCache(c))
 	b := sse.NewBroadcaster(0, noopErrorWriter)
 	defer b.Close()
 	noopSPA := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

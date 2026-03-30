@@ -363,10 +363,14 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/search", "SearchResult", SearchResponse{
-		Query:   q,
-		Results: results,
-		Counts:  counts,
-		Total:   total,
-	}))
+	writeJSONWithETag(
+		w,
+		r,
+		NewDetailResponse(r.Context(), "/search", "SearchResult", SearchResponse{
+			Query:   q,
+			Results: results,
+			Counts:  counts,
+			Total:   total,
+		}),
+	)
 }

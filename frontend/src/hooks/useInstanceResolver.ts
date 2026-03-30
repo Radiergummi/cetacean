@@ -35,7 +35,7 @@ export function useInstanceResolver() {
 
         setByHostname(map);
       })
-      .catch(() => {});
+      .catch(console.warn);
   }, []);
 
   useEffect(() => {

@@ -11,7 +11,6 @@ import (
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
-	"github.com/radiergummi/cetacean/internal/config"
 )
 
 func TestRequestLogger(t *testing.T) {
@@ -265,7 +264,7 @@ func TestRequestIDFrom_Empty(t *testing.T) {
 
 func TestNewRouter_Smoke(t *testing.T) {
 	c := cache.New(nil)
-	h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
+	h := newTestHandlers(t, withCache(c))
 	b := sse.NewBroadcaster(0, noopErrorWriter)
 	defer b.Close()
 	prom := promapi.NewProxy("http://localhost:9090", noopErrorWriter)

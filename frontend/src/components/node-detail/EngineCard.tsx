@@ -28,10 +28,7 @@ export function EngineCard({ version }: { version: string }) {
   const [latest, setLatest] = useState<{ version: string; url: string } | null>(null);
 
   useEffect(() => {
-    api
-      .dockerLatestVersion()
-      .then(setLatest)
-      .catch(() => {});
+    api.dockerLatestVersion().then(setLatest).catch(console.warn);
   }, []);
 
   const updateAvailable = latest && isNewer(latest.version, version);

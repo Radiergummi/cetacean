@@ -57,8 +57,8 @@ export default function ThemeToggle() {
   return (
     <button
       onClick={() => setTheme(CYCLE[(CYCLE.indexOf(theme) + 1) % CYCLE.length])}
+      aria-label={`Theme: ${labels[theme]}`}
       className="flex size-8 cursor-pointer items-center justify-center rounded-md transition hover:bg-muted"
-      title={`Theme: ${labels[theme]}`}
     >
       <Icon className="size-4" />
     </button>

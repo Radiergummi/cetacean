@@ -81,7 +81,7 @@ export default function CapacitySection({
             setMetrics(metrics);
           }
         })
-        .catch(() => {});
+        .catch(console.warn);
     };
     load();
     const interval = setInterval(load, 30_000);

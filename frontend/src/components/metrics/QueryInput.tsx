@@ -192,17 +192,27 @@ export function QueryInput({ value, onChange, onRun, loading, completion }: Prop
           onBlur={handleBlur}
           placeholder="Enter a PromQL expression..."
           rows={1}
+          role="combobox"
+          aria-expanded={hasSuggestions}
+          aria-autocomplete="list"
+          aria-controls={hasSuggestions ? "query-suggestions" : undefined}
+          aria-activedescendant={hasSuggestions ? `query-suggestion-${highlightIndex}` : undefined}
           className="w-full resize-none overflow-hidden rounded-md border bg-background px-3 py-1.5 font-mono text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         />
 
         {hasSuggestions && (
           <ul
+            id="query-suggestions"
             ref={dropdownRef}
+            role="listbox"
             className="absolute top-full left-0 z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-popover py-1 shadow-md"
           >
             {completion.suggestions.map((suggestion, index) => (
               <li
+                id={`query-suggestion-${index}`}
                 key={suggestion.label}
+                role="option"
+                aria-selected={index === highlightIndex}
                 className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm ${
                   index === highlightIndex ? "bg-accent text-accent-foreground" : ""
                 }`}

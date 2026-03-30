@@ -69,7 +69,7 @@ export default function TaskDetail() {
     api
       .service(serviceId)
       .then(({ service }) => setService(service))
-      .catch(() => {});
+      .catch(console.warn);
   }, [serviceId]);
 
   function executeRemove() {

@@ -62,7 +62,10 @@ export default function NodeResourceGauges({ instance }: Props) {
 
             return value != null ? Number(value) : null;
           })
-          .catch(() => null),
+          .catch((error) => {
+            console.warn(error);
+            return null;
+          }),
       ),
     ).then(setValues);
   }, [instance]);

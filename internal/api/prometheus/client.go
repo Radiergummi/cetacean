@@ -39,6 +39,16 @@ func (pc *Client) InstantQuery(ctx context.Context, query string) ([]prom.Result
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		preview, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, fmt.Errorf(
+			"prometheus returned HTTP %d for %s: %s",
+			resp.StatusCode,
+			u,
+			string(preview),
+		)
+	}
+
 	var body struct {
 		Status    string `json:"status"`
 		Error     string `json:"error"`

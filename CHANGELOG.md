@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Recommendation cards expand to show why each recommendation matters
+- Monitoring status banner shows the actual error when Prometheus is unreachable
+
+### Fixed
+- Prometheus proxy returning raw 404/502 responses instead of structured errors when the configured URL is wrong
+- Prometheus query client ignoring HTTP error status codes, producing misleading "parse error" messages
+- Base path detection using page URL instead of `<base>` tag, causing broken API requests when navigating in the dev server
+
 ## [0.9.1] - 2026-03-30
 
 ### Fixed

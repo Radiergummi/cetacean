@@ -64,7 +64,7 @@ export function invalidateRecommendations() {
         notify();
       }
     })
-    .catch(() => {});
+    .catch(console.warn);
 }
 
 export function useRecommendations(): RecommendationsState {
@@ -74,7 +74,7 @@ export function useRecommendations(): RecommendationsState {
   const refresh = useCallback(() => {
     fetchCached()
       .then((result) => setState(result))
-      .catch(() => {});
+      .catch(console.warn);
   }, []);
 
   useEffect(() => {
@@ -94,7 +94,7 @@ export function useRecommendations(): RecommendationsState {
           setState(result);
         }
       })
-      .catch(() => {});
+      .catch(console.warn);
 
     return () => {
       cancelled = true;

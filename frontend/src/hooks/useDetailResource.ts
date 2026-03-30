@@ -44,7 +44,7 @@ export function useDetailResource<T>(
           setHistory(entry);
         }
       })
-      .catch(() => {});
+      .catch(console.warn);
   }, [key, fetchFn]);
 
   useEffect(() => {

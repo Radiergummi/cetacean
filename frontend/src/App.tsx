@@ -87,6 +87,12 @@ function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:shadow-lg focus:ring-2 focus:ring-ring"
+      >
+        Skip to main content
+      </a>
       <nav className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="relative flex h-12 items-center justify-between">
@@ -113,7 +119,7 @@ function Layout({ children }: { children: React.ReactNode }) {
             <div className="ml-auto flex items-center gap-3 lg:ml-0">
               <ShortcutTooltip keys={["?"]}>
                 <button
-                  className="inline-flex size-8 items-center justify-center rounded-md transition hover:bg-muted"
+                  className="inline-flex size-8 cursor-pointer items-center justify-center rounded-md transition hover:bg-muted"
                   onClick={() => setShortcutsOpen(true)}
                   aria-label="Keyboard shortcuts"
                 >
@@ -148,7 +154,10 @@ function Layout({ children }: { children: React.ReactNode }) {
           )}
         </div>
       </nav>
-      <main className="mx-auto max-w-7xl px-4 py-6 pb-48 sm:px-6 lg:px-8">
+      <main
+        id="main-content"
+        className="mx-auto max-w-7xl px-4 py-6 pb-48 sm:px-6 lg:px-8"
+      >
         <ErrorBoundary>{children}</ErrorBoundary>
       </main>
       {shortcutsOpen && <ShortcutsHelp onClose={() => setShortcutsOpen(false)} />}
@@ -163,7 +172,7 @@ function RecommendationsIndicator() {
   return (
     <ShortcutTooltip keys={["g", "r"]}>
       <button
-        className="relative inline-flex size-8 items-center justify-center rounded-md transition hover:bg-muted"
+        className="relative inline-flex size-8 cursor-pointer items-center justify-center rounded-md transition hover:bg-muted"
         onClick={() => navigate("/recommendations")}
         aria-label="Recommendations"
       >

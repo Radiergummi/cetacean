@@ -1,6 +1,7 @@
 package prometheus
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -72,12 +73,29 @@ func (p *Proxy) proxyTo(
 	}
 	defer resp.Body.Close()
 
-	w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(resp.StatusCode)
-	if _, err := io.Copy(w, io.LimitReader(resp.Body, maxResponseBytes)); err != nil {
-		slog.Warn("prometheus proxy copy error", "error", err)
+	// Forward successful responses directly.
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
+		w.Header().Set("Cache-Control", "no-store")
+		w.WriteHeader(resp.StatusCode)
+		if _, err := io.Copy(w, io.LimitReader(resp.Body, maxResponseBytes)); err != nil {
+			slog.Warn("prometheus proxy copy error", "error", err)
+		}
+		return
 	}
+
+	// Non-2xx: return a structured error instead of forwarding the raw
+	// Prometheus response (which may be HTML or an opaque error page).
+	preview, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+	slog.Error("prometheus returned error",
+		"url", targetURL,
+		"status", resp.StatusCode,
+		"body", string(preview),
+	)
+	p.writeError(w, r, "MTR002", fmt.Sprintf(
+		"prometheus returned HTTP %d for %s",
+		resp.StatusCode, targetURL,
+	))
 }
 
 // HandleMetricsLabels proxies to /api/v1/labels with optional match[] param.

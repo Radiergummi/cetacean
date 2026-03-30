@@ -11,9 +11,6 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/errdefs"
 	json "github.com/goccy/go-json"
-
-	"github.com/radiergummi/cetacean/internal/cache"
-	"github.com/radiergummi/cetacean/internal/config"
 )
 
 type mockPluginClient struct {
@@ -99,19 +96,9 @@ func (m *mockPluginClient) PluginConfigure(ctx context.Context, name string, arg
 	return fmt.Errorf("not implemented")
 }
 
-func newPluginHandlers(pc *mockPluginClient) *Handlers {
-	return NewHandlers(
-		cache.New(nil),
-		nil,
-		nil,
-		nil,
-		nil,
-		pc,
-		closedReady(),
-		nil,
-		config.OpsImpactful,
-		nil,
-	)
+func newPluginHandlers(t testing.TB, pc *mockPluginClient) *Handlers {
+	t.Helper()
+	return newTestHandlers(t, withPluginClient(pc))
 }
 
 func TestHandlePlugins_OK(t *testing.T) {
@@ -123,7 +110,7 @@ func TestHandlePlugins_OK(t *testing.T) {
 			}, nil
 		},
 	}
-	h := newPluginHandlers(pc)
+	h := newPluginHandlers(t, pc)
 
 	req := httptest.NewRequest(http.MethodGet, "/plugins", nil)
 	req.Header.Set("Accept", "application/json")
@@ -152,7 +139,7 @@ func TestHandlePlugins_Empty(t *testing.T) {
 			return nil, nil
 		},
 	}
-	h := newPluginHandlers(pc)
+	h := newPluginHandlers(t, pc)
 
 	req := httptest.NewRequest(http.MethodGet, "/plugins", nil)
 	req.Header.Set("Accept", "application/json")
@@ -171,7 +158,7 @@ func TestHandlePlugin_OK(t *testing.T) {
 			return &types.Plugin{Name: name, Enabled: true}, nil
 		},
 	}
-	h := newPluginHandlers(pc)
+	h := newPluginHandlers(t, pc)
 
 	req := httptest.NewRequest("GET", "/plugins/my-plugin", nil)
 	req.SetPathValue("name", "my-plugin")
@@ -197,7 +184,7 @@ func TestHandlePlugin_NotFound(t *testing.T) {
 			return nil, errdefs.NotFound(fmt.Errorf("plugin not found"))
 		},
 	}
-	h := newPluginHandlers(pc)
+	h := newPluginHandlers(t, pc)
 
 	req := httptest.NewRequest("GET", "/plugins/missing", nil)
 	req.SetPathValue("name", "missing")
@@ -215,7 +202,7 @@ func TestHandleEnablePlugin_OK(t *testing.T) {
 			return nil
 		},
 	}
-	h := newPluginHandlers(pc)
+	h := newPluginHandlers(t, pc)
 
 	req := httptest.NewRequest("POST", "/plugins/my-plugin/enable", nil)
 	req.SetPathValue("name", "my-plugin")
@@ -233,7 +220,7 @@ func TestHandleDisablePlugin_OK(t *testing.T) {
 			return nil
 		},
 	}
-	h := newPluginHandlers(pc)
+	h := newPluginHandlers(t, pc)
 
 	req := httptest.NewRequest("POST", "/plugins/my-plugin/disable", nil)
 	req.SetPathValue("name", "my-plugin")
@@ -253,7 +240,7 @@ func TestHandleRemovePlugin_OK(t *testing.T) {
 			return nil
 		},
 	}
-	h := newPluginHandlers(pc)
+	h := newPluginHandlers(t, pc)
 
 	req := httptest.NewRequest("DELETE", "/plugins/my-plugin", nil)
 	req.SetPathValue("name", "my-plugin")
@@ -276,7 +263,7 @@ func TestHandleRemovePlugin_Force(t *testing.T) {
 			return nil
 		},
 	}
-	h := newPluginHandlers(pc)
+	h := newPluginHandlers(t, pc)
 
 	req := httptest.NewRequest("DELETE", "/plugins/my-plugin?force=true", nil)
 	req.SetPathValue("name", "my-plugin")
@@ -297,7 +284,7 @@ func TestHandlePluginPrivileges_OK(t *testing.T) {
 			return types.PluginPrivileges{{Name: "network", Value: []string{"host"}}}, nil
 		},
 	}
-	h := newPluginHandlers(pc)
+	h := newPluginHandlers(t, pc)
 
 	body := `{"remote":"example/plugin:latest"}`
 	req := httptest.NewRequest("POST", "/plugins/privileges", strings.NewReader(body))
@@ -311,7 +298,7 @@ func TestHandlePluginPrivileges_OK(t *testing.T) {
 
 func TestHandlePluginPrivileges_MissingRemote(t *testing.T) {
 	pc := &mockPluginClient{}
-	h := newPluginHandlers(pc)
+	h := newPluginHandlers(t, pc)
 
 	body := `{"remote":""}`
 	req := httptest.NewRequest("POST", "/plugins/privileges", strings.NewReader(body))
@@ -329,7 +316,7 @@ func TestHandleInstallPlugin_OK(t *testing.T) {
 			return &types.Plugin{Name: "example/plugin:latest", Enabled: false}, nil
 		},
 	}
-	h := newPluginHandlers(pc)
+	h := newPluginHandlers(t, pc)
 
 	body := `{"remote":"example/plugin:latest"}`
 	req := httptest.NewRequest("POST", "/plugins", strings.NewReader(body))
@@ -358,7 +345,7 @@ func TestHandleUpgradePlugin_OK(t *testing.T) {
 			return &types.Plugin{Name: name, Enabled: true}, nil
 		},
 	}
-	h := newPluginHandlers(pc)
+	h := newPluginHandlers(t, pc)
 
 	body := `{"remote":"example/plugin:v2"}`
 	req := httptest.NewRequest("POST", "/plugins/my-plugin/upgrade", strings.NewReader(body))
@@ -388,7 +375,7 @@ func TestHandleConfigurePlugin_OK(t *testing.T) {
 			return &types.Plugin{Name: name, Enabled: true}, nil
 		},
 	}
-	h := newPluginHandlers(pc)
+	h := newPluginHandlers(t, pc)
 
 	body := `{"args":["DEBUG=1","LOG_LEVEL=info"]}`
 	req := httptest.NewRequest("PATCH", "/plugins/my-plugin/settings", strings.NewReader(body))

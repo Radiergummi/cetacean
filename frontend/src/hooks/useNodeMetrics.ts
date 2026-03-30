@@ -44,12 +44,24 @@ export function useNodeMetrics() {
       const cpuRangeQuery = cpuQuery;
 
       Promise.all([
-        api.metricsQuery(cpuQuery).catch(() => null),
-        api.metricsQuery(memQuery).catch(() => null),
-        api.metricsQuery(diskQuery).catch(() => null),
+        api.metricsQuery(cpuQuery).catch((error) => {
+          console.warn(error);
+          return null;
+        }),
+        api.metricsQuery(memQuery).catch((error) => {
+          console.warn(error);
+          return null;
+        }),
+        api.metricsQuery(diskQuery).catch((error) => {
+          console.warn(error);
+          return null;
+        }),
         api
           .metricsQueryRange(cpuRangeQuery, String(start), String(now), String(step))
-          .catch(() => null),
+          .catch((error) => {
+            console.warn(error);
+            return null;
+          }),
       ]).then(([cpuResponse, memResponse, diskResponse, cpuRangeResponse]) => {
         if (cancelled) {
           return;

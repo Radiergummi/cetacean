@@ -252,51 +252,65 @@ func TestCache_DeleteTask(t *testing.T) {
 	}
 }
 
-func TestCache_DeleteConfig(t *testing.T) {
-	c := New(nil)
-	cfg := swarm.Config{ID: "cfg1"}
-	cfg.Spec.Labels = map[string]string{stackLabel: "mystack"}
-	c.SetConfig(cfg)
-
-	c.DeleteConfig("cfg1")
-
-	if _, ok := c.GetConfig("cfg1"); ok {
-		t.Fatal("expected config to be deleted")
+func TestCache_DeleteResource(t *testing.T) {
+	tests := []struct {
+		name   string
+		set    func(*Cache)
+		delete func(*Cache)
+		exists func(*Cache) bool
+	}{
+		{
+			name: "config",
+			set: func(c *Cache) {
+				cfg := swarm.Config{ID: "cfg1"}
+				cfg.Spec.Labels = map[string]string{stackLabel: "mystack"}
+				c.SetConfig(cfg)
+			},
+			delete: func(c *Cache) { c.DeleteConfig("cfg1") },
+			exists: func(c *Cache) bool { _, ok := c.GetConfig("cfg1"); return ok },
+		},
+		{
+			name: "secret",
+			set: func(c *Cache) {
+				sec := swarm.Secret{ID: "sec1"}
+				sec.Spec.Labels = map[string]string{stackLabel: "mystack"}
+				c.SetSecret(sec)
+			},
+			delete: func(c *Cache) { c.DeleteSecret("sec1") },
+			exists: func(c *Cache) bool { _, ok := c.GetSecret("sec1"); return ok },
+		},
+		{
+			name: "network",
+			set: func(c *Cache) {
+				c.SetNetwork(
+					network.Summary{ID: "net1", Labels: map[string]string{stackLabel: "mystack"}},
+				)
+			},
+			delete: func(c *Cache) { c.DeleteNetwork("net1") },
+			exists: func(c *Cache) bool { _, ok := c.GetNetwork("net1"); return ok },
+		},
+		{
+			name: "volume",
+			set: func(c *Cache) {
+				c.SetVolume(
+					volume.Volume{Name: "vol1", Labels: map[string]string{stackLabel: "mystack"}},
+				)
+			},
+			delete: func(c *Cache) { c.DeleteVolume("vol1") },
+			exists: func(c *Cache) bool { _, ok := c.GetVolume("vol1"); return ok },
+		},
 	}
-}
 
-func TestCache_DeleteSecret(t *testing.T) {
-	c := New(nil)
-	sec := swarm.Secret{ID: "sec1"}
-	sec.Spec.Labels = map[string]string{stackLabel: "mystack"}
-	c.SetSecret(sec)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := New(nil)
+			tt.set(c)
+			tt.delete(c)
 
-	c.DeleteSecret("sec1")
-
-	if _, ok := c.GetSecret("sec1"); ok {
-		t.Fatal("expected secret to be deleted")
-	}
-}
-
-func TestCache_DeleteNetwork(t *testing.T) {
-	c := New(nil)
-	c.SetNetwork(network.Summary{ID: "net1", Labels: map[string]string{stackLabel: "mystack"}})
-
-	c.DeleteNetwork("net1")
-
-	if _, ok := c.GetNetwork("net1"); ok {
-		t.Fatal("expected network to be deleted")
-	}
-}
-
-func TestCache_DeleteVolume(t *testing.T) {
-	c := New(nil)
-	c.SetVolume(volume.Volume{Name: "vol1", Labels: map[string]string{stackLabel: "mystack"}})
-
-	c.DeleteVolume("vol1")
-
-	if _, ok := c.GetVolume("vol1"); ok {
-		t.Fatal("expected volume to be deleted")
+			if tt.exists(c) {
+				t.Fatalf("expected %s to be deleted", tt.name)
+			}
+		})
 	}
 }
 
@@ -734,57 +748,47 @@ func TestCache_OnChange_AllTypes(t *testing.T) {
 
 // --- List operations for remaining types ---
 
-func TestCache_ListServices(t *testing.T) {
-	c := New(nil)
-	c.SetService(swarm.Service{ID: "s1"})
-	c.SetService(swarm.Service{ID: "s2"})
-	if svcs := c.ListServices(); len(svcs) != 2 {
-		t.Fatalf("expected 2 services, got %d", len(svcs))
+func TestCache_ListResources(t *testing.T) {
+	tests := []struct {
+		name  string
+		add   func(*Cache)
+		count func(*Cache) int
+	}{
+		{"services", func(c *Cache) {
+			c.SetService(swarm.Service{ID: "s1"})
+			c.SetService(swarm.Service{ID: "s2"})
+		}, func(c *Cache) int { return len(c.ListServices()) }},
+		{"tasks", func(c *Cache) {
+			c.SetTask(swarm.Task{ID: "t1"})
+			c.SetTask(swarm.Task{ID: "t2"})
+		}, func(c *Cache) int { return len(c.ListTasks()) }},
+		{"configs", func(c *Cache) {
+			c.SetConfig(swarm.Config{ID: "c1"})
+			c.SetConfig(swarm.Config{ID: "c2"})
+		}, func(c *Cache) int { return len(c.ListConfigs()) }},
+		{"secrets", func(c *Cache) {
+			c.SetSecret(swarm.Secret{ID: "s1"})
+			c.SetSecret(swarm.Secret{ID: "s2"})
+		}, func(c *Cache) int { return len(c.ListSecrets()) }},
+		{"networks", func(c *Cache) {
+			c.SetNetwork(network.Summary{ID: "n1"})
+			c.SetNetwork(network.Summary{ID: "n2"})
+		}, func(c *Cache) int { return len(c.ListNetworks()) }},
+		{"volumes", func(c *Cache) {
+			c.SetVolume(volume.Volume{Name: "v1"})
+			c.SetVolume(volume.Volume{Name: "v2"})
+		}, func(c *Cache) int { return len(c.ListVolumes()) }},
 	}
-}
 
-func TestCache_ListTasks(t *testing.T) {
-	c := New(nil)
-	c.SetTask(swarm.Task{ID: "t1"})
-	c.SetTask(swarm.Task{ID: "t2"})
-	if tasks := c.ListTasks(); len(tasks) != 2 {
-		t.Fatalf("expected 2 tasks, got %d", len(tasks))
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := New(nil)
+			tt.add(c)
 
-func TestCache_ListConfigs(t *testing.T) {
-	c := New(nil)
-	c.SetConfig(swarm.Config{ID: "c1"})
-	c.SetConfig(swarm.Config{ID: "c2"})
-	if cfgs := c.ListConfigs(); len(cfgs) != 2 {
-		t.Fatalf("expected 2 configs, got %d", len(cfgs))
-	}
-}
-
-func TestCache_ListSecrets(t *testing.T) {
-	c := New(nil)
-	c.SetSecret(swarm.Secret{ID: "s1"})
-	c.SetSecret(swarm.Secret{ID: "s2"})
-	if secs := c.ListSecrets(); len(secs) != 2 {
-		t.Fatalf("expected 2 secrets, got %d", len(secs))
-	}
-}
-
-func TestCache_ListNetworks(t *testing.T) {
-	c := New(nil)
-	c.SetNetwork(network.Summary{ID: "n1"})
-	c.SetNetwork(network.Summary{ID: "n2"})
-	if nets := c.ListNetworks(); len(nets) != 2 {
-		t.Fatalf("expected 2 networks, got %d", len(nets))
-	}
-}
-
-func TestCache_ListVolumes(t *testing.T) {
-	c := New(nil)
-	c.SetVolume(volume.Volume{Name: "v1"})
-	c.SetVolume(volume.Volume{Name: "v2"})
-	if vols := c.ListVolumes(); len(vols) != 2 {
-		t.Fatalf("expected 2 volumes, got %d", len(vols))
+			if n := tt.count(c); n != 2 {
+				t.Fatalf("expected 2 %s, got %d", tt.name, n)
+			}
+		})
 	}
 }
 

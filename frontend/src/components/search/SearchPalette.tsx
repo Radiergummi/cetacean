@@ -7,7 +7,7 @@ import { showErrorToast } from "../../lib/showErrorToast";
 import { getErrorMessage } from "../../lib/utils";
 import ResourceName from "../ResourceName";
 import { Spinner } from "../Spinner";
-import { ChevronRight, Search, Zap } from "lucide-react";
+import { ArrowRight, ChevronRight, Search, Zap } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -487,21 +487,24 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
       : "Search resources…";
 
   // Group items by type for rendering with section headers
-  const groups: { type: SearchResourceType; items: { index: number; result: SearchResult }[] }[] =
-    [];
-  let idx = actionSuggestionOffset;
+  const groups = useMemo(() => {
+    const result: { type: SearchResourceType; items: { index: number; result: SearchResult }[] }[] =
+      [];
+    let idx = actionSuggestionOffset;
+    const typesToRender = resourceFilter ? [resourceFilter] : typeOrder;
 
-  const typesToRender = resourceFilter ? [resourceFilter] : typeOrder;
+    for (const type of typesToRender) {
+      const results = response?.results[type];
 
-  for (const type of typesToRender) {
-    const results = response?.results[type];
+      if (results && results.length > 0) {
+        const items = results.map((r) => ({ index: idx++, result: r }));
 
-    if (results && results.length > 0) {
-      const items = results.map((result) => ({ index: idx++, result }));
-
-      groups.push({ type, items });
+        result.push({ type, items });
+      }
     }
-  }
+
+    return result;
+  }, [response, resourceFilter, actionSuggestionOffset]);
 
   const hasQuery = query.trim().length > 0;
   const hasResults = flat.length > 0;
@@ -664,7 +667,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
                 onClose();
               }}
             >
-              View all results &rarr;
+              View all results <ArrowRight className="ml-1 inline size-3" />
             </button>
           </div>
         )}

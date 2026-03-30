@@ -3917,6 +3917,9 @@ components:
           type: boolean
         prometheusReachable:
           type: boolean
+        error:
+          type: string
+          description: Diagnostic message when Prometheus is configured but unreachable.
         nodeExporter:
           $ref: "#/components/schemas/TargetStatus"
         cadvisor:

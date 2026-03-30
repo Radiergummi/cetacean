@@ -6,7 +6,7 @@ const ttl = 60_000;
 
 let cached: MonitoringStatus | null = null;
 let cachedAt: number | null = null;
-let inflight: Promise<MonitoringStatus> | null = null;
+let inflight: Promise<MonitoringStatus | null> | null = null;
 
 export function _resetMonitoringStatusCache() {
   cached = null;
@@ -33,10 +33,11 @@ export function useMonitoringStatus(): MonitoringStatus | null {
 
           return status;
         })
-        .catch(() => {
+        .catch((error) => {
+          console.warn("monitoring status fetch failed:", error);
           inflight = null;
 
-          return null as unknown as MonitoringStatus;
+          return null;
         });
     }
 

@@ -41,7 +41,7 @@ export function NetworksEditor({
           })),
         );
       })
-      .catch(() => {});
+      .catch(console.warn);
   }, []);
 
   /**

@@ -16,6 +16,8 @@ import { Link, useNavigate } from "react-router-dom";
 function HealthDot({ health }: { health: "healthy" | "warning" | "critical" }) {
   return (
     <span
+      role="img"
+      aria-label={health}
       data-health={health}
       className="inline-block size-2.5 shrink-0 rounded-full bg-yellow-500 data-[health=critical]:bg-red-500 data-[health=healthy]:bg-green-500"
     />

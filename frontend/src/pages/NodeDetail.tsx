@@ -76,18 +76,12 @@ export default function NodeDetail() {
         return;
       }
 
-      api
-        .nodeTasks(id, signal)
-        .then(setTasks)
-        .catch(() => {});
-      api
-        .history({ resourceId: id, limit: 10 }, signal)
-        .then(setHistory)
-        .catch(() => {});
+      api.nodeTasks(id, signal).then(setTasks).catch(console.warn);
+      api.history({ resourceId: id, limit: 10 }, signal).then(setHistory).catch(console.warn);
       api
         .nodeRole(id, signal)
         .then(({ managerCount: count }) => setManagerCount(count))
-        .catch(() => {});
+        .catch(console.warn);
     },
     [id],
   );

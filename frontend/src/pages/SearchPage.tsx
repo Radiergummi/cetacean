@@ -14,13 +14,19 @@ import { Link } from "react-router-dom";
 
 function StateOrb({ state }: { state: string }) {
   if (state === "updating") {
-    return <Loader2 className="size-3 shrink-0 animate-spin text-blue-500" />;
+    return (
+      <Loader2
+        aria-label="Updating"
+        className="size-3 shrink-0 animate-spin text-blue-500"
+      />
+    );
   }
   const color = statusColor(state);
   return (
     <span
+      role="img"
+      aria-label={state}
       className={`inline-block size-2 shrink-0 rounded-full ${color}`}
-      title={state}
     />
   );
 }

@@ -1,4 +1,4 @@
-import type { Recommendation } from "@/api/types";
+import type { Recommendation, RecommendationCategory } from "@/api/types";
 import EmptyState from "@/components/EmptyState";
 import PageHeader from "@/components/PageHeader";
 import ResourceName from "@/components/ResourceName";
@@ -7,9 +7,52 @@ import { invalidateRecommendations, useRecommendations } from "@/hooks/useRecomm
 import { applyRecommendation } from "@/lib/applyRecommendation";
 import { hintIcon, severityStyles, sizingCategories } from "@/lib/sizingUtils";
 import { getErrorMessage } from "@/lib/utils";
-import { Loader2, Wrench } from "lucide-react";
+import { Collapsible } from "@base-ui/react/collapsible";
+import { ChevronRight, Loader2, Wrench } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+
+const categoryDetails: Record<RecommendationCategory, string> = {
+  "no-healthcheck":
+    "Without a health check, Docker cannot detect when a container is stuck or unresponsive. " +
+    "Failed containers will keep receiving traffic instead of being replaced automatically.",
+  "no-restart-policy":
+    "Without a restart policy, containers that crash will stay down until manually restarted. " +
+    "Setting a restart policy ensures automatic recovery from transient failures.",
+  "single-replica":
+    "Running a single replica means any update, crash, or node failure causes downtime. " +
+    "At least two replicas allow rolling updates and provide basic fault tolerance.",
+  "manager-has-workloads":
+    "Manager nodes handle Raft consensus and cluster coordination. Running workloads on them " +
+    "can cause resource contention that affects cluster stability. Set manager availability to Drain.",
+  "uneven-distribution":
+    "An uneven task distribution means some nodes are overloaded while others sit idle. " +
+    "This can be caused by placement constraints, resource reservations, or stale task assignments.",
+  "flaky-service":
+    "Frequent task restarts indicate a recurring failure — OOM kills, crash loops, or failing " +
+    "health checks. Investigate container logs and resource usage for the root cause.",
+  "node-disk-full":
+    "When a node runs out of disk space, containers cannot write logs or temporary files and new " +
+    "images cannot be pulled. This typically leads to cascading task failures across the node.",
+  "node-memory-pressure":
+    "High memory usage on a node triggers the kernel OOM killer, which terminates containers " +
+    "unpredictably. Reduce workloads on this node or add memory capacity.",
+  "no-limits":
+    "Without resource limits, a single service can consume all available CPU or memory on a node, " +
+    "starving other services. Set limits to ensure fair resource sharing.",
+  "no-reservations":
+    "Reservations tell the scheduler how much capacity a service needs. Without them, Docker may " +
+    "place too many services on one node, leading to overcommitment and poor performance.",
+  "at-limit":
+    "The service is consuming nearly all of its allocated resources. It may be throttled (CPU) " +
+    "or killed (memory) under load. Consider increasing the limit or optimizing the service.",
+  "approaching-limit":
+    "Resource usage is trending toward the configured limit. If traffic increases, the service " +
+    "may hit the limit and experience throttling or OOM kills.",
+  "over-provisioned":
+    "The service is using significantly less than its reserved resources. Reducing the reservation " +
+    "frees capacity for other services and improves cluster utilization.",
+};
 
 const filterGroups: Record<string, Set<string>> = {
   sizing: sizingCategories,
@@ -53,52 +96,63 @@ function RecommendationCard({ hint, originalIndex, applying, onApply }: CardProp
   const hasFix = hint.fixAction != null && hint.suggested != null;
   const isApplying = applying === originalIndex;
   const link = targetLink(hint);
+  const detail = categoryDetails[hint.category];
 
   return (
-    <div className="flex items-start justify-between gap-4 rounded-lg border bg-card px-4 py-3">
-      <div className="flex items-start gap-3">
-        <span
-          className={`mt-1 size-2 shrink-0 rounded-full ${
-            hint.severity === "critical"
-              ? "bg-red-500"
-              : hint.severity === "warning"
-                ? "bg-amber-500"
-                : "bg-blue-500"
-          }`}
-        />
+    <Collapsible.Root className="rounded-lg border bg-card">
+      <div className="flex items-start justify-between gap-4 px-4 py-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <CategoryIcon
+            aria-label={hint.severity}
+            className={`mt-0.5 size-4 shrink-0 ${severityStyles[hint.severity]}`}
+          />
 
-        <CategoryIcon className={`mt-0.5 size-4 shrink-0 ${severityStyles[hint.severity]}`} />
+          <div className="min-w-0 space-y-0.5">
+            <Collapsible.Trigger className="group flex cursor-pointer items-center gap-1.5 text-left text-sm font-medium transition-colors hover:text-foreground">
+              <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-[panel-open]:rotate-90" />
+              {hint.message}
+            </Collapsible.Trigger>
 
-        <div className="space-y-0.5">
-          <p className="text-sm font-medium">{hint.message}</p>
-
-          {link ? (
-            <Link
-              to={link}
-              className="text-xs text-muted-foreground hover:underline"
-            >
-              <ResourceName name={hint.targetName} />
-            </Link>
-          ) : (
-            <span className="text-xs text-muted-foreground">
-              <ResourceName name={hint.targetName} />
-            </span>
-          )}
+            {link ? (
+              <Link
+                to={link}
+                className="ml-5 block text-xs text-muted-foreground hover:underline"
+              >
+                <ResourceName name={hint.targetName} />
+              </Link>
+            ) : (
+              <span className="ml-5 block text-xs text-muted-foreground">
+                <ResourceName name={hint.targetName} />
+              </span>
+            )}
+          </div>
         </div>
+
+        {hasFix && (
+          <Button
+            variant="outline"
+            size="xs"
+            disabled={applying !== null}
+            onClick={() => onApply(hint, originalIndex)}
+          >
+            {isApplying ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : (
+              <Wrench className="size-3" />
+            )}
+            Apply suggested value
+          </Button>
+        )}
       </div>
 
-      {hasFix && (
-        <Button
-          variant="outline"
-          size="xs"
-          disabled={applying !== null}
-          onClick={() => onApply(hint, originalIndex)}
-        >
-          {isApplying ? <Loader2 className="size-3 animate-spin" /> : <Wrench className="size-3" />}
-          Apply suggested value
-        </Button>
+      {detail && (
+        <Collapsible.Panel className="overflow-hidden transition-all data-[ending-style]:h-0 data-[starting-style]:h-0">
+          <p className="border-t px-4 py-3 pl-[3.25rem] text-xs leading-relaxed text-muted-foreground">
+            {detail}
+          </p>
+        </Collapsible.Panel>
       )}
-    </div>
+    </Collapsible.Root>
   );
 }
 

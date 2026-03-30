@@ -227,7 +227,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
         if (newerCheckGenRef.current !== gen) return;
         setHasNewerLogs((response.lines?.length ?? 0) > 0);
       })
-      .catch(() => {});
+      .catch(console.warn);
   }, [live, loading, logId, isTask, streamParam]);
 
   const handleScroll = useCallback(() => {

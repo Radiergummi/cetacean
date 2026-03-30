@@ -601,6 +601,7 @@ export interface TargetStatus {
 export interface MonitoringStatus {
   prometheusConfigured: boolean;
   prometheusReachable: boolean;
+  error?: string;
   nodeExporter: TargetStatus | null;
   cadvisor: TargetStatus | null;
 }

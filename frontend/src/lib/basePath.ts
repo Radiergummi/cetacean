@@ -2,10 +2,20 @@
  * Reads the base path from the <base> tag injected by the Go server.
  * Returns "" when running at root, or "/cetacean" (no trailing slash)
  * when running under a sub-path.
+ *
+ * Only reads from an explicit <base href="..."> element — ignores
+ * document.baseURI which falls back to the page URL when no <base> tag
+ * exists (causing incorrect paths in the Vite dev server).
  */
 function detectBasePath(): string {
   try {
-    const base = new URL(document.baseURI);
+    const baseElement = document.querySelector("base");
+
+    if (!baseElement) {
+      return "";
+    }
+
+    const base = new URL(baseElement.href, window.location.origin);
     const path = base.pathname.replace(/\/+$/, "");
 
     return path;

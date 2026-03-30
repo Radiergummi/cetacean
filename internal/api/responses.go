@@ -31,7 +31,7 @@ type ServiceResponse struct {
 
 // TaskResponse is the extra payload for GET /tasks/{id}.
 type TaskResponse struct {
-	Task    EnrichedTask `json:"task"`
+	Task    EnrichedTask   `json:"task"`
 	Service TaskServiceRef `json:"service"`
 	Node    TaskNodeRef    `json:"node"`
 }
@@ -50,25 +50,25 @@ type TaskNodeRef struct {
 
 // ConfigResponse is the extra payload for GET /configs/{id}.
 type ConfigResponse struct {
-	Config   swarm.Config     `json:"config"`
+	Config   swarm.Config       `json:"config"`
 	Services []cache.ServiceRef `json:"services"`
 }
 
 // SecretResponse is the extra payload for GET /secrets/{id}.
 type SecretResponse struct {
-	Secret   swarm.Secret     `json:"secret"`
+	Secret   swarm.Secret       `json:"secret"`
 	Services []cache.ServiceRef `json:"services"`
 }
 
 // NetworkResponse is the extra payload for GET /networks/{id}.
 type NetworkResponse struct {
-	Network  network.Summary  `json:"network"`
+	Network  network.Summary    `json:"network"`
 	Services []cache.ServiceRef `json:"services"`
 }
 
 // VolumeResponse is the extra payload for GET /volumes/{name}.
 type VolumeResponse struct {
-	Volume   volume.Volume    `json:"volume"`
+	Volume   volume.Volume      `json:"volume"`
 	Services []cache.ServiceRef `json:"services"`
 }
 
@@ -121,10 +121,10 @@ type ClusterCapacityResponse struct {
 
 // SearchResponse is the extra payload for GET /search.
 type SearchResponse struct {
-	Query   string                       `json:"query"`
-	Results map[string][]searchResult    `json:"results"`
-	Counts  map[string]int               `json:"counts"`
-	Total   int                          `json:"total"`
+	Query   string                    `json:"query"`
+	Results map[string][]searchResult `json:"results"`
+	Counts  map[string]int            `json:"counts"`
+	Total   int                       `json:"total"`
 }
 
 // RecommendationsResponse is the extra payload for GET /recommendations.

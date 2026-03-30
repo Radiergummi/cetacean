@@ -19,6 +19,7 @@ export function CopyButton({ text, className }: { text: string; className?: stri
     <button
       type="button"
       onClick={handleCopy}
+      aria-label={copied ? "Copied" : "Copy to clipboard"}
       className={cn(
         "shrink-0 cursor-pointer rounded p-1 text-muted-foreground/50 hover:text-muted-foreground",
         className,

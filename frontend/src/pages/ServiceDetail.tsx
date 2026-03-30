@@ -156,14 +156,8 @@ export default function ServiceDetail() {
         return;
       }
 
-      api
-        .serviceTasks(id, signal)
-        .then(setTasks)
-        .catch(() => {});
-      api
-        .history({ resourceId: id, limit: 10 }, signal)
-        .then(setHistory)
-        .catch(() => {});
+      api.serviceTasks(id, signal).then(setTasks).catch(console.warn);
+      api.history({ resourceId: id, limit: 10 }, signal).then(setHistory).catch(console.warn);
     },
     [id],
   );
@@ -186,7 +180,7 @@ export default function ServiceDetail() {
         }
         setNetworkNames(map);
       })
-      .catch(() => {});
+      .catch(console.warn);
   }, []);
 
   useEffect(() => {
@@ -264,7 +258,7 @@ export default function ServiceDetail() {
           setMemActual(Number(memVal));
         }
       })
-      .catch(() => {});
+      .catch(console.warn);
 
     return () => {
       cancelled = true;

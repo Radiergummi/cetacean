@@ -31,25 +31,40 @@ export default function PageHeader({ title, subtitle, breadcrumbs, actions }: Pr
   return (
     <header className="mb-6 flex max-w-full flex-col gap-6 overflow-x-hidden">
       {breadcrumbs && breadcrumbs.length > 0 && (
-        <nav className="mb-1.5 flex items-center gap-1 text-sm text-muted-foreground">
-          {breadcrumbs.map(({ label, to }, index) => (
-            <span
-              key={index}
-              className="flex items-center gap-1"
-            >
-              {index > 0 && <ChevronRight className="size-3.5" />}
-              {to ? (
-                <Link
-                  to={to}
-                  className="transition-colors hover:text-foreground"
-                >
-                  {label}
-                </Link>
-              ) : (
-                <span className="truncate text-foreground">{label}</span>
-              )}
-            </span>
-          ))}
+        <nav
+          aria-label="Breadcrumb"
+          className="mb-1.5 text-sm text-muted-foreground"
+        >
+          <ol className="flex items-center gap-1">
+            {breadcrumbs.map(({ label, to }, index) => (
+              <li
+                key={index}
+                className="flex items-center gap-1"
+              >
+                {index > 0 && (
+                  <ChevronRight
+                    aria-hidden="true"
+                    className="size-3.5"
+                  />
+                )}
+                {to ? (
+                  <Link
+                    to={to}
+                    className="transition-colors hover:text-foreground"
+                  >
+                    {label}
+                  </Link>
+                ) : (
+                  <span
+                    aria-current="page"
+                    className="truncate text-foreground"
+                  >
+                    {label}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ol>
         </nav>
       )}
 

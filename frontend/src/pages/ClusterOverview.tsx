@@ -35,7 +35,7 @@ export default function ClusterOverview() {
           return snapshot;
         });
       })
-      .catch(() => {});
+      .catch(console.warn);
   }, []);
 
   const fetchHistory = useCallback(() => {

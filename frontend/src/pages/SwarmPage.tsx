@@ -124,10 +124,7 @@ export default function SwarmPage() {
 
   useEffect(() => {
     fetchSwarmInfo();
-    api
-      .plugins()
-      .then(setPlugins)
-      .catch(() => {});
+    api.plugins().then(setPlugins).catch(console.warn);
   }, [fetchSwarmInfo]);
 
   // Orchestration draft
@@ -694,10 +691,7 @@ export default function SwarmPage() {
         open={installOpen}
         onOpenChange={setInstallOpen}
         onInstalled={() => {
-          api
-            .plugins()
-            .then(setPlugins)
-            .catch(() => {});
+          api.plugins().then(setPlugins).catch(console.warn);
         }}
       />
     </div>

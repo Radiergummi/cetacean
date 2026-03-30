@@ -386,7 +386,7 @@ export default function DiskUsageSection({ nodeId }: { nodeId?: string }) {
     api
       .diskUsage()
       .then(setData)
-      .catch(() => {})
+      .catch(console.warn)
       .finally(() => setLoading(false));
   }, [visible]);
 

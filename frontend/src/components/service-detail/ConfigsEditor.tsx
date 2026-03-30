@@ -36,7 +36,7 @@ export function ConfigsEditor({ serviceId, configs, onSaved }: ConfigsEditorProp
           })),
         );
       })
-      .catch(() => {});
+      .catch(console.warn);
   }, []);
 
   function handleConfigSelected(configId: string) {

@@ -14,7 +14,6 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
-	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/docker"
 )
 
@@ -46,18 +45,7 @@ func TestHandleServiceLogs_JSON(t *testing.T) {
 	frames.Write(buildFrame(1, "2024-01-01T00:00:00.000000000Z line1\n"))
 	frames.Write(buildFrame(2, "2024-01-01T00:00:01.000000000Z line2\n"))
 
-	h := NewHandlers(
-		c,
-		nil,
-		&mockLogStreamer{data: frames.Bytes()},
-		nil,
-		nil,
-		nil,
-		closedReady(),
-		nil,
-		config.OpsImpactful,
-		nil,
-	)
+	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{data: frames.Bytes()}))
 
 	req := httptest.NewRequest("GET", "/services/svc1/logs?limit=100", nil)
 	req.SetPathValue("id", "svc1")
@@ -95,18 +83,7 @@ func TestHandleServiceLogs_JSON(t *testing.T) {
 
 func TestHandleServiceLogs_JSON_NotFound(t *testing.T) {
 	c := cache.New(nil)
-	h := NewHandlers(
-		c,
-		nil,
-		&mockLogStreamer{},
-		nil,
-		nil,
-		nil,
-		closedReady(),
-		nil,
-		config.OpsImpactful,
-		nil,
-	)
+	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{}))
 
 	req := httptest.NewRequest("GET", "/services/missing/logs", nil)
 	req.SetPathValue("id", "missing")
@@ -131,18 +108,7 @@ func TestHandleServiceLogs_SSE(t *testing.T) {
 	frames.Write(buildFrame(1, "2024-01-01T00:00:00.000000000Z hello\n"))
 	frames.Write(buildFrame(2, "2024-01-01T00:00:01.000000000Z world\n"))
 
-	h := NewHandlers(
-		c,
-		nil,
-		&mockLogStreamer{data: frames.Bytes()},
-		nil,
-		nil,
-		nil,
-		closedReady(),
-		nil,
-		config.OpsImpactful,
-		nil,
-	)
+	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{data: frames.Bytes()}))
 
 	req := httptest.NewRequest("GET", "/services/svc1/logs", nil)
 	req.SetPathValue("id", "svc1")
@@ -189,18 +155,7 @@ func TestHandleTaskLogs_JSON(t *testing.T) {
 	var frames bytes.Buffer
 	frames.Write(buildFrame(1, "2024-01-01T00:00:00.000000000Z task log\n"))
 
-	h := NewHandlers(
-		c,
-		nil,
-		&mockLogStreamer{data: frames.Bytes()},
-		nil,
-		nil,
-		nil,
-		closedReady(),
-		nil,
-		config.OpsImpactful,
-		nil,
-	)
+	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{data: frames.Bytes()}))
 
 	req := httptest.NewRequest("GET", "/tasks/t1/logs?limit=50", nil)
 	req.SetPathValue("id", "t1")
@@ -228,18 +183,7 @@ func TestHandleServiceLogs_JSON_Empty(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{ID: "svc1"})
 
-	h := NewHandlers(
-		c,
-		nil,
-		&mockLogStreamer{data: nil},
-		nil,
-		nil,
-		nil,
-		closedReady(),
-		nil,
-		config.OpsImpactful,
-		nil,
-	)
+	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{data: nil}))
 
 	req := httptest.NewRequest("GET", "/services/svc1/logs", nil)
 	req.SetPathValue("id", "svc1")
@@ -264,18 +208,7 @@ func TestHandleServiceLogs_DefaultsToJSON(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{ID: "svc1"})
 
-	h := NewHandlers(
-		c,
-		nil,
-		&mockLogStreamer{data: nil},
-		nil,
-		nil,
-		nil,
-		closedReady(),
-		nil,
-		config.OpsImpactful,
-		nil,
-	)
+	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{data: nil}))
 
 	req := httptest.NewRequest("GET", "/services/svc1/logs", nil)
 	req.SetPathValue("id", "svc1")
@@ -296,18 +229,7 @@ func TestHandleServiceLogs_SSE_EventIDs(t *testing.T) {
 	frames.Write(buildFrame(1, "2024-01-01T00:00:00.000000000Z line1\n"))
 	frames.Write(buildFrame(1, "2024-01-01T00:00:01.000000000Z line2\n"))
 
-	h := NewHandlers(
-		c,
-		nil,
-		&mockLogStreamer{data: frames.Bytes()},
-		nil,
-		nil,
-		nil,
-		closedReady(),
-		nil,
-		config.OpsImpactful,
-		nil,
-	)
+	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{data: frames.Bytes()}))
 
 	req := httptest.NewRequest("GET", "/services/svc1/logs", nil)
 	req.SetPathValue("id", "svc1")
@@ -341,18 +263,7 @@ func TestHandleServiceLogs_JSON_StreamFilter(t *testing.T) {
 	frames.Write(buildFrame(2, "2024-01-01T00:00:01.000000000Z stderr line\n"))
 	frames.Write(buildFrame(1, "2024-01-01T00:00:02.000000000Z another stdout\n"))
 
-	h := NewHandlers(
-		c,
-		nil,
-		&mockLogStreamer{data: frames.Bytes()},
-		nil,
-		nil,
-		nil,
-		closedReady(),
-		nil,
-		config.OpsImpactful,
-		nil,
-	)
+	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{data: frames.Bytes()}))
 
 	// Filter to stderr only
 	req := httptest.NewRequest("GET", "/services/svc1/logs?stream=stderr", nil)
@@ -381,18 +292,7 @@ func TestHandleServiceLogs_JSON_StreamFilterStdout(t *testing.T) {
 	frames.Write(buildFrame(1, "2024-01-01T00:00:00.000000000Z stdout line\n"))
 	frames.Write(buildFrame(2, "2024-01-01T00:00:01.000000000Z stderr line\n"))
 
-	h := NewHandlers(
-		c,
-		nil,
-		&mockLogStreamer{data: frames.Bytes()},
-		nil,
-		nil,
-		nil,
-		closedReady(),
-		nil,
-		config.OpsImpactful,
-		nil,
-	)
+	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{data: frames.Bytes()}))
 
 	req := httptest.NewRequest("GET", "/services/svc1/logs?stream=stdout", nil)
 	req.SetPathValue("id", "svc1")
@@ -425,7 +325,7 @@ func TestHandleServiceLogs_SSE_LastEventID(t *testing.T) {
 		data:   frames.Bytes(),
 		onCall: func(since string) { capturedSince = since },
 	}
-	h := NewHandlers(c, nil, mock, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
+	h := newTestHandlers(t, withCache(c), withDockerClient(mock))
 
 	// Simulate EventSource reconnect with Last-Event-ID header
 	req := httptest.NewRequest("GET", "/services/svc1/logs", nil)
@@ -450,7 +350,7 @@ func TestHandleServiceLogs_SSE_LastEventID_OverriddenByAfter(t *testing.T) {
 		data:   buildFrame(1, "2024-01-01T00:00:05.000000000Z line\n"),
 		onCall: func(since string) { capturedSince = since },
 	}
-	h := NewHandlers(c, nil, mock, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
+	h := newTestHandlers(t, withCache(c), withDockerClient(mock))
 
 	// Both ?after= and Last-Event-ID present — ?after= should win
 	req := httptest.NewRequest("GET", "/services/svc1/logs?after=2024-01-01T00:00:01Z", nil)
@@ -494,18 +394,7 @@ func TestHandleServiceLogs_SSE_StreamFilter(t *testing.T) {
 	frames.Write(buildFrame(1, "2024-01-01T00:00:00.000000000Z stdout line\n"))
 	frames.Write(buildFrame(2, "2024-01-01T00:00:01.000000000Z stderr line\n"))
 
-	h := NewHandlers(
-		c,
-		nil,
-		&mockLogStreamer{data: frames.Bytes()},
-		nil,
-		nil,
-		nil,
-		closedReady(),
-		nil,
-		config.OpsImpactful,
-		nil,
-	)
+	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{data: frames.Bytes()}))
 
 	req := httptest.NewRequest("GET", "/services/svc1/logs?stream=stderr", nil)
 	req.SetPathValue("id", "svc1")

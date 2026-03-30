@@ -9,7 +9,6 @@ import (
 	json "github.com/goccy/go-json"
 
 	"github.com/radiergummi/cetacean/internal/cache"
-	"github.com/radiergummi/cetacean/internal/config"
 )
 
 func TestHandleNetworkTopology(t *testing.T) {
@@ -30,7 +29,7 @@ func TestHandleNetworkTopology(t *testing.T) {
 		},
 	})
 
-	h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
+	h := newTestHandlers(t, withCache(c))
 	req := httptest.NewRequest("GET", "/topology/networks", nil)
 	w := httptest.NewRecorder()
 	h.HandleNetworkTopology(w, req)
@@ -67,7 +66,7 @@ func TestHandleNetworkTopology_WithReplicatedService(t *testing.T) {
 			VirtualIPs: []swarm.EndpointVirtualIP{{NetworkID: "net1"}},
 		},
 	})
-	h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
+	h := newTestHandlers(t, withCache(c))
 	req := httptest.NewRequest("GET", "/topology/networks", nil)
 	w := httptest.NewRecorder()
 	h.HandleNetworkTopology(w, req)
@@ -110,7 +109,7 @@ func TestHandlePlacementTopology(t *testing.T) {
 		},
 	)
 
-	h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
+	h := newTestHandlers(t, withCache(c))
 	req := httptest.NewRequest("GET", "/topology/placement", nil)
 	w := httptest.NewRecorder()
 	h.HandlePlacementTopology(w, req)
@@ -160,7 +159,7 @@ func TestHandleNetworkTopology_EnrichedFields(t *testing.T) {
 		UpdateStatus: &swarm.UpdateStatus{State: swarm.UpdateStateUpdating},
 	})
 
-	h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
+	h := newTestHandlers(t, withCache(c))
 	req := httptest.NewRequest("GET", "/topology/networks", nil)
 	w := httptest.NewRecorder()
 	h.HandleNetworkTopology(w, req)
@@ -213,7 +212,7 @@ func TestHandlePlacementTopology_EnrichedFields(t *testing.T) {
 		Spec:   swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{Image: "nginx:1.25@sha256:abc"}},
 	})
 
-	h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
+	h := newTestHandlers(t, withCache(c))
 	req := httptest.NewRequest("GET", "/topology/placement", nil)
 	w := httptest.NewRecorder()
 	h.HandlePlacementTopology(w, req)

@@ -15,12 +15,21 @@ import (
 func (h *Handlers) HandleRecommendations(w http.ResponseWriter, r *http.Request) {
 	results := h.recEngine.Results()
 	summary := recommendations.ComputeSummary(results)
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/recommendations", "RecommendationCollection", RecommendationsResponse{
-		Items:      results,
-		Total:      len(results),
-		Summary:    summary,
-		ComputedAt: h.recEngine.LastTick(),
-	}))
+	writeJSONWithETag(
+		w,
+		r,
+		NewDetailResponse(
+			r.Context(),
+			"/recommendations",
+			"RecommendationCollection",
+			RecommendationsResponse{
+				Items:      results,
+				Total:      len(results),
+				Summary:    summary,
+				ComputedAt: h.recEngine.LastTick(),
+			},
+		),
+	)
 }
 
 func (h *Handlers) streamList(w http.ResponseWriter, r *http.Request, typ cache.EventType) {

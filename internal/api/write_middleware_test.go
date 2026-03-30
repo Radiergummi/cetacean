@@ -110,17 +110,11 @@ func TestRequireLevel_Integration_ScaleBlockedAtLevel0(t *testing.T) {
 		},
 	})
 
-	h := NewHandlers(
-		c,
-		nil,
-		nil,
-		nil,
-		&mockWriteClient{},
-		nil,
-		closedReady(),
-		nil,
-		config.OpsReadOnly,
-		nil,
+	h := newTestHandlers(
+		t,
+		withCache(c),
+		withWriteClient(&mockWriteClient{}),
+		withOpsLevel(config.OpsReadOnly),
 	)
 	handler := requireLevel(config.OpsOperational, config.OpsReadOnly)(h.HandleScaleService)
 
@@ -149,13 +143,18 @@ func TestRequireLevel_Integration_ScaleAllowedAtLevel1(t *testing.T) {
 	c.SetService(svc)
 
 	mock := &mockWriteClient{
-		mockServiceWriter: mockServiceWriter{
+		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
 			scaleServiceFn: func(ctx context.Context, id string, replicas uint64) (swarm.Service, error) {
 				return svc, nil
 			},
 		},
 	}
-	h := NewHandlers(c, nil, nil, nil, mock, nil, closedReady(), nil, config.OpsOperational, nil)
+	h := newTestHandlers(
+		t,
+		withCache(c),
+		withWriteClient(mock),
+		withOpsLevel(config.OpsOperational),
+	)
 	handler := requireLevel(config.OpsOperational, config.OpsOperational)(h.HandleScaleService)
 
 	body := strings.NewReader(`{"replicas": 3}`)

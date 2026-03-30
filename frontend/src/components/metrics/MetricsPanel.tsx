@@ -211,13 +211,17 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
           isCustomRange ? (
             <span className="flex items-center gap-1 py-0.5 text-xs">
               {customRangeLabel}
-              <X
-                className="size-3 opacity-60 hover:opacity-100"
+              <button
+                type="button"
+                className="cursor-pointer opacity-60 hover:opacity-100"
+                aria-label="Clear custom range"
                 onClick={(event) => {
                   event.stopPropagation();
                   clearCustomRange();
                 }}
-              />
+              >
+                <X className="size-3" />
+              </button>
             </span>
           ) : undefined
         }

@@ -102,12 +102,7 @@ type Cache struct {
 	lastSync       time.Time
 	onChange       OnChangeFunc
 	history        *History
-
-	// Reverse indexes: resource ID/name -> set of service IDs that reference it.
-	svcsByConfig  map[string]map[string]struct{} // configID -> set of serviceIDs
-	svcsBySecret  map[string]map[string]struct{} // secretID -> set of serviceIDs
-	svcsByNetwork map[string]map[string]struct{} // networkID -> set of serviceIDs
-	svcsByVolume  map[string]map[string]struct{} // volumeName -> set of serviceIDs
+	serviceRef     serviceRefIndex
 }
 
 func New(onChange OnChangeFunc) *Cache {
@@ -121,11 +116,8 @@ func New(onChange OnChangeFunc) *Cache {
 		secrets:        make(map[string]swarm.Secret),
 		networks:       make(map[string]network.Summary),
 		volumes:        make(map[string]volume.Volume),
-		svcsByConfig:   make(map[string]map[string]struct{}),
-		svcsBySecret:   make(map[string]map[string]struct{}),
-		svcsByNetwork:  make(map[string]map[string]struct{}),
-		svcsByVolume:   make(map[string]map[string]struct{}),
 		stacks:         make(map[string]Stack),
+		serviceRef:     newServiceRefIndex(),
 		onChange:       onChange,
 		history:        NewHistory(10000),
 	}
@@ -267,11 +259,11 @@ func (c *Cache) SetService(s swarm.Service) {
 	if old, ok := c.services[s.ID]; ok {
 		oldRefs = serviceRefs(old)
 		c.removeFromStack(EventService, old.ID, old.Spec.Labels)
-		c.removeServiceRefIndex(old)
+		c.serviceRef.remove(old)
 	}
 	c.services[s.ID] = s
 	c.addToStack(EventService, s.ID, s.Spec.Labels)
-	c.addServiceRefIndex(s)
+	c.serviceRef.add(s)
 	c.mu.Unlock()
 
 	c.notify(Event{Type: EventService, Action: "update", ID: s.ID, Resource: s})
@@ -291,7 +283,7 @@ func (c *Cache) DeleteService(id string) {
 	if old, ok := c.services[id]; ok {
 		oldRefs = serviceRefs(old)
 		c.removeFromStack(EventService, id, old.Spec.Labels)
-		c.removeServiceRefIndex(old)
+		c.serviceRef.remove(old)
 	}
 	delete(c.services, id)
 	c.mu.Unlock()
@@ -721,126 +713,32 @@ func (c *Cache) ListTasksByNode(nodeID string) []swarm.Task {
 
 // --- Cross-references ---
 
-// ServiceRef is a lightweight reference to a service.
-type ServiceRef struct {
-	AtID string `json:"@id"`
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
-// addServiceRefIndex populates the reverse-reference indexes for a service.
-// Must be called with c.mu held for writing.
-func (c *Cache) addServiceRefIndex(s swarm.Service) {
-	addRef := func(idx map[string]map[string]struct{}, key, svcID string) {
-		if idx[key] == nil {
-			idx[key] = make(map[string]struct{})
-		}
-		idx[key][svcID] = struct{}{}
-	}
-	if cs := s.Spec.TaskTemplate.ContainerSpec; cs != nil {
-		for _, cfg := range cs.Configs {
-			addRef(c.svcsByConfig, cfg.ConfigID, s.ID)
-		}
-		for _, sec := range cs.Secrets {
-			addRef(c.svcsBySecret, sec.SecretID, s.ID)
-		}
-		for _, m := range cs.Mounts {
-			if m.Type == "volume" && m.Source != "" {
-				addRef(c.svcsByVolume, m.Source, s.ID)
-			}
-		}
-	}
-	for _, n := range s.Spec.TaskTemplate.Networks {
-		addRef(c.svcsByNetwork, n.Target, s.ID)
-	}
-}
-
-// removeServiceRefIndex removes a service from all reverse-reference indexes.
-// Must be called with c.mu held for writing.
-func (c *Cache) removeServiceRefIndex(s swarm.Service) {
-	removeRef := func(idx map[string]map[string]struct{}, key, svcID string) {
-		if m := idx[key]; m != nil {
-			delete(m, svcID)
-			if len(m) == 0 {
-				delete(idx, key)
-			}
-		}
-	}
-	if cs := s.Spec.TaskTemplate.ContainerSpec; cs != nil {
-		for _, cfg := range cs.Configs {
-			removeRef(c.svcsByConfig, cfg.ConfigID, s.ID)
-		}
-		for _, sec := range cs.Secrets {
-			removeRef(c.svcsBySecret, sec.SecretID, s.ID)
-		}
-		for _, m := range cs.Mounts {
-			if m.Type == "volume" && m.Source != "" {
-				removeRef(c.svcsByVolume, m.Source, s.ID)
-			}
-		}
-	}
-	for _, n := range s.Spec.TaskTemplate.Networks {
-		removeRef(c.svcsByNetwork, n.Target, s.ID)
-	}
-}
-
-// rebuildServiceRefIndexes rebuilds all reverse-reference indexes from scratch.
-// Must be called with c.mu held for writing.
-func (c *Cache) rebuildServiceRefIndexes() {
-	c.svcsByConfig = make(map[string]map[string]struct{})
-	c.svcsBySecret = make(map[string]map[string]struct{})
-	c.svcsByNetwork = make(map[string]map[string]struct{})
-	c.svcsByVolume = make(map[string]map[string]struct{})
-	for _, svc := range c.services {
-		c.addServiceRefIndex(svc)
-	}
-}
-
-// serviceRefsFromIndex looks up the reverse index and returns ServiceRef slices.
-// Caller must hold c.mu (at least RLock).
-func (c *Cache) serviceRefsFromIndex(idx map[string]map[string]struct{}, key string) []ServiceRef {
-	svcIDs := idx[key]
-	if len(svcIDs) == 0 {
-		return nil
-	}
-	refs := make([]ServiceRef, 0, len(svcIDs))
-	for svcID := range svcIDs {
-		if svc, ok := c.services[svcID]; ok {
-			refs = append(
-				refs,
-				ServiceRef{AtID: "/services/" + svc.ID, ID: svc.ID, Name: svc.Spec.Name},
-			)
-		}
-	}
-	return refs
-}
-
 // ServicesUsingConfig returns services that reference the given config ID.
 func (c *Cache) ServicesUsingConfig(configID string) []ServiceRef {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.serviceRefsFromIndex(c.svcsByConfig, configID)
+	return c.serviceRef.lookup(c.serviceRef.byConfig, configID, c.services)
 }
 
 // ServicesUsingSecret returns services that reference the given secret ID.
 func (c *Cache) ServicesUsingSecret(secretID string) []ServiceRef {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.serviceRefsFromIndex(c.svcsBySecret, secretID)
+	return c.serviceRef.lookup(c.serviceRef.bySecret, secretID, c.services)
 }
 
 // ServicesUsingNetwork returns services that reference the given network ID.
 func (c *Cache) ServicesUsingNetwork(networkID string) []ServiceRef {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.serviceRefsFromIndex(c.svcsByNetwork, networkID)
+	return c.serviceRef.lookup(c.serviceRef.byNetwork, networkID, c.services)
 }
 
 // ServicesUsingVolume returns services that mount the given volume name.
 func (c *Cache) ServicesUsingVolume(volumeName string) []ServiceRef {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.serviceRefsFromIndex(c.svcsByVolume, volumeName)
+	return c.serviceRef.lookup(c.serviceRef.byVolume, volumeName, c.services)
 }
 
 // --- Snapshot ---
@@ -949,7 +847,7 @@ func (c *Cache) replaceServices(services []swarm.Service) {
 	}
 	c.mu.Lock()
 	c.services = m
-	c.rebuildServiceRefIndexes()
+	c.serviceRef.rebuild(c.services)
 	c.mu.Unlock()
 }
 
@@ -1149,7 +1047,7 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 
 	// Rebuild derived indexes from the current (possibly partially updated) maps.
 	c.rebuildStacks()
-	c.rebuildServiceRefIndexes()
+	c.serviceRef.rebuild(c.services)
 	c.lastSync = time.Now()
 	c.mu.Unlock()
 

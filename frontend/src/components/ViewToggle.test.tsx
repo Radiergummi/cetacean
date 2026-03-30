@@ -10,8 +10,8 @@ describe("ViewToggle", () => {
         onChange={vi.fn()}
       />,
     );
-    expect(screen.getByTitle("Table view")).toBeInTheDocument();
-    expect(screen.getByTitle("Grid view")).toBeInTheDocument();
+    expect(screen.getByLabelText("Table view")).toBeInTheDocument();
+    expect(screen.getByLabelText("Grid view")).toBeInTheDocument();
   });
 
   it("calls onChange with 'grid' when grid clicked", () => {
@@ -22,7 +22,7 @@ describe("ViewToggle", () => {
         onChange={onChange}
       />,
     );
-    fireEvent.click(screen.getByTitle("Grid view"));
+    fireEvent.click(screen.getByLabelText("Grid view"));
     expect(onChange).toHaveBeenCalledWith("grid");
   });
 
@@ -34,7 +34,7 @@ describe("ViewToggle", () => {
         onChange={onChange}
       />,
     );
-    fireEvent.click(screen.getByTitle("Table view"));
+    fireEvent.click(screen.getByLabelText("Table view"));
     expect(onChange).toHaveBeenCalledWith("table");
   });
 
@@ -45,7 +45,7 @@ describe("ViewToggle", () => {
         onChange={vi.fn()}
       />,
     );
-    expect(screen.getByTitle("Table view").className).toContain("bg-muted");
-    expect(screen.getByTitle("Grid view").className).not.toContain("bg-muted text-foreground");
+    expect(screen.getByLabelText("Table view")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("Grid view")).toHaveAttribute("aria-pressed", "false");
   });
 });

@@ -36,7 +36,7 @@ export function SecretsEditor({ serviceId, secrets, onSaved }: SecretsEditorProp
           })),
         );
       })
-      .catch(() => {});
+      .catch(console.warn);
   }, []);
 
   function handleSecretSelected(secretId: string) {

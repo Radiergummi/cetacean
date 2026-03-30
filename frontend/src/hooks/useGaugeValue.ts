@@ -16,7 +16,10 @@ export function useGaugeValue(query: string, enabled: boolean) {
           const raw = response.data?.result?.[0]?.value?.[1];
           setValue(raw != null ? Number(raw) : null);
         })
-        .catch(() => setValue(null));
+        .catch((error) => {
+          console.warn(error);
+          setValue(null);
+        });
     }
 
     poll();

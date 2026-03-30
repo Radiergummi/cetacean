@@ -15,12 +15,27 @@ export default function SortIndicator({
       {label}
       {active ? (
         dir === "asc" ? (
-          <ChevronUp className="size-3.5" />
+          <>
+            <ChevronUp
+              aria-hidden="true"
+              className="size-3.5"
+            />
+            <span className="sr-only">, sorted ascending</span>
+          </>
         ) : (
-          <ChevronDown className="size-3.5" />
+          <>
+            <ChevronDown
+              aria-hidden="true"
+              className="size-3.5"
+            />
+            <span className="sr-only">, sorted descending</span>
+          </>
         )
       ) : (
-        <ChevronsUpDown className="size-3.5 opacity-30" />
+        <ChevronsUpDown
+          aria-hidden="true"
+          className="size-3.5 opacity-30"
+        />
       )}
     </span>
   );

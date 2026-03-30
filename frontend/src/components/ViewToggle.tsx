@@ -12,16 +12,16 @@ export default function ViewToggle({ mode, onChange }: Props) {
       <button
         onClick={() => onChange("table")}
         aria-pressed={mode === "table"}
+        aria-label="Table view"
         className="flex items-center px-2.5 py-2.5 text-muted-foreground hover:text-foreground aria-pressed:bg-muted aria-pressed:text-foreground"
-        title="Table view"
       >
         <TableProperties className="size-4" />
       </button>
       <button
         onClick={() => onChange("grid")}
         aria-pressed={mode === "grid"}
+        aria-label="Grid view"
         className="flex items-center border-l px-2.5 py-2.5 text-muted-foreground hover:text-foreground aria-pressed:bg-muted aria-pressed:text-foreground"
-        title="Grid view"
       >
         <LayoutGrid className="size-4" />
       </button>

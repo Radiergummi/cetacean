@@ -12,8 +12,6 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
-
-	"github.com/radiergummi/cetacean/internal/config"
 )
 
 type mockSystemClient struct {
@@ -75,8 +73,9 @@ func (m *mockSystemClient) UnlockSwarm(ctx context.Context, key string) error {
 // Compile-time check: mockSystemClient must satisfy DockerSystemClient.
 var _ DockerSystemClient = (*mockSystemClient)(nil)
 
-func newSwarmHandlers(sc DockerSystemClient) *Handlers {
-	return NewHandlers(nil, nil, nil, sc, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
+func newSwarmHandlers(t testing.TB, sc DockerSystemClient) *Handlers {
+	t.Helper()
+	return newTestHandlers(t, withSystemClient(sc))
 }
 
 func validSwarm() swarm.Swarm {
@@ -147,7 +146,7 @@ func TestHandleSwarmOrchestration_Success(t *testing.T) {
 		},
 		updateSwarmFn: noopUpdate(),
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	body := `{"TaskHistoryRetentionLimit": 10}`
 	req := httptest.NewRequest(http.MethodPatch, "/swarm/orchestration", strings.NewReader(body))
@@ -175,7 +174,7 @@ func TestHandleSwarmOrchestration_Success(t *testing.T) {
 }
 
 func TestHandleSwarmOrchestration_NilClient(t *testing.T) {
-	h := newSwarmHandlers(nil)
+	h := newSwarmHandlers(t, nil)
 	req := httptest.NewRequest(http.MethodPatch, "/swarm/orchestration", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/merge-patch+json")
 	rec := httptest.NewRecorder()
@@ -188,7 +187,7 @@ func TestHandleSwarmOrchestration_NilClient(t *testing.T) {
 }
 
 func TestHandleSwarmOrchestration_WrongContentType(t *testing.T) {
-	h := newSwarmHandlers(&mockSystemClient{})
+	h := newSwarmHandlers(t, &mockSystemClient{})
 	req := httptest.NewRequest(http.MethodPatch, "/swarm/orchestration", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -202,7 +201,7 @@ func TestHandleSwarmOrchestration_WrongContentType(t *testing.T) {
 
 func TestHandleSwarmOrchestration_InspectError(t *testing.T) {
 	sc := &mockSystemClient{swarmInspectFn: inspectError()}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	rec := httptest.NewRecorder()
 	h.HandlePatchSwarmOrchestration(rec, mergePatchRequest("/swarm/orchestration", `{}`))
@@ -219,7 +218,7 @@ func TestHandleSwarmOrchestration_UpdateError(t *testing.T) {
 		},
 		updateSwarmFn: updateError(),
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	rec := httptest.NewRecorder()
 	h.HandlePatchSwarmOrchestration(
@@ -243,7 +242,7 @@ func TestHandleSwarmOrchestration_InvalidBody(t *testing.T) {
 			return validSwarm(), nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	rec := httptest.NewRecorder()
 	h.HandlePatchSwarmOrchestration(rec, mergePatchRequest("/swarm/orchestration", "not json"))
@@ -264,7 +263,7 @@ func TestHandleSwarmOrchestration_NilRetention_Preserved(t *testing.T) {
 			return nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	// Empty patch should preserve existing retention limit
 	rec := httptest.NewRecorder()
@@ -293,7 +292,7 @@ func TestHandleSwarmOrchestration_VersionPassedThrough(t *testing.T) {
 			return nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	rec := httptest.NewRecorder()
 	h.HandlePatchSwarmOrchestration(
@@ -322,7 +321,7 @@ func TestHandleSwarmRaft_Success(t *testing.T) {
 			return nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	body := `{"SnapshotInterval": 20000}`
 	req := httptest.NewRequest(http.MethodPatch, "/swarm/raft", strings.NewReader(body))
@@ -350,7 +349,7 @@ func TestHandleSwarmRaft_Success(t *testing.T) {
 }
 
 func TestHandleSwarmRaft_NilClient(t *testing.T) {
-	h := newSwarmHandlers(nil)
+	h := newSwarmHandlers(t, nil)
 	req := httptest.NewRequest(http.MethodPatch, "/swarm/raft", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/merge-patch+json")
 	rec := httptest.NewRecorder()
@@ -363,7 +362,7 @@ func TestHandleSwarmRaft_NilClient(t *testing.T) {
 }
 
 func TestHandleSwarmRaft_WrongContentType(t *testing.T) {
-	h := newSwarmHandlers(&mockSystemClient{})
+	h := newSwarmHandlers(t, &mockSystemClient{})
 	req := httptest.NewRequest(http.MethodPatch, "/swarm/raft", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -377,7 +376,7 @@ func TestHandleSwarmRaft_WrongContentType(t *testing.T) {
 
 func TestHandleSwarmRaft_InspectError(t *testing.T) {
 	sc := &mockSystemClient{swarmInspectFn: inspectError()}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	rec := httptest.NewRecorder()
 	h.HandlePatchSwarmRaft(rec, mergePatchRequest("/swarm/raft", `{}`))
@@ -394,7 +393,7 @@ func TestHandleSwarmRaft_UpdateError(t *testing.T) {
 		},
 		updateSwarmFn: updateError(),
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	rec := httptest.NewRecorder()
 	h.HandlePatchSwarmRaft(rec, mergePatchRequest("/swarm/raft", `{"SnapshotInterval": 20000}`))
@@ -410,7 +409,7 @@ func TestHandleSwarmRaft_InvalidBody(t *testing.T) {
 			return validSwarm(), nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	rec := httptest.NewRecorder()
 	h.HandlePatchSwarmRaft(rec, mergePatchRequest("/swarm/raft", "not json"))
@@ -432,7 +431,7 @@ func TestHandleSwarmRaft_MultiField(t *testing.T) {
 			return nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	body := fmt.Sprintf(
 		`{"SnapshotInterval": 20000, "KeepOldSnapshots": %d, "LogEntriesForSlowFollowers": 1000}`,
@@ -476,7 +475,7 @@ func TestHandleSwarmRaft_EmptyPatch_PreservesAll(t *testing.T) {
 			return nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	rec := httptest.NewRecorder()
 	h.HandlePatchSwarmRaft(rec, mergePatchRequest("/swarm/raft", `{}`))
@@ -505,7 +504,7 @@ func TestHandleSwarmDispatcher_Success(t *testing.T) {
 		},
 		updateSwarmFn: noopUpdate(),
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	body := fmt.Sprintf(`{"HeartbeatPeriod": %d}`, 10*time.Second)
 	req := httptest.NewRequest(http.MethodPatch, "/swarm/dispatcher", strings.NewReader(body))
@@ -533,7 +532,7 @@ func TestHandleSwarmDispatcher_Success(t *testing.T) {
 }
 
 func TestHandleSwarmDispatcher_NilClient(t *testing.T) {
-	h := newSwarmHandlers(nil)
+	h := newSwarmHandlers(t, nil)
 	req := httptest.NewRequest(http.MethodPatch, "/swarm/dispatcher", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/merge-patch+json")
 	rec := httptest.NewRecorder()
@@ -546,7 +545,7 @@ func TestHandleSwarmDispatcher_NilClient(t *testing.T) {
 }
 
 func TestHandleSwarmDispatcher_WrongContentType(t *testing.T) {
-	h := newSwarmHandlers(&mockSystemClient{})
+	h := newSwarmHandlers(t, &mockSystemClient{})
 	req := httptest.NewRequest(http.MethodPatch, "/swarm/dispatcher", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -560,7 +559,7 @@ func TestHandleSwarmDispatcher_WrongContentType(t *testing.T) {
 
 func TestHandleSwarmDispatcher_InspectError(t *testing.T) {
 	sc := &mockSystemClient{swarmInspectFn: inspectError()}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	rec := httptest.NewRecorder()
 	h.HandlePatchSwarmDispatcher(rec, mergePatchRequest("/swarm/dispatcher", `{}`))
@@ -577,7 +576,7 @@ func TestHandleSwarmDispatcher_UpdateError(t *testing.T) {
 		},
 		updateSwarmFn: updateError(),
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	rec := httptest.NewRecorder()
 	h.HandlePatchSwarmDispatcher(
@@ -599,7 +598,7 @@ func TestHandleSwarmDispatcher_InvalidBody(t *testing.T) {
 			return validSwarm(), nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	rec := httptest.NewRecorder()
 	h.HandlePatchSwarmDispatcher(rec, mergePatchRequest("/swarm/dispatcher", "not json"))
@@ -620,7 +619,7 @@ func TestHandleSwarmDispatcher_EmptyPatch_PreservesHeartbeat(t *testing.T) {
 			return nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	rec := httptest.NewRecorder()
 	h.HandlePatchSwarmDispatcher(rec, mergePatchRequest("/swarm/dispatcher", `{}`))
@@ -646,7 +645,7 @@ func TestHandleSwarmCAConfig_Success(t *testing.T) {
 		},
 		updateSwarmFn: noopUpdate(),
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	newExpiry := 30 * 24 * time.Hour
 	body := fmt.Sprintf(`{"NodeCertExpiry": %d}`, newExpiry)
@@ -675,7 +674,7 @@ func TestHandleSwarmCAConfig_Success(t *testing.T) {
 }
 
 func TestHandleSwarmCAConfig_NilClient(t *testing.T) {
-	h := newSwarmHandlers(nil)
+	h := newSwarmHandlers(t, nil)
 	req := httptest.NewRequest(http.MethodPatch, "/swarm/ca", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/merge-patch+json")
 	rec := httptest.NewRecorder()
@@ -688,7 +687,7 @@ func TestHandleSwarmCAConfig_NilClient(t *testing.T) {
 }
 
 func TestHandleSwarmCAConfig_WrongContentType(t *testing.T) {
-	h := newSwarmHandlers(&mockSystemClient{})
+	h := newSwarmHandlers(t, &mockSystemClient{})
 	req := httptest.NewRequest(http.MethodPatch, "/swarm/ca", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -702,7 +701,7 @@ func TestHandleSwarmCAConfig_WrongContentType(t *testing.T) {
 
 func TestHandleSwarmCAConfig_InspectError(t *testing.T) {
 	sc := &mockSystemClient{swarmInspectFn: inspectError()}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	rec := httptest.NewRecorder()
 	h.HandlePatchSwarmCAConfig(rec, mergePatchRequest("/swarm/ca", `{}`))
@@ -719,7 +718,7 @@ func TestHandleSwarmCAConfig_UpdateError(t *testing.T) {
 		},
 		updateSwarmFn: updateError(),
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	newExpiry := 30 * 24 * time.Hour
 	rec := httptest.NewRecorder()
@@ -739,7 +738,7 @@ func TestHandleSwarmCAConfig_InvalidBody(t *testing.T) {
 			return validSwarm(), nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	rec := httptest.NewRecorder()
 	h.HandlePatchSwarmCAConfig(rec, mergePatchRequest("/swarm/ca", "not json"))
@@ -760,7 +759,7 @@ func TestHandleSwarmCAConfig_EmptyPatch_PreservesExpiry(t *testing.T) {
 			return nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	rec := httptest.NewRecorder()
 	h.HandlePatchSwarmCAConfig(rec, mergePatchRequest("/swarm/ca", `{}`))
@@ -790,7 +789,7 @@ func TestHandleSwarmEncryption_Success(t *testing.T) {
 			return nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	body := `{"AutoLockManagers": true}`
 	req := httptest.NewRequest(http.MethodPatch, "/swarm/encryption", strings.NewReader(body))
@@ -822,7 +821,7 @@ func TestHandleSwarmEncryption_SetFalse(t *testing.T) {
 			return nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	body := `{"AutoLockManagers": false}`
 	req := httptest.NewRequest(http.MethodPatch, "/swarm/encryption", strings.NewReader(body))
@@ -841,7 +840,7 @@ func TestHandleSwarmEncryption_SetFalse(t *testing.T) {
 }
 
 func TestHandleSwarmEncryption_NilClient(t *testing.T) {
-	h := newSwarmHandlers(nil)
+	h := newSwarmHandlers(t, nil)
 	req := httptest.NewRequest(http.MethodPatch, "/swarm/encryption", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/merge-patch+json")
 	rec := httptest.NewRecorder()
@@ -854,7 +853,7 @@ func TestHandleSwarmEncryption_NilClient(t *testing.T) {
 }
 
 func TestHandleSwarmEncryption_WrongContentType(t *testing.T) {
-	h := newSwarmHandlers(&mockSystemClient{})
+	h := newSwarmHandlers(t, &mockSystemClient{})
 	req := httptest.NewRequest(http.MethodPatch, "/swarm/encryption", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -868,7 +867,7 @@ func TestHandleSwarmEncryption_WrongContentType(t *testing.T) {
 
 func TestHandleSwarmEncryption_InspectError(t *testing.T) {
 	sc := &mockSystemClient{swarmInspectFn: inspectError()}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	rec := httptest.NewRecorder()
 	h.HandlePatchSwarmEncryption(rec, mergePatchRequest("/swarm/encryption", `{}`))
@@ -885,7 +884,7 @@ func TestHandleSwarmEncryption_UpdateError(t *testing.T) {
 		},
 		updateSwarmFn: updateError(),
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	rec := httptest.NewRecorder()
 	h.HandlePatchSwarmEncryption(
@@ -904,7 +903,7 @@ func TestHandleSwarmEncryption_InvalidBody(t *testing.T) {
 			return validSwarm(), nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	rec := httptest.NewRecorder()
 	h.HandlePatchSwarmEncryption(rec, mergePatchRequest("/swarm/encryption", "not json"))
@@ -928,7 +927,7 @@ func TestHandleSwarmEncryption_OmittedField_NoChange(t *testing.T) {
 			return nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	// Empty patch: AutoLockManagers pointer is nil, so the field should not change
 	rec := httptest.NewRecorder()
@@ -955,7 +954,7 @@ func TestHandlePostRotateToken_Worker(t *testing.T) {
 			return nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	body := `{"target":"worker"}`
 	req := httptest.NewRequest(http.MethodPost, "/swarm/rotate-token", strings.NewReader(body))
@@ -985,7 +984,7 @@ func TestHandlePostRotateToken_Manager(t *testing.T) {
 			return nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	body := `{"target":"manager"}`
 	req := httptest.NewRequest(http.MethodPost, "/swarm/rotate-token", strings.NewReader(body))
@@ -1007,7 +1006,7 @@ func TestHandlePostRotateToken_InvalidTarget(t *testing.T) {
 			return validSwarm(), nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	body := `{"target":"invalid"}`
 	req := httptest.NewRequest(http.MethodPost, "/swarm/rotate-token", strings.NewReader(body))
@@ -1021,7 +1020,7 @@ func TestHandlePostRotateToken_InvalidTarget(t *testing.T) {
 }
 
 func TestHandlePostRotateToken_NilClient(t *testing.T) {
-	h := newSwarmHandlers(nil)
+	h := newSwarmHandlers(t, nil)
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"/swarm/rotate-token",
@@ -1040,7 +1039,7 @@ func TestHandlePostRotateToken_InspectError(t *testing.T) {
 	sc := &mockSystemClient{
 		swarmInspectFn: inspectError(),
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	body := `{"target":"worker"}`
 	req := httptest.NewRequest(http.MethodPost, "/swarm/rotate-token", strings.NewReader(body))
@@ -1060,7 +1059,7 @@ func TestHandlePostRotateToken_UpdateError(t *testing.T) {
 		},
 		updateSwarmFn: updateError(),
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	body := `{"target":"worker"}`
 	req := httptest.NewRequest(http.MethodPost, "/swarm/rotate-token", strings.NewReader(body))
@@ -1075,7 +1074,7 @@ func TestHandlePostRotateToken_UpdateError(t *testing.T) {
 
 func TestHandlePostRotateToken_InvalidBody(t *testing.T) {
 	sc := &mockSystemClient{}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	req := httptest.NewRequest(
 		http.MethodPost,
@@ -1097,7 +1096,7 @@ func TestHandlePostRotateToken_EmptyTarget(t *testing.T) {
 			return validSwarm(), nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	body := `{"target":""}`
 	req := httptest.NewRequest(http.MethodPost, "/swarm/rotate-token", strings.NewReader(body))
@@ -1123,7 +1122,7 @@ func TestHandlePostRotateUnlockKey_Success(t *testing.T) {
 			return nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	req := httptest.NewRequest(http.MethodPost, "/swarm/rotate-unlock-key", nil)
 	rec := httptest.NewRecorder()
@@ -1139,7 +1138,7 @@ func TestHandlePostRotateUnlockKey_Success(t *testing.T) {
 }
 
 func TestHandlePostRotateUnlockKey_NilClient(t *testing.T) {
-	h := newSwarmHandlers(nil)
+	h := newSwarmHandlers(t, nil)
 	req := httptest.NewRequest(http.MethodPost, "/swarm/rotate-unlock-key", nil)
 	rec := httptest.NewRecorder()
 
@@ -1152,7 +1151,7 @@ func TestHandlePostRotateUnlockKey_NilClient(t *testing.T) {
 
 func TestHandlePostRotateUnlockKey_InspectError(t *testing.T) {
 	sc := &mockSystemClient{swarmInspectFn: inspectError()}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	req := httptest.NewRequest(http.MethodPost, "/swarm/rotate-unlock-key", nil)
 	rec := httptest.NewRecorder()
@@ -1171,7 +1170,7 @@ func TestHandlePostRotateUnlockKey_UpdateError(t *testing.T) {
 		},
 		updateSwarmFn: updateError(),
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	req := httptest.NewRequest(http.MethodPost, "/swarm/rotate-unlock-key", nil)
 	rec := httptest.NewRecorder()
@@ -1196,7 +1195,7 @@ func TestHandlePostForceRotateCA_Success(t *testing.T) {
 			return nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	req := httptest.NewRequest(http.MethodPost, "/swarm/force-rotate-ca", nil)
 	rec := httptest.NewRecorder()
@@ -1226,7 +1225,7 @@ func TestHandlePostForceRotateCA_IncrementsExisting(t *testing.T) {
 			return nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	req := httptest.NewRequest(http.MethodPost, "/swarm/force-rotate-ca", nil)
 	rec := httptest.NewRecorder()
@@ -1242,7 +1241,7 @@ func TestHandlePostForceRotateCA_IncrementsExisting(t *testing.T) {
 }
 
 func TestHandlePostForceRotateCA_NilClient(t *testing.T) {
-	h := newSwarmHandlers(nil)
+	h := newSwarmHandlers(t, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/swarm/force-rotate-ca", nil)
 	rec := httptest.NewRecorder()
@@ -1256,7 +1255,7 @@ func TestHandlePostForceRotateCA_NilClient(t *testing.T) {
 
 func TestHandlePostForceRotateCA_InspectError(t *testing.T) {
 	sc := &mockSystemClient{swarmInspectFn: inspectError()}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	req := httptest.NewRequest(http.MethodPost, "/swarm/force-rotate-ca", nil)
 	rec := httptest.NewRecorder()
@@ -1275,7 +1274,7 @@ func TestHandlePostForceRotateCA_UpdateError(t *testing.T) {
 		},
 		updateSwarmFn: updateError(),
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	req := httptest.NewRequest(http.MethodPost, "/swarm/force-rotate-ca", nil)
 	rec := httptest.NewRecorder()
@@ -1298,7 +1297,7 @@ func TestHandlePostForceRotateCA_PassesVersion(t *testing.T) {
 			return nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	req := httptest.NewRequest(http.MethodPost, "/swarm/force-rotate-ca", nil)
 	rec := httptest.NewRecorder()
@@ -1324,7 +1323,7 @@ func TestHandlePostForceRotateCA_NoUpdateFlags(t *testing.T) {
 			return nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	req := httptest.NewRequest(http.MethodPost, "/swarm/force-rotate-ca", nil)
 	rec := httptest.NewRecorder()
@@ -1348,7 +1347,7 @@ func TestHandleGetUnlockKey_Success(t *testing.T) {
 			return "SWMKEY-1-abc123", nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	req := httptest.NewRequest(http.MethodGet, "/swarm/unlock-key", nil)
 	rec := httptest.NewRecorder()
@@ -1369,7 +1368,7 @@ func TestHandleGetUnlockKey_Success(t *testing.T) {
 }
 
 func TestHandleGetUnlockKey_NilClient(t *testing.T) {
-	h := newSwarmHandlers(nil)
+	h := newSwarmHandlers(t, nil)
 	req := httptest.NewRequest(http.MethodGet, "/swarm/unlock-key", nil)
 	rec := httptest.NewRecorder()
 
@@ -1386,7 +1385,7 @@ func TestHandleGetUnlockKey_Error(t *testing.T) {
 			return "", fmt.Errorf("not a manager")
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	req := httptest.NewRequest(http.MethodGet, "/swarm/unlock-key", nil)
 	rec := httptest.NewRecorder()
@@ -1408,7 +1407,7 @@ func TestHandlePostUnlockSwarm_Success(t *testing.T) {
 			return nil
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	body := `{"unlockKey":"SWMKEY-1-abc123"}`
 	req := httptest.NewRequest(http.MethodPost, "/swarm/unlock", strings.NewReader(body))
@@ -1426,7 +1425,7 @@ func TestHandlePostUnlockSwarm_Success(t *testing.T) {
 
 func TestHandlePostUnlockSwarm_MissingKey(t *testing.T) {
 	sc := &mockSystemClient{}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	body := `{}`
 	req := httptest.NewRequest(http.MethodPost, "/swarm/unlock", strings.NewReader(body))
@@ -1441,7 +1440,7 @@ func TestHandlePostUnlockSwarm_MissingKey(t *testing.T) {
 
 func TestHandlePostUnlockSwarm_InvalidBody(t *testing.T) {
 	sc := &mockSystemClient{}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	req := httptest.NewRequest(http.MethodPost, "/swarm/unlock", strings.NewReader("not json"))
 	rec := httptest.NewRecorder()
@@ -1454,7 +1453,7 @@ func TestHandlePostUnlockSwarm_InvalidBody(t *testing.T) {
 }
 
 func TestHandlePostUnlockSwarm_NilClient(t *testing.T) {
-	h := newSwarmHandlers(nil)
+	h := newSwarmHandlers(t, nil)
 
 	body := `{"unlockKey":"SWMKEY-1-abc123"}`
 	req := httptest.NewRequest(http.MethodPost, "/swarm/unlock", strings.NewReader(body))
@@ -1473,7 +1472,7 @@ func TestHandlePostUnlockSwarm_Error(t *testing.T) {
 			return fmt.Errorf("invalid key")
 		},
 	}
-	h := newSwarmHandlers(sc)
+	h := newSwarmHandlers(t, sc)
 
 	body := `{"unlockKey":"SWMKEY-1-wrong"}`
 	req := httptest.NewRequest(http.MethodPost, "/swarm/unlock", strings.NewReader(body))
