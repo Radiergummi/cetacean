@@ -166,9 +166,13 @@ func (h *Handlers) HandleGetNodeLabels(w http.ResponseWriter, r *http.Request) {
 	if labels == nil {
 		labels = map[string]string{}
 	}
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/nodes/"+id+"/labels", "NodeLabels", map[string]any{
-		"labels": labels,
-	}))
+	writeJSONWithETag(
+		w,
+		r,
+		NewDetailResponse(r.Context(), "/nodes/"+id+"/labels", "NodeLabels", map[string]any{
+			"labels": labels,
+		}),
+	)
 }
 
 func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request) {

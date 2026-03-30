@@ -16,19 +16,24 @@ import (
 func (h *Handlers) HandleRecommendations(w http.ResponseWriter, r *http.Request) {
 	results := h.recEngine.Results()
 	summary := recommendations.ComputeSummary(results)
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/recommendations", "RecommendationCollection", map[string]any{
-		"items":      results,
-		"total":      len(results),
-		"summary":    summary,
-		"computedAt": h.recEngine.LastTick(),
-	}))
+	writeJSONWithETag(w, r, NewDetailResponse(
+		r.Context(), "/recommendations", "RecommendationCollection",
+		map[string]any{
+			"items":      results,
+			"total":      len(results),
+			"summary":    summary,
+			"computedAt": h.recEngine.LastTick(),
+		},
+	))
 }
 
 func (h *Handlers) streamList(w http.ResponseWriter, r *http.Request, typ cache.EventType) {
 	h.broadcaster.ServeSSE(w, r, sse.TypeMatcher(typ))
 }
 
-func (h *Handlers) streamResource(w http.ResponseWriter, r *http.Request, typ cache.EventType, id string) {
+func (h *Handlers) streamResource(
+	w http.ResponseWriter, r *http.Request, typ cache.EventType, id string,
+) {
 	h.broadcaster.ServeSSE(w, r, sse.ResourceMatcher(typ, id))
 }
 

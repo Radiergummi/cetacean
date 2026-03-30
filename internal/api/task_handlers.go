@@ -74,7 +74,13 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 	writeJSONWithETag(
 		w,
 		r,
-		NewCollectionResponse(r.Context(), h.enrichTasks(paged.Items), paged.Total, paged.Limit, paged.Offset),
+		NewCollectionResponse(
+			r.Context(),
+			h.enrichTasks(paged.Items),
+			paged.Total,
+			paged.Limit,
+			paged.Offset,
+		),
 	)
 }
 

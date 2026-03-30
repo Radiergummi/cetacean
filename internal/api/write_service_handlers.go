@@ -364,9 +364,13 @@ func (h *Handlers) HandleGetServiceEnv(w http.ResponseWriter, r *http.Request) {
 	if svc.Spec.TaskTemplate.ContainerSpec != nil {
 		env = svc.Spec.TaskTemplate.ContainerSpec.Env
 	}
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/services/"+id+"/env", "ServiceEnv", map[string]any{
-		"env": envSliceToMap(env),
-	}))
+	writeJSONWithETag(
+		w,
+		r,
+		NewDetailResponse(r.Context(), "/services/"+id+"/env", "ServiceEnv", map[string]any{
+			"env": envSliceToMap(env),
+		}),
+	)
 }
 
 func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request) {
@@ -538,9 +542,14 @@ func (h *Handlers) HandleGetServiceResources(w http.ResponseWriter, r *http.Requ
 	writeJSONWithETag(
 		w,
 		r,
-		NewDetailResponse(r.Context(), "/services/"+id+"/resources", "ServiceResources", map[string]any{
-			"resources": resources,
-		}),
+		NewDetailResponse(
+			r.Context(),
+			"/services/"+id+"/resources",
+			"ServiceResources",
+			map[string]any{
+				"resources": resources,
+			},
+		),
 	)
 }
 
@@ -615,9 +624,17 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 		writeServiceError(w, r, err)
 		return
 	}
-	writeJSON(w, NewDetailResponse(r.Context(), "/services/"+id+"/resources", "ServiceResources", map[string]any{
-		"resources": updated.Spec.TaskTemplate.Resources,
-	}))
+	writeJSON(
+		w,
+		NewDetailResponse(
+			r.Context(),
+			"/services/"+id+"/resources",
+			"ServiceResources",
+			map[string]any{
+				"resources": updated.Spec.TaskTemplate.Resources,
+			},
+		),
+	)
 }
 
 // mergePatch applies RFC 7396 JSON Merge Patch semantics to a base map.
@@ -706,9 +723,12 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 	if resultPorts == nil {
 		resultPorts = []swarm.PortConfig{}
 	}
-	writeJSON(w, NewDetailResponse(r.Context(), "/services/"+id+"/ports", "ServicePorts", map[string]any{
-		"ports": resultPorts,
-	}))
+	writeJSON(
+		w,
+		NewDetailResponse(r.Context(), "/services/"+id+"/ports", "ServicePorts", map[string]any{
+			"ports": resultPorts,
+		}),
+	)
 }
 
 func (h *Handlers) HandleGetServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
@@ -727,9 +747,14 @@ func (h *Handlers) HandleGetServiceHealthcheck(w http.ResponseWriter, r *http.Re
 	writeJSONWithETag(
 		w,
 		r,
-		NewDetailResponse(r.Context(), "/services/"+id+"/healthcheck", "ServiceHealthcheck", map[string]any{
-			"healthcheck": hc,
-		}),
+		NewDetailResponse(
+			r.Context(),
+			"/services/"+id+"/healthcheck",
+			"ServiceHealthcheck",
+			map[string]any{
+				"healthcheck": hc,
+			},
+		),
 	)
 }
 
@@ -764,9 +789,14 @@ func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Re
 
 	writeJSON(
 		w,
-		NewDetailResponse(r.Context(), "/services/"+id+"/healthcheck", "ServiceHealthcheck", map[string]any{
-			"healthcheck": resultHC,
-		}),
+		NewDetailResponse(
+			r.Context(),
+			"/services/"+id+"/healthcheck",
+			"ServiceHealthcheck",
+			map[string]any{
+				"healthcheck": resultHC,
+			},
+		),
 	)
 }
 
@@ -786,9 +816,14 @@ func (h *Handlers) HandleGetServicePlacement(w http.ResponseWriter, r *http.Requ
 	writeJSONWithETag(
 		w,
 		r,
-		NewDetailResponse(r.Context(), "/services/"+id+"/placement", "ServicePlacement", map[string]any{
-			"placement": placement,
-		}),
+		NewDetailResponse(
+			r.Context(),
+			"/services/"+id+"/placement",
+			"ServicePlacement",
+			map[string]any{
+				"placement": placement,
+			},
+		),
 	)
 }
 
@@ -821,9 +856,17 @@ func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Requ
 		resultPlacement = &swarm.Placement{}
 	}
 
-	writeJSON(w, NewDetailResponse(r.Context(), "/services/"+id+"/placement", "ServicePlacement", map[string]any{
-		"placement": resultPlacement,
-	}))
+	writeJSON(
+		w,
+		NewDetailResponse(
+			r.Context(),
+			"/services/"+id+"/placement",
+			"ServicePlacement",
+			map[string]any{
+				"placement": resultPlacement,
+			},
+		),
+	)
 }
 
 func (h *Handlers) HandleGetServiceUpdatePolicy(w http.ResponseWriter, r *http.Request) {
@@ -840,9 +883,14 @@ func (h *Handlers) HandleGetServiceUpdatePolicy(w http.ResponseWriter, r *http.R
 	writeJSONWithETag(
 		w,
 		r,
-		NewDetailResponse(r.Context(), "/services/"+id+"/update-policy", "ServiceUpdatePolicy", map[string]any{
-			"updatePolicy": policy,
-		}),
+		NewDetailResponse(
+			r.Context(),
+			"/services/"+id+"/update-policy",
+			"ServiceUpdatePolicy",
+			map[string]any{
+				"updatePolicy": policy,
+			},
+		),
 	)
 }
 
@@ -931,9 +979,14 @@ func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http
 	}
 	writeJSON(
 		w,
-		NewDetailResponse(r.Context(), "/services/"+id+"/update-policy", "ServiceUpdatePolicy", map[string]any{
-			"updatePolicy": resultPolicy,
-		}),
+		NewDetailResponse(
+			r.Context(),
+			"/services/"+id+"/update-policy",
+			"ServiceUpdatePolicy",
+			map[string]any{
+				"updatePolicy": resultPolicy,
+			},
+		),
 	)
 }
 
@@ -1071,9 +1124,14 @@ func (h *Handlers) HandleGetServiceLogDriver(w http.ResponseWriter, r *http.Requ
 	writeJSONWithETag(
 		w,
 		r,
-		NewDetailResponse(r.Context(), "/services/"+id+"/log-driver", "ServiceLogDriver", map[string]any{
-			"logDriver": svc.Spec.TaskTemplate.LogDriver,
-		}),
+		NewDetailResponse(
+			r.Context(),
+			"/services/"+id+"/log-driver",
+			"ServiceLogDriver",
+			map[string]any{
+				"logDriver": svc.Spec.TaskTemplate.LogDriver,
+			},
+		),
 	)
 }
 
@@ -1148,9 +1206,14 @@ func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Re
 
 	writeJSON(
 		w,
-		NewDetailResponse(r.Context(), "/services/"+id+"/log-driver", "ServiceLogDriver", map[string]any{
-			"logDriver": updated.Spec.TaskTemplate.LogDriver,
-		}),
+		NewDetailResponse(
+			r.Context(),
+			"/services/"+id+"/log-driver",
+			"ServiceLogDriver",
+			map[string]any{
+				"logDriver": updated.Spec.TaskTemplate.LogDriver,
+			},
+		),
 	)
 }
 
@@ -1239,9 +1302,14 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 
 	writeJSON(
 		w,
-		NewDetailResponse(r.Context(), "/services/"+id+"/healthcheck", "ServiceHealthcheck", map[string]any{
-			"healthcheck": resultHC,
-		}),
+		NewDetailResponse(
+			r.Context(),
+			"/services/"+id+"/healthcheck",
+			"ServiceHealthcheck",
+			map[string]any{
+				"healthcheck": resultHC,
+			},
+		),
 	)
 }
 
@@ -1546,9 +1614,12 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	writeJSON(w, NewDetailResponse(r.Context(), "/services/"+id+"/configs", "ServiceConfigs", map[string]any{
-		"configs": extractConfigRefs(updated.Spec.TaskTemplate.ContainerSpec),
-	}))
+	writeJSON(
+		w,
+		NewDetailResponse(r.Context(), "/services/"+id+"/configs", "ServiceConfigs", map[string]any{
+			"configs": extractConfigRefs(updated.Spec.TaskTemplate.ContainerSpec),
+		}),
+	)
 }
 
 func (h *Handlers) HandleGetServiceSecrets(w http.ResponseWriter, r *http.Request) {
@@ -1632,9 +1703,12 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	writeJSON(w, NewDetailResponse(r.Context(), "/services/"+id+"/secrets", "ServiceSecrets", map[string]any{
-		"secrets": extractSecretRefs(updated.Spec.TaskTemplate.ContainerSpec),
-	}))
+	writeJSON(
+		w,
+		NewDetailResponse(r.Context(), "/services/"+id+"/secrets", "ServiceSecrets", map[string]any{
+			"secrets": extractSecretRefs(updated.Spec.TaskTemplate.ContainerSpec),
+		}),
+	)
 }
 
 func (h *Handlers) HandleGetServiceNetworks(w http.ResponseWriter, r *http.Request) {
@@ -1648,9 +1722,14 @@ func (h *Handlers) HandleGetServiceNetworks(w http.ResponseWriter, r *http.Reque
 	writeJSONWithETag(
 		w,
 		r,
-		NewDetailResponse(r.Context(), "/services/"+id+"/networks", "ServiceNetworks", map[string]any{
-			"networks": extractNetworkRefs(svc.Spec.TaskTemplate.Networks),
-		}),
+		NewDetailResponse(
+			r.Context(),
+			"/services/"+id+"/networks",
+			"ServiceNetworks",
+			map[string]any{
+				"networks": extractNetworkRefs(svc.Spec.TaskTemplate.Networks),
+			},
+		),
 	)
 }
 
@@ -1703,9 +1782,17 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	writeJSON(w, NewDetailResponse(r.Context(), "/services/"+id+"/networks", "ServiceNetworks", map[string]any{
-		"networks": extractNetworkRefs(updated.Spec.TaskTemplate.Networks),
-	}))
+	writeJSON(
+		w,
+		NewDetailResponse(
+			r.Context(),
+			"/services/"+id+"/networks",
+			"ServiceNetworks",
+			map[string]any{
+				"networks": extractNetworkRefs(updated.Spec.TaskTemplate.Networks),
+			},
+		),
+	)
 }
 
 func (h *Handlers) HandleGetServiceMounts(w http.ResponseWriter, r *http.Request) {
@@ -1779,7 +1866,10 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 		mounts = []mount.Mount{}
 	}
 
-	writeJSON(w, NewDetailResponse(r.Context(), "/services/"+id+"/mounts", "ServiceMounts", map[string]any{
-		"mounts": mounts,
-	}))
+	writeJSON(
+		w,
+		NewDetailResponse(r.Context(), "/services/"+id+"/mounts", "ServiceMounts", map[string]any{
+			"mounts": mounts,
+		}),
+	)
 }

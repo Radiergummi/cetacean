@@ -96,7 +96,9 @@ func NewRouter(
 		"GET /nodes/{id}",
 		contentNegotiatedWithSSE(
 			h.HandleGetNode,
-			func(w http.ResponseWriter, r *http.Request) { h.streamResource(w, r, cache.EventNode, r.PathValue("id")) },
+			func(w http.ResponseWriter, r *http.Request) {
+				h.streamResource(w, r, cache.EventNode, r.PathValue("id"))
+			},
 			spa,
 		),
 	)
@@ -118,7 +120,9 @@ func NewRouter(
 		"GET /services/{id}",
 		contentNegotiatedWithSSE(
 			h.HandleGetService,
-			func(w http.ResponseWriter, r *http.Request) { h.streamResource(w, r, cache.EventService, r.PathValue("id")) },
+			func(w http.ResponseWriter, r *http.Request) {
+				h.streamResource(w, r, cache.EventService, r.PathValue("id"))
+			},
 			spa,
 		),
 	)
@@ -216,7 +220,9 @@ func NewRouter(
 		"GET /tasks/{id}",
 		contentNegotiatedWithSSE(
 			h.HandleGetTask,
-			func(w http.ResponseWriter, r *http.Request) { h.streamResource(w, r, cache.EventTask, r.PathValue("id")) },
+			func(w http.ResponseWriter, r *http.Request) {
+				h.streamResource(w, r, cache.EventTask, r.PathValue("id"))
+			},
 			spa,
 		),
 	)
@@ -260,7 +266,9 @@ func NewRouter(
 		"GET /configs/{id}",
 		contentNegotiatedWithSSE(
 			h.HandleGetConfig,
-			func(w http.ResponseWriter, r *http.Request) { h.streamResource(w, r, cache.EventConfig, r.PathValue("id")) },
+			func(w http.ResponseWriter, r *http.Request) {
+				h.streamResource(w, r, cache.EventConfig, r.PathValue("id"))
+			},
 			spa,
 		),
 	)
@@ -282,7 +290,9 @@ func NewRouter(
 		"GET /secrets/{id}",
 		contentNegotiatedWithSSE(
 			h.HandleGetSecret,
-			func(w http.ResponseWriter, r *http.Request) { h.streamResource(w, r, cache.EventSecret, r.PathValue("id")) },
+			func(w http.ResponseWriter, r *http.Request) {
+				h.streamResource(w, r, cache.EventSecret, r.PathValue("id"))
+			},
 			spa,
 		),
 	)
@@ -304,7 +314,9 @@ func NewRouter(
 		"GET /networks/{id}",
 		contentNegotiatedWithSSE(
 			h.HandleGetNetwork,
-			func(w http.ResponseWriter, r *http.Request) { h.streamResource(w, r, cache.EventNetwork, r.PathValue("id")) },
+			func(w http.ResponseWriter, r *http.Request) {
+				h.streamResource(w, r, cache.EventNetwork, r.PathValue("id"))
+			},
 			spa,
 		),
 	)
@@ -323,7 +335,9 @@ func NewRouter(
 		"GET /volumes/{name}",
 		contentNegotiatedWithSSE(
 			h.HandleGetVolume,
-			func(w http.ResponseWriter, r *http.Request) { h.streamResource(w, r, cache.EventVolume, r.PathValue("name")) },
+			func(w http.ResponseWriter, r *http.Request) {
+				h.streamResource(w, r, cache.EventVolume, r.PathValue("name"))
+			},
 			spa,
 		),
 	)

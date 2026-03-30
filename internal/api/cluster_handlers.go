@@ -84,7 +84,10 @@ func (h *Handlers) HandleClusterCapacity(w http.ResponseWriter, r *http.Request)
 		"totalMemory":   snap.TotalMemory,
 		"nodeCount":     snap.NodeCount,
 	}
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/cluster/capacity", "ClusterCapacity", extra))
+	writeJSONWithETag(
+		w, r,
+		NewDetailResponse(r.Context(), "/cluster/capacity", "ClusterCapacity", extra),
+	)
 }
 
 func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) {
@@ -393,5 +396,8 @@ func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
 		TotalSize: bcSize, Reclaimable: bcReclaimable,
 	})
 
-	writeJSONWithETag(w, r, NewCollectionResponse(r.Context(), summaries, len(summaries), len(summaries), 0))
+	writeJSONWithETag(
+		w, r,
+		NewCollectionResponse(r.Context(), summaries, len(summaries), len(summaries), 0),
+	)
 }

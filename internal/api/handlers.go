@@ -215,7 +215,6 @@ func NewHandlers(
 	}
 }
 
-
 func searchFilter[T any](items []T, query string, name func(T) string) []T {
 	if query == "" {
 		return items
@@ -388,4 +387,3 @@ func exprFilter[T any](
 	}
 	return filtered, true
 }
-

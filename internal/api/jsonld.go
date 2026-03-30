@@ -88,7 +88,9 @@ type CollectionResponse[T any] struct {
 }
 
 // NewCollectionResponse creates a CollectionResponse with JSON-LD metadata.
-func NewCollectionResponse[T any](ctx context.Context, items []T, total, limit, offset int) CollectionResponse[T] {
+func NewCollectionResponse[T any](
+	ctx context.Context, items []T, total, limit, offset int,
+) CollectionResponse[T] {
 	return CollectionResponse[T]{
 		Context: absPath(ctx, jsonLDContext),
 		Type:    "Collection",

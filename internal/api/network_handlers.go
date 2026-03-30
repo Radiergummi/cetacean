@@ -18,10 +18,14 @@ func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "NET002", fmt.Sprintf("network %q not found", id))
 		return
 	}
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/networks/"+id, "Network", map[string]any{
-		"network":  net,
-		"services": h.cache.ServicesUsingNetwork(id),
-	}))
+	writeJSONWithETag(
+		w,
+		r,
+		NewDetailResponse(r.Context(), "/networks/"+id, "Network", map[string]any{
+			"network":  net,
+			"services": h.cache.ServicesUsingNetwork(id),
+		}),
+	)
 }
 
 func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {

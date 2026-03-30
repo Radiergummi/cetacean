@@ -57,7 +57,11 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writePaginationLinks(w, r, paged.Total, paged.Limit, paged.Offset)
-	writeJSONWithETag(w, r, NewCollectionResponse(r.Context(), items, paged.Total, paged.Limit, paged.Offset))
+	writeJSONWithETag(
+		w,
+		r,
+		NewCollectionResponse(r.Context(), items, paged.Total, paged.Limit, paged.Offset),
+	)
 }
 
 func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {

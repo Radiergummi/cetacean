@@ -3,8 +3,8 @@ package api
 import (
 	"context"
 	"crypto/rand"
-	"fmt"
 	"encoding/hex"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
@@ -82,7 +82,9 @@ func discoveryLinks(next http.Handler) http.Handler {
 		if !strings.HasPrefix(r.URL.Path, "/-/") {
 			ctx := r.Context()
 			w.Header().Add("Link", fmt.Sprintf(`<%s>; rel="service-desc"`, absPath(ctx, "/api")))
-			w.Header().Add("Link", fmt.Sprintf(`<%s>; rel="describedby"`, absPath(ctx, "/api/context.jsonld")))
+			w.Header().Add("Link", fmt.Sprintf(
+				`<%s>; rel="describedby"`, absPath(ctx, "/api/context.jsonld"),
+			))
 		}
 		next.ServeHTTP(w, r)
 	})

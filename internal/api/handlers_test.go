@@ -2,12 +2,12 @@ package api
 
 import (
 	"fmt"
-
-	json "github.com/goccy/go-json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	json "github.com/goccy/go-json"
 
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"

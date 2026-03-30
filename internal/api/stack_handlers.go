@@ -81,7 +81,11 @@ func (h *Handlers) HandleStackSummary(w http.ResponseWriter, r *http.Request) {
 	if summaries == nil {
 		summaries = []cache.StackSummary{}
 	}
-	writeJSONWithETag(w, r, NewCollectionResponse(r.Context(), summaries, len(summaries), len(summaries), 0))
+	writeJSONWithETag(
+		w,
+		r,
+		NewCollectionResponse(r.Context(), summaries, len(summaries), len(summaries), 0),
+	)
 }
 
 func (h *Handlers) queryStackMetric(ctx context.Context, query string) map[string]float64 {
