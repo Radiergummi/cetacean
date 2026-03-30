@@ -40,27 +40,25 @@ func (h *Handlers) getLocalNodeID() string {
 
 func (h *Handlers) HandleCluster(w http.ResponseWriter, r *http.Request) {
 	snap := h.cache.Snapshot()
-	extra := map[string]any{
-		"nodeCount":            snap.NodeCount,
-		"serviceCount":         snap.ServiceCount,
-		"taskCount":            snap.TaskCount,
-		"stackCount":           snap.StackCount,
-		"tasksByState":         snap.TasksByState,
-		"nodesReady":           snap.NodesReady,
-		"nodesDown":            snap.NodesDown,
-		"nodesDraining":        snap.NodesDraining,
-		"servicesConverged":    snap.ServicesConverged,
-		"servicesDegraded":     snap.ServicesDegraded,
-		"reservedCPU":          snap.ReservedCPU,
-		"reservedMemory":       snap.ReservedMemory,
-		"totalCPU":             snap.TotalCPU,
-		"totalMemory":          snap.TotalMemory,
-		"prometheusConfigured": h.promClient != nil,
+	overview := ClusterOverviewResponse{
+		NodeCount:            snap.NodeCount,
+		ServiceCount:         snap.ServiceCount,
+		TaskCount:            snap.TaskCount,
+		StackCount:           snap.StackCount,
+		TasksByState:         snap.TasksByState,
+		NodesReady:           snap.NodesReady,
+		NodesDown:            snap.NodesDown,
+		NodesDraining:        snap.NodesDraining,
+		ServicesConverged:    snap.ServicesConverged,
+		ServicesDegraded:     snap.ServicesDegraded,
+		ReservedCPU:          snap.ReservedCPU,
+		ReservedMemory:       snap.ReservedMemory,
+		TotalCPU:             snap.TotalCPU,
+		TotalMemory:          snap.TotalMemory,
+		PrometheusConfigured: h.promClient != nil,
+		LocalNodeID:          h.getLocalNodeID(),
 	}
-	if id := h.getLocalNodeID(); id != "" {
-		extra["localNodeID"] = id
-	}
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/cluster", "Cluster", extra))
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/cluster", "Cluster", overview))
 }
 
 type ClusterMetrics struct {
@@ -77,17 +75,13 @@ type ResourceMetric struct {
 
 func (h *Handlers) HandleClusterCapacity(w http.ResponseWriter, r *http.Request) {
 	snap := h.cache.Snapshot()
-	extra := map[string]any{
-		"maxNodeCPU":    snap.MaxNodeCPU,
-		"maxNodeMemory": snap.MaxNodeMemory,
-		"totalCPU":      snap.TotalCPU,
-		"totalMemory":   snap.TotalMemory,
-		"nodeCount":     snap.NodeCount,
-	}
-	writeJSONWithETag(
-		w, r,
-		NewDetailResponse(r.Context(), "/cluster/capacity", "ClusterCapacity", extra),
-	)
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/cluster/capacity", "ClusterCapacity", ClusterCapacityResponse{
+		MaxNodeCPU:    snap.MaxNodeCPU,
+		MaxNodeMemory: snap.MaxNodeMemory,
+		TotalCPU:      snap.TotalCPU,
+		TotalMemory:   snap.TotalMemory,
+		NodeCount:     snap.NodeCount,
+	}))
 }
 
 func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) {
@@ -298,9 +292,9 @@ func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/swarm", "Swarm", map[string]any{
-		"swarm":       sw,
-		"managerAddr": managerAddr,
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/swarm", "Swarm", SwarmResponse{
+		Swarm:       sw,
+		ManagerAddr: managerAddr,
 	}))
 }
 

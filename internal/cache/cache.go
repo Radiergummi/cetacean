@@ -261,6 +261,7 @@ func (c *Cache) ListNodes() []swarm.Node {
 
 func (c *Cache) SetService(s swarm.Service) {
 	newRefs := serviceRefs(s)
+
 	c.mu.Lock()
 	var oldRefs refSet
 	if old, ok := c.services[s.ID]; ok {

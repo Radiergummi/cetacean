@@ -11,11 +11,6 @@ import (
 
 const maxMetricsStreamClients = 64
 
-var metricsStreamCount atomic.Int32
-
-// testTickerInterval overrides the tick interval in tests (zero means use step duration).
-var testTickerInterval time.Duration
-
 func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("query")
 	if query == "" {
@@ -47,17 +42,17 @@ func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for {
-		cur := metricsStreamCount.Load()
+		cur := h.metricsStreamCount.Load()
 		if int(cur) >= maxMetricsStreamClients {
 			w.Header().Set("Retry-After", "5")
 			writeErrorCode(w, r, "MTR005", "too many metrics stream connections")
 			return
 		}
-		if metricsStreamCount.CompareAndSwap(cur, cur+1) {
+		if h.metricsStreamCount.CompareAndSwap(cur, cur+1) {
 			break
 		}
 	}
-	defer metricsStreamCount.Add(-1)
+	defer h.metricsStreamCount.Add(-1)
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -84,8 +79,8 @@ func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	interval := time.Duration(step) * time.Second
-	if testTickerInterval > 0 {
-		interval = testTickerInterval
+	if h.tickerInterval > 0 {
+		interval = h.tickerInterval
 	}
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()

@@ -81,9 +81,8 @@ func TestMetricsProxyHandler_MissingQuery(t *testing.T) {
 }
 
 func TestMetricsProxyHandler_NilProxy(t *testing.T) {
-	old := defaultWriteError
-	defaultWriteError = nil
-	defer func() { defaultWriteError = old }()
+	nilProxyErrorWriter.Store(nil)
+	defer SetNilProxyErrorWriter(noopErrorWriter)
 
 	var proxy *Proxy
 
@@ -138,9 +137,8 @@ func TestMetricsProxyHandler_LabelValues(t *testing.T) {
 }
 
 func TestMetricsProxyHandler_LabelValues_NilProxy(t *testing.T) {
-	old := defaultWriteError
-	defaultWriteError = nil
-	defer func() { defaultWriteError = old }()
+	nilProxyErrorWriter.Store(nil)
+	defer SetNilProxyErrorWriter(noopErrorWriter)
 
 	var proxy *Proxy
 	req := httptest.NewRequest("GET", "/-/metrics/labels/job", nil)

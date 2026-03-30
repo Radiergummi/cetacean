@@ -35,7 +35,7 @@ func NewRouter(
 	mux.HandleFunc("GET /-/health", h.HandleHealth)
 	mux.HandleFunc("GET /-/ready", h.HandleReady)
 	mux.HandleFunc("GET /-/metrics/status", h.HandleMonitoringStatus)
-	mux.HandleFunc("GET /-/docker-latest-version", HandleDockerLatestVersion)
+	mux.HandleFunc("GET /-/docker-latest-version", h.HandleDockerLatestVersion)
 	mux.HandleFunc("GET /-/metrics/labels", metricsProxy.HandleMetricsLabels)
 	mux.HandleFunc("GET /-/metrics/labels/{name}", metricsProxy.HandleMetricsLabelValues)
 	// Metrics (content-negotiated: JSON → proxy, SSE → stream, HTML → SPA)

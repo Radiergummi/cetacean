@@ -80,6 +80,8 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		svcNames[s.ID] = s.Spec.Name
 	}
 
+	ctx := r.Context()
+
 	var wg sync.WaitGroup
 	wg.Add(stCount)
 
@@ -89,6 +91,9 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		var matches []searchResult
 		count := 0
 		for _, s := range services {
+			if ctx.Err() != nil {
+				return
+			}
 			hit := containsFold(s.Spec.Name, ql)
 			if !hit && s.Spec.TaskTemplate.ContainerSpec != nil {
 				hit = containsFold(s.Spec.TaskTemplate.ContainerSpec.Image, ql)
@@ -142,6 +147,9 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		var matches []searchResult
 		count := 0
 		for _, s := range stacks {
+			if ctx.Err() != nil {
+				return
+			}
 			if containsFold(s.Name, ql) {
 				count++
 				if len(matches) < limit {
@@ -163,6 +171,9 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		var matches []searchResult
 		count := 0
 		for _, n := range nodes {
+			if ctx.Err() != nil {
+				return
+			}
 			hit := containsFold(n.Description.Hostname, ql)
 			if !hit {
 				hit = containsFold(n.Status.Addr, ql)
@@ -191,6 +202,9 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		var matches []searchResult
 		count := 0
 		for _, t := range tasks {
+			if ctx.Err() != nil {
+				return
+			}
 			svcName := svcNames[t.ServiceID]
 			taskName := fmt.Sprintf("%s.%d", svcName, t.Slot)
 
@@ -230,6 +244,9 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		var matches []searchResult
 		count := 0
 		for _, c := range configs {
+			if ctx.Err() != nil {
+				return
+			}
 			hit := containsFold(c.Spec.Name, ql)
 			if !hit {
 				hit = labelsMatch(c.Spec.Labels, ql)
@@ -255,6 +272,9 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		var matches []searchResult
 		count := 0
 		for _, s := range secrets {
+			if ctx.Err() != nil {
+				return
+			}
 			s.Spec.Data = nil
 			hit := containsFold(s.Spec.Name, ql)
 			if !hit {
@@ -281,6 +301,9 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		var matches []searchResult
 		count := 0
 		for _, n := range networks {
+			if ctx.Err() != nil {
+				return
+			}
 			hit := containsFold(n.Name, ql)
 			if !hit {
 				hit = labelsMatch(n.Labels, ql)
@@ -306,6 +329,9 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		var matches []searchResult
 		count := 0
 		for _, v := range volumes {
+			if ctx.Err() != nil {
+				return
+			}
 			hit := containsFold(v.Name, ql)
 			if !hit {
 				hit = labelsMatch(v.Labels, ql)
@@ -337,14 +363,10 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSONWithETag(
-		w,
-		r,
-		NewDetailResponse(r.Context(), "/search", "SearchResult", map[string]any{
-			"query":   q,
-			"results": results,
-			"counts":  counts,
-			"total":   total,
-		}),
-	)
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/search", "SearchResult", SearchResponse{
+		Query:   q,
+		Results: results,
+		Counts:  counts,
+		Total:   total,
+	}))
 }

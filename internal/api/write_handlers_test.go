@@ -22,26 +22,13 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-type mockWriteClient struct {
+type mockServiceWriter struct {
 	scaleServiceFn                 func(ctx context.Context, id string, replicas uint64) (swarm.Service, error)
 	updateServiceImageFn           func(ctx context.Context, id string, image string) (swarm.Service, error)
 	rollbackServiceFn              func(ctx context.Context, id string) (swarm.Service, error)
 	restartServiceFn               func(ctx context.Context, id string) (swarm.Service, error)
-	updateNodeAvailabilityFn       func(ctx context.Context, id string, availability swarm.NodeAvailability) (swarm.Node, error)
-	removeTaskFn                   func(ctx context.Context, id string) error
 	removeServiceFn                func(ctx context.Context, id string) error
 	updateServiceEnvFn             func(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
-	updateNodeLabelsFn             func(ctx context.Context, id string, labels map[string]string) (swarm.Node, error)
-	updateNodeRoleFn               func(ctx context.Context, id string, role swarm.NodeRole) (swarm.Node, error)
-	removeNodeFn                   func(ctx context.Context, id string, force bool) error
-	removeNetworkFn                func(ctx context.Context, id string) error
-	removeConfigFn                 func(ctx context.Context, id string) error
-	removeSecretFn                 func(ctx context.Context, id string) error
-	removeVolumeFn                 func(ctx context.Context, name string, force bool) error
-	createConfigFn                 func(ctx context.Context, spec swarm.ConfigSpec) (string, error)
-	createSecretFn                 func(ctx context.Context, spec swarm.SecretSpec) (string, error)
-	updateConfigLabelsFn           func(ctx context.Context, id string, labels map[string]string) (swarm.Config, error)
-	updateSecretLabelsFn           func(ctx context.Context, id string, labels map[string]string) (swarm.Secret, error)
 	updateServiceLabelsFn          func(ctx context.Context, id string, labels map[string]string) (swarm.Service, error)
 	updateServiceResourcesFn       func(ctx context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error)
 	updateServiceModeFn            func(ctx context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error)
@@ -59,7 +46,40 @@ type mockWriteClient struct {
 	updateServiceMountsFn          func(ctx context.Context, id string, mounts []mount.Mount) (swarm.Service, error)
 }
 
-func (m *mockWriteClient) ScaleService(
+type mockNodeWriter struct {
+	updateNodeAvailabilityFn func(ctx context.Context, id string, availability swarm.NodeAvailability) (swarm.Node, error)
+	updateNodeLabelsFn       func(ctx context.Context, id string, labels map[string]string) (swarm.Node, error)
+	updateNodeRoleFn         func(ctx context.Context, id string, role swarm.NodeRole) (swarm.Node, error)
+	removeNodeFn             func(ctx context.Context, id string, force bool) error
+}
+
+type mockConfigWriter struct {
+	createConfigFn       func(ctx context.Context, spec swarm.ConfigSpec) (string, error)
+	removeConfigFn       func(ctx context.Context, id string) error
+	updateConfigLabelsFn func(ctx context.Context, id string, labels map[string]string) (swarm.Config, error)
+}
+
+type mockSecretWriter struct {
+	createSecretFn       func(ctx context.Context, spec swarm.SecretSpec) (string, error)
+	removeSecretFn       func(ctx context.Context, id string) error
+	updateSecretLabelsFn func(ctx context.Context, id string, labels map[string]string) (swarm.Secret, error)
+}
+
+type mockResourceRemover struct {
+	removeTaskFn    func(ctx context.Context, id string) error
+	removeNetworkFn func(ctx context.Context, id string) error
+	removeVolumeFn  func(ctx context.Context, name string, force bool) error
+}
+
+type mockWriteClient struct {
+	mockServiceWriter
+	mockNodeWriter
+	mockConfigWriter
+	mockSecretWriter
+	mockResourceRemover
+}
+
+func (m *mockServiceWriter) ScaleService(
 	ctx context.Context,
 	id string,
 	replicas uint64,
@@ -70,7 +90,7 @@ func (m *mockWriteClient) ScaleService(
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceImage(
+func (m *mockServiceWriter) UpdateServiceImage(
 	ctx context.Context,
 	id string,
 	image string,
@@ -81,21 +101,21 @@ func (m *mockWriteClient) UpdateServiceImage(
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) RollbackService(ctx context.Context, id string) (swarm.Service, error) {
+func (m *mockServiceWriter) RollbackService(ctx context.Context, id string) (swarm.Service, error) {
 	if m.rollbackServiceFn != nil {
 		return m.rollbackServiceFn(ctx, id)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) RestartService(ctx context.Context, id string) (swarm.Service, error) {
+func (m *mockServiceWriter) RestartService(ctx context.Context, id string) (swarm.Service, error) {
 	if m.restartServiceFn != nil {
 		return m.restartServiceFn(ctx, id)
 	}
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateNodeAvailability(
+func (m *mockNodeWriter) UpdateNodeAvailability(
 	ctx context.Context,
 	id string,
 	availability swarm.NodeAvailability,
@@ -106,14 +126,14 @@ func (m *mockWriteClient) UpdateNodeAvailability(
 	return swarm.Node{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) RemoveTask(ctx context.Context, id string) error {
+func (m *mockResourceRemover) RemoveTask(ctx context.Context, id string) error {
 	if m.removeTaskFn != nil {
 		return m.removeTaskFn(ctx, id)
 	}
 	return fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceEnv(
+func (m *mockServiceWriter) UpdateServiceEnv(
 	ctx context.Context,
 	id string,
 	env map[string]string,
@@ -124,7 +144,7 @@ func (m *mockWriteClient) UpdateServiceEnv(
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateNodeLabels(
+func (m *mockNodeWriter) UpdateNodeLabels(
 	ctx context.Context,
 	id string,
 	labels map[string]string,
@@ -135,7 +155,7 @@ func (m *mockWriteClient) UpdateNodeLabels(
 	return swarm.Node{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateNodeRole(
+func (m *mockNodeWriter) UpdateNodeRole(
 	ctx context.Context,
 	id string,
 	role swarm.NodeRole,
@@ -146,49 +166,49 @@ func (m *mockWriteClient) UpdateNodeRole(
 	return swarm.Node{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) RemoveNode(ctx context.Context, id string, force bool) error {
+func (m *mockNodeWriter) RemoveNode(ctx context.Context, id string, force bool) error {
 	if m.removeNodeFn != nil {
 		return m.removeNodeFn(ctx, id, force)
 	}
 	return fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) RemoveNetwork(ctx context.Context, id string) error {
+func (m *mockResourceRemover) RemoveNetwork(ctx context.Context, id string) error {
 	if m.removeNetworkFn != nil {
 		return m.removeNetworkFn(ctx, id)
 	}
 	return fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) RemoveConfig(ctx context.Context, id string) error {
+func (m *mockConfigWriter) RemoveConfig(ctx context.Context, id string) error {
 	if m.removeConfigFn != nil {
 		return m.removeConfigFn(ctx, id)
 	}
 	return fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) RemoveSecret(ctx context.Context, id string) error {
+func (m *mockSecretWriter) RemoveSecret(ctx context.Context, id string) error {
 	if m.removeSecretFn != nil {
 		return m.removeSecretFn(ctx, id)
 	}
 	return fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) CreateConfig(ctx context.Context, spec swarm.ConfigSpec) (string, error) {
+func (m *mockConfigWriter) CreateConfig(ctx context.Context, spec swarm.ConfigSpec) (string, error) {
 	if m.createConfigFn != nil {
 		return m.createConfigFn(ctx, spec)
 	}
 	return "", fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) CreateSecret(ctx context.Context, spec swarm.SecretSpec) (string, error) {
+func (m *mockSecretWriter) CreateSecret(ctx context.Context, spec swarm.SecretSpec) (string, error) {
 	if m.createSecretFn != nil {
 		return m.createSecretFn(ctx, spec)
 	}
 	return "", fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateConfigLabels(
+func (m *mockConfigWriter) UpdateConfigLabels(
 	ctx context.Context,
 	id string,
 	labels map[string]string,
@@ -199,7 +219,7 @@ func (m *mockWriteClient) UpdateConfigLabels(
 	return swarm.Config{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateSecretLabels(
+func (m *mockSecretWriter) UpdateSecretLabels(
 	ctx context.Context,
 	id string,
 	labels map[string]string,
@@ -210,14 +230,14 @@ func (m *mockWriteClient) UpdateSecretLabels(
 	return swarm.Secret{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) RemoveVolume(ctx context.Context, name string, force bool) error {
+func (m *mockResourceRemover) RemoveVolume(ctx context.Context, name string, force bool) error {
 	if m.removeVolumeFn != nil {
 		return m.removeVolumeFn(ctx, name, force)
 	}
 	return fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceLabels(
+func (m *mockServiceWriter) UpdateServiceLabels(
 	ctx context.Context,
 	id string,
 	labels map[string]string,
@@ -228,7 +248,7 @@ func (m *mockWriteClient) UpdateServiceLabels(
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceResources(
+func (m *mockServiceWriter) UpdateServiceResources(
 	ctx context.Context,
 	id string,
 	resources *swarm.ResourceRequirements,
@@ -239,7 +259,7 @@ func (m *mockWriteClient) UpdateServiceResources(
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceEndpointMode(
+func (m *mockServiceWriter) UpdateServiceEndpointMode(
 	ctx context.Context,
 	id string,
 	mode swarm.ResolutionMode,
@@ -250,7 +270,7 @@ func (m *mockWriteClient) UpdateServiceEndpointMode(
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceMode(
+func (m *mockServiceWriter) UpdateServiceMode(
 	ctx context.Context,
 	id string,
 	mode swarm.ServiceMode,
@@ -261,7 +281,7 @@ func (m *mockWriteClient) UpdateServiceMode(
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceHealthcheck(
+func (m *mockServiceWriter) UpdateServiceHealthcheck(
 	ctx context.Context,
 	id string,
 	hc *container.HealthConfig,
@@ -272,7 +292,7 @@ func (m *mockWriteClient) UpdateServiceHealthcheck(
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServicePlacement(
+func (m *mockServiceWriter) UpdateServicePlacement(
 	ctx context.Context,
 	id string,
 	placement *swarm.Placement,
@@ -283,7 +303,7 @@ func (m *mockWriteClient) UpdateServicePlacement(
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServicePorts(
+func (m *mockServiceWriter) UpdateServicePorts(
 	ctx context.Context,
 	id string,
 	ports []swarm.PortConfig,
@@ -294,7 +314,7 @@ func (m *mockWriteClient) UpdateServicePorts(
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceUpdatePolicy(
+func (m *mockServiceWriter) UpdateServiceUpdatePolicy(
 	ctx context.Context,
 	id string,
 	policy *swarm.UpdateConfig,
@@ -305,7 +325,7 @@ func (m *mockWriteClient) UpdateServiceUpdatePolicy(
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceRollbackPolicy(
+func (m *mockServiceWriter) UpdateServiceRollbackPolicy(
 	ctx context.Context,
 	id string,
 	policy *swarm.UpdateConfig,
@@ -316,7 +336,7 @@ func (m *mockWriteClient) UpdateServiceRollbackPolicy(
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceLogDriver(
+func (m *mockServiceWriter) UpdateServiceLogDriver(
 	ctx context.Context,
 	id string,
 	driver *swarm.Driver,
@@ -327,7 +347,7 @@ func (m *mockWriteClient) UpdateServiceLogDriver(
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceContainerConfig(
+func (m *mockServiceWriter) UpdateServiceContainerConfig(
 	ctx context.Context,
 	id string,
 	apply func(spec *swarm.ContainerSpec),
@@ -338,7 +358,7 @@ func (m *mockWriteClient) UpdateServiceContainerConfig(
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceConfigs(
+func (m *mockServiceWriter) UpdateServiceConfigs(
 	ctx context.Context,
 	id string,
 	configs []*swarm.ConfigReference,
@@ -349,7 +369,7 @@ func (m *mockWriteClient) UpdateServiceConfigs(
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceSecrets(
+func (m *mockServiceWriter) UpdateServiceSecrets(
 	ctx context.Context,
 	id string,
 	secrets []*swarm.SecretReference,
@@ -360,7 +380,7 @@ func (m *mockWriteClient) UpdateServiceSecrets(
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceNetworks(
+func (m *mockServiceWriter) UpdateServiceNetworks(
 	ctx context.Context,
 	id string,
 	networks []swarm.NetworkAttachmentConfig,
@@ -371,7 +391,7 @@ func (m *mockWriteClient) UpdateServiceNetworks(
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) UpdateServiceMounts(
+func (m *mockServiceWriter) UpdateServiceMounts(
 	ctx context.Context,
 	id string,
 	mounts []mount.Mount,
@@ -382,7 +402,7 @@ func (m *mockWriteClient) UpdateServiceMounts(
 	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
-func (m *mockWriteClient) RemoveService(ctx context.Context, id string) error {
+func (m *mockServiceWriter) RemoveService(ctx context.Context, id string) error {
 	if m.removeServiceFn != nil {
 		return m.removeServiceFn(ctx, id)
 	}
@@ -406,10 +426,12 @@ func TestHandleScaleService_OK(t *testing.T) {
 	c.SetService(replicatedService("svc1"))
 
 	wc := &mockWriteClient{
-		scaleServiceFn: func(_ context.Context, id string, replicas uint64) (swarm.Service, error) {
-			svc := replicatedService(id)
-			svc.Spec.Mode.Replicated.Replicas = &replicas
-			return svc, nil
+		mockServiceWriter: mockServiceWriter{
+			scaleServiceFn: func(_ context.Context, id string, replicas uint64) (swarm.Service, error) {
+				svc := replicatedService(id)
+				svc.Spec.Mode.Replicated.Replicas = &replicas
+				return svc, nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -483,8 +505,10 @@ func TestHandleScaleService_Conflict(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		scaleServiceFn: func(_ context.Context, _ string, _ uint64) (swarm.Service, error) {
-			return swarm.Service{}, errdefs.Conflict(fmt.Errorf("update out of sequence"))
+		mockServiceWriter: mockServiceWriter{
+			scaleServiceFn: func(_ context.Context, _ string, _ uint64) (swarm.Service, error) {
+				return swarm.Service{}, errdefs.Conflict(fmt.Errorf("update out of sequence"))
+			},
 		},
 	}
 
@@ -520,11 +544,13 @@ func TestHandleUpdateServiceMode_ToGlobal(t *testing.T) {
 	c.SetService(replicatedService("svc1"))
 
 	wc := &mockWriteClient{
-		updateServiceModeFn: func(_ context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error) {
-			return swarm.Service{
-				ID:   id,
-				Spec: swarm.ServiceSpec{Mode: mode},
-			}, nil
+		mockServiceWriter: mockServiceWriter{
+			updateServiceModeFn: func(_ context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error) {
+				return swarm.Service{
+					ID:   id,
+					Spec: swarm.ServiceSpec{Mode: mode},
+				}, nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -548,11 +574,13 @@ func TestHandleUpdateServiceMode_ToReplicated(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		updateServiceModeFn: func(_ context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error) {
-			return swarm.Service{
-				ID:   id,
-				Spec: swarm.ServiceSpec{Mode: mode},
-			}, nil
+		mockServiceWriter: mockServiceWriter{
+			updateServiceModeFn: func(_ context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error) {
+				return swarm.Service{
+					ID:   id,
+					Spec: swarm.ServiceSpec{Mode: mode},
+				}, nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -628,10 +656,12 @@ func TestHandleUpdateServiceEndpointMode_OK(t *testing.T) {
 	c.SetService(replicatedService("svc1"))
 
 	wc := &mockWriteClient{
-		updateServiceEndpointModeFn: func(_ context.Context, id string, mode swarm.ResolutionMode) (swarm.Service, error) {
-			svc := replicatedService(id)
-			svc.Spec.EndpointSpec = &swarm.EndpointSpec{Mode: mode}
-			return svc, nil
+		mockServiceWriter: mockServiceWriter{
+			updateServiceEndpointModeFn: func(_ context.Context, id string, mode swarm.ResolutionMode) (swarm.Service, error) {
+				svc := replicatedService(id)
+				svc.Spec.EndpointSpec = &swarm.EndpointSpec{Mode: mode}
+				return svc, nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -670,10 +700,12 @@ func TestHandleUpdateServiceImage_OK(t *testing.T) {
 	c.SetService(replicatedService("svc1"))
 
 	wc := &mockWriteClient{
-		updateServiceImageFn: func(_ context.Context, id string, image string) (swarm.Service, error) {
-			svc := replicatedService(id)
-			svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{Image: image}
-			return svc, nil
+		mockServiceWriter: mockServiceWriter{
+			updateServiceImageFn: func(_ context.Context, id string, image string) (swarm.Service, error) {
+				svc := replicatedService(id)
+				svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{Image: image}
+				return svc, nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -741,8 +773,10 @@ func TestHandleRollbackService_OK(t *testing.T) {
 	c.SetService(serviceWithPreviousSpec("svc1"))
 
 	wc := &mockWriteClient{
-		rollbackServiceFn: func(_ context.Context, id string) (swarm.Service, error) {
-			return replicatedService(id), nil
+		mockServiceWriter: mockServiceWriter{
+			rollbackServiceFn: func(_ context.Context, id string) (swarm.Service, error) {
+				return replicatedService(id), nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -800,8 +834,10 @@ func TestHandleRestartService_OK(t *testing.T) {
 	c.SetService(replicatedService("svc1"))
 
 	wc := &mockWriteClient{
-		restartServiceFn: func(_ context.Context, id string) (swarm.Service, error) {
-			return replicatedService(id), nil
+		mockServiceWriter: mockServiceWriter{
+			restartServiceFn: func(_ context.Context, id string) (swarm.Service, error) {
+				return replicatedService(id), nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -843,8 +879,10 @@ func TestHandleUpdateNodeAvailability_OK(t *testing.T) {
 	c.SetNode(swarm.Node{ID: "node1"})
 
 	wc := &mockWriteClient{
-		updateNodeAvailabilityFn: func(_ context.Context, id string, availability swarm.NodeAvailability) (swarm.Node, error) {
-			return swarm.Node{ID: id, Spec: swarm.NodeSpec{Availability: availability}}, nil
+		mockNodeWriter: mockNodeWriter{
+			updateNodeAvailabilityFn: func(_ context.Context, id string, availability swarm.NodeAvailability) (swarm.Node, error) {
+				return swarm.Node{ID: id, Spec: swarm.NodeSpec{Availability: availability}}, nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -905,8 +943,10 @@ func TestHandleRemoveTask_OK(t *testing.T) {
 	c.SetTask(swarm.Task{ID: "task1"})
 
 	wc := &mockWriteClient{
-		removeTaskFn: func(_ context.Context, id string) error {
-			return nil
+		mockResourceRemover: mockResourceRemover{
+			removeTaskFn: func(_ context.Context, id string) error {
+				return nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -941,8 +981,10 @@ func TestHandleRemoveTask_NoContainer(t *testing.T) {
 	c.SetTask(swarm.Task{ID: "task1"})
 
 	wc := &mockWriteClient{
-		removeTaskFn: func(_ context.Context, id string) error {
-			return errdefs.NotFound(fmt.Errorf("task has no running container"))
+		mockResourceRemover: mockResourceRemover{
+			removeTaskFn: func(_ context.Context, id string) error {
+				return errdefs.NotFound(fmt.Errorf("task has no running container"))
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -962,8 +1004,10 @@ func TestHandleRemoveService_OK(t *testing.T) {
 	c.SetService(replicatedService("svc1"))
 
 	wc := &mockWriteClient{
-		removeServiceFn: func(_ context.Context, id string) error {
-			return nil
+		mockServiceWriter: mockServiceWriter{
+			removeServiceFn: func(_ context.Context, id string) error {
+				return nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -998,8 +1042,10 @@ func TestHandleRemoveService_DockerError(t *testing.T) {
 	c.SetService(replicatedService("svc1"))
 
 	wc := &mockWriteClient{
-		removeServiceFn: func(_ context.Context, id string) error {
-			return fmt.Errorf("engine error")
+		mockServiceWriter: mockServiceWriter{
+			removeServiceFn: func(_ context.Context, id string) error {
+				return fmt.Errorf("engine error")
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -1068,12 +1114,14 @@ func TestHandlePatchServiceEnv_Add(t *testing.T) {
 	c.SetService(serviceWithEnv("svc1", []string{"FOO=bar"}))
 
 	wc := &mockWriteClient{
-		updateServiceEnvFn: func(_ context.Context, id string, env map[string]string) (swarm.Service, error) {
-			envSlice := make([]string, 0, len(env))
-			for k, v := range env {
-				envSlice = append(envSlice, k+"="+v)
-			}
-			return serviceWithEnv(id, envSlice), nil
+		mockServiceWriter: mockServiceWriter{
+			updateServiceEnvFn: func(_ context.Context, id string, env map[string]string) (swarm.Service, error) {
+				envSlice := make([]string, 0, len(env))
+				for k, v := range env {
+					envSlice = append(envSlice, k+"="+v)
+				}
+				return serviceWithEnv(id, envSlice), nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -1177,12 +1225,14 @@ func TestHandlePatchServiceEnv_MergePatch(t *testing.T) {
 	c.SetService(serviceWithEnv("svc1", []string{"FOO=bar", "OLD=remove"}))
 
 	wc := &mockWriteClient{
-		updateServiceEnvFn: func(_ context.Context, id string, env map[string]string) (swarm.Service, error) {
-			envSlice := make([]string, 0, len(env))
-			for k, v := range env {
-				envSlice = append(envSlice, k+"="+v)
-			}
-			return serviceWithEnv(id, envSlice), nil
+		mockServiceWriter: mockServiceWriter{
+			updateServiceEnvFn: func(_ context.Context, id string, env map[string]string) (swarm.Service, error) {
+				envSlice := make([]string, 0, len(env))
+				for k, v := range env {
+					envSlice = append(envSlice, k+"="+v)
+				}
+				return serviceWithEnv(id, envSlice), nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -1254,11 +1304,13 @@ func TestHandlePatchNodeLabels_Add(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		updateNodeLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Node, error) {
-			return swarm.Node{
-				ID:   id,
-				Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: labels}},
-			}, nil
+		mockNodeWriter: mockNodeWriter{
+			updateNodeLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Node, error) {
+				return swarm.Node{
+					ID:   id,
+					Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: labels}},
+				}, nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -1314,11 +1366,13 @@ func TestHandlePatchNodeLabels_MergePatch(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		updateNodeLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Node, error) {
-			return swarm.Node{
-				ID:   id,
-				Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: labels}},
-			}, nil
+		mockNodeWriter: mockNodeWriter{
+			updateNodeLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Node, error) {
+				return swarm.Node{
+					ID:   id,
+					Spec: swarm.NodeSpec{Annotations: swarm.Annotations{Labels: labels}},
+				}, nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -1386,10 +1440,12 @@ func TestHandlePatchServiceResources_Merge(t *testing.T) {
 	c.SetService(svc)
 
 	wc := &mockWriteClient{
-		updateServiceResourcesFn: func(_ context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error) {
-			s := replicatedService(id)
-			s.Spec.TaskTemplate.Resources = resources
-			return s, nil
+		mockServiceWriter: mockServiceWriter{
+			updateServiceResourcesFn: func(_ context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error) {
+				s := replicatedService(id)
+				s.Spec.TaskTemplate.Resources = resources
+				return s, nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -1521,8 +1577,10 @@ func TestHandlePutServiceHealthcheck(t *testing.T) {
 	c.SetService(replicatedService("svc1"))
 
 	wc := &mockWriteClient{
-		updateServiceHealthcheckFn: func(_ context.Context, id string, hc *container.HealthConfig) (swarm.Service, error) {
-			return serviceWithHealthcheck(id, hc), nil
+		mockServiceWriter: mockServiceWriter{
+			updateServiceHealthcheckFn: func(_ context.Context, id string, hc *container.HealthConfig) (swarm.Service, error) {
+				return serviceWithHealthcheck(id, hc), nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -1553,9 +1611,11 @@ func TestHandlePutServiceHealthcheck_Disable(t *testing.T) {
 
 	var captured *container.HealthConfig
 	wc := &mockWriteClient{
-		updateServiceHealthcheckFn: func(_ context.Context, id string, hc *container.HealthConfig) (swarm.Service, error) {
-			captured = hc
-			return serviceWithHealthcheck(id, hc), nil
+		mockServiceWriter: mockServiceWriter{
+			updateServiceHealthcheckFn: func(_ context.Context, id string, hc *container.HealthConfig) (swarm.Service, error) {
+				captured = hc
+				return serviceWithHealthcheck(id, hc), nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -1590,9 +1650,11 @@ func TestHandlePatchServiceHealthcheck_Merge(t *testing.T) {
 
 	var captured *container.HealthConfig
 	wc := &mockWriteClient{
-		updateServiceHealthcheckFn: func(_ context.Context, id string, hc *container.HealthConfig) (swarm.Service, error) {
-			captured = hc
-			return serviceWithHealthcheck(id, hc), nil
+		mockServiceWriter: mockServiceWriter{
+			updateServiceHealthcheckFn: func(_ context.Context, id string, hc *container.HealthConfig) (swarm.Service, error) {
+				captured = hc
+				return serviceWithHealthcheck(id, hc), nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -1736,8 +1798,10 @@ func TestHandlePutServicePlacement(t *testing.T) {
 		},
 	}
 	mock := &mockWriteClient{
-		updateServicePlacementFn: func(ctx context.Context, id string, placement *swarm.Placement) (swarm.Service, error) {
-			return updated, nil
+		mockServiceWriter: mockServiceWriter{
+			updateServicePlacementFn: func(ctx context.Context, id string, placement *swarm.Placement) (swarm.Service, error) {
+				return updated, nil
+			},
 		},
 	}
 
@@ -1872,8 +1936,10 @@ func TestHandlePatchServicePorts(t *testing.T) {
 		},
 	}
 	mock := &mockWriteClient{
-		updateServicePortsFn: func(ctx context.Context, id string, ports []swarm.PortConfig) (swarm.Service, error) {
-			return updated, nil
+		mockServiceWriter: mockServiceWriter{
+			updateServicePortsFn: func(ctx context.Context, id string, ports []swarm.PortConfig) (swarm.Service, error) {
+				return updated, nil
+			},
 		},
 	}
 
@@ -1974,8 +2040,10 @@ func TestHandlePatchServiceUpdatePolicy(t *testing.T) {
 	c.SetService(swarm.Service{ID: "svc1"})
 
 	mock := &mockWriteClient{
-		updateServiceUpdatePolicyFn: func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error) {
-			return swarm.Service{ID: "svc1", Spec: swarm.ServiceSpec{UpdateConfig: policy}}, nil
+		mockServiceWriter: mockServiceWriter{
+			updateServiceUpdatePolicyFn: func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error) {
+				return swarm.Service{ID: "svc1", Spec: swarm.ServiceSpec{UpdateConfig: policy}}, nil
+			},
 		},
 	}
 
@@ -2109,8 +2177,10 @@ func TestHandlePatchServiceRollbackPolicy(t *testing.T) {
 	c.SetService(swarm.Service{ID: "svc1"})
 
 	mock := &mockWriteClient{
-		updateServiceRollbackPolicyFn: func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error) {
-			return swarm.Service{ID: "svc1", Spec: swarm.ServiceSpec{RollbackConfig: policy}}, nil
+		mockServiceWriter: mockServiceWriter{
+			updateServiceRollbackPolicyFn: func(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error) {
+				return swarm.Service{ID: "svc1", Spec: swarm.ServiceSpec{RollbackConfig: policy}}, nil
+			},
 		},
 	}
 
@@ -2189,11 +2259,13 @@ func TestHandlePatchServiceLogDriver(t *testing.T) {
 	})
 
 	mock := &mockWriteClient{
-		updateServiceLogDriverFn: func(ctx context.Context, id string, driver *swarm.Driver) (swarm.Service, error) {
-			return swarm.Service{
-				ID:   "svc1",
-				Spec: swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{LogDriver: driver}},
-			}, nil
+		mockServiceWriter: mockServiceWriter{
+			updateServiceLogDriverFn: func(ctx context.Context, id string, driver *swarm.Driver) (swarm.Service, error) {
+				return swarm.Service{
+					ID:   "svc1",
+					Spec: swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{LogDriver: driver}},
+				}, nil
+			},
 		},
 	}
 
@@ -2249,8 +2321,10 @@ func TestHandleUpdateNodeRole_OK(t *testing.T) {
 	c.SetNode(swarm.Node{ID: "node1", Spec: swarm.NodeSpec{Role: swarm.NodeRoleWorker}})
 
 	wc := &mockWriteClient{
-		updateNodeRoleFn: func(_ context.Context, id string, role swarm.NodeRole) (swarm.Node, error) {
-			return swarm.Node{ID: id, Spec: swarm.NodeSpec{Role: role}}, nil
+		mockNodeWriter: mockNodeWriter{
+			updateNodeRoleFn: func(_ context.Context, id string, role swarm.NodeRole) (swarm.Node, error) {
+				return swarm.Node{ID: id, Spec: swarm.NodeSpec{Role: role}}, nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -2311,8 +2385,10 @@ func TestHandleUpdateNodeRole_Conflict(t *testing.T) {
 	c.SetNode(swarm.Node{ID: "node1"})
 
 	wc := &mockWriteClient{
-		updateNodeRoleFn: func(_ context.Context, _ string, _ swarm.NodeRole) (swarm.Node, error) {
-			return swarm.Node{}, errdefs.Conflict(fmt.Errorf("conflict"))
+		mockNodeWriter: mockNodeWriter{
+			updateNodeRoleFn: func(_ context.Context, _ string, _ swarm.NodeRole) (swarm.Node, error) {
+				return swarm.Node{}, errdefs.Conflict(fmt.Errorf("conflict"))
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -2333,8 +2409,10 @@ func TestHandleRemoveNode_OK(t *testing.T) {
 	c.SetNode(swarm.Node{ID: "node1"})
 
 	wc := &mockWriteClient{
-		removeNodeFn: func(_ context.Context, _ string, _ bool) error {
-			return nil
+		mockNodeWriter: mockNodeWriter{
+			removeNodeFn: func(_ context.Context, _ string, _ bool) error {
+				return nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -2369,8 +2447,10 @@ func TestHandleRemoveNode_DockerError(t *testing.T) {
 	c.SetNode(swarm.Node{ID: "node1"})
 
 	wc := &mockWriteClient{
-		removeNodeFn: func(_ context.Context, _ string, _ bool) error {
-			return fmt.Errorf("node is not down")
+		mockNodeWriter: mockNodeWriter{
+			removeNodeFn: func(_ context.Context, _ string, _ bool) error {
+				return fmt.Errorf("node is not down")
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -2391,9 +2471,11 @@ func TestHandleRemoveNode_Force(t *testing.T) {
 
 	var gotForce bool
 	wc := &mockWriteClient{
-		removeNodeFn: func(_ context.Context, _ string, force bool) error {
-			gotForce = force
-			return nil
+		mockNodeWriter: mockNodeWriter{
+			removeNodeFn: func(_ context.Context, _ string, force bool) error {
+				gotForce = force
+				return nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -2417,9 +2499,11 @@ func TestHandleRemoveVolume_Force(t *testing.T) {
 
 	var gotForce bool
 	wc := &mockWriteClient{
-		removeVolumeFn: func(_ context.Context, _ string, force bool) error {
-			gotForce = force
-			return nil
+		mockResourceRemover: mockResourceRemover{
+			removeVolumeFn: func(_ context.Context, _ string, force bool) error {
+				gotForce = force
+				return nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -2544,10 +2628,18 @@ func TestHandleRemoveStack_OK(t *testing.T) {
 	seedStack(c, "myapp")
 
 	wc := &mockWriteClient{
-		removeServiceFn: func(_ context.Context, _ string) error { return nil },
-		removeNetworkFn: func(_ context.Context, _ string) error { return nil },
-		removeConfigFn:  func(_ context.Context, _ string) error { return nil },
-		removeSecretFn:  func(_ context.Context, _ string) error { return nil },
+		mockServiceWriter: mockServiceWriter{
+			removeServiceFn: func(_ context.Context, _ string) error { return nil },
+		},
+		mockResourceRemover: mockResourceRemover{
+			removeNetworkFn: func(_ context.Context, _ string) error { return nil },
+		},
+		mockConfigWriter: mockConfigWriter{
+			removeConfigFn:  func(_ context.Context, _ string) error { return nil },
+		},
+		mockSecretWriter: mockSecretWriter{
+			removeSecretFn:  func(_ context.Context, _ string) error { return nil },
+		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
 
@@ -2605,12 +2697,20 @@ func TestHandleRemoveStack_PartialFailure(t *testing.T) {
 	seedStack(c, "myapp")
 
 	wc := &mockWriteClient{
-		removeServiceFn: func(_ context.Context, _ string) error { return nil },
-		removeNetworkFn: func(_ context.Context, _ string) error {
-			return fmt.Errorf("network is in use")
+		mockServiceWriter: mockServiceWriter{
+			removeServiceFn: func(_ context.Context, _ string) error { return nil },
 		},
-		removeConfigFn: func(_ context.Context, _ string) error { return nil },
-		removeSecretFn: func(_ context.Context, _ string) error { return nil },
+		mockResourceRemover: mockResourceRemover{
+			removeNetworkFn: func(_ context.Context, _ string) error {
+				return fmt.Errorf("network is in use")
+			},
+		},
+		mockConfigWriter: mockConfigWriter{
+			removeConfigFn: func(_ context.Context, _ string) error { return nil },
+		},
+		mockSecretWriter: mockSecretWriter{
+			removeSecretFn: func(_ context.Context, _ string) error { return nil },
+		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
 
@@ -2640,17 +2740,25 @@ func TestHandleRemoveStack_AlreadyGone(t *testing.T) {
 	seedStack(c, "myapp")
 
 	wc := &mockWriteClient{
-		removeServiceFn: func(_ context.Context, _ string) error {
-			return errdefs.NotFound(fmt.Errorf("not found"))
+		mockServiceWriter: mockServiceWriter{
+			removeServiceFn: func(_ context.Context, _ string) error {
+				return errdefs.NotFound(fmt.Errorf("not found"))
+			},
 		},
-		removeNetworkFn: func(_ context.Context, _ string) error {
-			return errdefs.NotFound(fmt.Errorf("not found"))
+		mockResourceRemover: mockResourceRemover{
+			removeNetworkFn: func(_ context.Context, _ string) error {
+				return errdefs.NotFound(fmt.Errorf("not found"))
+			},
 		},
-		removeConfigFn: func(_ context.Context, _ string) error {
-			return errdefs.NotFound(fmt.Errorf("not found"))
+		mockConfigWriter: mockConfigWriter{
+			removeConfigFn: func(_ context.Context, _ string) error {
+				return errdefs.NotFound(fmt.Errorf("not found"))
+			},
 		},
-		removeSecretFn: func(_ context.Context, _ string) error {
-			return errdefs.NotFound(fmt.Errorf("not found"))
+		mockSecretWriter: mockSecretWriter{
+			removeSecretFn: func(_ context.Context, _ string) error {
+				return errdefs.NotFound(fmt.Errorf("not found"))
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -2778,15 +2886,17 @@ func TestHandlePatchServiceContainerConfig_PartialPatch(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		updateServiceContainerConfigFn: func(_ context.Context, id string, apply func(*swarm.ContainerSpec)) (swarm.Service, error) {
-			cs := &swarm.ContainerSpec{}
-			apply(cs)
-			return swarm.Service{
-				ID: id,
-				Spec: swarm.ServiceSpec{
-					TaskTemplate: swarm.TaskSpec{ContainerSpec: cs},
-				},
-			}, nil
+		mockServiceWriter: mockServiceWriter{
+			updateServiceContainerConfigFn: func(_ context.Context, id string, apply func(*swarm.ContainerSpec)) (swarm.Service, error) {
+				cs := &swarm.ContainerSpec{}
+				apply(cs)
+				return swarm.Service{
+					ID: id,
+					Spec: swarm.ServiceSpec{
+						TaskTemplate: swarm.TaskSpec{ContainerSpec: cs},
+					},
+				}, nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -3014,8 +3124,10 @@ func TestHandlePatchServiceConfigs_OK(t *testing.T) {
 		},
 	}
 	mock := &mockWriteClient{
-		updateServiceConfigsFn: func(_ context.Context, _ string, _ []*swarm.ConfigReference) (swarm.Service, error) {
-			return updated, nil
+		mockServiceWriter: mockServiceWriter{
+			updateServiceConfigsFn: func(_ context.Context, _ string, _ []*swarm.ConfigReference) (swarm.Service, error) {
+				return updated, nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, mock, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -3200,8 +3312,10 @@ func TestHandlePatchServiceSecrets_OK(t *testing.T) {
 		},
 	}
 	mock := &mockWriteClient{
-		updateServiceSecretsFn: func(_ context.Context, _ string, _ []*swarm.SecretReference) (swarm.Service, error) {
-			return updated, nil
+		mockServiceWriter: mockServiceWriter{
+			updateServiceSecretsFn: func(_ context.Context, _ string, _ []*swarm.SecretReference) (swarm.Service, error) {
+				return updated, nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, mock, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -3371,8 +3485,10 @@ func TestHandlePatchServiceNetworks_OK(t *testing.T) {
 		},
 	}
 	mock := &mockWriteClient{
-		updateServiceNetworksFn: func(_ context.Context, _ string, _ []swarm.NetworkAttachmentConfig) (swarm.Service, error) {
-			return updated, nil
+		mockServiceWriter: mockServiceWriter{
+			updateServiceNetworksFn: func(_ context.Context, _ string, _ []swarm.NetworkAttachmentConfig) (swarm.Service, error) {
+				return updated, nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, mock, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -3533,15 +3649,17 @@ func TestHandlePatchServiceMounts_OK(t *testing.T) {
 	c.SetService(swarm.Service{ID: "svc1"})
 
 	wc := &mockWriteClient{
-		updateServiceMountsFn: func(_ context.Context, _ string, mounts []mount.Mount) (swarm.Service, error) {
-			return swarm.Service{
-				ID: "svc1",
-				Spec: swarm.ServiceSpec{
-					TaskTemplate: swarm.TaskSpec{
-						ContainerSpec: &swarm.ContainerSpec{Mounts: mounts},
+		mockServiceWriter: mockServiceWriter{
+			updateServiceMountsFn: func(_ context.Context, _ string, mounts []mount.Mount) (swarm.Service, error) {
+				return swarm.Service{
+					ID: "svc1",
+					Spec: swarm.ServiceSpec{
+						TaskTemplate: swarm.TaskSpec{
+							ContainerSpec: &swarm.ContainerSpec{Mounts: mounts},
+						},
 					},
-				},
-			}, nil
+				}, nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -3621,8 +3739,10 @@ func TestHandleRemoveConfig_OK(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		removeConfigFn: func(_ context.Context, id string) error {
-			return nil
+		mockConfigWriter: mockConfigWriter{
+			removeConfigFn: func(_ context.Context, id string) error {
+				return nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -3660,8 +3780,10 @@ func TestHandleRemoveConfig_DockerError(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		removeConfigFn: func(_ context.Context, id string) error {
-			return fmt.Errorf("engine error")
+		mockConfigWriter: mockConfigWriter{
+			removeConfigFn: func(_ context.Context, id string) error {
+				return fmt.Errorf("engine error")
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -3684,8 +3806,10 @@ func TestHandleRemoveSecret_OK(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		removeSecretFn: func(_ context.Context, id string) error {
-			return nil
+		mockSecretWriter: mockSecretWriter{
+			removeSecretFn: func(_ context.Context, id string) error {
+				return nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -3723,8 +3847,10 @@ func TestHandleRemoveSecret_DockerError(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		removeSecretFn: func(_ context.Context, id string) error {
-			return fmt.Errorf("engine error")
+		mockSecretWriter: mockSecretWriter{
+			removeSecretFn: func(_ context.Context, id string) error {
+				return fmt.Errorf("engine error")
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -3744,8 +3870,10 @@ func TestHandleRemoveNetwork_OK(t *testing.T) {
 	c.SetNetwork(network.Summary{ID: "net1", Name: "my-network"})
 
 	wc := &mockWriteClient{
-		removeNetworkFn: func(_ context.Context, id string) error {
-			return nil
+		mockResourceRemover: mockResourceRemover{
+			removeNetworkFn: func(_ context.Context, id string) error {
+				return nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -3780,8 +3908,10 @@ func TestHandleRemoveNetwork_DockerError(t *testing.T) {
 	c.SetNetwork(network.Summary{ID: "net1", Name: "my-network"})
 
 	wc := &mockWriteClient{
-		removeNetworkFn: func(_ context.Context, id string) error {
-			return fmt.Errorf("engine error")
+		mockResourceRemover: mockResourceRemover{
+			removeNetworkFn: func(_ context.Context, id string) error {
+				return fmt.Errorf("engine error")
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -3801,8 +3931,10 @@ func TestHandleRemoveVolume_OK(t *testing.T) {
 	c.SetVolume(volume.Volume{Name: "my-vol"})
 
 	wc := &mockWriteClient{
-		removeVolumeFn: func(_ context.Context, name string, _ bool) error {
-			return nil
+		mockResourceRemover: mockResourceRemover{
+			removeVolumeFn: func(_ context.Context, name string, _ bool) error {
+				return nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -3837,8 +3969,10 @@ func TestHandleRemoveVolume_DockerError(t *testing.T) {
 	c.SetVolume(volume.Volume{Name: "my-vol"})
 
 	wc := &mockWriteClient{
-		removeVolumeFn: func(_ context.Context, name string, _ bool) error {
-			return fmt.Errorf("engine error")
+		mockResourceRemover: mockResourceRemover{
+			removeVolumeFn: func(_ context.Context, name string, _ bool) error {
+				return fmt.Errorf("engine error")
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsImpactful, nil)
@@ -3856,8 +3990,10 @@ func TestHandleRemoveVolume_DockerError(t *testing.T) {
 func TestHandleCreateConfig_OK(t *testing.T) {
 	c := cache.New(nil)
 	wc := &mockWriteClient{
-		createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
-			return "new-cfg-id", nil
+		mockConfigWriter: mockConfigWriter{
+			createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
+				return "new-cfg-id", nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration, nil)
@@ -3931,8 +4067,10 @@ func TestHandleCreateConfig_InvalidBase64(t *testing.T) {
 
 func TestHandleCreateConfig_NameConflict(t *testing.T) {
 	wc := &mockWriteClient{
-		createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
-			return "", errdefs.Conflict(fmt.Errorf("config already exists"))
+		mockConfigWriter: mockConfigWriter{
+			createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
+				return "", errdefs.Conflict(fmt.Errorf("config already exists"))
+			},
 		},
 	}
 	h := NewHandlers(
@@ -3984,8 +4122,10 @@ func TestHandleCreateConfig_InvalidJSON(t *testing.T) {
 func TestHandleCreateSecret_OK(t *testing.T) {
 	c := cache.New(nil)
 	wc := &mockWriteClient{
-		createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
-			return "new-sec-id", nil
+		mockSecretWriter: mockSecretWriter{
+			createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
+				return "new-sec-id", nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration, nil)
@@ -4034,8 +4174,10 @@ func TestHandleCreateSecret_MissingName(t *testing.T) {
 
 func TestHandleCreateSecret_NameConflict(t *testing.T) {
 	wc := &mockWriteClient{
-		createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
-			return "", errdefs.Conflict(fmt.Errorf("secret already exists"))
+		mockSecretWriter: mockSecretWriter{
+			createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
+				return "", errdefs.Conflict(fmt.Errorf("secret already exists"))
+			},
 		},
 	}
 	h := NewHandlers(
@@ -4111,8 +4253,10 @@ func TestHandleCreateSecret_InvalidJSON(t *testing.T) {
 func TestHandleCreateSecret_ClearsData(t *testing.T) {
 	c := cache.New(nil)
 	wc := &mockWriteClient{
-		createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
-			return "new-sec-id", nil
+		mockSecretWriter: mockSecretWriter{
+			createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
+				return "new-sec-id", nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration, nil)
@@ -4168,8 +4312,10 @@ func TestHandleCreateConfig_WhitespaceOnlyName(t *testing.T) {
 func TestHandleCreateConfig_CacheMiss(t *testing.T) {
 	c := cache.New(nil)
 	wc := &mockWriteClient{
-		createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
-			return "new-cfg-id", nil
+		mockConfigWriter: mockConfigWriter{
+			createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
+				return "new-cfg-id", nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration, nil)
@@ -4197,8 +4343,10 @@ func TestHandleCreateConfig_CacheMiss(t *testing.T) {
 func TestHandleCreateSecret_CacheMiss(t *testing.T) {
 	c := cache.New(nil)
 	wc := &mockWriteClient{
-		createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
-			return "new-sec-id", nil
+		mockSecretWriter: mockSecretWriter{
+			createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
+				return "new-sec-id", nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration, nil)
@@ -4218,8 +4366,10 @@ func TestHandleCreateSecret_CacheMiss(t *testing.T) {
 
 func TestHandleCreateConfig_DockerError(t *testing.T) {
 	wc := &mockWriteClient{
-		createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
-			return "", fmt.Errorf("engine error")
+		mockConfigWriter: mockConfigWriter{
+			createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
+				return "", fmt.Errorf("engine error")
+			},
 		},
 	}
 	h := NewHandlers(
@@ -4247,8 +4397,10 @@ func TestHandleCreateConfig_DockerError(t *testing.T) {
 
 func TestHandleCreateSecret_DockerError(t *testing.T) {
 	wc := &mockWriteClient{
-		createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
-			return "", fmt.Errorf("engine error")
+		mockSecretWriter: mockSecretWriter{
+			createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
+				return "", fmt.Errorf("engine error")
+			},
 		},
 	}
 	h := NewHandlers(
@@ -4359,11 +4511,13 @@ func TestHandlePatchConfigLabels_JSONPatch(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		updateConfigLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Config, error) {
-			return swarm.Config{
-				ID:   id,
-				Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Labels: labels}},
-			}, nil
+		mockConfigWriter: mockConfigWriter{
+			updateConfigLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Config, error) {
+				return swarm.Config{
+					ID:   id,
+					Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Labels: labels}},
+				}, nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration, nil)
@@ -4393,11 +4547,13 @@ func TestHandlePatchConfigLabels_MergePatch(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		updateConfigLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Config, error) {
-			return swarm.Config{
-				ID:   id,
-				Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Labels: labels}},
-			}, nil
+		mockConfigWriter: mockConfigWriter{
+			updateConfigLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Config, error) {
+				return swarm.Config{
+					ID:   id,
+					Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Labels: labels}},
+				}, nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration, nil)
@@ -4449,8 +4605,10 @@ func TestHandlePatchConfigLabels_VersionConflict(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		updateConfigLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Config, error) {
-			return swarm.Config{}, errdefs.Conflict(fmt.Errorf("version conflict"))
+		mockConfigWriter: mockConfigWriter{
+			updateConfigLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Config, error) {
+				return swarm.Config{}, errdefs.Conflict(fmt.Errorf("version conflict"))
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration, nil)
@@ -4521,11 +4679,13 @@ func TestHandlePatchSecretLabels_JSONPatch(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		updateSecretLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Secret, error) {
-			return swarm.Secret{
-				ID:   id,
-				Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Labels: labels}},
-			}, nil
+		mockSecretWriter: mockSecretWriter{
+			updateSecretLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Secret, error) {
+				return swarm.Secret{
+					ID:   id,
+					Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Labels: labels}},
+				}, nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration, nil)
@@ -4550,8 +4710,10 @@ func TestHandlePatchSecretLabels_VersionConflict(t *testing.T) {
 	})
 
 	wc := &mockWriteClient{
-		updateSecretLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Secret, error) {
-			return swarm.Secret{}, errdefs.Conflict(fmt.Errorf("version conflict"))
+		mockSecretWriter: mockSecretWriter{
+			updateSecretLabelsFn: func(_ context.Context, id string, labels map[string]string) (swarm.Secret, error) {
+				return swarm.Secret{}, errdefs.Conflict(fmt.Errorf("version conflict"))
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, wc, nil, closedReady(), nil, config.OpsConfiguration, nil)

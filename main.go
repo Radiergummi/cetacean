@@ -192,6 +192,7 @@ func main() {
 	go watcher.Run(ctx)
 
 	// API — pass ready channel so /-/ready reports sync status
+	promapi.SetNilProxyErrorWriter(api.WriteErrorCode)
 	var promClient *promapi.Client
 	var metricsProxy *promapi.Proxy
 	if cfg.PrometheusURL != "" {

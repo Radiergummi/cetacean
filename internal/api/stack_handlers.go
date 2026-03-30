@@ -41,8 +41,8 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "STK001", fmt.Sprintf("stack %q not found", name))
 		return
 	}
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/stacks/"+name, "Stack", map[string]any{
-		"stack": detail,
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/stacks/"+name, "Stack", StackResponse{
+		Stack: detail,
 	}))
 }
 

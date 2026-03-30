@@ -2,10 +2,13 @@ package api
 
 import (
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 
 	cerrdefs "github.com/containerd/errdefs"
+	"github.com/docker/docker/api/types/swarm"
+	json "github.com/goccy/go-json"
 )
 
 // writeDockerError handles Docker API errors that don't have a domain-specific
@@ -82,6 +85,89 @@ func writeSecretError(w http.ResponseWriter, r *http.Request, err error) {
 		return
 	}
 	writeDockerError(w, r, err, "secret")
+}
+
+// writeServiceMutation calls a service writer function and writes the standard
+// service detail response. It handles error mapping and JSON-LD wrapping.
+func writeServiceMutation(
+	w http.ResponseWriter,
+	r *http.Request,
+	id string,
+	fn func() (swarm.Service, error),
+) {
+	updated, err := fn()
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	writeJSON(w, NewDetailResponse(r.Context(), "/services/"+id, "Service", ServiceResponse{
+		Service: updated,
+	}))
+}
+
+// writeNodeMutation calls a node writer function and writes the standard
+// node detail response.
+func writeNodeMutation(
+	w http.ResponseWriter,
+	r *http.Request,
+	id string,
+	fn func() (swarm.Node, error),
+) {
+	updated, err := fn()
+	if err != nil {
+		writeNodeError(w, r, err)
+		return
+	}
+	writeJSON(w, NewDetailResponse(r.Context(), "/nodes/"+id, "Node", NodeResponse{
+		Node: updated,
+	}))
+}
+
+// applyStructMergePatch reads a merge-patch body, applies it to current (any
+// JSON-marshalable struct), and unmarshals the result into target. Returns
+// false and writes an error response on failure.
+func applyStructMergePatch(
+	w http.ResponseWriter,
+	r *http.Request,
+	current any,
+	target any,
+	errCode string,
+	errMsg string,
+) bool {
+	base, err := json.Marshal(current)
+	if err != nil {
+		writeErrorCode(w, r, "API009", "failed to marshal current state")
+		return false
+	}
+	var baseMap map[string]any
+	if err := json.Unmarshal(base, &baseMap); err != nil {
+		writeErrorCode(w, r, "API009", "failed to unmarshal current state")
+		return false
+	}
+
+	patchBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeErrorCode(w, r, "API007", "failed to read request body")
+		return false
+	}
+	var patchMap map[string]any
+	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
+		writeErrorCode(w, r, "API008", "invalid JSON")
+		return false
+	}
+
+	mergePatch(baseMap, patchMap)
+
+	merged, err := json.Marshal(baseMap)
+	if err != nil {
+		writeErrorCode(w, r, "API009", "failed to marshal merged state")
+		return false
+	}
+	if err := json.Unmarshal(merged, target); err != nil {
+		writeErrorCode(w, r, errCode, errMsg)
+		return false
+	}
+	return true
 }
 
 // writePatchError maps JSON Patch application errors to error codes.

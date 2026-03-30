@@ -41,8 +41,8 @@ func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/nodes/"+id, "Node", map[string]any{
-		"node": node,
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/nodes/"+id, "Node", NodeResponse{
+		Node: node,
 	}))
 }
 

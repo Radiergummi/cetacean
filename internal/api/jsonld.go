@@ -11,28 +11,26 @@ const jsonLDContext = "/api/context.jsonld"
 
 // DetailResponse is a JSON-LD wrapped detail response with deterministic
 // key ordering. The @context, @id, @type fields are serialized first,
-// followed by extra fields in sorted key order. This guarantees stable
-// ETags regardless of the JSON library's map iteration order.
+// followed by extra fields.
+//
+// extra may be a map[string]any (keys sorted alphabetically) or a struct
+// (fields serialized in declaration order via JSON tags). Both produce
+// deterministic output suitable for stable ETags.
 type DetailResponse struct {
 	context string
 	id      string
 	typ     string
-	extra   map[string]any
+	extra   any
 }
 
 // MarshalJSON produces deterministic output: @context, @id, @type first,
-// then extra keys in sorted order.
+// then extra fields.
 func (d DetailResponse) MarshalJSON() ([]byte, error) {
-	keys := make([]string, 0, len(d.extra))
-	for k := range d.extra {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-
 	idJSON, err := json.Marshal(d.id)
 	if err != nil {
 		return nil, err
 	}
+
 	typJSON, err := json.Marshal(d.typ)
 	if err != nil {
 		return nil, err
@@ -47,28 +45,56 @@ func (d DetailResponse) MarshalJSON() ([]byte, error) {
 	buf = append(buf, `,"@type":`...)
 	buf = append(buf, typJSON...)
 
-	for _, k := range keys {
-		buf = append(buf, ',')
-		key, err := json.Marshal(k)
+	switch extra := d.extra.(type) {
+	case map[string]any:
+		keys := make([]string, 0, len(extra))
+		for k := range extra {
+			keys = append(keys, k)
+		}
+		slices.Sort(keys)
+
+		for _, k := range keys {
+			buf = append(buf, ',')
+
+			key, err := json.Marshal(k)
+			if err != nil {
+				return nil, err
+			}
+
+			buf = append(buf, key...)
+			buf = append(buf, ':')
+
+			val, err := json.Marshal(extra[k])
+			if err != nil {
+				return nil, err
+			}
+
+			buf = append(buf, val...)
+		}
+
+	case nil:
+		// No extra fields.
+
+	default:
+		// Struct: marshal and splice its fields after the @-prefixed keys.
+		extraBytes, err := json.Marshal(extra)
 		if err != nil {
 			return nil, err
 		}
-		buf = append(buf, key...)
-		buf = append(buf, ':')
-		val, err := json.Marshal(d.extra[k])
-		if err != nil {
-			return nil, err
+
+		if len(extraBytes) > 2 { // not just "{}"
+			buf = append(buf, ',')
+			buf = append(buf, extraBytes[1:len(extraBytes)-1]...)
 		}
-		buf = append(buf, val...)
 	}
 
 	buf = append(buf, '}')
 	return buf, nil
 }
 
-// NewDetailResponse creates a JSON-LD wrapped detail response with
-// deterministic serialization order.
-func NewDetailResponse(ctx context.Context, id, typ string, extra map[string]any) DetailResponse {
+// NewDetailResponse creates a JSON-LD wrapped detail response.
+// extra may be a map[string]any or a struct with JSON tags.
+func NewDetailResponse(ctx context.Context, id, typ string, extra any) DetailResponse {
 	return DetailResponse{
 		context: absPath(ctx, jsonLDContext),
 		id:      absPath(ctx, id),

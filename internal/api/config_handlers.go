@@ -18,9 +18,9 @@ func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "CFG002", fmt.Sprintf("config %q not found", id))
 		return
 	}
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/configs/"+id, "Config", map[string]any{
-		"config":   cfg,
-		"services": h.cache.ServicesUsingConfig(id),
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/configs/"+id, "Config", ConfigResponse{
+		Config:   cfg,
+		Services: h.cache.ServicesUsingConfig(id),
 	}))
 }
 

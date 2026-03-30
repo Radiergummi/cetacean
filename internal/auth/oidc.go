@@ -413,7 +413,7 @@ func (p *OIDCProvider) handleWhoami(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(id)
+	_ = json.NewEncoder(w).Encode(id) // best-effort: status already sent
 }
 
 // handleLogout clears the local session and, if the IdP supports it,

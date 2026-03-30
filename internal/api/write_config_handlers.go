@@ -25,7 +25,7 @@ func (h *Handlers) HandleRemoveConfig(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("removing config", "config", id)
 
-	err := h.writeClient.RemoveConfig(r.Context(), id)
+	err := h.configWriter.RemoveConfig(r.Context(), id)
 	if err != nil {
 		if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
 			writeErrorCode(w, r, "CFG001", err.Error())
@@ -58,7 +58,7 @@ func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("creating config", "name", req.Name)
 
-	id, err := h.writeClient.CreateConfig(r.Context(), swarm.ConfigSpec{
+	id, err := h.configWriter.CreateConfig(r.Context(), swarm.ConfigSpec{
 		Annotations: swarm.Annotations{Name: req.Name},
 		Data:        data,
 	})
@@ -75,21 +75,21 @@ func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		w.Header().Set("Location", absPath(r.Context(), "/configs/"+id))
 		w.WriteHeader(http.StatusCreated)
-		writeJSON(w, NewDetailResponse(r.Context(), "/configs/"+id, "Config", map[string]any{
-			"config": swarm.Config{
+		writeJSON(w, NewDetailResponse(r.Context(), "/configs/"+id, "Config", ConfigResponse{
+			Config: swarm.Config{
 				ID:   id,
 				Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: req.Name}},
 			},
-			"services": []cache.ServiceRef{},
+			Services: []cache.ServiceRef{},
 		}))
 		return
 	}
 
 	w.Header().Set("Location", absPath(r.Context(), "/configs/"+id))
 	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, NewDetailResponse(r.Context(), "/configs/"+id, "Config", map[string]any{
-		"config":   cfg,
-		"services": h.cache.ServicesUsingConfig(id),
+	writeJSON(w, NewDetailResponse(r.Context(), "/configs/"+id, "Config", ConfigResponse{
+		Config:   cfg,
+		Services: h.cache.ServicesUsingConfig(id),
 	}))
 }
 
@@ -107,8 +107,8 @@ func (h *Handlers) HandleGetConfigLabels(w http.ResponseWriter, r *http.Request)
 	writeJSONWithETag(
 		w,
 		r,
-		NewDetailResponse(r.Context(), "/configs/"+id+"/labels", "ConfigLabels", map[string]any{
-			"labels": labels,
+		NewDetailResponse(r.Context(), "/configs/"+id+"/labels", "ConfigLabels", LabelsResponse{
+			Labels: labels,
 		}),
 	)
 }
@@ -167,7 +167,7 @@ func (h *Handlers) HandlePatchConfigLabels(w http.ResponseWriter, r *http.Reques
 
 	slog.Info("patching config labels", "config", id)
 
-	result, err := h.writeClient.UpdateConfigLabels(r.Context(), id, updated)
+	result, err := h.configWriter.UpdateConfigLabels(r.Context(), id, updated)
 	if err != nil {
 		writeConfigError(w, r, err)
 		return

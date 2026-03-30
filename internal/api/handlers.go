@@ -28,8 +28,6 @@ const defaultLogLimit = 500
 const maxLogLimit = 10000
 const maxLogSSEConns = 128
 
-var activeLogSSEConns atomic.Int64
-
 type DockerLogStreamer interface {
 	Logs(
 		ctx context.Context,
@@ -55,109 +53,67 @@ type DockerSystemClient interface {
 	UnlockSwarm(ctx context.Context, key string) error
 }
 
-type DockerWriteClient interface {
+// Narrow write interfaces, grouped by resource type. Each handler file
+// depends only on the methods it needs. The concrete docker.Client
+// satisfies all of them via Go's structural typing.
+
+type ServiceWriter interface {
 	ScaleService(ctx context.Context, id string, replicas uint64) (swarm.Service, error)
 	UpdateServiceImage(ctx context.Context, id string, image string) (swarm.Service, error)
 	RollbackService(ctx context.Context, id string) (swarm.Service, error)
 	RestartService(ctx context.Context, id string) (swarm.Service, error)
-	UpdateNodeAvailability(
-		ctx context.Context,
-		id string,
-		availability swarm.NodeAvailability,
-	) (swarm.Node, error)
-	RemoveTask(ctx context.Context, id string) error
 	RemoveService(ctx context.Context, id string) error
 	UpdateServiceEnv(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
+	UpdateServiceLabels(ctx context.Context, id string, labels map[string]string) (swarm.Service, error)
+	UpdateServiceResources(ctx context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error)
+	UpdateServiceMode(ctx context.Context, id string, mode swarm.ServiceMode) (swarm.Service, error)
+	UpdateServiceEndpointMode(ctx context.Context, id string, mode swarm.ResolutionMode) (swarm.Service, error)
+	UpdateServiceHealthcheck(ctx context.Context, id string, hc *container.HealthConfig) (swarm.Service, error)
+	UpdateServicePlacement(ctx context.Context, id string, placement *swarm.Placement) (swarm.Service, error)
+	UpdateServicePorts(ctx context.Context, id string, ports []swarm.PortConfig) (swarm.Service, error)
+	UpdateServiceUpdatePolicy(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error)
+	UpdateServiceRollbackPolicy(ctx context.Context, id string, policy *swarm.UpdateConfig) (swarm.Service, error)
+	UpdateServiceLogDriver(ctx context.Context, id string, driver *swarm.Driver) (swarm.Service, error)
+	UpdateServiceConfigs(ctx context.Context, id string, configs []*swarm.ConfigReference) (swarm.Service, error)
+	UpdateServiceSecrets(ctx context.Context, id string, secrets []*swarm.SecretReference) (swarm.Service, error)
+	UpdateServiceNetworks(ctx context.Context, id string, networks []swarm.NetworkAttachmentConfig) (swarm.Service, error)
+	UpdateServiceMounts(ctx context.Context, id string, mounts []mount.Mount) (swarm.Service, error)
+	UpdateServiceContainerConfig(ctx context.Context, id string, apply func(spec *swarm.ContainerSpec)) (swarm.Service, error)
+}
+
+type NodeWriter interface {
+	UpdateNodeAvailability(ctx context.Context, id string, availability swarm.NodeAvailability) (swarm.Node, error)
 	UpdateNodeLabels(ctx context.Context, id string, labels map[string]string) (swarm.Node, error)
 	UpdateNodeRole(ctx context.Context, id string, role swarm.NodeRole) (swarm.Node, error)
 	RemoveNode(ctx context.Context, id string, force bool) error
-	RemoveNetwork(ctx context.Context, id string) error
-	RemoveConfig(ctx context.Context, id string) error
-	RemoveSecret(ctx context.Context, id string) error
-	RemoveVolume(ctx context.Context, name string, force bool) error
+}
+
+type ConfigWriter interface {
 	CreateConfig(ctx context.Context, spec swarm.ConfigSpec) (string, error)
+	RemoveConfig(ctx context.Context, id string) error
+	UpdateConfigLabels(ctx context.Context, id string, labels map[string]string) (swarm.Config, error)
+}
+
+type SecretWriter interface {
 	CreateSecret(ctx context.Context, spec swarm.SecretSpec) (string, error)
-	UpdateConfigLabels(
-		ctx context.Context,
-		id string,
-		labels map[string]string,
-	) (swarm.Config, error)
-	UpdateSecretLabels(
-		ctx context.Context,
-		id string,
-		labels map[string]string,
-	) (swarm.Secret, error)
-	UpdateServiceLabels(
-		ctx context.Context,
-		id string,
-		labels map[string]string,
-	) (swarm.Service, error)
-	UpdateServiceResources(
-		ctx context.Context,
-		id string,
-		resources *swarm.ResourceRequirements,
-	) (swarm.Service, error)
-	UpdateServiceMode(
-		ctx context.Context,
-		id string,
-		mode swarm.ServiceMode,
-	) (swarm.Service, error)
-	UpdateServiceEndpointMode(
-		ctx context.Context,
-		id string,
-		mode swarm.ResolutionMode,
-	) (swarm.Service, error)
-	UpdateServiceHealthcheck(
-		ctx context.Context,
-		id string,
-		hc *container.HealthConfig,
-	) (swarm.Service, error)
-	UpdateServicePlacement(
-		ctx context.Context,
-		id string,
-		placement *swarm.Placement,
-	) (swarm.Service, error)
-	UpdateServicePorts(
-		ctx context.Context,
-		id string,
-		ports []swarm.PortConfig,
-	) (swarm.Service, error)
-	UpdateServiceUpdatePolicy(
-		ctx context.Context,
-		id string,
-		policy *swarm.UpdateConfig,
-	) (swarm.Service, error)
-	UpdateServiceRollbackPolicy(
-		ctx context.Context,
-		id string,
-		policy *swarm.UpdateConfig,
-	) (swarm.Service, error)
-	UpdateServiceLogDriver(
-		ctx context.Context,
-		id string,
-		driver *swarm.Driver,
-	) (swarm.Service, error)
-	UpdateServiceConfigs(
-		ctx context.Context,
-		id string,
-		configs []*swarm.ConfigReference,
-	) (swarm.Service, error)
-	UpdateServiceSecrets(
-		ctx context.Context,
-		id string,
-		secrets []*swarm.SecretReference,
-	) (swarm.Service, error)
-	UpdateServiceNetworks(
-		ctx context.Context,
-		id string,
-		networks []swarm.NetworkAttachmentConfig,
-	) (swarm.Service, error)
-	UpdateServiceMounts(ctx context.Context, id string, mounts []mount.Mount) (swarm.Service, error)
-	UpdateServiceContainerConfig(
-		ctx context.Context,
-		id string,
-		apply func(spec *swarm.ContainerSpec),
-	) (swarm.Service, error)
+	RemoveSecret(ctx context.Context, id string) error
+	UpdateSecretLabels(ctx context.Context, id string, labels map[string]string) (swarm.Secret, error)
+}
+
+type ResourceRemover interface {
+	RemoveTask(ctx context.Context, id string) error
+	RemoveNetwork(ctx context.Context, id string) error
+	RemoveVolume(ctx context.Context, name string, force bool) error
+}
+
+// DockerWriteClient composes all resource-specific write interfaces.
+// Tests can mock narrower interfaces; the concrete docker.Client satisfies this.
+type DockerWriteClient interface {
+	ServiceWriter
+	NodeWriter
+	ConfigWriter
+	SecretWriter
+	ResourceRemover
 }
 
 type DockerPluginClient interface {
@@ -173,20 +129,29 @@ type DockerPluginClient interface {
 }
 
 type Handlers struct {
-	cache               *cache.Cache
-	broadcaster         *sse.Broadcaster
-	dockerClient        DockerLogStreamer
-	systemClient        DockerSystemClient
-	writeClient         DockerWriteClient
-	pluginClient        DockerPluginClient
-	ready               <-chan struct{}
-	promClient          *prometheus.Client
-	operationsLevel     config.OperationsLevel
-	recEngine           *recommendations.Engine
-	localNodeMu         sync.Mutex
-	localNodeID         string
-	localNodeDone       bool
+	cache           *cache.Cache
+	broadcaster     *sse.Broadcaster
+	dockerClient    DockerLogStreamer
+	systemClient    DockerSystemClient
+	serviceWriter   ServiceWriter
+	nodeWriter      NodeWriter
+	configWriter    ConfigWriter
+	secretWriter    SecretWriter
+	resourceRemover ResourceRemover
+	pluginClient    DockerPluginClient
+	ready           <-chan struct{}
+	promClient      *prometheus.Client
+	operationsLevel config.OperationsLevel
+	recEngine       *recommendations.Engine
+	localNodeMu     sync.Mutex
+	localNodeID     string
+	localNodeDone   bool
 	localNodeRetryAfter *time.Time
+
+	activeLogSSEConns   atomic.Int64
+	metricsStreamCount  atomic.Int32
+	tickerInterval      time.Duration // override for tick interval in tests; zero means use step duration
+	dockerVersionCache  *dockerVersionCache
 }
 
 func NewHandlers(
@@ -202,16 +167,21 @@ func NewHandlers(
 	recEngine *recommendations.Engine,
 ) *Handlers {
 	return &Handlers{
-		cache:           c,
-		broadcaster:     b,
-		dockerClient:    dc,
-		systemClient:    sc,
-		writeClient:     wc,
-		pluginClient:    pc,
-		ready:           ready,
-		promClient:      promClient,
-		operationsLevel: operationsLevel,
-		recEngine:       recEngine,
+		cache:              c,
+		broadcaster:        b,
+		dockerClient:       dc,
+		systemClient:       sc,
+		serviceWriter:      wc,
+		nodeWriter:         wc,
+		configWriter:       wc,
+		secretWriter:       wc,
+		resourceRemover:    wc,
+		pluginClient:       pc,
+		ready:              ready,
+		promClient:         promClient,
+		operationsLevel:    operationsLevel,
+		recEngine:          recEngine,
+		dockerVersionCache: newDockerVersionCache(),
 	}
 }
 

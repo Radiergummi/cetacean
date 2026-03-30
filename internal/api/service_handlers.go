@@ -71,16 +71,14 @@ func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
-	extra := map[string]any{
-		"service": svc,
-	}
+	detail := ServiceResponse{Service: svc}
 	if changes := DiffServiceSpecs(svc.PreviousSpec, &svc.Spec); len(changes) > 0 {
-		extra["changes"] = changes
+		detail.Changes = changes
 	}
 	if detected := integrations.Detect(svc.Spec.Labels); len(detected) > 0 {
-		extra["integrations"] = detected
+		detail.Integrations = detected
 	}
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/services/"+id, "Service", extra))
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/services/"+id, "Service", detail))
 }
 
 func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {

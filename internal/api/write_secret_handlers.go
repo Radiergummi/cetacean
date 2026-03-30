@@ -25,7 +25,7 @@ func (h *Handlers) HandleRemoveSecret(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("removing secret", "secret", id)
 
-	err := h.writeClient.RemoveSecret(r.Context(), id)
+	err := h.secretWriter.RemoveSecret(r.Context(), id)
 	if err != nil {
 		if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
 			writeErrorCode(w, r, "SEC001", err.Error())
@@ -58,7 +58,7 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("creating secret", "name", req.Name)
 
-	id, err := h.writeClient.CreateSecret(r.Context(), swarm.SecretSpec{
+	id, err := h.secretWriter.CreateSecret(r.Context(), swarm.SecretSpec{
 		Annotations: swarm.Annotations{Name: req.Name},
 		Data:        data,
 	})
@@ -75,12 +75,12 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		w.Header().Set("Location", absPath(r.Context(), "/secrets/"+id))
 		w.WriteHeader(http.StatusCreated)
-		writeJSON(w, NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", map[string]any{
-			"secret": swarm.Secret{
+		writeJSON(w, NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", SecretResponse{
+			Secret: swarm.Secret{
 				ID:   id,
 				Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: req.Name}},
 			},
-			"services": []cache.ServiceRef{},
+			Services: []cache.ServiceRef{},
 		}))
 		return
 	}
@@ -88,9 +88,9 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 	sec.Spec.Data = nil
 	w.Header().Set("Location", absPath(r.Context(), "/secrets/"+id))
 	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", map[string]any{
-		"secret":   sec,
-		"services": h.cache.ServicesUsingSecret(id),
+	writeJSON(w, NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", SecretResponse{
+		Secret:   sec,
+		Services: h.cache.ServicesUsingSecret(id),
 	}))
 }
 
@@ -108,8 +108,8 @@ func (h *Handlers) HandleGetSecretLabels(w http.ResponseWriter, r *http.Request)
 	writeJSONWithETag(
 		w,
 		r,
-		NewDetailResponse(r.Context(), "/secrets/"+id+"/labels", "SecretLabels", map[string]any{
-			"labels": labels,
+		NewDetailResponse(r.Context(), "/secrets/"+id+"/labels", "SecretLabels", LabelsResponse{
+			Labels: labels,
 		}),
 	)
 }
@@ -168,7 +168,7 @@ func (h *Handlers) HandlePatchSecretLabels(w http.ResponseWriter, r *http.Reques
 
 	slog.Info("patching secret labels", "secret", id)
 
-	result, err := h.writeClient.UpdateSecretLabels(r.Context(), id, updated)
+	result, err := h.secretWriter.UpdateSecretLabels(r.Context(), id, updated)
 	if err != nil {
 		writeSecretError(w, r, err)
 		return

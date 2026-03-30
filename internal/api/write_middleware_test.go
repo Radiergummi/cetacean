@@ -149,8 +149,10 @@ func TestRequireLevel_Integration_ScaleAllowedAtLevel1(t *testing.T) {
 	c.SetService(svc)
 
 	mock := &mockWriteClient{
-		scaleServiceFn: func(ctx context.Context, id string, replicas uint64) (swarm.Service, error) {
-			return svc, nil
+		mockServiceWriter: mockServiceWriter{
+			scaleServiceFn: func(ctx context.Context, id string, replicas uint64) (swarm.Service, error) {
+				return svc, nil
+			},
 		},
 	}
 	h := NewHandlers(c, nil, nil, nil, mock, nil, closedReady(), nil, config.OpsOperational, nil)

@@ -18,7 +18,7 @@ func (h *Handlers) HandleRemoveTask(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("removing task", "task", id)
 
-	err := h.writeClient.RemoveTask(r.Context(), id)
+	err := h.resourceRemover.RemoveTask(r.Context(), id)
 	if err != nil {
 		if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
 			writeErrorCode(w, r, "TSK001", err.Error())
@@ -42,7 +42,7 @@ func (h *Handlers) HandleRemoveNetwork(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("removing network", "network", id)
 
-	err := h.writeClient.RemoveNetwork(r.Context(), id)
+	err := h.resourceRemover.RemoveNetwork(r.Context(), id)
 	if err != nil {
 		if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
 			writeErrorCode(w, r, "NET001", err.Error())
@@ -68,7 +68,7 @@ func (h *Handlers) HandleRemoveVolume(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("removing volume", "volume", name, "force", force)
 
-	err := h.writeClient.RemoveVolume(r.Context(), name, force)
+	err := h.resourceRemover.RemoveVolume(r.Context(), name, force)
 	if err != nil {
 		if !force && (cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err)) {
 			writeErrorCode(w, r, "VOL001", err.Error())

@@ -43,13 +43,9 @@ func (h *Handlers) HandlePlugin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONWithETag(
-		w,
-		r,
-		NewDetailResponse(r.Context(), "/plugins/"+name, "Plugin", map[string]any{
-			"plugin": plugin,
-		}),
-	)
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/plugins/"+name, "Plugin", PluginResponse{
+		Plugin: *plugin,
+	}))
 }
 
 func (h *Handlers) HandleEnablePlugin(w http.ResponseWriter, r *http.Request) {
@@ -145,13 +141,9 @@ func (h *Handlers) HandleInstallPlugin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONStatus(
-		w,
-		http.StatusCreated,
-		NewDetailResponse(r.Context(), "/plugins/"+plugin.Name, "Plugin", map[string]any{
-			"plugin": plugin,
-		}),
-	)
+	writeJSONStatus(w, http.StatusCreated, NewDetailResponse(r.Context(), "/plugins/"+plugin.Name, "Plugin", PluginResponse{
+		Plugin: *plugin,
+	}))
 }
 
 func (h *Handlers) HandleUpgradePlugin(w http.ResponseWriter, r *http.Request) {
@@ -181,8 +173,8 @@ func (h *Handlers) HandleUpgradePlugin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, NewDetailResponse(r.Context(), "/plugins/"+name, "Plugin", map[string]any{
-		"plugin": plugin,
+	writeJSON(w, NewDetailResponse(r.Context(), "/plugins/"+name, "Plugin", PluginResponse{
+		Plugin: *plugin,
 	}))
 }
 
@@ -212,7 +204,7 @@ func (h *Handlers) HandleConfigurePlugin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	writeJSON(w, NewDetailResponse(r.Context(), "/plugins/"+name, "Plugin", map[string]any{
-		"plugin": plugin,
+	writeJSON(w, NewDetailResponse(r.Context(), "/plugins/"+name, "Plugin", PluginResponse{
+		Plugin: *plugin,
 	}))
 }

@@ -40,18 +40,9 @@ func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("scaling service", "service", id, "replicas", *req.Replicas)
 
-	updated, err := h.writeClient.ScaleService(r.Context(), id, *req.Replicas)
-	if err != nil {
-		writeServiceError(w, r, err)
-		return
-	}
-
-	// Use writeJSON (not writeJSONWithETag) for mutation responses:
-	// ETag + If-None-Match → 304 is only valid for safe methods (GET/HEAD)
-	// per RFC 9110 Section 13.1.1.
-	writeJSON(w, NewDetailResponse(r.Context(), "/services/"+id, "Service", map[string]any{
-		"service": updated,
-	}))
+	writeServiceMutation(w, r, id, func() (swarm.Service, error) {
+		return h.serviceWriter.ScaleService(r.Context(), id, *req.Replicas)
+	})
 }
 
 func (h *Handlers) HandleUpdateServiceMode(w http.ResponseWriter, r *http.Request) {
@@ -92,15 +83,9 @@ func (h *Handlers) HandleUpdateServiceMode(w http.ResponseWriter, r *http.Reques
 
 	slog.Info("updating service mode", "service", id, "mode", req.Mode)
 
-	updated, err := h.writeClient.UpdateServiceMode(r.Context(), id, mode)
-	if err != nil {
-		writeServiceError(w, r, err)
-		return
-	}
-
-	writeJSON(w, NewDetailResponse(r.Context(), "/services/"+id, "Service", map[string]any{
-		"service": updated,
-	}))
+	writeServiceMutation(w, r, id, func() (swarm.Service, error) {
+		return h.serviceWriter.UpdateServiceMode(r.Context(), id, mode)
+	})
 }
 
 type updateEndpointModeRequest struct {
@@ -136,15 +121,9 @@ func (h *Handlers) HandleUpdateServiceEndpointMode(w http.ResponseWriter, r *htt
 
 	slog.Info("updating service endpoint mode", "service", id, "mode", req.Mode)
 
-	updated, err := h.writeClient.UpdateServiceEndpointMode(r.Context(), id, mode)
-	if err != nil {
-		writeServiceError(w, r, err)
-		return
-	}
-
-	writeJSON(w, NewDetailResponse(r.Context(), "/services/"+id, "Service", map[string]any{
-		"service": updated,
-	}))
+	writeServiceMutation(w, r, id, func() (swarm.Service, error) {
+		return h.serviceWriter.UpdateServiceEndpointMode(r.Context(), id, mode)
+	})
 }
 
 func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Request) {
@@ -169,15 +148,9 @@ func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Reque
 
 	slog.Info("updating service image", "service", id, "image", req.Image)
 
-	updated, err := h.writeClient.UpdateServiceImage(r.Context(), id, req.Image)
-	if err != nil {
-		writeServiceError(w, r, err)
-		return
-	}
-
-	writeJSON(w, NewDetailResponse(r.Context(), "/services/"+id, "Service", map[string]any{
-		"service": updated,
-	}))
+	writeServiceMutation(w, r, id, func() (swarm.Service, error) {
+		return h.serviceWriter.UpdateServiceImage(r.Context(), id, req.Image)
+	})
 }
 
 func (h *Handlers) HandleRollbackService(w http.ResponseWriter, r *http.Request) {
@@ -195,15 +168,9 @@ func (h *Handlers) HandleRollbackService(w http.ResponseWriter, r *http.Request)
 
 	slog.Info("rolling back service", "service", id)
 
-	updated, err := h.writeClient.RollbackService(r.Context(), id)
-	if err != nil {
-		writeServiceError(w, r, err)
-		return
-	}
-
-	writeJSON(w, NewDetailResponse(r.Context(), "/services/"+id, "Service", map[string]any{
-		"service": updated,
-	}))
+	writeServiceMutation(w, r, id, func() (swarm.Service, error) {
+		return h.serviceWriter.RollbackService(r.Context(), id)
+	})
 }
 
 func (h *Handlers) HandleRemoveService(w http.ResponseWriter, r *http.Request) {
@@ -217,7 +184,7 @@ func (h *Handlers) HandleRemoveService(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("removing service", "service", id)
 
-	err := h.writeClient.RemoveService(r.Context(), id)
+	err := h.serviceWriter.RemoveService(r.Context(), id)
 	if err != nil {
 		if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
 			writeErrorCode(w, r, "SVC002", err.Error())
@@ -267,7 +234,7 @@ func (h *Handlers) HandleRemoveStack(w http.ResponseWriter, r *http.Request) {
 	var errs []removeError
 
 	for _, id := range stack.Services {
-		if err := h.writeClient.RemoveService(ctx, id); err != nil {
+		if err := h.serviceWriter.RemoveService(ctx, id); err != nil {
 			if cerrdefs.IsNotFound(err) {
 				continue
 			}
@@ -278,7 +245,7 @@ func (h *Handlers) HandleRemoveStack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, id := range stack.Networks {
-		if err := h.writeClient.RemoveNetwork(ctx, id); err != nil {
+		if err := h.resourceRemover.RemoveNetwork(ctx, id); err != nil {
 			if cerrdefs.IsNotFound(err) {
 				continue
 			}
@@ -289,7 +256,7 @@ func (h *Handlers) HandleRemoveStack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, id := range stack.Secrets {
-		if err := h.writeClient.RemoveSecret(ctx, id); err != nil {
+		if err := h.secretWriter.RemoveSecret(ctx, id); err != nil {
 			if cerrdefs.IsNotFound(err) {
 				continue
 			}
@@ -300,7 +267,7 @@ func (h *Handlers) HandleRemoveStack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, id := range stack.Configs {
-		if err := h.writeClient.RemoveConfig(ctx, id); err != nil {
+		if err := h.configWriter.RemoveConfig(ctx, id); err != nil {
 			if cerrdefs.IsNotFound(err) {
 				continue
 			}
@@ -328,15 +295,9 @@ func (h *Handlers) HandleRestartService(w http.ResponseWriter, r *http.Request) 
 
 	slog.Info("restarting service", "service", id)
 
-	updated, err := h.writeClient.RestartService(r.Context(), id)
-	if err != nil {
-		writeServiceError(w, r, err)
-		return
-	}
-
-	writeJSON(w, NewDetailResponse(r.Context(), "/services/"+id, "Service", map[string]any{
-		"service": updated,
-	}))
+	writeServiceMutation(w, r, id, func() (swarm.Service, error) {
+		return h.serviceWriter.RestartService(r.Context(), id)
+	})
 }
 
 // envSliceToMap converts a slice of KEY=VALUE strings to a map.
@@ -364,13 +325,9 @@ func (h *Handlers) HandleGetServiceEnv(w http.ResponseWriter, r *http.Request) {
 	if svc.Spec.TaskTemplate.ContainerSpec != nil {
 		env = svc.Spec.TaskTemplate.ContainerSpec.Env
 	}
-	writeJSONWithETag(
-		w,
-		r,
-		NewDetailResponse(r.Context(), "/services/"+id+"/env", "ServiceEnv", map[string]any{
-			"env": envSliceToMap(env),
-		}),
-	)
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/services/"+id+"/env", "ServiceEnv", EnvResponse{
+		Env: envSliceToMap(env),
+	}))
 }
 
 func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request) {
@@ -428,7 +385,7 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 
 	slog.Info("patching service env", "service", id)
 
-	result, err := h.writeClient.UpdateServiceEnv(r.Context(), id, updated)
+	result, err := h.serviceWriter.UpdateServiceEnv(r.Context(), id, updated)
 	if err != nil {
 		writeServiceError(w, r, err)
 		return
@@ -455,8 +412,8 @@ func (h *Handlers) HandleGetServiceLabels(w http.ResponseWriter, r *http.Request
 	writeJSONWithETag(
 		w,
 		r,
-		NewDetailResponse(r.Context(), "/services/"+id+"/labels", "ServiceLabels", map[string]any{
-			"labels": labels,
+		NewDetailResponse(r.Context(), "/services/"+id+"/labels", "ServiceLabels", LabelsResponse{
+			Labels: labels,
 		}),
 	)
 }
@@ -515,7 +472,7 @@ func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Reque
 
 	slog.Info("patching service labels", "service", id)
 
-	result, err := h.writeClient.UpdateServiceLabels(r.Context(), id, updated)
+	result, err := h.serviceWriter.UpdateServiceLabels(r.Context(), id, updated)
 	if err != nil {
 		writeServiceError(w, r, err)
 		return
@@ -579,47 +536,13 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 		current = &swarm.ResourceRequirements{}
 	}
 
-	// Marshal current state to JSON, then to a generic map
-	base, err := json.Marshal(current)
-	if err != nil {
-		writeErrorCode(w, r, "API009", "failed to marshal current resources")
-		return
-	}
-	var baseMap map[string]any
-	if err := json.Unmarshal(base, &baseMap); err != nil {
-		writeErrorCode(w, r, "API009", "failed to unmarshal current resources")
-		return
-	}
-
-	// Read the patch
-	patchBytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		writeErrorCode(w, r, "API007", "failed to read request body")
-		return
-	}
-	var patchMap map[string]any
-	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
-		writeErrorCode(w, r, "API008", "invalid JSON")
-		return
-	}
-
-	// Apply RFC 7396 merge: null deletes, non-null overwrites
-	mergePatch(baseMap, patchMap)
-
-	// Marshal back to struct
-	merged, err := json.Marshal(baseMap)
-	if err != nil {
-		writeErrorCode(w, r, "API009", "failed to marshal merged resources")
-		return
-	}
 	var result swarm.ResourceRequirements
-	if err := json.Unmarshal(merged, &result); err != nil {
-		writeErrorCode(w, r, "SVC011", "invalid resource specification")
+	if !applyStructMergePatch(w, r, current, &result, "SVC011", "invalid resource specification") {
 		return
 	}
 
 	slog.Info("updating service resources", "service", id)
-	updated, err := h.writeClient.UpdateServiceResources(r.Context(), id, &result)
+	updated, err := h.serviceWriter.UpdateServiceResources(r.Context(), id, &result)
 	if err != nil {
 		writeServiceError(w, r, err)
 		return
@@ -710,7 +633,7 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 
 	slog.Info("updating service ports", "service", id)
 
-	updated, err := h.writeClient.UpdateServicePorts(r.Context(), id, patch.Ports)
+	updated, err := h.serviceWriter.UpdateServicePorts(r.Context(), id, patch.Ports)
 	if err != nil {
 		writeServiceError(w, r, err)
 		return
@@ -776,7 +699,7 @@ func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Re
 
 	slog.Info("updating service healthcheck", "service", id)
 
-	updated, err := h.writeClient.UpdateServiceHealthcheck(r.Context(), id, &hc)
+	updated, err := h.serviceWriter.UpdateServiceHealthcheck(r.Context(), id, &hc)
 	if err != nil {
 		writeServiceError(w, r, err)
 		return
@@ -845,7 +768,7 @@ func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Requ
 
 	slog.Info("updating service placement", "service", id)
 
-	updated, err := h.writeClient.UpdateServicePlacement(r.Context(), id, &placement)
+	updated, err := h.serviceWriter.UpdateServicePlacement(r.Context(), id, &placement)
 	if err != nil {
 		writeServiceError(w, r, err)
 		return
@@ -920,54 +843,14 @@ func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http
 		current = &swarm.UpdateConfig{}
 	}
 
-	base, err := json.Marshal(current)
-	if err != nil {
-		writeErrorCode(
-			w,
-			r,
-			"API009",
-			"failed to marshal current update policy",
-		)
-		return
-	}
-	var baseMap map[string]any
-	if err := json.Unmarshal(base, &baseMap); err != nil {
-		writeErrorCode(
-			w,
-			r,
-			"API009",
-			"failed to unmarshal current update policy",
-		)
-		return
-	}
-
-	patchBytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		writeErrorCode(w, r, "API007", "failed to read request body")
-		return
-	}
-	var patchMap map[string]any
-	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
-		writeErrorCode(w, r, "API008", "invalid JSON")
-		return
-	}
-
-	mergePatch(baseMap, patchMap)
-
-	merged, err := json.Marshal(baseMap)
-	if err != nil {
-		writeErrorCode(w, r, "API009", "failed to marshal merged update policy")
-		return
-	}
 	var result swarm.UpdateConfig
-	if err := json.Unmarshal(merged, &result); err != nil {
-		writeErrorCode(w, r, "SVC012", "invalid update policy specification")
+	if !applyStructMergePatch(w, r, current, &result, "SVC012", "invalid update policy specification") {
 		return
 	}
 
 	slog.Info("updating service update policy", "service", id)
 
-	updated, err := h.writeClient.UpdateServiceUpdatePolicy(r.Context(), id, &result)
+	updated, err := h.serviceWriter.UpdateServiceUpdatePolicy(r.Context(), id, &result)
 	if err != nil {
 		writeServiceError(w, r, err)
 		return
@@ -1040,59 +923,14 @@ func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *ht
 		current = &swarm.UpdateConfig{}
 	}
 
-	base, err := json.Marshal(current)
-	if err != nil {
-		writeErrorCode(
-			w,
-			r,
-			"API009",
-			"failed to marshal current rollback policy",
-		)
-		return
-	}
-	var baseMap map[string]any
-	if err := json.Unmarshal(base, &baseMap); err != nil {
-		writeErrorCode(
-			w,
-			r,
-			"API009",
-			"failed to unmarshal current rollback policy",
-		)
-		return
-	}
-
-	patchBytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		writeErrorCode(w, r, "API007", "failed to read request body")
-		return
-	}
-	var patchMap map[string]any
-	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
-		writeErrorCode(w, r, "API008", "invalid JSON")
-		return
-	}
-
-	mergePatch(baseMap, patchMap)
-
-	merged, err := json.Marshal(baseMap)
-	if err != nil {
-		writeErrorCode(
-			w,
-			r,
-			"API009",
-			"failed to marshal merged rollback policy",
-		)
-		return
-	}
 	var result swarm.UpdateConfig
-	if err := json.Unmarshal(merged, &result); err != nil {
-		writeErrorCode(w, r, "SVC013", "invalid rollback policy specification")
+	if !applyStructMergePatch(w, r, current, &result, "SVC013", "invalid rollback policy specification") {
 		return
 	}
 
 	slog.Info("updating service rollback policy", "service", id)
 
-	updated, err := h.writeClient.UpdateServiceRollbackPolicy(r.Context(), id, &result)
+	updated, err := h.serviceWriter.UpdateServiceRollbackPolicy(r.Context(), id, &result)
 	if err != nil {
 		writeServiceError(w, r, err)
 		return
@@ -1161,44 +999,14 @@ func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Re
 		current = &swarm.Driver{}
 	}
 
-	base, err := json.Marshal(current)
-	if err != nil {
-		writeErrorCode(w, r, "API009", "failed to marshal current log driver")
-		return
-	}
-	var baseMap map[string]any
-	if err := json.Unmarshal(base, &baseMap); err != nil {
-		writeErrorCode(w, r, "API009", "failed to unmarshal current log driver")
-		return
-	}
-
-	patchBytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		writeErrorCode(w, r, "API007", "failed to read request body")
-		return
-	}
-	var patchMap map[string]any
-	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
-		writeErrorCode(w, r, "API008", "invalid JSON")
-		return
-	}
-
-	mergePatch(baseMap, patchMap)
-
-	merged, err := json.Marshal(baseMap)
-	if err != nil {
-		writeErrorCode(w, r, "API009", "failed to marshal merged log driver")
-		return
-	}
 	var result swarm.Driver
-	if err := json.Unmarshal(merged, &result); err != nil {
-		writeErrorCode(w, r, "SVC019", "invalid log driver specification")
+	if !applyStructMergePatch(w, r, current, &result, "SVC019", "invalid log driver specification") {
 		return
 	}
 
 	slog.Info("updating service log driver", "service", id)
 
-	updated, err := h.writeClient.UpdateServiceLogDriver(r.Context(), id, &result)
+	updated, err := h.serviceWriter.UpdateServiceLogDriver(r.Context(), id, &result)
 	if err != nil {
 		writeServiceError(w, r, err)
 		return
@@ -1244,52 +1052,14 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 		current = svc.Spec.TaskTemplate.ContainerSpec.Healthcheck
 	}
 
-	base, err := json.Marshal(current)
-	if err != nil {
-		writeErrorCode(w, r, "API009", "failed to marshal current healthcheck")
-		return
-	}
-
-	var baseMap map[string]any
-	if err := json.Unmarshal(base, &baseMap); err != nil {
-		writeErrorCode(
-			w,
-			r,
-			"API009",
-			"failed to unmarshal current healthcheck",
-		)
-		return
-	}
-
-	patchBytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		writeErrorCode(w, r, "API007", "failed to read request body")
-		return
-	}
-
-	var patchMap map[string]any
-	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
-		writeErrorCode(w, r, "API008", "invalid JSON")
-		return
-	}
-
-	mergePatch(baseMap, patchMap)
-
-	merged, err := json.Marshal(baseMap)
-	if err != nil {
-		writeErrorCode(w, r, "API009", "failed to marshal merged healthcheck")
-		return
-	}
-
 	var result container.HealthConfig
-	if err := json.Unmarshal(merged, &result); err != nil {
-		writeErrorCode(w, r, "SVC014", "invalid healthcheck specification")
+	if !applyStructMergePatch(w, r, current, &result, "SVC014", "invalid healthcheck specification") {
 		return
 	}
 
 	slog.Info("updating service healthcheck", "service", id)
 
-	updated, err := h.writeClient.UpdateServiceHealthcheck(r.Context(), id, &result)
+	updated, err := h.serviceWriter.UpdateServiceHealthcheck(r.Context(), id, &result)
 	if err != nil {
 		writeServiceError(w, r, err)
 		return
@@ -1404,44 +1174,15 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 	}
 
 	current := containerConfigFromSpec(svc.Spec.TaskTemplate.ContainerSpec)
-	baseBytes, err := json.Marshal(current)
-	if err != nil {
-		writeErrorCode(w, r, "API009", "failed to marshal current config")
-		return
-	}
-	var baseMap map[string]any
-	if err := json.Unmarshal(baseBytes, &baseMap); err != nil {
-		writeErrorCode(w, r, "API009", "failed to unmarshal current config")
-		return
-	}
 
-	patchBytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		writeErrorCode(w, r, "API007", "failed to read request body")
-		return
-	}
-	var patchMap map[string]any
-	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
-		writeErrorCode(w, r, "API008", "invalid JSON")
-		return
-	}
-
-	mergePatch(baseMap, patchMap)
-
-	mergedBytes, err := json.Marshal(baseMap)
-	if err != nil {
-		writeErrorCode(w, r, "API009", "failed to marshal merged config")
-		return
-	}
 	var merged containerConfigResponse
-	if err := json.Unmarshal(mergedBytes, &merged); err != nil {
-		writeErrorCode(w, r, "SVC018", "invalid patch result")
+	if !applyStructMergePatch(w, r, current, &merged, "SVC018", "invalid patch result") {
 		return
 	}
 
 	slog.Info("updating service container config", "service", id)
 
-	updated, err := h.writeClient.UpdateServiceContainerConfig(
+	updated, err := h.serviceWriter.UpdateServiceContainerConfig(
 		r.Context(),
 		id,
 		func(cs *swarm.ContainerSpec) {
@@ -1608,7 +1349,7 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 
 	slog.Info("updating service configs", "service", id)
 
-	updated, err := h.writeClient.UpdateServiceConfigs(r.Context(), id, configs)
+	updated, err := h.serviceWriter.UpdateServiceConfigs(r.Context(), id, configs)
 	if err != nil {
 		writeServiceError(w, r, err)
 		return
@@ -1697,7 +1438,7 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 
 	slog.Info("updating service secrets", "service", id)
 
-	updated, err := h.writeClient.UpdateServiceSecrets(r.Context(), id, secrets)
+	updated, err := h.serviceWriter.UpdateServiceSecrets(r.Context(), id, secrets)
 	if err != nil {
 		writeServiceError(w, r, err)
 		return
@@ -1776,7 +1517,7 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 
 	slog.Info("updating service networks", "service", id)
 
-	updated, err := h.writeClient.UpdateServiceNetworks(r.Context(), id, networks)
+	updated, err := h.serviceWriter.UpdateServiceNetworks(r.Context(), id, networks)
 	if err != nil {
 		writeServiceError(w, r, err)
 		return
@@ -1852,7 +1593,7 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 
 	slog.Info("updating service mounts", "service", id, "count", len(req.Mounts))
 
-	updated, err := h.writeClient.UpdateServiceMounts(r.Context(), id, req.Mounts)
+	updated, err := h.serviceWriter.UpdateServiceMounts(r.Context(), id, req.Mounts)
 	if err != nil {
 		writeServiceError(w, r, err)
 		return

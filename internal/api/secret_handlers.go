@@ -20,9 +20,9 @@ func (h *Handlers) HandleGetSecret(w http.ResponseWriter, r *http.Request) {
 	}
 	// Never expose secret data — clear it before responding.
 	sec.Spec.Data = nil
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", map[string]any{
-		"secret":   sec,
-		"services": h.cache.ServicesUsingSecret(id),
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", SecretResponse{
+		Secret:   sec,
+		Services: h.cache.ServicesUsingSecret(id),
 	}))
 }
 

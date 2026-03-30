@@ -183,17 +183,17 @@ func (h *Handlers) serveLogsSSE(
 	since, streamFilter string,
 ) {
 	for {
-		cur := activeLogSSEConns.Load()
+		cur := h.activeLogSSEConns.Load()
 		if cur >= maxLogSSEConns {
 			w.Header().Set("Retry-After", "5")
 			writeErrorCode(w, r, "LOG001", "too many active log streams")
 			return
 		}
-		if activeLogSSEConns.CompareAndSwap(cur, cur+1) {
+		if h.activeLogSSEConns.CompareAndSwap(cur, cur+1) {
 			break
 		}
 	}
-	defer activeLogSSEConns.Add(-1)
+	defer h.activeLogSSEConns.Add(-1)
 
 	// EventSource sends Last-Event-ID on reconnect; use it as fallback for since
 	if since == "" {

@@ -31,6 +31,8 @@ type History struct {
 
 	// byResource maps resource IDs to a ring of entry indices, enabling
 	// fast filtered lookups without scanning the entire buffer.
+	// Stale index entries (where the main ring has overwritten the slot)
+	// are detected and skipped during iteration in listByResource.
 	byResource map[string]*indexRing
 }
 

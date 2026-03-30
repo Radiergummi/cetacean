@@ -30,6 +30,6 @@ func WhoamiHandler(p Provider) http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
-		_ = json.NewEncoder(w).Encode(id)
+		_ = json.NewEncoder(w).Encode(id) // best-effort: status already sent
 	}
 }

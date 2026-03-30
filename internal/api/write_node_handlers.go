@@ -51,15 +51,9 @@ func (h *Handlers) HandleUpdateNodeAvailability(w http.ResponseWriter, r *http.R
 
 	slog.Info("updating node availability", "node", id, "availability", req.Availability)
 
-	updated, err := h.writeClient.UpdateNodeAvailability(r.Context(), id, availability)
-	if err != nil {
-		writeNodeError(w, r, err)
-		return
-	}
-
-	writeJSON(w, NewDetailResponse(r.Context(), "/nodes/"+id, "Node", map[string]any{
-		"node": updated,
-	}))
+	writeNodeMutation(w, r, id, func() (swarm.Node, error) {
+		return h.nodeWriter.UpdateNodeAvailability(r.Context(), id, availability)
+	})
 }
 
 type updateRoleRequest struct {
@@ -95,15 +89,9 @@ func (h *Handlers) HandleUpdateNodeRole(w http.ResponseWriter, r *http.Request) 
 
 	slog.Info("updating node role", "node", id, "role", req.Role)
 
-	updated, err := h.writeClient.UpdateNodeRole(r.Context(), id, role)
-	if err != nil {
-		writeNodeError(w, r, err)
-		return
-	}
-
-	writeJSON(w, NewDetailResponse(r.Context(), "/nodes/"+id, "Node", map[string]any{
-		"node": updated,
-	}))
+	writeNodeMutation(w, r, id, func() (swarm.Node, error) {
+		return h.nodeWriter.UpdateNodeRole(r.Context(), id, role)
+	})
 }
 
 func (h *Handlers) HandleRemoveNode(w http.ResponseWriter, r *http.Request) {
@@ -119,7 +107,7 @@ func (h *Handlers) HandleRemoveNode(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("removing node", "node", id, "force", force)
 
-	err := h.writeClient.RemoveNode(r.Context(), id, force)
+	err := h.nodeWriter.RemoveNode(r.Context(), id, force)
 	if err != nil {
 		if !force && (cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err)) {
 			writeErrorCode(w, r, "NOD001", err.Error())
@@ -148,10 +136,10 @@ func (h *Handlers) HandleGetNodeRole(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSONWithETag(w, r, map[string]any{
-		"role":         string(node.Spec.Role),
-		"isLeader":     node.ManagerStatus != nil && node.ManagerStatus.Leader,
-		"managerCount": managerCount,
+	writeJSONWithETag(w, r, NodeRoleResponse{
+		Role:         string(node.Spec.Role),
+		IsLeader:     node.ManagerStatus != nil && node.ManagerStatus.Leader,
+		ManagerCount: managerCount,
 	})
 }
 
@@ -166,13 +154,9 @@ func (h *Handlers) HandleGetNodeLabels(w http.ResponseWriter, r *http.Request) {
 	if labels == nil {
 		labels = map[string]string{}
 	}
-	writeJSONWithETag(
-		w,
-		r,
-		NewDetailResponse(r.Context(), "/nodes/"+id+"/labels", "NodeLabels", map[string]any{
-			"labels": labels,
-		}),
-	)
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/nodes/"+id+"/labels", "NodeLabels", LabelsResponse{
+		Labels: labels,
+	}))
 }
 
 func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request) {
@@ -229,7 +213,7 @@ func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request)
 
 	slog.Info("patching node labels", "node", id)
 
-	result, err := h.writeClient.UpdateNodeLabels(r.Context(), id, updated)
+	result, err := h.nodeWriter.UpdateNodeLabels(r.Context(), id, updated)
 	if err != nil {
 		writeNodeError(w, r, err)
 		return

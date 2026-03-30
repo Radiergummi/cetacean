@@ -10,21 +10,17 @@ import (
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/recommendations"
-	"github.com/radiergummi/cetacean/internal/version"
 )
 
 func (h *Handlers) HandleRecommendations(w http.ResponseWriter, r *http.Request) {
 	results := h.recEngine.Results()
 	summary := recommendations.ComputeSummary(results)
-	writeJSONWithETag(w, r, NewDetailResponse(
-		r.Context(), "/recommendations", "RecommendationCollection",
-		map[string]any{
-			"items":      results,
-			"total":      len(results),
-			"summary":    summary,
-			"computedAt": h.recEngine.LastTick(),
-		},
-	))
+	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/recommendations", "RecommendationCollection", RecommendationsResponse{
+		Items:      results,
+		Total:      len(results),
+		Summary:    summary,
+		ComputedAt: h.recEngine.LastTick(),
+	}))
 }
 
 func (h *Handlers) streamList(w http.ResponseWriter, r *http.Request, typ cache.EventType) {
@@ -52,13 +48,7 @@ func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
 		status = "error"
 	}
 
-	writeJSON(w, map[string]any{
-		"status":          status,
-		"version":         version.Version,
-		"commit":          version.Commit,
-		"buildDate":       version.Date,
-		"operationsLevel": h.operationsLevel,
-	})
+	writeJSON(w, NewHealthResponse(status, h.operationsLevel))
 }
 
 func (h *Handlers) HandleReady(w http.ResponseWriter, r *http.Request) {
@@ -80,7 +70,7 @@ func writeJSONStatus(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(v) // best-effort: status already sent
 }
 
 // HandleProfile returns the authenticated user's identity as JSON.

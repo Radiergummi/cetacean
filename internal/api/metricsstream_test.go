@@ -34,13 +34,12 @@ func TestMetricsStream_NoPromClient(t *testing.T) {
 }
 
 func TestMetricsStream_ConnectionLimit(t *testing.T) {
-	metricsStreamCount.Store(int32(maxMetricsStreamClients))
-	defer metricsStreamCount.Store(0)
-
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer srv.Close()
 
 	h := &Handlers{promClient: promapi.NewClient(srv.URL)}
+	h.metricsStreamCount.Store(int32(maxMetricsStreamClients))
+	defer h.metricsStreamCount.Store(0)
 	req := httptest.NewRequest("GET", "/-/metrics/query_range?query=up", nil)
 	w := httptest.NewRecorder()
 	h.HandleMetricsStream(w, req)
@@ -53,9 +52,6 @@ func TestMetricsStream_ConnectionLimit(t *testing.T) {
 }
 
 func TestMetricsStream_StreamsEvents(t *testing.T) {
-	testTickerInterval = 10 * time.Millisecond
-	defer func() { testTickerInterval = 0 }()
-
 	queryCount := atomic.Int32{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		queryCount.Add(1)
@@ -68,7 +64,10 @@ func TestMetricsStream_StreamsEvents(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	h := &Handlers{promClient: promapi.NewClient(srv.URL)}
+	h := &Handlers{
+		promClient:     promapi.NewClient(srv.URL),
+		tickerInterval: 10 * time.Millisecond,
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
@@ -95,9 +94,6 @@ func TestMetricsStream_StreamsEvents(t *testing.T) {
 }
 
 func TestMetricsStream_FullLifecycle(t *testing.T) {
-	testTickerInterval = 20 * time.Millisecond
-	defer func() { testTickerInterval = 0 }()
-
 	queryCount := atomic.Int32{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		queryCount.Add(1)
@@ -119,7 +115,10 @@ func TestMetricsStream_FullLifecycle(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	h := &Handlers{promClient: promapi.NewClient(srv.URL)}
+	h := &Handlers{
+		promClient:     promapi.NewClient(srv.URL),
+		tickerInterval: 20 * time.Millisecond,
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
@@ -144,7 +143,7 @@ func TestMetricsStream_FullLifecycle(t *testing.T) {
 	if queryCount.Load() < 2 {
 		t.Errorf("expected at least 2 Prometheus calls, got %d", queryCount.Load())
 	}
-	if metricsStreamCount.Load() != 0 {
+	if h.metricsStreamCount.Load() != 0 {
 		t.Error("connection counter should be 0 after handler returns")
 	}
 }

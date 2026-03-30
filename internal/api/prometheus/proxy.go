@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -13,10 +14,17 @@ import (
 // This decouples the Prometheus package from the API error registry.
 type ErrorWriter func(w http.ResponseWriter, r *http.Request, code, detail string)
 
-// defaultWriteError is a package-level error writer used by nil-receiver
-// handlers. Set by NewProxy so the nil-proxy case still produces structured
-// error responses matching the rest of the API.
-var defaultWriteError ErrorWriter
+// nilProxyErrorWriter is used by nil-receiver handlers to produce structured
+// error responses matching the rest of the API. Must be set during
+// initialization (before serving requests) via SetNilProxyErrorWriter.
+var nilProxyErrorWriter atomic.Pointer[ErrorWriter]
+
+// SetNilProxyErrorWriter registers the error writer used when a nil *Proxy
+// receives a request (i.e., Prometheus is not configured). Must be called
+// during initialization, before any requests are served.
+func SetNilProxyErrorWriter(w ErrorWriter) {
+	nilProxyErrorWriter.Store(&w)
+}
 
 type Proxy struct {
 	baseURL    string
@@ -25,7 +33,7 @@ type Proxy struct {
 }
 
 func NewProxy(baseURL string, writeError ErrorWriter) *Proxy {
-	defaultWriteError = writeError
+	SetNilProxyErrorWriter(writeError)
 	return &Proxy{
 		baseURL:    strings.TrimRight(baseURL, "/"),
 		client:     &http.Client{Timeout: 30 * time.Second},
@@ -139,8 +147,8 @@ func (p *Proxy) HandleMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeNilProxyError(w http.ResponseWriter, r *http.Request) {
-	if defaultWriteError != nil {
-		defaultWriteError(w, r, "MTR001", "prometheus not configured")
+	if ew := nilProxyErrorWriter.Load(); ew != nil {
+		(*ew)(w, r, "MTR001", "prometheus not configured")
 		return
 	}
 
