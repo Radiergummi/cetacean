@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Sub-path support: serve Cetacean under a configurable URL prefix (e.g., `/cetacean/`) via `CETACEAN_BASE_PATH` environment variable or `base_path` TOML config
 - Recommendation feed: a `/recommendations` page aggregating cluster health checks across four domains — resource sizing, config hygiene (missing health checks, restart policies), operational health (flaky services, disk/memory pressure), and cluster topology (single replicas, manager workloads, uneven distribution). Dashboard shows a severity summary card. One-click fixes for safely auto-fixable recommendations.
 - Detect label-based integrations (Traefik, Shepherd, Swarm Cronjob, Diun) on services and display as structured panels on the service detail page
 - Edit integration settings inline with structured forms or raw label editing, writing changes back as Docker label mutations

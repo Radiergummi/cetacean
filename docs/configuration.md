@@ -16,6 +16,7 @@ Supported `_FILE` variants: `CETACEAN_AUTH_OIDC_CLIENT_SECRET_FILE`, `CETACEAN_A
 | Flag              | Env var                       | Config file key             | Default                       | Description                                                                    |
 |-------------------|-------------------------------|-----------------------------|-------------------------------|--------------------------------------------------------------------------------|
 | `-listen`         | `CETACEAN_LISTEN_ADDR`        | `server.listen_addr`        | `:9000`                       | HTTP server bind address                                                       |
+| `-base-path`      | `CETACEAN_BASE_PATH`          | `server.base_path`          | _—_                           | URL base path prefix for sub-path deployments (e.g., `/cetacean`)              |
 | `-docker-host`    | `CETACEAN_DOCKER_HOST`        | `docker.host`               | `unix:///var/run/docker.sock` | Docker socket URI                                                              |
 | `-prometheus-url` | `CETACEAN_PROMETHEUS_URL`     | `prometheus.url`            | _—_                           | Prometheus base URL. Unset = metrics disabled.                                 |
 | `-log-level`      | `CETACEAN_LOG_LEVEL`          | `logging.level`             | `info`                        | `debug`, `info`, `warn`, `error`                                               |
@@ -31,6 +32,30 @@ Supported `_FILE` variants: `CETACEAN_AUTH_OIDC_CLIENT_SECRET_FILE`, `CETACEAN_A
 | `-version`        | _—_                           | _—_                         | _—_                           | Print version and exit                                                         |
 
 TLS cert and key must be set together or not at all. Required for `cert` auth mode (mTLS), optional otherwise.
+
+### Sub-Path Deployment
+
+Set `CETACEAN_BASE_PATH` to serve Cetacean under a URL prefix, for example behind a reverse proxy that routes
+`/cetacean/` to your Cetacean instance:
+
+```bash
+CETACEAN_BASE_PATH=/cetacean
+```
+
+Or in TOML:
+
+```toml
+[server]
+base_path = "/cetacean"
+```
+
+The value is normalized (leading slash added, trailing slash removed). All API responses, SSE endpoints, auth cookies,
+and the frontend router automatically adjust to the configured prefix. No frontend rebuild is needed — the base path is
+injected at runtime via a `<base>` tag.
+
+When deploying behind a reverse proxy that **preserves** the path prefix (e.g., forwards `/cetacean/nodes` as-is), set
+`CETACEAN_BASE_PATH=/cetacean`. When the proxy **strips** the prefix before forwarding, leave `CETACEAN_BASE_PATH`
+unset.
 
 ## Authentication and Authorization Settings
 
