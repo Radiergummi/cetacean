@@ -246,7 +246,7 @@ func main() {
 		slog.Error("failed to create sub FS", "error", err)
 		os.Exit(1)
 	}
-	spa := api.NewSPAHandler(distFS)
+	spa := api.NewSPAHandler(distFS, cfg.BasePath)
 
 	if cfg.Pprof {
 		slog.Warn("pprof endpoints enabled", "path", "/debug/pprof/")

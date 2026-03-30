@@ -188,7 +188,7 @@ func TestNewSPAHandler_ServesFile(t *testing.T) {
 		"index.html":     {Data: []byte("<html>app</html>")},
 		"assets/main.js": {Data: []byte("console.log('ok')")},
 	}
-	handler := NewSPAHandler(fs.FS(fsys))
+	handler := NewSPAHandler(fs.FS(fsys), "")
 
 	req := httptest.NewRequest("GET", "/assets/main.js", nil)
 	w := httptest.NewRecorder()
@@ -206,7 +206,7 @@ func TestNewSPAHandler_FallbackToIndex(t *testing.T) {
 	fsys := fstest.MapFS{
 		"index.html": {Data: []byte("<html>app</html>")},
 	}
-	handler := NewSPAHandler(fs.FS(fsys))
+	handler := NewSPAHandler(fs.FS(fsys), "")
 
 	req := httptest.NewRequest("GET", "/some/route", nil)
 	w := httptest.NewRecorder()
@@ -270,7 +270,7 @@ func TestNewRouter_Smoke(t *testing.T) {
 	defer b.Close()
 	prom := promapi.NewProxy("http://localhost:9090", noopErrorWriter)
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}
-	spa := NewSPAHandler(fs.FS(fsys))
+	spa := NewSPAHandler(fs.FS(fsys), "")
 
 	router := NewRouter(
 		h,
