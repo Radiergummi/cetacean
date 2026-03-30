@@ -1,4 +1,4 @@
-package api
+package sse
 
 import (
 	"fmt"
@@ -22,7 +22,11 @@ type sseClient struct {
 	done   chan struct{}
 }
 
-const maxSSEClients = 256
+const MaxClients = 256
+
+// ErrorWriter is a callback for writing HTTP error responses.
+// This decouples the SSE package from the API error registry.
+type ErrorWriter func(w http.ResponseWriter, r *http.Request, code, detail string)
 
 type Broadcaster struct {
 	mu            sync.RWMutex
@@ -31,9 +35,10 @@ type Broadcaster struct {
 	inbox         chan cache.Event
 	stop          chan struct{}
 	batchInterval time.Duration
+	writeError    ErrorWriter
 }
 
-func NewBroadcaster(batchInterval time.Duration) *Broadcaster {
+func NewBroadcaster(batchInterval time.Duration, writeError ErrorWriter) *Broadcaster {
 	if batchInterval <= 0 {
 		batchInterval = 100 * time.Millisecond
 	}
@@ -42,6 +47,7 @@ func NewBroadcaster(batchInterval time.Duration) *Broadcaster {
 		inbox:         make(chan cache.Event, 256),
 		stop:          make(chan struct{}),
 		batchInterval: batchInterval,
+		writeError:    writeError,
 	}
 	go b.fanOut()
 	return b
@@ -100,19 +106,19 @@ func (b *Broadcaster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		for typ := range strings.SplitSeq(t, ",") {
 			types[strings.TrimSpace(typ)] = true
 		}
-		match = func(e cache.Event) bool { return types[e.Type] }
+		match = func(e cache.Event) bool { return types[string(e.Type)] }
 	}
-	b.serveSSE(w, r, match)
+	b.ServeSSE(w, r, match)
 }
 
-func (b *Broadcaster) serveSSE(
+func (b *Broadcaster) ServeSSE(
 	w http.ResponseWriter,
 	r *http.Request,
 	match func(cache.Event) bool,
 ) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		writeErrorCode(w, r, "API005", "streaming not supported")
+		b.writeError(w, r, "API005", "streaming not supported")
 		return
 	}
 
@@ -127,10 +133,10 @@ func (b *Broadcaster) serveSSE(
 		b.mu.Unlock()
 		return
 	}
-	if len(b.clients) >= maxSSEClients {
+	if len(b.clients) >= MaxClients {
 		b.mu.Unlock()
 		w.Header().Set("Retry-After", "5")
-		writeErrorCode(w, r, "SSE001", "too many SSE connections")
+		b.writeError(w, r, "SSE001", "too many SSE connections")
 		return
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -164,92 +170,92 @@ func (b *Broadcaster) serveSSE(
 		case e, ok := <-client.events:
 			if !ok {
 				if len(batch) > 0 {
-					writeBatch(w, flusher, batch, &eventID)
+					WriteBatch(w, flusher, batch, &eventID)
 				}
 				return
 			}
 			batch = append(batch, e)
 		case <-batchTicker.C:
 			if len(batch) > 0 {
-				writeBatch(w, flusher, batch, &eventID)
+				WriteBatch(w, flusher, batch, &eventID)
 				batch = batch[:0]
 			}
 		case <-r.Context().Done():
 			if len(batch) > 0 {
-				writeBatch(w, flusher, batch, &eventID)
+				WriteBatch(w, flusher, batch, &eventID)
 			}
 			return
 		case <-client.done:
 			if len(batch) > 0 {
-				writeBatch(w, flusher, batch, &eventID)
+				WriteBatch(w, flusher, batch, &eventID)
 			}
 			return
 		}
 	}
 }
 
-// typeMatcher returns a match function that accepts events of the given type.
+// TypeMatcher returns a match function that accepts events of the given type.
 // Sync events always pass through so clients can trigger a full refetch.
-func typeMatcher(typ string) func(cache.Event) bool {
+func TypeMatcher(typ cache.EventType) func(cache.Event) bool {
 	return func(e cache.Event) bool {
-		return e.Type == typ || e.Type == "sync"
+		return e.Type == typ || e.Type == cache.EventSync
 	}
 }
 
-// resourceMatcher returns a match function for per-resource SSE streams.
+// ResourceMatcher returns a match function for per-resource SSE streams.
 // Sync events always pass through so clients can trigger a full refetch.
-func resourceMatcher(typ, id string) func(cache.Event) bool {
+func ResourceMatcher(typ cache.EventType, id string) func(cache.Event) bool {
 	switch typ {
-	case "node":
+	case cache.EventNode:
 		return func(e cache.Event) bool {
-			if e.Type == "sync" {
+			if e.Type == cache.EventSync {
 				return true
 			}
-			if e.Type == "node" && e.ID == id {
+			if e.Type == cache.EventNode && e.ID == id {
 				return true
 			}
-			if e.Type == "task" {
+			if e.Type == cache.EventTask {
 				if t, ok := e.Resource.(swarm.Task); ok {
 					return t.NodeID == id
 				}
 			}
 			return false
 		}
-	case "service":
+	case cache.EventService:
 		return func(e cache.Event) bool {
-			if e.Type == "sync" {
+			if e.Type == cache.EventSync {
 				return true
 			}
-			if e.Type == "service" && e.ID == id {
+			if e.Type == cache.EventService && e.ID == id {
 				return true
 			}
-			if e.Type == "task" {
+			if e.Type == cache.EventTask {
 				if t, ok := e.Resource.(swarm.Task); ok {
 					return t.ServiceID == id
 				}
 			}
 			return false
 		}
-	case "task":
+	case cache.EventTask:
 		return func(e cache.Event) bool {
-			return e.Type == "sync" || (e.Type == "task" && e.ID == id)
+			return e.Type == cache.EventSync || (e.Type == cache.EventTask && e.ID == id)
 		}
 	default:
 		// config, secret, network, volume — match by type+ID.
 		// Cross-reference "ref_changed" events already have the correct type+ID.
 		return func(e cache.Event) bool {
-			return e.Type == "sync" || (e.Type == typ && e.ID == id)
+			return e.Type == cache.EventSync || (e.Type == typ && e.ID == id)
 		}
 	}
 }
 
-// stackMatcher returns a match function for stack SSE streams.
+// StackMatcher returns a match function for stack SSE streams.
 // Looks up the current stack membership from the cache on every event so that
 // newly added or removed services are immediately reflected in the stream.
 // Sync events always pass through so clients can trigger a full refetch.
-func stackMatcher(c *cache.Cache, name string) func(cache.Event) bool {
+func StackMatcher(c *cache.Cache, name string) func(cache.Event) bool {
 	return func(e cache.Event) bool {
-		if e.Type == "sync" {
+		if e.Type == cache.EventSync {
 			return true
 		}
 		stack, ok := c.GetStack(name)
@@ -257,17 +263,17 @@ func stackMatcher(c *cache.Cache, name string) func(cache.Event) bool {
 			return false
 		}
 		switch e.Type {
-		case "service":
+		case cache.EventService:
 			return slices.Contains(stack.Services, e.ID)
-		case "config":
+		case cache.EventConfig:
 			return slices.Contains(stack.Configs, e.ID)
-		case "secret":
+		case cache.EventSecret:
 			return slices.Contains(stack.Secrets, e.ID)
-		case "network":
+		case cache.EventNetwork:
 			return slices.Contains(stack.Networks, e.ID)
-		case "volume":
+		case cache.EventVolume:
 			return slices.Contains(stack.Volumes, e.ID)
-		case "task":
+		case cache.EventTask:
 			if t, ok := e.Resource.(swarm.Task); ok {
 				return slices.Contains(stack.Services, t.ServiceID)
 			}
@@ -278,8 +284,8 @@ func stackMatcher(c *cache.Cache, name string) func(cache.Event) bool {
 	}
 }
 
-// sseEvent is the JSON-LD enriched wire format for SSE event payloads.
-type sseEvent struct {
+// Event is the JSON-LD enriched wire format for SSE event payloads.
+type Event struct {
 	AtID     string `json:"@id,omitempty"`
 	AtType   string `json:"@type,omitempty"`
 	Type     string `json:"type"`
@@ -288,74 +294,74 @@ type sseEvent struct {
 	Resource any    `json:"resource,omitempty"`
 }
 
-func toSSEEvent(e cache.Event) sseEvent {
-	return sseEvent{
-		AtID:     resourcePath(e.Type, e.ID),
-		AtType:   resourceType(e.Type),
-		Type:     e.Type,
+func ToSSEEvent(e cache.Event) Event {
+	return Event{
+		AtID:     ResourcePath(e.Type, e.ID),
+		AtType:   ResourceType(e.Type),
+		Type:     string(e.Type),
 		Action:   e.Action,
 		ID:       e.ID,
 		Resource: e.Resource,
 	}
 }
 
-// resourcePath returns the canonical API path for a resource.
-func resourcePath(typ, id string) string {
+// ResourcePath returns the canonical API path for a resource.
+func ResourcePath(typ cache.EventType, id string) string {
 	switch typ {
-	case "node":
+	case cache.EventNode:
 		return "/nodes/" + id
-	case "service":
+	case cache.EventService:
 		return "/services/" + id
-	case "task":
+	case cache.EventTask:
 		return "/tasks/" + id
-	case "config":
+	case cache.EventConfig:
 		return "/configs/" + id
-	case "secret":
+	case cache.EventSecret:
 		return "/secrets/" + id
-	case "network":
+	case cache.EventNetwork:
 		return "/networks/" + id
-	case "volume":
+	case cache.EventVolume:
 		return "/volumes/" + id
-	case "stack":
+	case cache.EventStack:
 		return "/stacks/" + id
 	default:
 		return ""
 	}
 }
 
-// resourceType returns the JSON-LD @type for a resource type string.
-func resourceType(typ string) string {
+// ResourceType returns the JSON-LD @type for a resource type string.
+func ResourceType(typ cache.EventType) string {
 	switch typ {
-	case "node":
+	case cache.EventNode:
 		return "Node"
-	case "service":
+	case cache.EventService:
 		return "Service"
-	case "task":
+	case cache.EventTask:
 		return "Task"
-	case "config":
+	case cache.EventConfig:
 		return "Config"
-	case "secret":
+	case cache.EventSecret:
 		return "Secret"
-	case "network":
+	case cache.EventNetwork:
 		return "Network"
-	case "volume":
+	case cache.EventVolume:
 		return "Volume"
-	case "stack":
+	case cache.EventStack:
 		return "Stack"
 	default:
 		return ""
 	}
 }
 
-func writeBatch(w io.Writer, flusher http.Flusher, events []cache.Event, eventID *uint64) {
+func WriteBatch(w io.Writer, flusher http.Flusher, events []cache.Event, eventID *uint64) {
 	*eventID++
 	if len(events) == 1 {
-		data, _ := json.Marshal(toSSEEvent(events[0]))
+		data, _ := json.Marshal(ToSSEEvent(events[0]))
 		fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", *eventID, events[0].Type, data)
 	} else {
-		enriched := make([]sseEvent, len(events))
+		enriched := make([]Event, len(events))
 		for i, e := range events {
-			enriched[i] = toSSEEvent(e)
+			enriched[i] = ToSSEEvent(e)
 		}
 		data, _ := json.Marshal(enriched)
 		fmt.Fprintf(w, "id: %d\nevent: batch\ndata: %s\n\n", *eventID, data)

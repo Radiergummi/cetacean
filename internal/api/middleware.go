@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
@@ -79,8 +80,11 @@ func (w *statusWriter) Flush() {
 func discoveryLinks(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(r.URL.Path, "/-/") {
-			w.Header().Add("Link", `</api>; rel="service-desc"`)
-			w.Header().Add("Link", `</api/context.jsonld>; rel="describedby"`)
+			ctx := r.Context()
+			w.Header().Add("Link", fmt.Sprintf(`<%s>; rel="service-desc"`, absPath(ctx, "/api")))
+			w.Header().Add("Link", fmt.Sprintf(
+				`<%s>; rel="describedby"`, absPath(ctx, "/api/context.jsonld"),
+			))
 		}
 		next.ServeHTTP(w, r)
 	})

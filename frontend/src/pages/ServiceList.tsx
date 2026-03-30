@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { Service, ServiceListItem } from "../api/types";
+import type { Recommendation, Service, ServiceListItem } from "../api/types";
 import DataTable, { type Column } from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import ErrorBoundary from "../components/ErrorBoundary";
@@ -10,14 +10,17 @@ import { MetricsPanel, TaskSparkline } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import ResourceCard from "../components/ResourceCard";
 import ResourceName from "../components/ResourceName";
+import { SizingBadge } from "../components/SizingBadge";
 import SortIndicator from "../components/SortIndicator";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { useRecommendations } from "../hooks/useRecommendations";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { useServiceMetrics } from "../hooks/useServiceMetrics";
 import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useViewMode } from "../hooks/useViewMode";
-import { useCallback } from "react";
+import { sizingCategories } from "../lib/sizingUtils";
+import { useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 function ReplicaHealth({ running, desired }: { running: number; desired: number }) {
@@ -69,6 +72,27 @@ export default function ServiceList() {
     monitoring?.prometheusReachable &&
     !!monitoring?.cadvisor?.targets;
   const { getForService } = useServiceMetrics();
+  const { items: recommendations, hasData: hasRecommendations } = useRecommendations();
+
+  const recommendationsByService = useMemo(() => {
+    const map = new Map<string, Recommendation[]>();
+
+    for (const recommendation of recommendations) {
+      if (recommendation.scope !== "service" || !sizingCategories.has(recommendation.category)) {
+        continue;
+      }
+
+      const existing = map.get(recommendation.targetId);
+
+      if (existing) {
+        existing.push(recommendation);
+      } else {
+        map.set(recommendation.targetId, [recommendation]);
+      }
+    }
+
+    return map;
+  }, [recommendations]);
 
   const baseColumns: Column<ServiceListItem>[] = [
     {
@@ -179,7 +203,19 @@ export default function ServiceList() {
       ]
     : [];
 
-  const columns: Column<ServiceListItem>[] = [...baseColumns, ...metricsColumns];
+  const sizingColumns: Column<ServiceListItem>[] = hasRecommendations
+    ? [
+        {
+          header: "Sizing",
+          cell: ({ ID }) => {
+            const hints = recommendationsByService.get(ID) ?? [];
+            return <SizingBadge hints={hints} />;
+          },
+        },
+      ]
+    : [];
+
+  const columns: Column<ServiceListItem>[] = [...baseColumns, ...metricsColumns, ...sizingColumns];
 
   if (loading) {
     return (

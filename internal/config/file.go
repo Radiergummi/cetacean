@@ -55,6 +55,19 @@ type fileConfig struct {
 	Storage *fileStorage `toml:"storage"`
 	TLS     *fileTLS     `toml:"tls"`
 	Auth    *fileAuth    `toml:"auth"`
+	Sizing  *fileSizing  `toml:"sizing"`
+}
+
+type fileSizing struct {
+	Headroom   *float64              `toml:"headroom_multiplier"`
+	Thresholds *fileSizingThresholds `toml:"thresholds"`
+}
+
+type fileSizingThresholds struct {
+	OverProvisioned  *float64 `toml:"over_provisioned"`
+	ApproachingLimit *float64 `toml:"approaching_limit"`
+	AtLimit          *float64 `toml:"at_limit"`
+	Lookback         *string  `toml:"lookback"`
 }
 
 type fileServer struct {
@@ -62,6 +75,7 @@ type fileServer struct {
 	Pprof           *bool    `toml:"pprof"`
 	SSE             *fileSSE `toml:"sse"`
 	OperationsLevel *int     `toml:"operations_level"`
+	BasePath        *string  `toml:"base_path"`
 }
 
 type fileSSE struct {

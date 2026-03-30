@@ -1,7 +1,8 @@
 import { useMetricsPanelContext } from "./MetricsPanelContext";
 import type { Threshold } from "./TimeSeriesChart";
 import TimeSeriesChart from "./TimeSeriesChart";
-import { useCallback, useRef, useState } from "react";
+import { splitStackPrefix } from "@/lib/searchConstants";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 interface Props {
   title: string;
@@ -71,6 +72,11 @@ export default function StackDrillDownChart({
 
   const chartTitle = drillStack ? `${title} (${drillStack})` : title;
 
+  const stripStackPrefix = useMemo(
+    () => (drillStack ? (label: string) => splitStackPrefix(label).name : undefined),
+    [drillStack],
+  );
+
   return (
     <div>
       <TimeSeriesChart
@@ -89,6 +95,7 @@ export default function StackDrillDownChart({
         onSeriesInfo={setSeriesInfo}
         isolatedLabel={isolatedLabel}
         onIsolationChange={setIsolatedLabel}
+        labelTransform={stripStackPrefix}
       />
       <div className="mt-1">
         <button
@@ -101,6 +108,7 @@ export default function StackDrillDownChart({
         {showLegend && seriesInfo.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
             {seriesInfo.map(({ color, label }, index) => {
+              const displayLabel = drillStack ? splitStackPrefix(label).name : label;
               const dimmed = isolatedLabel != null && isolatedLabel !== label;
               const faded = index >= 10 && !showAll;
 
@@ -115,7 +123,7 @@ export default function StackDrillDownChart({
                     className="h-2 w-2 shrink-0 rounded-full"
                     style={{ background: color }}
                   />
-                  {label}
+                  {displayLabel}
                 </button>
               );
             })}

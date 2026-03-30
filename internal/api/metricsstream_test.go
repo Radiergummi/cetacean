@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	promapi "github.com/radiergummi/cetacean/internal/api/prometheus"
 )
 
 func TestMetricsStream_MissingQuery(t *testing.T) {
@@ -38,7 +40,7 @@ func TestMetricsStream_ConnectionLimit(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer srv.Close()
 
-	h := &Handlers{promClient: NewPromClient(srv.URL)}
+	h := &Handlers{promClient: promapi.NewClient(srv.URL)}
 	req := httptest.NewRequest("GET", "/-/metrics/query_range?query=up", nil)
 	w := httptest.NewRecorder()
 	h.HandleMetricsStream(w, req)
@@ -66,7 +68,7 @@ func TestMetricsStream_StreamsEvents(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	h := &Handlers{promClient: NewPromClient(srv.URL)}
+	h := &Handlers{promClient: promapi.NewClient(srv.URL)}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
@@ -117,7 +119,7 @@ func TestMetricsStream_FullLifecycle(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	h := &Handlers{promClient: NewPromClient(srv.URL)}
+	h := &Handlers{promClient: promapi.NewClient(srv.URL)}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
@@ -154,7 +156,7 @@ func TestMetricsStream_ErrorEvent(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	h := &Handlers{promClient: NewPromClient(srv.URL)}
+	h := &Handlers{promClient: promapi.NewClient(srv.URL)}
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 

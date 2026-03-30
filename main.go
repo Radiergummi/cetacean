@@ -17,10 +17,13 @@ import (
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/api"
+	promapi "github.com/radiergummi/cetacean/internal/api/prometheus"
+	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/docker"
+	"github.com/radiergummi/cetacean/internal/recommendations"
 	"github.com/radiergummi/cetacean/internal/version"
 	"tailscale.com/tsnet"
 )
@@ -116,6 +119,7 @@ func main() {
 			RedirectURL:  authCfg.OIDC.RedirectURL,
 			Scopes:       authCfg.OIDC.Scopes,
 			SessionKey:   authCfg.OIDC.SessionKey,
+			BasePath:     cfg.BasePath,
 		})
 		if err != nil {
 			slog.Error("OIDC provider setup failed", "error", err)
@@ -149,7 +153,7 @@ func main() {
 	}
 
 	// SSE broadcaster
-	broadcaster := api.NewBroadcaster(cfg.SSEBatchInterval)
+	broadcaster := sse.NewBroadcaster(cfg.SSEBatchInterval, api.WriteErrorCode)
 	defer broadcaster.Close()
 
 	// State cache — broadcasts changes via SSE
@@ -188,15 +192,46 @@ func main() {
 	go watcher.Run(ctx)
 
 	// API — pass ready channel so /-/ready reports sync status
-	var promClient *api.PromClient
-	var metricsProxy *api.PrometheusProxy
+	var promClient *promapi.Client
+	var metricsProxy *promapi.Proxy
 	if cfg.PrometheusURL != "" {
-		promClient = api.NewPromClient(cfg.PrometheusURL)
-		metricsProxy = api.NewPrometheusProxy(cfg.PrometheusURL)
+		promClient = promapi.NewClient(cfg.PrometheusURL)
+		metricsProxy = promapi.NewProxy(cfg.PrometheusURL, api.WriteErrorCode)
 		slog.Info("prometheus configured", "url", cfg.PrometheusURL)
 	} else {
 		slog.Warn("prometheus not configured, metrics disabled")
 	}
+	// Recommendations engine
+	sizingCfg, err := config.LoadSizing(fc)
+	if err != nil {
+		slog.Error("failed to load sizing config", "error", err)
+		os.Exit(1)
+	}
+
+	var checkers []recommendations.Checker
+	// Always register cache-only checkers.
+	checkers = append(checkers,
+		recommendations.NewConfigChecker(stateCache),
+		recommendations.NewClusterChecker(stateCache),
+	)
+	// Register Prometheus-dependent checkers when available.
+	if promClient != nil {
+		checkers = append(
+			checkers,
+			recommendations.NewSizingChecker(promClient.InstantQuery, stateCache, sizingCfg),
+			recommendations.NewOperationalChecker(
+				promClient.InstantQuery,
+				stateCache,
+				sizingCfg.Lookback,
+			),
+		)
+	}
+	recEngine := recommendations.NewEngine(checkers...)
+	if recEngine != nil {
+		go recEngine.Run(ctx)
+		slog.Info("recommendation engine started", "checkers", len(checkers))
+	}
+
 	slog.Info("operations level", "level", cfg.OperationsLevel)
 	handlers := api.NewHandlers(
 		stateCache,
@@ -208,6 +243,7 @@ func main() {
 		watcher.Ready(),
 		promClient,
 		cfg.OperationsLevel,
+		recEngine,
 	)
 
 	// SPA
@@ -216,7 +252,7 @@ func main() {
 		slog.Error("failed to create sub FS", "error", err)
 		os.Exit(1)
 	}
-	spa := api.NewSPAHandler(distFS)
+	spa := api.NewSPAHandler(distFS, cfg.BasePath)
 
 	if cfg.Pprof {
 		slog.Warn("pprof endpoints enabled", "path", "/debug/pprof/")
@@ -231,6 +267,7 @@ func main() {
 		scalarJS,
 		cfg.Pprof,
 		authProvider,
+		cfg.BasePath,
 	)
 
 	var serverTLSConfig *tls.Config
@@ -281,6 +318,8 @@ func main() {
 		"server started",
 		"addr",
 		cfg.ListenAddr,
+		"base_path",
+		cfg.BasePath,
 		"version",
 		version.Version,
 		"commit",
@@ -307,6 +346,7 @@ func runHealthcheck() int {
 	if addr == "" {
 		addr = ":9000"
 	}
+	basePath := config.NormalizeBasePath(os.Getenv("CETACEAN_BASE_PATH"))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -314,7 +354,7 @@ func runHealthcheck() int {
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		"http://localhost"+addr+"/-/ready",
+		"http://localhost"+addr+basePath+"/-/ready",
 		nil,
 	)
 	if err != nil {

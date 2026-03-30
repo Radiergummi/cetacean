@@ -59,7 +59,7 @@ export function LogSearch({
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Filter logs…"
-          className="h-8 w-56 max-w-full rounded-md border bg-background pr-16 pl-7 font-mono text-xs"
+          className="h-8 w-56 max-w-full rounded-md border bg-background ps-7 pe-16 font-mono text-xs"
           onKeyDown={(event) => {
             if (event.key === "Escape") {
               setSearch("");

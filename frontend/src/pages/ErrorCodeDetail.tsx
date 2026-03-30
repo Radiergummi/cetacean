@@ -1,6 +1,7 @@
 import FetchError from "../components/FetchError";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
+import { apiPath } from "@/lib/basePath";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
@@ -18,7 +19,7 @@ export default function ErrorCodeDetail() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/api/errors/${code}`, { headers: { Accept: "application/json" } })
+    fetch(apiPath(`/api/errors/${code}`), { headers: { Accept: "application/json" } })
       .then((res) => {
         if (!res.ok) {
           throw new Error(`${res.status} ${res.statusText}`);
@@ -55,7 +56,7 @@ export default function ErrorCodeDetail() {
 
         <p className="text-sm">{errorDef.description}</p>
 
-        <div className="rounded-md border-l-2 border-blue-500 bg-blue-50 p-4 dark:bg-blue-950/30">
+        <div className="rounded-md border-s-2 border-blue-500 bg-blue-50 p-4 dark:bg-blue-950/30">
           <p className="text-sm">
             <span className="font-medium">Suggestion: </span>
             {errorDef.suggestion}

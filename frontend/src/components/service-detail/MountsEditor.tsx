@@ -1,6 +1,7 @@
 import { api } from "@/api/client";
 import type { ServiceMount } from "@/api/types";
 import CollapsibleSection from "@/components/CollapsibleSection";
+import ResourceName from "@/components/ResourceName";
 import { DockerDocsLink } from "@/components/service-detail/DockerDocsLink";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
@@ -158,7 +159,7 @@ export function MountsEditor({ serviceId, mounts, onSaved }: MountsEditorProps) 
                     <Trash2 className="size-3" />
                   </Button>
 
-                  <div className="grid grid-cols-2 gap-3 pr-10">
+                  <div className="grid grid-cols-2 gap-3 pe-10">
                     <div className="flex flex-col gap-1.5">
                       <label className="flex items-center gap-1 text-xs font-medium text-foreground">
                         Type <DockerDocsLink href="https://docs.docker.com/engine/storage/" />
@@ -189,7 +190,10 @@ export function MountsEditor({ serviceId, mounts, onSaved }: MountsEditorProps) 
                         <Input
                           value={mount.Source}
                           onChange={(event) =>
-                            updateMount(index, { ...mount, Source: event.target.value })
+                            updateMount(index, {
+                              ...mount,
+                              Source: event.target.value,
+                            })
                           }
                           placeholder={mount.Type === "bind" ? "/host/path" : ""}
                         />
@@ -204,7 +208,10 @@ export function MountsEditor({ serviceId, mounts, onSaved }: MountsEditorProps) 
                       <Input
                         value={mount.Target}
                         onChange={(event) =>
-                          updateMount(index, { ...mount, Target: event.target.value })
+                          updateMount(index, {
+                            ...mount,
+                            Target: event.target.value,
+                          })
                         }
                         placeholder="/container/path"
                       />
@@ -216,7 +223,10 @@ export function MountsEditor({ serviceId, mounts, onSaved }: MountsEditorProps) 
                           type="checkbox"
                           checked={mount.ReadOnly ?? false}
                           onChange={(event) =>
-                            updateMount(index, { ...mount, ReadOnly: event.target.checked })
+                            updateMount(index, {
+                              ...mount,
+                              ReadOnly: event.target.checked,
+                            })
                           }
                         />
                         Read-only
@@ -384,7 +394,7 @@ export function MountsEditor({ serviceId, mounts, onSaved }: MountsEditorProps) 
               Add mount
             </Button>
 
-            <div className="ml-auto flex gap-2">
+            <div className="ms-auto flex gap-2">
               <Button
                 size="sm"
                 onClick={save}
@@ -429,7 +439,7 @@ export function MountsEditor({ serviceId, mounts, onSaved }: MountsEditorProps) 
                       to={`/volumes/${Source}`}
                       className="font-mono text-link hover:underline"
                     >
-                      {Source}
+                      <ResourceName name={Source} />
                     </Link>
                   ) : (
                     <span className="font-mono">{Source}</span>

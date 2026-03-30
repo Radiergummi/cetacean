@@ -29,7 +29,7 @@ export default function ActivityFeed({ entries, loading, hideType }: ActivityFee
   }
 
   return (
-    <div className="relative pl-5">
+    <div className="relative ps-5">
       <div className="absolute top-2.5 bottom-2.5 left-[11.5px] w-px bg-border" />
 
       {entries.map(({ action, id, name, resourceId, timestamp, type }) => (

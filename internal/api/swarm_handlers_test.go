@@ -76,7 +76,7 @@ func (m *mockSystemClient) UnlockSwarm(ctx context.Context, key string) error {
 var _ DockerSystemClient = (*mockSystemClient)(nil)
 
 func newSwarmHandlers(sc DockerSystemClient) *Handlers {
-	return NewHandlers(nil, nil, nil, sc, nil, nil, closedReady(), nil, config.OpsImpactful)
+	return NewHandlers(nil, nil, nil, sc, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
 }
 
 func validSwarm() swarm.Swarm {

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -10,8 +9,11 @@ import (
 	"testing"
 	"time"
 
+	json "github.com/goccy/go-json"
+
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
@@ -32,15 +34,25 @@ func setupIntegrationRouter(t *testing.T) http.Handler {
 		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
 	})
 
-	b := NewBroadcaster(100 * time.Millisecond)
-	h := NewHandlers(c, b, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	b := sse.NewBroadcaster(100*time.Millisecond, noopErrorWriter)
+	h := NewHandlers(c, b, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
 	spa := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte("<html>SPA</html>")) //nolint:errcheck
 	})
 
 	specBytes, _ := os.ReadFile("../../api/openapi.yaml")
-	return NewRouter(h, b, nil, spa, specBytes, []byte("/* scalar */"), false, &auth.NoneProvider{})
+	return NewRouter(
+		h,
+		b,
+		nil,
+		spa,
+		specBytes,
+		[]byte("/* scalar */"),
+		false,
+		&auth.NoneProvider{},
+		"",
+	)
 }
 
 func TestContentNegotiationIntegration(t *testing.T) {

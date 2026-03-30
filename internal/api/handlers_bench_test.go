@@ -8,9 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
-	"time"
 
 	json "github.com/goccy/go-json"
 
@@ -19,6 +17,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
 
+	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 )
@@ -139,7 +138,7 @@ func benchHandler(b *testing.B, name string, fn func(b *testing.B, h *Handlers))
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			fn(b, h)
 		})
@@ -372,6 +371,7 @@ func BenchmarkHandleHealth(b *testing.B) {
 		closedReady(),
 		nil,
 		config.OpsImpactful,
+		nil,
 	)
 	for b.Loop() {
 		req := httptest.NewRequestWithContext(b.Context(), "GET", "/-/health", nil)
@@ -390,6 +390,7 @@ func BenchmarkHandleReady(b *testing.B) {
 		closedReady(),
 		nil,
 		config.OpsImpactful,
+		nil,
 	)
 	for b.Loop() {
 		req := httptest.NewRequestWithContext(b.Context(), "GET", "/-/ready", nil)
@@ -408,6 +409,7 @@ func BenchmarkHandleMonitoringStatus_NoPrometheus(b *testing.B) {
 		closedReady(),
 		nil,
 		config.OpsImpactful,
+		nil,
 	)
 	for b.Loop() {
 		req := httptest.NewRequestWithContext(b.Context(), "GET", "/-/metrics/status", nil)
@@ -588,7 +590,7 @@ func BenchmarkHandleGetNode_ETagHit(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			req := httptest.NewRequestWithContext(b.Context(), "GET", "/nodes/id-0", nil)
 			req.SetPathValue("id", "id-0")
@@ -681,7 +683,7 @@ func BenchmarkETagMatch(b *testing.B) {
 
 func BenchmarkDetailResponseMarshalJSON(b *testing.B) {
 	b.Run("small", func(b *testing.B) {
-		dr := NewDetailResponse("/nodes/n1", "Node", map[string]any{
+		dr := NewDetailResponse(context.Background(), "/nodes/n1", "Node", map[string]any{
 			"node": swarm.Node{ID: "n1"},
 		})
 		for b.Loop() {
@@ -702,7 +704,7 @@ func BenchmarkDetailResponseMarshalJSON(b *testing.B) {
 				},
 			}
 		}
-		dr := NewDetailResponse("/configs/cfg1", "Config", map[string]any{
+		dr := NewDetailResponse(context.Background(), "/configs/cfg1", "Config", map[string]any{
 			"config":   swarm.Config{ID: "cfg1"},
 			"services": services,
 		})
@@ -825,7 +827,7 @@ func BenchmarkHandleSearch_LabelHeavy(b *testing.B) {
 			},
 		})
 	}
-	h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+	h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
 
 	b.Run("label_hit", func(b *testing.B) {
 		for b.Loop() {
@@ -849,7 +851,7 @@ func BenchmarkHandleListNodes_FullPipeline(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			for b.Loop() {
 				req := httptest.NewRequestWithContext(
@@ -947,13 +949,13 @@ func BenchmarkToSSEEvent(b *testing.B) {
 	b.Run("empty_resource", func(b *testing.B) {
 		e := cache.Event{Type: "service", Action: "update", ID: "svc-1"}
 		for b.Loop() {
-			toSSEEvent(e)
+			sse.ToSSEEvent(e)
 		}
 	})
 	b.Run("service_payload", func(b *testing.B) {
 		e := realisticServiceEvent()
 		for b.Loop() {
-			toSSEEvent(e)
+			sse.ToSSEEvent(e)
 		}
 	})
 }
@@ -964,7 +966,7 @@ func BenchmarkWriteBatch(b *testing.B) {
 		var id uint64
 		for b.Loop() {
 			id = 0
-			writeBatch(io.Discard, discardFlusher{}, events, &id)
+			sse.WriteBatch(io.Discard, discardFlusher{}, events, &id)
 		}
 	})
 	for _, n := range []int{5, 20} {
@@ -981,7 +983,7 @@ func BenchmarkWriteBatch(b *testing.B) {
 			var id uint64
 			for b.Loop() {
 				id = 0
-				writeBatch(io.Discard, discardFlusher{}, events, &id)
+				sse.WriteBatch(io.Discard, discardFlusher{}, events, &id)
 			}
 		})
 	}
@@ -997,7 +999,7 @@ func (discardFlusher) Flush() {}
 // =============================================================================
 
 func BenchmarkTypeMatcher(b *testing.B) {
-	match := typeMatcher("service")
+	match := sse.TypeMatcher("service")
 	events := []struct {
 		name string
 		e    cache.Event
@@ -1030,46 +1032,46 @@ func BenchmarkResourceMatcher(b *testing.B) {
 	}
 
 	b.Run("service/direct_hit", func(b *testing.B) {
-		match := resourceMatcher("service", "svc-1")
+		match := sse.ResourceMatcher("service", "svc-1")
 		e := cache.Event{Type: "service", Action: "update", ID: "svc-1"}
 		for b.Loop() {
 			match(e)
 		}
 	})
 	b.Run("service/task_hit", func(b *testing.B) {
-		match := resourceMatcher("service", "svc-1")
+		match := sse.ResourceMatcher("service", "svc-1")
 		for b.Loop() {
 			match(taskForService)
 		}
 	})
 	b.Run("service/task_miss", func(b *testing.B) {
-		match := resourceMatcher("service", "svc-1")
+		match := sse.ResourceMatcher("service", "svc-1")
 		for b.Loop() {
 			match(taskMiss)
 		}
 	})
 	b.Run("node/direct_hit", func(b *testing.B) {
-		match := resourceMatcher("node", "node-1")
+		match := sse.ResourceMatcher("node", "node-1")
 		e := cache.Event{Type: "node", Action: "update", ID: "node-1"}
 		for b.Loop() {
 			match(e)
 		}
 	})
 	b.Run("node/task_hit", func(b *testing.B) {
-		match := resourceMatcher("node", "node-1")
+		match := sse.ResourceMatcher("node", "node-1")
 		for b.Loop() {
 			match(taskForNode)
 		}
 	})
 	b.Run("config/hit", func(b *testing.B) {
-		match := resourceMatcher("config", "cfg-1")
+		match := sse.ResourceMatcher("config", "cfg-1")
 		e := cache.Event{Type: "config", Action: "update", ID: "cfg-1"}
 		for b.Loop() {
 			match(e)
 		}
 	})
 	b.Run("config/miss", func(b *testing.B) {
-		match := resourceMatcher("config", "cfg-1")
+		match := sse.ResourceMatcher("config", "cfg-1")
 		e := cache.Event{Type: "config", Action: "update", ID: "cfg-2"}
 		for b.Loop() {
 			match(e)
@@ -1080,7 +1082,7 @@ func BenchmarkResourceMatcher(b *testing.B) {
 func BenchmarkStackMatcher(b *testing.B) {
 	c := cache.New(nil)
 	populateCache(c, 100) // 5 stacks with 20 services each
-	match := stackMatcher(c, "stack-0")
+	match := sse.StackMatcher(c, "stack-0")
 
 	b.Run("service_hit", func(b *testing.B) {
 		e := cache.Event{Type: "service", Action: "update", ID: "id-0"}
@@ -1114,305 +1116,6 @@ func BenchmarkStackMatcher(b *testing.B) {
 }
 
 // =============================================================================
-// SSE broadcast
-// =============================================================================
-
-func BenchmarkBroadcast(b *testing.B) {
-	for _, nClients := range []int{10, 100} {
-		b.Run(fmt.Sprintf("clients=%d", nClients), func(b *testing.B) {
-			br := NewBroadcaster(0)
-			defer br.Close()
-
-			for range nClients {
-				client := &sseClient{
-					events: make(chan cache.Event, 64),
-					done:   make(chan struct{}),
-				}
-				br.clients[client] = struct{}{}
-				go func(c *sseClient) {
-					for {
-						select {
-						case <-c.done:
-							return
-						case <-c.events:
-						}
-					}
-				}(client)
-			}
-
-			event := cache.Event{Type: "service", Action: "update", ID: "svc-1"}
-			b.ResetTimer()
-			for b.Loop() {
-				br.Broadcast(event)
-			}
-		})
-	}
-}
-
-func BenchmarkBroadcastWithPayload(b *testing.B) {
-	for _, nClients := range []int{10, 100} {
-		b.Run(fmt.Sprintf("clients=%d", nClients), func(b *testing.B) {
-			br := NewBroadcaster(0)
-			defer br.Close()
-
-			for range nClients {
-				client := &sseClient{
-					events: make(chan cache.Event, 64),
-					done:   make(chan struct{}),
-				}
-				br.clients[client] = struct{}{}
-				go func(c *sseClient) {
-					for {
-						select {
-						case <-c.done:
-							return
-						case <-c.events:
-						}
-					}
-				}(client)
-			}
-
-			event := realisticServiceEvent()
-			b.ResetTimer()
-			for b.Loop() {
-				br.Broadcast(event)
-			}
-		})
-	}
-}
-
-func BenchmarkBroadcastWithFiltering(b *testing.B) {
-	for _, nClients := range []int{10, 100} {
-		b.Run(fmt.Sprintf("clients=%d", nClients), func(b *testing.B) {
-			br := NewBroadcaster(0)
-			defer br.Close()
-
-			// Half the clients filter for "service", half for "node".
-			// A service event should reach only half.
-			for i := range nClients {
-				var match func(cache.Event) bool
-				if i%2 == 0 {
-					match = typeMatcher("service")
-				} else {
-					match = typeMatcher("node")
-				}
-				client := &sseClient{
-					events: make(chan cache.Event, 64),
-					match:  match,
-					done:   make(chan struct{}),
-				}
-				br.clients[client] = struct{}{}
-				go func(c *sseClient) {
-					for {
-						select {
-						case <-c.done:
-							return
-						case <-c.events:
-						}
-					}
-				}(client)
-			}
-
-			event := cache.Event{Type: "service", Action: "update", ID: "svc-1"}
-			b.ResetTimer()
-			for b.Loop() {
-				br.Broadcast(event)
-			}
-		})
-	}
-}
-
-func BenchmarkBroadcastWithResourceMatcher(b *testing.B) {
-	for _, nClients := range []int{10, 100} {
-		b.Run(fmt.Sprintf("clients=%d", nClients), func(b *testing.B) {
-			br := NewBroadcaster(0)
-			defer br.Close()
-
-			// Each client watches a different resource — simulates per-detail-page SSE.
-			for i := range nClients {
-				match := resourceMatcher("service", fmt.Sprintf("svc-%d", i))
-				client := &sseClient{
-					events: make(chan cache.Event, 64),
-					match:  match,
-					done:   make(chan struct{}),
-				}
-				br.clients[client] = struct{}{}
-				go func(c *sseClient) {
-					for {
-						select {
-						case <-c.done:
-							return
-						case <-c.events:
-						}
-					}
-				}(client)
-			}
-
-			// Only one client should match this event.
-			event := cache.Event{
-				Type: "task", Action: "update", ID: "t1",
-				Resource: swarm.Task{ServiceID: "svc-0"},
-			}
-			b.ResetTimer()
-			for b.Loop() {
-				br.Broadcast(event)
-			}
-		})
-	}
-}
-
-// =============================================================================
-// SSE client registration churn
-// =============================================================================
-
-func BenchmarkClientRegistration(b *testing.B) {
-	br := NewBroadcaster(0)
-	defer br.Close()
-
-	// Keep a steady-state client so fanOut stays busy.
-	steady := &sseClient{
-		events: make(chan cache.Event, 64),
-		done:   make(chan struct{}),
-	}
-	br.mu.Lock()
-	br.clients[steady] = struct{}{}
-	br.mu.Unlock()
-	go func() {
-		for {
-			select {
-			case <-steady.done:
-				return
-			case <-steady.events:
-			}
-		}
-	}()
-
-	// Feed events at a controlled rate so the inbox doesn't overflow.
-	ctx := b.Context()
-	go func() {
-		e := cache.Event{Type: "service", Action: "update", ID: "svc-1"}
-		ticker := time.NewTicker(100 * time.Microsecond)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				br.Broadcast(e)
-			}
-		}
-	}()
-
-	b.ResetTimer()
-	for b.Loop() {
-		client := &sseClient{
-			events: make(chan cache.Event, 64),
-			match:  typeMatcher("service"),
-			done:   make(chan struct{}),
-		}
-		br.mu.Lock()
-		br.clients[client] = struct{}{}
-		br.mu.Unlock()
-
-		br.mu.Lock()
-		delete(br.clients, client)
-		br.mu.Unlock()
-	}
-}
-
-// =============================================================================
-// Full SSE HTTP path
-// =============================================================================
-
-func BenchmarkServeSSE(b *testing.B) {
-	for _, nEvents := range []int{1, 10} {
-		b.Run(fmt.Sprintf("events=%d", nEvents), func(b *testing.B) {
-			for b.Loop() {
-				br := NewBroadcaster(time.Millisecond) // fast flush
-
-				ctx, cancel := context.WithCancel(context.Background())
-				req := httptest.NewRequestWithContext(ctx, "GET", "/events", nil)
-				w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
-
-				var wg sync.WaitGroup
-				wg.Go(func() {
-					br.ServeHTTP(w, req)
-				})
-
-				// Wait for client registration.
-				for {
-					br.mu.RLock()
-					n := len(br.clients)
-					br.mu.RUnlock()
-					if n > 0 {
-						break
-					}
-					time.Sleep(time.Microsecond)
-				}
-
-				for i := range nEvents {
-					br.Broadcast(cache.Event{
-						Type:     "service",
-						Action:   "update",
-						ID:       fmt.Sprintf("svc-%d", i),
-						Resource: realisticServiceEvent().Resource,
-					})
-				}
-
-				// Give the batch ticker time to flush.
-				time.Sleep(2 * time.Millisecond)
-				cancel()
-				wg.Wait()
-				br.Close()
-			}
-		})
-	}
-}
-
-func BenchmarkServeSSEFiltered(b *testing.B) {
-	for b.Loop() {
-		br := NewBroadcaster(time.Millisecond)
-
-		ctx, cancel := context.WithCancel(context.Background())
-		req := httptest.NewRequestWithContext(ctx, "GET", "/events?types=service", nil)
-		w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
-
-		var wg sync.WaitGroup
-		wg.Go(func() {
-			br.ServeHTTP(w, req)
-		})
-
-		for {
-			br.mu.RLock()
-			n := len(br.clients)
-			br.mu.RUnlock()
-			if n > 0 {
-				break
-			}
-			time.Sleep(time.Microsecond)
-		}
-
-		// Send mix of types — only service events should be written.
-		for i := range 5 {
-			if i%2 == 0 {
-				br.Broadcast(
-					cache.Event{Type: "service", Action: "update", ID: fmt.Sprintf("svc-%d", i)},
-				)
-			} else {
-				br.Broadcast(
-					cache.Event{Type: "node", Action: "update", ID: fmt.Sprintf("n-%d", i)},
-				)
-			}
-		}
-
-		time.Sleep(2 * time.Millisecond)
-		cancel()
-		wg.Wait()
-		br.Close()
-	}
-}
-
-// =============================================================================
 // Parallel HTTP benchmarks (contention under load)
 // =============================================================================
 
@@ -1420,7 +1123,7 @@ func BenchmarkHandleListNodesParallel(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
@@ -1440,7 +1143,7 @@ func BenchmarkHandleListServicesParallel(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
@@ -1456,7 +1159,7 @@ func BenchmarkHandleSearchParallel(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
@@ -1472,7 +1175,7 @@ func BenchmarkHandleGetNodeParallel(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
@@ -1489,7 +1192,7 @@ func BenchmarkHandleNetworkTopologyParallel(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
@@ -1512,7 +1215,7 @@ func BenchmarkMixedWorkloadParallel(b *testing.B) {
 	for _, n := range handlerSizes {
 		c := cache.New(nil)
 		populateCache(c, n)
-		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
+		h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
 		b.Run(fmt.Sprintf("size=%d", n), func(b *testing.B) {
 			b.RunParallel(func(pb *testing.PB) {
 				i := 0

@@ -1,13 +1,14 @@
 package api
 
 import (
+	"context"
 	"testing"
 
 	json "github.com/goccy/go-json"
 )
 
 func TestNewDetailResponse(t *testing.T) {
-	resp := NewDetailResponse("/nodes/n1", "Node", map[string]any{
+	resp := NewDetailResponse(context.Background(), "/nodes/n1", "Node", map[string]any{
 		"node": "test-value",
 	})
 
@@ -35,7 +36,7 @@ func TestNewDetailResponse(t *testing.T) {
 }
 
 func TestNewDetailResponse_MultipleExtras(t *testing.T) {
-	resp := NewDetailResponse("/configs/c1", "Config", map[string]any{
+	resp := NewDetailResponse(context.Background(), "/configs/c1", "Config", map[string]any{
 		"config":   "cfg-data",
 		"services": []string{"svc1"},
 	})
@@ -64,7 +65,7 @@ func TestNewDetailResponse_MultipleExtras(t *testing.T) {
 }
 
 func TestNewDetailResponse_NilExtras(t *testing.T) {
-	resp := NewDetailResponse("/nodes/n1", "Node", nil)
+	resp := NewDetailResponse(context.Background(), "/nodes/n1", "Node", nil)
 
 	body, err := json.Marshal(resp)
 	if err != nil {
@@ -85,7 +86,7 @@ func TestNewDetailResponse_NilExtras(t *testing.T) {
 
 func TestDetailResponse_DeterministicSerialization(t *testing.T) {
 	// Marshal the same response multiple times and verify identical output.
-	resp := NewDetailResponse("/nodes/n1", "Node", map[string]any{
+	resp := NewDetailResponse(context.Background(), "/nodes/n1", "Node", map[string]any{
 		"zebra": 1,
 		"alpha": 2,
 		"node":  "value",
@@ -120,7 +121,7 @@ func TestDetailResponse_DeterministicSerialization(t *testing.T) {
 
 func TestNewCollectionResponse(t *testing.T) {
 	items := []string{"a", "b", "c"}
-	resp := NewCollectionResponse(items, 10, 3, 0)
+	resp := NewCollectionResponse(context.Background(), items, 10, 3, 0)
 
 	if resp.Context != jsonLDContext {
 		t.Errorf("Context = %s, want %s", resp.Context, jsonLDContext)
@@ -143,7 +144,7 @@ func TestNewCollectionResponse(t *testing.T) {
 }
 
 func TestNewCollectionResponse_Empty(t *testing.T) {
-	resp := NewCollectionResponse([]int{}, 0, 50, 0)
+	resp := NewCollectionResponse(context.Background(), []int{}, 0, 50, 0)
 
 	if resp.Context != jsonLDContext {
 		t.Errorf("Context = %s, want %s", resp.Context, jsonLDContext)

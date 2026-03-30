@@ -31,6 +31,7 @@ type Config struct {
 	DockerHost       string
 	PrometheusURL    string
 	ListenAddr       string
+	BasePath         string          // CETACEAN_BASE_PATH, default ""
 	LogLevel         string          // "debug", "info", "warn", "error"
 	LogFormat        string          // "json", "text"
 	DataDir          string          // CETACEAN_DATA_DIR, default "./data"
@@ -60,12 +61,14 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		fDataDir    *string
 		fSnapshot   *bool
 		fOpsLevel   *int
+		fBasePath   *string
 	)
 	if fc != nil {
 		if fc.Server != nil {
 			fListen = fc.Server.ListenAddr
 			fPprof = fc.Server.Pprof
 			fOpsLevel = fc.Server.OperationsLevel
+			fBasePath = fc.Server.BasePath
 			if fc.Server.SSE != nil {
 				fSSEBatch = fc.Server.SSE.BatchInterval
 			}
@@ -115,8 +118,11 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 			fDockerHost,
 			"unix:///var/run/docker.sock",
 		),
-		PrometheusURL:    resolve(flags.PrometheusURL, "CETACEAN_PROMETHEUS_URL", fPromURL, ""),
-		ListenAddr:       resolve(flags.Listen, "CETACEAN_LISTEN_ADDR", fListen, ":9000"),
+		PrometheusURL: resolve(flags.PrometheusURL, "CETACEAN_PROMETHEUS_URL", fPromURL, ""),
+		ListenAddr:    resolve(flags.Listen, "CETACEAN_LISTEN_ADDR", fListen, ":9000"),
+		BasePath: NormalizeBasePath(
+			resolve(flags.BasePath, "CETACEAN_BASE_PATH", fBasePath, ""),
+		),
 		LogLevel:         resolve(flags.LogLevel, "CETACEAN_LOG_LEVEL", fLogLevel, "info"),
 		LogFormat:        resolve(flags.LogFormat, "CETACEAN_LOG_FORMAT", fLogFormat, "json"),
 		DataDir:          resolve(nil, "CETACEAN_DATA_DIR", fDataDir, "./data"),
@@ -124,6 +130,10 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		SSEBatchInterval: batchInterval,
 		Pprof:            resolveBool(flags.Pprof, "CETACEAN_PPROF", fPprof, false),
 		OperationsLevel:  OperationsLevel(opsLevel),
+	}
+
+	if err := ValidateBasePath(cfg.BasePath); err != nil {
+		return nil, err
 	}
 
 	return cfg, nil

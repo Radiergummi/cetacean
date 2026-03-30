@@ -133,3 +133,39 @@ func checkIntRange(v, min, max int, source string) (int, error) {
 	}
 	return v, nil
 }
+
+// resolveFloat returns the first set value in precedence order:
+// flag > env > file > hardcoded default. Returns an error if any
+// explicitly set value is not a valid float or is out of [min, max].
+func resolveFloat(
+	flag *float64,
+	envKey string,
+	file *float64,
+	def, min, max float64,
+) (float64, error) {
+	var raw string
+	var source string
+	switch envVal := os.Getenv(envKey); {
+	case flag != nil:
+		return checkFloatRange(*flag, min, max, "flag")
+	case envVal != "":
+		raw, source = envVal, envKey
+	case file != nil:
+		return checkFloatRange(*file, min, max, "config file")
+	default:
+		return def, nil
+	}
+
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid float from %s %q: %w", source, raw, err)
+	}
+	return checkFloatRange(v, min, max, source)
+}
+
+func checkFloatRange(v, min, max float64, source string) (float64, error) {
+	if v < min || v > max {
+		return 0, fmt.Errorf("value %f from %s out of range [%f, %f]", v, source, min, max)
+	}
+	return v, nil
+}

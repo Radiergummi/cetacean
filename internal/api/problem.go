@@ -19,14 +19,15 @@ type ProblemDetail struct {
 
 // writeProblem writes an RFC 9457 problem details response with about:blank type.
 func writeProblem(w http.ResponseWriter, r *http.Request, status int, detail string) {
+	ctx := r.Context()
 	p := ProblemDetail{
-		Context:   jsonLDContext,
+		Context:   absPath(ctx, jsonLDContext),
 		Type:      "about:blank",
 		Title:     http.StatusText(status),
 		Status:    status,
 		Detail:    detail,
-		Instance:  r.URL.Path,
-		RequestID: RequestIDFrom(r.Context()),
+		Instance:  absPath(ctx, r.URL.Path),
+		RequestID: RequestIDFrom(ctx),
 	}
 	writeProblemJSON(w, p)
 }
@@ -34,8 +35,9 @@ func writeProblem(w http.ResponseWriter, r *http.Request, status int, detail str
 // writeProblemTyped writes an RFC 9457 problem details response with a domain-specific type URI.
 // It fills in defaults for context, instance, and requestId if not already set.
 func writeProblemTyped(w http.ResponseWriter, r *http.Request, p ProblemDetail) {
+	ctx := r.Context()
 	if p.Context == "" {
-		p.Context = jsonLDContext
+		p.Context = absPath(ctx, jsonLDContext)
 	}
 	if p.Type == "" {
 		p.Type = "about:blank"
@@ -44,10 +46,10 @@ func writeProblemTyped(w http.ResponseWriter, r *http.Request, p ProblemDetail) 
 		p.Title = http.StatusText(p.Status)
 	}
 	if p.Instance == "" {
-		p.Instance = r.URL.Path
+		p.Instance = absPath(ctx, r.URL.Path)
 	}
 	if p.RequestID == "" {
-		p.RequestID = RequestIDFrom(r.Context())
+		p.RequestID = RequestIDFrom(ctx)
 	}
 	writeProblemJSON(w, p)
 }

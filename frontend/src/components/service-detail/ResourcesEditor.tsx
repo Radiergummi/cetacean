@@ -92,6 +92,7 @@ export function ResourcesEditor({
         Reservations?.MemoryBytes != null ? Reservations.MemoryBytes / (1024 * 1024) : undefined,
       limit: Limits?.MemoryBytes != null ? Limits.MemoryBytes / (1024 * 1024) : undefined,
     });
+
     setCapacity(null);
     setCapacityError(false);
     api
@@ -180,7 +181,7 @@ export function ResourcesEditor({
         <Button
           variant="outline"
           size="xs"
-          onClick={openEdit}
+          onClick={() => openEdit()}
         >
           <Pencil className="size-3" />
           Edit

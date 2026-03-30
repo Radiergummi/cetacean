@@ -1,3 +1,4 @@
+import { apiPath } from "@/lib/basePath";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 
 interface SSEEvent {
@@ -31,7 +32,7 @@ export function useResourceStream(path: string, listener: SSEListener) {
   listenerRef.current = listener;
 
   useEffect(() => {
-    const eventSource = new EventSource(path);
+    const eventSource = new EventSource(apiPath(path));
 
     eventSource.onopen = () => setConnected(true);
     eventSource.onerror = () => setConnected(false);

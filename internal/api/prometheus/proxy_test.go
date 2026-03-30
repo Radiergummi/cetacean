@@ -1,10 +1,14 @@
-package api
+package prometheus
 
 import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
+
+func noopErrorWriter(w http.ResponseWriter, _ *http.Request, _, detail string) {
+	http.Error(w, detail, http.StatusBadRequest)
+}
 
 func TestMetricsProxyHandler_InstantQuery(t *testing.T) {
 	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -18,7 +22,7 @@ func TestMetricsProxyHandler_InstantQuery(t *testing.T) {
 	}))
 	defer prom.Close()
 
-	proxy := NewPrometheusProxy(prom.URL)
+	proxy := NewProxy(prom.URL, noopErrorWriter)
 
 	req := httptest.NewRequest("GET", "/metrics?query=up", nil)
 	w := httptest.NewRecorder()
@@ -53,7 +57,7 @@ func TestMetricsProxyHandler_RangeQuery(t *testing.T) {
 	}))
 	defer prom.Close()
 
-	proxy := NewPrometheusProxy(prom.URL)
+	proxy := NewProxy(prom.URL, noopErrorWriter)
 
 	req := httptest.NewRequest("GET", "/metrics?query=up&start=100&end=200&step=15", nil)
 	w := httptest.NewRecorder()
@@ -65,7 +69,7 @@ func TestMetricsProxyHandler_RangeQuery(t *testing.T) {
 }
 
 func TestMetricsProxyHandler_MissingQuery(t *testing.T) {
-	proxy := NewPrometheusProxy("http://localhost:9090")
+	proxy := NewProxy("http://localhost:9090", noopErrorWriter)
 
 	req := httptest.NewRequest("GET", "/metrics", nil)
 	w := httptest.NewRecorder()
@@ -77,7 +81,11 @@ func TestMetricsProxyHandler_MissingQuery(t *testing.T) {
 }
 
 func TestMetricsProxyHandler_NilProxy(t *testing.T) {
-	var proxy *PrometheusProxy
+	old := defaultWriteError
+	defaultWriteError = nil
+	defer func() { defaultWriteError = old }()
+
+	var proxy *Proxy
 
 	req := httptest.NewRequest("GET", "/metrics?query=up", nil)
 	w := httptest.NewRecorder()
@@ -98,7 +106,7 @@ func TestMetricsProxyHandler_Labels(t *testing.T) {
 	}))
 	defer prom.Close()
 
-	proxy := NewPrometheusProxy(prom.URL)
+	proxy := NewProxy(prom.URL, noopErrorWriter)
 	req := httptest.NewRequest("GET", "/-/metrics/labels", nil)
 	w := httptest.NewRecorder()
 	proxy.HandleMetricsLabels(w, req)
@@ -118,7 +126,7 @@ func TestMetricsProxyHandler_LabelValues(t *testing.T) {
 	}))
 	defer prom.Close()
 
-	proxy := NewPrometheusProxy(prom.URL)
+	proxy := NewProxy(prom.URL, noopErrorWriter)
 	req := httptest.NewRequest("GET", "/-/metrics/labels/job", nil)
 	req.SetPathValue("name", "job")
 	w := httptest.NewRecorder()
@@ -130,7 +138,11 @@ func TestMetricsProxyHandler_LabelValues(t *testing.T) {
 }
 
 func TestMetricsProxyHandler_LabelValues_NilProxy(t *testing.T) {
-	var proxy *PrometheusProxy
+	old := defaultWriteError
+	defaultWriteError = nil
+	defer func() { defaultWriteError = old }()
+
+	var proxy *Proxy
 	req := httptest.NewRequest("GET", "/-/metrics/labels/job", nil)
 	req.SetPathValue("name", "job")
 	w := httptest.NewRecorder()

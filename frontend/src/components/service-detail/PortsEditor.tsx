@@ -122,7 +122,7 @@ export function PortsEditor({ serviceId, ports, onSaved }: PortsEditorProps) {
                     <Trash2 className="size-3" />
                   </Button>
 
-                  <div className="grid grid-cols-2 gap-3 pr-10">
+                  <div className="grid grid-cols-2 gap-3 pe-10">
                     <div className="flex flex-col gap-1.5">
                       <label className="flex items-center gap-1 text-xs font-medium text-foreground">
                         Protocol{" "}
@@ -209,7 +209,7 @@ export function PortsEditor({ serviceId, ports, onSaved }: PortsEditorProps) {
               Add port
             </Button>
 
-            <div className="ml-auto flex gap-2">
+            <div className="ms-auto flex gap-2">
               <Button
                 size="sm"
                 onClick={save}

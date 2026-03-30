@@ -23,6 +23,12 @@ interface KeyValueEditorProps {
   isKeyReadOnly?: (key: string) => boolean;
   /** Validate a new key. Return an error message, or null if valid. */
   validateKey?: (key: string) => string | null;
+  /** Render without CollapsibleSection wrapper. */
+  bare?: boolean;
+  /** Start in edit mode. */
+  defaultEditing?: boolean;
+  /** Called when the user cancels editing. */
+  onCancel?: () => void;
 }
 
 export function KeyValueEditor({
@@ -40,6 +46,9 @@ export function KeyValueEditor({
   editDisabled = false,
   isKeyReadOnly,
   validateKey,
+  bare = false,
+  defaultEditing = false,
+  onCancel,
 }: KeyValueEditorProps) {
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("");
@@ -59,6 +68,9 @@ export function KeyValueEditor({
       columns={[keyLabel, valueLabel]}
       defaultOpen={defaultOpen}
       editDisabled={editDisabled}
+      bare={bare}
+      defaultEditing={defaultEditing}
+      onCancel={onCancel}
       emptyLabel={`No ${title.toLowerCase()}`}
       emptyHint="Click Edit to add entries."
       keyFn={([key]) => key}
@@ -74,7 +86,7 @@ export function KeyValueEditor({
         <span className="font-mono text-xs">
           {key}
           {isKeyReadOnly?.(key) && (
-            <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-sans text-[10px] text-muted-foreground">
+            <span className="ms-2 rounded bg-muted px-1.5 py-0.5 font-sans text-[10px] text-muted-foreground">
               read-only
             </span>
           )}

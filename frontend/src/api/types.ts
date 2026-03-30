@@ -329,9 +329,86 @@ export interface ServiceRef {
   name: string;
 }
 
+export interface TraefikTLSDomain {
+  main: string;
+  sans?: string[];
+}
+
+export interface TraefikRouter {
+  name: string;
+  rule?: string;
+  entrypoints?: string[];
+  tls?: {
+    certResolver?: string;
+    domains?: TraefikTLSDomain[];
+    options?: string;
+  };
+  middlewares?: string[];
+  service?: string;
+  priority?: number;
+}
+
+export interface TraefikService {
+  name: string;
+  port?: number;
+  scheme?: string;
+}
+
+export interface TraefikMiddleware {
+  name: string;
+  type: string;
+  config?: Record<string, string>;
+}
+
+export interface TraefikIntegration {
+  name: "traefik";
+  enabled: boolean;
+  routers?: TraefikRouter[];
+  services?: TraefikService[];
+  middlewares?: TraefikMiddleware[];
+}
+
+export interface ShepherdIntegration {
+  name: "shepherd";
+  enabled: boolean;
+  authConfig?: string;
+}
+
+export interface CronjobIntegration {
+  name: "swarm-cronjob";
+  enabled: boolean;
+  schedule?: string;
+  skipRunning?: boolean;
+  replicas?: number;
+  registryAuth?: boolean;
+  queryRegistry?: boolean;
+}
+
+export interface DiunIntegration {
+  name: "diun";
+  enabled: boolean;
+  watchRepo?: boolean;
+  notifyOn?: string;
+  maxTags?: number;
+  includeTags?: string;
+  excludeTags?: string;
+  sortTags?: string;
+  regopt?: string;
+  hubLink?: string;
+  platform?: string;
+  metadata?: Record<string, string>;
+}
+
+export type Integration =
+  | TraefikIntegration
+  | ShepherdIntegration
+  | CronjobIntegration
+  | DiunIntegration;
+
 export interface ServiceDetail {
   service: Service;
   changes?: SpecChange[];
+  integrations?: Integration[];
 }
 
 export interface ConfigDetail {
@@ -635,4 +712,49 @@ export interface ServiceMount {
     Subpath?: string;
   };
   ClusterOptions?: Record<string, unknown>;
+}
+
+export type RecommendationCategory =
+  | "over-provisioned"
+  | "approaching-limit"
+  | "at-limit"
+  | "no-limits"
+  | "no-reservations"
+  | "no-healthcheck"
+  | "no-restart-policy"
+  | "flaky-service"
+  | "node-disk-full"
+  | "node-memory-pressure"
+  | "single-replica"
+  | "manager-has-workloads"
+  | "uneven-distribution";
+
+export type RecommendationSeverity = "info" | "warning" | "critical";
+export type RecommendationScope = "service" | "node" | "cluster";
+
+export interface Recommendation {
+  category: RecommendationCategory;
+  severity: RecommendationSeverity;
+  scope: RecommendationScope;
+  targetId: string;
+  targetName: string;
+  resource: string;
+  message: string;
+  current: number;
+  configured: number;
+  suggested?: number;
+  fixAction?: string;
+}
+
+export interface RecommendationSummary {
+  critical: number;
+  warning: number;
+  info: number;
+}
+
+export interface RecommendationsResponse {
+  items: Recommendation[];
+  total: number;
+  summary: RecommendationSummary;
+  computedAt: string;
 }

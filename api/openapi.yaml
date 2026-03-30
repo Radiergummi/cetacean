@@ -1170,6 +1170,11 @@ paths:
                       service:
                         type: object
                         description: Docker swarm.Service object
+                      integrations:
+                        type: array
+                        description: Detected third-party integrations (e.g. Traefik)
+                        items:
+                          $ref: "#/components/schemas/Integration"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -3136,6 +3141,42 @@ paths:
         "304":
           $ref: "#/components/responses/NotModified"
 
+  /recommendations:
+    get:
+      operationId: getRecommendations
+      tags: [Recommendations]
+      summary: Cluster health recommendations
+      description: |
+        Returns all active recommendations across four domains: resource sizing,
+        config hygiene, operational health, and cluster topology. Items are sorted
+        by severity (critical first). Includes a summary with severity counts.
+      responses:
+        "200":
+          description: Recommendation collection
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Recommendation"
+                      total:
+                        type: integer
+                      summary:
+                        $ref: "#/components/schemas/RecommendationSummary"
+                      computedAt:
+                        type: string
+                        format: date-time
+        "304":
+          $ref: "#/components/responses/NotModified"
+
 # ════════════════════════════════════════════════════════════════════════
 # Components
 # ════════════════════════════════════════════════════════════════════════
@@ -3700,6 +3741,60 @@ components:
           type: number
           format: double
           description: Populated from Prometheus (0 if unavailable)
+
+    # ── Recommendations ─────────────────────────────────────────────
+
+    Recommendation:
+      type: object
+      properties:
+        category:
+          type: string
+          enum:
+            - over-provisioned
+            - approaching-limit
+            - at-limit
+            - no-limits
+            - no-reservations
+            - no-healthcheck
+            - no-restart-policy
+            - flaky-service
+            - node-disk-full
+            - node-memory-pressure
+            - single-replica
+            - manager-has-workloads
+            - uneven-distribution
+        severity:
+          type: string
+          enum: [info, warning, critical]
+        scope:
+          type: string
+          enum: [service, node, cluster]
+        targetId:
+          type: string
+        targetName:
+          type: string
+        resource:
+          type: string
+        message:
+          type: string
+        current:
+          type: number
+        configured:
+          type: number
+        suggested:
+          type: number
+        fixAction:
+          type: string
+
+    RecommendationSummary:
+      type: object
+      properties:
+        critical:
+          type: integer
+        warning:
+          type: integer
+        info:
+          type: integer
 
     # ── Cluster ──────────────────────────────────────────────────────
 
@@ -4285,3 +4380,206 @@ components:
               additionalProperties:
                 type: string
               description: Log driver options
+
+    # ── Integrations ──────────────────────────────────────────────────
+
+    Integration:
+      description: A detected third-party integration on a service
+      discriminator:
+        propertyName: name
+        mapping:
+          traefik: "#/components/schemas/TraefikIntegration"
+          shepherd: "#/components/schemas/ShepherdIntegration"
+          swarm-cronjob: "#/components/schemas/CronjobIntegration"
+          diun: "#/components/schemas/DiunIntegration"
+      oneOf:
+        - $ref: "#/components/schemas/TraefikIntegration"
+        - $ref: "#/components/schemas/ShepherdIntegration"
+        - $ref: "#/components/schemas/CronjobIntegration"
+        - $ref: "#/components/schemas/DiunIntegration"
+
+    TraefikIntegration:
+      type: object
+      description: Traefik reverse proxy integration detected from service labels
+      required: [name]
+      properties:
+        name:
+          type: string
+          enum: [traefik]
+          description: Discriminator field identifying the integration type
+        enabled:
+          type: boolean
+          description: Whether the Traefik integration is enabled
+        routers:
+          type: array
+          items:
+            $ref: "#/components/schemas/TraefikRouter"
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/TraefikService"
+        middlewares:
+          type: array
+          items:
+            $ref: "#/components/schemas/TraefikMiddleware"
+
+    TraefikRouter:
+      type: object
+      description: A Traefik router detected from service labels
+      properties:
+        name:
+          type: string
+          description: Router name
+        rule:
+          type: string
+          description: Routing rule expression (e.g. "Host(`example.com`)")
+        entrypoints:
+          type: array
+          items:
+            type: string
+          description: Entrypoint names this router listens on
+        tls:
+          $ref: "#/components/schemas/TraefikTLS"
+        middlewares:
+          type: array
+          items:
+            type: string
+          description: Middleware names attached to this router
+        service:
+          type: string
+          description: Backend service name this router forwards to
+        priority:
+          type: integer
+          description: Router priority (higher wins on rule conflicts)
+
+    TraefikTLS:
+      type: object
+      description: TLS configuration for a Traefik router
+      properties:
+        certResolver:
+          type: string
+          description: Certificate resolver name (e.g. "letsencrypt")
+        domains:
+          type: array
+          items:
+            $ref: "#/components/schemas/TraefikTLSDomain"
+          description: Explicit domain entries for certificate generation
+        options:
+          type: string
+          description: TLS options name
+
+    TraefikTLSDomain:
+      type: object
+      description: A domain entry in Traefik TLS configuration
+      properties:
+        main:
+          type: string
+          description: Primary domain name
+        sans:
+          type: array
+          items:
+            type: string
+          description: Subject alternative names
+
+    TraefikService:
+      type: object
+      description: A Traefik service detected from service labels
+      properties:
+        name:
+          type: string
+          description: Service name
+        port:
+          type: integer
+          description: Backend port number
+        scheme:
+          type: string
+          description: Backend scheme (e.g. "http", "https", "h2c")
+
+    TraefikMiddleware:
+      type: object
+      description: A Traefik middleware detected from service labels
+      properties:
+        name:
+          type: string
+          description: Middleware name
+        type:
+          type: string
+          description: Middleware type (e.g. "redirectScheme", "basicAuth")
+        config:
+          type: object
+          additionalProperties: true
+          description: Middleware configuration key-value pairs
+
+    ShepherdIntegration:
+      type: object
+      description: Shepherd auto-update integration detected from service labels
+      required: [name]
+      properties:
+        name:
+          type: string
+          enum: [shepherd]
+        enabled:
+          type: boolean
+        authConfig:
+          type: string
+          description: Registry auth configuration ID
+
+    CronjobIntegration:
+      type: object
+      description: Swarm Cronjob integration detected from service labels
+      required: [name]
+      properties:
+        name:
+          type: string
+          enum: [swarm-cronjob]
+        enabled:
+          type: boolean
+        schedule:
+          type: string
+          description: Cron expression
+        skipRunning:
+          type: boolean
+        replicas:
+          type: integer
+        registryAuth:
+          type: boolean
+        queryRegistry:
+          type: boolean
+
+    DiunIntegration:
+      type: object
+      description: Diun image update notifier integration detected from service labels
+      required: [name]
+      properties:
+        name:
+          type: string
+          enum: [diun]
+        enabled:
+          type: boolean
+        regopt:
+          type: string
+          description: Registry options name
+        watchRepo:
+          type: boolean
+        notifyOn:
+          type: string
+          description: "Semicolon-separated triggers (new, update)"
+        sortTags:
+          type: string
+          enum: [default, reverse, semver, lexicographical]
+        maxTags:
+          type: integer
+        includeTags:
+          type: string
+          description: Regex for tag inclusion
+        excludeTags:
+          type: string
+          description: Regex for tag exclusion
+        hubLink:
+          type: string
+        platform:
+          type: string
+        metadata:
+          type: object
+          additionalProperties:
+            type: string

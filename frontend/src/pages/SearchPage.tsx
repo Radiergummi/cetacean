@@ -107,7 +107,7 @@ export default function SearchPage() {
                   <header className="mb-2">
                     <h2 className="text-sm font-medium text-muted-foreground">
                       <span>{typeLabels[type]}</span>
-                      <span className="ml-2 inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
+                      <span className="ms-2 inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
                         {items.length}
                       </span>
                     </h2>

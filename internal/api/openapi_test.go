@@ -12,6 +12,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers/gorillamux"
 
+	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
@@ -81,14 +82,14 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 		Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
 	})
 
-	h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful)
-	b := NewBroadcaster(0)
+	h := NewHandlers(c, nil, nil, nil, nil, nil, closedReady(), nil, config.OpsImpactful, nil)
+	b := sse.NewBroadcaster(0, noopErrorWriter)
 	defer b.Close()
 	noopSPA := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte("<html></html>"))
 	})
-	router := NewRouter(h, b, nil, noopSPA, specBytes, nil, false, &auth.NoneProvider{})
+	router := NewRouter(h, b, nil, noopSPA, specBytes, nil, false, &auth.NoneProvider{}, "")
 
 	tests := []struct {
 		name       string

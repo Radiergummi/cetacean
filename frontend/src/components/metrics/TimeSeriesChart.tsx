@@ -63,6 +63,8 @@ interface Props {
   isolatedLabel?: string | null;
   /** Fires when isolation changes (from chart clicks or sync). */
   onIsolationChange?: (label: string | null) => void;
+  /** Transform series labels for display (tooltips, legend). Raw labels are still used for identification. */
+  labelTransform?: (label: string) => string;
 }
 
 type State = "loading" | "data" | "empty" | "error";
@@ -186,6 +188,7 @@ export default function TimeSeriesChart({
   stackable,
   isolatedLabel,
   onIsolationChange,
+  labelTransform,
 }: Props) {
   const isMobile = useMatchesBreakpoint("md", "below");
   const chartRef = useRef<ChartJS<"line"> | null>(null);
@@ -476,8 +479,9 @@ export default function TimeSeriesChart({
       labels: fetchedData.labels,
       datasets: fetchedData.series.map(({ color, data, label }, i) => {
         const dimmed = isolatedIndex != null && isolatedIndex !== i;
+        const displayLabel = labelTransform ? labelTransform(label) : label;
         const base = {
-          label,
+          label: displayLabel,
           pointRadius: 0,
           pointHoverRadius: dimmed ? 0 : 3,
           pointHoverBackgroundColor: color,
@@ -514,7 +518,7 @@ export default function TimeSeriesChart({
         };
       }),
     };
-  }, [fetchedData, isolatedIndex, stacked]);
+  }, [fetchedData, isolatedIndex, stacked, labelTransform]);
 
   const suggestedMax = useMemo<number | undefined>(() => {
     if (!thresholds?.length || !fetchedData) {
@@ -907,7 +911,7 @@ export default function TimeSeriesChart({
         <span className="text-sm font-medium">{title}</span>
 
         {stackable && panel?.stacked == null && (
-          <div className="ml-1 flex items-center gap-0.5">
+          <div className="ms-1 flex items-center gap-0.5">
             <button
               onClick={() => setLocalStacked(false)}
               aria-pressed={!stacked}
@@ -927,7 +931,7 @@ export default function TimeSeriesChart({
           </div>
         )}
 
-        {unit && <span className="ml-auto text-xs text-muted-foreground">{unit}</span>}
+        {unit && <span className="ms-auto text-xs text-muted-foreground">{unit}</span>}
       </div>
 
       {state === "loading" && !fetchedData && <div className="h-50 rounded bg-muted/50" />}

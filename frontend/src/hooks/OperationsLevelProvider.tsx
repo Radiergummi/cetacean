@@ -1,4 +1,5 @@
 import { OperationsLevelContext, type OperationsLevelState } from "./useOperationsLevel";
+import { apiPath } from "@/lib/basePath";
 import type React from "react";
 import { useEffect, useState } from "react";
 
@@ -14,7 +15,7 @@ export function OperationsLevelProvider({ children }: { children: React.ReactNod
     let attempt = 0;
 
     function tryFetch() {
-      fetch("/-/health")
+      fetch(apiPath("/-/health"))
         .then((response) => response.json())
         .then((data) => {
           if (!cancelled) {

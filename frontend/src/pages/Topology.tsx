@@ -62,7 +62,7 @@ function StackLegend({
         {isMobile && (
           <button
             onClick={() => setOpen(false)}
-            className="ml-2 text-muted-foreground hover:text-foreground"
+            className="ms-2 text-muted-foreground hover:text-foreground"
           >
             <X className="size-3" />
           </button>
@@ -180,7 +180,9 @@ function LogicalView({ data, isMobile }: { data: NetworkTopology; isMobile: bool
     <HighlightProvider edges={rawEdges}>
       <div
         className="relative"
-        style={{ height: isMobile ? "calc(100dvh - 3rem)" : "calc(100vh - 12rem)" }}
+        style={{
+          height: isMobile ? "calc(100dvh - 3rem)" : "calc(100vh - 12rem)",
+        }}
       >
         <ReactFlow
           nodes={nodes}
@@ -216,7 +218,11 @@ function PhysicalView({ data, isMobile }: { data: PlacementTopology; isMobile: b
   }
 
   return (
-    <div style={{ height: isMobile ? "calc(100dvh - 3rem)" : "calc(100vh - 12rem)" }}>
+    <div
+      style={{
+        height: isMobile ? "calc(100dvh - 3rem)" : "calc(100vh - 12rem)",
+      }}
+    >
       <ReactFlow
         nodes={nodes}
         edges={[]}

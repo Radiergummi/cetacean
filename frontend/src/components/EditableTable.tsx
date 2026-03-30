@@ -14,6 +14,10 @@ interface EditableTableProps<T> {
   columns: [string, string];
   defaultOpen?: boolean;
   editDisabled?: boolean;
+  /** Render without CollapsibleSection wrapper (no title, no collapse toggle). */
+  bare?: boolean;
+  /** Start in edit mode. */
+  defaultEditing?: boolean;
 
   // Read-only view
   renderReadOnly: (items: T[]) => ReactNode;
@@ -39,6 +43,8 @@ interface EditableTableProps<T> {
   onSave: (items: T[]) => Promise<void>;
   /** Called when the user opens edit mode. Use for lazy data fetching. */
   onEditStart?: () => void;
+  /** Called when the user cancels editing. */
+  onCancel?: () => void;
 }
 
 export function EditableTable<T>({
@@ -48,6 +54,8 @@ export function EditableTable<T>({
   columns,
   defaultOpen = false,
   editDisabled = false,
+  bare = false,
+  defaultEditing = false,
   renderReadOnly,
   emptyLabel,
   emptyHint,
@@ -63,11 +71,12 @@ export function EditableTable<T>({
   onAddReset,
   onSave,
   onEditStart,
+  onCancel,
 }: EditableTableProps<T>) {
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(defaultEditing);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [draft, setDraft] = useState<T[]>([]);
+  const [draft, setDraft] = useState<T[]>(defaultEditing ? [...items] : []);
   const [adding, setAdding] = useState(false);
 
   useEscapeCancel(editing, () => cancelEdit());
@@ -83,10 +92,11 @@ export function EditableTable<T>({
   function cancelEdit() {
     setEditing(false);
     setSaveError(null);
+    onCancel?.();
   }
 
   function removeRow(index: number) {
-    setDraft((previous) => previous.filter((_, i) => i !== index));
+    setDraft((previous) => previous.filter((_, itemIndex) => itemIndex !== index));
   }
 
   function handleAddAnother() {
@@ -145,12 +155,8 @@ export function EditableTable<T>({
     </>
   ) : null;
 
-  return (
-    <CollapsibleSection
-      title={title}
-      defaultOpen={defaultOpen}
-      controls={controls}
-    >
+  const content = (
+    <>
       {!editing ? (
         items.length === 0 ? (
           <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed py-6 text-center text-muted-foreground">
@@ -240,7 +246,7 @@ export function EditableTable<T>({
               >
                 Add another
               </Button>
-              <div className="ml-auto flex gap-2">
+              <div className="ms-auto flex gap-2">
                 <Button
                   size="sm"
                   onClick={() => void save()}
@@ -262,6 +268,20 @@ export function EditableTable<T>({
           </div>
         </div>
       )}
+    </>
+  );
+
+  if (bare) {
+    return content;
+  }
+
+  return (
+    <CollapsibleSection
+      title={title}
+      defaultOpen={defaultOpen}
+      controls={controls}
+    >
+      {content}
     </CollapsibleSection>
   );
 }

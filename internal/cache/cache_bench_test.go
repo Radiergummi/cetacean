@@ -428,7 +428,7 @@ func BenchmarkHistoryList(b *testing.B) {
 	// Fill the ring buffer.
 	for i := range 10000 {
 		h.Append(HistoryEntry{
-			Type:       []string{"service", "task", "node", "config"}[i%4],
+			Type:       []EventType{EventService, EventTask, EventNode, EventConfig}[i%4],
 			Action:     "update",
 			ResourceID: fmt.Sprintf("id-%d", i%100),
 			Name:       fmt.Sprintf("resource-%d", i),

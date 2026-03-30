@@ -111,14 +111,14 @@ export function ExtraHostsEditor({
         <table className="w-full text-sm">
           <thead>
             <tr>
-              <th className="pr-4 pb-1 text-left font-normal text-muted-foreground">IP Address</th>
+              <th className="pe-4 pb-1 text-left font-normal text-muted-foreground">IP Address</th>
               <th className="pb-1 text-left font-normal text-muted-foreground">Hostname</th>
             </tr>
           </thead>
           <tbody>
             {parseHosts(config.hosts).map((row, index) => (
               <tr key={index}>
-                <td className="pr-4 font-mono">{row.ip}</td>
+                <td className="pe-4 font-mono">{row.ip}</td>
                 <td className="font-mono">{row.hostname}</td>
               </tr>
             ))}

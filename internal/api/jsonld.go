@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"slices"
 
 	json "github.com/goccy/go-json"
@@ -67,10 +68,10 @@ func (d DetailResponse) MarshalJSON() ([]byte, error) {
 
 // NewDetailResponse creates a JSON-LD wrapped detail response with
 // deterministic serialization order.
-func NewDetailResponse(id, typ string, extra map[string]any) DetailResponse {
+func NewDetailResponse(ctx context.Context, id, typ string, extra map[string]any) DetailResponse {
 	return DetailResponse{
-		context: jsonLDContext,
-		id:      id,
+		context: absPath(ctx, jsonLDContext),
+		id:      absPath(ctx, id),
 		typ:     typ,
 		extra:   extra,
 	}
@@ -87,9 +88,11 @@ type CollectionResponse[T any] struct {
 }
 
 // NewCollectionResponse creates a CollectionResponse with JSON-LD metadata.
-func NewCollectionResponse[T any](items []T, total, limit, offset int) CollectionResponse[T] {
+func NewCollectionResponse[T any](
+	ctx context.Context, items []T, total, limit, offset int,
+) CollectionResponse[T] {
 	return CollectionResponse[T]{
-		Context: jsonLDContext,
+		Context: absPath(ctx, jsonLDContext),
 		Type:    "Collection",
 		Items:   items,
 		Total:   total,

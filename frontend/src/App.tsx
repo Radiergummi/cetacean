@@ -10,8 +10,10 @@ import { AuthProvider } from "./hooks/AuthProvider";
 import { OperationsLevelProvider } from "./hooks/OperationsLevelProvider";
 import { useAuth } from "./hooks/useAuth";
 import { useHotkeys } from "./hooks/useHotkeys";
+import { useRecommendations } from "./hooks/useRecommendations";
 import { ConnectionProvider, sseEventTypes } from "./hooks/useResourceStream";
-import { Keyboard, Menu, X } from "lucide-react";
+import { apiPath, basePath } from "./lib/basePath";
+import { Keyboard, Lightbulb, Menu, X } from "lucide-react";
 import type React from "react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { BrowserRouter, Link, Route, Routes, useLocation, useNavigate } from "react-router-dom";
@@ -41,6 +43,7 @@ const TaskDetail = lazy(() => import("./pages/TaskDetail"));
 const TaskList = lazy(() => import("./pages/TaskList"));
 const MetricsConsole = lazy(() => import("./pages/MetricsConsole"));
 const Topology = lazy(() => import("./pages/Topology"));
+const RecommendationsPage = lazy(() => import("./pages/RecommendationsPage"));
 const VolumeDetail = lazy(() => import("./pages/VolumeDetail"));
 const VolumeList = lazy(() => import("./pages/VolumeList"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
@@ -78,6 +81,7 @@ function Layout({ children }: { children: React.ReactNode }) {
     "g a": useCallback(() => navigate("/tasks"), [navigate]),
     "g i": useCallback(() => navigate("/swarm"), [navigate]),
     "g t": useCallback(() => navigate("/topology"), [navigate]),
+    "g r": useCallback(() => navigate("/recommendations"), [navigate]),
     "g m": useCallback(() => navigate("/metrics"), [navigate]),
   });
 
@@ -106,7 +110,7 @@ function Layout({ children }: { children: React.ReactNode }) {
               className="order-last lg:order-none lg:mx-auto"
             />
 
-            <div className="flex items-center gap-3">
+            <div className="ml-auto flex items-center gap-3 lg:ml-0">
               <ShortcutTooltip keys={["?"]}>
                 <button
                   className="inline-flex size-8 items-center justify-center rounded-md transition hover:bg-muted"
@@ -116,6 +120,7 @@ function Layout({ children }: { children: React.ReactNode }) {
                   <Keyboard className="size-4" />
                 </button>
               </ShortcutTooltip>
+              <RecommendationsIndicator />
               <ThemeToggle />
               <UserBadge />
 
@@ -148,6 +153,28 @@ function Layout({ children }: { children: React.ReactNode }) {
       </main>
       {shortcutsOpen && <ShortcutsHelp onClose={() => setShortcutsOpen(false)} />}
     </div>
+  );
+}
+
+function RecommendationsIndicator() {
+  const { total } = useRecommendations();
+  const navigate = useNavigate();
+
+  return (
+    <ShortcutTooltip keys={["g", "r"]}>
+      <button
+        className="relative inline-flex size-8 items-center justify-center rounded-md transition hover:bg-muted"
+        onClick={() => navigate("/recommendations")}
+        aria-label="Recommendations"
+      >
+        <Lightbulb className="size-4" />
+        {total > 0 && (
+          <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white">
+            {total > 99 ? "99" : total}
+          </span>
+        )}
+      </button>
+    </ShortcutTooltip>
   );
 }
 
@@ -210,7 +237,7 @@ function ConnectionTracker({ children }: { children: React.ReactNode }) {
   const lastEventAtRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const es = new EventSource("/events");
+    const es = new EventSource(apiPath("/events"));
     es.onopen = () => setConnected(true);
     es.onerror = () => setConnected(false);
 
@@ -232,7 +259,7 @@ function ConnectionTracker({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={basePath}>
       <AuthProvider>
         <OperationsLevelProvider>
           <ConnectionTracker>
@@ -336,6 +363,10 @@ export default function App() {
                   <Route
                     path="/topology"
                     element={<Topology />}
+                  />
+                  <Route
+                    path="/recommendations"
+                    element={<RecommendationsPage />}
                   />
                   <Route
                     path="/search"

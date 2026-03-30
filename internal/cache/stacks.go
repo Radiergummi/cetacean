@@ -5,35 +5,37 @@ import "slices"
 const stackLabel = "com.docker.stack.namespace"
 
 // addToStack incrementally adds a resource to the appropriate stack. Must be called with c.mu held for writing.
-func (c *Cache) addToStack(resource, id string, labels map[string]string) {
+func (c *Cache) addToStack(resource EventType, id string, labels map[string]string) {
 	ns, ok := labels[stackLabel]
 	if !ok {
 		return
 	}
 	s, exists := c.stacks[ns]
 	if !exists {
-		if resource != "service" {
+		if resource != EventService {
 			return // never create a stack entry without at least one service
 		}
 		s = Stack{Name: ns}
 	}
 	switch resource {
-	case "service":
+	case EventService:
 		s.Services = appendUnique(s.Services, id)
-	case "config":
+	case EventConfig:
 		s.Configs = appendUnique(s.Configs, id)
-	case "secret":
+	case EventSecret:
 		s.Secrets = appendUnique(s.Secrets, id)
-	case "network":
+	case EventNetwork:
 		s.Networks = appendUnique(s.Networks, id)
-	case "volume":
+	case EventVolume:
 		s.Volumes = appendUnique(s.Volumes, id)
+	default:
+		// Nodes, tasks, stacks, and sync events do not belong to a stack.
 	}
 	c.stacks[ns] = s
 }
 
 // removeFromStack incrementally removes a resource from its stack. Must be called with c.mu held for writing.
-func (c *Cache) removeFromStack(resource, id string, labels map[string]string) {
+func (c *Cache) removeFromStack(resource EventType, id string, labels map[string]string) {
 	ns, ok := labels[stackLabel]
 	if !ok {
 		return
@@ -43,16 +45,18 @@ func (c *Cache) removeFromStack(resource, id string, labels map[string]string) {
 		return
 	}
 	switch resource {
-	case "service":
+	case EventService:
 		s.Services = removeStr(s.Services, id)
-	case "config":
+	case EventConfig:
 		s.Configs = removeStr(s.Configs, id)
-	case "secret":
+	case EventSecret:
 		s.Secrets = removeStr(s.Secrets, id)
-	case "network":
+	case EventNetwork:
 		s.Networks = removeStr(s.Networks, id)
-	case "volume":
+	case EventVolume:
 		s.Volumes = removeStr(s.Volumes, id)
+	default:
+		// Nodes, tasks, stacks, and sync events do not belong to a stack.
 	}
 	if len(s.Services) == 0 {
 		delete(c.stacks, ns)
@@ -74,38 +78,40 @@ func (c *Cache) rebuildStacks() {
 		return s
 	}
 
+	// IDs come from map keys, so they are unique within each resource type.
+	// No need for appendUnique during a full rebuild.
 	for id, svc := range c.services {
 		if ns, ok := svc.Spec.Labels[stackLabel]; ok {
 			s := ensure(ns)
-			s.Services = appendUnique(s.Services, id)
+			s.Services = append(s.Services, id)
 		}
 	}
 
 	for id, cfg := range c.configs {
 		if ns, ok := cfg.Spec.Labels[stackLabel]; ok {
 			s := ensure(ns)
-			s.Configs = appendUnique(s.Configs, id)
+			s.Configs = append(s.Configs, id)
 		}
 	}
 
 	for id, sec := range c.secrets {
 		if ns, ok := sec.Spec.Labels[stackLabel]; ok {
 			s := ensure(ns)
-			s.Secrets = appendUnique(s.Secrets, id)
+			s.Secrets = append(s.Secrets, id)
 		}
 	}
 
 	for id, net := range c.networks {
 		if ns, ok := net.Labels[stackLabel]; ok {
 			s := ensure(ns)
-			s.Networks = appendUnique(s.Networks, id)
+			s.Networks = append(s.Networks, id)
 		}
 	}
 
 	for name, vol := range c.volumes {
 		if ns, ok := vol.Labels[stackLabel]; ok {
 			s := ensure(ns)
-			s.Volumes = appendUnique(s.Volumes, name)
+			s.Volumes = append(s.Volumes, name)
 		}
 	}
 
@@ -130,11 +136,5 @@ func appendUnique(sl []string, v string) []string {
 }
 
 func removeStr(sl []string, v string) []string {
-	out := make([]string, 0, len(sl))
-	for _, s := range sl {
-		if s != v {
-			out = append(out, s)
-		}
-	}
-	return out
+	return slices.DeleteFunc(sl, func(s string) bool { return s == v })
 }

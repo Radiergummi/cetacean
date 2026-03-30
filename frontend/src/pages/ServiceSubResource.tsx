@@ -3,6 +3,7 @@ import { LoadingDetail } from "@/components/LoadingSkeleton";
 import PageHeader from "@/components/PageHeader";
 import ResourceName from "@/components/ResourceName";
 import SimpleTable from "@/components/SimpleTable";
+import { apiPath } from "@/lib/basePath";
 import { useEffect, useState } from "react";
 import { Navigate, useParams } from "react-router-dom";
 
@@ -46,8 +47,11 @@ export default function ServiceSubResource() {
     const signal = controller.signal;
 
     Promise.all([
-      fetch(`/services/${id}/${subResource}`, { headers: { Accept: "application/json" }, signal }),
-      fetch(`/services/${id}`, { headers: { Accept: "application/json" }, signal }),
+      fetch(apiPath(`/services/${id}/${subResource}`), {
+        headers: { Accept: "application/json" },
+        signal,
+      }),
+      fetch(apiPath(`/services/${id}`), { headers: { Accept: "application/json" }, signal }),
     ])
       .then(async ([subResponse, serviceResponse]) => {
         if (!subResponse.ok) {

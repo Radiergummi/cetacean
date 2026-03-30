@@ -3,6 +3,7 @@ import type {
   ContainerConfig,
   Healthcheck,
   HistoryEntry,
+  Integration,
   PortConfig,
   Service,
   ServiceMount,
@@ -44,10 +45,16 @@ import {
   ServiceActions,
   type ServiceResourceShape,
 } from "../components/service-detail";
+import { CronjobPanel } from "../components/service-detail/CronjobPanel";
+import { DiunPanel } from "../components/service-detail/DiunPanel";
+import { ShepherdPanel } from "../components/service-detail/ShepherdPanel";
+import { TraefikPanel } from "../components/service-detail/TraefikPanel";
+import { SizingBanner } from "../components/SizingBanner";
 import TasksTable from "../components/TasksTable";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
+import { useRecommendations } from "../hooks/useRecommendations";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
@@ -57,6 +64,30 @@ import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
 import { escapePromQL } from "../lib/utils";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
+
+const integrationLabelPrefix = {
+  traefik: "traefik.",
+  shepherd: "shepherd.",
+  "swarm-cronjob": "swarm.cronjob.",
+  diun: "diun.",
+} as const;
+
+function rawLabelsForIntegration(
+  labels: Record<string, string> | null,
+  integrationName: string,
+): [string, string][] {
+  if (!labels) {
+    return [];
+  }
+
+  const prefix = integrationLabelPrefix[integrationName as keyof typeof integrationLabelPrefix];
+
+  if (!prefix) {
+    return [];
+  }
+
+  return Object.entries(labels).filter(([key]) => key.startsWith(prefix));
+}
 
 export default function ServiceDetail() {
   const { id } = useParams<{ id: string }>();
@@ -71,6 +102,7 @@ export default function ServiceDetail() {
   const [specPorts, setSpecPorts] = useState<PortConfig[] | null>(null);
   const [serviceMounts, setServiceMounts] = useState<ServiceMount[] | null>(null);
   const [containerConfig, setContainerConfig] = useState<ContainerConfig | null>(null);
+  const [integrations, setIntegrations] = useState<Integration[]>([]);
   const monitoring = useMonitoringStatus();
   const { level: operationsLevel, loading: levelLoading } = useOperationsLevel();
   const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
@@ -79,6 +111,8 @@ export default function ServiceDetail() {
   const [networkNames, setNetworkNames] = useState<Record<string, string>>({});
   const [cpuActual, setCpuActual] = useState<number | undefined>();
   const [memActual, setMemActual] = useState<number | undefined>();
+  const { items: recommendations } = useRecommendations();
+  const serviceRecommendations = recommendations.filter((r) => r.targetId === id);
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -104,6 +138,7 @@ export default function ServiceDetail() {
         .then((response) => {
           setService(response.service);
           setChanges(response.changes ?? []);
+          setIntegrations(response.integrations ?? []);
           applyDerivedState(response.service);
         })
         .catch(() => {
@@ -264,6 +299,29 @@ export default function ServiceDetail() {
     [name, service],
   );
 
+  const filteredLabels = useMemo(() => {
+    if (!serviceLabels || integrations.length === 0) {
+      return serviceLabels;
+    }
+
+    const prefixes = integrations
+      .map(
+        ({ name: integrationName }) =>
+          integrationLabelPrefix[integrationName as keyof typeof integrationLabelPrefix],
+      )
+      .filter(Boolean);
+
+    if (prefixes.length === 0) {
+      return serviceLabels;
+    }
+
+    return Object.fromEntries(
+      Object.entries(serviceLabels).filter(
+        ([key]) => !prefixes.some((prefix) => key.startsWith(prefix)),
+      ),
+    );
+  }, [serviceLabels, integrations]);
+
   if (error) {
     return <FetchError message="Failed to load service" />;
   }
@@ -284,14 +342,14 @@ export default function ServiceDetail() {
     healthcheck != null && !(healthcheck.Test?.length === 1 && healthcheck.Test[0] === "NONE");
   const hasPortsContent = specPorts != null && specPorts.length > 0;
   const hasEnvContent = envVars != null && Object.keys(envVars).length > 0;
-  const hasLabelsContent = serviceLabels != null && Object.keys(serviceLabels).length > 0;
+  const hasLabelsContent = filteredLabels != null && Object.keys(filteredLabels).length > 0;
   const hasResourcesContent =
     serviceResources != null &&
     (serviceResources.Limits?.NanoCPUs != null ||
       serviceResources.Limits?.MemoryBytes != null ||
       serviceResources.Reservations?.NanoCPUs != null ||
       serviceResources.Reservations?.MemoryBytes != null ||
-      taskTemplate.Resources?.Limits?.Pids != null);
+      taskTemplate?.Resources?.Limits?.Pids != null);
   const labels = service.Spec.Labels;
 
   const runningTasks = tasks?.filter(({ Status }) => Status?.State === "running").length ?? 0;
@@ -328,6 +386,24 @@ export default function ServiceDetail() {
             serviceId={id!}
           />
         }
+      />
+
+      <SizingBanner
+        hints={serviceRecommendations}
+        canFix={canEditConfig}
+        onFixed={() => {
+          if (id) {
+            api
+              .service(id)
+              .then((response) => {
+                setService(response.service);
+                applyDerivedState(response.service);
+              })
+              .catch(() => {
+                // Refetch failed — page will refresh on next SSE event
+              });
+          }
+        }}
       />
 
       {/* Overview cards */}
@@ -445,12 +521,61 @@ export default function ServiceDetail() {
         />
       )}
 
+      {/* Integrations */}
+      {integrations.map((integration) => {
+        const rawLabels = rawLabelsForIntegration(serviceLabels, integration.name);
+
+        const panelProps = {
+          rawLabels,
+          serviceId: id!,
+          onSaved: setServiceLabels,
+          editable: canEditConfig,
+        };
+
+        switch (integration.name) {
+          case "traefik":
+            return (
+              <TraefikPanel
+                key={integration.name}
+                integration={integration}
+                {...panelProps}
+              />
+            );
+          case "shepherd":
+            return (
+              <ShepherdPanel
+                key={integration.name}
+                integration={integration}
+                {...panelProps}
+              />
+            );
+          case "swarm-cronjob":
+            return (
+              <CronjobPanel
+                key={integration.name}
+                integration={integration}
+                {...panelProps}
+              />
+            );
+          case "diun":
+            return (
+              <DiunPanel
+                key={integration.name}
+                integration={integration}
+                {...panelProps}
+              />
+            );
+          default:
+            return null;
+        }
+      })}
+
       {/* Labels */}
       {serviceLabels !== null && (hasLabelsContent || canEditConfig) && (
         <KeyValueEditor
           title="Labels"
-          entries={serviceLabels}
-          defaultOpen={Object.keys(serviceLabels).length > 0}
+          entries={filteredLabels ?? {}}
+          defaultOpen={Object.keys(filteredLabels ?? {}).length > 0}
           keyPlaceholder="com.example.my-label"
           valuePlaceholder="value"
           editDisabled={levelLoading || operationsLevel < opsLevel.configuration}
@@ -540,7 +665,10 @@ export default function ServiceDetail() {
             )}
 
             {serviceResources !== null && (hasResourcesContent || canEditConfig) && (
-              <div className="flex flex-col gap-3 rounded-lg border p-3">
+              <div
+                id="resources-section"
+                className="flex flex-col gap-3 rounded-lg border p-3"
+              >
                 <ResourcesEditor
                   serviceId={id!}
                   resources={serviceResources}

@@ -3,6 +3,7 @@ import { LoadingDetail } from "@/components/LoadingSkeleton";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { apiPath } from "@/lib/basePath";
 import { LogOut } from "lucide-react";
 import { Navigate } from "react-router-dom";
 
@@ -38,14 +39,14 @@ export default function ProfilePage() {
           identity.provider === "oidc" ? (
             <form
               method="POST"
-              action="/auth/logout"
+              action={apiPath("/auth/logout")}
             >
               <Button
                 variant="outline"
                 size="sm"
                 type="submit"
               >
-                <LogOut className="mr-1.5 size-4" />
+                <LogOut className="me-1.5 size-4" />
                 Sign out
               </Button>
             </form>

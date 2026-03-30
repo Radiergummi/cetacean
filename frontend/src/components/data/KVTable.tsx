@@ -36,7 +36,7 @@ export default function KVTable({ rows }: { rows: Row[] }) {
             return (
               <tr
                 key={key}
-                className="border-b last:border-b-0"
+                className="border-b border-b-muted last:border-b-0"
               >
                 <td className="min-w-1/3 p-3 text-sm font-medium text-muted-foreground">
                   <span className="inline-flex items-center gap-1.5">
@@ -50,7 +50,7 @@ export default function KVTable({ rows }: { rows: Row[] }) {
                     {copyable && (
                       <CopyButton
                         text={copyable}
-                        className="ml-auto"
+                        className="ms-auto"
                       />
                     )}
                   </span>

@@ -329,16 +329,16 @@ function DiskUsageLoading() {
                   <div className="h-4 w-24 animate-pulse rounded bg-muted" />
                 </td>
                 <td className="p-3">
-                  <div className="ml-auto h-4 w-8 animate-pulse rounded bg-muted" />
+                  <div className="ms-auto h-4 w-8 animate-pulse rounded bg-muted" />
                 </td>
                 <td className="p-3">
-                  <div className="ml-auto h-4 w-8 animate-pulse rounded bg-muted" />
+                  <div className="ms-auto h-4 w-8 animate-pulse rounded bg-muted" />
                 </td>
                 <td className="p-3">
-                  <div className="ml-auto h-4 w-16 animate-pulse rounded bg-muted" />
+                  <div className="ms-auto h-4 w-16 animate-pulse rounded bg-muted" />
                 </td>
                 <td className="p-3">
-                  <div className="ml-auto h-4 w-24 animate-pulse rounded bg-muted" />
+                  <div className="ms-auto h-4 w-24 animate-pulse rounded bg-muted" />
                 </td>
               </tr>
             ))}
