@@ -135,9 +135,9 @@ func (p *OIDCProvider) Authenticate(w http.ResponseWriter, r *http.Request) (*Id
 
 	// 3. Browser request: redirect to OIDC authorize endpoint.
 	if strings.Contains(r.Header.Get("Accept"), "text/html") {
-		redirect := r.URL.RequestURI()
+		redirect := p.basePath + r.URL.RequestURI()
 		if !isRelativePath(redirect) {
-			redirect = "/"
+			redirect = p.basePath + "/"
 		}
 		p.redirectToLogin(w, r, redirect)
 		return nil, nil
@@ -166,7 +166,7 @@ func (p *OIDCProvider) RegisterRoutes(mux *http.ServeMux) {
 func (p *OIDCProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 	redirect := r.URL.Query().Get("redirect")
 	if !isRelativePath(redirect) {
-		redirect = "/"
+		redirect = p.basePath + "/"
 	}
 	p.redirectToLogin(w, r, redirect)
 }
@@ -291,7 +291,7 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Read redirect URL before clearing cookies.
-	redirectURL := "/"
+	redirectURL := p.basePath + "/"
 	if c, err := r.Cookie("cetacean_auth_redirect"); err == nil && isRelativePath(c.Value) {
 		redirectURL = c.Value
 	}
@@ -442,7 +442,7 @@ func (p *OIDCProvider) handleLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, p.basePath+"/", http.StatusSeeOther)
 }
 
 // validateAzp enforces OIDC Core Section 3.1.3.7 rules 4-5: if the ID Token

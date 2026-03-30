@@ -92,10 +92,11 @@ func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	et := h.enrichTask(task)
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/tasks/"+id, "Task", map[string]any{
+	ctx := r.Context()
+	writeJSONWithETag(w, r, NewDetailResponse(ctx, "/tasks/"+id, "Task", map[string]any{
 		"task":    et,
-		"service": map[string]any{"@id": "/services/" + et.ServiceID, "name": et.ServiceName},
-		"node":    map[string]any{"@id": "/nodes/" + et.NodeID, "hostname": et.NodeHostname},
+		"service": map[string]any{"@id": absPath(ctx, "/services/"+et.ServiceID), "name": et.ServiceName},
+		"node":    map[string]any{"@id": absPath(ctx, "/nodes/"+et.NodeID), "hostname": et.NodeHostname},
 	}))
 }
 
