@@ -148,7 +148,12 @@ func init() {
 }
 
 // RecordHTTPRequest records metrics for a completed HTTP request.
-func RecordHTTPRequest(handler, method string, status int, durationSeconds float64, requestBytes, responseBytes int64) {
+func RecordHTTPRequest(
+	handler, method string,
+	status int,
+	durationSeconds float64,
+	requestBytes, responseBytes int64,
+) {
 	httpRequestsTotal.WithLabelValues(method, handler, strconv.Itoa(status)).Inc()
 	httpRequestDurationSeconds.WithLabelValues(method, handler).Observe(durationSeconds)
 	httpRequestSizeBytes.WithLabelValues(method, handler).Observe(float64(requestBytes))

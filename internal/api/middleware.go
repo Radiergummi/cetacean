@@ -134,7 +134,10 @@ func instrumentMetrics(next http.Handler) http.Handler {
 			handler = "unknown"
 		}
 
-		metrics.RecordHTTPRequest(handler, r.Method, sw.status, duration, r.ContentLength, int64(sw.written))
+		metrics.RecordHTTPRequest(
+			handler, r.Method, sw.status,
+			duration, r.ContentLength, int64(sw.written),
+		)
 	})
 }
 

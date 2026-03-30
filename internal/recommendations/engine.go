@@ -109,7 +109,10 @@ func (e *Engine) tick(ctx context.Context, force bool) {
 			defer cancel()
 			start := time.Now()
 			recs := e.checkers[idx].checker.Check(tickCtx)
-			metrics.ObserveRecommendationCheck(e.checkers[idx].checker.Name(), time.Since(start).Seconds())
+			metrics.ObserveRecommendationCheck(
+				e.checkers[idx].checker.Name(),
+				time.Since(start).Seconds(),
+			)
 			ch <- result{idx, recs}
 		}(i)
 	}
