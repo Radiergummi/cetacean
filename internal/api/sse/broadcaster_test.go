@@ -219,16 +219,18 @@ func TestSSE_BatchEventContainsJSONLD(t *testing.T) {
 
 func TestResourcePath(t *testing.T) {
 	tests := []struct {
-		typ, id, want string
+		typ  cache.EventType
+		id   string
+		want string
 	}{
-		{"node", "n1", "/nodes/n1"},
-		{"service", "s1", "/services/s1"},
-		{"task", "t1", "/tasks/t1"},
-		{"config", "c1", "/configs/c1"},
-		{"secret", "sec1", "/secrets/sec1"},
-		{"network", "net1", "/networks/net1"},
-		{"volume", "vol1", "/volumes/vol1"},
-		{"stack", "mystack", "/stacks/mystack"},
+		{cache.EventNode, "n1", "/nodes/n1"},
+		{cache.EventService, "s1", "/services/s1"},
+		{cache.EventTask, "t1", "/tasks/t1"},
+		{cache.EventConfig, "c1", "/configs/c1"},
+		{cache.EventSecret, "sec1", "/secrets/sec1"},
+		{cache.EventNetwork, "net1", "/networks/net1"},
+		{cache.EventVolume, "vol1", "/volumes/vol1"},
+		{cache.EventStack, "mystack", "/stacks/mystack"},
 		{"unknown", "x", ""},
 	}
 	for _, tt := range tests {
@@ -241,16 +243,17 @@ func TestResourcePath(t *testing.T) {
 
 func TestResourceType(t *testing.T) {
 	tests := []struct {
-		typ, want string
+		typ  cache.EventType
+		want string
 	}{
-		{"node", "Node"},
-		{"service", "Service"},
-		{"task", "Task"},
-		{"config", "Config"},
-		{"secret", "Secret"},
-		{"network", "Network"},
-		{"volume", "Volume"},
-		{"stack", "Stack"},
+		{cache.EventNode, "Node"},
+		{cache.EventService, "Service"},
+		{cache.EventTask, "Task"},
+		{cache.EventConfig, "Config"},
+		{cache.EventSecret, "Secret"},
+		{cache.EventNetwork, "Network"},
+		{cache.EventVolume, "Volume"},
+		{cache.EventStack, "Stack"},
 		{"unknown", ""},
 	}
 	for _, tt := range tests {

@@ -708,14 +708,15 @@ func TestCache_OnChange_AllTypes(t *testing.T) {
 	}
 
 	expected := []struct {
-		typ, action string
+		typ    EventType
+		action string
 	}{
-		{"service", "update"}, {"service", "remove"},
-		{"task", "update"}, {"task", "remove"},
-		{"config", "update"}, {"config", "remove"},
-		{"secret", "update"}, {"secret", "remove"},
-		{"network", "update"}, {"network", "remove"},
-		{"volume", "update"}, {"volume", "remove"},
+		{EventService, "update"}, {EventService, "remove"},
+		{EventTask, "update"}, {EventTask, "remove"},
+		{EventConfig, "update"}, {EventConfig, "remove"},
+		{EventSecret, "update"}, {EventSecret, "remove"},
+		{EventNetwork, "update"}, {EventNetwork, "remove"},
+		{EventVolume, "update"}, {EventVolume, "remove"},
 	}
 	for i, exp := range expected {
 		if events[i].Type != exp.typ || events[i].Action != exp.action {

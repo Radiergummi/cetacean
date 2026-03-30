@@ -18,7 +18,7 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	entries := h.cache.History().List(cache.HistoryQuery{
-		Type:       q.Get("type"),
+		Type:       cache.EventType(q.Get("type")),
 		ResourceID: q.Get("resourceId"),
 		Limit:      limit,
 	})

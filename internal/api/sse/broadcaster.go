@@ -106,7 +106,7 @@ func (b *Broadcaster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		for typ := range strings.SplitSeq(t, ",") {
 			types[strings.TrimSpace(typ)] = true
 		}
-		match = func(e cache.Event) bool { return types[e.Type] }
+		match = func(e cache.Event) bool { return types[string(e.Type)] }
 	}
 	b.ServeSSE(w, r, match)
 }
@@ -196,55 +196,55 @@ func (b *Broadcaster) ServeSSE(
 
 // TypeMatcher returns a match function that accepts events of the given type.
 // Sync events always pass through so clients can trigger a full refetch.
-func TypeMatcher(typ string) func(cache.Event) bool {
+func TypeMatcher(typ cache.EventType) func(cache.Event) bool {
 	return func(e cache.Event) bool {
-		return e.Type == typ || e.Type == "sync"
+		return e.Type == typ || e.Type == cache.EventSync
 	}
 }
 
 // ResourceMatcher returns a match function for per-resource SSE streams.
 // Sync events always pass through so clients can trigger a full refetch.
-func ResourceMatcher(typ, id string) func(cache.Event) bool {
+func ResourceMatcher(typ cache.EventType, id string) func(cache.Event) bool {
 	switch typ {
-	case "node":
+	case cache.EventNode:
 		return func(e cache.Event) bool {
-			if e.Type == "sync" {
+			if e.Type == cache.EventSync {
 				return true
 			}
-			if e.Type == "node" && e.ID == id {
+			if e.Type == cache.EventNode && e.ID == id {
 				return true
 			}
-			if e.Type == "task" {
+			if e.Type == cache.EventTask {
 				if t, ok := e.Resource.(swarm.Task); ok {
 					return t.NodeID == id
 				}
 			}
 			return false
 		}
-	case "service":
+	case cache.EventService:
 		return func(e cache.Event) bool {
-			if e.Type == "sync" {
+			if e.Type == cache.EventSync {
 				return true
 			}
-			if e.Type == "service" && e.ID == id {
+			if e.Type == cache.EventService && e.ID == id {
 				return true
 			}
-			if e.Type == "task" {
+			if e.Type == cache.EventTask {
 				if t, ok := e.Resource.(swarm.Task); ok {
 					return t.ServiceID == id
 				}
 			}
 			return false
 		}
-	case "task":
+	case cache.EventTask:
 		return func(e cache.Event) bool {
-			return e.Type == "sync" || (e.Type == "task" && e.ID == id)
+			return e.Type == cache.EventSync || (e.Type == cache.EventTask && e.ID == id)
 		}
 	default:
 		// config, secret, network, volume — match by type+ID.
 		// Cross-reference "ref_changed" events already have the correct type+ID.
 		return func(e cache.Event) bool {
-			return e.Type == "sync" || (e.Type == typ && e.ID == id)
+			return e.Type == cache.EventSync || (e.Type == typ && e.ID == id)
 		}
 	}
 }
@@ -255,7 +255,7 @@ func ResourceMatcher(typ, id string) func(cache.Event) bool {
 // Sync events always pass through so clients can trigger a full refetch.
 func StackMatcher(c *cache.Cache, name string) func(cache.Event) bool {
 	return func(e cache.Event) bool {
-		if e.Type == "sync" {
+		if e.Type == cache.EventSync {
 			return true
 		}
 		stack, ok := c.GetStack(name)
@@ -263,17 +263,17 @@ func StackMatcher(c *cache.Cache, name string) func(cache.Event) bool {
 			return false
 		}
 		switch e.Type {
-		case "service":
+		case cache.EventService:
 			return slices.Contains(stack.Services, e.ID)
-		case "config":
+		case cache.EventConfig:
 			return slices.Contains(stack.Configs, e.ID)
-		case "secret":
+		case cache.EventSecret:
 			return slices.Contains(stack.Secrets, e.ID)
-		case "network":
+		case cache.EventNetwork:
 			return slices.Contains(stack.Networks, e.ID)
-		case "volume":
+		case cache.EventVolume:
 			return slices.Contains(stack.Volumes, e.ID)
-		case "task":
+		case cache.EventTask:
 			if t, ok := e.Resource.(swarm.Task); ok {
 				return slices.Contains(stack.Services, t.ServiceID)
 			}
@@ -298,7 +298,7 @@ func ToSSEEvent(e cache.Event) Event {
 	return Event{
 		AtID:     ResourcePath(e.Type, e.ID),
 		AtType:   ResourceType(e.Type),
-		Type:     e.Type,
+		Type:     string(e.Type),
 		Action:   e.Action,
 		ID:       e.ID,
 		Resource: e.Resource,
@@ -306,23 +306,23 @@ func ToSSEEvent(e cache.Event) Event {
 }
 
 // ResourcePath returns the canonical API path for a resource.
-func ResourcePath(typ, id string) string {
+func ResourcePath(typ cache.EventType, id string) string {
 	switch typ {
-	case "node":
+	case cache.EventNode:
 		return "/nodes/" + id
-	case "service":
+	case cache.EventService:
 		return "/services/" + id
-	case "task":
+	case cache.EventTask:
 		return "/tasks/" + id
-	case "config":
+	case cache.EventConfig:
 		return "/configs/" + id
-	case "secret":
+	case cache.EventSecret:
 		return "/secrets/" + id
-	case "network":
+	case cache.EventNetwork:
 		return "/networks/" + id
-	case "volume":
+	case cache.EventVolume:
 		return "/volumes/" + id
-	case "stack":
+	case cache.EventStack:
 		return "/stacks/" + id
 	default:
 		return ""
@@ -330,23 +330,23 @@ func ResourcePath(typ, id string) string {
 }
 
 // ResourceType returns the JSON-LD @type for a resource type string.
-func ResourceType(typ string) string {
+func ResourceType(typ cache.EventType) string {
 	switch typ {
-	case "node":
+	case cache.EventNode:
 		return "Node"
-	case "service":
+	case cache.EventService:
 		return "Service"
-	case "task":
+	case cache.EventTask:
 		return "Task"
-	case "config":
+	case cache.EventConfig:
 		return "Config"
-	case "secret":
+	case cache.EventSecret:
 		return "Secret"
-	case "network":
+	case cache.EventNetwork:
 		return "Network"
-	case "volume":
+	case cache.EventVolume:
 		return "Volume"
-	case "stack":
+	case cache.EventStack:
 		return "Stack"
 	default:
 		return ""

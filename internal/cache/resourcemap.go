@@ -64,7 +64,7 @@ func (r *ResourceMap[T]) list() []T {
 }
 
 // Set stores a value, calling the onSet hook and notifying via the returned Event.
-func (r *ResourceMap[T]) Set(key string, v T, eventType string) Event {
+func (r *ResourceMap[T]) Set(key string, v T, eventType EventType) Event {
 	r.mu.Lock()
 	r.set(key, &v)
 	r.mu.Unlock()
@@ -79,7 +79,7 @@ func (r *ResourceMap[T]) Get(key string) (T, bool) {
 }
 
 // Delete removes a value by key, calling the onDelete hook.
-func (r *ResourceMap[T]) Delete(key string, eventType string) Event {
+func (r *ResourceMap[T]) Delete(key string, eventType EventType) Event {
 	r.mu.Lock()
 	r.del(key)
 	r.mu.Unlock()

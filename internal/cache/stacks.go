@@ -5,35 +5,35 @@ import "slices"
 const stackLabel = "com.docker.stack.namespace"
 
 // addToStack incrementally adds a resource to the appropriate stack. Must be called with c.mu held for writing.
-func (c *Cache) addToStack(resource, id string, labels map[string]string) {
+func (c *Cache) addToStack(resource EventType, id string, labels map[string]string) {
 	ns, ok := labels[stackLabel]
 	if !ok {
 		return
 	}
 	s, exists := c.stacks[ns]
 	if !exists {
-		if resource != "service" {
+		if resource != EventService {
 			return // never create a stack entry without at least one service
 		}
 		s = Stack{Name: ns}
 	}
 	switch resource {
-	case "service":
+	case EventService:
 		s.Services = appendUnique(s.Services, id)
-	case "config":
+	case EventConfig:
 		s.Configs = appendUnique(s.Configs, id)
-	case "secret":
+	case EventSecret:
 		s.Secrets = appendUnique(s.Secrets, id)
-	case "network":
+	case EventNetwork:
 		s.Networks = appendUnique(s.Networks, id)
-	case "volume":
+	case EventVolume:
 		s.Volumes = appendUnique(s.Volumes, id)
 	}
 	c.stacks[ns] = s
 }
 
 // removeFromStack incrementally removes a resource from its stack. Must be called with c.mu held for writing.
-func (c *Cache) removeFromStack(resource, id string, labels map[string]string) {
+func (c *Cache) removeFromStack(resource EventType, id string, labels map[string]string) {
 	ns, ok := labels[stackLabel]
 	if !ok {
 		return
@@ -43,15 +43,15 @@ func (c *Cache) removeFromStack(resource, id string, labels map[string]string) {
 		return
 	}
 	switch resource {
-	case "service":
+	case EventService:
 		s.Services = removeStr(s.Services, id)
-	case "config":
+	case EventConfig:
 		s.Configs = removeStr(s.Configs, id)
-	case "secret":
+	case EventSecret:
 		s.Secrets = removeStr(s.Secrets, id)
-	case "network":
+	case EventNetwork:
 		s.Networks = removeStr(s.Networks, id)
-	case "volume":
+	case EventVolume:
 		s.Volumes = removeStr(s.Volumes, id)
 	}
 	if len(s.Services) == 0 {

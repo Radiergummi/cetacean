@@ -8,7 +8,7 @@ import (
 type HistoryEntry struct {
 	ID         uint64    `json:"id"`
 	Timestamp  time.Time `json:"timestamp"`
-	Type       string    `json:"type"`
+	Type       EventType `json:"type"`
 	Action     string    `json:"action"`
 	ResourceID string    `json:"resourceId"`
 	Name       string    `json:"name"`
@@ -16,7 +16,7 @@ type HistoryEntry struct {
 }
 
 type HistoryQuery struct {
-	Type       string
+	Type       EventType
 	ResourceID string
 	Limit      int
 }
@@ -147,7 +147,7 @@ func (h *History) List(q HistoryQuery) []HistoryEntry {
 	return result
 }
 
-func (h *History) listByResource(resourceID, typeFilter string, limit int) []HistoryEntry {
+func (h *History) listByResource(resourceID string, typeFilter EventType, limit int) []HistoryEntry {
 	ring := h.byResource[resourceID]
 	if ring == nil {
 		return nil

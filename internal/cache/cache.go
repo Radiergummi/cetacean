@@ -9,11 +9,26 @@ import (
 	"github.com/docker/docker/api/types/volume"
 )
 
+// EventType identifies the kind of resource an event relates to.
+type EventType string
+
+const (
+	EventNode    EventType = "node"
+	EventService EventType = "service"
+	EventTask    EventType = "task"
+	EventConfig  EventType = "config"
+	EventSecret  EventType = "secret"
+	EventNetwork EventType = "network"
+	EventVolume  EventType = "volume"
+	EventStack   EventType = "stack"
+	EventSync    EventType = "sync"
+)
+
 type Event struct {
-	Type     string `json:"type"`
-	Action   string `json:"action"`
-	ID       string `json:"id"`
-	Resource any    `json:"resource,omitempty"`
+	Type     EventType `json:"type"`
+	Action   string    `json:"action"`
+	ID       string    `json:"id"`
+	Resource any       `json:"resource,omitempty"`
 }
 
 type Stack struct {
@@ -121,7 +136,7 @@ func (c *Cache) History() *History { return c.history }
 func (c *Cache) notify(e Event) {
 	// Sync events are internal bookkeeping; broadcast them to SSE clients
 	// but don't record them in history where they drown out real changes.
-	if e.Type != "sync" {
+	if e.Type != EventSync {
 		c.history.Append(HistoryEntry{
 			Type:       e.Type,
 			Action:     e.Action,
@@ -191,7 +206,7 @@ func serviceRefs(s swarm.Service) refSet {
 }
 
 func (c *Cache) notifyRefChanges(old, new refSet) {
-	diffNotify := func(typ string, oldSet, newSet map[string]bool) {
+	diffNotify := func(typ EventType, oldSet, newSet map[string]bool) {
 		for id := range oldSet {
 			if !newSet[id] {
 				c.notify(Event{Type: typ, Action: "ref_changed", ID: id})
@@ -203,10 +218,10 @@ func (c *Cache) notifyRefChanges(old, new refSet) {
 			}
 		}
 	}
-	diffNotify("config", old.configs, new.configs)
-	diffNotify("secret", old.secrets, new.secrets)
-	diffNotify("network", old.networks, new.networks)
-	diffNotify("volume", old.volumes, new.volumes)
+	diffNotify(EventConfig, old.configs, new.configs)
+	diffNotify(EventSecret, old.secrets, new.secrets)
+	diffNotify(EventNetwork, old.networks, new.networks)
+	diffNotify(EventVolume, old.volumes, new.volumes)
 }
 
 // --- Nodes ---
@@ -215,7 +230,7 @@ func (c *Cache) SetNode(n swarm.Node) {
 	c.mu.Lock()
 	c.nodes[n.ID] = n
 	c.mu.Unlock()
-	c.notify(Event{Type: "node", Action: "update", ID: n.ID, Resource: n})
+	c.notify(Event{Type: EventNode, Action: "update", ID: n.ID, Resource: n})
 }
 
 func (c *Cache) GetNode(id string) (swarm.Node, bool) {
@@ -229,7 +244,7 @@ func (c *Cache) DeleteNode(id string) {
 	c.mu.Lock()
 	delete(c.nodes, id)
 	c.mu.Unlock()
-	c.notify(Event{Type: "node", Action: "remove", ID: id})
+	c.notify(Event{Type: EventNode, Action: "remove", ID: id})
 }
 
 func (c *Cache) ListNodes() []swarm.Node {
@@ -249,16 +264,16 @@ func (c *Cache) SetService(s swarm.Service) {
 	var oldRefs refSet
 	if old, ok := c.services[s.ID]; ok {
 		oldRefs = serviceRefs(old)
-		c.removeFromStack("service", old.ID, old.Spec.Labels)
+		c.removeFromStack(EventService, old.ID, old.Spec.Labels)
 		c.removeServiceRefIndex(old)
 	}
 	c.services[s.ID] = s
-	c.addToStack("service", s.ID, s.Spec.Labels)
+	c.addToStack(EventService, s.ID, s.Spec.Labels)
 	c.addServiceRefIndex(s)
 	newRefs := serviceRefs(s)
 	c.mu.Unlock()
 
-	c.notify(Event{Type: "service", Action: "update", ID: s.ID, Resource: s})
+	c.notify(Event{Type: EventService, Action: "update", ID: s.ID, Resource: s})
 	c.notifyRefChanges(oldRefs, newRefs)
 }
 
@@ -274,13 +289,13 @@ func (c *Cache) DeleteService(id string) {
 	var oldRefs refSet
 	if old, ok := c.services[id]; ok {
 		oldRefs = serviceRefs(old)
-		c.removeFromStack("service", id, old.Spec.Labels)
+		c.removeFromStack(EventService, id, old.Spec.Labels)
 		c.removeServiceRefIndex(old)
 	}
 	delete(c.services, id)
 	c.mu.Unlock()
 
-	c.notify(Event{Type: "service", Action: "remove", ID: id})
+	c.notify(Event{Type: EventService, Action: "remove", ID: id})
 	c.notifyRefChanges(oldRefs, refSet{})
 }
 
@@ -311,7 +326,7 @@ func (c *Cache) SetTask(t swarm.Task) {
 	c.addTaskIndex(t)
 	c.mu.Unlock()
 	if changed {
-		c.notify(Event{Type: "task", Action: "update", ID: t.ID, Resource: t})
+		c.notify(Event{Type: EventTask, Action: "update", ID: t.ID, Resource: t})
 	}
 }
 
@@ -329,7 +344,7 @@ func (c *Cache) DeleteTask(id string) {
 	}
 	delete(c.tasks, id)
 	c.mu.Unlock()
-	c.notify(Event{Type: "task", Action: "remove", ID: id})
+	c.notify(Event{Type: EventTask, Action: "remove", ID: id})
 }
 
 // addTaskIndex adds a task to the secondary indexes. Must be called with c.mu held for writing.
@@ -383,12 +398,12 @@ func (c *Cache) ListTasks() []swarm.Task {
 func (c *Cache) SetConfig(cfg swarm.Config) {
 	c.mu.Lock()
 	if old, ok := c.configs[cfg.ID]; ok {
-		c.removeFromStack("config", old.ID, old.Spec.Labels)
+		c.removeFromStack(EventConfig, old.ID, old.Spec.Labels)
 	}
 	c.configs[cfg.ID] = cfg
-	c.addToStack("config", cfg.ID, cfg.Spec.Labels)
+	c.addToStack(EventConfig, cfg.ID, cfg.Spec.Labels)
 	c.mu.Unlock()
-	c.notify(Event{Type: "config", Action: "update", ID: cfg.ID, Resource: cfg})
+	c.notify(Event{Type: EventConfig, Action: "update", ID: cfg.ID, Resource: cfg})
 }
 
 func (c *Cache) GetConfig(id string) (swarm.Config, bool) {
@@ -401,11 +416,11 @@ func (c *Cache) GetConfig(id string) (swarm.Config, bool) {
 func (c *Cache) DeleteConfig(id string) {
 	c.mu.Lock()
 	if old, ok := c.configs[id]; ok {
-		c.removeFromStack("config", id, old.Spec.Labels)
+		c.removeFromStack(EventConfig, id, old.Spec.Labels)
 	}
 	delete(c.configs, id)
 	c.mu.Unlock()
-	c.notify(Event{Type: "config", Action: "remove", ID: id})
+	c.notify(Event{Type: EventConfig, Action: "remove", ID: id})
 }
 
 func (c *Cache) ListConfigs() []swarm.Config {
@@ -423,13 +438,13 @@ func (c *Cache) ListConfigs() []swarm.Config {
 func (c *Cache) SetSecret(s swarm.Secret) {
 	c.mu.Lock()
 	if old, ok := c.secrets[s.ID]; ok {
-		c.removeFromStack("secret", old.ID, old.Spec.Labels)
+		c.removeFromStack(EventSecret, old.ID, old.Spec.Labels)
 	}
 	s.Spec.Data = nil
 	c.secrets[s.ID] = s
-	c.addToStack("secret", s.ID, s.Spec.Labels)
+	c.addToStack(EventSecret, s.ID, s.Spec.Labels)
 	c.mu.Unlock()
-	c.notify(Event{Type: "secret", Action: "update", ID: s.ID, Resource: s})
+	c.notify(Event{Type: EventSecret, Action: "update", ID: s.ID, Resource: s})
 }
 
 func (c *Cache) GetSecret(id string) (swarm.Secret, bool) {
@@ -442,11 +457,11 @@ func (c *Cache) GetSecret(id string) (swarm.Secret, bool) {
 func (c *Cache) DeleteSecret(id string) {
 	c.mu.Lock()
 	if old, ok := c.secrets[id]; ok {
-		c.removeFromStack("secret", id, old.Spec.Labels)
+		c.removeFromStack(EventSecret, id, old.Spec.Labels)
 	}
 	delete(c.secrets, id)
 	c.mu.Unlock()
-	c.notify(Event{Type: "secret", Action: "remove", ID: id})
+	c.notify(Event{Type: EventSecret, Action: "remove", ID: id})
 }
 
 func (c *Cache) ListSecrets() []swarm.Secret {
@@ -464,12 +479,12 @@ func (c *Cache) ListSecrets() []swarm.Secret {
 func (c *Cache) SetNetwork(n network.Summary) {
 	c.mu.Lock()
 	if old, ok := c.networks[n.ID]; ok {
-		c.removeFromStack("network", old.ID, old.Labels)
+		c.removeFromStack(EventNetwork, old.ID, old.Labels)
 	}
 	c.networks[n.ID] = n
-	c.addToStack("network", n.ID, n.Labels)
+	c.addToStack(EventNetwork, n.ID, n.Labels)
 	c.mu.Unlock()
-	c.notify(Event{Type: "network", Action: "update", ID: n.ID, Resource: n})
+	c.notify(Event{Type: EventNetwork, Action: "update", ID: n.ID, Resource: n})
 }
 
 func (c *Cache) GetNetwork(id string) (network.Summary, bool) {
@@ -482,11 +497,11 @@ func (c *Cache) GetNetwork(id string) (network.Summary, bool) {
 func (c *Cache) DeleteNetwork(id string) {
 	c.mu.Lock()
 	if old, ok := c.networks[id]; ok {
-		c.removeFromStack("network", id, old.Labels)
+		c.removeFromStack(EventNetwork, id, old.Labels)
 	}
 	delete(c.networks, id)
 	c.mu.Unlock()
-	c.notify(Event{Type: "network", Action: "remove", ID: id})
+	c.notify(Event{Type: EventNetwork, Action: "remove", ID: id})
 }
 
 func (c *Cache) ListNetworks() []network.Summary {
@@ -504,12 +519,12 @@ func (c *Cache) ListNetworks() []network.Summary {
 func (c *Cache) SetVolume(v volume.Volume) {
 	c.mu.Lock()
 	if old, ok := c.volumes[v.Name]; ok {
-		c.removeFromStack("volume", old.Name, old.Labels)
+		c.removeFromStack(EventVolume, old.Name, old.Labels)
 	}
 	c.volumes[v.Name] = v
-	c.addToStack("volume", v.Name, v.Labels)
+	c.addToStack(EventVolume, v.Name, v.Labels)
 	c.mu.Unlock()
-	c.notify(Event{Type: "volume", Action: "update", ID: v.Name, Resource: v})
+	c.notify(Event{Type: EventVolume, Action: "update", ID: v.Name, Resource: v})
 }
 
 func (c *Cache) GetVolume(name string) (volume.Volume, bool) {
@@ -522,11 +537,11 @@ func (c *Cache) GetVolume(name string) (volume.Volume, bool) {
 func (c *Cache) DeleteVolume(name string) {
 	c.mu.Lock()
 	if old, ok := c.volumes[name]; ok {
-		c.removeFromStack("volume", name, old.Labels)
+		c.removeFromStack(EventVolume, name, old.Labels)
 	}
 	delete(c.volumes, name)
 	c.mu.Unlock()
-	c.notify(Event{Type: "volume", Action: "remove", ID: name})
+	c.notify(Event{Type: EventVolume, Action: "remove", ID: name})
 }
 
 func (c *Cache) ListVolumes() []volume.Volume {
@@ -1137,5 +1152,5 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 	c.lastSync = time.Now()
 	c.mu.Unlock()
 
-	c.notify(Event{Type: "sync", Action: "full_sync", ID: ""})
+	c.notify(Event{Type: EventSync, Action: "full_sync", ID: ""})
 }

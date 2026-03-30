@@ -8,6 +8,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 	"github.com/radiergummi/cetacean/internal/version"
 )
@@ -23,11 +24,11 @@ func (h *Handlers) HandleRecommendations(w http.ResponseWriter, r *http.Request)
 	}))
 }
 
-func (h *Handlers) streamList(w http.ResponseWriter, r *http.Request, typ string) {
+func (h *Handlers) streamList(w http.ResponseWriter, r *http.Request, typ cache.EventType) {
 	h.broadcaster.ServeSSE(w, r, sse.TypeMatcher(typ))
 }
 
-func (h *Handlers) streamResource(w http.ResponseWriter, r *http.Request, typ, id string) {
+func (h *Handlers) streamResource(w http.ResponseWriter, r *http.Request, typ cache.EventType, id string) {
 	h.broadcaster.ServeSSE(w, r, sse.ResourceMatcher(typ, id))
 }
 
