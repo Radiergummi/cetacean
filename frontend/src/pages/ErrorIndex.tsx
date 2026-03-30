@@ -1,6 +1,7 @@
 import FetchError from "../components/FetchError";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
+import { apiPath } from "@/lib/basePath";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -17,7 +18,7 @@ export default function ErrorIndex() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/errors", { headers: { Accept: "application/json" } })
+    fetch(apiPath("/api/errors"), { headers: { Accept: "application/json" } })
       .then((res) => {
         if (!res.ok) {
           throw new Error(`${res.status} ${res.statusText}`);
