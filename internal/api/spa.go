@@ -1,6 +1,8 @@
 package api
 
 import (
+	"fmt"
+	"html"
 	"io/fs"
 	"net/http"
 	"strings"
@@ -10,7 +12,10 @@ func NewSPAHandler(fsys fs.FS, basePath string) http.Handler {
 	fileServer := http.FileServer(http.FS(fsys))
 
 	// Read and prepare index.html with base path injection.
-	indexBytes, _ := fs.ReadFile(fsys, "index.html")
+	indexBytes, err := fs.ReadFile(fsys, "index.html")
+	if err != nil {
+		panic(fmt.Sprintf("spa: embedded index.html missing: %v", err))
+	}
 	indexHTML := string(indexBytes)
 
 	baseHref := "/"
@@ -18,8 +23,9 @@ func NewSPAHandler(fsys fs.FS, basePath string) http.Handler {
 		baseHref = basePath + "/"
 	}
 
-	injection := `<base href="` + baseHref + `">` + "\n" +
-		`    <link rel="canonical" href="` + baseHref + `">`
+	safeHref := html.EscapeString(baseHref)
+	injection := `<base href="` + safeHref + `">` + "\n" +
+		`    <link rel="canonical" href="` + safeHref + `">`
 
 	indexHTML = strings.Replace(indexHTML, "<head>", "<head>\n    "+injection, 1)
 	preparedIndex := []byte(indexHTML)

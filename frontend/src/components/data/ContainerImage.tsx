@@ -164,7 +164,7 @@ export default function ContainerImage({
       {favicon && (
         <img
           src={favicon}
-          alt="Registry Icon"
+          alt=""
           aria-hidden="true"
           className="h-4 w-4 shrink-0"
         />
