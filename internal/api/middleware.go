@@ -99,7 +99,17 @@ func requestLogger(next http.Handler) http.Handler {
 		next.ServeHTTP(sw, r)
 		duration := time.Since(start)
 
-		// Skip logging for static assets served by SPA handler
+		handler := r.Pattern
+		if handler == "" {
+			handler = "unknown"
+		}
+
+		metrics.RecordHTTPRequest(
+			handler, r.Method, sw.status,
+			duration.Seconds(), r.ContentLength, int64(sw.written),
+		)
+
+		// Skip logging for static assets served by SPA handler.
 		if strings.HasPrefix(r.URL.Path, "/assets/") {
 			return
 		}
@@ -118,25 +128,6 @@ func requestLogger(next http.Handler) http.Handler {
 			"status", sw.status,
 			"duration_ms", duration.Milliseconds(),
 			"bytes", sw.written,
-		)
-	})
-}
-
-func instrumentMetrics(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		sw := &statusWriter{ResponseWriter: w}
-		next.ServeHTTP(sw, r)
-		duration := time.Since(start).Seconds()
-
-		handler := r.Pattern
-		if handler == "" {
-			handler = "unknown"
-		}
-
-		metrics.RecordHTTPRequest(
-			handler, r.Method, sw.status,
-			duration, r.ContentLength, int64(sw.written),
 		)
 	})
 }

@@ -369,7 +369,6 @@ func NewRouter(
 
 	var handler http.Handler = mux
 	handler = requestLogger(handler)
-	handler = instrumentMetrics(handler)
 	handler = discoveryLinks(handler)
 	handler = requireReady(h)(handler)
 	handler = negotiate(handler)

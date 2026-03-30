@@ -3,7 +3,6 @@ package metrics
 import (
 	"testing"
 
-	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 )
 
@@ -215,9 +214,4 @@ func matchLabels(pairs []*dto.LabelPair, expected map[string]string) bool {
 	}
 
 	return true
-}
-
-func init() {
-	// Ensure the registry satisfies the Gatherer interface at compile time.
-	var _ prometheus.Gatherer = Registry
 }
