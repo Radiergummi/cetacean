@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-03-30
+
+### Fixed
+- Assets not loading when deployed under a base path
+
 ## [0.9.0] - 2026-03-30
 
 ### Added
