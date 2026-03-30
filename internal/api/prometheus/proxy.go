@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/metrics"
 )
 
 // ErrorWriter is a callback for writing HTTP error responses.
@@ -65,13 +67,17 @@ func (p *Proxy) proxyTo(
 		return
 	}
 
+	proxyStart := time.Now()
 	resp, err := p.client.Do(outReq)
+	proxyDuration := time.Since(proxyStart).Seconds()
 	if err != nil {
+		metrics.RecordPrometheusRequest(0, proxyDuration)
 		slog.Error("prometheus unreachable", "url", p.baseURL, "error", err)
 		p.writeError(w, r, "MTR002", "prometheus unreachable")
 		return
 	}
 	defer resp.Body.Close()
+	metrics.RecordPrometheusRequest(resp.StatusCode, proxyDuration)
 
 	// Forward successful responses directly.
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {

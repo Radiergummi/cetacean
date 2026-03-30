@@ -7,6 +7,8 @@ import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
+
+	"github.com/radiergummi/cetacean/internal/metrics"
 )
 
 // EventType identifies the kind of resource an event relates to.
@@ -135,6 +137,7 @@ func (c *Cache) notify(e Event) {
 			ResourceID: e.ID,
 			Name:       ExtractName(e),
 		})
+		metrics.RecordCacheMutation(string(e.Type), e.Action)
 	}
 	if c.onChange != nil {
 		c.onChange(e)
@@ -1050,6 +1053,28 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 	c.serviceRef.rebuild(c.services)
 	c.lastSync = time.Now()
 	c.mu.Unlock()
+
+	if data.HasNodes {
+		metrics.SetCacheResources("nodes", len(data.Nodes))
+	}
+	if data.HasServices {
+		metrics.SetCacheResources("services", len(data.Services))
+	}
+	if data.HasTasks {
+		metrics.SetCacheResources("tasks", len(data.Tasks))
+	}
+	if data.HasConfigs {
+		metrics.SetCacheResources("configs", len(data.Configs))
+	}
+	if data.HasSecrets {
+		metrics.SetCacheResources("secrets", len(data.Secrets))
+	}
+	if data.HasNetworks {
+		metrics.SetCacheResources("networks", len(data.Networks))
+	}
+	if data.HasVolumes {
+		metrics.SetCacheResources("volumes", len(data.Volumes))
+	}
 
 	c.notify(Event{Type: EventSync, Action: "full_sync", ID: ""})
 }

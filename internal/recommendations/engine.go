@@ -6,6 +6,8 @@ import (
 	"slices"
 	"sync"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/metrics"
 )
 
 // Checker produces recommendations from a specific domain.
@@ -105,7 +107,9 @@ func (e *Engine) tick(ctx context.Context, force bool) {
 		go func(idx int) {
 			tickCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			defer cancel()
+			start := time.Now()
 			recs := e.checkers[idx].checker.Check(tickCtx)
+			metrics.ObserveRecommendationCheck(e.checkers[idx].checker.Name(), time.Since(start).Seconds())
 			ch <- result{idx, recs}
 		}(i)
 	}
@@ -126,6 +130,19 @@ func (e *Engine) tick(ctx context.Context, force bool) {
 	e.results = merged
 	e.lastTick = now
 	e.mu.Unlock()
+
+	var critical, warning, info int
+	for _, r := range merged {
+		switch r.Severity {
+		case SeverityCritical:
+			critical++
+		case SeverityWarning:
+			warning++
+		case SeverityInfo:
+			info++
+		}
+	}
+	metrics.SetRecommendationCounts(critical, warning, info)
 
 	slog.Debug("recommendations: tick complete", "checkers_run", len(toRun), "total", len(merged))
 }

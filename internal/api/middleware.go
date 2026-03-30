@@ -10,6 +10,8 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/metrics"
 )
 
 type ctxKey int
@@ -117,6 +119,22 @@ func requestLogger(next http.Handler) http.Handler {
 			"duration_ms", duration.Milliseconds(),
 			"bytes", sw.written,
 		)
+	})
+}
+
+func instrumentMetrics(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		sw := &statusWriter{ResponseWriter: w}
+		next.ServeHTTP(sw, r)
+		duration := time.Since(start).Seconds()
+
+		handler := r.Pattern
+		if handler == "" {
+			handler = "unknown"
+		}
+
+		metrics.RecordHTTPRequest(handler, r.Method, sw.status, duration, r.ContentLength, int64(sw.written))
 	})
 }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/metrics"
 )
 
 func NewRouter(
@@ -36,6 +37,7 @@ func NewRouter(
 	mux.HandleFunc("GET /-/ready", h.HandleReady)
 	mux.HandleFunc("GET /-/metrics/status", h.HandleMonitoringStatus)
 	mux.HandleFunc("GET /-/docker-latest-version", h.HandleDockerLatestVersion)
+	mux.Handle("GET /-/metrics", metrics.Handler())
 	mux.HandleFunc("GET /-/metrics/labels", metricsProxy.HandleMetricsLabels)
 	mux.HandleFunc("GET /-/metrics/labels/{name}", metricsProxy.HandleMetricsLabelValues)
 	// Metrics (content-negotiated: JSON → proxy, SSE → stream, HTML → SPA)
@@ -367,6 +369,7 @@ func NewRouter(
 
 	var handler http.Handler = mux
 	handler = requestLogger(handler)
+	handler = instrumentMetrics(handler)
 	handler = discoveryLinks(handler)
 	handler = requireReady(h)(handler)
 	handler = negotiate(handler)

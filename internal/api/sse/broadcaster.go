@@ -14,6 +14,7 @@ import (
 	json "github.com/goccy/go-json"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/metrics"
 )
 
 type sseClient struct {
@@ -58,7 +59,9 @@ func NewBroadcaster(batchInterval time.Duration, writeError ErrorWriter) *Broadc
 func (b *Broadcaster) Broadcast(e cache.Event) {
 	select {
 	case b.inbox <- e:
+		metrics.RecordSSEBroadcast()
 	default:
+		metrics.RecordSSEDrop()
 		slog.Warn("SSE broadcast buffer full, dropping event", "type", e.Type, "id", e.ID)
 	}
 }
@@ -144,6 +147,7 @@ func (b *Broadcaster) ServeSSE(
 	w.Header().Set("Connection", "keep-alive")
 	b.clients[client] = struct{}{}
 	b.mu.Unlock()
+	metrics.RecordSSEConnect()
 
 	flusher.Flush()
 
@@ -158,6 +162,7 @@ func (b *Broadcaster) ServeSSE(
 			close(client.done)
 		}
 		b.mu.Unlock()
+		metrics.RecordSSEDisconnect()
 	}()
 
 	var eventID uint64

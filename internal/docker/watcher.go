@@ -13,6 +13,7 @@ import (
 	"github.com/docker/docker/api/types/volume"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/metrics"
 )
 
 // DockerClient abstracts the Docker API methods used by the Watcher.
@@ -124,6 +125,7 @@ func (w *Watcher) writeSnapshot() {
 }
 
 func (w *Watcher) fullSync(ctx context.Context) error {
+	start := time.Now()
 	slog.Info("starting full sync")
 
 	data, err := w.client.FullSync(ctx)
@@ -133,6 +135,7 @@ func (w *Watcher) fullSync(ctx context.Context) error {
 	}
 
 	w.store.ReplaceAll(data)
+	metrics.ObserveSyncDuration(time.Since(start).Seconds())
 
 	snap := w.store.Snapshot()
 	slog.Info(
