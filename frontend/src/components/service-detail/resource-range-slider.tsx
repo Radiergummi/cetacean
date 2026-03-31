@@ -138,7 +138,7 @@ export function ResourceRangeSlider({
             >
               <div className={`w-px bg-muted-foreground/40 ${tick.tall ? "h-2.5" : "h-1.5"}`} />
               {tick.label != null && (
-                <span className="mt-0.5 text-[9px] text-muted-foreground">{tick.label}</span>
+                <span className="mt-0.5 whitespace-nowrap text-[9px] text-muted-foreground">{tick.label}</span>
               )}
             </div>
           ))}
