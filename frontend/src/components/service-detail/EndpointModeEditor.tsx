@@ -2,7 +2,7 @@ import { api } from "@/api/client";
 import { DockerDocsLink } from "@/components/service-detail/DockerDocsLink";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
-import { RadioCard } from "@/components/ui/radio-card";
+import { RadioCard, RadioCardGroup } from "@/components/ui/radio-card";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
@@ -67,7 +67,7 @@ export function EndpointModeEditor({
 
       {editing ? (
         <>
-          <div className="flex flex-col gap-2">
+          <RadioCardGroup className="flex flex-col gap-2">
             <RadioCard
               selected={mode === "vip"}
               onClick={() => setMode("vip")}
@@ -84,7 +84,7 @@ export function EndpointModeEditor({
               description="DNS queries return all task IPs in round-robin order. Does not support published ports."
               disabled={action.loading}
             />
-          </div>
+          </RadioCardGroup>
 
           <footer className="flex items-center justify-end gap-2">
             <Button

@@ -3,7 +3,7 @@ import { EditablePanel } from "./EditablePanel";
 import { api } from "@/api/client";
 import type { UpdateConfig } from "@/api/types";
 import { NumberField } from "@/components/ui/number-field";
-import { RadioCard } from "@/components/ui/radio-card";
+import { RadioCard, RadioCardGroup } from "@/components/ui/radio-card";
 import { formatDuration, formatPercentage, nanosToSeconds } from "@/lib/format";
 import { useState } from "react";
 
@@ -197,7 +197,7 @@ export function PolicyEditor({ type, serviceId, policy, onSaved }: PolicyEditorP
               <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/service/create/#update-delay" />
             </span>
 
-            <div
+            <RadioCardGroup
               className={
                 type === "update"
                   ? "grid grid-cols-1 gap-1.5 sm:grid-cols-3"
@@ -213,7 +213,7 @@ export function PolicyEditor({ type, serviceId, policy, onSaved }: PolicyEditorP
                   description={description}
                 />
               ))}
-            </div>
+            </RadioCardGroup>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -222,7 +222,7 @@ export function PolicyEditor({ type, serviceId, policy, onSaved }: PolicyEditorP
               <DockerDocsLink href="https://docs.docker.com/reference/cli/docker/service/create/#update-delay" />
             </span>
 
-            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            <RadioCardGroup className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
               <RadioCard
                 selected={form.order === "stop-first"}
                 onClick={() => setForm({ ...form, order: "stop-first" })}
@@ -235,7 +235,7 @@ export function PolicyEditor({ type, serviceId, policy, onSaved }: PolicyEditorP
                 title="Start new first"
                 description="Start new tasks before stopping old ones. Minimizes downtime."
               />
-            </div>
+            </RadioCardGroup>
           </div>
         </>
       }

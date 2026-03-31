@@ -1,5 +1,66 @@
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
+import { useCallback, useRef } from "react";
+
+interface RadioCardGroupProps {
+  children: ReactNode;
+  className?: string;
+}
+
+/**
+ * Wraps a set of RadioCard buttons with roving tabindex and arrow-key navigation.
+ * Only the selected (or first) card is tabbable; arrow keys move focus and activate.
+ */
+export function RadioCardGroup({ children, className }: RadioCardGroupProps) {
+  const groupRef = useRef<HTMLDivElement>(null);
+
+  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    const group = groupRef.current;
+
+    if (!group) {
+      return;
+    }
+
+    const cards = Array.from(
+      group.querySelectorAll<HTMLButtonElement>('[role="radio"]:not(:disabled)'),
+    );
+
+    if (cards.length === 0) {
+      return;
+    }
+
+    const currentIndex = cards.indexOf(document.activeElement as HTMLButtonElement);
+
+    if (currentIndex === -1) {
+      return;
+    }
+
+    let nextIndex: number | null = null;
+
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      nextIndex = (currentIndex + 1) % cards.length;
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      nextIndex = (currentIndex - 1 + cards.length) % cards.length;
+    }
+
+    if (nextIndex !== null) {
+      event.preventDefault();
+      cards[nextIndex].focus();
+      cards[nextIndex].click();
+    }
+  }, []);
+
+  return (
+    <div
+      ref={groupRef}
+      role="radiogroup"
+      onKeyDown={handleKeyDown}
+      className={className}
+    >
+      {children}
+    </div>
+  );
+}
 
 interface RadioCardProps {
   selected: boolean;
@@ -21,6 +82,9 @@ export function RadioCard({
   return (
     <button
       type="button"
+      role="radio"
+      aria-checked={selected}
+      tabIndex={selected ? 0 : -1}
       onClick={onClick}
       disabled={disabled}
       className={cn(

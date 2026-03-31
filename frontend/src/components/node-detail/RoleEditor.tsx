@@ -2,7 +2,7 @@ import { api } from "@/api/client";
 import InfoCard from "@/components/InfoCard";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { RadioCard } from "@/components/ui/radio-card";
+import { RadioCard, RadioCardGroup } from "@/components/ui/radio-card";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { cn } from "@/lib/utils";
@@ -94,16 +94,18 @@ export function RoleEditor({ nodeId, currentRole, isLeader, managerCount }: Role
                 <div className="flex flex-col gap-3">
                   <p className="text-sm font-medium">Change Role</p>
 
-                  {roles.map((role) => (
-                    <RadioCard
-                      key={role.value}
-                      selected={value === role.value}
-                      onClick={() => setValue(role.value)}
-                      disabled={role.value === currentRole}
-                      title={role.value === currentRole ? `${role.title} (current)` : role.title}
-                      description={role.description}
-                    />
-                  ))}
+                  <RadioCardGroup className="flex flex-col gap-3">
+                    {roles.map((role) => (
+                      <RadioCard
+                        key={role.value}
+                        selected={value === role.value}
+                        onClick={() => setValue(role.value)}
+                        disabled={role.value === currentRole}
+                        title={role.value === currentRole ? `${role.title} (current)` : role.title}
+                        description={role.description}
+                      />
+                    ))}
+                  </RadioCardGroup>
 
                   {isDemoting && (
                     <div className="rounded-md border border-yellow-500/25 bg-yellow-500/5 px-3 py-2 text-xs leading-relaxed text-yellow-600 dark:text-yellow-500">
