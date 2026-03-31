@@ -1,4 +1,4 @@
-.PHONY: lint fmt fmt-check build test check
+.PHONY: lint fmt fmt-check build test test-e2e check
 
 ## Lint all code
 lint:
@@ -30,6 +30,10 @@ build:
 ## Run all tests
 test:
 	go test ./...
+
+## Run end-to-end tests
+test-e2e:
+	cd frontend && npx playwright test
 
 ## Run all checks (lint + format check + test)
 check: lint fmt-check test
