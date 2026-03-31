@@ -364,20 +364,26 @@ export default function TimeSeriesChart({
   }, [fetchData, refreshKey]);
 
   // SSE streaming for live ranges. Opens after the initial fetch completes.
+  // A generation counter ensures the gate only opens when fetchedData was
+  // produced for the current query/range, preventing SSE point events from
+  // mutating stale data arrays during range switches.
   const streaming = panel?.streaming ?? true;
   const hasOpenedRef = useRef(false);
   const [sseKey, setSSEKey] = useState(0);
   const fetchDataRef = useRef(fetchData);
   fetchDataRef.current = fetchData;
+  const dataSnapRef = useRef<typeof fetchedData>(null);
 
-  // Reset the gate when query/range changes so SSE re-opens after next fetch
+  // Close the gate and snapshot current data when query/range changes.
+  // The gate re-opens only when fetchedData becomes a new reference (new fetch completed).
   useEffect(() => {
     hasOpenedRef.current = false;
-  }, [query, range, from, to]);
+    dataSnapRef.current = fetchedData;
+  }, [query, range, from, to]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Mark ready once we have data
+  // Open the gate only when fetchedData has changed since the last gate reset
   useEffect(() => {
-    if (fetchedData != null) {
+    if (fetchedData != null && fetchedData !== dataSnapRef.current) {
       hasOpenedRef.current = true;
     }
   }, [fetchedData]);
@@ -460,6 +466,7 @@ export default function TimeSeriesChart({
         eventSource.close();
       } else {
         hasOpenedRef.current = false;
+        dataSnapRef.current = fetchedDataRef.current;
 
         fetchDataRef.current();
         setSSEKey((key) => key + 1);

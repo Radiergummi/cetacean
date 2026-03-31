@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Monitoring status banner shows the actual error when Prometheus is unreachable
 
 ### Fixed
+- Relative timestamps ("5 minutes ago") never updating while the page stays open
+- Chart data briefly corrupted when switching time ranges on metrics panels
 - Task state not updating in real time when replicas finish starting, requiring a 5-minute wait for the periodic re-sync
 - Prometheus proxy returning raw 404/502 responses instead of structured errors when the configured URL is wrong
 - Prometheus query client ignoring HTTP error status codes, producing misleading "parse error" messages
