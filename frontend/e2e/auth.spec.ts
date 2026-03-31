@@ -1,20 +1,20 @@
 import { test, expect } from "./fixtures";
 
 test.describe("Auth / Profile", () => {
-  test("profile page shows profile content or redirects to home", async ({ page }) => {
+  test("profile page redirects to home when auth is none", async ({ page }) => {
     await page.goto("/profile");
+    // In none mode, /profile redirects to /
+    const url = page.url();
+    const isHome = url.endsWith("/") && !url.includes("/profile");
+    test.skip(!isHome, "Auth is enabled — profile page rendered instead of redirecting");
+    await expect(page.getByRole("heading", { name: "Cluster Overview" })).toBeVisible();
+  });
 
-    // Either the profile page renders (authenticated) or it redirects to "/"
-    const isHome = page.url().endsWith("/") || page.url().match(/\/$/) !== null;
-
-    if (isHome) {
-      // Redirected to dashboard — auth mode is "none", this is expected
-      await expect(page.getByRole("heading", { name: "Cluster Overview" })).toBeVisible({
-        timeout: 10_000,
-      });
-    } else {
-      // Profile page rendered — should show a heading with identity info
-      await expect(page.getByRole("heading").first()).toBeVisible({ timeout: 10_000 });
-    }
+  test("profile page shows identity when auth is enabled", async ({ page }) => {
+    await page.goto("/profile");
+    const url = page.url();
+    const isProfile = url.includes("/profile");
+    test.skip(!isProfile, "Auth is none — redirected to home");
+    await expect(page.getByRole("heading").first()).toBeVisible();
   });
 });

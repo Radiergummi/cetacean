@@ -40,14 +40,19 @@ export { expect };
 /** Whether write operations are enabled for this test run. */
 export const writesEnabled = !!process.env.CETACEAN_E2E_WRITE;
 
-/** Navigate to the first item in a resource list and wait for the detail page. */
+/**
+ * Navigate to the first item in a resource list and wait for the detail page.
+ * Uses `table tbody tr` because DataTable renders standard HTML table elements
+ * and Playwright's role-based `getByRole("row")` also matches the header row.
+ */
 export async function navigateToFirst(
   page: import("@playwright/test").Page,
   listPath: string,
   detailPattern: RegExp,
 ) {
   await page.goto(listPath);
-  await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 10_000 });
-  await page.locator("table tbody tr").first().click();
+  const firstRow = page.locator("table tbody tr").first();
+  await expect(firstRow).toBeVisible({ timeout: 10_000 });
+  await firstRow.click();
   await expect(page).toHaveURL(detailPattern);
 }

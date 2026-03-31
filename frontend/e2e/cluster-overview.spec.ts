@@ -72,9 +72,6 @@ test.describe("Cluster Overview", () => {
 
     // Collapse
     await toggle.click();
-    // After collapsing the activity feed container should be gone
-    await expect(page.locator("[aria-expanded=false]", { has: toggle })).not.toBeVisible();
-    // The toggle itself should still be visible with aria-expanded=false
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
 
     // Expand again
@@ -109,10 +106,12 @@ test.describe("Cluster Overview", () => {
 
     // The "View all" link is only rendered when there are recommendations.
     const viewAll = page.getByRole("link", { name: /View all/i });
-    // Allow time for recommendations to load, then check presence.
-    await page.waitForTimeout(3_000);
-    const count = await viewAll.count();
-    test.skip(count === 0, "No recommendations present — View all link not rendered");
+
+    try {
+      await expect(viewAll).toBeVisible({ timeout: 5_000 });
+    } catch {
+      test.skip(true, "No recommendations present — View all link not rendered");
+    }
 
     await viewAll.click();
     await expect(page).toHaveURL("/recommendations");

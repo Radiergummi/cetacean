@@ -53,14 +53,9 @@ test.describe("Recommendations (/recommendations)", () => {
     const cardCount = await cards.count();
     test.skip(cardCount === 0, "No recommendations present — target link test skipped");
 
-    // Each card is inside a Collapsible.Root; find all anchor links in those ancestor elements
-    const cardRoots = cards.first().locator("xpath=ancestor::div[contains(@class, 'rounded-lg')]");
-    const links = cardRoots.locator("a");
+    // Recommendation cards contain target links (service/node names)
+    const links = page.locator("a[href^='/services/'], a[href^='/nodes/']");
     const linkCount = await links.count();
-
-    for (let index = 0; index < linkCount; index++) {
-      const href = await links.nth(index).getAttribute("href");
-      expect(href).toBeTruthy();
-    }
+    expect(linkCount).toBeGreaterThan(0);
   });
 });

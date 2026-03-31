@@ -13,10 +13,7 @@ test.describe("Service Editors", () => {
     const envSection = page.getByRole("button", { name: /Environment Variables/i });
     const count = await envSection.count();
 
-    if (count === 0) {
-      test.skip();
-      return;
-    }
+    test.skip(count === 0, "Section not present on this service");
 
     // Ensure the section is open
     const isExpanded = await envSection.getAttribute("aria-expanded");
@@ -40,10 +37,7 @@ test.describe("Service Editors", () => {
     const envSection = page.getByRole("button", { name: /Environment Variables/i });
     const count = await envSection.count();
 
-    if (count === 0) {
-      test.skip();
-      return;
-    }
+    test.skip(count === 0, "Section not present on this service");
 
     const isExpanded = await envSection.getAttribute("aria-expanded");
 
@@ -70,10 +64,7 @@ test.describe("Service Editors", () => {
     const envSection = page.getByRole("button", { name: /Environment Variables/i });
     const count = await envSection.count();
 
-    if (count === 0) {
-      test.skip();
-      return;
-    }
+    test.skip(count === 0, "Section not present on this service");
 
     const isExpanded = await envSection.getAttribute("aria-expanded");
 
@@ -99,10 +90,7 @@ test.describe("Service Editors", () => {
     const labelsSection = page.getByRole("button", { name: /^Labels$/i });
     const count = await labelsSection.count();
 
-    if (count === 0) {
-      test.skip();
-      return;
-    }
+    test.skip(count === 0, "Section not present on this service");
 
     const isExpanded = await labelsSection.getAttribute("aria-expanded");
 
@@ -124,10 +112,7 @@ test.describe("Service Editors", () => {
     const labelsSection = page.getByRole("button", { name: /^Labels$/i });
     const count = await labelsSection.count();
 
-    if (count === 0) {
-      test.skip();
-      return;
-    }
+    test.skip(count === 0, "Section not present on this service");
 
     const isExpanded = await labelsSection.getAttribute("aria-expanded");
 
