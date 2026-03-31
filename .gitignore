@@ -48,3 +48,5 @@ frontend/dist/
 node_modules/
 .worktrees/
 cetacean.toml
+.playwright-mcp/
+frontend/test-results/

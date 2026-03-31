@@ -413,22 +413,22 @@ export interface ServiceDetail {
 
 export interface ConfigDetail {
   config: Config;
-  services: ServiceRef[];
+  services: ServiceRef[] | null;
 }
 
 export interface SecretDetail {
   secret: Secret;
-  services: ServiceRef[];
+  services: ServiceRef[] | null;
 }
 
 export interface NetworkDetail {
   network: Network;
-  services: ServiceRef[];
+  services: ServiceRef[] | null;
 }
 
 export interface VolumeDetail {
   volume: Volume;
-  services: ServiceRef[];
+  services: ServiceRef[] | null;
 }
 
 export interface StackSummary {
