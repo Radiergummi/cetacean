@@ -613,6 +613,7 @@ export interface Identity {
   groups?: string[];
   provider: string;
   raw?: Record<string, unknown>;
+  permissions?: Record<string, string[]>;
 }
 
 export interface ClusterCapacity {

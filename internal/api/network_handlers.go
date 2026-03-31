@@ -6,6 +6,8 @@ import (
 
 	"github.com/docker/docker/api/types/network"
 
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
 
@@ -18,6 +20,11 @@ func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "NET002", fmt.Sprintf("network %q not found", id))
 		return
 	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "network:"+net.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
+		return
+	}
+	h.setAllow(w, r, "network", net.Name)
 	writeJSONWithETag(
 		w,
 		r,
@@ -30,6 +37,9 @@ func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 	networks := h.cache.ListNetworks()
+	networks = acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", networks, func(n network.Summary) string {
+		return "network:" + n.Name
+	})
 	networks = searchFilter(
 		networks,
 		r.URL.Query().Get("search"),

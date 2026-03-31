@@ -6,6 +6,8 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
 
@@ -13,6 +15,9 @@ import (
 
 func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 	nodes := h.cache.ListNodes()
+	nodes = acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", nodes, func(n swarm.Node) string {
+		return "node:" + n.Description.Hostname
+	})
 	nodes = searchFilter(
 		nodes,
 		r.URL.Query().Get("search"),
@@ -41,6 +46,11 @@ func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "node:"+node.Description.Hostname) {
+		writeErrorCode(w, r, "ACL001", "access denied")
+		return
+	}
+	h.setAllow(w, r, "node", node.Description.Hostname)
 	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/nodes/"+id, "Node", NodeResponse{
 		Node: node,
 	}))

@@ -7,6 +7,8 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
@@ -59,6 +61,9 @@ func taskStateSortKey(state swarm.TaskState) string {
 
 func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 	tasks := h.cache.ListTasks()
+	tasks = acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", tasks, func(t swarm.Task) string {
+		return "task:" + t.ID
+	})
 	var ok bool
 	if tasks, ok = exprFilter(tasks, r.URL.Query().Get("filter"), filter.TaskEnv, w, r); !ok {
 		return
@@ -91,7 +96,12 @@ func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "TSK002", fmt.Sprintf("task %q not found", id))
 		return
 	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "task:"+id) {
+		writeErrorCode(w, r, "ACL001", "access denied")
+		return
+	}
 	et := h.enrichTask(task)
+	h.setAllow(w, r, "task", id)
 	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/tasks/"+id, "Task", TaskResponse{
 		Task:    et,
 		Service: TaskServiceRef{AtID: "/services/" + et.ServiceID, Name: et.ServiceName},

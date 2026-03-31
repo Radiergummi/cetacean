@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/api"
 	promapi "github.com/radiergummi/cetacean/internal/api/prometheus"
 	"github.com/radiergummi/cetacean/internal/api/sse"
@@ -238,6 +239,66 @@ func main() {
 		slog.Info("recommendation engine disabled")
 	}
 
+	// ACL
+	aclCfg := config.LoadACL(flags, fc)
+	var aclEval *acl.Evaluator
+	var stopPolicyWatch func()
+	if authCfg.Mode != "none" {
+		aclEval = acl.NewEvaluator()
+		aclEval.SetResolver(stateCache)
+
+		// Load policy from inline or file.
+		if aclCfg.Policy != "" {
+			p, err := acl.ParsePolicy([]byte(aclCfg.Policy))
+			if err != nil {
+				slog.Error("failed to parse inline ACL policy", "error", err)
+				os.Exit(1)
+			}
+			if err := acl.Validate(p); err != nil {
+				slog.Error("invalid ACL policy", "error", err)
+				os.Exit(1)
+			}
+			aclEval.SetPolicy(p)
+			slog.Info("loaded inline ACL policy", "grants", len(p.Grants))
+		} else if aclCfg.PolicyFile != "" {
+			p, err := acl.ParsePolicyFile(aclCfg.PolicyFile)
+			if err != nil {
+				slog.Error("failed to load ACL policy file", "path", aclCfg.PolicyFile, "error", err)
+				os.Exit(1)
+			}
+			if err := acl.Validate(p); err != nil {
+				slog.Error("invalid ACL policy file", "path", aclCfg.PolicyFile, "error", err)
+				os.Exit(1)
+			}
+			aclEval.SetPolicy(p)
+			slog.Info("loaded ACL policy file", "path", aclCfg.PolicyFile, "grants", len(p.Grants))
+
+			stopPolicyWatch, err = acl.WatchPolicyFile(aclEval, aclCfg.PolicyFile)
+			if err != nil {
+				slog.Warn("failed to watch policy file for changes", "error", err)
+			}
+		}
+
+		// Provider grant source
+		switch authCfg.Mode {
+		case "tailscale":
+			if aclCfg.TailscaleCapability != "" {
+				aclEval.SetSource(&acl.TailscaleSource{Capability: aclCfg.TailscaleCapability})
+			}
+		case "oidc":
+			if aclCfg.OIDCClaim != "" {
+				aclEval.SetSource(&acl.OIDCSource{Claim: aclCfg.OIDCClaim})
+			}
+		case "headers":
+			if aclCfg.HeadersACL != "" {
+				aclEval.SetSource(&acl.HeadersSource{Header: aclCfg.HeadersACL})
+			}
+		}
+	}
+	if stopPolicyWatch != nil {
+		defer stopPolicyWatch()
+	}
+
 	slog.Info("operations level", "level", cfg.OperationsLevel)
 	handlers := api.NewHandlers(
 		stateCache,
@@ -250,6 +311,7 @@ func main() {
 		promClient,
 		cfg.OperationsLevel,
 		recEngine,
+		aclEval,
 	)
 
 	// SPA

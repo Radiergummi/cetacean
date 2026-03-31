@@ -86,5 +86,6 @@ func newTestHandlers(t testing.TB, opts ...testHandlersOption) *Handlers {
 		cfg.promClient,
 		cfg.operationsLevel,
 		nil, // recEngine
+		nil, // acl
 	)
 }

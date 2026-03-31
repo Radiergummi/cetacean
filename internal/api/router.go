@@ -58,7 +58,14 @@ func NewRouter(
 	mux.HandleFunc("GET /api/errors/{code}", contentNegotiated(HandleErrorDetail, spa))
 
 	// SSE events
-	mux.Handle("GET /events", sseOnly(b, spa))
+	mux.HandleFunc("GET /events", func(w http.ResponseWriter, r *http.Request) {
+		ct := ContentTypeFromContext(r.Context())
+		if ct != ContentTypeSSE {
+			spa.ServeHTTP(w, r)
+			return
+		}
+		b.ServeSSE(w, r, h.aclMatchWrap(r, nil))
+	})
 
 	// Cluster
 	mux.HandleFunc("GET /cluster", contentNegotiated(h.HandleCluster, spa))
@@ -253,7 +260,8 @@ func NewRouter(
 	mux.HandleFunc(
 		"GET /stacks/{name}",
 		contentNegotiatedWithSSE(h.HandleGetStack, func(w http.ResponseWriter, r *http.Request) {
-			h.broadcaster.ServeSSE(w, r, sse.StackMatcher(h.cache, r.PathValue("name")))
+			stackMatch := sse.StackMatcher(h.cache, r.PathValue("name"))
+			h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, stackMatch))
 		}, spa),
 	)
 	mux.Handle("DELETE /stacks/{name}", tier3(h.HandleRemoveStack))
@@ -352,7 +360,7 @@ func NewRouter(
 	mux.HandleFunc("GET /search", contentNegotiated(h.HandleSearch, spa))
 
 	// Profile
-	mux.HandleFunc("GET /profile", contentNegotiated(HandleProfile, spa))
+	mux.HandleFunc("GET /profile", contentNegotiated(h.HandleProfile, spa))
 
 	// Topology
 	mux.HandleFunc("GET /topology/networks", contentNegotiated(h.HandleNetworkTopology, spa))

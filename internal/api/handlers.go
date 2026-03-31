@@ -15,6 +15,8 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/api/prometheus"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -228,6 +230,7 @@ type Handlers struct {
 	promClient          *prometheus.Client
 	operationsLevel     config.OperationsLevel
 	recEngine           *recommendations.Engine
+	acl                 *acl.Evaluator
 	localNodeMu         sync.Mutex
 	localNodeID         string
 	localNodeDone       bool
@@ -250,6 +253,7 @@ func NewHandlers(
 	promClient *prometheus.Client,
 	operationsLevel config.OperationsLevel,
 	recEngine *recommendations.Engine,
+	aclEval *acl.Evaluator,
 ) *Handlers {
 	return &Handlers{
 		cache:              c,
@@ -268,8 +272,20 @@ func NewHandlers(
 		promClient:         promClient,
 		operationsLevel:    operationsLevel,
 		recEngine:          recEngine,
+		acl:                aclEval,
 		dockerVersionCache: newDockerVersionCache(),
 	}
+}
+
+// requireAnyGrant checks that the identity has at least one grant.
+// Used to gate cluster-wide endpoints when ACL is active.
+func (h *Handlers) requireAnyGrant(w http.ResponseWriter, r *http.Request) bool {
+	id := auth.IdentityFromContext(r.Context())
+	if h.acl.HasAnyGrant(id) {
+		return true
+	}
+	writeErrorCode(w, r, "ACL001", "no grants found for this identity")
+	return false
 }
 
 func searchFilter[T any](items []T, query string, name func(T) string) []T {

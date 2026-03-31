@@ -6,6 +6,8 @@ import (
 
 	"github.com/docker/docker/api/types/volume"
 
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
 
@@ -18,6 +20,11 @@ func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "VOL002", fmt.Sprintf("volume %q not found", name))
 		return
 	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "volume:"+vol.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
+		return
+	}
+	h.setAllow(w, r, "volume", vol.Name)
 	writeJSONWithETag(
 		w,
 		r,
@@ -30,6 +37,9 @@ func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 	volumes := h.cache.ListVolumes()
+	volumes = acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", volumes, func(v volume.Volume) string {
+		return "volume:" + v.Name
+	})
 	volumes = searchFilter(
 		volumes,
 		r.URL.Query().Get("search"),

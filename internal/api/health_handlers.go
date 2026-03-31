@@ -33,13 +33,31 @@ func (h *Handlers) HandleRecommendations(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *Handlers) streamList(w http.ResponseWriter, r *http.Request, typ cache.EventType) {
-	h.broadcaster.ServeSSE(w, r, sse.TypeMatcher(typ))
+	typMatch := sse.TypeMatcher(typ)
+	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, typMatch))
 }
 
 func (h *Handlers) streamResource(
 	w http.ResponseWriter, r *http.Request, typ cache.EventType, id string,
 ) {
-	h.broadcaster.ServeSSE(w, r, sse.ResourceMatcher(typ, id))
+	resMatch := sse.ResourceMatcher(typ, id)
+	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, resMatch))
+}
+
+// aclMatchWrap wraps an SSE match function with an ACL authorization check.
+// Events that pass the type/resource matcher are further filtered by ACL.
+// Sync events always pass through.
+func (h *Handlers) aclMatchWrap(r *http.Request, inner func(cache.Event) bool) func(cache.Event) bool {
+	id := auth.IdentityFromContext(r.Context())
+	return func(ev cache.Event) bool {
+		if inner != nil && !inner(ev) {
+			return false
+		}
+		if ev.Type == cache.EventSync {
+			return true
+		}
+		return h.acl.Can(id, "read", string(ev.Type)+":"+ev.Name)
+	}
 }
 
 func (h *Handlers) isReady() bool {
@@ -85,12 +103,20 @@ func writeJSONStatus(w http.ResponseWriter, status int, v any) {
 // HandleProfile returns the authenticated user's identity as JSON.
 // Registered with content negotiation so /profile serves the SPA for
 // browsers and JSON for API clients (/profile.json or Accept: application/json).
-func HandleProfile(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleProfile(w http.ResponseWriter, r *http.Request) {
 	id := auth.IdentityFromContext(r.Context())
 	if id == nil {
 		writeErrorCode(w, r, "AUT001", "not authenticated")
 		return
 	}
+
+	type profileResponse struct {
+		*auth.Identity
+		Permissions map[string][]string `json:"permissions,omitempty"`
+	}
+	resp := profileResponse{Identity: id}
+	resp.Permissions = h.acl.PermissionsFor(id)
+
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSONWithETag(w, r, id)
+	writeJSONWithETag(w, r, resp)
 }

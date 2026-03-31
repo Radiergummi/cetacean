@@ -7,6 +7,8 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/filter"
 	"github.com/radiergummi/cetacean/internal/integrations"
@@ -21,6 +23,9 @@ type ServiceListItem struct {
 
 func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 	services := h.cache.ListServices()
+	services = acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", services, func(s swarm.Service) string {
+		return "service:" + s.Spec.Name
+	})
 	services = searchFilter(
 		services,
 		r.URL.Query().Get("search"),
@@ -71,6 +76,10 @@ func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "service:"+svc.Spec.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
+		return
+	}
 	detail := ServiceResponse{Service: svc}
 	if changes := DiffServiceSpecs(svc.PreviousSpec, &svc.Spec); len(changes) > 0 {
 		detail.Changes = changes
@@ -78,6 +87,7 @@ func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
 	if detected := integrations.Detect(svc.Spec.Labels); len(detected) > 0 {
 		detail.Integrations = detected
 	}
+	h.setAllow(w, r, "service", svc.Spec.Name)
 	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/services/"+id, "Service", detail))
 }
 

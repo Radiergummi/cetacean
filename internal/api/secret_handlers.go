@@ -6,6 +6,8 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
 
@@ -18,8 +20,13 @@ func (h *Handlers) HandleGetSecret(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "SEC002", fmt.Sprintf("secret %q not found", id))
 		return
 	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "secret:"+sec.Spec.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
+		return
+	}
 	// Never expose secret data — clear it before responding.
 	sec.Spec.Data = nil
+	h.setAllow(w, r, "secret", sec.Spec.Name)
 	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", SecretResponse{
 		Secret:   sec,
 		Services: h.cache.ServicesUsingSecret(id),
@@ -31,6 +38,9 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 	for i := range secrets {
 		secrets[i].Spec.Data = nil
 	}
+	secrets = acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", secrets, func(s swarm.Secret) string {
+		return "secret:" + s.Spec.Name
+	})
 	secrets = searchFilter(
 		secrets,
 		r.URL.Query().Get("search"),

@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
@@ -16,6 +18,9 @@ import (
 
 func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
 	stacks := h.cache.ListStacks()
+	stacks = acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", stacks, func(s cache.Stack) string {
+		return "stack:" + s.Name
+	})
 	stacks = searchFilter(
 		stacks,
 		r.URL.Query().Get("search"),
@@ -41,6 +46,11 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "STK001", fmt.Sprintf("stack %q not found", name))
 		return
 	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "stack:"+name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
+		return
+	}
+	h.setAllow(w, r, "stack", name)
 	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/stacks/"+name, "Stack", StackResponse{
 		Stack: detail,
 	}))

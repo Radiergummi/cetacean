@@ -39,6 +39,9 @@ func (h *Handlers) getLocalNodeID() string {
 }
 
 func (h *Handlers) HandleCluster(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAnyGrant(w, r) {
+		return
+	}
 	snap := h.cache.Snapshot()
 	overview := ClusterOverviewResponse{
 		NodeCount:            snap.NodeCount,

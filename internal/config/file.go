@@ -56,6 +56,7 @@ type fileConfig struct {
 	TLS     *fileTLS     `toml:"tls"`
 	Auth    *fileAuth    `toml:"auth"`
 	Sizing  *fileSizing  `toml:"sizing"`
+	ACL     *fileACL     `toml:"acl"`
 }
 
 type fileSizing struct {
@@ -144,6 +145,14 @@ type fileAuthHeaders struct {
 	SecretHeader   *string `toml:"secret_header"`
 	SecretValue    *string `toml:"secret_value"`
 	TrustedProxies *string `toml:"trusted_proxies"`
+}
+
+type fileACL struct {
+	Policy              *string `toml:"policy"`
+	PolicyFile          *string `toml:"policy_file"`
+	TailscaleCapability *string `toml:"tailscale_capability"`
+	OIDCClaim           *string `toml:"oidc_claim"`
+	HeadersACL          *string `toml:"headers_acl"`
 }
 
 // LoadFile reads and parses the TOML config file at path.

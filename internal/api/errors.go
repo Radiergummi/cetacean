@@ -96,6 +96,14 @@ var errorRegistry = map[string]ErrorDef{
 		Description: "The request requires authentication but no valid credentials were provided.",
 		Suggestion:  "Log in or provide a valid authentication token."},
 
+	// ── ACL: access control ──────────────────────────────────────────
+	"ACL001": {Code: "ACL001", Title: "Access Denied", Status: http.StatusForbidden,
+		Description: "You do not have permission to access this resource.",
+		Suggestion:  "Check your ACL policy grants."},
+	"ACL002": {Code: "ACL002", Title: "Write Access Denied", Status: http.StatusForbidden,
+		Description: "You do not have write permission on this resource.",
+		Suggestion:  "Check your ACL policy grants for write permissions."},
+
 	// ── OPS: operations level ─────────────────────────────────────────
 	"OPS001": {
 		Code:        "OPS001",

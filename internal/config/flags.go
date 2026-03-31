@@ -53,6 +53,10 @@ type Flags struct {
 	// TLS
 	TLSCert *string
 	TLSKey  *string
+
+	// ACL
+	ACLPolicy     *string
+	ACLPolicyFile *string
 }
 
 // ParseFlags parses CLI flags from args (typically os.Args[1:]).
