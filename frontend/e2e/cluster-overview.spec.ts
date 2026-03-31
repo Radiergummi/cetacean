@@ -106,12 +106,8 @@ test.describe("Cluster Overview", () => {
 
     // The "View all" link is only rendered when there are recommendations.
     const viewAll = page.getByRole("link", { name: /View all/i });
-
-    try {
-      await expect(viewAll).toBeVisible({ timeout: 5_000 });
-    } catch {
-      test.skip(true, "No recommendations present — View all link not rendered");
-    }
+    const count = await viewAll.count();
+    test.skip(count === 0, "No recommendations present — View all link not rendered");
 
     await viewAll.click();
     await expect(page).toHaveURL("/recommendations");

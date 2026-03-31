@@ -35,20 +35,15 @@ test.describe("Navigation Bar", () => {
     await expect(page.getByRole("status").getByText("Live")).toBeVisible();
   });
 
-  test("theme toggle cycles themes", async ({ page }) => {
+  test("theme toggle changes theme", async ({ page }) => {
     await page.goto("/");
     const button = page.getByRole("button", { name: /Theme/ });
     await expect(button).toBeVisible();
 
-    const initialClass = await page.locator("html").getAttribute("class");
+    const initialLabel = await button.getAttribute("aria-label");
     await button.click();
-    // After cycling, the class or style attribute on <html> should change
-    const afterClick = await page.locator("html").getAttribute("class");
-    // At least one click should have changed something (light → dark → system)
-    await button.click();
-    await button.click();
-    // Verify we cycled back — no crash, button still functional
-    await expect(button).toBeVisible();
+    const afterLabel = await button.getAttribute("aria-label");
+    expect(afterLabel).not.toBe(initialLabel);
   });
 
   test("recommendations button navigates to /recommendations", async ({ page }) => {

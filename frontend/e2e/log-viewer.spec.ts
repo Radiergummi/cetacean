@@ -1,10 +1,11 @@
 import { test, expect, navigateToFirst } from "./fixtures";
+import type { Page } from "@playwright/test";
 
 /**
  * Navigate to the first service detail page and expand the Logs section.
  * Returns the locator for the log viewer container.
  */
-async function openLogViewer(page: Parameters<Parameters<typeof test>[1]>[0]) {
+async function openLogViewer(page: Page) {
   await navigateToFirst(page, "/services", /\/services\/.+/);
 
   // Ensure the Logs toggle is visible and expand it if collapsed

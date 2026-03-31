@@ -23,8 +23,10 @@ test.describe("Service Sub-Resources", () => {
     const response = await request.get(`${baseURL}/services`, {
       headers: { Accept: "application/json" },
     });
+    expect(response.ok()).toBe(true);
     const data = await response.json();
-    serviceId = data.items[0]?.ID;
+    serviceId = data.items?.[0]?.ID;
+    expect(serviceId).toBeTruthy();
   });
 
   for (const sub of subResources) {
