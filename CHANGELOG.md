@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-03-31
+
 ### Added
 - Self-metrics endpoint (`/-/metrics`) documented in monitoring guide with full metric reference
 - `CETACEAN_SELF_METRICS` toggle to disable the self-metrics endpoint (enabled by default)
