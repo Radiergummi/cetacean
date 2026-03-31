@@ -15,12 +15,17 @@ type methodSpec struct {
 	tier   config.OperationsLevel
 }
 
+// resourceWriteMethods maps resource types to their write methods and the
+// minimum operations tier required. For methods that appear at multiple tiers
+// (e.g. service PUT at tier1 for scale/image and tier3 for mode/endpoint-mode),
+// the lowest tier is used so the method appears in Allow whenever any of its
+// uses are enabled.
 var resourceWriteMethods = map[string][]methodSpec{
 	"service": {
-		{"PUT", config.OpsOperational},    // scale, image
-		{"POST", config.OpsOperational},   // rollback, restart
+		{"PUT", config.OpsOperational},     // scale, image (tier1); mode, endpoint-mode are tier3 but PUT is available if tier1 is enabled
+		{"POST", config.OpsOperational},    // rollback, restart
 		{"PATCH", config.OpsConfiguration}, // env, labels, resources, etc.
-		{"DELETE", config.OpsImpactful},   // remove
+		{"DELETE", config.OpsImpactful},    // remove
 	},
 	"node": {
 		{"PUT", config.OpsImpactful},    // availability, role
@@ -48,6 +53,15 @@ var resourceWriteMethods = map[string][]methodSpec{
 	},
 	"stack": {
 		{"DELETE", config.OpsImpactful},
+	},
+	"plugin": {
+		{"POST", config.OpsConfiguration},   // enable, disable (tier2); install, privileges, upgrade (tier3)
+		{"PATCH", config.OpsConfiguration},  // settings
+		{"DELETE", config.OpsImpactful},     // remove
+	},
+	"swarm": {
+		{"PATCH", config.OpsConfiguration},  // orchestration, raft, dispatcher (tier2); ca, encryption (tier3)
+		{"POST", config.OpsImpactful},       // rotate-token, rotate-unlock-key, force-rotate-ca, unlock
 	},
 }
 

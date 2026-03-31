@@ -31,6 +31,21 @@ func NewRouter(
 	tier2 := requireLevel(config.OpsConfiguration, h.operationsLevel)
 	tier3 := requireLevel(config.OpsImpactful, h.operationsLevel)
 
+	// ACL wrappers for write endpoints.
+	svcACL := h.requireWriteACL(h.serviceName)
+	nodeACL := h.requireWriteACL(h.nodeName)
+	taskACL := h.requireWriteACL(h.taskServiceResource)
+	stackACL := h.requireWriteACL(h.stackName)
+	cfgACL := h.requireWriteACL(h.configName)
+	secACL := h.requireWriteACL(h.secretName)
+	netACL := h.requireWriteACL(h.networkName)
+	volACL := h.requireWriteACL(h.volumeName)
+	pluginACL := h.requireWriteACL(h.pluginName)
+	pluginWildACL := h.requireWriteACL(wildcardResource("plugin"))
+	cfgWildACL := h.requireWriteACL(wildcardResource("config"))
+	secWildACL := h.requireWriteACL(wildcardResource("secret"))
+	swarmACL := h.requireWriteACL(swarmResource)
+
 	authProvider.RegisterRoutes(mux)
 
 	// Meta endpoints (no content negotiation, no discovery links)
@@ -72,28 +87,28 @@ func NewRouter(
 	mux.HandleFunc("GET /cluster/metrics", contentNegotiated(h.HandleClusterMetrics, spa))
 	mux.HandleFunc("GET /cluster/capacity", contentNegotiated(h.HandleClusterCapacity, spa))
 	mux.HandleFunc("GET /swarm", contentNegotiated(h.HandleSwarm, spa))
-	mux.Handle("PATCH /swarm/orchestration", tier2(h.HandlePatchSwarmOrchestration))
-	mux.Handle("PATCH /swarm/raft", tier2(h.HandlePatchSwarmRaft))
-	mux.Handle("PATCH /swarm/dispatcher", tier2(h.HandlePatchSwarmDispatcher))
-	mux.Handle("PATCH /swarm/ca", tier3(h.HandlePatchSwarmCAConfig))
-	mux.Handle("PATCH /swarm/encryption", tier3(h.HandlePatchSwarmEncryption))
-	mux.Handle("POST /swarm/rotate-token", tier3(h.HandlePostRotateToken))
-	mux.Handle("POST /swarm/rotate-unlock-key", tier3(h.HandlePostRotateUnlockKey))
-	mux.Handle("POST /swarm/force-rotate-ca", tier3(h.HandlePostForceRotateCA))
+	mux.Handle("PATCH /swarm/orchestration", swarmACL(tier2(h.HandlePatchSwarmOrchestration)))
+	mux.Handle("PATCH /swarm/raft", swarmACL(tier2(h.HandlePatchSwarmRaft)))
+	mux.Handle("PATCH /swarm/dispatcher", swarmACL(tier2(h.HandlePatchSwarmDispatcher)))
+	mux.Handle("PATCH /swarm/ca", swarmACL(tier3(h.HandlePatchSwarmCAConfig)))
+	mux.Handle("PATCH /swarm/encryption", swarmACL(tier3(h.HandlePatchSwarmEncryption)))
+	mux.Handle("POST /swarm/rotate-token", swarmACL(tier3(h.HandlePostRotateToken)))
+	mux.Handle("POST /swarm/rotate-unlock-key", swarmACL(tier3(h.HandlePostRotateUnlockKey)))
+	mux.Handle("POST /swarm/force-rotate-ca", swarmACL(tier3(h.HandlePostForceRotateCA)))
 	mux.HandleFunc("GET /swarm/unlock-key", h.HandleGetUnlockKey)
-	mux.Handle("POST /swarm/unlock", tier3(h.HandlePostUnlockSwarm))
+	mux.Handle("POST /swarm/unlock", swarmACL(tier3(h.HandlePostUnlockSwarm)))
 	mux.HandleFunc("GET /disk-usage", contentNegotiated(h.HandleDiskUsage, spa))
 	// Plugins
 	mux.HandleFunc("GET /plugins", contentNegotiated(h.HandlePlugins, spa))
 	mux.HandleFunc("GET /plugins/{name}", contentNegotiated(h.HandlePlugin, spa))
 	mux.HandleFunc("GET /swarm/plugins", contentNegotiated(h.HandlePlugins, spa))
-	mux.Handle("POST /plugins/privileges", tier3(h.HandlePluginPrivileges))
-	mux.Handle("POST /plugins", tier3(h.HandleInstallPlugin))
-	mux.Handle("POST /plugins/{name}/enable", tier2(h.HandleEnablePlugin))
-	mux.Handle("POST /plugins/{name}/disable", tier2(h.HandleDisablePlugin))
-	mux.Handle("DELETE /plugins/{name}", tier3(h.HandleRemovePlugin))
-	mux.Handle("POST /plugins/{name}/upgrade", tier3(h.HandleUpgradePlugin))
-	mux.Handle("PATCH /plugins/{name}/settings", tier2(h.HandleConfigurePlugin))
+	mux.Handle("POST /plugins/privileges", pluginWildACL(tier3(h.HandlePluginPrivileges)))
+	mux.Handle("POST /plugins", pluginWildACL(tier3(h.HandleInstallPlugin)))
+	mux.Handle("POST /plugins/{name}/enable", pluginACL(tier2(h.HandleEnablePlugin)))
+	mux.Handle("POST /plugins/{name}/disable", pluginACL(tier2(h.HandleDisablePlugin)))
+	mux.Handle("DELETE /plugins/{name}", pluginACL(tier3(h.HandleRemovePlugin)))
+	mux.Handle("POST /plugins/{name}/upgrade", pluginACL(tier3(h.HandleUpgradePlugin)))
+	mux.Handle("PATCH /plugins/{name}/settings", pluginACL(tier2(h.HandleConfigurePlugin)))
 
 	// Nodes
 	mux.HandleFunc(
@@ -145,79 +160,79 @@ func NewRouter(
 	)
 
 	// Node write operations
-	mux.Handle("PUT /nodes/{id}/availability", tier3(h.HandleUpdateNodeAvailability))
+	mux.Handle("PUT /nodes/{id}/availability", nodeACL(tier3(h.HandleUpdateNodeAvailability)))
 	mux.HandleFunc("GET /nodes/{id}/labels", contentNegotiated(h.HandleGetNodeLabels, spa))
-	mux.Handle("PATCH /nodes/{id}/labels", tier3(h.HandlePatchNodeLabels))
+	mux.Handle("PATCH /nodes/{id}/labels", nodeACL(tier3(h.HandlePatchNodeLabels)))
 	mux.HandleFunc("GET /nodes/{id}/role", contentNegotiated(h.HandleGetNodeRole, spa))
-	mux.Handle("PUT /nodes/{id}/role", tier3(h.HandleUpdateNodeRole))
-	mux.Handle("DELETE /nodes/{id}", tier3(h.HandleRemoveNode))
+	mux.Handle("PUT /nodes/{id}/role", nodeACL(tier3(h.HandleUpdateNodeRole)))
+	mux.Handle("DELETE /nodes/{id}", nodeACL(tier3(h.HandleRemoveNode)))
 
 	// Service write operations — tier 1 (operational)
-	mux.Handle("PUT /services/{id}/scale", tier1(h.HandleScaleService))
-	mux.Handle("PUT /services/{id}/image", tier1(h.HandleUpdateServiceImage))
-	mux.Handle("POST /services/{id}/rollback", tier1(h.HandleRollbackService))
-	mux.Handle("POST /services/{id}/restart", tier1(h.HandleRestartService))
+	mux.Handle("PUT /services/{id}/scale", svcACL(tier1(h.HandleScaleService)))
+	mux.Handle("PUT /services/{id}/image", svcACL(tier1(h.HandleUpdateServiceImage)))
+	mux.Handle("POST /services/{id}/rollback", svcACL(tier1(h.HandleRollbackService)))
+	mux.Handle("POST /services/{id}/restart", svcACL(tier1(h.HandleRestartService)))
 
 	// Service write operations — tier 2 (configuration)
 	mux.HandleFunc("GET /services/{id}/env", contentNegotiated(h.HandleGetServiceEnv, spa))
-	mux.Handle("PATCH /services/{id}/env", tier2(h.HandlePatchServiceEnv))
+	mux.Handle("PATCH /services/{id}/env", svcACL(tier2(h.HandlePatchServiceEnv)))
 	mux.HandleFunc("GET /services/{id}/labels", contentNegotiated(h.HandleGetServiceLabels, spa))
-	mux.Handle("PATCH /services/{id}/labels", tier2(h.HandlePatchServiceLabels))
+	mux.Handle("PATCH /services/{id}/labels", svcACL(tier2(h.HandlePatchServiceLabels)))
 	mux.HandleFunc(
 		"GET /services/{id}/resources",
 		contentNegotiated(h.HandleGetServiceResources, spa),
 	)
-	mux.Handle("PATCH /services/{id}/resources", tier2(h.HandlePatchServiceResources))
+	mux.Handle("PATCH /services/{id}/resources", svcACL(tier2(h.HandlePatchServiceResources)))
 	mux.HandleFunc(
 		"GET /services/{id}/healthcheck",
 		contentNegotiated(h.HandleGetServiceHealthcheck, spa),
 	)
-	mux.Handle("PUT /services/{id}/healthcheck", tier2(h.HandlePutServiceHealthcheck))
-	mux.Handle("PATCH /services/{id}/healthcheck", tier2(h.HandlePatchServiceHealthcheck))
+	mux.Handle("PUT /services/{id}/healthcheck", svcACL(tier2(h.HandlePutServiceHealthcheck)))
+	mux.Handle("PATCH /services/{id}/healthcheck", svcACL(tier2(h.HandlePatchServiceHealthcheck)))
 	mux.HandleFunc(
 		"GET /services/{id}/placement",
 		contentNegotiated(h.HandleGetServicePlacement, spa),
 	)
-	mux.Handle("PUT /services/{id}/placement", tier2(h.HandlePutServicePlacement))
+	mux.Handle("PUT /services/{id}/placement", svcACL(tier2(h.HandlePutServicePlacement)))
 	mux.HandleFunc("GET /services/{id}/ports", contentNegotiated(h.HandleGetServicePorts, spa))
-	mux.Handle("PATCH /services/{id}/ports", tier2(h.HandlePatchServicePorts))
+	mux.Handle("PATCH /services/{id}/ports", svcACL(tier2(h.HandlePatchServicePorts)))
 	mux.HandleFunc(
 		"GET /services/{id}/update-policy",
 		contentNegotiated(h.HandleGetServiceUpdatePolicy, spa),
 	)
-	mux.Handle("PATCH /services/{id}/update-policy", tier2(h.HandlePatchServiceUpdatePolicy))
+	mux.Handle("PATCH /services/{id}/update-policy", svcACL(tier2(h.HandlePatchServiceUpdatePolicy)))
 	mux.HandleFunc(
 		"GET /services/{id}/rollback-policy",
 		contentNegotiated(h.HandleGetServiceRollbackPolicy, spa),
 	)
-	mux.Handle("PATCH /services/{id}/rollback-policy", tier2(h.HandlePatchServiceRollbackPolicy))
+	mux.Handle("PATCH /services/{id}/rollback-policy", svcACL(tier2(h.HandlePatchServiceRollbackPolicy)))
 	mux.HandleFunc(
 		"GET /services/{id}/log-driver",
 		contentNegotiated(h.HandleGetServiceLogDriver, spa),
 	)
-	mux.Handle("PATCH /services/{id}/log-driver", tier2(h.HandlePatchServiceLogDriver))
+	mux.Handle("PATCH /services/{id}/log-driver", svcACL(tier2(h.HandlePatchServiceLogDriver)))
 	mux.HandleFunc("GET /services/{id}/configs", contentNegotiated(h.HandleGetServiceConfigs, spa))
-	mux.Handle("PATCH /services/{id}/configs", tier2(h.HandlePatchServiceConfigs))
+	mux.Handle("PATCH /services/{id}/configs", svcACL(tier2(h.HandlePatchServiceConfigs)))
 	mux.HandleFunc("GET /services/{id}/secrets", contentNegotiated(h.HandleGetServiceSecrets, spa))
-	mux.Handle("PATCH /services/{id}/secrets", tier2(h.HandlePatchServiceSecrets))
+	mux.Handle("PATCH /services/{id}/secrets", svcACL(tier2(h.HandlePatchServiceSecrets)))
 	mux.HandleFunc(
 		"GET /services/{id}/networks",
 		contentNegotiated(h.HandleGetServiceNetworks, spa),
 	)
-	mux.Handle("PATCH /services/{id}/networks", tier2(h.HandlePatchServiceNetworks))
+	mux.Handle("PATCH /services/{id}/networks", svcACL(tier2(h.HandlePatchServiceNetworks)))
 	mux.HandleFunc("GET /services/{id}/mounts", contentNegotiated(h.HandleGetServiceMounts, spa))
-	mux.Handle("PATCH /services/{id}/mounts", tier2(h.HandlePatchServiceMounts))
+	mux.Handle("PATCH /services/{id}/mounts", svcACL(tier2(h.HandlePatchServiceMounts)))
 
 	mux.HandleFunc(
 		"GET /services/{id}/container-config",
 		contentNegotiated(h.HandleGetServiceContainerConfig, spa),
 	)
-	mux.Handle("PATCH /services/{id}/container-config", tier2(h.HandlePatchServiceContainerConfig))
+	mux.Handle("PATCH /services/{id}/container-config", svcACL(tier2(h.HandlePatchServiceContainerConfig)))
 
 	// Service write operations — tier 3 (impactful)
-	mux.Handle("PUT /services/{id}/mode", tier3(h.HandleUpdateServiceMode))
-	mux.Handle("PUT /services/{id}/endpoint-mode", tier3(h.HandleUpdateServiceEndpointMode))
-	mux.Handle("DELETE /services/{id}", tier3(h.HandleRemoveService))
+	mux.Handle("PUT /services/{id}/mode", svcACL(tier3(h.HandleUpdateServiceMode)))
+	mux.Handle("PUT /services/{id}/endpoint-mode", svcACL(tier3(h.HandleUpdateServiceEndpointMode)))
+	mux.Handle("DELETE /services/{id}", svcACL(tier3(h.HandleRemoveService)))
 
 	// Tasks
 	mux.HandleFunc(
@@ -242,7 +257,7 @@ func NewRouter(
 		"GET /tasks/{id}/logs",
 		contentNegotiatedWithSSE(h.HandleTaskLogs, h.HandleTaskLogs, spa),
 	)
-	mux.Handle("DELETE /tasks/{id}", tier3(h.HandleRemoveTask))
+	mux.Handle("DELETE /tasks/{id}", taskACL(tier3(h.HandleRemoveTask)))
 
 	// History
 	mux.HandleFunc("GET /history", contentNegotiated(h.HandleHistory, spa))
@@ -264,7 +279,7 @@ func NewRouter(
 			h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, stackMatch))
 		}, spa),
 	)
-	mux.Handle("DELETE /stacks/{name}", tier3(h.HandleRemoveStack))
+	mux.Handle("DELETE /stacks/{name}", stackACL(tier3(h.HandleRemoveStack)))
 
 	// Configs
 	mux.HandleFunc(
@@ -285,10 +300,10 @@ func NewRouter(
 			spa,
 		),
 	)
-	mux.Handle("DELETE /configs/{id}", tier3(h.HandleRemoveConfig))
-	mux.Handle("POST /configs", tier2(h.HandleCreateConfig))
+	mux.Handle("DELETE /configs/{id}", cfgACL(tier3(h.HandleRemoveConfig)))
+	mux.Handle("POST /configs", cfgWildACL(tier2(h.HandleCreateConfig)))
 	mux.HandleFunc("GET /configs/{id}/labels", contentNegotiated(h.HandleGetConfigLabels, spa))
-	mux.Handle("PATCH /configs/{id}/labels", tier2(h.HandlePatchConfigLabels))
+	mux.Handle("PATCH /configs/{id}/labels", cfgACL(tier2(h.HandlePatchConfigLabels)))
 
 	// Secrets
 	mux.HandleFunc(
@@ -309,10 +324,10 @@ func NewRouter(
 			spa,
 		),
 	)
-	mux.Handle("DELETE /secrets/{id}", tier3(h.HandleRemoveSecret))
-	mux.Handle("POST /secrets", tier2(h.HandleCreateSecret))
+	mux.Handle("DELETE /secrets/{id}", secACL(tier3(h.HandleRemoveSecret)))
+	mux.Handle("POST /secrets", secWildACL(tier2(h.HandleCreateSecret)))
 	mux.HandleFunc("GET /secrets/{id}/labels", contentNegotiated(h.HandleGetSecretLabels, spa))
-	mux.Handle("PATCH /secrets/{id}/labels", tier2(h.HandlePatchSecretLabels))
+	mux.Handle("PATCH /secrets/{id}/labels", secACL(tier2(h.HandlePatchSecretLabels)))
 
 	// Networks
 	mux.HandleFunc(
@@ -333,7 +348,7 @@ func NewRouter(
 			spa,
 		),
 	)
-	mux.Handle("DELETE /networks/{id}", tier3(h.HandleRemoveNetwork))
+	mux.Handle("DELETE /networks/{id}", netACL(tier3(h.HandleRemoveNetwork)))
 
 	// Volumes
 	mux.HandleFunc(
@@ -354,7 +369,7 @@ func NewRouter(
 			spa,
 		),
 	)
-	mux.Handle("DELETE /volumes/{name}", tier3(h.HandleRemoveVolume))
+	mux.Handle("DELETE /volumes/{name}", volACL(tier3(h.HandleRemoveVolume)))
 
 	// Search
 	mux.HandleFunc("GET /search", contentNegotiated(h.HandleSearch, spa))

@@ -13,6 +13,9 @@ import (
 )
 
 func (h *Handlers) HandleRecommendations(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAnyGrant(w, r) {
+		return
+	}
 	results := h.recEngine.Results()
 	summary := recommendations.ComputeSummary(results)
 	writeJSONWithETag(

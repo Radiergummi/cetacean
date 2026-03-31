@@ -59,7 +59,13 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 const stackNamespaceLabel = "container_label_com_docker_stack_namespace"
 
 func (h *Handlers) HandleStackSummary(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAnyGrant(w, r) {
+		return
+	}
 	summaries := h.cache.ListStackSummaries()
+	summaries = acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", summaries, func(s cache.StackSummary) string {
+		return "stack:" + s.Name
+	})
 
 	if h.promClient != nil && len(summaries) > 0 {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)

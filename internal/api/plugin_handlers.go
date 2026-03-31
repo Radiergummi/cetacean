@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types"
+
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 	json "github.com/goccy/go-json"
 )
 
@@ -24,6 +27,10 @@ func (h *Handlers) HandlePlugins(w http.ResponseWriter, r *http.Request) {
 		plugins = types.PluginsListResponse{}
 	}
 
+	plugins = acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", plugins, func(p *types.Plugin) string {
+		return "plugin:" + p.Name
+	})
+
 	writeJSONWithETag(
 		w,
 		r,
@@ -34,6 +41,11 @@ func (h *Handlers) HandlePlugins(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandlePlugin(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "plugin:"+name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
@@ -43,6 +55,7 @@ func (h *Handlers) HandlePlugin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.setAllow(w, r, "plugin", name)
 	writeJSONWithETag(
 		w,
 		r,

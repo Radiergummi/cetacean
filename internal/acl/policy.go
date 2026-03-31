@@ -34,6 +34,8 @@ var validResourceTypes = map[string]bool{
 	"secret":  true,
 	"network": true,
 	"volume":  true,
+	"plugin":  true,
+	"swarm":   true,
 }
 
 var validAudienceKinds = map[string]bool{

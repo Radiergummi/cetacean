@@ -385,6 +385,9 @@ func (h *Handlers) HandlePostForceRotateCA(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *Handlers) HandleGetUnlockKey(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAnyGrant(w, r) {
+		return
+	}
 	if h.systemClient == nil {
 		writeErrorCode(w, r, "SWM001", "swarm API not available")
 		return
