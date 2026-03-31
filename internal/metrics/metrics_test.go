@@ -7,38 +7,26 @@ import (
 )
 
 func TestRecordHTTPRequest(t *testing.T) {
+	labels200 := map[string]string{"method": "GET", "handler": "/nodes", "status": "200"}
+	labels404 := map[string]string{"method": "GET", "handler": "/nodes", "status": "404"}
+
+	// Snapshot before: counters accumulate across test runs with -count=N.
+	before200 := findCounterValueFromRegistry(labels200, "cetacean_http_requests_total")
+	before404 := findCounterValueFromRegistry(labels404, "cetacean_http_requests_total")
+
 	RecordHTTPRequest("/nodes", "GET", 200, 0.05, 0, 512)
 	RecordHTTPRequest("/nodes", "GET", 200, 0.10, 0, 1024)
 	RecordHTTPRequest("/nodes", "GET", 404, 0.01, 0, 64)
 
-	metrics, err := Registry.Gather()
-	if err != nil {
-		t.Fatalf("failed to gather metrics: %v", err)
+	after200 := findCounterValueFromRegistry(labels200, "cetacean_http_requests_total")
+	after404 := findCounterValueFromRegistry(labels404, "cetacean_http_requests_total")
+
+	if delta := after200 - before200; delta != 2 {
+		t.Errorf("expected 2 new requests with status 200, got %v", delta)
 	}
 
-	counter := findMetricFamily(metrics, "cetacean_http_requests_total")
-	if counter == nil {
-		t.Fatal("cetacean_http_requests_total not found")
-	}
-
-	got200 := findCounterValue(counter, map[string]string{
-		"method":  "GET",
-		"handler": "/nodes",
-		"status":  "200",
-	})
-
-	if got200 != 2 {
-		t.Errorf("expected 2 requests with status 200, got %v", got200)
-	}
-
-	got404 := findCounterValue(counter, map[string]string{
-		"method":  "GET",
-		"handler": "/nodes",
-		"status":  "404",
-	})
-
-	if got404 != 1 {
-		t.Errorf("expected 1 request with status 404, got %v", got404)
+	if delta := after404 - before404; delta != 1 {
+		t.Errorf("expected 1 new request with status 404, got %v", delta)
 	}
 }
 
@@ -199,6 +187,16 @@ func findCounterValue(family *dto.MetricFamily, labels map[string]string) float6
 	}
 
 	return 0
+}
+
+func findCounterValueFromRegistry(labels map[string]string, name string) float64 {
+	families, _ := Registry.Gather()
+	family := findMetricFamily(families, name)
+	if family == nil {
+		return 0
+	}
+
+	return findCounterValue(family, labels)
 }
 
 func matchLabels(pairs []*dto.LabelPair, expected map[string]string) bool {
