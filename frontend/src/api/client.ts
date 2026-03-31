@@ -554,4 +554,15 @@ export const api = {
       partial,
       "application/merge-patch+json",
     ),
+
+  health: (signal?: AbortSignal) =>
+    fetchJSON<HealthInfo>(`/-/health`, signal),
 };
+
+export interface HealthInfo {
+  status: string;
+  version: string;
+  commit: string;
+  buildDate: string;
+  operationsLevel: number;
+}

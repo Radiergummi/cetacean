@@ -1,5 +1,6 @@
 import ConnectionStatus from "./components/ConnectionStatus";
 import ErrorBoundary from "./components/ErrorBoundary";
+import Footer from "./components/Footer";
 import { LoadingDetail } from "./components/LoadingSkeleton";
 import { GlobalSearch, type GlobalSearchHandle } from "./components/search";
 import ShortcutsHelp from "./components/ShortcutsHelp";
@@ -156,10 +157,11 @@ function Layout({ children }: { children: React.ReactNode }) {
       </nav>
       <main
         id="main-content"
-        className="mx-auto max-w-7xl px-4 py-6 pb-48 sm:px-6 lg:px-8"
+        className="mx-auto max-w-7xl px-4 py-6 pb-24 sm:px-6 lg:px-8"
       >
         <ErrorBoundary>{children}</ErrorBoundary>
       </main>
+      <Footer />
       {shortcutsOpen && <ShortcutsHelp onClose={() => setShortcutsOpen(false)} />}
     </div>
   );
