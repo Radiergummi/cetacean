@@ -115,6 +115,23 @@ func TestExtractGrantsFromRaw_FieldValues(t *testing.T) {
 	}
 }
 
+func TestExtractGrantsFromRaw_MixedTypesInArrays(t *testing.T) {
+	raw := []any{
+		map[string]any{
+			"resources":   []any{"service:*", 42, nil},
+			"permissions": []any{"read"},
+		},
+	}
+	grants := extractGrantsFromRaw(raw)
+	if len(grants) != 1 {
+		t.Fatalf("expected 1 grant, got %d", len(grants))
+	}
+	g := grants[0]
+	if len(g.Resources) != 1 || g.Resources[0] != "service:*" {
+		t.Fatalf("expected resources [service:*], got %v", g.Resources)
+	}
+}
+
 // --- TailscaleSource ---
 
 func TestTailscaleSource(t *testing.T) {

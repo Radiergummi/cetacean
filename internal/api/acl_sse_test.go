@@ -79,6 +79,29 @@ func TestAclMatchWrap_InnerMatcherRejects(t *testing.T) {
 	}
 }
 
+func TestAclMatchWrap_StackEventFiltered(t *testing.T) {
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{Resources: []string{"stack:webapp"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+	}})
+
+	h := newTestHandlers(t, withACL(e))
+	r := httptest.NewRequest("GET", "/events", nil)
+	r = r.WithContext(auth.ContextWithIdentity(r.Context(), &auth.Identity{Subject: "alice"}))
+
+	matcher := h.aclMatchWrap(r, nil)
+
+	// stack:monitoring should be blocked -- user only has stack:webapp grant.
+	if matcher(cache.Event{Type: cache.EventStack, Name: "monitoring"}) {
+		t.Fatal("stack:monitoring event should be blocked")
+	}
+
+	// stack:webapp should pass through.
+	if !matcher(cache.Event{Type: cache.EventStack, Name: "webapp"}) {
+		t.Fatal("stack:webapp event should pass through")
+	}
+}
+
 func TestAclMatchWrap_NilInnerMatcher(t *testing.T) {
 	// Nil inner matcher + nil evaluator = all events pass.
 	h := newTestHandlers(t)

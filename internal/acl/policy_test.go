@@ -129,3 +129,82 @@ func TestValidate_EmptyGrants(t *testing.T) {
 		t.Fatalf("Validate should accept empty grants (nothing to validate): %v", err)
 	}
 }
+
+func TestValidate_EmptyNameAfterColon(t *testing.T) {
+	tests := []struct {
+		name   string
+		policy *Policy
+	}{
+		{
+			name: "empty resource name",
+			policy: &Policy{Grants: []Grant{
+				{Resources: []string{"service:"}, Audience: []string{"group:ops"}, Permissions: []string{"read"}},
+			}},
+		},
+		{
+			name: "empty audience user value",
+			policy: &Policy{Grants: []Grant{
+				{Resources: []string{"service:*"}, Audience: []string{"user:"}, Permissions: []string{"read"}},
+			}},
+		},
+		{
+			name: "empty audience group value",
+			policy: &Policy{Grants: []Grant{
+				{Resources: []string{"service:*"}, Audience: []string{"group:"}, Permissions: []string{"read"}},
+			}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := Validate(tt.policy); err == nil {
+				t.Fatal("expected validation error for empty value after colon")
+			}
+		})
+	}
+}
+
+func TestParsePolicyFile_YAML(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "policy.yaml")
+	data := []byte("grants:\n  - resources: [\"service:*\"]\n    audience: [\"user:alice\"]\n    permissions: [\"read\", \"write\"]\n")
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	p, err := ParsePolicyFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Grants) != 1 {
+		t.Fatalf("expected 1 grant, got %d", len(p.Grants))
+	}
+	g := p.Grants[0]
+	if len(g.Resources) != 1 || g.Resources[0] != "service:*" {
+		t.Fatalf("unexpected resources: %v", g.Resources)
+	}
+	if len(g.Permissions) != 2 {
+		t.Fatalf("expected 2 permissions, got %d", len(g.Permissions))
+	}
+}
+
+func TestParsePolicyFile_TOML(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "policy.toml")
+	data := []byte("[[grants]]\nresources = [\"node:*\"]\naudience = [\"group:ops\"]\npermissions = [\"read\"]\n")
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	p, err := ParsePolicyFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Grants) != 1 {
+		t.Fatalf("expected 1 grant, got %d", len(p.Grants))
+	}
+	g := p.Grants[0]
+	if len(g.Resources) != 1 || g.Resources[0] != "node:*" {
+		t.Fatalf("unexpected resources: %v", g.Resources)
+	}
+	if len(g.Audience) != 1 || g.Audience[0] != "group:ops" {
+		t.Fatalf("unexpected audience: %v", g.Audience)
+	}
+}

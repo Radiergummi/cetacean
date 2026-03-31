@@ -457,3 +457,36 @@ func TestEvaluator_MalformedResourceAgainstTypedPattern(t *testing.T) {
 		})
 	}
 }
+
+func TestPermissionsFor_Deduplication(t *testing.T) {
+	e := NewEvaluator()
+	e.SetPolicy(&Policy{Grants: []Grant{
+		{Resources: []string{"service:webapp-*"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+	}})
+	e.SetSource(&mockSource{
+		grants: []Grant{
+			{Resources: []string{"service:webapp-*"}, Permissions: []string{"read"}},
+		},
+	})
+
+	alice := &auth.Identity{Subject: "alice"}
+	perms := e.PermissionsFor(alice)
+	got := perms["service:webapp-*"]
+	if len(got) != 1 {
+		t.Fatalf("expected deduplicated [read], got %v", got)
+	}
+	if got[0] != "read" {
+		t.Fatalf("expected read, got %s", got[0])
+	}
+}
+
+func TestEvaluator_NilIdentityWithActivePolicy(t *testing.T) {
+	e := NewEvaluator()
+	e.SetPolicy(&Policy{Grants: []Grant{
+		{Resources: []string{"service:*"}, Audience: []string{"group:ops"}, Permissions: []string{"read"}},
+	}})
+
+	if e.Can(nil, "read", "service:foo") {
+		t.Fatal("nil identity should be denied when policy has audience restrictions")
+	}
+}
