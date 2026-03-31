@@ -30,6 +30,7 @@ type Event struct {
 	Type     EventType `json:"type"`
 	Action   string    `json:"action"`
 	ID       string    `json:"id"`
+	Name     string    `json:"name,omitempty"`
 	Resource any       `json:"resource,omitempty"`
 }
 
@@ -128,6 +129,11 @@ func New(onChange OnChangeFunc) *Cache {
 func (c *Cache) History() *History { return c.history }
 
 func (c *Cache) notify(e Event) {
+	// Populate the Name field for SSE authorization checks.
+	if e.Name == "" {
+		e.Name = ExtractName(e)
+	}
+
 	// Sync events are internal bookkeeping; broadcast them to SSE clients
 	// but don't record them in history where they drown out real changes.
 	if e.Type != EventSync {
@@ -135,7 +141,7 @@ func (c *Cache) notify(e Event) {
 			Type:       e.Type,
 			Action:     e.Action,
 			ResourceID: e.ID,
-			Name:       ExtractName(e),
+			Name:       e.Name,
 		})
 		metrics.RecordCacheMutation(string(e.Type), e.Action)
 	}
@@ -237,9 +243,13 @@ func (c *Cache) GetNode(id string) (swarm.Node, bool) {
 
 func (c *Cache) DeleteNode(id string) {
 	c.mu.Lock()
+	var name string
+	if old, ok := c.nodes[id]; ok {
+		name = old.Description.Hostname
+	}
 	delete(c.nodes, id)
 	c.mu.Unlock()
-	c.notify(Event{Type: EventNode, Action: "remove", ID: id})
+	c.notify(Event{Type: EventNode, Action: "remove", ID: id, Name: name})
 }
 
 func (c *Cache) ListNodes() []swarm.Node {
@@ -283,7 +293,9 @@ func (c *Cache) GetService(id string) (swarm.Service, bool) {
 func (c *Cache) DeleteService(id string) {
 	c.mu.Lock()
 	var oldRefs refSet
+	var name string
 	if old, ok := c.services[id]; ok {
+		name = old.Spec.Name
 		oldRefs = serviceRefs(old)
 		c.removeFromStack(EventService, id, old.Spec.Labels)
 		c.serviceRef.remove(old)
@@ -291,7 +303,7 @@ func (c *Cache) DeleteService(id string) {
 	delete(c.services, id)
 	c.mu.Unlock()
 
-	c.notify(Event{Type: EventService, Action: "remove", ID: id})
+	c.notify(Event{Type: EventService, Action: "remove", ID: id, Name: name})
 	c.notifyRefChanges(oldRefs, refSet{})
 }
 
@@ -340,7 +352,7 @@ func (c *Cache) DeleteTask(id string) {
 	}
 	delete(c.tasks, id)
 	c.mu.Unlock()
-	c.notify(Event{Type: EventTask, Action: "remove", ID: id})
+	c.notify(Event{Type: EventTask, Action: "remove", ID: id, Name: id})
 }
 
 // addTaskIndex adds a task to the secondary indexes. Must be called with c.mu held for writing.
@@ -411,12 +423,14 @@ func (c *Cache) GetConfig(id string) (swarm.Config, bool) {
 
 func (c *Cache) DeleteConfig(id string) {
 	c.mu.Lock()
+	var name string
 	if old, ok := c.configs[id]; ok {
+		name = old.Spec.Name
 		c.removeFromStack(EventConfig, id, old.Spec.Labels)
 	}
 	delete(c.configs, id)
 	c.mu.Unlock()
-	c.notify(Event{Type: EventConfig, Action: "remove", ID: id})
+	c.notify(Event{Type: EventConfig, Action: "remove", ID: id, Name: name})
 }
 
 func (c *Cache) ListConfigs() []swarm.Config {
@@ -452,12 +466,14 @@ func (c *Cache) GetSecret(id string) (swarm.Secret, bool) {
 
 func (c *Cache) DeleteSecret(id string) {
 	c.mu.Lock()
+	var name string
 	if old, ok := c.secrets[id]; ok {
+		name = old.Spec.Name
 		c.removeFromStack(EventSecret, id, old.Spec.Labels)
 	}
 	delete(c.secrets, id)
 	c.mu.Unlock()
-	c.notify(Event{Type: EventSecret, Action: "remove", ID: id})
+	c.notify(Event{Type: EventSecret, Action: "remove", ID: id, Name: name})
 }
 
 func (c *Cache) ListSecrets() []swarm.Secret {
@@ -492,12 +508,14 @@ func (c *Cache) GetNetwork(id string) (network.Summary, bool) {
 
 func (c *Cache) DeleteNetwork(id string) {
 	c.mu.Lock()
+	var name string
 	if old, ok := c.networks[id]; ok {
+		name = old.Name
 		c.removeFromStack(EventNetwork, id, old.Labels)
 	}
 	delete(c.networks, id)
 	c.mu.Unlock()
-	c.notify(Event{Type: EventNetwork, Action: "remove", ID: id})
+	c.notify(Event{Type: EventNetwork, Action: "remove", ID: id, Name: name})
 }
 
 func (c *Cache) ListNetworks() []network.Summary {
@@ -537,7 +555,7 @@ func (c *Cache) DeleteVolume(name string) {
 	}
 	delete(c.volumes, name)
 	c.mu.Unlock()
-	c.notify(Event{Type: EventVolume, Action: "remove", ID: name})
+	c.notify(Event{Type: EventVolume, Action: "remove", ID: name, Name: name})
 }
 
 func (c *Cache) ListVolumes() []volume.Volume {
