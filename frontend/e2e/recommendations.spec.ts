@@ -35,8 +35,9 @@ test.describe("Recommendations (/recommendations)", () => {
       timeout: 10_000,
     });
 
-    // Either recommendation cards or an empty state message should be present
-    const cards = page.locator(".rounded-lg.border.bg-card");
+    // Recommendation cards contain a severity icon with aria-label; match any of the known values.
+    // Fall back to the empty state message if no cards exist.
+    const cards = page.locator("[aria-label=info], [aria-label=warning], [aria-label=critical]");
     const emptyState = page.getByText(/No recommendations/i);
     await expect(cards.first().or(emptyState)).toBeVisible({ timeout: 10_000 });
   });
@@ -47,16 +48,14 @@ test.describe("Recommendations (/recommendations)", () => {
       timeout: 10_000,
     });
 
-    // Check if there are any recommendation cards at all
-    const cards = page.locator(".rounded-lg.border.bg-card");
+    // Recommendation cards contain a severity icon with aria-label
+    const cards = page.locator("[aria-label=info], [aria-label=warning], [aria-label=critical]");
     const cardCount = await cards.count();
+    test.skip(cardCount === 0, "No recommendations present — target link test skipped");
 
-    if (cardCount === 0) {
-      test.skip(true, "No recommendations present — target link test skipped");
-    }
-
-    // All anchor links inside cards should have a non-empty href
-    const links = cards.locator("a");
+    // Each card is inside a Collapsible.Root; find all anchor links in those ancestor elements
+    const cardRoots = cards.first().locator("xpath=ancestor::div[contains(@class, 'rounded-lg')]");
+    const links = cardRoots.locator("a");
     const linkCount = await links.count();
 
     for (let index = 0; index < linkCount; index++) {

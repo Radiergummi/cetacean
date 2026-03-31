@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, navigateToFirst } from "./fixtures";
 
 test.describe("Volume List (/volumes)", () => {
   test("renders heading", async ({ page }) => {
@@ -19,10 +19,7 @@ test.describe("Volume List (/volumes)", () => {
 
 test.describe("Volume Detail (/volumes/:name)", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/volumes");
-    await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 10_000 });
-    await page.locator("table tbody tr").first().click();
-    await expect(page).toHaveURL(/\/volumes\/.+/);
+    await navigateToFirst(page, "/volumes", /\/volumes\/.+/);
   });
 
   test("shows Driver, Scope, and Mountpoint metadata", async ({ page }) => {

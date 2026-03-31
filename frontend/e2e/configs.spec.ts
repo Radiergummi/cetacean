@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, navigateToFirst } from "./fixtures";
 
 test.describe("Config List (/configs)", () => {
   test("renders heading", async ({ page }) => {
@@ -19,10 +19,7 @@ test.describe("Config List (/configs)", () => {
 
 test.describe("Config Detail (/configs/:id)", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/configs");
-    await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 10_000 });
-    await page.locator("table tbody tr").first().click();
-    await expect(page).toHaveURL(/\/configs\/.+/);
+    await navigateToFirst(page, "/configs", /\/configs\/.+/);
   });
 
   test("shows ID, Created, and Updated metadata", async ({ page }) => {
@@ -43,11 +40,10 @@ test.describe("Config Detail (/configs/:id)", () => {
 
     const dataButton = page.getByRole("button", { name: /^Data$/i });
     const count = await dataButton.count();
+    test.skip(count === 0, "Config has no data section");
 
-    if (count > 0) {
-      await expect(dataButton).toBeVisible();
-      await expect(page.getByRole("button", { name: /Copy/i })).toBeVisible();
-    }
+    await expect(dataButton).toBeVisible();
+    await expect(page.getByRole("button", { name: /Copy/i })).toBeVisible();
   });
 
   test("used by services section renders", async ({ page }) => {
@@ -61,10 +57,8 @@ test.describe("Config Detail (/configs/:id)", () => {
 
     const activityButton = page.getByRole("button", { name: /Recent Activity/i });
     const count = await activityButton.count();
-
-    if (count > 0) {
-      await expect(activityButton).toBeVisible();
-    }
+    test.skip(count === 0, "No activity history present for this config");
+    await expect(activityButton).toBeVisible();
   });
 
   test("remove button is present", async ({ page }) => {

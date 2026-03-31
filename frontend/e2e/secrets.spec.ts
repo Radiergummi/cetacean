@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, navigateToFirst } from "./fixtures";
 
 test.describe("Secret List (/secrets)", () => {
   test("renders heading", async ({ page }) => {
@@ -19,10 +19,7 @@ test.describe("Secret List (/secrets)", () => {
 
 test.describe("Secret Detail (/secrets/:id)", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/secrets");
-    await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 10_000 });
-    await page.locator("table tbody tr").first().click();
-    await expect(page).toHaveURL(/\/secrets\/.+/);
+    await navigateToFirst(page, "/secrets", /\/secrets\/.+/);
   });
 
   test("shows ID, Created, and Updated metadata", async ({ page }) => {
@@ -48,10 +45,8 @@ test.describe("Secret Detail (/secrets/:id)", () => {
 
     const activityButton = page.getByRole("button", { name: /Recent Activity/i });
     const count = await activityButton.count();
-
-    if (count > 0) {
-      await expect(activityButton).toBeVisible();
-    }
+    test.skip(count === 0, "No activity history present for this secret");
+    await expect(activityButton).toBeVisible();
   });
 
   test("remove button is present", async ({ page }) => {

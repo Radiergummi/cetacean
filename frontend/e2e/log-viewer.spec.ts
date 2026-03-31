@@ -1,14 +1,11 @@
-import { test, expect } from "./fixtures";
+import { test, expect, navigateToFirst } from "./fixtures";
 
 /**
  * Navigate to the first service detail page and expand the Logs section.
  * Returns the locator for the log viewer container.
  */
 async function openLogViewer(page: Parameters<Parameters<typeof test>[1]>[0]) {
-  await page.goto("/services");
-  await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 10_000 });
-  await page.locator("table tbody tr").first().click();
-  await expect(page).toHaveURL(/\/services\/.+/);
+  await navigateToFirst(page, "/services", /\/services\/.+/);
 
   // Ensure the Logs toggle is visible and expand it if collapsed
   const logsToggle = page.getByRole("button", { name: /^Logs$/i });
@@ -27,10 +24,7 @@ async function openLogViewer(page: Parameters<Parameters<typeof test>[1]>[0]) {
 
 test.describe("Log Viewer (service detail)", () => {
   test("Logs section toggle button is present", async ({ page }) => {
-    await page.goto("/services");
-    await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 10_000 });
-    await page.locator("table tbody tr").first().click();
-    await expect(page).toHaveURL(/\/services\/.+/);
+    await navigateToFirst(page, "/services", /\/services\/.+/);
 
     await expect(page.getByRole("button", { name: /^Logs$/i })).toBeVisible({ timeout: 10_000 });
   });
@@ -85,10 +79,7 @@ test.describe("Log Viewer (service detail)", () => {
 
 test.describe("Log Viewer (task detail)", () => {
   test("Logs section is present on task detail page", async ({ page }) => {
-    await page.goto("/tasks");
-    await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 10_000 });
-    await page.locator("table tbody tr").first().click();
-    await expect(page).toHaveURL(/\/tasks\/.+/);
+    await navigateToFirst(page, "/tasks", /\/tasks\/.+/);
 
     await expect(page.getByRole("button", { name: "Logs", exact: true })).toBeVisible({
       timeout: 10_000,

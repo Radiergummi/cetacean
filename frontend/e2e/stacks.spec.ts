@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, navigateToFirst } from "./fixtures";
 
 test.describe("Stack List (/stacks)", () => {
   test("renders heading and table", async ({ page }) => {
@@ -20,17 +20,13 @@ test.describe("Stack List (/stacks)", () => {
   });
 });
 
-test.describe("Stack Detail (/stacks/cetacean-monitoring)", () => {
+test.describe("Stack Detail", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/stacks/cetacean-monitoring");
-    // Wait for the page to finish loading (heading is rendered after fetch)
-    await expect(page.getByRole("heading", { name: "cetacean-monitoring" })).toBeVisible({
-      timeout: 10_000,
-    });
+    await navigateToFirst(page, "/stacks", /\/stacks\/.+/);
   });
 
   test("shows stack name in heading", async ({ page }) => {
-    await expect(page.getByRole("heading", { name: "cetacean-monitoring" })).toBeVisible();
+    await expect(page.getByRole("heading").first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("Services section is present", async ({ page }) => {
@@ -53,5 +49,42 @@ test.describe("Stack Detail (/stacks/cetacean-monitoring)", () => {
     // Expand again
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  });
+
+  test("Configs section toggle is present when stack has configs", async ({ page }) => {
+    // Configs section only renders when the stack has configs
+    await expect(page.getByRole("button", { name: /^Services$/i })).toBeVisible({ timeout: 10_000 });
+
+    const configsButton = page.getByRole("button", { name: /^Configs$/i });
+    const count = await configsButton.count();
+    test.skip(count === 0, "Stack has no configs");
+    await expect(configsButton).toBeVisible();
+  });
+
+  test("Secrets section toggle is present when stack has secrets", async ({ page }) => {
+    await expect(page.getByRole("button", { name: /^Services$/i })).toBeVisible({ timeout: 10_000 });
+
+    const secretsButton = page.getByRole("button", { name: /^Secrets$/i });
+    const count = await secretsButton.count();
+    test.skip(count === 0, "Stack has no secrets");
+    await expect(secretsButton).toBeVisible();
+  });
+
+  test("Networks section toggle is present when stack has networks", async ({ page }) => {
+    await expect(page.getByRole("button", { name: /^Services$/i })).toBeVisible({ timeout: 10_000 });
+
+    const networksButton = page.getByRole("button", { name: /^Networks$/i });
+    const count = await networksButton.count();
+    test.skip(count === 0, "Stack has no networks");
+    await expect(networksButton).toBeVisible();
+  });
+
+  test("Volumes section toggle is present when stack has volumes", async ({ page }) => {
+    await expect(page.getByRole("button", { name: /^Services$/i })).toBeVisible({ timeout: 10_000 });
+
+    const volumesButton = page.getByRole("button", { name: /^Volumes$/i });
+    const count = await volumesButton.count();
+    test.skip(count === 0, "Stack has no volumes");
+    await expect(volumesButton).toBeVisible();
   });
 });

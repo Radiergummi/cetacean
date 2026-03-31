@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, navigateToFirst } from "./fixtures";
 
 test.describe("Network List (/networks)", () => {
   test("renders heading", async ({ page }) => {
@@ -19,10 +19,7 @@ test.describe("Network List (/networks)", () => {
 
 test.describe("Network Detail (/networks/:id)", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/networks");
-    await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 10_000 });
-    await page.locator("table tbody tr").first().click();
-    await expect(page).toHaveURL(/\/networks\/.+/);
+    await navigateToFirst(page, "/networks", /\/networks\/.+/);
   });
 
   test("shows Driver and Scope metadata", async ({ page }) => {

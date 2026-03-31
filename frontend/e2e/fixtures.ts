@@ -39,3 +39,15 @@ export { expect };
 
 /** Whether write operations are enabled for this test run. */
 export const writesEnabled = !!process.env.CETACEAN_E2E_WRITE;
+
+/** Navigate to the first item in a resource list and wait for the detail page. */
+export async function navigateToFirst(
+  page: import("@playwright/test").Page,
+  listPath: string,
+  detailPattern: RegExp,
+) {
+  await page.goto(listPath);
+  await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 10_000 });
+  await page.locator("table tbody tr").first().click();
+  await expect(page).toHaveURL(detailPattern);
+}

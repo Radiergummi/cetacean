@@ -25,4 +25,21 @@ test.describe("Error Pages", () => {
       timeout: 10_000,
     });
   });
+
+  test("error code detail page renders from index link", async ({ page }) => {
+    await page.goto("/api/errors");
+
+    await expect(page.getByRole("heading", { name: /Error Reference/i })).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Click the first error code link in the table
+    const codeLink = page.locator("table tbody tr a").first();
+    const count = await codeLink.count();
+    test.skip(count === 0, "No error codes listed — cannot test detail page");
+
+    await codeLink.click();
+    await expect(page).toHaveURL(/\/api\/errors\/.+/);
+    await expect(page.getByRole("heading").first()).toBeVisible({ timeout: 10_000 });
+  });
 });

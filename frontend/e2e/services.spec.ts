@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, navigateToFirst } from "./fixtures";
 
 test.describe("Service List (/services)", () => {
   test("renders table with expected columns", async ({ page }) => {
@@ -66,10 +66,7 @@ test.describe("Service List (/services)", () => {
 
 test.describe("Service Detail (/services/:id)", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/services");
-    await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 10_000 });
-    await page.locator("table tbody tr").first().click();
-    await expect(page).toHaveURL(/\/services\/.+/);
+    await navigateToFirst(page, "/services", /\/services\/.+/);
   });
 
   test("shows service name in heading", async ({ page }) => {
@@ -79,17 +76,14 @@ test.describe("Service Detail (/services/:id)", () => {
 
   test("action buttons present when write operations are enabled", async ({ page }) => {
     // ServiceActions renders only when the ops level is >= 1 (operational).
-    // If the buttons are absent we pass vacuously — this is a read-only test.
     await expect(page.getByRole("heading").first()).toBeVisible({ timeout: 10_000 });
 
     const rollback = page.getByRole("button", { name: /Rollback/i });
-    const restart = page.getByRole("button", { name: /Restart/i });
     const count = await rollback.count();
+    test.skip(count === 0, "Write operations not enabled — action buttons not rendered");
 
-    if (count > 0) {
-      await expect(rollback).toBeVisible();
-      await expect(restart).toBeVisible();
-    }
+    await expect(rollback).toBeVisible();
+    await expect(page.getByRole("button", { name: /Restart/i })).toBeVisible();
   });
 
   test("tasks section renders with state filter", async ({ page }) => {
@@ -106,24 +100,18 @@ test.describe("Service Detail (/services/:id)", () => {
     // CollapsibleSection toggle button
     await expect(page.getByRole("button", { name: /^Tasks$/i })).toBeVisible({ timeout: 10_000 });
 
-    const envButton = page.getByRole("button", { name: /Environment Variables/i });
-    const count = await envButton.count();
-
-    if (count > 0) {
-      await expect(envButton).toBeVisible();
-    }
+    await expect(page.getByRole("button", { name: /Environment Variables/i })).toBeVisible({
+      timeout: 10_000,
+    });
   });
 
   test("labels section exists", async ({ page }) => {
     // KeyValueEditor with title "Labels"
     await expect(page.getByRole("button", { name: /^Tasks$/i })).toBeVisible({ timeout: 10_000 });
 
-    const labelsButton = page.getByRole("button", { name: /^Labels$/i });
-    const count = await labelsButton.count();
-
-    if (count > 0) {
-      await expect(labelsButton).toBeVisible();
-    }
+    await expect(page.getByRole("button", { name: /^Labels$/i })).toBeVisible({
+      timeout: 10_000,
+    });
   });
 
   test("deploy configuration section is collapsible and can be expanded", async ({ page }) => {
@@ -155,9 +143,7 @@ test.describe("Service Detail (/services/:id)", () => {
 
     const activityButton = page.getByRole("button", { name: /Recent Activity/i });
     const count = await activityButton.count();
-
-    if (count > 0) {
-      await expect(activityButton).toBeVisible();
-    }
+    test.skip(count === 0, "No activity history present for this service");
+    await expect(activityButton).toBeVisible();
   });
 });

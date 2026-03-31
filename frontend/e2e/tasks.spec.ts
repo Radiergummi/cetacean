@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, navigateToFirst } from "./fixtures";
 
 test.describe("Task List (/tasks)", () => {
   test("renders table with expected columns", async ({ page }) => {
@@ -25,10 +25,7 @@ test.describe("Task List (/tasks)", () => {
 
 test.describe("Task Detail (/tasks/:id)", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/tasks");
-    await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 10_000 });
-    await page.locator("table tbody tr").first().click();
-    await expect(page).toHaveURL(/\/tasks\/.+/);
+    await navigateToFirst(page, "/tasks", /\/tasks\/.+/);
   });
 
   test("shows state, service, and image metadata", async ({ page }) => {

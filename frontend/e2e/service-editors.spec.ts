@@ -1,18 +1,10 @@
-import { test, expect, writesEnabled } from "./fixtures";
-import type { Page } from "@playwright/test";
-
-async function navigateToFirstService(page: Page) {
-  await page.goto("/services");
-  await page.waitForSelector("table tbody tr");
-  await page.locator("table tbody tr").first().click();
-  await page.waitForURL(/\/services\//);
-}
+import { test, expect, writesEnabled, navigateToFirst } from "./fixtures";
 
 test.describe("Service Editors", () => {
   test.skip(!writesEnabled, "Write operations disabled (set CETACEAN_E2E_WRITE=1)");
 
   test.beforeEach(async ({ page }) => {
-    await navigateToFirstService(page);
+    await navigateToFirst(page, "/services", /\/services\/.+/);
     // Wait for page to fully load before each test
     await expect(page.getByRole("button", { name: /^Tasks$/i })).toBeVisible({ timeout: 10_000 });
   });
@@ -160,7 +152,7 @@ test.describe("Service Editors", () => {
     // Clear persisted state to ensure closed default
     await page.evaluate(() => localStorage.removeItem("section:deploy-configuration"));
     await page.reload();
-    await expect(page).toHaveURL(/\/services\//);
+    await expect(page).toHaveURL(/\/services\/.+/);
     await expect(page.getByRole("button", { name: /^Tasks$/i })).toBeVisible({ timeout: 10_000 });
 
     const deployToggle = page.getByRole("button", { name: /Deploy Configuration/i });

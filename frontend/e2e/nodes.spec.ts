@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, navigateToFirst } from "./fixtures";
 
 test.describe("Node List (/nodes)", () => {
   test("renders table with expected columns", async ({ page }) => {
@@ -57,10 +57,7 @@ test.describe("Node List (/nodes)", () => {
 
 test.describe("Node Detail (/nodes/:id)", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/nodes");
-    await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 10_000 });
-    await page.locator("table tbody tr").first().click();
-    await expect(page).toHaveURL(/\/nodes\/.+/);
+    await navigateToFirst(page, "/nodes", /\/nodes\/.+/);
   });
 
   test("shows role, availability, and status metadata", async ({ page }) => {
@@ -82,13 +79,10 @@ test.describe("Node Detail (/nodes/:id)", () => {
     // loaded, then check whether recent activity appears.
     await expect(page.getByRole("button", { name: /^Tasks$/i })).toBeVisible({ timeout: 10_000 });
 
-    // If the node has history, the section must be visible. If not, the test passes vacuously.
     const activityButton = page.getByRole("button", { name: /Recent Activity/i });
     const count = await activityButton.count();
-
-    if (count > 0) {
-      await expect(activityButton).toBeVisible();
-    }
+    test.skip(count === 0, "No activity history present for this node");
+    await expect(activityButton).toBeVisible();
   });
 
   test("labels section renders", async ({ page }) => {
