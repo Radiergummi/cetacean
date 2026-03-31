@@ -1,7 +1,7 @@
 import type { Healthcheck } from "@/api/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDuration } from "@/lib/format";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 const labelStyle = { fontSize: 7 } as const;
 type HoverGroup = "failed" | "ghost" | null;
@@ -12,6 +12,7 @@ type HoverGroup = "failed" | "ghost" | null;
  * where `retries` consecutive failures would mark the container unhealthy.
  */
 export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck }) {
+  const gradientId = useId();
   const [hoverGroup, setHoverGroup] = useState<HoverGroup>(null);
 
   const interval = healthcheck.Interval || 30e9;
@@ -117,7 +118,7 @@ export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck 
 
         {/* Hover track bars — behind all dots */}
         <defs>
-          <linearGradient id="hc-grad-amber-light">
+          <linearGradient id={`${gradientId}-amber-light`}>
             <stop
               offset="0%"
               style={{ stopColor: "var(--color-amber-300)" }}
@@ -127,7 +128,7 @@ export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck 
               style={{ stopColor: "var(--color-zinc-200)" }}
             />
           </linearGradient>
-          <linearGradient id="hc-grad-amber-dark">
+          <linearGradient id={`${gradientId}-amber-dark`}>
             <stop
               offset="0%"
               style={{ stopColor: "var(--color-amber-800)" }}
@@ -137,7 +138,7 @@ export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck 
               style={{ stopColor: "var(--color-zinc-700)" }}
             />
           </linearGradient>
-          <linearGradient id="hc-grad-red-light">
+          <linearGradient id={`${gradientId}-red-light`}>
             <stop
               offset="8%"
               style={{ stopColor: "var(--color-zinc-300)" }}
@@ -147,7 +148,7 @@ export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck 
               style={{ stopColor: "var(--color-red-400)" }}
             />
           </linearGradient>
-          <linearGradient id="hc-grad-red-dark">
+          <linearGradient id={`${gradientId}-red-dark`}>
             <stop
               offset="8%"
               style={{ stopColor: "var(--color-zinc-600)" }}
@@ -179,7 +180,7 @@ export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck 
                   width={x(firstCheck) - x(startChecks[startChecks.length - 1])}
                   height={2}
                   rx={1}
-                  fill="url(#hc-grad-amber-light)"
+                  fill={`url(#${gradientId}-amber-light)`}
                   className="dark:hidden"
                 />
                 <rect
@@ -188,7 +189,7 @@ export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck 
                   width={x(firstCheck) - x(startChecks[startChecks.length - 1])}
                   height={2}
                   rx={1}
-                  fill="url(#hc-grad-amber-dark)"
+                  fill={`url(#${gradientId}-amber-dark)`}
                   className="hidden dark:block"
                 />
               </>
@@ -214,7 +215,7 @@ export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck 
               width={x(regularChecks[0]) - x(firstCheck)}
               height={2}
               rx={1}
-              fill="url(#hc-grad-red-light)"
+              fill={`url(#${gradientId}-red-light)`}
               className="dark:hidden"
             />
             <rect
@@ -223,7 +224,7 @@ export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck 
               width={x(regularChecks[0]) - x(firstCheck)}
               height={2}
               rx={1}
-              fill="url(#hc-grad-red-dark)"
+              fill={`url(#${gradientId}-red-dark)`}
               className="hidden dark:block"
             />
             <rect

@@ -115,8 +115,9 @@ export default function ServiceDetail() {
   const serviceRecommendations = recommendations.filter((r) => r.targetId === id);
 
   const abortRef = useRef<AbortController | null>(null);
+  const sseAbortRef = useRef<AbortController | null>(null);
 
-  function applyDerivedState(svc: Service) {
+  const applyDerivedState = useCallback((svc: Service) => {
     const derived = deriveServiceSubResources(svc);
     setEnvVars(derived.envVars);
     setServiceResources(derived.serviceResources);
@@ -125,7 +126,7 @@ export default function ServiceDetail() {
     setSpecPorts(derived.specPorts);
     setServiceMounts(derived.serviceMounts);
     setContainerConfig(derived.containerConfig);
-  }
+  }, []);
 
   const fetchService = useCallback(
     (signal: AbortSignal) => {
@@ -211,9 +212,10 @@ export default function ServiceDetail() {
     }
 
     // Refetch tasks and history — not in the service object.
-    // Don't abort previous fetches: let them complete so the UI stays
-    // current during rapid event bursts (e.g. rolling updates).
+    // Abort previous SSE-triggered fetches so they don't outlive unmount.
+    sseAbortRef.current?.abort();
     const controller = new AbortController();
+    sseAbortRef.current = controller;
     fetchSideData(controller.signal);
 
     // On sync events (no resource), also refetch service for fresh changes/diff
@@ -221,6 +223,10 @@ export default function ServiceDetail() {
       fetchService(controller.signal);
     }
   });
+
+  useEffect(() => {
+    return () => sseAbortRef.current?.abort();
+  }, []);
 
   const serviceName = service?.Spec.Name || "";
   const taskMetrics = useTaskMetrics(

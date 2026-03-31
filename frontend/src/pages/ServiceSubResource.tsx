@@ -1,9 +1,9 @@
+import { get } from "@/api/client";
 import FetchError from "@/components/FetchError";
 import { LoadingDetail } from "@/components/LoadingSkeleton";
 import PageHeader from "@/components/PageHeader";
 import ResourceName from "@/components/ResourceName";
 import SimpleTable from "@/components/SimpleTable";
-import { apiPath } from "@/lib/basePath";
 import { useEffect, useState } from "react";
 import { Navigate, useParams } from "react-router-dom";
 
@@ -47,28 +47,12 @@ export default function ServiceSubResource() {
     const signal = controller.signal;
 
     Promise.all([
-      fetch(apiPath(`/services/${id}/${subResource}`), {
-        headers: { Accept: "application/json" },
-        signal,
-      }),
-      fetch(apiPath(`/services/${id}`), { headers: { Accept: "application/json" }, signal }),
+      get<unknown>(`/services/${id}/${subResource}`, signal),
+      get<{ service?: { Spec?: { Name?: string } } }>(`/services/${id}`, signal).catch(() => null),
     ])
-      .then(async ([subResponse, serviceResponse]) => {
-        if (!subResponse.ok) {
-          throw new Error(`${subResponse.status} ${subResponse.statusText}`);
-        }
-
-        setData(await subResponse.json());
-
-        if (serviceResponse.ok) {
-          try {
-            const serviceData = await serviceResponse.json();
-            setServiceName(serviceData?.service?.Spec?.Name ?? null);
-          } catch {
-            // non-critical
-          }
-        }
-
+      .then(([subData, serviceData]) => {
+        setData(subData);
+        setServiceName(serviceData?.service?.Spec?.Name ?? null);
         setLoading(false);
       })
       .catch((fetchError) => {

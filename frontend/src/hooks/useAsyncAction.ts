@@ -1,6 +1,6 @@
 import { showErrorToast } from "@/lib/showErrorToast";
 import { getErrorMessage } from "@/lib/utils";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface AsyncActionOptions {
   toast?: boolean;
@@ -19,7 +19,10 @@ export function useAsyncAction(options?: AsyncActionOptions) {
     };
   }, []);
 
-  async function execute(action: () => Promise<unknown>, errorMessage: string) {
+  const toastRef = useRef(options?.toast);
+  toastRef.current = options?.toast;
+
+  const execute = useCallback(async (action: () => Promise<unknown>, errorMessage: string) => {
     setLoading(true);
     setError(null);
     setCause(null);
@@ -31,7 +34,7 @@ export function useAsyncAction(options?: AsyncActionOptions) {
         setError(getErrorMessage(caught, errorMessage));
         setCause(caught);
 
-        if (options?.toast) {
+        if (toastRef.current) {
           showErrorToast(caught, errorMessage);
         }
       }
@@ -40,7 +43,7 @@ export function useAsyncAction(options?: AsyncActionOptions) {
         setLoading(false);
       }
     }
-  }
+  }, []);
 
   return { loading, error, cause, execute };
 }

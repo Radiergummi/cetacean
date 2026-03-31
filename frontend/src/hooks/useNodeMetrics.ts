@@ -62,36 +62,38 @@ export function useNodeMetrics() {
             console.warn(error);
             return null;
           }),
-      ]).then(([cpuResponse, memResponse, diskResponse, cpuRangeResponse]) => {
-        if (cancelled) {
-          return;
-        }
-
-        const map: Record<string, NodeMetrics> = {};
-
-        const ensure = (instance: string) => {
-          if (!map[instance]) {
-            map[instance] = { ...emptyMetrics, cpuHistory: [] };
+      ])
+        .then(([cpuResponse, memResponse, diskResponse, cpuRangeResponse]) => {
+          if (cancelled) {
+            return;
           }
 
-          return map[instance];
-        };
+          const map: Record<string, NodeMetrics> = {};
 
-        parseInstant(cpuResponse)?.forEach(([instance, value]) => {
-          ensure(instance).cpu = value;
-        });
-        parseInstant(memResponse)?.forEach(([instance, value]) => {
-          ensure(instance).memory = value;
-        });
-        parseInstant(diskResponse)?.forEach(([instance, value]) => {
-          ensure(instance).disk = value;
-        });
-        parseRange(cpuRangeResponse)?.forEach(([instance, values]) => {
-          ensure(instance).cpuHistory = values;
-        });
+          const ensure = (instance: string) => {
+            if (!map[instance]) {
+              map[instance] = { ...emptyMetrics, cpuHistory: [] };
+            }
 
-        setByInstance(map);
-      });
+            return map[instance];
+          };
+
+          parseInstant(cpuResponse)?.forEach(([instance, value]) => {
+            ensure(instance).cpu = value;
+          });
+          parseInstant(memResponse)?.forEach(([instance, value]) => {
+            ensure(instance).memory = value;
+          });
+          parseInstant(diskResponse)?.forEach(([instance, value]) => {
+            ensure(instance).disk = value;
+          });
+          parseRange(cpuRangeResponse)?.forEach(([instance, values]) => {
+            ensure(instance).cpuHistory = values;
+          });
+
+          setByInstance(map);
+        })
+        .catch(console.warn);
     };
 
     doFetch();

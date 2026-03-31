@@ -12,6 +12,7 @@ import { useDetailResource } from "../hooks/useDetailResource";
 import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
 import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
 import { parseStackLabels } from "../lib/parseStackLabels";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
 export default function SecretDetail() {
@@ -36,7 +37,11 @@ export default function SecretDetail() {
   const services = data.services ?? [];
   const name = secret.Spec.Name || secret.ID;
   const { stack } = parseStackLabels(secret.Spec.Labels);
-  const allLabels = secret.Spec.Labels ?? {};
+  const [labels, setLabels] = useState<Record<string, string>>(secret.Spec.Labels ?? {});
+
+  useEffect(() => {
+    setLabels(secret.Spec.Labels ?? {});
+  }, [secret]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -85,8 +90,8 @@ export default function SecretDetail() {
 
       <KeyValueEditor
         title="Labels"
-        entries={allLabels}
-        defaultOpen={Object.keys(allLabels).length > 0}
+        entries={labels}
+        defaultOpen={Object.keys(labels).length > 0}
         keyPlaceholder="com.example.my-label"
         valuePlaceholder="value"
         editDisabled={levelLoading || level < opsLevel.configuration}
@@ -94,6 +99,8 @@ export default function SecretDetail() {
         validateKey={validateLabelKey}
         onSave={async (ops) => {
           const updated = await api.patchSecretLabels(secret.ID, ops);
+          setLabels(updated);
+
           return updated;
         }}
       />

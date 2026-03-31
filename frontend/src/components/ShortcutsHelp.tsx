@@ -84,13 +84,13 @@ export default function ShortcutsHelp({ onClose }: { onClose: () => void }) {
                   >
                     <span className="text-muted-foreground">{description}</span>
                     <span className="flex items-center gap-1">
-                      {keys.map((key, index) => (
-                        <span key={index}>
-                          {index > 0 && <span className="mx-0.5 text-xs text-muted-foreground" />}
-                          <kbd className="inline-flex min-w-5 items-center justify-center rounded border bg-muted px-1.5 py-0.5 text-xs font-medium">
-                            {key}
-                          </kbd>
-                        </span>
+                      {keys.map((key) => (
+                        <kbd
+                          key={key}
+                          className="inline-flex min-w-5 items-center justify-center rounded border bg-muted px-1.5 py-0.5 text-xs font-medium"
+                        >
+                          {key}
+                        </kbd>
                       ))}
                     </span>
                   </div>

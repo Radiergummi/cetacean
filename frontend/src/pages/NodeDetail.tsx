@@ -48,6 +48,7 @@ export default function NodeDetail() {
   const [error, setError] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
+  const sseAbortRef = useRef<AbortController | null>(null);
 
   const fetchNode = useCallback(
     (signal: AbortSignal) => {
@@ -113,14 +114,20 @@ export default function NodeDetail() {
     }
 
     // Refetch tasks, history, and role — not in the node object.
-    // Don't abort previous fetches: let them complete during rapid event bursts.
+    // Abort previous SSE-triggered fetches so they don't outlive unmount.
+    sseAbortRef.current?.abort();
     const controller = new AbortController();
+    sseAbortRef.current = controller;
     fetchSideData(controller.signal);
 
     if (!event.resource) {
       fetchNode(controller.signal);
     }
   });
+
+  useEffect(() => {
+    return () => sseAbortRef.current?.abort();
+  }, []);
 
   const nodeId = node?.ID || "";
   const hostname = node?.Description?.Hostname || "";

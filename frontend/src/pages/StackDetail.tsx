@@ -8,7 +8,7 @@ import ResourceName from "../components/ResourceName";
 import SimpleTable from "../components/SimpleTable";
 import { StackActions } from "../components/stack-detail/StackActions";
 import { useResourceStream } from "../hooks/useResourceStream";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 export default function StackDetail() {
@@ -32,43 +32,54 @@ export default function StackDetail() {
 
   useResourceStream(`/stacks/${name}`, fetchData);
 
+  const taskDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (!stack?.services?.length) {
       return;
     }
 
+    if (taskDebounceRef.current) {
+      clearTimeout(taskDebounceRef.current);
+    }
+
     const controller = new AbortController();
 
-    Promise.all(
-      stack.services.map((service) =>
-        api
-          .serviceTasks(service.ID, controller.signal)
-          .then((tasks: Task[]) => [service, tasks] as const)
-          .catch(() => [service, []] as const),
-      ),
-    ).then((results) => {
-      if (controller.signal.aborted) {
-        return;
-      }
+    taskDebounceRef.current = setTimeout(() => {
+      Promise.all(
+        stack.services.map((service) =>
+          api
+            .serviceTasks(service.ID, controller.signal)
+            .then((tasks: Task[]) => [service, tasks] as const)
+            .catch(() => [service, []] as const),
+        ),
+      ).then((results) => {
+        if (controller.signal.aborted) {
+          return;
+        }
 
-      const counts: Record<string, { running: number; desired: number }> = {};
+        const counts: Record<string, { running: number; desired: number }> = {};
 
-      for (const [service, tasks] of results) {
-        const desired =
-          service.Spec.Mode.Replicated?.Replicas ??
-          (service.Spec.Mode.Global
-            ? tasks.filter(({ Status: { State } }) => State === "running").length
-            : 1);
+        for (const [service, tasks] of results) {
+          const desired =
+            service.Spec.Mode.Replicated?.Replicas ??
+            (service.Spec.Mode.Global
+              ? tasks.filter(({ Status: { State } }) => State === "running").length
+              : 1);
 
-        counts[service.ID] = {
-          running: tasks.filter(({ Status: { State } }) => State === "running").length,
-          desired,
-        };
-      }
-      setTaskCounts(counts);
-    });
+          counts[service.ID] = {
+            running: tasks.filter(({ Status: { State } }) => State === "running").length,
+            desired,
+          };
+        }
+        setTaskCounts(counts);
+      });
+    }, 2000);
 
-    return () => controller.abort();
+    return () => {
+      clearTimeout(taskDebounceRef.current!);
+      controller.abort();
+    };
   }, [stack]);
 
   if (error) {

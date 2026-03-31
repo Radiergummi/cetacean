@@ -16,6 +16,7 @@ import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
 import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
 import { parseStackLabels } from "../lib/parseStackLabels";
 import { Copy } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
 export default function ConfigDetail() {
@@ -40,7 +41,11 @@ export default function ConfigDetail() {
   const services = data.services ?? [];
   const name = config.Spec.Name || config.ID;
   const { stack } = parseStackLabels(config.Spec.Labels);
-  const allLabels = config.Spec.Labels ?? {};
+  const [labels, setLabels] = useState<Record<string, string>>(config.Spec.Labels ?? {});
+
+  useEffect(() => {
+    setLabels(config.Spec.Labels ?? {});
+  }, [config]);
   let decoded: string | null = null;
 
   if (config.Spec.Data) {
@@ -98,8 +103,8 @@ export default function ConfigDetail() {
 
       <KeyValueEditor
         title="Labels"
-        entries={allLabels}
-        defaultOpen={Object.keys(allLabels).length > 0}
+        entries={labels}
+        defaultOpen={Object.keys(labels).length > 0}
         keyPlaceholder="com.example.my-label"
         valuePlaceholder="value"
         editDisabled={levelLoading || level < opsLevel.configuration}
@@ -107,6 +112,8 @@ export default function ConfigDetail() {
         validateKey={validateLabelKey}
         onSave={async (ops) => {
           const updated = await api.patchConfigLabels(config.ID, ops);
+          setLabels(updated);
+
           return updated;
         }}
       />

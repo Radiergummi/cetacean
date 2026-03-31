@@ -58,39 +58,41 @@ export function useServiceMetrics() {
           console.warn(error);
           return null;
         }),
-      ]).then(([cpuResponse, memResponse, cpuRangeResponse, memRangeResponse]) => {
-        if (cancelled) {
-          return;
-        }
-
-        const map: Record<string, ServiceMetrics> = {};
-
-        const ensure = (name: string) => {
-          if (!map[name]) {
-            map[name] = { ...emptyMetrics, cpuHistory: [], memoryHistory: [] };
+      ])
+        .then(([cpuResponse, memResponse, cpuRangeResponse, memRangeResponse]) => {
+          if (cancelled) {
+            return;
           }
 
-          return map[name];
-        };
+          const map: Record<string, ServiceMetrics> = {};
 
-        parseInstant(cpuResponse)?.forEach(([name, value]) => {
-          ensure(name).cpu = value;
-        });
+          const ensure = (name: string) => {
+            if (!map[name]) {
+              map[name] = { ...emptyMetrics, cpuHistory: [], memoryHistory: [] };
+            }
 
-        parseInstant(memResponse)?.forEach(([name, value]) => {
-          ensure(name).memory = value;
-        });
+            return map[name];
+          };
 
-        parseRange(cpuRangeResponse)?.forEach(([name, values]) => {
-          ensure(name).cpuHistory = values;
-        });
+          parseInstant(cpuResponse)?.forEach(([name, value]) => {
+            ensure(name).cpu = value;
+          });
 
-        parseRange(memRangeResponse)?.forEach(([name, values]) => {
-          ensure(name).memoryHistory = values;
-        });
+          parseInstant(memResponse)?.forEach(([name, value]) => {
+            ensure(name).memory = value;
+          });
 
-        setByService(map);
-      });
+          parseRange(cpuRangeResponse)?.forEach(([name, values]) => {
+            ensure(name).cpuHistory = values;
+          });
+
+          parseRange(memRangeResponse)?.forEach(([name, values]) => {
+            ensure(name).memoryHistory = values;
+          });
+
+          setByService(map);
+        })
+        .catch(console.warn);
     };
 
     doFetch();

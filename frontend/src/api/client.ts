@@ -154,6 +154,10 @@ async function mutationFetch<T>(
   return res.json();
 }
 
+export function get<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return fetchJSON(path, signal);
+}
+
 export function put<T>(path: string, body: unknown): Promise<T> {
   return mutationFetch(path, "PUT", body, "application/json");
 }

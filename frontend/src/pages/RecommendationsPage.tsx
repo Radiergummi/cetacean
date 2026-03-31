@@ -84,17 +84,21 @@ function targetLink(hint: Recommendation): string | null {
   return null;
 }
 
-interface CardProps {
-  hint: Recommendation;
-  originalIndex: number;
-  applying: number | null;
-  onApply: (hint: Recommendation, originalIndex: number) => void;
+function recommendationKey(hint: Recommendation): string {
+  return `${hint.targetId}:${hint.category}`;
 }
 
-function RecommendationCard({ hint, originalIndex, applying, onApply }: CardProps) {
+interface CardProps {
+  hint: Recommendation;
+  hintKey: string;
+  applying: string | null;
+  onApply: (hint: Recommendation) => void;
+}
+
+function RecommendationCard({ hint, hintKey, applying, onApply }: CardProps) {
   const CategoryIcon = hintIcon(hint.category);
   const hasFix = hint.fixAction != null && hint.suggested != null;
-  const isApplying = applying === originalIndex;
+  const isApplying = applying === hintKey;
   const link = targetLink(hint);
   const detail = categoryDetails[hint.category];
 
@@ -133,7 +137,7 @@ function RecommendationCard({ hint, originalIndex, applying, onApply }: CardProp
             variant="outline"
             size="xs"
             disabled={applying !== null}
-            onClick={() => onApply(hint, originalIndex)}
+            onClick={() => onApply(hint)}
           >
             {isApplying ? (
               <Loader2 className="size-3 animate-spin" />
@@ -159,8 +163,8 @@ function RecommendationCard({ hint, originalIndex, applying, onApply }: CardProp
 export default function RecommendationsPage() {
   const { items } = useRecommendations();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [applying, setApplying] = useState<number | null>(null);
-  const [dismissed, setDismissed] = useState<Set<number>>(new Set());
+  const [applying, setApplying] = useState<string | null>(null);
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
   const rawFilter = searchParams.get("filter") ?? "all";
@@ -185,27 +189,26 @@ export default function RecommendationsPage() {
     );
   }
 
-  const filteredItems = items
-    .map((hint, index) => ({ hint, index }))
-    .filter(({ hint, index }) => {
-      if (dismissed.has(index)) {
-        return false;
-      }
+  const filteredItems = items.filter((hint) => {
+    if (dismissed.has(recommendationKey(hint))) {
+      return false;
+    }
 
-      if (activeFilter === "all") {
-        return true;
-      }
+    if (activeFilter === "all") {
+      return true;
+    }
 
-      return filterGroups[activeFilter]?.has(hint.category) ?? false;
-    });
+    return filterGroups[activeFilter]?.has(hint.category) ?? false;
+  });
 
-  async function handleApply(hint: Recommendation, originalIndex: number) {
-    setApplying(originalIndex);
+  async function handleApply(hint: Recommendation) {
+    const key = recommendationKey(hint);
+    setApplying(key);
     setError(null);
 
     try {
       await applyRecommendation(hint);
-      setDismissed((previous) => new Set([...previous, originalIndex]));
+      setDismissed((previous) => new Set([...previous, key]));
       invalidateRecommendations();
     } catch (caughtError) {
       setError(getErrorMessage(caughtError, "Failed to apply suggestion"));
@@ -244,15 +247,19 @@ export default function RecommendationsPage() {
         <EmptyState message="No recommendations — your cluster looks healthy" />
       ) : (
         <div className="space-y-2">
-          {filteredItems.map(({ hint, index }) => (
-            <RecommendationCard
-              key={index}
-              hint={hint}
-              originalIndex={index}
-              applying={applying}
-              onApply={handleApply}
-            />
-          ))}
+          {filteredItems.map((hint) => {
+            const key = recommendationKey(hint);
+
+            return (
+              <RecommendationCard
+                key={key}
+                hint={hint}
+                hintKey={key}
+                applying={applying}
+                onApply={handleApply}
+              />
+            );
+          })}
         </div>
       )}
     </div>

@@ -78,7 +78,7 @@ export default function MetricsConsole() {
     if (searchParams.get("q")) {
       runQuery();
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchParams, runQuery]);
 
   const setRange = (value: string) => {
     setSearchParams(

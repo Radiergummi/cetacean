@@ -87,7 +87,6 @@ export function useSwarmResource<T>(
         setTotal((previous) => Math.max(0, previous - 1));
       } else if (event.resource) {
         const resource = event.resource as T;
-        const isNew = dataRef.current.findIndex((item) => getIdRef.current(item) === event.id) < 0;
 
         setData((previous) => {
           const index = previous.findIndex((item) => getIdRef.current(item) === event.id);
@@ -99,12 +98,10 @@ export function useSwarmResource<T>(
             return next;
           }
 
+          setTotal((t) => t + 1);
+
           return [...previous, resource];
         });
-
-        if (isNew) {
-          setTotal((t) => t + 1);
-        }
       }
     }, []),
   );
