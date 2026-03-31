@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - Self-metrics endpoint (`/-/metrics`) documented in monitoring guide with full metric reference
 - `CETACEAN_SELF_METRICS` toggle to disable the self-metrics endpoint (enabled by default)
+- `CETACEAN_RECOMMENDATIONS` toggle to disable the recommendation engine (enabled by default)
 - Task state filter on the tasks page — filter by running, failed, or any other state via segmented control
 - "Failed Tasks" card on the cluster overview now links directly to failed tasks
 - Recommendation cards expand to show why each recommendation matters

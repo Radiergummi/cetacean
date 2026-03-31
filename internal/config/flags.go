@@ -8,16 +8,17 @@ import (
 // Flags holds parsed CLI flag values. Pointer fields distinguish
 // "not set" (nil) from "set to zero value".
 type Flags struct {
-	Config        string // path to TOML config file
-	Listen        *string
-	DockerHost    *string
-	PrometheusURL *string
-	LogLevel      *string
-	LogFormat     *string
-	Pprof         *bool
-	SelfMetrics   *bool
-	BasePath      *string
-	Version       bool
+	Config          string // path to TOML config file
+	Listen          *string
+	DockerHost      *string
+	PrometheusURL   *string
+	LogLevel        *string
+	LogFormat       *string
+	Pprof           *bool
+	SelfMetrics     *bool
+	Recommendations *bool
+	BasePath        *string
+	Version         bool
 
 	// Auth
 	AuthMode *string
@@ -93,6 +94,11 @@ func ParseFlags(args []string) (*Flags, error) {
 		false,
 		"Enable self-metrics endpoint (env: CETACEAN_SELF_METRICS, default true)",
 	)
+	recs := fs.Bool(
+		"recommendations",
+		false,
+		"Enable recommendation engine (env: CETACEAN_RECOMMENDATIONS, default true)",
+	)
 	basePath := fs.String("base-path", "", "URL base path (env: CETACEAN_BASE_PATH)")
 	fs.BoolVar(&f.Version, "version", false, "Print version and exit")
 
@@ -163,6 +169,8 @@ func ParseFlags(args []string) (*Flags, error) {
 			f.Pprof = pprof
 		case "self-metrics":
 			f.SelfMetrics = selfMetrics
+		case "recommendations":
+			f.Recommendations = recs
 		case "base-path":
 			f.BasePath = basePath
 		case "auth-mode":

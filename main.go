@@ -203,34 +203,39 @@ func main() {
 		slog.Warn("prometheus not configured, metrics disabled")
 	}
 	// Recommendations engine
-	sizingCfg, err := config.LoadSizing(fc)
-	if err != nil {
-		slog.Error("failed to load sizing config", "error", err)
-		os.Exit(1)
-	}
+	var recEngine *recommendations.Engine
+	if cfg.Recommendations {
+		sizingCfg, err := config.LoadSizing(fc)
+		if err != nil {
+			slog.Error("failed to load sizing config", "error", err)
+			os.Exit(1)
+		}
 
-	var checkers []recommendations.Checker
-	// Always register cache-only checkers.
-	checkers = append(checkers,
-		recommendations.NewConfigChecker(stateCache),
-		recommendations.NewClusterChecker(stateCache),
-	)
-	// Register Prometheus-dependent checkers when available.
-	if promClient != nil {
-		checkers = append(
-			checkers,
-			recommendations.NewSizingChecker(promClient.InstantQuery, stateCache, sizingCfg),
-			recommendations.NewOperationalChecker(
-				promClient.InstantQuery,
-				stateCache,
-				sizingCfg.Lookback,
-			),
+		var checkers []recommendations.Checker
+		// Always register cache-only checkers.
+		checkers = append(checkers,
+			recommendations.NewConfigChecker(stateCache),
+			recommendations.NewClusterChecker(stateCache),
 		)
-	}
-	recEngine := recommendations.NewEngine(checkers...)
-	if recEngine != nil {
-		go recEngine.Run(ctx)
-		slog.Info("recommendation engine started", "checkers", len(checkers))
+		// Register Prometheus-dependent checkers when available.
+		if promClient != nil {
+			checkers = append(
+				checkers,
+				recommendations.NewSizingChecker(promClient.InstantQuery, stateCache, sizingCfg),
+				recommendations.NewOperationalChecker(
+					promClient.InstantQuery,
+					stateCache,
+					sizingCfg.Lookback,
+				),
+			)
+		}
+		recEngine = recommendations.NewEngine(checkers...)
+		if recEngine != nil {
+			go recEngine.Run(ctx)
+			slog.Info("recommendation engine started", "checkers", len(checkers))
+		}
+	} else {
+		slog.Info("recommendation engine disabled")
 	}
 
 	slog.Info("operations level", "level", cfg.OperationsLevel)

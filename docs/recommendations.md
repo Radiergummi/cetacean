@@ -2,6 +2,8 @@
 
 Cetacean continuously evaluates your cluster's health across four domains and surfaces actionable recommendations. Checks that only need Docker state (config hygiene, cluster topology) run every 60 seconds. Checks that query Prometheus (resource sizing, operational health) run every 5 minutes.
 
+To disable the recommendation engine entirely, set `CETACEAN_RECOMMENDATIONS=false` (or `--recommendations=false`, or `server.recommendations = false` in TOML). The `/recommendations` endpoint will return an empty list.
+
 ## Categories
 
 ### Resource Sizing
