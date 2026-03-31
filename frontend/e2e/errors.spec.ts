@@ -13,9 +13,9 @@ test.describe("Error Pages", () => {
 
     // Either a FetchError component or the NotFound page renders.
     // FetchError renders "Failed to load node"; NotFound renders "Page not found" / "404".
-    await expect(
-      page.getByText(/404|not found|failed to load/i).first(),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/404|not found|failed to load/i).first()).toBeVisible({
+      timeout: 10_000,
+    });
   });
 
   test("error index page heading is visible", async ({ page }) => {

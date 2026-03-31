@@ -44,7 +44,10 @@ test.describe("Service Editors", () => {
     await ensureSectionOpen(page, /Environment Variables/i);
     await clickEdit(page);
 
-    await page.getByRole("button", { name: /^Cancel$/i }).first().click();
+    await page
+      .getByRole("button", { name: /^Cancel$/i })
+      .first()
+      .click();
 
     await expect(page.getByRole("button", { name: /^Save$/i })).not.toBeVisible();
     await expect(page.getByRole("button", { name: /^Edit$/i }).first()).toBeVisible();
@@ -74,7 +77,10 @@ test.describe("Service Editors", () => {
     await ensureSectionOpen(page, /^Labels$/i);
     await clickEdit(page);
 
-    await page.getByRole("button", { name: /^Cancel$/i }).first().click();
+    await page
+      .getByRole("button", { name: /^Cancel$/i })
+      .first()
+      .click();
 
     await expect(page.getByRole("button", { name: /^Save$/i })).not.toBeVisible();
     await expect(page.getByRole("button", { name: /^Edit$/i }).first()).toBeVisible();

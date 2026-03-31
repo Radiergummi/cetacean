@@ -25,6 +25,7 @@ async function fetchMonitoringStatus(baseURL: string): Promise<MonitoringStatus>
 
 export const test = base.extend<object, { monitoring: MonitoringStatus }>({
   monitoring: [
+    // eslint-disable-next-line no-empty-pattern, react-hooks/rules-of-hooks
     async ({}, use, workerInfo) => {
       const baseURL =
         workerInfo.project.use.baseURL ?? process.env.CETACEAN_E2E_URL ?? "http://localhost:9000";

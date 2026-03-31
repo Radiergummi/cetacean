@@ -14,9 +14,11 @@ test.describe("Recommendations (/recommendations)", () => {
       timeout: 10_000,
     });
 
+    /* eslint-disable no-await-in-loop */
     for (const label of ["All", "Sizing", "Config", "Operational", "Cluster"]) {
       await expect(page.getByRole("button", { name: label, exact: true })).toBeVisible();
     }
+    /* eslint-enable no-await-in-loop */
   });
 
   test("clicking Config tab updates URL to ?filter=config", async ({ page }) => {

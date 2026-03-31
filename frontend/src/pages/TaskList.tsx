@@ -204,7 +204,9 @@ export default function TaskList() {
         />
       </div>
       {filteredTasks.length === 0 ? (
-        <EmptyState message={search || stateFilter ? "No tasks match your filters" : "No tasks found"} />
+        <EmptyState
+          message={search || stateFilter ? "No tasks match your filters" : "No tasks found"}
+        />
       ) : (
         <DataTable
           columns={columns}

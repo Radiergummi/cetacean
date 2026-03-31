@@ -53,7 +53,9 @@ test.describe("Stack Detail", () => {
 
   test("Configs section toggle is present when stack has configs", async ({ page }) => {
     // Configs section only renders when the stack has configs
-    await expect(page.getByRole("button", { name: /^Services$/i })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: /^Services$/i })).toBeVisible({
+      timeout: 10_000,
+    });
 
     const configsButton = page.getByRole("button", { name: /^Configs$/i });
     const count = await configsButton.count();
@@ -62,7 +64,9 @@ test.describe("Stack Detail", () => {
   });
 
   test("Secrets section toggle is present when stack has secrets", async ({ page }) => {
-    await expect(page.getByRole("button", { name: /^Services$/i })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: /^Services$/i })).toBeVisible({
+      timeout: 10_000,
+    });
 
     const secretsButton = page.getByRole("button", { name: /^Secrets$/i });
     const count = await secretsButton.count();
@@ -71,7 +75,9 @@ test.describe("Stack Detail", () => {
   });
 
   test("Networks section toggle is present when stack has networks", async ({ page }) => {
-    await expect(page.getByRole("button", { name: /^Services$/i })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: /^Services$/i })).toBeVisible({
+      timeout: 10_000,
+    });
 
     const networksButton = page.getByRole("button", { name: /^Networks$/i });
     const count = await networksButton.count();
@@ -80,7 +86,9 @@ test.describe("Stack Detail", () => {
   });
 
   test("Volumes section toggle is present when stack has volumes", async ({ page }) => {
-    await expect(page.getByRole("button", { name: /^Services$/i })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: /^Services$/i })).toBeVisible({
+      timeout: 10_000,
+    });
 
     const volumesButton = page.getByRole("button", { name: /^Volumes$/i });
     const count = await volumesButton.count();

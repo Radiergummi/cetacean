@@ -10,24 +10,35 @@ test.describe("Cluster Overview", () => {
     await page.goto("/");
 
     // Wait for snapshot to load (cards switch from skeleton to real content)
-    await expect(page.getByRole("link", { name: /Nodes/i }).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("link", { name: /Nodes/i }).first()).toBeVisible({
+      timeout: 10_000,
+    });
 
+    /* eslint-disable no-await-in-loop */
     for (const label of ["Nodes", "Services", "Failed Tasks", "Tasks"]) {
       await expect(page.getByRole("link", { name: new RegExp(label, "i") }).first()).toBeVisible();
     }
+    /* eslint-enable no-await-in-loop */
   });
 
   test("Nodes card links to /nodes", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("link", { name: /Nodes/i }).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("link", { name: /Nodes/i }).first()).toBeVisible({
+      timeout: 10_000,
+    });
     await page.getByRole("link", { name: /Nodes/i }).first().click();
     await expect(page).toHaveURL("/nodes");
   });
 
   test("Services card links to /services", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("link", { name: /Services/i }).first()).toBeVisible({ timeout: 10_000 });
-    await page.getByRole("link", { name: /Services/i }).first().click();
+    await expect(page.getByRole("link", { name: /Services/i }).first()).toBeVisible({
+      timeout: 10_000,
+    });
+    await page
+      .getByRole("link", { name: /Services/i })
+      .first()
+      .click();
     await expect(page).toHaveURL("/services");
   });
 
@@ -85,8 +96,7 @@ test.describe("Cluster Overview", () => {
   }) => {
     // This test only makes sense when Prometheus is NOT fully healthy
     // (either unconfigured or partial). Skip when everything is green.
-    const fullyHealthy =
-      monitoring?.prometheus && monitoring?.nodeExporter && monitoring?.cadvisor;
+    const fullyHealthy = monitoring?.prometheus && monitoring?.nodeExporter && monitoring?.cadvisor;
     test.skip(!!fullyHealthy, "Monitoring is fully healthy — no banner expected");
 
     // Ensure the dismiss flag is cleared so the banner is visible
@@ -123,9 +133,11 @@ test.describe("Cluster Overview", () => {
       const section = page.getByRole("button", { name: /Resource Usage by Stack/i });
       await expect(section).toBeVisible({ timeout: 15_000 });
 
+      /* eslint-disable no-await-in-loop */
       for (const label of ["1H", "6H", "24H", "7D"]) {
         await expect(page.getByRole("button", { name: label })).toBeVisible();
       }
+      /* eslint-enable no-await-in-loop */
     });
 
     test("stacked area toggle is visible", async ({ page, monitoring }) => {

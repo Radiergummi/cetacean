@@ -24,10 +24,12 @@ test.describe("Navigation Bar", () => {
       ["Metrics", "/metrics"],
     ];
 
+    /* eslint-disable no-await-in-loop */
     for (const [label, path] of links) {
       await page.getByRole("link", { name: label, exact: true }).first().click();
       await expect(page).toHaveURL(path);
     }
+    /* eslint-enable no-await-in-loop */
   });
 
   test("connection status shows Live", async ({ page }) => {
@@ -82,6 +84,7 @@ test.describe("Keyboard Shortcuts", () => {
       ["m", "/metrics"],
     ];
 
+    /* eslint-disable no-await-in-loop */
     for (const [key, path] of chords) {
       const startPage = path === "/nodes" ? "/services" : "/nodes";
       await page.goto(startPage);
@@ -91,6 +94,7 @@ test.describe("Keyboard Shortcuts", () => {
       await page.keyboard.press(key);
       await expect(page).toHaveURL(path);
     }
+    /* eslint-enable no-await-in-loop */
   });
 
   test("j/k navigate list rows and Enter opens", async ({ page }) => {

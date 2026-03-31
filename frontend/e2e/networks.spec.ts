@@ -29,8 +29,8 @@ test.describe("Network Detail (/networks/:id)", () => {
 
   test("services section is present", async ({ page }) => {
     // ServiceRefList renders a CollapsibleSection with title "Connected Services"
-    await expect(
-      page.getByRole("button", { name: /Connected Services/i }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: /Connected Services/i })).toBeVisible({
+      timeout: 10_000,
+    });
   });
 });

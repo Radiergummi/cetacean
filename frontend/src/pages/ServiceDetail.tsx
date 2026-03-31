@@ -148,7 +148,7 @@ export default function ServiceDetail() {
           }
         });
     },
-    [id],
+    [id, applyDerivedState],
   );
 
   const fetchSideData = useCallback(
