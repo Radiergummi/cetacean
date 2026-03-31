@@ -23,6 +23,13 @@ export default function ConfigDetail() {
   const { id } = useParams<{ id: string }>();
   const { data, history, error, retry } = useDetailResource(id, api.config, `/configs/${id}`);
   const { level, loading: levelLoading } = useOperationsLevel();
+  const [labels, setLabels] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (data?.config) {
+      setLabels(data.config.Spec.Labels ?? {});
+    }
+  }, [data?.config]);
 
   if (error) {
     return (
@@ -37,15 +44,10 @@ export default function ConfigDetail() {
     return <LoadingDetail />;
   }
 
-  const config = data.config;
+  const { config } = data;
   const services = data.services ?? [];
   const name = config.Spec.Name || config.ID;
   const { stack } = parseStackLabels(config.Spec.Labels);
-  const [labels, setLabels] = useState<Record<string, string>>(config.Spec.Labels ?? {});
-
-  useEffect(() => {
-    setLabels(config.Spec.Labels ?? {});
-  }, [config]);
   let decoded: string | null = null;
 
   if (config.Spec.Data) {

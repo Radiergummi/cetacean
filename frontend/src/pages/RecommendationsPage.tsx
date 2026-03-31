@@ -85,7 +85,7 @@ function targetLink(hint: Recommendation): string | null {
 }
 
 function recommendationKey(hint: Recommendation): string {
-  return `${hint.targetId}:${hint.category}`;
+  return `${hint.targetId}:${hint.category}:${hint.resource}`;
 }
 
 interface CardProps {

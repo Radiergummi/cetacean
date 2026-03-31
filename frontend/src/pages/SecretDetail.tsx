@@ -19,6 +19,13 @@ export default function SecretDetail() {
   const { id } = useParams<{ id: string }>();
   const { data, history, error, retry } = useDetailResource(id, api.secret, `/secrets/${id}`);
   const { level, loading: levelLoading } = useOperationsLevel();
+  const [labels, setLabels] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (data?.secret) {
+      setLabels(data.secret.Spec.Labels ?? {});
+    }
+  }, [data?.secret]);
 
   if (error) {
     return (
@@ -33,15 +40,10 @@ export default function SecretDetail() {
     return <LoadingDetail />;
   }
 
-  const secret = data.secret;
+  const { secret } = data;
   const services = data.services ?? [];
   const name = secret.Spec.Name || secret.ID;
   const { stack } = parseStackLabels(secret.Spec.Labels);
-  const [labels, setLabels] = useState<Record<string, string>>(secret.Spec.Labels ?? {});
-
-  useEffect(() => {
-    setLabels(secret.Spec.Labels ?? {});
-  }, [secret]);
 
   return (
     <div className="flex flex-col gap-6">
