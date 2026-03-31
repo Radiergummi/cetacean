@@ -86,7 +86,7 @@ export function Combobox({
             onChange={(event) => setSearch(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Escape") {
-                event.stopPropagation();
+                setOpen(false);
               }
 
               if (event.key === "Enter" && search.trim() && allowCustom) {
