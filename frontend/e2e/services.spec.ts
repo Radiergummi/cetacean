@@ -24,11 +24,13 @@ test.describe("Service List (/services)", () => {
 
     await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 10_000 });
 
+    // Read the first row's service name to use as a search term
+    const firstName = await page.locator("table tbody tr td").first().innerText();
     const searchInput = page.getByPlaceholder("Search services…");
-    await searchInput.fill("nginx");
+    await searchInput.fill(firstName);
 
-    // A row containing "nginx" should be visible
-    await expect(page.getByRole("cell", { name: /nginx/i }).first()).toBeVisible({
+    // Row with that name should remain visible
+    await expect(page.getByRole("cell", { name: firstName }).first()).toBeVisible({
       timeout: 5_000,
     });
 

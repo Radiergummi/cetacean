@@ -34,11 +34,13 @@ test.describe("Node List (/nodes)", () => {
 
     await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 10_000 });
 
+    // Read the first row's hostname to use as a search term
+    const firstHostname = await page.locator("table tbody tr td").first().innerText();
     const searchInput = page.getByPlaceholder("Search nodes…");
-    await searchInput.fill("orbstack");
+    await searchInput.fill(firstHostname);
 
-    // Row with orbstack should remain visible
-    await expect(page.getByRole("cell", { name: "orbstack" })).toBeVisible({ timeout: 5_000 });
+    // Row with that hostname should remain visible
+    await expect(page.getByRole("cell", { name: firstHostname })).toBeVisible({ timeout: 5_000 });
 
     // Searching for something that won't match should show empty state
     await searchInput.fill("zzznomatch");

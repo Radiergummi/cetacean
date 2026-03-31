@@ -1,38 +1,38 @@
 import { test as base, expect } from "@playwright/test";
 
-/**
- * Detect whether Prometheus metrics are available by checking the monitoring
- * status endpoint. Caches the result per worker.
- */
-let monitoringStatus: { prometheus: boolean; nodeExporter: boolean; cadvisor: boolean } | null = null;
+interface MonitoringStatus {
+  prometheus: boolean;
+  nodeExporter: boolean;
+  cadvisor: boolean;
+}
 
-async function getMonitoringStatus(baseURL: string) {
-  if (monitoringStatus) {
-    return monitoringStatus;
-  }
-
+async function fetchMonitoringStatus(baseURL: string): Promise<MonitoringStatus> {
   try {
     const response = await fetch(`${baseURL}/-/metrics/status`, {
       headers: { Accept: "application/json" },
     });
     const data = await response.json();
-    monitoringStatus = {
+
+    return {
       prometheus: data.prometheusConfigured && data.prometheusReachable,
       nodeExporter: (data.nodeExporter?.targets ?? 0) > 0,
       cadvisor: (data.cadvisor?.targets ?? 0) > 0,
     };
   } catch {
-    monitoringStatus = { prometheus: false, nodeExporter: false, cadvisor: false };
+    return { prometheus: false, nodeExporter: false, cadvisor: false };
   }
-
-  return monitoringStatus;
 }
 
-export const test = base.extend<{ monitoring: typeof monitoringStatus }>({
-  monitoring: async ({ baseURL }, use) => {
-    const status = await getMonitoringStatus(baseURL!);
-    await use(status);
-  },
+export const test = base.extend<object, { monitoring: MonitoringStatus }>({
+  monitoring: [
+    async ({}, use, workerInfo) => {
+      const baseURL =
+        workerInfo.project.use.baseURL ?? process.env.CETACEAN_E2E_URL ?? "http://localhost:9000";
+      const status = await fetchMonitoringStatus(baseURL);
+      await use(status);
+    },
+    { scope: "worker" },
+  ],
 });
 
 export { expect };

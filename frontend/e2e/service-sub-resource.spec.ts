@@ -1,6 +1,6 @@
 import { test, expect } from "./fixtures";
 
-let serviceId: string;
+let serviceId: string | undefined;
 
 test.beforeAll(async ({ request, baseURL }) => {
   const response = await request.get(`${baseURL}/services`, {

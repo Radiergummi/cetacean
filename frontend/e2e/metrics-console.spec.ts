@@ -21,7 +21,7 @@ test.describe("Metrics Console (/metrics)", () => {
     // Type "up" in the query input and run it
     const input = page.getByRole("combobox");
     await input.fill("up");
-    await input.press("Meta+Enter");
+    await input.press("ControlOrMeta+Enter");
 
     // Either a chart canvas or a table should appear
     await expect(page.locator("canvas, table").first()).toBeVisible({ timeout: 15_000 });
