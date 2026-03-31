@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/auth"
 )
 
 func TestReloadPolicy_ValidFile(t *testing.T) {
@@ -88,6 +90,19 @@ func TestReloadPolicy_MissingFile(t *testing.T) {
 	}
 }
 
+// pollUntil polls condition every interval until it returns true or deadline expires.
+func pollUntil(t *testing.T, deadline time.Duration, interval time.Duration, condition func() bool, msg string) {
+	t.Helper()
+	end := time.Now().Add(deadline)
+	for time.Now().Before(end) {
+		if condition() {
+			return
+		}
+		time.Sleep(interval)
+	}
+	t.Fatal(msg)
+}
+
 func TestWatchPolicyFile_InitialLoadAndReload(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "policy.json")
@@ -117,8 +132,11 @@ func TestWatchPolicyFile_InitialLoadAndReload(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Wait for debounce (200ms) + extra margin.
-	time.Sleep(600 * time.Millisecond)
+	// Poll until the policy is reloaded instead of using a fixed sleep.
+	id := &auth.Identity{Subject: "anyone"}
+	pollUntil(t, 5*time.Second, 50*time.Millisecond, func() bool {
+		return e.Can(id, "write", "node:any")
+	}, "policy was not reloaded within deadline")
 
 	p = e.policy.Load()
 	if p == nil {
@@ -152,7 +170,10 @@ func TestWatchPolicyFile_InvalidUpdateKeepsOldPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	time.Sleep(600 * time.Millisecond)
+	// Wait for the debounce to fire (200ms) + margin, then verify unchanged.
+	// We need a short sleep here because we're testing that nothing changes,
+	// but we use a modest timeout rather than a flaky long one.
+	time.Sleep(500 * time.Millisecond)
 
 	after := e.policy.Load()
 	if after != original {

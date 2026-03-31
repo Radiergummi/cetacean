@@ -111,3 +111,21 @@ func TestValidate_EmptyPermissions(t *testing.T) {
 		t.Fatal("expected error for empty permissions")
 	}
 }
+
+// Fix 4: {"grants": []} parses successfully but creates an empty policy.
+// ParsePolicy requires len(p.Grants) > 0, so it fails to parse.
+func TestParsePolicy_EmptyGrantsReturnsError(t *testing.T) {
+	data := []byte(`{"grants":[]}`)
+	_, err := ParsePolicy(data)
+	if err == nil {
+		t.Fatal("expected error for empty grants array -- ParsePolicy requires at least one grant")
+	}
+}
+
+// Validate accepts an empty grants slice (no grants to validate).
+func TestValidate_EmptyGrants(t *testing.T) {
+	p := &Policy{Grants: []Grant{}}
+	if err := Validate(p); err != nil {
+		t.Fatalf("Validate should accept empty grants (nothing to validate): %v", err)
+	}
+}

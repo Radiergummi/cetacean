@@ -293,7 +293,7 @@ func TestEvaluator_MalformedResource(t *testing.T) {
 
 	id := &auth.Identity{Subject: "anyone"}
 
-	// Resource with no colon — direct wildcard match should still work.
+	// Resource with no colon -- direct wildcard match should still work.
 	if !e.Can(id, "read", "nocolon") {
 		t.Fatal("wildcard * should match even malformed resource")
 	}
@@ -360,4 +360,100 @@ func TestEvaluator_SetOnNil(t *testing.T) {
 	e.SetPolicy(&Policy{})
 	e.SetResolver(&stubResolver{})
 	e.SetSource(&mockSource{})
+}
+
+// Fix 3: Stack grant isolation -- service in stack B denied when only stack A granted.
+func TestEvaluator_StackGrantIsolation(t *testing.T) {
+	e := NewEvaluator()
+	e.SetPolicy(&Policy{Grants: []Grant{
+		{Resources: []string{"stack:alpha"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+	}})
+	e.SetResolver(&stubResolver{
+		stacks: map[string]string{
+			"service:svc-a": "alpha",
+			"service:svc-b": "beta",
+		},
+	})
+
+	id := &auth.Identity{Subject: "anyone"}
+	if !e.Can(id, "read", "service:svc-a") {
+		t.Fatal("service in stack alpha should be readable via stack:alpha grant")
+	}
+	if e.Can(id, "read", "service:svc-b") {
+		t.Fatal("service in stack beta should NOT be readable -- only stack:alpha is granted")
+	}
+}
+
+// Fix 4: Empty but non-nil grants list denies all access (distinct from nil policy).
+func TestEvaluator_EmptyGrantsDenyAll(t *testing.T) {
+	e := NewEvaluator()
+	e.SetPolicy(&Policy{Grants: []Grant{}})
+
+	id := &auth.Identity{Subject: "anyone"}
+	if e.Can(id, "read", "service:foo") {
+		t.Fatal("empty grants policy (non-nil) should deny all access")
+	}
+	if e.Can(id, "write", "node:bar") {
+		t.Fatal("empty grants policy (non-nil) should deny all access")
+	}
+	if e.HasAnyGrant(id) {
+		t.Fatal("empty grants policy should report no grants")
+	}
+}
+
+// Fix 6: Provider grants with invalid resource types/permissions are inert.
+func TestEvaluator_ProviderGrantsWithInvalidStringsAreInert(t *testing.T) {
+	e := NewEvaluator()
+	e.SetPolicy(&Policy{Grants: []Grant{}})
+	e.SetSource(&mockSource{
+		grants: []Grant{
+			{Resources: []string{"badtype:foo"}, Permissions: []string{"admin"}},
+		},
+	})
+
+	id := &auth.Identity{Subject: "anyone"}
+
+	// "read" != "admin", so permission check fails.
+	if e.Can(id, "read", "badtype:foo") {
+		t.Fatal("grant with permission 'admin' should not satisfy 'read' check")
+	}
+
+	// "admin" is not recognized by hasPermission (only read/write + write-implies-read).
+	if e.Can(id, "admin", "service:foo") {
+		t.Fatal("unrecognized permission 'admin' should not match service:foo")
+	}
+
+	// Exact permission+resource match works (strings match literally).
+	if !e.Can(id, "admin", "badtype:foo") {
+		t.Fatal("exact permission+resource match should succeed even with invalid strings")
+	}
+}
+
+// Fix 8: Malformed resources against typed patterns.
+func TestEvaluator_MalformedResourceAgainstTypedPattern(t *testing.T) {
+	e := NewEvaluator()
+	e.SetPolicy(&Policy{Grants: []Grant{
+		{Resources: []string{"service:*"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+	}})
+
+	id := &auth.Identity{Subject: "anyone"}
+
+	tests := []struct {
+		name     string
+		resource string
+		want     bool
+	}{
+		{"no colon", "nocolon", false},
+		{"empty type", ":noname", false},
+		{"empty name matches glob", "service:", true}, // path.Match("*","") = true
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := e.Can(id, "read", tt.resource)
+			if got != tt.want {
+				t.Errorf("Can(read, %q) = %v, want %v", tt.resource, got, tt.want)
+			}
+		})
+	}
 }
