@@ -295,6 +295,39 @@ func TestClaimsToIdentity_MissingFields(t *testing.T) {
 	}
 }
 
+func TestClaimsToIdentity_PreferredUsername(t *testing.T) {
+	// When "name" is absent, preferred_username should be used as DisplayName.
+	claims := map[string]any{
+		"sub":                "1aa019f2-7846-4d6c-a039-0c783c35477f",
+		"preferred_username": "alice",
+		"email":              "alice@example.com",
+	}
+
+	id := claimsToIdentity(claims)
+
+	if id.Subject != "1aa019f2-7846-4d6c-a039-0c783c35477f" {
+		t.Errorf("Subject = %q, want UUID", id.Subject)
+	}
+	if id.DisplayName != "alice" {
+		t.Errorf("DisplayName = %q, want %q", id.DisplayName, "alice")
+	}
+}
+
+func TestClaimsToIdentity_NameTakesPrecedence(t *testing.T) {
+	// When both "name" and "preferred_username" are present, "name" wins.
+	claims := map[string]any{
+		"sub":                "user-789",
+		"name":               "Alice Smith",
+		"preferred_username": "alice",
+	}
+
+	id := claimsToIdentity(claims)
+
+	if id.DisplayName != "Alice Smith" {
+		t.Errorf("DisplayName = %q, want %q", id.DisplayName, "Alice Smith")
+	}
+}
+
 func TestClaimsToIdentity_GroupsWithNonStrings(t *testing.T) {
 	// Groups array containing non-string elements should be skipped.
 	claims := map[string]any{

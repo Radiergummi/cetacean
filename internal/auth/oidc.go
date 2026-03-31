@@ -474,6 +474,8 @@ func claimsToIdentity(claims map[string]any) *Identity {
 	}
 	if name, ok := claims["name"].(string); ok {
 		id.DisplayName = name
+	} else if pref, ok := claims["preferred_username"].(string); ok {
+		id.DisplayName = pref
 	}
 	if email, ok := claims["email"].(string); ok {
 		id.Email = email
