@@ -703,3 +703,7 @@ The Cetacean SPA automatically:
 - OIDC validates issuer, state, nonce, and authorized party (`azp`)
 - Redirect URLs restricted to relative paths (no protocol-relative or absolute URLs)
 - Subject header values validated for length and control characters
+
+## Authorization
+
+For per-resource access control — controlling which users can view or modify which resources — see [Authorization](authorization.md).

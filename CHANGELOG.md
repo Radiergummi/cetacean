@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Grant-based RBAC authorization with per-resource access control
+- `Allow` response header indicating available methods per resource
+
 ## [0.10.0] - 2026-03-31
 
 ### Added
