@@ -3,6 +3,7 @@ package api
 import (
 	"testing"
 
+	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/api/prometheus"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -19,6 +20,7 @@ type testHandlersConfig struct {
 	ready           <-chan struct{}
 	promClient      *prometheus.Client
 	operationsLevel config.OperationsLevel
+	aclEval         *acl.Evaluator
 }
 
 type testHandlersOption func(*testHandlersConfig)
@@ -55,6 +57,10 @@ func withDockerClient(dc DockerLogStreamer) testHandlersOption {
 	return func(cfg *testHandlersConfig) { cfg.dockerClient = dc }
 }
 
+func withACL(e *acl.Evaluator) testHandlersOption {
+	return func(cfg *testHandlersConfig) { cfg.aclEval = e }
+}
+
 func withBroadcaster(b *sse.Broadcaster) testHandlersOption {
 	return func(cfg *testHandlersConfig) { cfg.broadcaster = b }
 }
@@ -86,6 +92,6 @@ func newTestHandlers(t testing.TB, opts ...testHandlersOption) *Handlers {
 		cfg.promClient,
 		cfg.operationsLevel,
 		nil, // recEngine
-		nil, // acl
+		cfg.aclEval,
 	)
 }

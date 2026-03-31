@@ -3,7 +3,9 @@ package cache
 import (
 	"testing"
 
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
+	"github.com/docker/docker/api/types/volume"
 )
 
 func TestStackOf(t *testing.T) {
@@ -44,5 +46,74 @@ func TestServiceOfTask(t *testing.T) {
 	}
 	if got := c.ServiceOfTask("nonexistent"); got != "" {
 		t.Fatalf("expected empty, got %q", got)
+	}
+}
+
+func TestStackOf_Secrets(t *testing.T) {
+	c := New(nil)
+	c.SetSecret(swarm.Secret{
+		ID:   "sec1",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "mysecret", Labels: map[string]string{"com.docker.stack.namespace": "mystack"}}},
+	})
+
+	if got := c.StackOf("secret", "sec1"); got != "mystack" {
+		t.Fatalf("expected mystack, got %q", got)
+	}
+}
+
+func TestStackOf_Networks(t *testing.T) {
+	c := New(nil)
+	c.SetNetwork(network.Summary{
+		ID:     "net1",
+		Name:   "mynet",
+		Labels: map[string]string{"com.docker.stack.namespace": "mystack"},
+	})
+
+	if got := c.StackOf("network", "net1"); got != "mystack" {
+		t.Fatalf("expected mystack, got %q", got)
+	}
+}
+
+func TestStackOf_Volumes(t *testing.T) {
+	c := New(nil)
+	c.SetVolume(volume.Volume{
+		Name:   "myvol",
+		Labels: map[string]string{"com.docker.stack.namespace": "mystack"},
+	})
+
+	if got := c.StackOf("volume", "myvol"); got != "mystack" {
+		t.Fatalf("expected mystack, got %q", got)
+	}
+}
+
+func TestStackOf_ResourceNotInStack(t *testing.T) {
+	c := New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "standalone"}},
+	})
+
+	if got := c.StackOf("service", "svc1"); got != "" {
+		t.Fatalf("expected empty for service with no stack label, got %q", got)
+	}
+}
+
+func TestStackOf_UnknownType(t *testing.T) {
+	c := New(nil)
+	if got := c.StackOf("unknown", "id1"); got != "" {
+		t.Fatalf("expected empty for unknown type, got %q", got)
+	}
+}
+
+func TestServiceOfTask_ServiceNotInCache(t *testing.T) {
+	c := New(nil)
+	// Task references a service that doesn't exist in cache.
+	c.SetTask(swarm.Task{
+		ID:        "task2",
+		ServiceID: "svc-missing",
+	})
+
+	if got := c.ServiceOfTask("task2"); got != "" {
+		t.Fatalf("expected empty when service is missing, got %q", got)
 	}
 }
