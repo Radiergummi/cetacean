@@ -19,7 +19,8 @@ export function useSwarmResource<T>(
   getId: (item: T) => string,
 ) {
   const [data, setData] = useState<T[]>([]);
-  const [total, setTotal] = useState(0);
+  const [serverTotal, setServerTotal] = useState(0);
+  const [sseOffset, setSSEOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const getIdRef = useRef(getId);
@@ -47,7 +48,8 @@ export function useSwarmResource<T>(
         }
 
         setData(response.items);
-        setTotal(response.total);
+        setServerTotal(response.total);
+        setSSEOffset(0);
 
         hasLoadedRef.current = true;
       })
@@ -82,29 +84,32 @@ export function useSwarmResource<T>(
         return;
       }
 
+      const previous = dataRef.current;
+
       if (event.action === "remove") {
-        setData((previous) => previous.filter((item) => getIdRef.current(item) !== event.id));
-        setTotal((previous) => Math.max(0, previous - 1));
+        const next = previous.filter((item) => getIdRef.current(item) !== event.id);
+
+        if (next.length < previous.length) {
+          setData(next);
+          setSSEOffset((offset) => offset - 1);
+        }
       } else if (event.resource) {
         const resource = event.resource as T;
+        const index = previous.findIndex((item) => getIdRef.current(item) === event.id);
 
-        setData((previous) => {
-          const index = previous.findIndex((item) => getIdRef.current(item) === event.id);
-
-          if (index >= 0) {
-            const next = [...previous];
-            next[index] = resource;
-
-            return next;
-          }
-
-          setTotal((t) => t + 1);
-
-          return [...previous, resource];
-        });
+        if (index >= 0) {
+          const next = [...previous];
+          next[index] = resource;
+          setData(next);
+        } else {
+          setData([...previous, resource]);
+          setSSEOffset((offset) => offset + 1);
+        }
       }
     }, []),
   );
+
+  const total = serverTotal + sseOffset;
 
   return { data, total, loading, error, retry: load };
 }

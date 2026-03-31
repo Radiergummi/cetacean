@@ -199,6 +199,10 @@ export default function TimeSeriesChart({
   const [fetchedData, setFetchedData] = useState<FetchedData | null>(null);
   const tooltipRef = useRef(setTooltip);
   tooltipRef.current = setTooltip;
+  const titleRef = useRef(title);
+  titleRef.current = title;
+  const colorOverrideRef = useRef(colorOverride);
+  colorOverrideRef.current = colorOverride;
   const unitRef = useRef(unit);
   unitRef.current = unit;
   const thresholdsRef = useRef(thresholds);
@@ -391,7 +395,7 @@ export default function TimeSeriesChart({
     eventSource.addEventListener("initial", (event: MessageEvent) => {
       try {
         const response = JSON.parse(event.data) as PrometheusResponse;
-        const parsed = parseRangeResult(response, title, colorOverride);
+        const parsed = parseRangeResult(response, titleRef.current, colorOverrideRef.current);
 
         if (!parsed) {
           return;
@@ -468,7 +472,7 @@ export default function TimeSeriesChart({
       eventSource.close();
       document.removeEventListener("visibilitychange", visibilityHandler);
     };
-  }, [query, range, from, to, streaming, title, colorOverride, sseKey]);
+  }, [query, range, from, to, streaming, sseKey]);
 
   const chartData = useMemo<ChartData<"line"> | null>(() => {
     if (!fetchedData) {

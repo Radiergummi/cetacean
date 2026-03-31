@@ -1,61 +1,71 @@
 import { api } from "../api/client";
 import type { MonitoringStatus } from "../api/types";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const ttl = 60_000;
 
-let cached: MonitoringStatus | null = null;
-let cachedAt: number | null = null;
-let inflight: Promise<MonitoringStatus | null> | null = null;
+interface StatusCache {
+  value: MonitoringStatus | null;
+  fetchedAt: number | null;
+  inflight: Promise<MonitoringStatus | null> | null;
+}
+
+const cache: StatusCache = {
+  value: null,
+  fetchedAt: null,
+  inflight: null,
+};
 
 export function _resetMonitoringStatusCache() {
-  cached = null;
-  cachedAt = null;
-  inflight = null;
+  cache.value = null;
+  cache.fetchedAt = null;
+  cache.inflight = null;
 }
 
 export function useMonitoringStatus(): MonitoringStatus | null {
-  const [status, setStatus] = useState<MonitoringStatus | null>(cached);
+  const [status, setStatus] = useState<MonitoringStatus | null>(cache.value);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    let cancelled = false;
+    mountedRef.current = true;
 
-    if (cached != null && cachedAt != null && Date.now() - cachedAt < ttl) {
-      setStatus(cached);
+    if (cache.value != null && cache.fetchedAt != null && Date.now() - cache.fetchedAt < ttl) {
+      setStatus(cache.value);
+
       return;
     }
 
-    if (!inflight) {
-      inflight = api
+    if (!cache.inflight) {
+      cache.inflight = api
         .monitoringStatus()
-        .then((status) => {
-          inflight = null;
+        .then((result) => {
+          cache.inflight = null;
 
-          return status;
+          return result;
         })
         .catch((error) => {
           console.warn("monitoring status fetch failed:", error);
-          inflight = null;
+          cache.inflight = null;
 
           return null;
         });
     }
 
-    inflight.then((status) => {
-      if (cancelled) {
+    cache.inflight.then((result) => {
+      if (!mountedRef.current) {
         return;
       }
 
-      if (status != null) {
-        cached = status;
-        cachedAt = Date.now();
+      if (result != null) {
+        cache.value = result;
+        cache.fetchedAt = Date.now();
 
-        setStatus(status);
+        setStatus(result);
       }
     });
 
     return () => {
-      cancelled = true;
+      mountedRef.current = false;
     };
   }, []);
 

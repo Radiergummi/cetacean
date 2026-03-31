@@ -138,10 +138,18 @@ export default function DataTable<T>({ columns, data, keyFn, rowClassName, onRow
   const useVirtual = data.length > VIRTUAL_THRESHOLD;
   const [selectedIndex, setSelectedIndex] = useState(-1);
 
-  // Reset selection when data changes
+  const prevVirtualRef = useRef(useVirtual);
+
+  // Reset selection when data changes; reset scroll when switching render mode
   useEffect(() => {
     setSelectedIndex(-1);
-  }, [data]);
+
+    if (prevVirtualRef.current !== useVirtual && scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+    }
+
+    prevVirtualRef.current = useVirtual;
+  }, [data, useVirtual]);
 
   // Scroll selected plain row into view
   useEffect(() => {

@@ -37,8 +37,6 @@ function StackLegend({
 }) {
   const [open, setOpen] = useState(!isMobile);
 
-  useEffect(() => setOpen(!isMobile), [isMobile]);
-
   if (stackColors.size === 0) {
     return null;
   }
@@ -197,6 +195,7 @@ function LogicalView({ data, isMobile }: { data: NetworkTopology; isMobile: bool
           <Background />
         </ReactFlow>
         <StackLegend
+          key={isMobile ? "mobile" : "desktop"}
           stackColors={stackColors}
           isMobile={isMobile}
         />

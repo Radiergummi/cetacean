@@ -55,7 +55,31 @@ export function useDetailResource<T>(
     };
   }, [fetchData]);
 
-  useResourceStream(ssePath, fetchData);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fetchDataRef = useRef(fetchData);
+  fetchDataRef.current = fetchData;
+
+  useResourceStream(
+    ssePath,
+    useCallback(() => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+
+      debounceRef.current = setTimeout(() => {
+        debounceRef.current = null;
+        fetchDataRef.current();
+      }, 500);
+    }, []),
+  );
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, []);
 
   return { data, history, error, retry: fetchData };
 }
