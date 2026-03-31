@@ -15,6 +15,13 @@ export function useEscapeCancel(active: boolean, onCancel: () => void) {
 
     function handler(event: KeyboardEvent) {
       if (event.key === "Escape") {
+        // Let open popovers (combobox dropdowns, etc.) handle Escape themselves.
+        const target = event.target as Element | null;
+
+        if (target?.closest("[data-slot='popover-content']")) {
+          return;
+        }
+
         event.stopPropagation();
         event.preventDefault();
         callbackRef.current();
