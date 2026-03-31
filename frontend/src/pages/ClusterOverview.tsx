@@ -139,7 +139,7 @@ export default function ClusterOverview() {
           secondary={tasksFailed > 0 ? "needs attention" : "none"}
           status={tasksFailed > 0 ? "red" : "neutral"}
           delta={prev ? tasksFailed - prevFailed : undefined}
-          to="/tasks"
+          to={tasksFailed > 0 ? "/tasks?state=failed" : "/tasks"}
         />
         <HealthCard
           label="Tasks"

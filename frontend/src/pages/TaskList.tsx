@@ -9,6 +9,7 @@ import { TaskSparkline } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
 import SortIndicator from "../components/SortIndicator";
+import TaskStateFilter, { isActiveTask } from "../components/TaskStateFilter";
 import TaskStatusBadge from "../components/TaskStatusBadge";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useSearchParam } from "../hooks/useSearchParam";
@@ -16,11 +17,13 @@ import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { useCallback, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 export default function TaskList() {
   const navigate = useNavigate();
   const [search, debouncedSearch, setSearch] = useSearchParam("q");
+  const [params, setParams] = useSearchParams();
+  const stateFilter = params.get("state");
   const { sortKey, sortDir, toggle } = useSortParams("state");
   const {
     data: tasks,
@@ -34,6 +37,38 @@ export default function TaskList() {
     ),
     "task",
     ({ ID }: Task) => ID,
+  );
+
+  const filteredTasks = useMemo(() => {
+    if (stateFilter === "__all__") {
+      return tasks;
+    }
+
+    if (stateFilter) {
+      return tasks.filter(({ Status: { State } }) => State === stateFilter);
+    }
+
+    return tasks.filter(isActiveTask);
+  }, [tasks, stateFilter]);
+
+  const setStateFilter = useCallback(
+    (state: string | null) => {
+      setParams(
+        (previous) => {
+          const next = new URLSearchParams(previous);
+
+          if (state) {
+            next.set("state", state);
+          } else {
+            next.delete("state");
+          }
+
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setParams],
   );
 
   const monitoring = useMonitoringStatus();
@@ -161,12 +196,19 @@ export default function TaskList() {
         onSearchChange={setSearch}
         placeholder="Search tasks…"
       />
-      {tasks.length === 0 ? (
-        <EmptyState message={search ? "No tasks match your search" : "No tasks found"} />
+      <div className="mb-4">
+        <TaskStateFilter
+          tasks={tasks}
+          active={stateFilter}
+          onChange={setStateFilter}
+        />
+      </div>
+      {filteredTasks.length === 0 ? (
+        <EmptyState message={search || stateFilter ? "No tasks match your filters" : "No tasks found"} />
       ) : (
         <DataTable
           columns={columns}
-          data={tasks}
+          data={filteredTasks}
           keyFn={({ ID }) => ID}
           onRowClick={({ ID }) => navigate(`/tasks/${ID}`)}
         />

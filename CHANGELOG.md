@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Task state filter on the tasks page — filter by running, failed, or any other state via segmented control
+- "Failed Tasks" card on the cluster overview now links directly to failed tasks
 - Recommendation cards expand to show why each recommendation matters
 - Monitoring status banner shows the actual error when Prometheus is unreachable
 
