@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { getErrorMessage } from "@/lib/utils";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -444,7 +444,7 @@ export function MountsEditor({ serviceId, mounts, onSaved }: MountsEditorProps) 
                   ) : (
                     <span className="font-mono">{Source}</span>
                   )}
-                  <span className="text-muted-foreground">{"\u2192"}</span>
+                  <ArrowRight className="size-3.5 text-muted-foreground" />
                   <span className="font-mono">{Target}</span>
                 </>
               )}
