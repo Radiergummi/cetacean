@@ -7,6 +7,7 @@ import ListToolbar from "../components/ListToolbar";
 import { SkeletonTable } from "../components/LoadingSkeleton";
 import { TaskSparkline } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
+import ResourceCard from "../components/ResourceCard";
 import ResourceName from "../components/ResourceName";
 import SortIndicator from "../components/SortIndicator";
 import TaskStateFilter, { isActiveTask } from "../components/TaskStateFilter";
@@ -16,6 +17,7 @@ import { useSearchParam } from "../hooks/useSearchParam";
 import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
+import { useViewMode } from "../hooks/useViewMode";
 import { useCallback, useMemo } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
@@ -51,6 +53,24 @@ export default function TaskList() {
     return tasks.filter(isActiveTask);
   }, [tasks, stateFilter]);
 
+  const groupedByService = useMemo(() => {
+    const groups = new Map<string, { name: string; id: string; tasks: Task[] }>();
+
+    for (const task of filteredTasks) {
+      const key = task.ServiceID;
+      let group = groups.get(key);
+
+      if (!group) {
+        group = { name: task.ServiceName || key.slice(0, 12), id: key, tasks: [] };
+        groups.set(key, group);
+      }
+
+      group.tasks.push(task);
+    }
+
+    return Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [filteredTasks]);
+
   const setStateFilter = useCallback(
     (state: string | null) => {
       setParams(
@@ -71,6 +91,7 @@ export default function TaskList() {
     [setParams],
   );
 
+  const [viewMode, setViewMode] = useViewMode("tasks");
   const monitoring = useMonitoringStatus();
   const hasCadvisor = !!monitoring?.cadvisor?.targets;
   const taskMetrics = useTaskMetrics(`container_label_com_docker_swarm_task_id!=""`, hasCadvisor);
@@ -195,8 +216,10 @@ export default function TaskList() {
         search={search}
         onSearchChange={setSearch}
         placeholder="Search tasks…"
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
       />
-      <div className="mb-4">
+      <div className="mb-4 flex justify-end">
         <TaskStateFilter
           tasks={tasks}
           active={stateFilter}
@@ -207,13 +230,46 @@ export default function TaskList() {
         <EmptyState
           message={search || stateFilter ? "No tasks match your filters" : "No tasks found"}
         />
-      ) : (
+      ) : viewMode === "table" ? (
         <DataTable
           columns={columns}
           data={filteredTasks}
           keyFn={({ ID }) => ID}
           onRowClick={({ ID }) => navigate(`/tasks/${ID}`)}
         />
+      ) : (
+        <div className="space-y-6">
+          {groupedByService.map((group) => (
+            <section key={group.id}>
+              <h3 className="mb-2 flex items-center gap-2 text-base font-medium">
+                <Link
+                  to={`/services/${group.id}`}
+                  className="text-link hover:underline"
+                >
+                  <ResourceName name={group.name} />
+                </Link>
+                <span className="inline-flex size-5 items-center justify-center rounded-full bg-muted text-xs tabular-nums text-muted-foreground">
+                  {group.tasks.length}
+                </span>
+              </h3>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {group.tasks.map((task) => (
+                  <ResourceCard
+                    key={task.ID}
+                    title={task.Slot ? `Slot ${task.Slot}` : task.ID.slice(0, 12)}
+                    to={`/tasks/${task.ID}`}
+                    badge={<TaskStatusBadge state={task.Status.State} />}
+                    subtitle={task.NodeHostname}
+                    meta={[
+                      <span key="desired">{task.DesiredState}</span>,
+                    ]}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
       )}
     </div>
   );
