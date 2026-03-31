@@ -1,8 +1,10 @@
 package cache
 
-// StackOf returns the stack name for a resource, or "" if it doesn't belong
-// to a stack. Reads the com.docker.stack.namespace label directly.
-func (c *Cache) StackOf(resourceType, resourceID string) string {
+// StackOf returns the stack name for a resource identified by its display name,
+// or "" if the resource doesn't exist or isn't in a stack.
+// Resources are looked up by name (not Docker ID) because the ACL evaluator
+// works with "type:name" resource strings.
+func (c *Cache) StackOf(resourceType, name string) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -10,24 +12,34 @@ func (c *Cache) StackOf(resourceType, resourceID string) string {
 
 	switch resourceType {
 	case "service":
-		if s, ok := c.services[resourceID]; ok {
-			return s.Spec.Labels[label]
+		for _, s := range c.services {
+			if s.Spec.Name == name {
+				return s.Spec.Labels[label]
+			}
 		}
 	case "config":
-		if cfg, ok := c.configs[resourceID]; ok {
-			return cfg.Spec.Labels[label]
+		for _, cfg := range c.configs {
+			if cfg.Spec.Name == name {
+				return cfg.Spec.Labels[label]
+			}
 		}
 	case "secret":
-		if s, ok := c.secrets[resourceID]; ok {
-			return s.Spec.Labels[label]
+		for _, s := range c.secrets {
+			if s.Spec.Name == name {
+				return s.Spec.Labels[label]
+			}
 		}
 	case "network":
-		if n, ok := c.networks[resourceID]; ok {
-			return n.Labels[label]
+		for _, n := range c.networks {
+			if n.Name == name {
+				return n.Labels[label]
+			}
 		}
 	case "volume":
-		if v, ok := c.volumes[resourceID]; ok {
-			return v.Labels[label]
+		for _, v := range c.volumes {
+			if v.Name == name {
+				return v.Labels[label]
+			}
 		}
 	}
 	return ""

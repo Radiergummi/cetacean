@@ -19,14 +19,19 @@ func TestStackOf(t *testing.T) {
 		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "myconfig", Labels: map[string]string{"com.docker.stack.namespace": "mystack"}}},
 	})
 
-	if got := c.StackOf("service", "svc1"); got != "mystack" {
-		t.Fatalf("expected mystack, got %q", got)
+	// Lookup by name (not Docker ID) — this is what the ACL evaluator passes.
+	if got := c.StackOf("service", "webapp"); got != "mystack" {
+		t.Fatalf("StackOf(service, webapp) = %q, want mystack", got)
 	}
-	if got := c.StackOf("config", "cfg1"); got != "mystack" {
-		t.Fatalf("expected mystack, got %q", got)
+	if got := c.StackOf("config", "myconfig"); got != "mystack" {
+		t.Fatalf("StackOf(config, myconfig) = %q, want mystack", got)
 	}
 	if got := c.StackOf("service", "nonexistent"); got != "" {
-		t.Fatalf("expected empty, got %q", got)
+		t.Fatalf("StackOf(service, nonexistent) = %q, want empty", got)
+	}
+	// Docker ID should NOT match — StackOf uses names.
+	if got := c.StackOf("service", "svc1"); got != "" {
+		t.Fatalf("StackOf(service, svc1) should not match by Docker ID, got %q", got)
 	}
 }
 
@@ -42,10 +47,10 @@ func TestServiceOfTask(t *testing.T) {
 	})
 
 	if got := c.ServiceOfTask("task1"); got != "webapp" {
-		t.Fatalf("expected webapp, got %q", got)
+		t.Fatalf("ServiceOfTask(task1) = %q, want webapp", got)
 	}
 	if got := c.ServiceOfTask("nonexistent"); got != "" {
-		t.Fatalf("expected empty, got %q", got)
+		t.Fatalf("ServiceOfTask(nonexistent) = %q, want empty", got)
 	}
 }
 
@@ -56,8 +61,8 @@ func TestStackOf_Secrets(t *testing.T) {
 		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "mysecret", Labels: map[string]string{"com.docker.stack.namespace": "mystack"}}},
 	})
 
-	if got := c.StackOf("secret", "sec1"); got != "mystack" {
-		t.Fatalf("expected mystack, got %q", got)
+	if got := c.StackOf("secret", "mysecret"); got != "mystack" {
+		t.Fatalf("StackOf(secret, mysecret) = %q, want mystack", got)
 	}
 }
 
@@ -69,8 +74,8 @@ func TestStackOf_Networks(t *testing.T) {
 		Labels: map[string]string{"com.docker.stack.namespace": "mystack"},
 	})
 
-	if got := c.StackOf("network", "net1"); got != "mystack" {
-		t.Fatalf("expected mystack, got %q", got)
+	if got := c.StackOf("network", "mynet"); got != "mystack" {
+		t.Fatalf("StackOf(network, mynet) = %q, want mystack", got)
 	}
 }
 
@@ -82,7 +87,7 @@ func TestStackOf_Volumes(t *testing.T) {
 	})
 
 	if got := c.StackOf("volume", "myvol"); got != "mystack" {
-		t.Fatalf("expected mystack, got %q", got)
+		t.Fatalf("StackOf(volume, myvol) = %q, want mystack", got)
 	}
 }
 
@@ -93,7 +98,7 @@ func TestStackOf_ResourceNotInStack(t *testing.T) {
 		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "standalone"}},
 	})
 
-	if got := c.StackOf("service", "svc1"); got != "" {
+	if got := c.StackOf("service", "standalone"); got != "" {
 		t.Fatalf("expected empty for service with no stack label, got %q", got)
 	}
 }
@@ -107,7 +112,6 @@ func TestStackOf_UnknownType(t *testing.T) {
 
 func TestServiceOfTask_ServiceNotInCache(t *testing.T) {
 	c := New(nil)
-	// Task references a service that doesn't exist in cache.
 	c.SetTask(swarm.Task{
 		ID:        "task2",
 		ServiceID: "svc-missing",
