@@ -5,4 +5,5 @@ plugins:
   - jekyll-remote-theme
 exclude:
   - specs
+  - superpowers
   - CHANGELOG.md
