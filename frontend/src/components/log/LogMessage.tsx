@@ -69,15 +69,16 @@ export function HighlightedText({
   let expression: RegExp;
 
   try {
-    expression = new RegExp(`(${pattern})`, caseSensitive ? "" : "i");
+    expression = new RegExp(`(${pattern})`, caseSensitive ? "g" : "gi");
   } catch {
     return <>{text}</>;
   }
-  const parts = text.split(new RegExp(`(${pattern})`, caseSensitive ? "g" : "gi"));
+  const parts = text.split(expression);
 
   return (
     <>
       {parts.map((part, index) => {
+        expression.lastIndex = 0;
         const isMatch = part.length > 0 && expression.test(part);
 
         return isMatch ? (

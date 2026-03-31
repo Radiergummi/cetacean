@@ -90,15 +90,14 @@ function recommendationKey(hint: Recommendation): string {
 
 interface CardProps {
   hint: Recommendation;
-  hintKey: string;
   applying: string | null;
   onApply: (hint: Recommendation) => void;
 }
 
-function RecommendationCard({ hint, hintKey, applying, onApply }: CardProps) {
+function RecommendationCard({ hint, applying, onApply }: CardProps) {
   const CategoryIcon = hintIcon(hint.category);
   const hasFix = hint.fixAction != null && hint.suggested != null;
-  const isApplying = applying === hintKey;
+  const isApplying = applying === recommendationKey(hint);
   const link = targetLink(hint);
   const detail = categoryDetails[hint.category];
 
@@ -247,19 +246,14 @@ export default function RecommendationsPage() {
         <EmptyState message="No recommendations — your cluster looks healthy" />
       ) : (
         <div className="space-y-2">
-          {filteredItems.map((hint) => {
-            const key = recommendationKey(hint);
-
-            return (
-              <RecommendationCard
-                key={key}
-                hint={hint}
-                hintKey={key}
-                applying={applying}
-                onApply={handleApply}
-              />
-            );
-          })}
+          {filteredItems.map((hint) => (
+            <RecommendationCard
+              key={recommendationKey(hint)}
+              hint={hint}
+              applying={applying}
+              onApply={handleApply}
+            />
+          ))}
         </div>
       )}
     </div>

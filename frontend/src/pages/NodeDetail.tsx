@@ -77,12 +77,18 @@ export default function NodeDetail() {
         return;
       }
 
-      api.nodeTasks(id, signal).then(setTasks).catch(console.warn);
-      api.history({ resourceId: id, limit: 10 }, signal).then(setHistory).catch(console.warn);
+      const ignore = (error: unknown) => {
+        if (!signal.aborted) {
+          console.warn(error);
+        }
+      };
+
+      api.nodeTasks(id, signal).then(setTasks).catch(ignore);
+      api.history({ resourceId: id, limit: 10 }, signal).then(setHistory).catch(ignore);
       api
         .nodeRole(id, signal)
         .then(({ managerCount: count }) => setManagerCount(count))
-        .catch(console.warn);
+        .catch(ignore);
     },
     [id],
   );

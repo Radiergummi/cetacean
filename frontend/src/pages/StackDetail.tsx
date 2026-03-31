@@ -33,6 +33,7 @@ export default function StackDetail() {
   useResourceStream(`/stacks/${name}`, fetchData);
 
   const taskDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasInitialTaskFetchRef = useRef(false);
 
   useEffect(() => {
     if (!stack?.services?.length) {
@@ -44,8 +45,11 @@ export default function StackDetail() {
     }
 
     const controller = new AbortController();
+    const delay = hasInitialTaskFetchRef.current ? 2000 : 0;
 
     taskDebounceRef.current = setTimeout(() => {
+      hasInitialTaskFetchRef.current = true;
+
       Promise.all(
         stack.services.map((service) =>
           api
@@ -74,7 +78,7 @@ export default function StackDetail() {
         }
         setTaskCounts(counts);
       });
-    }, 2000);
+    }, delay);
 
     return () => {
       clearTimeout(taskDebounceRef.current!);

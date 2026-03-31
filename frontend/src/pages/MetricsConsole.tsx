@@ -68,6 +68,9 @@ export default function MetricsConsole() {
       });
   }, [input, setSearchParams]);
 
+  // Auto-run on mount if the URL has ?q=. Intentionally mount-only:
+  // input is initialized from searchParams, so runQuery captures the
+  // correct value on first render. The ref guard prevents re-execution.
   useEffect(() => {
     if (hasAutoRun.current) {
       return;
@@ -78,7 +81,7 @@ export default function MetricsConsole() {
     if (searchParams.get("q")) {
       runQuery();
     }
-  }, [searchParams, runQuery]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setRange = (value: string) => {
     setSearchParams(
