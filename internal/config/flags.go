@@ -15,6 +15,7 @@ type Flags struct {
 	LogLevel      *string
 	LogFormat     *string
 	Pprof         *bool
+	SelfMetrics   *bool
 	BasePath      *string
 	Version       bool
 
@@ -87,6 +88,11 @@ func ParseFlags(args []string) (*Flags, error) {
 		"Log format (env: CETACEAN_LOG_FORMAT, default \"json\")",
 	)
 	pprof := fs.Bool("pprof", false, "Enable pprof (env: CETACEAN_PPROF)")
+	selfMetrics := fs.Bool(
+		"self-metrics",
+		false,
+		"Enable self-metrics endpoint (env: CETACEAN_SELF_METRICS, default true)",
+	)
 	basePath := fs.String("base-path", "", "URL base path (env: CETACEAN_BASE_PATH)")
 	fs.BoolVar(&f.Version, "version", false, "Print version and exit")
 
@@ -155,6 +161,8 @@ func ParseFlags(args []string) (*Flags, error) {
 			f.LogFormat = logFormat
 		case "pprof":
 			f.Pprof = pprof
+		case "self-metrics":
+			f.SelfMetrics = selfMetrics
 		case "base-path":
 			f.BasePath = basePath
 		case "auth-mode":

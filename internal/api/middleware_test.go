@@ -279,6 +279,7 @@ func TestNewRouter_Smoke(t *testing.T) {
 		[]byte("openapi: '3.1.0'"),
 		nil,
 		false,
+		true,
 		&auth.NoneProvider{},
 		"",
 	)

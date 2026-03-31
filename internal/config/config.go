@@ -38,6 +38,7 @@ type Config struct {
 	Snapshot         bool            // CETACEAN_SNAPSHOT, default true
 	SSEBatchInterval time.Duration   // CETACEAN_SSE_BATCH_INTERVAL, default 100ms
 	Pprof            bool            // CETACEAN_PPROF, default false
+	SelfMetrics      bool            // CETACEAN_SELF_METRICS, default true
 	OperationsLevel  OperationsLevel // CETACEAN_OPERATIONS_LEVEL
 }
 
@@ -51,22 +52,24 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 
 	// Extract file-level pointers (safely handle nil sub-structs).
 	var (
-		fListen     *string
-		fPprof      *bool
-		fSSEBatch   *string
-		fDockerHost *string
-		fPromURL    *string
-		fLogLevel   *string
-		fLogFormat  *string
-		fDataDir    *string
-		fSnapshot   *bool
-		fOpsLevel   *int
-		fBasePath   *string
+		fListen      *string
+		fPprof       *bool
+		fSelfMetrics *bool
+		fSSEBatch    *string
+		fDockerHost  *string
+		fPromURL     *string
+		fLogLevel    *string
+		fLogFormat   *string
+		fDataDir     *string
+		fSnapshot    *bool
+		fOpsLevel    *int
+		fBasePath    *string
 	)
 	if fc != nil {
 		if fc.Server != nil {
 			fListen = fc.Server.ListenAddr
 			fPprof = fc.Server.Pprof
+			fSelfMetrics = fc.Server.SelfMetrics
 			fOpsLevel = fc.Server.OperationsLevel
 			fBasePath = fc.Server.BasePath
 			if fc.Server.SSE != nil {
@@ -129,7 +132,13 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		Snapshot:         resolveBool(nil, "CETACEAN_SNAPSHOT", fSnapshot, true),
 		SSEBatchInterval: batchInterval,
 		Pprof:            resolveBool(flags.Pprof, "CETACEAN_PPROF", fPprof, false),
-		OperationsLevel:  OperationsLevel(opsLevel),
+		SelfMetrics: resolveBool(
+			flags.SelfMetrics,
+			"CETACEAN_SELF_METRICS",
+			fSelfMetrics,
+			true,
+		),
+		OperationsLevel: OperationsLevel(opsLevel),
 	}
 
 	if err := ValidateBasePath(cfg.BasePath); err != nil {

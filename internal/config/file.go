@@ -73,6 +73,7 @@ type fileSizingThresholds struct {
 type fileServer struct {
 	ListenAddr      *string  `toml:"listen_addr"`
 	Pprof           *bool    `toml:"pprof"`
+	SelfMetrics     *bool    `toml:"self_metrics"`
 	SSE             *fileSSE `toml:"sse"`
 	OperationsLevel *int     `toml:"operations_level"`
 	BasePath        *string  `toml:"base_path"`

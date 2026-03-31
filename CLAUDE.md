@@ -63,6 +63,7 @@ docker stack deploy -c compose.monitoring.yaml monitoring  # Deploy standalone m
 | `CETACEAN_LOG_LEVEL` | `info` | No |
 | `CETACEAN_SSE_BATCH_INTERVAL` | `100ms` | No |
 | `CETACEAN_PPROF` | `false` | No (enable pprof endpoints at `/debug/pprof/`) |
+| `CETACEAN_SELF_METRICS` | `true` | No (expose Prometheus metrics at `/-/metrics`) |
 | `CETACEAN_OPERATIONS_LEVEL` | `1` | No (0=read-only, 1=operational, 2=configuration, 3=impactful) |
 | `CETACEAN_SNAPSHOT` | `true` | No (enable disk persistence of swarm state) |
 | `CETACEAN_DATA_DIR` | `./data` | No (directory for snapshot file) |

@@ -122,6 +122,42 @@ Make sure your Prometheus scrapes node-exporter and cAdvisor targets. The standa
 
 If Prometheus is behind authentication, Cetacean currently doesn't support passing credentials to the upstream. The proxy connects without auth.
 
+## Self-Metrics
+
+Cetacean exposes Prometheus metrics about its own operation at `GET /-/metrics`. This endpoint serves standard Prometheus exposition format and is enabled by default.
+
+**Available metric families:**
+
+| Metric | Type | Description |
+|---|---|---|
+| `cetacean_http_requests_total` | counter | HTTP requests by method, handler, status |
+| `cetacean_http_request_duration_seconds` | histogram | Request latency by method and handler |
+| `cetacean_http_request_size_bytes` | histogram | Request body size by method and handler |
+| `cetacean_http_response_size_bytes` | histogram | Response body size by method and handler |
+| `cetacean_sse_connections_active` | gauge | Active SSE connections |
+| `cetacean_sse_events_broadcast_total` | counter | SSE events broadcast |
+| `cetacean_sse_events_dropped_total` | counter | SSE events dropped (slow clients) |
+| `cetacean_cache_resources` | gauge | Cached resources by type |
+| `cetacean_cache_sync_duration_seconds` | histogram | Full-sync duration |
+| `cetacean_cache_mutations_total` | counter | Cache mutations by type and action |
+| `cetacean_prometheus_requests_total` | counter | Prometheus proxy requests by status |
+| `cetacean_prometheus_request_duration_seconds` | histogram | Prometheus proxy request duration |
+| `cetacean_recommendations_check_duration_seconds` | histogram | Recommendation checker run duration |
+| `cetacean_recommendations_total` | gauge | Active recommendations by severity |
+
+To scrape Cetacean's own metrics, add it as a Prometheus target:
+
+```yaml
+# In your prometheus.yml
+scrape_configs:
+  - job_name: cetacean
+    static_configs:
+      - targets: ["cetacean:9000"]
+    metrics_path: /-/metrics
+```
+
+To disable self-metrics, set `CETACEAN_SELF_METRICS=false` or `--self-metrics=false`.
+
 ## Resource Overhead
 
 The monitoring stack is designed to be lightweight:

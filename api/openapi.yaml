@@ -122,6 +122,23 @@ paths:
                     type: string
                     example: not_ready
 
+  /-/metrics:
+    get:
+      operationId: getSelfMetrics
+      tags: [Monitoring]
+      summary: Cetacean's own Prometheus metrics
+      description: >
+        Serves Prometheus exposition format with Cetacean's operational metrics
+        (HTTP requests, SSE connections, cache state, etc.).
+        Disabled when CETACEAN_SELF_METRICS=false.
+      responses:
+        "200":
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+
   /-/metrics/status:
     get:
       operationId: getMonitoringStatus

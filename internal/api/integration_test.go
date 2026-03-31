@@ -49,6 +49,7 @@ func setupIntegrationRouter(t *testing.T) http.Handler {
 		specBytes,
 		[]byte("/* scalar */"),
 		false,
+		true,
 		&auth.NoneProvider{},
 		"",
 	)

@@ -21,6 +21,7 @@ func NewRouter(
 	openapiSpec []byte,
 	scalarJS []byte,
 	enablePprof bool,
+	enableSelfMetrics bool,
 	authProvider auth.Provider,
 	basePath string,
 ) http.Handler {
@@ -37,7 +38,9 @@ func NewRouter(
 	mux.HandleFunc("GET /-/ready", h.HandleReady)
 	mux.HandleFunc("GET /-/metrics/status", h.HandleMonitoringStatus)
 	mux.HandleFunc("GET /-/docker-latest-version", h.HandleDockerLatestVersion)
-	mux.Handle("GET /-/metrics", metrics.Handler())
+	if enableSelfMetrics {
+		mux.Handle("GET /-/metrics", metrics.Handler())
+	}
 	mux.HandleFunc("GET /-/metrics/labels", metricsProxy.HandleMetricsLabels)
 	mux.HandleFunc("GET /-/metrics/labels/{name}", metricsProxy.HandleMetricsLabelValues)
 	// Metrics (content-negotiated: JSON → proxy, SSE → stream, HTML → SPA)

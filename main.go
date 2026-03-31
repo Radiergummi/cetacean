@@ -267,6 +267,7 @@ func main() {
 		openapiSpec,
 		scalarJS,
 		cfg.Pprof,
+		cfg.SelfMetrics,
 		authProvider,
 		cfg.BasePath,
 	)
