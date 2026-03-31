@@ -8,6 +8,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
 
@@ -26,8 +27,10 @@ func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setAllow(w, r, "config", cfg.Spec.Name)
 	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/configs/"+id, "Config", ConfigResponse{
-		Config:   cfg,
-		Services: h.cache.ServicesUsingConfig(id),
+		Config: cfg,
+		Services: acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", h.cache.ServicesUsingConfig(id), func(ref cache.ServiceRef) string {
+			return "service:" + ref.Name
+		}),
 	}))
 }
 

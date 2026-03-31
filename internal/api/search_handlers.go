@@ -9,6 +9,9 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 )
 
 // --- Search ---
@@ -351,6 +354,32 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	wg.Wait()
+
+	// ACL-filter search results per resource type.
+	identity := auth.IdentityFromContext(r.Context())
+	resourcePrefixes := [stCount]string{
+		stServices: "service:",
+		stStacks:   "stack:",
+		stNodes:    "node:",
+		stTasks:    "task:",
+		stConfigs:  "config:",
+		stSecrets:  "secret:",
+		stNetworks: "network:",
+		stVolumes:  "volume:",
+	}
+	for i := range allResults {
+		before := len(allResults[i].results)
+		prefix := resourcePrefixes[i]
+		allResults[i].results = acl.Filter(h.acl, identity, "read", allResults[i].results, func(sr searchResult) string {
+			if i == stTasks {
+				return prefix + sr.ID
+			}
+			return prefix + sr.Name
+		})
+		if removed := before - len(allResults[i].results); removed > 0 {
+			allResults[i].count -= removed
+		}
+	}
 
 	results := make(map[string][]searchResult, stCount)
 	counts := make(map[string]int, stCount)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
 
@@ -29,8 +30,10 @@ func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 		w,
 		r,
 		NewDetailResponse(r.Context(), "/networks/"+id, "Network", NetworkResponse{
-			Network:  net,
-			Services: h.cache.ServicesUsingNetwork(id),
+			Network: net,
+			Services: acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", h.cache.ServicesUsingNetwork(id), func(ref cache.ServiceRef) string {
+				return "service:" + ref.Name
+			}),
 		}),
 	)
 }

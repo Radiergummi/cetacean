@@ -8,6 +8,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
 
@@ -29,8 +30,10 @@ func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
 		w,
 		r,
 		NewDetailResponse(r.Context(), "/volumes/"+name, "Volume", VolumeResponse{
-			Volume:   vol,
-			Services: h.cache.ServicesUsingVolume(name),
+			Volume: vol,
+			Services: acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", h.cache.ServicesUsingVolume(name), func(ref cache.ServiceRef) string {
+				return "service:" + ref.Name
+			}),
 		}),
 	)
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
 
@@ -28,8 +29,10 @@ func (h *Handlers) HandleGetSecret(w http.ResponseWriter, r *http.Request) {
 	sec.Spec.Data = nil
 	h.setAllow(w, r, "secret", sec.Spec.Name)
 	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", SecretResponse{
-		Secret:   sec,
-		Services: h.cache.ServicesUsingSecret(id),
+		Secret: sec,
+		Services: acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", h.cache.ServicesUsingSecret(id), func(ref cache.ServiceRef) string {
+			return "service:" + ref.Name
+		}),
 	}))
 }
 
