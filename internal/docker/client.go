@@ -130,6 +130,7 @@ func (c *Client) Events(ctx context.Context) (<-chan events.Message, <-chan erro
 			filters.Arg("type", string(events.NetworkEventType)),
 			filters.Arg("type", string(events.VolumeEventType)),
 			filters.Arg("type", string(events.ContainerEventType)),
+			filters.Arg("type", "task"),
 		),
 	})
 }
