@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - Grant-based RBAC authorization with per-resource access control
 - `Allow` response header indicating available methods per resource
+- Footer with version info, GitHub, docs, and API links
+- Table/grid view toggle on the tasks page with tasks grouped by service in card view
+- Arrow-key navigation for radio card groups
+
+### Fixed
+- Layout shift in the header when the live connection timer changes width
+- Pressing Escape in a combobox dropdown closing the parent editor panel
 
 ## [0.10.0] - 2026-03-31
 
