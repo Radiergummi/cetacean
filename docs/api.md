@@ -44,9 +44,11 @@ curl -H "Accept: application/json" http://localhost:9000/services
 curl -H "Accept: application/vnd.cetacean.v1+json" http://localhost:9000/services
 ```
 
-## Common Query Parameters
+## Pagination
 
-List endpoints support these parameters:
+List endpoints support two pagination mechanisms: query parameters and HTTP Range headers.
+
+### Query parameters
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
@@ -70,6 +72,39 @@ curl "http://localhost:9000/configs?search=nginx"
 # Filter services with expr-lang
 curl "http://localhost:9000/services?filter=name+contains+'web'"
 ```
+
+### Range header pagination
+
+All list endpoints also accept the HTTP `Range` header with the `items` unit. This follows the pattern used by
+[Heroku](https://devcenter.heroku.com/articles/platform-api-reference#ranges) and other APIs for cursor-free
+pagination.
+
+```bash
+# First 25 items
+curl -H "Range: items 0-24" http://localhost:9000/services
+
+# Items 50-74
+curl -H "Range: items 50-74" http://localhost:9000/services
+```
+
+The response uses standard HTTP range semantics:
+
+| Status | Meaning |
+|---|---|
+| `200 OK` | The full collection fits within the requested range (or no Range header). |
+| `206 Partial Content` | A subset was returned. Check `Content-Range` for position. |
+| `416 Range Not Satisfiable` | The requested offset is beyond the total. `Content-Range: items */TOTAL` tells you the actual count. |
+
+Partial responses include a `Content-Range` header:
+
+```
+Content-Range: items 0-24/142
+```
+
+All list responses include `Accept-Ranges: items` to advertise support.
+
+When both query parameters (`limit`/`offset`) and a `Range` header are present, query parameters take precedence.
+Multipart ranges (e.g., `items 0-9, 50-59`) are not supported and return `416`.
 
 ### Sort fields by resource
 
@@ -228,7 +263,23 @@ The code is the last path segment of `type` (e.g. `SVC001`). Codes use a three-l
 
 Generic HTTP errors (no domain-specific code) use `"type": "about:blank"`.
 
-Browse the full error reference at [`GET /api/errors`](#error-reference) or look up a single code at `GET /api/errors/{code}`.
+Browse the full error reference at [`GET /api/errors`](#api-documentation) or look up a single code at
+`GET /api/errors/{code}`.
+
+### Common error scenarios
+
+**Version conflicts (409)** -- All write endpoints use Docker's optimistic concurrency. If the resource was modified by
+another client between your read and write, the server returns `409 Conflict` with a `SVC001`, `NOD001`, or similar code.
+Re-read the resource and retry.
+
+**Operations level (403)** -- Requests to endpoints above the configured [operations level](configuration.md#operations-level)
+return `403` with code `OPS001`.
+
+**Authorization denied (403)** -- When [ACL](authorization.md) is active, read access denied returns `ACL001` and write
+access denied returns `ACL002`. The response includes the resource and permission that was checked.
+
+**Unsupported patch type (415)** -- PATCH endpoints validate `Content-Type`. Sending `application/json` instead of
+`application/json-patch+json` or `application/merge-patch+json` returns `415 Unsupported Media Type`.
 
 ## Caching
 
@@ -280,7 +331,8 @@ Every resource endpoint supports SSE in addition to JSON. Send `Accept: text/eve
 
 ### Per-resource streams
 
-List endpoints stream events filtered by resource type. Detail endpoints stream events for that specific resource.
+List endpoints stream events filtered by resource type. Detail endpoints stream events for a single resource. Stack
+streams include events for all member resources (services, tasks, configs, secrets, networks, volumes).
 
 ```bash
 # Stream all node events
@@ -289,8 +341,8 @@ curl -H "Accept: text/event-stream" http://localhost:9000/nodes
 # Stream events for a specific service
 curl -H "Accept: text/event-stream" http://localhost:9000/services/abc123
 
-# Stream all task events
-curl -H "Accept: text/event-stream" http://localhost:9000/tasks
+# Stream changes to a stack (includes member resources)
+curl -H "Accept: text/event-stream" http://localhost:9000/stacks/myapp
 ```
 
 This is the primary SSE mechanism -- the frontend uses per-resource streams for real-time updates on every page.
@@ -332,38 +384,17 @@ curl -H "Accept: text/event-stream" "http://localhost:9000/events?types=service,
 
 Valid types: `node`, `service`, `task`, `config`, `secret`, `network`, `volume`, `stack`.
 
+### Keepalive
+
+The server sends SSE comment lines (`:keepalive`) on idle connections to prevent proxies and load balancers from closing
+them. This is transparent to EventSource clients.
+
 ### Reconnection and Replay
 
 The server assigns incrementing `id:` values to each event. EventSource clients automatically send `Last-Event-ID` on
 reconnect. The server replays missed events from its in-memory history buffer (last 10,000 events), then resumes live
 streaming. If the requested ID is too old (no longer in the buffer), the server sends a `sync` event to tell the client
 to do a full reload.
-
-### Per-resource SSE
-
-In addition to the global `/events` stream, every list and detail endpoint supports SSE via content negotiation. Request `Accept: text/event-stream` on any resource URL to receive updates scoped to that resource.
-
-**List endpoints** stream events for all resources of that type:
-
-```bash
-# Stream all service changes
-curl -H "Accept: text/event-stream" http://localhost:9000/services
-
-# Stream all task changes
-curl -H "Accept: text/event-stream" http://localhost:9000/tasks
-```
-
-**Detail endpoints** stream events for a single resource:
-
-```bash
-# Stream changes to one node
-curl -H "Accept: text/event-stream" http://localhost:9000/nodes/abc123
-
-# Stream changes to a stack (includes its services, tasks, configs, etc.)
-curl -H "Accept: text/event-stream" http://localhost:9000/stacks/myapp
-```
-
-Events use the same format as `/events`. Stack streams include events for all member resources (services, tasks, configs, secrets, networks, volumes).
 
 ### Metrics SSE
 
@@ -439,7 +470,6 @@ curl -H "Accept: text/event-stream" "http://localhost:9000/metrics?query=up&step
 | GET | `/cluster/metrics` | CPU, memory, disk utilization (requires Prometheus). |
 | GET | `/cluster/capacity` | Cluster resource capacity (max single-node CPU/memory, totals). |
 | GET | `/disk-usage` | Disk usage summary by type (images, containers, volumes, build cache). |
-| GET | `/plugins` | Installed Docker plugins. |
 | GET | `/swarm` | Swarm inspect: join tokens, raft config, CA config. |
 | GET | `/swarm/unlock-key` | Current swarm unlock key (when autolock enabled). |
 
