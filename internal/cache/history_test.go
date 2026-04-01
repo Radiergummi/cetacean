@@ -92,3 +92,130 @@ func TestHistory_Limit(t *testing.T) {
 		t.Fatalf("expected 5 entries, got %d", len(entries))
 	}
 }
+
+func TestHistory_Count_Empty(t *testing.T) {
+	h := NewHistory(10)
+
+	if c := h.Count(); c != 0 {
+		t.Fatalf("expected 0, got %d", c)
+	}
+}
+
+func TestHistory_Count_AfterAppends(t *testing.T) {
+	h := NewHistory(10)
+
+	for range 5 {
+		h.Append(HistoryEntry{Type: "service", Action: "update"})
+	}
+
+	if c := h.Count(); c != 5 {
+		t.Fatalf("expected 5, got %d", c)
+	}
+}
+
+func TestHistory_Since_Basic(t *testing.T) {
+	h := NewHistory(10)
+
+	for i := range 5 {
+		h.Append(HistoryEntry{Type: "service", Action: "update", Name: names[i]})
+	}
+
+	entries, ok := h.Since(2)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+
+	if len(entries) != 3 {
+		t.Fatalf("expected 3 entries after ID 2, got %d", len(entries))
+	}
+
+	// Chronological order (oldest first)
+	if entries[0].Name != "c" || entries[1].Name != "d" || entries[2].Name != "e" {
+		t.Errorf("unexpected order: %v", entries)
+	}
+}
+
+func TestHistory_Since_CaughtUp(t *testing.T) {
+	h := NewHistory(10)
+
+	for range 3 {
+		h.Append(HistoryEntry{Type: "service"})
+	}
+
+	entries, ok := h.Since(3)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+
+	if len(entries) != 0 {
+		t.Fatalf("expected 0 entries when caught up, got %d", len(entries))
+	}
+}
+
+func TestHistory_Since_Overwritten(t *testing.T) {
+	h := NewHistory(3) // ring size 3
+
+	for i := range 5 {
+		h.Append(HistoryEntry{Type: "service", Name: names[i]})
+	}
+
+	// ID 1 and 2 have been overwritten (ring holds IDs 3, 4, 5)
+	_, ok := h.Since(1)
+	if ok {
+		t.Fatal("expected ok=false for overwritten ID")
+	}
+}
+
+func TestHistory_Since_FutureID(t *testing.T) {
+	h := NewHistory(10)
+
+	h.Append(HistoryEntry{Type: "service"})
+
+	_, ok := h.Since(999)
+	if ok {
+		t.Fatal("expected ok=false for future ID")
+	}
+}
+
+func TestHistory_Since_Zero(t *testing.T) {
+	h := NewHistory(10)
+
+	for i := range 3 {
+		h.Append(HistoryEntry{Type: "service", Name: names[i]})
+	}
+
+	entries, ok := h.Since(0)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+
+	if len(entries) != 3 {
+		t.Fatalf("expected 3 entries after ID 0, got %d", len(entries))
+	}
+
+	if entries[0].Name != "a" {
+		t.Errorf("expected oldest first, got %q", entries[0].Name)
+	}
+}
+
+func TestHistory_Since_WrappedRing(t *testing.T) {
+	h := NewHistory(3)
+
+	for i := range 5 {
+		h.Append(HistoryEntry{Type: "service", Name: names[i]})
+	}
+
+	// Ring holds IDs 3 ("c"), 4 ("d"), 5 ("e")
+	entries, ok := h.Since(3)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 entries after ID 3, got %d", len(entries))
+	}
+
+	if entries[0].Name != "d" || entries[1].Name != "e" {
+		t.Errorf("unexpected entries: %v", entries)
+	}
+}

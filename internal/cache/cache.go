@@ -138,13 +138,12 @@ func (c *Cache) notify(e Event) {
 	// Sync events are internal bookkeeping; broadcast them to SSE clients
 	// but don't record them in history where they drown out real changes.
 	if e.Type != EventSync {
-		c.history.Append(HistoryEntry{
+		e.HistoryID = c.history.Append(HistoryEntry{
 			Type:       e.Type,
 			Action:     e.Action,
 			ResourceID: e.ID,
 			Name:       e.Name,
 		})
-		e.HistoryID = c.history.Count()
 		metrics.RecordCacheMutation(string(e.Type), e.Action)
 	} else {
 		e.HistoryID = c.history.Count()

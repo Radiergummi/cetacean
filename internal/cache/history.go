@@ -88,7 +88,61 @@ func (h *History) Count() uint64 {
 	return h.count
 }
 
-func (h *History) Append(e HistoryEntry) {
+// Since returns all entries with ID > afterID in chronological order.
+// Returns ok=false if afterID has been overwritten or is a future ID,
+// meaning the caller cannot trust the result is complete.
+func (h *History) Since(afterID uint64) ([]HistoryEntry, bool) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	// Future ID or empty history
+	if afterID > h.count {
+		return nil, false
+	}
+
+	// Caught up — no new entries
+	if afterID == h.count {
+		return nil, true
+	}
+
+	// Determine the oldest ID still in the ring
+	var oldestID uint64
+	if h.full {
+		oldestID = h.count - uint64(h.size) + 1
+	} else {
+		oldestID = 1
+	}
+
+	// afterID has been overwritten
+	if afterID > 0 && afterID < oldestID {
+		return nil, false
+	}
+
+	// Collect entries with ID > afterID in chronological order.
+	// Walk the ring from oldest to newest.
+	total := h.size
+	if !h.full {
+		total = h.cursor
+	}
+
+	var result []HistoryEntry
+
+	for i := total - 1; i >= 0; i-- {
+		idx := h.cursor - 1 - i
+		if idx < 0 {
+			idx += h.size
+		}
+
+		e := h.entries[idx]
+		if e.ID > afterID {
+			result = append(result, e)
+		}
+	}
+
+	return result, true
+}
+
+func (h *History) Append(e HistoryEntry) uint64 {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -113,6 +167,8 @@ func (h *History) Append(e HistoryEntry) {
 		h.cursor = 0
 		h.full = true
 	}
+
+	return h.count
 }
 
 func (h *History) List(q HistoryQuery) []HistoryEntry {
