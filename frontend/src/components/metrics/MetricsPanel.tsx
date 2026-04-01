@@ -48,6 +48,7 @@ interface ChartDef {
   thresholds?: Threshold[];
   yMin?: number;
   color?: string;
+  labelTransform?: (label: string) => string;
 }
 
 interface Props {

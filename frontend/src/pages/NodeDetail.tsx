@@ -142,7 +142,9 @@ export default function NodeDetail() {
     ? `instance="${escapePromQL(instance)}"`
     : node?.Status?.Addr
       ? `instance=~"${escapePromQL(node.Status.Addr)}:.*"`
-      : "";
+      : hostname
+        ? `instance=~"${escapePromQL(hostname)}(\\..+)?:.*"`
+        : "";
 
   const taskMetrics = useTaskMetrics(
     nodeId ? `container_label_com_docker_swarm_node_id="${escapePromQL(nodeId)}"` : "",

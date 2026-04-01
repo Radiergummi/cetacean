@@ -17,6 +17,7 @@ import { useSearchParam } from "../hooks/useSearchParam";
 import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useViewMode } from "../hooks/useViewMode";
+import { instanceToHostname } from "../lib/format";
 import { useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -206,12 +207,14 @@ export default function NodeList() {
                   query: `100 - (avg by (instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)`,
                   unit: "%",
                   yMin: 0,
+                  labelTransform: instanceToHostname,
                 },
                 {
                   title: "Memory Utilization",
                   query: `(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100`,
                   unit: "%",
                   yMin: 0,
+                  labelTransform: instanceToHostname,
                 },
               ]}
             />

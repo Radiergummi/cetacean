@@ -197,6 +197,19 @@ export function nanosToSeconds(nanoseconds: number | undefined): number | undefi
 }
 
 /**
+ * Extract the hostname from a Prometheus series label string.
+ *
+ * Series labels from `seriesLabel()` join all metric label values with ", ".
+ * This takes the first segment (the `instance` value), strips the port suffix,
+ * and discards any remaining label values (e.g. "job").
+ */
+export function instanceToHostname(label: string): string {
+  const instance = label.split(", ")[0];
+
+  return instance.replace(/:\d+$/, "");
+}
+
+/**
  * Format a number with a specified unit using `Intl.NumberFormat`.
  */
 function formatUnit(value: number, unit: string, maximumFractionDigits = 0): string {

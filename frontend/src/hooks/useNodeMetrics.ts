@@ -121,6 +121,17 @@ export function useNodeMetrics() {
         }
       }
 
+      // Fallback: try matching Docker hostname against host portion of instance label
+      const short = hostname.split(".")[0];
+
+      for (const [key, metrics] of Object.entries(byInstance)) {
+        const host = key.split(":")[0];
+
+        if (host === hostname || host === short || host.split(".")[0] === short) {
+          return metrics;
+        }
+      }
+
       return emptyMetrics;
     },
     [byInstance, resolve],
