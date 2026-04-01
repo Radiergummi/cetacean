@@ -108,9 +108,13 @@ func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	_, ok := h.cache.GetService(id)
+	svc, ok := h.cache.GetService(id)
 	if !ok {
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+		return
+	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "service:"+svc.Spec.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}
 	tasks := h.enrichTasks(h.cache.ListTasksByService(id))
@@ -119,9 +123,13 @@ func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleServiceLogs(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	_, ok := h.cache.GetService(id)
+	svc, ok := h.cache.GetService(id)
 	if !ok {
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+		return
+	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "service:"+svc.Spec.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}
 	h.serveLogs(

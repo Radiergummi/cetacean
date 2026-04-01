@@ -76,6 +76,16 @@ func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
-	tasks := h.enrichTasks(h.cache.ListTasksByNode(id))
-	writeCachedJSON(w, r, NewCollectionResponse(r.Context(), tasks, len(tasks), len(tasks), 0))
+	tasks := h.cache.ListTasksByNode(id)
+	tasks = acl.Filter(
+		h.acl,
+		auth.IdentityFromContext(r.Context()),
+		"read",
+		tasks,
+		func(t swarm.Task) string { return "task:" + t.ID },
+	)
+	enriched := h.enrichTasks(tasks)
+	writeCachedJSON(
+		w, r, NewCollectionResponse(r.Context(), enriched, len(enriched), len(enriched), 0),
+	)
 }

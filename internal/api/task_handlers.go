@@ -122,6 +122,10 @@ func (h *Handlers) HandleTaskLogs(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "TSK002", fmt.Sprintf("task %q not found", id))
 		return
 	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "task:"+id) {
+		writeErrorCode(w, r, "ACL001", "access denied")
+		return
+	}
 	h.serveLogs(
 		w,
 		r,
