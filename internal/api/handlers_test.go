@@ -331,7 +331,7 @@ func TestHandleClusterMetrics_WithPrometheus(t *testing.T) {
 func TestHandleMonitoringStatus_NoPrometheus(t *testing.T) {
 	h := newTestHandlers(t)
 
-	req := httptest.NewRequest("GET", "/-/metrics/status", nil)
+	req := httptest.NewRequest("GET", "/metrics/status", nil)
 	w := httptest.NewRecorder()
 	h.HandleMonitoringStatus(w, req)
 
@@ -378,7 +378,7 @@ func TestHandleMonitoringStatus_WithPrometheus(t *testing.T) {
 	c.SetNode(swarm.Node{ID: "n2", Status: swarm.NodeStatus{State: swarm.NodeStateReady}})
 	h := newTestHandlers(t, withCache(c), withPromClient(promapi.NewClient(prom.URL)))
 
-	req := httptest.NewRequest("GET", "/-/metrics/status", nil)
+	req := httptest.NewRequest("GET", "/metrics/status", nil)
 	w := httptest.NewRecorder()
 	h.HandleMonitoringStatus(w, req)
 
@@ -420,7 +420,7 @@ func TestHandleMonitoringStatus_PrometheusUnreachable(t *testing.T) {
 	// Point to a URL that will refuse connections
 	h := newTestHandlers(t, withPromClient(promapi.NewClient("http://127.0.0.1:19999")))
 
-	req := httptest.NewRequest("GET", "/-/metrics/status", nil)
+	req := httptest.NewRequest("GET", "/metrics/status", nil)
 	w := httptest.NewRecorder()
 	h.HandleMonitoringStatus(w, req)
 

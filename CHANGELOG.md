@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - History endpoint now filters events by per-resource ACL read permission instead of showing all resource changes
 - SSE event replay on reconnect now applies ACL filtering (previously replayed events bypassed ACL)
 - Policy validation rejects malformed glob patterns at load time instead of silently creating dead grants
+- Monitoring status, Prometheus label names, and label values endpoints moved from unauthenticated `/-/` prefix to authenticated `/metrics/` — previously exposed cluster node count and Prometheus label data without authentication
 - Task-to-service-to-stack ACL inheritance chain now resolves correctly (previously stopped at service level)
 
 ### Fixed

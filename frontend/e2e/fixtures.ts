@@ -8,7 +8,7 @@ interface MonitoringStatus {
 
 async function fetchMonitoringStatus(baseURL: string): Promise<MonitoringStatus> {
   try {
-    const response = await fetch(`${baseURL}/-/metrics/status`, {
+    const response = await fetch(`${baseURL}/metrics/status`, {
       headers: { Accept: "application/json" },
     });
     const data = await response.json();

@@ -430,9 +430,9 @@ No content negotiation. No discovery `Link` headers.
 | GET | `/-/health` | Health check. Returns version info. |
 | GET | `/-/ready` | Readiness probe. 503 until first sync completes. |
 | GET | `/-/metrics` | Cetacean's own Prometheus metrics (disabled via `CETACEAN_SELF_METRICS=false`). |
-| GET | `/-/metrics/status` | Monitoring auto-detection status (Prometheus, node-exporter, cAdvisor). |
-| GET | `/-/metrics/labels` | Proxied Prometheus label names (optional `match[]` filter). |
-| GET | `/-/metrics/labels/{name}` | Proxied Prometheus label values for a given label name. |
+| GET | `/metrics/status` | Monitoring auto-detection status (Prometheus, node-exporter, cAdvisor). |
+| GET | `/metrics/labels` | Proxied Prometheus label names (optional `match[]` filter). |
+| GET | `/metrics/labels/{name}` | Proxied Prometheus label values for a given label name. |
 | GET | `/-/docker-latest-version` | Latest Docker Engine version (cached). |
 
 ```bash

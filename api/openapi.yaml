@@ -139,7 +139,7 @@ paths:
               schema:
                 type: string
 
-  /-/metrics/status:
+  /metrics/status:
     get:
       operationId: getMonitoringStatus
       tags: [Monitoring]
@@ -155,7 +155,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/MonitoringStatus"
 
-  /-/metrics/labels:
+  /metrics/labels:
     get:
       operationId: getMetricsLabels
       tags: [Monitoring]
@@ -188,7 +188,7 @@ paths:
         "503":
           description: Prometheus not configured
 
-  /-/metrics/labels/{name}:
+  /metrics/labels/{name}:
     get:
       operationId: getMetricsLabelValues
       tags: [Monitoring]

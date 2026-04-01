@@ -378,7 +378,7 @@ func BenchmarkHandleReady(b *testing.B) {
 func BenchmarkHandleMonitoringStatus_NoPrometheus(b *testing.B) {
 	h := newTestHandlers(b)
 	for b.Loop() {
-		req := httptest.NewRequestWithContext(b.Context(), "GET", "/-/metrics/status", nil)
+		req := httptest.NewRequestWithContext(b.Context(), "GET", "/metrics/status", nil)
 		h.HandleMonitoringStatus(httptest.NewRecorder(), req)
 	}
 }

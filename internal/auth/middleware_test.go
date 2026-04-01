@@ -53,7 +53,6 @@ func TestMiddleware_ExemptRoutes(t *testing.T) {
 	cases := []string{
 		"/-/health",
 		"/-/ready",
-		"/-/metrics/status",
 		"/api",
 		"/api/context.jsonld",
 		"/api/scalar.js",
@@ -171,7 +170,6 @@ func TestIsExempt_Complete(t *testing.T) {
 		// Meta endpoints.
 		{"/-/health", true},
 		{"/-/ready", true},
-		{"/-/metrics/status", true},
 
 		// API docs.
 		{"/api", true},

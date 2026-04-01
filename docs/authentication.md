@@ -267,8 +267,8 @@ Embeds a Tailscale node directly into Cetacean. No local Tailscale installation 
   -auth-tailscale-state-dir /var/lib/cetacean/tsnet
 ```
 
-In tsnet mode, authenticated routes are served on the tailnet listener. Meta endpoints (`/-/health`, `/-/ready`,
-`/-/metrics/status`) remain on the regular listener for Docker health checks.
+In tsnet mode, authenticated routes are served on the tailnet listener. Meta endpoints (`/-/health`, `/-/ready`)
+remain on the regular listener for Docker health checks.
 
 #### Configuration
 

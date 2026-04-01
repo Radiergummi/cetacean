@@ -485,7 +485,6 @@ func serveDualListeners(
 	metaMux := http.NewServeMux()
 	metaMux.HandleFunc("GET /-/health", h.HandleHealth)
 	metaMux.HandleFunc("GET /-/ready", h.HandleReady)
-	metaMux.HandleFunc("GET /-/metrics/status", h.HandleMonitoringStatus)
 
 	metaServer := &http.Server{
 		Addr:        cfg.ListenAddr,

@@ -123,9 +123,9 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 - **`api/allow.go`** — Sets `Allow` response header on GET/HEAD responses. Combines operations level tier check with ACL write permission to determine which methods are available for each resource.
 - **`api/jsonpatch.go`** — JSON Patch (RFC 6902) and JSON Merge Patch (RFC 7396) application logic for string maps (env vars, labels).
 - **`api/sse.go`** — `Broadcaster` manages up to 256 SSE clients. Per-resource SSE: list endpoints stream events filtered by type, detail endpoints stream events filtered by type+id. Legacy `GET /events` endpoint supports `?types=` filter. Event batching within configurable interval. Slow clients get events dropped (non-blocking send to buffered channel). SSE events include the full resource in the `resource` field for optimistic client-side updates.
-- **`api/prometheus.go`** — Reverse proxy to Prometheus. `HandleMetrics` is the content-negotiated handler at `/metrics` (routes instant vs range by `start`+`end` params). `HandleMetricsLabels` and `HandleMetricsLabelValues` serve label metadata at `/-/metrics/labels` and `/-/metrics/labels/{name}`. All handlers use nil-receiver checks (return 503 when Prometheus is not configured). 10MB response limit, 30s timeout.
+- **`api/prometheus.go`** — Reverse proxy to Prometheus. `HandleMetrics` is the content-negotiated handler at `/metrics` (routes instant vs range by `start`+`end` params). `HandleMetricsLabels` and `HandleMetricsLabelValues` serve label metadata at `/metrics/labels` and `/metrics/labels/{name}`. All handlers use nil-receiver checks (return 503 when Prometheus is not configured). 10MB response limit, 30s timeout.
 - **`api/metricsstream.go`** — SSE streaming handler for Prometheus queries. Registered at `GET /metrics` via content negotiation (JSON → proxy, SSE → stream handler, HTML → SPA). Periodically runs instant queries and pushes `point` events; sends full `initial` event on connect. 64-connection limit, 15s keepalive, skips ticks if previous query is in-flight.
-- **`api/promquery.go`** — `PromClient` for direct Prometheus instant queries. Used by `HandleClusterMetrics` and `HandleMonitoringStatus` (`GET /-/metrics/status` — probes for node-exporter/cAdvisor targets, returns detection status for guided setup UI). Also provides `RangeQueryRaw` and `InstantQueryRaw` for raw JSON byte responses (used by metrics stream handler).
+- **`api/promquery.go`** — `PromClient` for direct Prometheus instant queries. Used by `HandleClusterMetrics` and `HandleMonitoringStatus` (`GET /metrics/status` — probes for node-exporter/cAdvisor targets, returns detection status for guided setup UI). Also provides `RangeQueryRaw` and `InstantQueryRaw` for raw JSON byte responses (used by metrics stream handler).
 - **`api/spa.go`** — Serves the embedded `frontend/dist/` filesystem with index.html fallback for client-side routing.
 - **`api/negotiate.go`** — Content negotiation middleware. Resolves `Accept` header or `.json`/`.html` extension suffix to `ContentType` enum stored in context. `ContentTypeFromContext` used by handlers.
 - **`api/dispatch.go`** — `contentNegotiated`, `contentNegotiatedWithSSE`, and `sseOnly` dispatch helpers that route requests to JSON handler, SSE handler, or SPA based on negotiated content type.
@@ -215,7 +215,7 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 - **OpenAPI spec**: `api/openapi.yaml`, served at `GET /api` (JSON for programmatic clients, Scalar HTML playground for browsers)
 - **JSON-LD context**: `internal/api/context.go`, served at `GET /api/context.jsonld`
 - **Markdown docs**: `docs/api.md`
-- Meta endpoints (`/-/health`, `/-/ready`, `/-/metrics/status`, `/-/metrics/labels`) have no content negotiation or discovery links
+- Meta endpoints (`/-/health`, `/-/ready`) have no content negotiation or discovery links
 
 ## Known Pre-existing Issues
 None — all previously known test failures have been fixed.

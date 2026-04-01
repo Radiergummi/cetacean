@@ -69,7 +69,7 @@ Cetacean automatically detects your monitoring setup and shows a status banner o
 | **Partial** | Prometheus is up but node-exporter or cAdvisor targets are missing | Deploy the monitoring stack |
 | **Healthy** | Everything is working | Nothing. Enjoy the charts. |
 
-The detection endpoint is `GET /-/metrics/status`. It probes Prometheus for active scrape targets and compares them against your cluster's node count.
+The detection endpoint is `GET /metrics/status`. It probes Prometheus for active scrape targets and compares them against your cluster's node count.
 
 ## Prometheus Proxy
 
@@ -84,8 +84,8 @@ Cetacean proxies Prometheus queries through its own API so the browser never tal
 | Path | Maps to | Description |
 |---|---|---|
 | `GET /metrics` | `/api/v1/query` or `/api/v1/query_range` | Instant or range query (determined by `start`+`end` params). Content-negotiated: JSON, SSE, or HTML console. |
-| `GET /-/metrics/labels` | `/api/v1/labels` | Label names (optional `match[]` filter) |
-| `GET /-/metrics/labels/{name}` | `/api/v1/label/{name}/values` | Label values |
+| `GET /metrics/labels` | `/api/v1/labels` | Label names (optional `match[]` filter) |
+| `GET /metrics/labels/{name}` | `/api/v1/label/{name}/values` | Label values |
 
 **Allowed parameters:** `query`, `time`, `timeout`, `start`, `end`, `step`
 

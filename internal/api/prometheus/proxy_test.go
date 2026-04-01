@@ -106,7 +106,7 @@ func TestMetricsProxyHandler_Labels(t *testing.T) {
 	defer prom.Close()
 
 	proxy := NewProxy(prom.URL, noopErrorWriter)
-	req := httptest.NewRequest("GET", "/-/metrics/labels", nil)
+	req := httptest.NewRequest("GET", "/metrics/labels", nil)
 	w := httptest.NewRecorder()
 	proxy.HandleMetricsLabels(w, req)
 
@@ -126,7 +126,7 @@ func TestMetricsProxyHandler_LabelValues(t *testing.T) {
 	defer prom.Close()
 
 	proxy := NewProxy(prom.URL, noopErrorWriter)
-	req := httptest.NewRequest("GET", "/-/metrics/labels/job", nil)
+	req := httptest.NewRequest("GET", "/metrics/labels/job", nil)
 	req.SetPathValue("name", "job")
 	w := httptest.NewRecorder()
 	proxy.HandleMetricsLabelValues(w, req)
@@ -141,7 +141,7 @@ func TestMetricsProxyHandler_LabelValues_NilProxy(t *testing.T) {
 	defer SetNilProxyErrorWriter(noopErrorWriter)
 
 	var proxy *Proxy
-	req := httptest.NewRequest("GET", "/-/metrics/labels/job", nil)
+	req := httptest.NewRequest("GET", "/metrics/labels/job", nil)
 	req.SetPathValue("name", "job")
 	w := httptest.NewRecorder()
 	proxy.HandleMetricsLabelValues(w, req)

@@ -329,7 +329,7 @@ export const api = {
   configurePlugin: (name: string, settings: { args?: string[]; env?: string[] }) =>
     patch<void>(`/plugins/${encodeURIComponent(name)}/settings`, settings, "application/json"),
   clusterMetrics: () => fetchJSON<ClusterMetrics>("/cluster/metrics"),
-  monitoringStatus: () => fetchJSON<MonitoringStatus>("/-/metrics/status"),
+  monitoringStatus: () => fetchJSON<MonitoringStatus>("/metrics/status"),
   nodes: (params?: ListParams, signal?: AbortSignal) => fetchRange<Node>("/nodes", params, signal),
   node: (id: string, signal?: AbortSignal) =>
     fetchJSON<{ node: Node }>(`/nodes/${id}`, signal).then((r) => r.node),
@@ -409,10 +409,10 @@ export const api = {
   metricsLabels: (match?: string) => {
     const params = new URLSearchParams();
     if (match) params.set("match[]", match);
-    return fetchJSON<{ data: string[] }>(`/-/metrics/labels?${params}`).then((r) => r.data);
+    return fetchJSON<{ data: string[] }>(`/metrics/labels?${params}`).then((r) => r.data);
   },
   metricsLabelValues: (name: string) =>
-    fetchJSON<{ data: string[] }>(`/-/metrics/labels/${encodeURIComponent(name)}`).then(
+    fetchJSON<{ data: string[] }>(`/metrics/labels/${encodeURIComponent(name)}`).then(
       (r) => r.data,
     ),
   search: (q: string, limit?: number, signal?: AbortSignal) =>

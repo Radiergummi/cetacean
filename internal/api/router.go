@@ -64,14 +64,14 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	// Meta endpoints (no content negotiation, no discovery links)
 	mux.HandleFunc("GET /-/health", h.HandleHealth)
 	mux.HandleFunc("GET /-/ready", h.HandleReady)
-	mux.HandleFunc("GET /-/metrics/status", h.HandleMonitoringStatus)
 	mux.HandleFunc("GET /-/docker-latest-version", h.HandleDockerLatestVersion)
 	if cfg.EnableSelfMetrics {
 		mux.Handle("GET /-/metrics", metrics.Handler())
 	}
-	mux.HandleFunc("GET /-/metrics/labels", metricsProxy.HandleMetricsLabels)
-	mux.HandleFunc("GET /-/metrics/labels/{name}", metricsProxy.HandleMetricsLabelValues)
 	// Metrics (content-negotiated: JSON → proxy, SSE → stream, HTML → SPA)
+	mux.HandleFunc("GET /metrics/status", h.HandleMonitoringStatus)
+	mux.HandleFunc("GET /metrics/labels", metricsProxy.HandleMetricsLabels)
+	mux.HandleFunc("GET /metrics/labels/{name}", metricsProxy.HandleMetricsLabelValues)
 	mux.HandleFunc("GET /metrics", contentNegotiatedWithSSE(
 		metricsProxy.HandleMetrics,
 		h.HandleMetricsStream,
