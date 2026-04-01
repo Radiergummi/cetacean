@@ -32,6 +32,7 @@ vi.mock("../components/metrics", () => ({
 }));
 
 vi.mock("../api/client", () => ({
+  pageSize: 50,
   api: {
     nodes: vi.fn(),
     cluster: vi.fn().mockResolvedValue({ prometheusConfigured: false }),

@@ -31,7 +31,8 @@ export default function NodeList() {
     retry,
   } = useSwarmResource(
     useCallback(
-      () => api.nodes({ search: debouncedSearch, sort: sortKey, dir: sortDir }),
+      (offset: number) =>
+        api.nodes({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }),
       [debouncedSearch, sortKey, sortDir],
     ),
     "node",

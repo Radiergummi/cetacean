@@ -29,7 +29,8 @@ export default function ConfigList() {
     retry,
   } = useSwarmResource(
     useCallback(
-      () => api.configs({ search: debouncedSearch, sort: sortKey, dir: sortDir }),
+      (offset: number) =>
+        api.configs({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }),
       [debouncedSearch, sortKey, sortDir],
     ),
     "config",

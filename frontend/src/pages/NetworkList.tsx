@@ -27,7 +27,8 @@ export default function NetworkList() {
     retry,
   } = useSwarmResource(
     useCallback(
-      () => api.networks({ search: debouncedSearch, sort: sortKey, dir: sortDir }),
+      (offset: number) =>
+        api.networks({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }),
       [debouncedSearch, sortKey, sortDir],
     ),
     "network",

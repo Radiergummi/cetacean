@@ -49,7 +49,9 @@ function wrapper({ children }: { children: ReactNode }) {
 describe("useSwarmResource", () => {
   it("fetches initial data", async () => {
     const items: Item[] = [{ ID: "1", Name: "svc1" }];
-    const fetchFn = vi.fn().mockResolvedValue({ items, total: 1 });
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValue({ items, total: 1, limit: 50, offset: 0 });
 
     const { result } = renderHook(
       () => useSwarmResource(fetchFn, "service", ({ ID }: Item) => ID),
@@ -82,7 +84,9 @@ describe("useSwarmResource", () => {
 
   it("updates item on SSE update event", async () => {
     const items: Item[] = [{ ID: "1", Name: "old" }];
-    const fetchFn = vi.fn().mockResolvedValue({ items, total: 1 });
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValue({ items, total: 1, limit: 50, offset: 0 });
 
     const { result } = renderHook(
       () => useSwarmResource(fetchFn, "service", ({ ID }: Item) => ID),
@@ -106,8 +110,13 @@ describe("useSwarmResource", () => {
     expect(result.current.data).toEqual([updated]);
   });
 
-  it("adds new item on SSE event with unknown id", async () => {
-    const fetchFn = vi.fn().mockResolvedValue({ items: [{ ID: "1", Name: "a" }], total: 1 });
+  it("bumps sseOffset for SSE event with unknown id", async () => {
+    const fetchFn = vi.fn().mockResolvedValue({
+      items: [{ ID: "1", Name: "a" }],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    });
 
     const { result } = renderHook(
       () => useSwarmResource(fetchFn, "service", ({ ID }: Item) => ID),
@@ -118,18 +127,19 @@ describe("useSwarmResource", () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    const newItem = { ID: "2", Name: "b" };
     act(() =>
       MockEventSource.instance.simulateEvent("service", {
         type: "service",
         action: "update",
         id: "2",
-        resource: newItem,
+        resource: { ID: "2", Name: "b" },
       }),
     );
 
-    expect(result.current.data).toHaveLength(2);
-    expect(result.current.data[1]).toEqual(newItem);
+    // Should NOT append to data — item might belong to an unloaded page
+    expect(result.current.data).toHaveLength(1);
+    // Total should bump via sseOffset
+    expect(result.current.total).toBe(2);
   });
 
   it("removes item on SSE remove event", async () => {
@@ -139,6 +149,8 @@ describe("useSwarmResource", () => {
         { ID: "2", Name: "b" },
       ],
       total: 2,
+      limit: 50,
+      offset: 0,
     });
 
     const { result } = renderHook(
@@ -165,7 +177,12 @@ describe("useSwarmResource", () => {
     const fetchFn = vi
       .fn()
       .mockRejectedValueOnce(new Error("fail"))
-      .mockResolvedValueOnce({ items: [{ ID: "1", Name: "ok" }], total: 1 });
+      .mockResolvedValueOnce({
+        items: [{ ID: "1", Name: "ok" }],
+        total: 1,
+        limit: 50,
+        offset: 0,
+      });
 
     const { result } = renderHook(
       () => useSwarmResource(fetchFn, "service", ({ ID }: Item) => ID),
@@ -181,5 +198,111 @@ describe("useSwarmResource", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.data).toEqual([{ ID: "1", Name: "ok" }]);
     expect(result.current.error).toBeNull();
+  });
+
+  it("exposes loadMore and hasMore for pagination", async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce({
+        items: [
+          { ID: "1", Name: "a" },
+          { ID: "2", Name: "b" },
+        ],
+        total: 3,
+        limit: 50,
+        offset: 0,
+      })
+      .mockResolvedValueOnce({
+        items: [{ ID: "3", Name: "c" }],
+        total: 3,
+        limit: 50,
+        offset: 50,
+      });
+
+    const { result } = renderHook(
+      () => useSwarmResource(fetchFn, "service", ({ ID }: Item) => ID),
+      {
+        wrapper,
+      },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.data).toHaveLength(2);
+    expect(result.current.hasMore).toBe(true);
+
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.loadingMore).toBe(false));
+
+    expect(result.current.data).toHaveLength(3);
+    expect(result.current.data).toEqual([
+      { ID: "1", Name: "a" },
+      { ID: "2", Name: "b" },
+      { ID: "3", Name: "c" },
+    ]);
+    expect(result.current.hasMore).toBe(false);
+  });
+
+  it("resets pages on fetchFn change", async () => {
+    const fetchFn1 = vi.fn().mockResolvedValue({
+      items: [{ ID: "1", Name: "first" }],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    });
+    const fetchFn2 = vi.fn().mockResolvedValue({
+      items: [{ ID: "2", Name: "second" }],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    });
+
+    const { result, rerender } = renderHook(
+      ({ fn }: { fn: (offset: number) => Promise<{ items: Item[]; total: number; limit: number; offset: number }> }) =>
+        useSwarmResource(fn, "service", ({ ID }: Item) => ID),
+      {
+        wrapper,
+        initialProps: { fn: fetchFn1 },
+      },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.data).toEqual([{ ID: "1", Name: "first" }]);
+
+    rerender({ fn: fetchFn2 });
+    await waitFor(() => expect(result.current.data).toEqual([{ ID: "2", Name: "second" }]));
+  });
+
+  it("SSE bumps total for unknown items in paginated mode", async () => {
+    const fetchFn = vi.fn().mockResolvedValue({
+      items: [{ ID: "1", Name: "a" }],
+      total: 5,
+      limit: 50,
+      offset: 0,
+    });
+
+    const { result } = renderHook(
+      () => useSwarmResource(fetchFn, "service", ({ ID }: Item) => ID),
+      {
+        wrapper,
+      },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.total).toBe(5);
+    expect(result.current.data).toHaveLength(1);
+
+    act(() =>
+      MockEventSource.instance.simulateEvent("service", {
+        type: "service",
+        action: "update",
+        id: "99",
+        resource: { ID: "99", Name: "new-unknown" },
+      }),
+    );
+
+    // Total should increase but data should NOT have the new item
+    expect(result.current.total).toBe(6);
+    expect(result.current.data).toHaveLength(1);
+    expect(result.current.data[0].ID).toBe("1");
   });
 });

@@ -27,7 +27,8 @@ export default function VolumeList() {
     retry,
   } = useSwarmResource(
     useCallback(
-      () => api.volumes({ search: debouncedSearch, sort: sortKey, dir: sortDir }),
+      (offset: number) =>
+        api.volumes({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }),
       [debouncedSearch, sortKey, sortDir],
     ),
     "volume",

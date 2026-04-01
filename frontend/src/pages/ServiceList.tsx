@@ -58,7 +58,8 @@ export default function ServiceList() {
     retry,
   } = useSwarmResource(
     useCallback(
-      () => api.services({ search: debouncedSearch, sort: sortKey, dir: sortDir }),
+      (offset: number) =>
+        api.services({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }),
       [debouncedSearch, sortKey, sortDir],
     ),
     "service",

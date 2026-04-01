@@ -25,6 +25,7 @@ class MockEventSource {
 }
 
 vi.mock("../api/client", () => ({
+  pageSize: 50,
   api: {
     configs: vi.fn(),
   },

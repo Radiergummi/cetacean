@@ -34,7 +34,8 @@ export default function TaskList() {
     retry,
   } = useSwarmResource(
     useCallback(
-      () => api.tasks({ search: debouncedSearch, sort: sortKey, dir: sortDir }),
+      (offset: number) =>
+        api.tasks({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }),
       [debouncedSearch, sortKey, sortDir],
     ),
     "task",

@@ -1,6 +1,7 @@
-import type { PagedResponse } from "../api/types";
+import type { CollectionResponse } from "../api/types";
+import { pageSize } from "../api/client";
 import { useResourceStream } from "./useResourceStream";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const ssePathMap: Record<string, string> = {
   node: "/nodes",
@@ -14,96 +15,142 @@ const ssePathMap: Record<string, string> = {
 };
 
 export function useSwarmResource<T>(
-  fetchFn: () => Promise<PagedResponse<T>>,
+  fetchFn: (offset: number) => Promise<CollectionResponse<T>>,
   sseType: string,
   getId: (item: T) => string,
 ) {
-  const [data, setData] = useState<T[]>([]);
+  const [pages, setPages] = useState<Map<number, T[]>>(new Map());
   const [serverTotal, setServerTotal] = useState(0);
   const [sseOffset, setSSEOffset] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+
   const getIdRef = useRef(getId);
   getIdRef.current = getId;
   const hasLoadedRef = useRef(false);
   const pendingRefetch = useRef(false);
-
+  const loadingMoreRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  const load = useCallback(() => {
-    abortRef.current?.abort();
+  const loadPage = useCallback(
+    (pageNumber: number) => {
+      abortRef.current?.abort();
 
-    const controller = new AbortController();
-    abortRef.current = controller;
+      const controller = new AbortController();
+      abortRef.current = controller;
 
-    // Only show loading skeleton on initial load, not on search/sort refetches
-    if (!hasLoadedRef.current) {
-      setLoading(true);
-    }
+      const isFirstPage = pageNumber === 0;
 
-    setError(null);
-    fetchFn()
-      .then((response) => {
-        if (controller.signal.aborted) {
-          return;
-        }
+      if (isFirstPage && !hasLoadedRef.current) {
+        setLoading(true);
+      }
 
-        setData(response.items);
-        setServerTotal(response.total);
-        setSSEOffset(0);
+      if (!isFirstPage) {
+        setLoadingMore(true);
+        loadingMoreRef.current = true;
+      }
 
-        hasLoadedRef.current = true;
-      })
-      .catch((event) => {
-        if (!controller.signal.aborted) {
-          setError(event);
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-        }
-      });
-  }, [fetchFn]);
+      setError(null);
+
+      fetchFn(pageNumber * pageSize)
+        .then((response) => {
+          if (controller.signal.aborted) {
+            return;
+          }
+
+          if (isFirstPage) {
+            setPages(new Map([[0, response.items]]));
+            setSSEOffset(0);
+          } else {
+            setPages((previous) => {
+              const next = new Map(previous);
+              next.set(pageNumber, response.items);
+              return next;
+            });
+          }
+
+          setServerTotal(response.total);
+          hasLoadedRef.current = true;
+        })
+        .catch((event) => {
+          if (!controller.signal.aborted) {
+            setError(event);
+          }
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) {
+            setLoading(false);
+            setLoadingMore(false);
+            loadingMoreRef.current = false;
+          }
+        });
+    },
+    [fetchFn],
+  );
 
   useEffect(() => {
-    load();
+    loadPage(0);
     return () => abortRef.current?.abort();
-  }, [load]);
+  }, [loadPage]);
 
-  const loadRef = useRef(load);
-  loadRef.current = load;
-  const dataRef = useRef(data);
-  dataRef.current = data;
+  const loadPageRef = useRef(loadPage);
+  loadPageRef.current = loadPage;
+  const pagesRef = useRef(pages);
+  pagesRef.current = pages;
 
   useResourceStream(
     ssePathMap[sseType] ?? `/events?types=${sseType}`,
     useCallback((event) => {
       if (event.type === "sync") {
-        loadRef.current();
+        loadPageRef.current(0);
 
         return;
       }
 
-      const previous = dataRef.current;
+      const currentPages = pagesRef.current;
 
       if (event.action === "remove") {
-        const next = previous.filter((item) => getIdRef.current(item) !== event.id);
+        let found = false;
 
-        if (next.length < previous.length) {
-          setData(next);
+        for (const [pageNumber, items] of currentPages) {
+          const filtered = items.filter((item) => getIdRef.current(item) !== event.id);
+
+          if (filtered.length < items.length) {
+            found = true;
+            setPages((previous) => {
+              const next = new Map(previous);
+              next.set(pageNumber, filtered);
+              return next;
+            });
+            break;
+          }
+        }
+
+        if (found) {
           setSSEOffset((offset) => offset - 1);
         }
       } else if (event.resource) {
         const resource = event.resource as T;
-        const index = previous.findIndex((item) => getIdRef.current(item) === event.id);
+        let found = false;
 
-        if (index >= 0) {
-          const next = [...previous];
-          next[index] = resource;
-          setData(next);
-        } else {
-          setData([...previous, resource]);
+        for (const [pageNumber, items] of currentPages) {
+          const index = items.findIndex((item) => getIdRef.current(item) === event.id);
+
+          if (index >= 0) {
+            found = true;
+            setPages((previous) => {
+              const next = new Map(previous);
+              const updated = [...(previous.get(pageNumber) ?? [])];
+              updated[index] = resource;
+              next.set(pageNumber, updated);
+              return next;
+            });
+            break;
+          }
+        }
+
+        if (!found) {
           setSSEOffset((offset) => offset + 1);
         }
       } else {
@@ -113,14 +160,43 @@ export function useSwarmResource<T>(
           pendingRefetch.current = true;
           queueMicrotask(() => {
             pendingRefetch.current = false;
-            loadRef.current();
+            loadPageRef.current(0);
           });
         }
       }
     }, []),
   );
 
-  const total = serverTotal + sseOffset;
+  const data = useMemo(() => {
+    const result: T[] = [];
+    const sortedKeys = [...pages.keys()].sort((a, b) => a - b);
 
-  return { data, total, loading, error, retry: load };
+    for (const key of sortedKeys) {
+      const items = pages.get(key);
+
+      if (items) {
+        result.push(...items);
+      }
+    }
+
+    return result;
+  }, [pages]);
+
+  const total = serverTotal + sseOffset;
+  const hasMore = data.length < total;
+
+  const loadMore = useCallback(() => {
+    if (loadingMoreRef.current) {
+      return;
+    }
+
+    const nextPage = Math.ceil(data.length / pageSize);
+    loadPageRef.current(nextPage);
+  }, [data.length]);
+
+  const retry = useCallback(() => {
+    loadPageRef.current(0);
+  }, []);
+
+  return { data, total, loading, loadingMore, error, retry, hasMore, loadMore };
 }

@@ -29,7 +29,8 @@ export default function SecretList() {
     retry,
   } = useSwarmResource(
     useCallback(
-      () => api.secrets({ search: debouncedSearch, sort: sortKey, dir: sortDir }),
+      (offset: number) =>
+        api.secrets({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }),
       [debouncedSearch, sortKey, sortDir],
     ),
     "secret",
