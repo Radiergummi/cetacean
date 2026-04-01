@@ -1593,3 +1593,22 @@ func TestHandleGetUnlockKey_ACLDenied_ReadOnly(t *testing.T) {
 	}
 	assertACLErrorCode(t, w, "ACL002")
 }
+
+func TestGetUnlockKey_BlockedAtOpsLevel0(t *testing.T) {
+	h := newTestHandlers(t, withOpsLevel(config.OpsReadOnly), withSystemClient(&mockSystemClient{
+		getUnlockKeyFn: func(_ context.Context) (string, error) {
+			t.Fatal("handler should not be reached at ops level 0")
+			return "", nil
+		},
+	}))
+
+	handler := requireLevel(config.OpsImpactful, config.OpsReadOnly)(h.HandleGetUnlockKey)
+
+	req := httptest.NewRequest("GET", "/swarm/unlock-key", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status=%d, want 403 (unlock key blocked at ops level 0)", w.Code)
+	}
+}
