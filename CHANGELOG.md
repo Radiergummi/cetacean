@@ -10,9 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - Grant-based RBAC authorization with per-resource access control
 - `Allow` response header indicating available methods per resource
+- `Accept-Patch` response header advertising supported patch formats per resource (RFC 5789)
+- `Prefer: return=minimal` support on all write endpoints (RFC 7240)
+- `Last-Modified` / `If-Modified-Since` conditional requests on resource detail endpoints
+- Structured error responses (RFC 9457) for all authentication and OIDC callback errors
 - Footer with version info, GitHub, docs, and API links
 - Table/grid view toggle on the tasks page with tasks grouped by service in card view
 - Arrow-key navigation for radio card groups
+- Series labels in the Prometheus query result table
 
 ### Fixed
 - Layout shift in the header when the live connection timer changes width

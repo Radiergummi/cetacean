@@ -5,7 +5,35 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync/atomic"
 )
+
+// ErrorWriter writes a structured error response. The code and detail
+// parameters map to the API error registry (e.g. "AUT001"). This type
+// decouples the auth package from the API error-response implementation,
+// avoiding a circular dependency.
+type ErrorWriter func(w http.ResponseWriter, r *http.Request, code, detail string)
+
+// globalErrorWriter is set once during initialization via SetErrorWriter.
+var globalErrorWriter atomic.Pointer[ErrorWriter]
+
+// SetErrorWriter registers the structured error writer used by the auth
+// middleware and providers. Must be called during initialization, before
+// any requests are served.
+func SetErrorWriter(ew ErrorWriter) {
+	globalErrorWriter.Store(&ew)
+}
+
+// writeError writes a structured error response if an ErrorWriter has been
+// registered, otherwise falls back to http.Error.
+func writeError(w http.ResponseWriter, r *http.Request, status int, code, detail string) {
+	if ew := globalErrorWriter.Load(); ew != nil {
+		(*ew)(w, r, code, detail)
+		return
+	}
+
+	http.Error(w, detail, status)
+}
 
 // AuthError is an authentication error that carries a WWW-Authenticate
 // header value per RFC 9110. Providers return this to advertise their
@@ -38,7 +66,7 @@ func Middleware(provider Provider) func(http.Handler) http.Handler {
 				if errors.As(err, &authErr) && authErr.WWWAuthenticate != "" {
 					w.Header().Set("WWW-Authenticate", authErr.WWWAuthenticate)
 				}
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				writeError(w, r, http.StatusUnauthorized, "AUT001", "authentication required")
 				return
 			}
 

@@ -61,7 +61,7 @@ func (h *Handlers) HandleCluster(w http.ResponseWriter, r *http.Request) {
 		PrometheusConfigured: h.promClient != nil,
 		LocalNodeID:          h.getLocalNodeID(),
 	}
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/cluster", "Cluster", overview))
+	writeCachedJSON(w, r, NewDetailResponse(r.Context(), "/cluster", "Cluster", overview))
 }
 
 type ClusterMetrics struct {
@@ -78,7 +78,7 @@ type ResourceMetric struct {
 
 func (h *Handlers) HandleClusterCapacity(w http.ResponseWriter, r *http.Request) {
 	snap := h.cache.Snapshot()
-	writeJSONWithETag(
+	writeCachedJSON(
 		w,
 		r,
 		NewDetailResponse(
@@ -203,7 +203,7 @@ func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) 
 	}()
 
 	wg.Wait()
-	writeJSONWithETag(w, r, metrics)
+	writeCachedJSON(w, r, metrics)
 }
 
 type MonitoringStatus struct {
@@ -307,10 +307,10 @@ func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/swarm", "Swarm", SwarmResponse{
+	writeCachedJSONTimed(w, r, NewDetailResponse(r.Context(), "/swarm", "Swarm", SwarmResponse{
 		Swarm:       sw,
 		ManagerAddr: managerAddr,
-	}))
+	}), sw.ClusterInfo.UpdatedAt)
 }
 
 type DiskUsageSummary struct {
@@ -405,7 +405,7 @@ func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
 		TotalSize: bcSize, Reclaimable: bcReclaimable,
 	})
 
-	writeJSONWithETag(
+	writeCachedJSON(
 		w, r,
 		NewCollectionResponse(r.Context(), summaries, len(summaries), len(summaries), 0),
 	)

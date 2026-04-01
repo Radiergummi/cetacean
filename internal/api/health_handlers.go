@@ -18,7 +18,7 @@ func (h *Handlers) HandleRecommendations(w http.ResponseWriter, r *http.Request)
 	}
 	results := h.recEngine.Results()
 	summary := recommendations.ComputeSummary(results)
-	writeJSONWithETag(
+	writeCachedJSON(
 		w,
 		r,
 		NewDetailResponse(
@@ -121,5 +121,5 @@ func (h *Handlers) HandleProfile(w http.ResponseWriter, r *http.Request) {
 	resp.Permissions = h.acl.PermissionsFor(id)
 
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSONWithETag(w, r, resp)
+	writeCachedJSON(w, r, resp)
 }

@@ -142,6 +142,70 @@ func TestSetAllow_DifferentResourceTypes(t *testing.T) {
 	}
 }
 
+func TestSetAllow_AcceptPatch_ServiceFullWrite(t *testing.T) {
+	h := newTestHandlers(t, withOpsLevel(config.OpsImpactful))
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/services/webapp", nil)
+	h.setAllow(w, r, "service", "webapp")
+
+	got := w.Header().Get("Accept-Patch")
+	if got != AcceptPatch {
+		t.Errorf("Accept-Patch = %q, want %q", got, AcceptPatch)
+	}
+}
+
+func TestSetAllow_AcceptPatch_SwarmMergeOnly(t *testing.T) {
+	h := newTestHandlers(t, withOpsLevel(config.OpsImpactful))
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/swarm", nil)
+	h.setAllow(w, r, "swarm", "swarm")
+
+	got := w.Header().Get("Accept-Patch")
+	if got != AcceptMergePatch {
+		t.Errorf("Accept-Patch = %q, want %q", got, AcceptMergePatch)
+	}
+}
+
+func TestSetAllow_AcceptPatch_AbsentWhenNoPatch(t *testing.T) {
+	h := newTestHandlers(t, withOpsLevel(config.OpsImpactful))
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/tasks/abc", nil)
+	h.setAllow(w, r, "task", "abc")
+
+	if got := w.Header().Get("Accept-Patch"); got != "" {
+		t.Errorf("Accept-Patch should be absent for task, got %q", got)
+	}
+}
+
+func TestSetAllow_AcceptPatch_AbsentWhenReadOnly(t *testing.T) {
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{Resources: []string{"service:*"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+	}})
+
+	h := newTestHandlers(t, withACL(e), withOpsLevel(config.OpsImpactful))
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/services/webapp", nil)
+	r = r.WithContext(auth.ContextWithIdentity(r.Context(), &auth.Identity{Subject: "alice"}))
+	h.setAllow(w, r, "service", "webapp")
+
+	if got := w.Header().Get("Accept-Patch"); got != "" {
+		t.Errorf("Accept-Patch should be absent for read-only, got %q", got)
+	}
+}
+
+func TestSetAllow_AcceptPatch_AbsentWhenLowOpsLevel(t *testing.T) {
+	// OpsOperational is below PATCH tier (OpsConfiguration) for services.
+	h := newTestHandlers(t, withOpsLevel(config.OpsOperational))
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/services/webapp", nil)
+	h.setAllow(w, r, "service", "webapp")
+
+	if got := w.Header().Get("Accept-Patch"); got != "" {
+		t.Errorf("Accept-Patch should be absent at OpsOperational, got %q", got)
+	}
+}
+
 func TestSetAllow_NilACL(t *testing.T) {
 	// Nil ACL evaluator = allow all.
 	h := newTestHandlers(t, withOpsLevel(config.OpsImpactful))

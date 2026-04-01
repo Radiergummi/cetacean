@@ -281,7 +281,7 @@ func (h *Handlers) HandleRemoveStack(w http.ResponseWriter, r *http.Request) {
 		resp.Errors = errs
 	}
 
-	writeJSON(w, resp)
+	writeMutationResponse(w, r, resp)
 }
 
 func (h *Handlers) HandleRestartService(w http.ResponseWriter, r *http.Request) {
@@ -325,7 +325,7 @@ func (h *Handlers) HandleGetServiceEnv(w http.ResponseWriter, r *http.Request) {
 	if svc.Spec.TaskTemplate.ContainerSpec != nil {
 		env = svc.Spec.TaskTemplate.ContainerSpec.Env
 	}
-	writeJSONWithETag(
+	writeCachedJSON(
 		w,
 		r,
 		NewDetailResponse(r.Context(), "/services/"+id+"/env", "ServiceEnv", EnvResponse{
@@ -399,7 +399,7 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 	if result.Spec.TaskTemplate.ContainerSpec != nil {
 		resultEnv = result.Spec.TaskTemplate.ContainerSpec.Env
 	}
-	writeJSON(w, envSliceToMap(resultEnv))
+	writeMutationResponse(w, r, envSliceToMap(resultEnv))
 }
 
 func (h *Handlers) HandleGetServiceLabels(w http.ResponseWriter, r *http.Request) {
@@ -413,7 +413,7 @@ func (h *Handlers) HandleGetServiceLabels(w http.ResponseWriter, r *http.Request
 	if labels == nil {
 		labels = map[string]string{}
 	}
-	writeJSONWithETag(
+	writeCachedJSON(
 		w,
 		r,
 		NewDetailResponse(r.Context(), "/services/"+id+"/labels", "ServiceLabels", LabelsResponse{
@@ -486,7 +486,7 @@ func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Reque
 	if labels == nil {
 		labels = map[string]string{}
 	}
-	writeJSON(w, labels)
+	writeMutationResponse(w, r, labels)
 }
 
 func (h *Handlers) HandleGetServiceResources(w http.ResponseWriter, r *http.Request) {
@@ -500,7 +500,7 @@ func (h *Handlers) HandleGetServiceResources(w http.ResponseWriter, r *http.Requ
 	if resources == nil {
 		resources = &swarm.ResourceRequirements{}
 	}
-	writeJSONWithETag(
+	writeCachedJSON(
 		w,
 		r,
 		NewDetailResponse(
@@ -551,17 +551,14 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 		writeServiceError(w, r, err)
 		return
 	}
-	writeJSON(
-		w,
-		NewDetailResponse(
-			r.Context(),
-			"/services/"+id+"/resources",
-			"ServiceResources",
-			map[string]any{
-				"resources": updated.Spec.TaskTemplate.Resources,
-			},
-		),
-	)
+	writeMutationResponse(w, r, NewDetailResponse(
+		r.Context(),
+		"/services/"+id+"/resources",
+		"ServiceResources",
+		map[string]any{
+			"resources": updated.Spec.TaskTemplate.Resources,
+		},
+	))
 }
 
 // mergePatch applies RFC 7396 JSON Merge Patch semantics to a base map.
@@ -597,7 +594,7 @@ func (h *Handlers) HandleGetServicePorts(w http.ResponseWriter, r *http.Request)
 	if ports == nil {
 		ports = []swarm.PortConfig{}
 	}
-	writeJSONWithETag(
+	writeCachedJSON(
 		w,
 		r,
 		NewDetailResponse(r.Context(), "/services/"+id+"/ports", "ServicePorts", map[string]any{
@@ -650,12 +647,9 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 	if resultPorts == nil {
 		resultPorts = []swarm.PortConfig{}
 	}
-	writeJSON(
-		w,
-		NewDetailResponse(r.Context(), "/services/"+id+"/ports", "ServicePorts", map[string]any{
-			"ports": resultPorts,
-		}),
-	)
+	writeMutationResponse(w, r, NewDetailResponse(r.Context(), "/services/"+id+"/ports", "ServicePorts", map[string]any{
+		"ports": resultPorts,
+	}))
 }
 
 func (h *Handlers) HandleGetServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
@@ -671,7 +665,7 @@ func (h *Handlers) HandleGetServiceHealthcheck(w http.ResponseWriter, r *http.Re
 		hc = svc.Spec.TaskTemplate.ContainerSpec.Healthcheck
 	}
 
-	writeJSONWithETag(
+	writeCachedJSON(
 		w,
 		r,
 		NewDetailResponse(
@@ -714,17 +708,14 @@ func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Re
 		resultHC = updated.Spec.TaskTemplate.ContainerSpec.Healthcheck
 	}
 
-	writeJSON(
-		w,
-		NewDetailResponse(
-			r.Context(),
-			"/services/"+id+"/healthcheck",
-			"ServiceHealthcheck",
-			map[string]any{
-				"healthcheck": resultHC,
-			},
-		),
-	)
+	writeMutationResponse(w, r, NewDetailResponse(
+		r.Context(),
+		"/services/"+id+"/healthcheck",
+		"ServiceHealthcheck",
+		map[string]any{
+			"healthcheck": resultHC,
+		},
+	))
 }
 
 func (h *Handlers) HandleGetServicePlacement(w http.ResponseWriter, r *http.Request) {
@@ -740,7 +731,7 @@ func (h *Handlers) HandleGetServicePlacement(w http.ResponseWriter, r *http.Requ
 		placement = &swarm.Placement{}
 	}
 
-	writeJSONWithETag(
+	writeCachedJSON(
 		w,
 		r,
 		NewDetailResponse(
@@ -783,17 +774,14 @@ func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Requ
 		resultPlacement = &swarm.Placement{}
 	}
 
-	writeJSON(
-		w,
-		NewDetailResponse(
-			r.Context(),
-			"/services/"+id+"/placement",
-			"ServicePlacement",
-			map[string]any{
-				"placement": resultPlacement,
-			},
-		),
-	)
+	writeMutationResponse(w, r, NewDetailResponse(
+		r.Context(),
+		"/services/"+id+"/placement",
+		"ServicePlacement",
+		map[string]any{
+			"placement": resultPlacement,
+		},
+	))
 }
 
 func (h *Handlers) HandleGetServiceUpdatePolicy(w http.ResponseWriter, r *http.Request) {
@@ -807,7 +795,7 @@ func (h *Handlers) HandleGetServiceUpdatePolicy(w http.ResponseWriter, r *http.R
 	if policy == nil {
 		policy = &swarm.UpdateConfig{}
 	}
-	writeJSONWithETag(
+	writeCachedJSON(
 		w,
 		r,
 		NewDetailResponse(
@@ -871,17 +859,14 @@ func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http
 	if resultPolicy == nil {
 		resultPolicy = &swarm.UpdateConfig{}
 	}
-	writeJSON(
-		w,
-		NewDetailResponse(
-			r.Context(),
-			"/services/"+id+"/update-policy",
-			"ServiceUpdatePolicy",
-			map[string]any{
-				"updatePolicy": resultPolicy,
-			},
-		),
-	)
+	writeMutationResponse(w, r, NewDetailResponse(
+		r.Context(),
+		"/services/"+id+"/update-policy",
+		"ServiceUpdatePolicy",
+		map[string]any{
+			"updatePolicy": resultPolicy,
+		},
+	))
 }
 
 func (h *Handlers) HandleGetServiceRollbackPolicy(w http.ResponseWriter, r *http.Request) {
@@ -895,7 +880,7 @@ func (h *Handlers) HandleGetServiceRollbackPolicy(w http.ResponseWriter, r *http
 	if policy == nil {
 		policy = &swarm.UpdateConfig{}
 	}
-	writeJSONWithETag(
+	writeCachedJSON(
 		w,
 		r,
 		NewDetailResponse(r.Context(),
@@ -958,16 +943,13 @@ func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *ht
 	if resultPolicy == nil {
 		resultPolicy = &swarm.UpdateConfig{}
 	}
-	writeJSON(
-		w,
-		NewDetailResponse(r.Context(),
-			"/services/"+id+"/rollback-policy",
-			"ServiceRollbackPolicy",
-			map[string]any{
-				"rollbackPolicy": resultPolicy,
-			},
-		),
-	)
+	writeMutationResponse(w, r, NewDetailResponse(r.Context(),
+		"/services/"+id+"/rollback-policy",
+		"ServiceRollbackPolicy",
+		map[string]any{
+			"rollbackPolicy": resultPolicy,
+		},
+	))
 }
 
 func (h *Handlers) HandleGetServiceLogDriver(w http.ResponseWriter, r *http.Request) {
@@ -977,7 +959,7 @@ func (h *Handlers) HandleGetServiceLogDriver(w http.ResponseWriter, r *http.Requ
 		writeErrorCode(w, r, "SVC003", "service not found")
 		return
 	}
-	writeJSONWithETag(
+	writeCachedJSON(
 		w,
 		r,
 		NewDetailResponse(
@@ -1037,17 +1019,14 @@ func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	writeJSON(
-		w,
-		NewDetailResponse(
-			r.Context(),
-			"/services/"+id+"/log-driver",
-			"ServiceLogDriver",
-			map[string]any{
-				"logDriver": updated.Spec.TaskTemplate.LogDriver,
-			},
-		),
-	)
+	writeMutationResponse(w, r, NewDetailResponse(
+		r.Context(),
+		"/services/"+id+"/log-driver",
+		"ServiceLogDriver",
+		map[string]any{
+			"logDriver": updated.Spec.TaskTemplate.LogDriver,
+		},
+	))
 }
 
 func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
@@ -1102,17 +1081,14 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 		resultHC = updated.Spec.TaskTemplate.ContainerSpec.Healthcheck
 	}
 
-	writeJSON(
-		w,
-		NewDetailResponse(
-			r.Context(),
-			"/services/"+id+"/healthcheck",
-			"ServiceHealthcheck",
-			map[string]any{
-				"healthcheck": resultHC,
-			},
-		),
-	)
+	writeMutationResponse(w, r, NewDetailResponse(
+		r.Context(),
+		"/services/"+id+"/healthcheck",
+		"ServiceHealthcheck",
+		map[string]any{
+			"healthcheck": resultHC,
+		},
+	))
 }
 
 type containerConfigResponse struct {
@@ -1254,7 +1230,7 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 	}
 
 	result := containerConfigFromSpec(updated.Spec.TaskTemplate.ContainerSpec)
-	writeJSON(w, result)
+	writeMutationResponse(w, r, result)
 }
 
 func extractConfigRefs(cs *swarm.ContainerSpec) []serviceConfigRef {
@@ -1314,7 +1290,7 @@ func (h *Handlers) HandleGetServiceConfigs(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	writeJSONWithETag(
+	writeCachedJSON(
 		w,
 		r,
 		NewDetailResponse(r.Context(), "/services/"+id+"/configs", "ServiceConfigs", map[string]any{
@@ -1387,12 +1363,9 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	writeJSON(
-		w,
-		NewDetailResponse(r.Context(), "/services/"+id+"/configs", "ServiceConfigs", map[string]any{
-			"configs": extractConfigRefs(updated.Spec.TaskTemplate.ContainerSpec),
-		}),
-	)
+	writeMutationResponse(w, r, NewDetailResponse(r.Context(), "/services/"+id+"/configs", "ServiceConfigs", map[string]any{
+		"configs": extractConfigRefs(updated.Spec.TaskTemplate.ContainerSpec),
+	}))
 }
 
 func (h *Handlers) HandleGetServiceSecrets(w http.ResponseWriter, r *http.Request) {
@@ -1403,7 +1376,7 @@ func (h *Handlers) HandleGetServiceSecrets(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	writeJSONWithETag(
+	writeCachedJSON(
 		w,
 		r,
 		NewDetailResponse(r.Context(), "/services/"+id+"/secrets", "ServiceSecrets", map[string]any{
@@ -1476,12 +1449,9 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	writeJSON(
-		w,
-		NewDetailResponse(r.Context(), "/services/"+id+"/secrets", "ServiceSecrets", map[string]any{
-			"secrets": extractSecretRefs(updated.Spec.TaskTemplate.ContainerSpec),
-		}),
-	)
+	writeMutationResponse(w, r, NewDetailResponse(r.Context(), "/services/"+id+"/secrets", "ServiceSecrets", map[string]any{
+		"secrets": extractSecretRefs(updated.Spec.TaskTemplate.ContainerSpec),
+	}))
 }
 
 func (h *Handlers) HandleGetServiceNetworks(w http.ResponseWriter, r *http.Request) {
@@ -1492,7 +1462,7 @@ func (h *Handlers) HandleGetServiceNetworks(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	writeJSONWithETag(
+	writeCachedJSON(
 		w,
 		r,
 		NewDetailResponse(
@@ -1555,17 +1525,14 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	writeJSON(
-		w,
-		NewDetailResponse(
-			r.Context(),
-			"/services/"+id+"/networks",
-			"ServiceNetworks",
-			map[string]any{
-				"networks": extractNetworkRefs(updated.Spec.TaskTemplate.Networks),
-			},
-		),
-	)
+	writeMutationResponse(w, r, NewDetailResponse(
+		r.Context(),
+		"/services/"+id+"/networks",
+		"ServiceNetworks",
+		map[string]any{
+			"networks": extractNetworkRefs(updated.Spec.TaskTemplate.Networks),
+		},
+	))
 }
 
 func (h *Handlers) HandleGetServiceMounts(w http.ResponseWriter, r *http.Request) {
@@ -1585,7 +1552,7 @@ func (h *Handlers) HandleGetServiceMounts(w http.ResponseWriter, r *http.Request
 		mounts = []mount.Mount{}
 	}
 
-	writeJSONWithETag(
+	writeCachedJSON(
 		w,
 		r,
 		NewDetailResponse(r.Context(), "/services/"+id+"/mounts", "ServiceMounts", map[string]any{
@@ -1639,10 +1606,7 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 		mounts = []mount.Mount{}
 	}
 
-	writeJSON(
-		w,
-		NewDetailResponse(r.Context(), "/services/"+id+"/mounts", "ServiceMounts", map[string]any{
-			"mounts": mounts,
-		}),
-	)
+	writeMutationResponse(w, r, NewDetailResponse(r.Context(), "/services/"+id+"/mounts", "ServiceMounts", map[string]any{
+		"mounts": mounts,
+	}))
 }

@@ -238,7 +238,7 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	if errCode := r.URL.Query().Get("error"); errCode != "" {
 		desc := r.URL.Query().Get("error_description")
 		slog.Warn("oidc authorization error", "error", errCode, "description", desc)
-		http.Error(w, "authorization denied", http.StatusForbidden)
+		writeError(w, r, http.StatusForbidden, "AUT002", "authorization denied: "+errCode)
 		return
 	}
 
@@ -250,13 +250,13 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 		slog.Error(
 			"oidc callback missing required iss parameter (IdP advertises authorization_response_iss_parameter_supported)",
 		)
-		http.Error(w, "missing iss parameter", http.StatusBadRequest)
+		writeError(w, r, http.StatusBadRequest, "AUT003", "missing iss parameter")
 		return
 	}
 	if iss != "" {
 		if subtle.ConstantTimeCompare([]byte(iss), []byte(p.issuer)) != 1 {
 			slog.Error("oidc issuer mismatch in callback", "expected", p.issuer, "got", iss)
-			http.Error(w, "issuer mismatch", http.StatusBadRequest)
+			writeError(w, r, http.StatusBadRequest, "AUT003", "issuer mismatch")
 			return
 		}
 	}
@@ -264,7 +264,7 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	// Validate state (constant-time comparison).
 	stateCookie, err := r.Cookie("cetacean_auth_state")
 	if err != nil {
-		http.Error(w, "missing state cookie", http.StatusBadRequest)
+		writeError(w, r, http.StatusBadRequest, "AUT003", "missing state cookie")
 		return
 	}
 
@@ -272,21 +272,21 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 		[]byte(r.URL.Query().Get("state")),
 		[]byte(stateCookie.Value),
 	) != 1 {
-		http.Error(w, "state mismatch", http.StatusBadRequest)
+		writeError(w, r, http.StatusBadRequest, "AUT003", "state mismatch")
 		return
 	}
 
 	// Read nonce cookie for ID token verification.
 	nonceCookie, err := r.Cookie("cetacean_auth_nonce")
 	if err != nil {
-		http.Error(w, "missing nonce cookie", http.StatusBadRequest)
+		writeError(w, r, http.StatusBadRequest, "AUT003", "missing nonce cookie")
 		return
 	}
 
 	// Read PKCE verifier cookie.
 	verifierCookie, err := r.Cookie("cetacean_auth_verifier")
 	if err != nil {
-		http.Error(w, "missing verifier cookie", http.StatusBadRequest)
+		writeError(w, r, http.StatusBadRequest, "AUT003", "missing verifier cookie")
 		return
 	}
 
@@ -304,41 +304,41 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil {
 		slog.Error("oidc token exchange failed", "error", err)
-		http.Error(w, "token exchange failed", http.StatusInternalServerError)
+		writeError(w, r, http.StatusInternalServerError, "AUT004", "token exchange failed")
 		return
 	}
 
 	rawIDToken, ok := oauth2Token.Extra("id_token").(string)
 	if !ok {
 		slog.Error("oidc response missing id_token")
-		http.Error(w, "missing id_token", http.StatusInternalServerError)
+		writeError(w, r, http.StatusInternalServerError, "AUT004", "missing id_token")
 		return
 	}
 
 	idToken, err := p.verifier.Verify(r.Context(), rawIDToken)
 	if err != nil {
 		slog.Error("oidc id_token verification failed", "error", err)
-		http.Error(w, "invalid id_token", http.StatusInternalServerError)
+		writeError(w, r, http.StatusInternalServerError, "AUT004", "invalid id_token")
 		return
 	}
 
 	// Verify nonce matches what we sent in the authorization request.
 	if subtle.ConstantTimeCompare([]byte(idToken.Nonce), []byte(nonceCookie.Value)) != 1 {
 		slog.Error("oidc nonce mismatch")
-		http.Error(w, "nonce mismatch", http.StatusBadRequest)
+		writeError(w, r, http.StatusBadRequest, "AUT003", "nonce mismatch")
 		return
 	}
 
 	var claims map[string]any
 	if err := idToken.Claims(&claims); err != nil {
 		slog.Error("oidc claims parsing failed", "error", err)
-		http.Error(w, "failed to parse claims", http.StatusInternalServerError)
+		writeError(w, r, http.StatusInternalServerError, "AUT004", "failed to parse claims")
 		return
 	}
 
 	if err := p.validateAzp(idToken, claims); err != nil {
 		slog.Error("oidc azp validation failed", "error", err)
-		http.Error(w, "azp validation failed", http.StatusBadRequest)
+		writeError(w, r, http.StatusBadRequest, "AUT003", "azp validation failed")
 		return
 	}
 
@@ -408,7 +408,7 @@ func (p *OIDCProvider) authenticateQuiet(r *http.Request) (*Identity, error) {
 func (p *OIDCProvider) handleWhoami(w http.ResponseWriter, r *http.Request) {
 	id, err := p.authenticateQuiet(r)
 	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, r, http.StatusUnauthorized, "AUT001", "authentication required")
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")

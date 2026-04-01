@@ -136,7 +136,7 @@ func (h *Handlers) HandleGetNodeRole(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSONWithETag(w, r, NodeRoleResponse{
+	writeCachedJSON(w, r, NodeRoleResponse{
 		Role:         string(node.Spec.Role),
 		IsLeader:     node.ManagerStatus != nil && node.ManagerStatus.Leader,
 		ManagerCount: managerCount,
@@ -154,7 +154,7 @@ func (h *Handlers) HandleGetNodeLabels(w http.ResponseWriter, r *http.Request) {
 	if labels == nil {
 		labels = map[string]string{}
 	}
-	writeJSONWithETag(
+	writeCachedJSON(
 		w,
 		r,
 		NewDetailResponse(r.Context(), "/nodes/"+id+"/labels", "NodeLabels", LabelsResponse{
@@ -227,5 +227,5 @@ func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request)
 	if labels == nil {
 		labels = map[string]string{}
 	}
-	writeJSON(w, labels)
+	writeMutationResponse(w, r, labels)
 }

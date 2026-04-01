@@ -62,7 +62,7 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writePaginationLinks(w, r, paged.Total, paged.Limit, paged.Offset)
-	writeJSONWithETag(
+	writeCachedJSON(
 		w,
 		r,
 		NewCollectionResponse(r.Context(), items, paged.Total, paged.Limit, paged.Offset),
@@ -88,7 +88,7 @@ func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
 		detail.Integrations = detected
 	}
 	h.setAllow(w, r, "service", svc.Spec.Name)
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/services/"+id, "Service", detail))
+	writeCachedJSONTimed(w, r, NewDetailResponse(r.Context(), "/services/"+id, "Service", detail), svc.UpdatedAt)
 }
 
 func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {
@@ -99,7 +99,7 @@ func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tasks := h.enrichTasks(h.cache.ListTasksByService(id))
-	writeJSONWithETag(w, r, NewCollectionResponse(r.Context(), tasks, len(tasks), len(tasks), 0))
+	writeCachedJSON(w, r, NewCollectionResponse(r.Context(), tasks, len(tasks), len(tasks), 0))
 }
 
 func (h *Handlers) HandleServiceLogs(w http.ResponseWriter, r *http.Request) {

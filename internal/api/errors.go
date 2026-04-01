@@ -95,6 +95,15 @@ var errorRegistry = map[string]ErrorDef{
 	"AUT001": {Code: "AUT001", Title: "Not Authenticated", Status: http.StatusUnauthorized,
 		Description: "The request requires authentication but no valid credentials were provided.",
 		Suggestion:  "Log in or provide a valid authentication token."},
+	"AUT002": {Code: "AUT002", Title: "Authorization Denied", Status: http.StatusForbidden,
+		Description: "The identity provider denied authorization.",
+		Suggestion:  "Check your account permissions with the identity provider."},
+	"AUT003": {Code: "AUT003", Title: "Authentication Callback Error", Status: http.StatusBadRequest,
+		Description: "The authentication callback contained invalid or missing parameters.",
+		Suggestion:  "Retry the login flow from the beginning."},
+	"AUT004": {Code: "AUT004", Title: "Authentication Server Error", Status: http.StatusInternalServerError,
+		Description: "An internal error occurred during authentication.",
+		Suggestion:  "Retry the login flow. If the problem persists, check server logs."},
 
 	// ── ACL: access control ──────────────────────────────────────────
 	"ACL001": {Code: "ACL001", Title: "Access Denied", Status: http.StatusForbidden,
@@ -561,6 +570,7 @@ func writeErrorCode(w http.ResponseWriter, r *http.Request, code string, detail 
 		writeProblem(w, r, http.StatusInternalServerError, detail)
 		return
 	}
+
 	writeProblemTyped(w, r, ProblemDetail{
 		Type:   absPath(r.Context(), "/api/errors/"+code),
 		Title:  def.Title,

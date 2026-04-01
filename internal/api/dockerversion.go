@@ -139,5 +139,5 @@ func (h *Handlers) HandleDockerLatestVersion(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	writeJSONWithETag(w, r, v)
+	writeCachedJSON(w, r, v)
 }

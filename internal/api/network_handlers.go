@@ -26,7 +26,7 @@ func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setAllow(w, r, "network", net.Name)
-	writeJSONWithETag(
+	writeCachedJSONTimed(
 		w,
 		r,
 		NewDetailResponse(r.Context(), "/networks/"+id, "Network", NetworkResponse{
@@ -35,6 +35,7 @@ func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 				return "service:" + ref.Name
 			}),
 		}),
+		net.Created,
 	)
 }
 
@@ -66,5 +67,5 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 	})
 	resp := applyPagination(r.Context(), networks, p)
 	writePaginationLinks(w, r, resp.Total, resp.Limit, resp.Offset)
-	writeJSONWithETag(w, r, resp)
+	writeCachedJSON(w, r, resp)
 }

@@ -45,9 +45,17 @@ func etagMatch(header, etag string) bool {
 	return false
 }
 
-// writeJSONWithETag marshals v to JSON, computes an ETag, and returns
-// 304 Not Modified if the client's If-None-Match header matches.
-func writeJSONWithETag(w http.ResponseWriter, r *http.Request, v any) {
+// writeCachedJSON marshals v to JSON with ETag-based conditional caching.
+// Returns 304 Not Modified if the client's If-None-Match header matches.
+func writeCachedJSON(w http.ResponseWriter, r *http.Request, v any) {
+	writeCachedJSONTimed(w, r, v, time.Time{})
+}
+
+// writeCachedJSONTimed is like writeCachedJSON but also sets a Last-Modified
+// header and evaluates If-Modified-Since for conditional requests. Per
+// RFC 9110 §13.1.3, If-None-Match takes precedence over If-Modified-Since
+// when both are present.
+func writeCachedJSONTimed(w http.ResponseWriter, r *http.Request, v any, lastModified time.Time) {
 	rc := http.NewResponseController(w)
 	_ = rc.SetWriteDeadline(time.Now().Add(30 * time.Second))
 
@@ -63,9 +71,26 @@ func writeJSONWithETag(w http.ResponseWriter, r *http.Request, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-cache")
 
-	if etagMatch(r.Header.Get("If-None-Match"), etag) {
-		w.WriteHeader(http.StatusNotModified)
-		return
+	if !lastModified.IsZero() {
+		w.Header().Set("Last-Modified", lastModified.UTC().Format(http.TimeFormat))
+	}
+
+	// RFC 9110 §13.1.3: If-None-Match takes precedence over If-Modified-Since.
+	if r.Header.Get("If-None-Match") != "" {
+		if etagMatch(r.Header.Get("If-None-Match"), etag) {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+	} else if !lastModified.IsZero() {
+		if ims := r.Header.Get("If-Modified-Since"); ims != "" {
+			if t, err := http.ParseTime(ims); err == nil {
+				// HTTP dates have second precision; truncate for comparison.
+				if !lastModified.Truncate(time.Second).After(t.Truncate(time.Second)) {
+					w.WriteHeader(http.StatusNotModified)
+					return
+				}
+			}
+		}
 	}
 
 	w.Write(body)         //nolint:errcheck

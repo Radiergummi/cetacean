@@ -28,12 +28,12 @@ func (h *Handlers) HandleGetSecret(w http.ResponseWriter, r *http.Request) {
 	// Never expose secret data — clear it before responding.
 	sec.Spec.Data = nil
 	h.setAllow(w, r, "secret", sec.Spec.Name)
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", SecretResponse{
+	writeCachedJSONTimed(w, r, NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", SecretResponse{
 		Secret: sec,
 		Services: acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", h.cache.ServicesUsingSecret(id), func(ref cache.ServiceRef) string {
 			return "service:" + ref.Name
 		}),
-	}))
+	}), sec.UpdatedAt)
 }
 
 func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
@@ -61,5 +61,5 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 	})
 	resp := applyPagination(r.Context(), secrets, p)
 	writePaginationLinks(w, r, resp.Total, resp.Limit, resp.Offset)
-	writeJSONWithETag(w, r, resp)
+	writeCachedJSON(w, r, resp)
 }

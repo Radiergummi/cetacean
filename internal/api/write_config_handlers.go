@@ -71,9 +71,15 @@ func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Location", absPath(r.Context(), "/configs/"+id))
+
+	if preferMinimal(r) {
+		writePreferCreated(w)
+		return
+	}
+
 	cfg, ok := h.cache.GetConfig(id)
 	if !ok {
-		w.Header().Set("Location", absPath(r.Context(), "/configs/"+id))
 		w.WriteHeader(http.StatusCreated)
 		writeJSON(w, NewDetailResponse(r.Context(), "/configs/"+id, "Config", ConfigResponse{
 			Config: swarm.Config{
@@ -85,7 +91,6 @@ func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Location", absPath(r.Context(), "/configs/"+id))
 	w.WriteHeader(http.StatusCreated)
 	writeJSON(w, NewDetailResponse(r.Context(), "/configs/"+id, "Config", ConfigResponse{
 		Config:   cfg,
@@ -104,7 +109,7 @@ func (h *Handlers) HandleGetConfigLabels(w http.ResponseWriter, r *http.Request)
 	if labels == nil {
 		labels = map[string]string{}
 	}
-	writeJSONWithETag(
+	writeCachedJSON(
 		w,
 		r,
 		NewDetailResponse(r.Context(), "/configs/"+id+"/labels", "ConfigLabels", LabelsResponse{
@@ -177,5 +182,5 @@ func (h *Handlers) HandlePatchConfigLabels(w http.ResponseWriter, r *http.Reques
 	if labels == nil {
 		labels = map[string]string{}
 	}
-	writeJSON(w, labels)
+	writeMutationResponse(w, r, labels)
 }

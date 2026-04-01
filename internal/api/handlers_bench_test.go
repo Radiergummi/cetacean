@@ -740,7 +740,7 @@ func BenchmarkLabelsMatch(b *testing.B) {
 }
 
 // =============================================================================
-// writeJSONWithETag (full marshal + hash + conditional response)
+// writeCachedJSON (full marshal + hash + conditional response)
 // =============================================================================
 
 func BenchmarkWriteJSONWithETag(b *testing.B) {
@@ -752,7 +752,7 @@ func BenchmarkWriteJSONWithETag(b *testing.B) {
 		for b.Loop() {
 			req := httptest.NewRequest("GET", "/nodes", nil)
 			w := httptest.NewRecorder()
-			writeJSONWithETag(w, req, nodes)
+			writeCachedJSON(w, req, nodes)
 		}
 	})
 	b.Run("hit_304", func(b *testing.B) {
@@ -763,7 +763,7 @@ func BenchmarkWriteJSONWithETag(b *testing.B) {
 			req := httptest.NewRequest("GET", "/nodes", nil)
 			req.Header.Set("If-None-Match", etag)
 			w := httptest.NewRecorder()
-			writeJSONWithETag(w, req, nodes)
+			writeCachedJSON(w, req, nodes)
 		}
 	})
 }

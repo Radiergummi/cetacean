@@ -71,9 +71,15 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Location", absPath(r.Context(), "/secrets/"+id))
+
+	if preferMinimal(r) {
+		writePreferCreated(w)
+		return
+	}
+
 	sec, ok := h.cache.GetSecret(id)
 	if !ok {
-		w.Header().Set("Location", absPath(r.Context(), "/secrets/"+id))
 		w.WriteHeader(http.StatusCreated)
 		writeJSON(w, NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", SecretResponse{
 			Secret: swarm.Secret{
@@ -86,7 +92,6 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sec.Spec.Data = nil
-	w.Header().Set("Location", absPath(r.Context(), "/secrets/"+id))
 	w.WriteHeader(http.StatusCreated)
 	writeJSON(w, NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", SecretResponse{
 		Secret:   sec,
@@ -105,7 +110,7 @@ func (h *Handlers) HandleGetSecretLabels(w http.ResponseWriter, r *http.Request)
 	if labels == nil {
 		labels = map[string]string{}
 	}
-	writeJSONWithETag(
+	writeCachedJSON(
 		w,
 		r,
 		NewDetailResponse(r.Context(), "/secrets/"+id+"/labels", "SecretLabels", LabelsResponse{
@@ -178,5 +183,5 @@ func (h *Handlers) HandlePatchSecretLabels(w http.ResponseWriter, r *http.Reques
 	if labels == nil {
 		labels = map[string]string{}
 	}
-	writeJSON(w, labels)
+	writeMutationResponse(w, r, labels)
 }

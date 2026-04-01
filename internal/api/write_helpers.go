@@ -100,7 +100,7 @@ func writeServiceMutation(
 		writeServiceError(w, r, err)
 		return
 	}
-	writeJSON(w, NewDetailResponse(r.Context(), "/services/"+id, "Service", ServiceResponse{
+	writeMutationResponse(w, r, NewDetailResponse(r.Context(), "/services/"+id, "Service", ServiceResponse{
 		Service: updated,
 	}))
 }
@@ -118,7 +118,7 @@ func writeNodeMutation(
 		writeNodeError(w, r, err)
 		return
 	}
-	writeJSON(w, NewDetailResponse(r.Context(), "/nodes/"+id, "Node", NodeResponse{
+	writeMutationResponse(w, r, NewDetailResponse(r.Context(), "/nodes/"+id, "Node", NodeResponse{
 		Node: updated,
 	}))
 }

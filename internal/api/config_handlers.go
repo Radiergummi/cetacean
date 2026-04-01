@@ -26,12 +26,12 @@ func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setAllow(w, r, "config", cfg.Spec.Name)
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/configs/"+id, "Config", ConfigResponse{
+	writeCachedJSONTimed(w, r, NewDetailResponse(r.Context(), "/configs/"+id, "Config", ConfigResponse{
 		Config: cfg,
 		Services: acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", h.cache.ServicesUsingConfig(id), func(ref cache.ServiceRef) string {
 			return "service:" + ref.Name
 		}),
-	}))
+	}), cfg.UpdatedAt)
 }
 
 func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
@@ -56,5 +56,5 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 	})
 	resp := applyPagination(r.Context(), configs, p)
 	writePaginationLinks(w, r, resp.Total, resp.Limit, resp.Offset)
-	writeJSONWithETag(w, r, resp)
+	writeCachedJSON(w, r, resp)
 }

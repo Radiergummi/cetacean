@@ -25,6 +25,8 @@ func NewRouter(
 	authProvider auth.Provider,
 	basePath string,
 ) http.Handler {
+	auth.SetErrorWriter(WriteErrorCode)
+
 	mux := http.NewServeMux()
 
 	tier1 := requireLevel(config.OpsOperational, h.operationsLevel)

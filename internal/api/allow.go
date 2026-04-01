@@ -8,6 +8,14 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
+// AcceptPatch is the Accept-Patch header value for endpoints that support both
+// JSON Patch (RFC 6902) and JSON Merge Patch (RFC 7396).
+const AcceptPatch = "application/json-patch+json, application/merge-patch+json"
+
+// AcceptMergePatch is the Accept-Patch header value for endpoints that only
+// support JSON Merge Patch (RFC 7396).
+const AcceptMergePatch = "application/merge-patch+json"
+
 // resourceMethods defines what write methods exist for each resource type
 // at each operations tier.
 type methodSpec struct {
@@ -65,6 +73,18 @@ var resourceWriteMethods = map[string][]methodSpec{
 	},
 }
 
+// resourceAcceptPatch maps resource types to their Accept-Patch header value.
+// Resources with map-patch sub-endpoints (env, labels) accept both JSON Patch
+// and JSON Merge Patch; others accept only JSON Merge Patch.
+var resourceAcceptPatch = map[string]string{
+	"service": AcceptPatch,
+	"node":    AcceptPatch,
+	"config":  AcceptPatch,
+	"secret":  AcceptPatch,
+	"swarm":   AcceptMergePatch,
+	"plugin":  AcceptMergePatch,
+}
+
 // setAllow sets the Allow response header for a detail endpoint based on the
 // configured operations level and ACL write permission.
 func (h *Handlers) setAllow(w http.ResponseWriter, r *http.Request, resourceType, resourceName string) {
@@ -73,13 +93,23 @@ func (h *Handlers) setAllow(w http.ResponseWriter, r *http.Request, resourceType
 	id := auth.IdentityFromContext(r.Context())
 	canWrite := h.acl.Can(id, "write", resourceType+":"+resourceName)
 
+	hasPatch := false
 	for _, spec := range resourceWriteMethods[resourceType] {
 		if h.operationsLevel >= spec.tier && canWrite {
 			methods = append(methods, spec.method)
+			if spec.method == "PATCH" {
+				hasPatch = true
+			}
 		}
 	}
 
 	w.Header().Set("Allow", strings.Join(methods, ", "))
+
+	if hasPatch {
+		if ap, ok := resourceAcceptPatch[resourceType]; ok {
+			w.Header().Set("Accept-Patch", ap)
+		}
+	}
 }
 
 // setAllowList sets the Allow header for list endpoints.

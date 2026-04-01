@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestETagGeneration(t *testing.T) {
@@ -33,7 +34,7 @@ func TestETagConditionalRequest(t *testing.T) {
 	// First request: should get 200 + ETag header
 	r1 := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
 	w1 := httptest.NewRecorder()
-	writeJSONWithETag(w1, r1, data)
+	writeCachedJSON(w1, r1, data)
 
 	if w1.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w1.Code)
@@ -50,7 +51,7 @@ func TestETagConditionalRequest(t *testing.T) {
 	r2 := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
 	r2.Header.Set("If-None-Match", etag)
 	w2 := httptest.NewRecorder()
-	writeJSONWithETag(w2, r2, data)
+	writeCachedJSON(w2, r2, data)
 
 	if w2.Code != http.StatusNotModified {
 		t.Fatalf("expected 304, got %d", w2.Code)
@@ -70,7 +71,7 @@ func TestETagMismatch(t *testing.T) {
 	r := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
 	r.Header.Set("If-None-Match", `"stale-etag-value"`)
 	w := httptest.NewRecorder()
-	writeJSONWithETag(w, r, data)
+	writeCachedJSON(w, r, data)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
@@ -117,14 +118,14 @@ func TestETagConditionalMultiValue(t *testing.T) {
 	// Get the ETag for this data.
 	r1 := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
 	w1 := httptest.NewRecorder()
-	writeJSONWithETag(w1, r1, data)
+	writeCachedJSON(w1, r1, data)
 	etag := w1.Header().Get("ETag")
 
 	// Send If-None-Match with multiple ETags including the correct one.
 	r2 := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
 	r2.Header.Set("If-None-Match", `"stale", `+etag+`, "other"`)
 	w2 := httptest.NewRecorder()
-	writeJSONWithETag(w2, r2, data)
+	writeCachedJSON(w2, r2, data)
 
 	if w2.Code != http.StatusNotModified {
 		t.Fatalf("expected 304 with multi-value If-None-Match, got %d", w2.Code)
@@ -137,14 +138,14 @@ func TestETagConditionalWeak(t *testing.T) {
 	// Get the ETag.
 	r1 := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
 	w1 := httptest.NewRecorder()
-	writeJSONWithETag(w1, r1, data)
+	writeCachedJSON(w1, r1, data)
 	etag := w1.Header().Get("ETag")
 
 	// Send weak version of the same ETag.
 	r2 := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
 	r2.Header.Set("If-None-Match", "W/"+etag)
 	w2 := httptest.NewRecorder()
-	writeJSONWithETag(w2, r2, data)
+	writeCachedJSON(w2, r2, data)
 
 	if w2.Code != http.StatusNotModified {
 		t.Fatalf("expected 304 with weak ETag, got %d", w2.Code)
@@ -157,9 +158,119 @@ func TestETagConditionalWildcard(t *testing.T) {
 	r := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
 	r.Header.Set("If-None-Match", "*")
 	w := httptest.NewRecorder()
-	writeJSONWithETag(w, r, data)
+	writeCachedJSON(w, r, data)
 
 	if w.Code != http.StatusNotModified {
 		t.Fatalf("expected 304 with wildcard If-None-Match, got %d", w.Code)
+	}
+}
+
+func TestLastModifiedHeader(t *testing.T) {
+	data := map[string]string{"status": "ok"}
+	ts := time.Date(2025, 6, 15, 10, 30, 0, 0, time.UTC)
+
+	r := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
+	w := httptest.NewRecorder()
+	writeCachedJSONTimed(w, r, data, ts)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	lm := w.Header().Get("Last-Modified")
+	if lm == "" {
+		t.Fatal("expected Last-Modified header")
+	}
+
+	want := "Sun, 15 Jun 2025 10:30:00 GMT"
+	if lm != want {
+		t.Fatalf("Last-Modified = %q, want %q", lm, want)
+	}
+}
+
+func TestLastModifiedZero(t *testing.T) {
+	data := map[string]string{"status": "ok"}
+
+	r := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
+	w := httptest.NewRecorder()
+	writeCachedJSONTimed(w, r, data, time.Time{})
+
+	if lm := w.Header().Get("Last-Modified"); lm != "" {
+		t.Fatalf("expected no Last-Modified for zero time, got %q", lm)
+	}
+}
+
+func TestIfModifiedSince_NotModified(t *testing.T) {
+	data := map[string]string{"status": "ok"}
+	ts := time.Date(2025, 6, 15, 10, 30, 0, 0, time.UTC)
+
+	r := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
+	r.Header.Set("If-Modified-Since", ts.Format(http.TimeFormat))
+	w := httptest.NewRecorder()
+	writeCachedJSONTimed(w, r, data, ts)
+
+	if w.Code != http.StatusNotModified {
+		t.Fatalf("expected 304, got %d", w.Code)
+	}
+	if w.Body.Len() != 0 {
+		t.Fatalf("expected empty body on 304, got %d bytes", w.Body.Len())
+	}
+}
+
+func TestIfModifiedSince_Modified(t *testing.T) {
+	data := map[string]string{"status": "ok"}
+	ts := time.Date(2025, 6, 15, 10, 30, 0, 0, time.UTC)
+	older := time.Date(2025, 6, 14, 10, 30, 0, 0, time.UTC)
+
+	r := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
+	r.Header.Set("If-Modified-Since", older.Format(http.TimeFormat))
+	w := httptest.NewRecorder()
+	writeCachedJSONTimed(w, r, data, ts)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if w.Body.Len() == 0 {
+		t.Fatal("expected non-empty body when resource is newer")
+	}
+}
+
+func TestIfNoneMatchTakesPrecedenceOverIfModifiedSince(t *testing.T) {
+	data := map[string]string{"status": "ok"}
+	ts := time.Date(2025, 6, 15, 10, 30, 0, 0, time.UTC)
+
+	// First, get the ETag.
+	r1 := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
+	w1 := httptest.NewRecorder()
+	writeCachedJSONTimed(w1, r1, data, ts)
+	etag := w1.Header().Get("ETag")
+
+	// Send both If-None-Match (matching) and If-Modified-Since (stale date).
+	// ETag should take precedence → 304.
+	r2 := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
+	r2.Header.Set("If-None-Match", etag)
+	r2.Header.Set("If-Modified-Since", time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).Format(http.TimeFormat))
+	w2 := httptest.NewRecorder()
+	writeCachedJSONTimed(w2, r2, data, ts)
+
+	if w2.Code != http.StatusNotModified {
+		t.Fatalf("expected 304 (ETag precedence), got %d", w2.Code)
+	}
+}
+
+func TestIfNoneMatchMismatchOverridesIfModifiedSince(t *testing.T) {
+	data := map[string]string{"status": "ok"}
+	ts := time.Date(2025, 6, 15, 10, 30, 0, 0, time.UTC)
+
+	// Send non-matching If-None-Match + matching If-Modified-Since.
+	// ETag takes precedence → mismatch → 200 (If-Modified-Since is ignored).
+	r := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
+	r.Header.Set("If-None-Match", `"wrong-etag"`)
+	r.Header.Set("If-Modified-Since", ts.Format(http.TimeFormat))
+	w := httptest.NewRecorder()
+	writeCachedJSONTimed(w, r, data, ts)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 (ETag mismatch overrides), got %d", w.Code)
 	}
 }

@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types"
+	json "github.com/goccy/go-json"
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
-	json "github.com/goccy/go-json"
 )
 
 func (h *Handlers) HandlePlugins(w http.ResponseWriter, r *http.Request) {
@@ -31,7 +31,7 @@ func (h *Handlers) HandlePlugins(w http.ResponseWriter, r *http.Request) {
 		return "plugin:" + p.Name
 	})
 
-	writeJSONWithETag(
+	writeCachedJSON(
 		w,
 		r,
 		NewCollectionResponse(r.Context(), plugins, len(plugins), len(plugins), 0),
@@ -56,7 +56,7 @@ func (h *Handlers) HandlePlugin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setAllow(w, r, "plugin", name)
-	writeJSONWithETag(
+	writeCachedJSON(
 		w,
 		r,
 		NewDetailResponse(r.Context(), "/plugins/"+name, "Plugin", PluginResponse{
@@ -188,6 +188,11 @@ func (h *Handlers) HandleUpgradePlugin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if preferMinimal(r) {
+		writePreferMinimal(w)
+		return
+	}
+
 	plugin, err := h.pluginClient.PluginInspect(r.Context(), name)
 	if err != nil {
 		writeDockerError(w, r, err, "plugin")
@@ -216,6 +221,11 @@ func (h *Handlers) HandleConfigurePlugin(w http.ResponseWriter, r *http.Request)
 
 	if err := h.pluginClient.PluginConfigure(r.Context(), name, settings); err != nil {
 		writeDockerError(w, r, err, "plugin")
+		return
+	}
+
+	if preferMinimal(r) {
+		writePreferMinimal(w)
 		return
 	}
 

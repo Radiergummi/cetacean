@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/docker/docker/api/types/volume"
 
@@ -26,7 +27,8 @@ func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setAllow(w, r, "volume", vol.Name)
-	writeJSONWithETag(
+	created, _ := time.Parse(time.RFC3339, vol.CreatedAt)
+	writeCachedJSONTimed(
 		w,
 		r,
 		NewDetailResponse(r.Context(), "/volumes/"+name, "Volume", VolumeResponse{
@@ -35,6 +37,7 @@ func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
 				return "service:" + ref.Name
 			}),
 		}),
+		created,
 	)
 }
 
@@ -60,5 +63,5 @@ func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 	})
 	resp := applyPagination(r.Context(), volumes, p)
 	writePaginationLinks(w, r, resp.Total, resp.Limit, resp.Offset)
-	writeJSONWithETag(w, r, resp)
+	writeCachedJSON(w, r, resp)
 }

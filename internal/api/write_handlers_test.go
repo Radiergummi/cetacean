@@ -4200,3 +4200,153 @@ func TestHandlePatchSecretLabels_VersionConflict(t *testing.T) {
 		t.Errorf("status=%d, want 409; body: %s", w.Code, w.Body.String())
 	}
 }
+
+func TestPreferMinimal_ScaleService(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(replicatedService("svc1"))
+
+	wc := &mockWriteClient{
+		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
+			scaleServiceFn: func(_ context.Context, id string, replicas uint64) (swarm.Service, error) {
+				svc := replicatedService(id)
+				svc.Spec.Mode.Replicated.Replicas = &replicas
+				return svc, nil
+			},
+		},
+	}
+	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
+
+	body := `{"replicas":3}`
+	req := httptest.NewRequest("PUT", "/services/svc1/scale", strings.NewReader(body))
+	req.SetPathValue("id", "svc1")
+	req.Header.Set("Prefer", "return=minimal")
+	w := httptest.NewRecorder()
+	h.HandleScaleService(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status=%d, want 204; body: %s", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get("Preference-Applied"); got != "return=minimal" {
+		t.Errorf("Preference-Applied=%q, want %q", got, "return=minimal")
+	}
+	if w.Body.Len() != 0 {
+		t.Errorf("body should be empty, got %q", w.Body.String())
+	}
+}
+
+func TestPreferMinimal_PatchServiceEnv(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{
+					Env: []string{"FOO=bar"},
+				},
+			},
+		},
+	})
+
+	wc := &mockWriteClient{
+		mockServiceSpecWriter: mockServiceSpecWriter{
+			updateServiceEnvFn: func(_ context.Context, _ string, env map[string]string) (swarm.Service, error) {
+				return swarm.Service{
+					ID: "svc1",
+					Spec: swarm.ServiceSpec{
+						TaskTemplate: swarm.TaskSpec{
+							ContainerSpec: &swarm.ContainerSpec{
+								Env: []string{"FOO=bar", "BAZ=qux"},
+							},
+						},
+					},
+				}, nil
+			},
+		},
+	}
+	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
+
+	body := `{"BAZ":"qux"}`
+	req := httptest.NewRequest("PATCH", "/services/svc1/env", strings.NewReader(body))
+	req.SetPathValue("id", "svc1")
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.Header.Set("Prefer", "return=minimal")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceEnv(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status=%d, want 204; body: %s", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get("Preference-Applied"); got != "return=minimal" {
+		t.Errorf("Preference-Applied=%q, want %q", got, "return=minimal")
+	}
+}
+
+func TestPreferMinimal_CreateConfig(t *testing.T) {
+	c := cache.New(nil)
+	wc := &mockWriteClient{
+		mockConfigWriter: mockConfigWriter{
+			createConfigFn: func(_ context.Context, _ swarm.ConfigSpec) (string, error) {
+				return "cfg-new", nil
+			},
+		},
+	}
+	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
+
+	body := `{"name":"myconfig","data":"aGVsbG8="}`
+	req := httptest.NewRequest("POST", "/configs", strings.NewReader(body))
+	req.Header.Set("Prefer", "return=minimal")
+	w := httptest.NewRecorder()
+	h.HandleCreateConfig(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status=%d, want 201; body: %s", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get("Preference-Applied"); got != "return=minimal" {
+		t.Errorf("Preference-Applied=%q, want %q", got, "return=minimal")
+	}
+	if got := w.Header().Get("Location"); got == "" {
+		t.Error("Location header should be set")
+	}
+	if w.Body.Len() != 0 {
+		t.Errorf("body should be empty, got %q", w.Body.String())
+	}
+}
+
+func TestPreferMinimal_PatchNodeLabels(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{
+		ID: "node1",
+		Spec: swarm.NodeSpec{
+			Annotations: swarm.Annotations{Labels: map[string]string{"env": "prod"}},
+		},
+	})
+
+	wc := &mockWriteClient{
+		mockNodeWriter: mockNodeWriter{
+			updateNodeLabelsFn: func(_ context.Context, _ string, labels map[string]string) (swarm.Node, error) {
+				return swarm.Node{
+					ID: "node1",
+					Spec: swarm.NodeSpec{
+						Annotations: swarm.Annotations{Labels: labels},
+					},
+				}, nil
+			},
+		},
+	}
+	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
+
+	body := `{"region":"us-east"}`
+	req := httptest.NewRequest("PATCH", "/nodes/node1/labels", strings.NewReader(body))
+	req.SetPathValue("id", "node1")
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.Header.Set("Prefer", "return=minimal")
+	w := httptest.NewRecorder()
+	h.HandlePatchNodeLabels(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status=%d, want 204; body: %s", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get("Preference-Applied"); got != "return=minimal" {
+		t.Errorf("Preference-Applied=%q, want %q", got, "return=minimal")
+	}
+}

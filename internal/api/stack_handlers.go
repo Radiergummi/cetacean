@@ -36,7 +36,7 @@ func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
 	})
 	resp := applyPagination(r.Context(), stacks, p)
 	writePaginationLinks(w, r, resp.Total, resp.Limit, resp.Offset)
-	writeJSONWithETag(w, r, resp)
+	writeCachedJSON(w, r, resp)
 }
 
 func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
@@ -51,7 +51,7 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setAllow(w, r, "stack", name)
-	writeJSONWithETag(w, r, NewDetailResponse(r.Context(), "/stacks/"+name, "Stack", StackResponse{
+	writeCachedJSON(w, r, NewDetailResponse(r.Context(), "/stacks/"+name, "Stack", StackResponse{
 		Stack: detail,
 	}))
 }
@@ -97,7 +97,7 @@ func (h *Handlers) HandleStackSummary(w http.ResponseWriter, r *http.Request) {
 	if summaries == nil {
 		summaries = []cache.StackSummary{}
 	}
-	writeJSONWithETag(
+	writeCachedJSON(
 		w,
 		r,
 		NewCollectionResponse(r.Context(), summaries, len(summaries), len(summaries), 0),
