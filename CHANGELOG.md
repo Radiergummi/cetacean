@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Arrow-key navigation for radio card groups
 - Series labels in the Prometheus query result table
 - Per-stack CPU and memory usage charts on the node detail page with drill-down to individual services
+- HTTP Range Request pagination on all list API endpoints (`Range: items 0-49` returns `206 Partial Content` with `Content-Range`)
+- Infinite scroll on all resource list pages — items load automatically as you scroll down
 
 ### Fixed
 - Layout shift in the header when the live connection timer changes width
