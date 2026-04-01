@@ -1375,3 +1375,62 @@ func TestHandleSwarm_IncludesJoinTokensWithSwarmWrite(t *testing.T) {
 		t.Fatal("manager join token should be present")
 	}
 }
+
+func TestServiceSubResourceGET_ACLDenied(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "webapp"},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{},
+			},
+		},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"service:other"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	identity := &auth.Identity{Subject: "user1"}
+
+	subResources := []struct {
+		name    string
+		handler func(http.ResponseWriter, *http.Request)
+	}{
+		{"env", h.HandleGetServiceEnv},
+		{"labels", h.HandleGetServiceLabels},
+		{"resources", h.HandleGetServiceResources},
+		{"ports", h.HandleGetServicePorts},
+		{"healthcheck", h.HandleGetServiceHealthcheck},
+		{"placement", h.HandleGetServicePlacement},
+		{"update-policy", h.HandleGetServiceUpdatePolicy},
+		{"rollback-policy", h.HandleGetServiceRollbackPolicy},
+		{"log-driver", h.HandleGetServiceLogDriver},
+		{"container-config", h.HandleGetServiceContainerConfig},
+		{"configs", h.HandleGetServiceConfigs},
+		{"secrets", h.HandleGetServiceSecrets},
+		{"networks", h.HandleGetServiceNetworks},
+		{"mounts", h.HandleGetServiceMounts},
+	}
+
+	for _, sub := range subResources {
+		t.Run(sub.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/services/svc1/"+sub.name, nil)
+			req.SetPathValue("id", "svc1")
+			req = req.WithContext(auth.ContextWithIdentity(req.Context(), identity))
+			w := httptest.NewRecorder()
+			sub.handler(w, req)
+
+			if w.Code != http.StatusForbidden {
+				t.Errorf("GET /services/svc1/%s: expected 403, got %d", sub.name, w.Code)
+			}
+		})
+	}
+}

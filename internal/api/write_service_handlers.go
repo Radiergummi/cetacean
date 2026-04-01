@@ -13,6 +13,8 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
+
+	"github.com/radiergummi/cetacean/internal/auth"
 )
 
 func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
@@ -198,93 +200,6 @@ func (h *Handlers) HandleRemoveService(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-type removeError struct {
-	Type  string `json:"type"`
-	ID    string `json:"id"`
-	Error string `json:"error"`
-}
-
-type removeStackResponse struct {
-	Removed struct {
-		Services int `json:"services"`
-		Networks int `json:"networks"`
-		Configs  int `json:"configs"`
-		Secrets  int `json:"secrets"`
-	} `json:"removed"`
-	Errors []removeError `json:"errors,omitempty"`
-}
-
-func (h *Handlers) HandleRemoveStack(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-
-	stack, ok := h.cache.GetStack(name)
-	if !ok {
-		writeErrorCode(w, r, "STK001", fmt.Sprintf("stack %q not found", name))
-		return
-	}
-
-	slog.Info("removing stack", "stack", name,
-		"services", len(stack.Services),
-		"networks", len(stack.Networks),
-		"configs", len(stack.Configs),
-		"secrets", len(stack.Secrets),
-	)
-
-	ctx := r.Context()
-	var resp removeStackResponse
-	var errs []removeError
-
-	for _, id := range stack.Services {
-		if err := h.serviceLifecycle.RemoveService(ctx, id); err != nil {
-			if cerrdefs.IsNotFound(err) {
-				continue
-			}
-			errs = append(errs, removeError{Type: "service", ID: id, Error: err.Error()})
-			continue
-		}
-		resp.Removed.Services++
-	}
-
-	for _, id := range stack.Networks {
-		if err := h.resourceRemover.RemoveNetwork(ctx, id); err != nil {
-			if cerrdefs.IsNotFound(err) {
-				continue
-			}
-			errs = append(errs, removeError{Type: "network", ID: id, Error: err.Error()})
-			continue
-		}
-		resp.Removed.Networks++
-	}
-
-	for _, id := range stack.Secrets {
-		if err := h.secretWriter.RemoveSecret(ctx, id); err != nil {
-			if cerrdefs.IsNotFound(err) {
-				continue
-			}
-			errs = append(errs, removeError{Type: "secret", ID: id, Error: err.Error()})
-			continue
-		}
-		resp.Removed.Secrets++
-	}
-
-	for _, id := range stack.Configs {
-		if err := h.configWriter.RemoveConfig(ctx, id); err != nil {
-			if cerrdefs.IsNotFound(err) {
-				continue
-			}
-			errs = append(errs, removeError{Type: "config", ID: id, Error: err.Error()})
-			continue
-		}
-		resp.Removed.Configs++
-	}
-
-	if len(errs) > 0 {
-		resp.Errors = errs
-	}
-
-	writeMutationResponse(w, r, resp)
-}
-
 func (h *Handlers) HandleRestartService(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
@@ -320,6 +235,10 @@ func (h *Handlers) HandleGetServiceEnv(w http.ResponseWriter, r *http.Request) {
 	svc, ok := h.cache.GetService(id)
 	if !ok {
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+		return
+	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "service:"+svc.Spec.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}
 	var env []string
@@ -410,6 +329,10 @@ func (h *Handlers) HandleGetServiceLabels(w http.ResponseWriter, r *http.Request
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "service:"+svc.Spec.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
+		return
+	}
 	labels := svc.Spec.Labels
 	if labels == nil {
 		labels = map[string]string{}
@@ -495,6 +418,10 @@ func (h *Handlers) HandleGetServiceResources(w http.ResponseWriter, r *http.Requ
 	svc, ok := h.cache.GetService(id)
 	if !ok {
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+		return
+	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "service:"+svc.Spec.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}
 	resources := svc.Spec.TaskTemplate.Resources
@@ -588,6 +515,10 @@ func (h *Handlers) HandleGetServicePorts(w http.ResponseWriter, r *http.Request)
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "service:"+svc.Spec.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
+		return
+	}
 	var ports []swarm.PortConfig
 	if svc.Spec.EndpointSpec != nil {
 		ports = svc.Spec.EndpointSpec.Ports
@@ -664,6 +595,10 @@ func (h *Handlers) HandleGetServiceHealthcheck(w http.ResponseWriter, r *http.Re
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "service:"+svc.Spec.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
+		return
+	}
 
 	var hc *container.HealthConfig
 	if svc.Spec.TaskTemplate.ContainerSpec != nil {
@@ -730,6 +665,10 @@ func (h *Handlers) HandleGetServicePlacement(w http.ResponseWriter, r *http.Requ
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "service:"+svc.Spec.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
+		return
+	}
 
 	placement := svc.Spec.TaskTemplate.Placement
 	if placement == nil {
@@ -794,6 +733,10 @@ func (h *Handlers) HandleGetServiceUpdatePolicy(w http.ResponseWriter, r *http.R
 	svc, ok := h.cache.GetService(id)
 	if !ok {
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+		return
+	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "service:"+svc.Spec.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}
 	policy := svc.Spec.UpdateConfig
@@ -881,6 +824,10 @@ func (h *Handlers) HandleGetServiceRollbackPolicy(w http.ResponseWriter, r *http
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "service:"+svc.Spec.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
+		return
+	}
 	policy := svc.Spec.RollbackConfig
 	if policy == nil {
 		policy = &swarm.UpdateConfig{}
@@ -962,6 +909,10 @@ func (h *Handlers) HandleGetServiceLogDriver(w http.ResponseWriter, r *http.Requ
 	svc, ok := h.cache.GetService(id)
 	if !ok {
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+		return
+	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "service:"+svc.Spec.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}
 	writeCachedJSON(
@@ -1161,6 +1112,10 @@ func (h *Handlers) HandleGetServiceContainerConfig(w http.ResponseWriter, r *htt
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "service:"+svc.Spec.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
+		return
+	}
 
 	resp := containerConfigFromSpec(svc.Spec.TaskTemplate.ContainerSpec)
 	writeJSON(w, resp)
@@ -1294,6 +1249,10 @@ func (h *Handlers) HandleGetServiceConfigs(w http.ResponseWriter, r *http.Reques
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "service:"+svc.Spec.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
+		return
+	}
 
 	writeCachedJSON(
 		w,
@@ -1382,6 +1341,10 @@ func (h *Handlers) HandleGetServiceSecrets(w http.ResponseWriter, r *http.Reques
 	svc, ok := h.cache.GetService(id)
 	if !ok {
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+		return
+	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "service:"+svc.Spec.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}
 
@@ -1474,6 +1437,10 @@ func (h *Handlers) HandleGetServiceNetworks(w http.ResponseWriter, r *http.Reque
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "service:"+svc.Spec.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
+		return
+	}
 
 	writeCachedJSON(
 		w,
@@ -1554,6 +1521,10 @@ func (h *Handlers) HandleGetServiceMounts(w http.ResponseWriter, r *http.Request
 	svc, ok := h.cache.GetService(id)
 	if !ok {
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+		return
+	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "service:"+svc.Spec.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}
 
