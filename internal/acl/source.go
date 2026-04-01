@@ -45,7 +45,7 @@ func extractGrantsFromRaw(raw []any) []Grant {
 				}
 			}
 		}
-		if len(g.Resources) > 0 && len(g.Permissions) > 0 {
+		if len(g.Resources) > 0 && len(g.Permissions) > 0 && validateGrant(g) == nil {
 			grants = append(grants, g)
 		}
 	}

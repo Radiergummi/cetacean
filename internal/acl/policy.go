@@ -48,53 +48,63 @@ var validPermissions = map[string]bool{
 	"write": true,
 }
 
+// validateGrant checks a single grant for structural errors.
+func validateGrant(g Grant) error {
+	if len(g.Resources) == 0 {
+		return fmt.Errorf("resources must not be empty")
+	}
+
+	for _, r := range g.Resources {
+		if r == "*" {
+			continue
+		}
+
+		parts := strings.SplitN(r, ":", 2)
+		if len(parts) != 2 || parts[1] == "" {
+			return fmt.Errorf("invalid resource expression %q (expected type:pattern)", r)
+		}
+
+		if !validResourceTypes[parts[0]] {
+			return fmt.Errorf("unknown resource type %q", parts[0])
+		}
+	}
+
+	for _, a := range g.Audience {
+		if a == "*" {
+			continue
+		}
+
+		parts := strings.SplitN(a, ":", 2)
+		if len(parts) != 2 || parts[1] == "" {
+			return fmt.Errorf("invalid audience expression %q (expected kind:pattern)", a)
+		}
+
+		if !validAudienceKinds[parts[0]] {
+			return fmt.Errorf("unknown audience kind %q", parts[0])
+		}
+	}
+
+	if len(g.Permissions) == 0 {
+		return fmt.Errorf("permissions must not be empty")
+	}
+
+	for _, perm := range g.Permissions {
+		if !validPermissions[perm] {
+			return fmt.Errorf("unknown permission %q", perm)
+		}
+	}
+
+	return nil
+}
+
 // Validate checks the policy for structural errors.
 func Validate(p *Policy) error {
 	for i, g := range p.Grants {
-		if len(g.Resources) == 0 {
-			return fmt.Errorf("grant %d: resources must not be empty", i)
-		}
-		for _, r := range g.Resources {
-			if r == "*" {
-				continue
-			}
-			parts := strings.SplitN(r, ":", 2)
-			if len(parts) != 2 || parts[1] == "" {
-				return fmt.Errorf(
-					"grant %d: invalid resource expression %q (expected type:pattern)",
-					i,
-					r,
-				)
-			}
-			if !validResourceTypes[parts[0]] {
-				return fmt.Errorf("grant %d: unknown resource type %q", i, parts[0])
-			}
-		}
-		for _, a := range g.Audience {
-			if a == "*" {
-				continue
-			}
-			parts := strings.SplitN(a, ":", 2)
-			if len(parts) != 2 || parts[1] == "" {
-				return fmt.Errorf(
-					"grant %d: invalid audience expression %q (expected kind:pattern)",
-					i,
-					a,
-				)
-			}
-			if !validAudienceKinds[parts[0]] {
-				return fmt.Errorf("grant %d: unknown audience kind %q", i, parts[0])
-			}
-		}
-		if len(g.Permissions) == 0 {
-			return fmt.Errorf("grant %d: permissions must not be empty", i)
-		}
-		for _, perm := range g.Permissions {
-			if !validPermissions[perm] {
-				return fmt.Errorf("grant %d: unknown permission %q", i, perm)
-			}
+		if err := validateGrant(g); err != nil {
+			return fmt.Errorf("grant %d: %w", i, err)
 		}
 	}
+
 	return nil
 }
 

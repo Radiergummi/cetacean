@@ -95,6 +95,79 @@ func TestExtractGrantsFromRaw(t *testing.T) {
 	}
 }
 
+func TestExtractGrantsFromRaw_RejectsInvalidResourceType(t *testing.T) {
+	raw := []any{
+		map[string]any{
+			"resources":   []any{"bogus:foo"},
+			"permissions": []any{"read"},
+		},
+	}
+	grants := extractGrantsFromRaw(raw)
+	if len(grants) != 0 {
+		t.Errorf("expected invalid resource type to be rejected, got %d grants", len(grants))
+	}
+}
+
+func TestExtractGrantsFromRaw_RejectsInvalidPermission(t *testing.T) {
+	raw := []any{
+		map[string]any{
+			"resources":   []any{"service:*"},
+			"permissions": []any{"admin"},
+		},
+	}
+	grants := extractGrantsFromRaw(raw)
+	if len(grants) != 0 {
+		t.Errorf("expected invalid permission to be rejected, got %d grants", len(grants))
+	}
+}
+
+func TestExtractGrantsFromRaw_RejectsMalformedResource(t *testing.T) {
+	raw := []any{
+		map[string]any{
+			"resources":   []any{"nocolon"},
+			"permissions": []any{"read"},
+		},
+	}
+	grants := extractGrantsFromRaw(raw)
+	if len(grants) != 0 {
+		t.Errorf("expected malformed resource to be rejected, got %d grants", len(grants))
+	}
+}
+
+func TestExtractGrantsFromRaw_AllowsWildcardResource(t *testing.T) {
+	raw := []any{
+		map[string]any{
+			"resources":   []any{"*"},
+			"permissions": []any{"read"},
+		},
+	}
+	grants := extractGrantsFromRaw(raw)
+	if len(grants) != 1 {
+		t.Errorf("expected wildcard resource to be accepted, got %d grants", len(grants))
+	}
+}
+
+func TestExtractGrantsFromRaw_KeepsValidDropsInvalid(t *testing.T) {
+	raw := []any{
+		map[string]any{
+			"resources":   []any{"service:*"},
+			"permissions": []any{"read"},
+		},
+		map[string]any{
+			"resources":   []any{"bogus:foo"},
+			"permissions": []any{"read"},
+		},
+		map[string]any{
+			"resources":   []any{"node:*"},
+			"permissions": []any{"write"},
+		},
+	}
+	grants := extractGrantsFromRaw(raw)
+	if len(grants) != 2 {
+		t.Errorf("expected 2 valid grants (invalid one dropped), got %d", len(grants))
+	}
+}
+
 func TestExtractGrantsFromRaw_FieldValues(t *testing.T) {
 	raw := []any{
 		map[string]any{
