@@ -929,10 +929,8 @@ func BenchmarkToSSEEvent(b *testing.B) {
 func BenchmarkWriteBatch(b *testing.B) {
 	b.Run("single", func(b *testing.B) {
 		events := []cache.Event{realisticServiceEvent()}
-		var id uint64
 		for b.Loop() {
-			id = 0
-			sse.WriteBatch(io.Discard, discardFlusher{}, events, &id)
+			sse.WriteBatch(io.Discard, discardFlusher{}, events)
 		}
 	})
 	for _, n := range []int{5, 20} {
@@ -946,10 +944,8 @@ func BenchmarkWriteBatch(b *testing.B) {
 					Resource: realisticTaskEvent().Resource,
 				}
 			}
-			var id uint64
 			for b.Loop() {
-				id = 0
-				sse.WriteBatch(io.Discard, discardFlusher{}, events, &id)
+				sse.WriteBatch(io.Discard, discardFlusher{}, events)
 			}
 		})
 	}

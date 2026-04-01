@@ -167,7 +167,6 @@ func (b *Broadcaster) ServeSSE(
 		metrics.RecordSSEDisconnect()
 	}()
 
-	var eventID uint64
 	batchTicker := time.NewTicker(b.batchInterval)
 	defer batchTicker.Stop()
 	keepalive := time.NewTicker(b.keepaliveInterval)
@@ -179,14 +178,14 @@ func (b *Broadcaster) ServeSSE(
 		case e, ok := <-client.events:
 			if !ok {
 				if len(batch) > 0 {
-					WriteBatch(w, flusher, batch, &eventID)
+					WriteBatch(w, flusher, batch)
 				}
 				return
 			}
 			batch = append(batch, e)
 		case <-batchTicker.C:
 			if len(batch) > 0 {
-				WriteBatch(w, flusher, batch, &eventID)
+				WriteBatch(w, flusher, batch)
 				batch = batch[:0]
 				keepalive.Reset(b.keepaliveInterval)
 			}
@@ -195,12 +194,12 @@ func (b *Broadcaster) ServeSSE(
 			flusher.Flush()
 		case <-r.Context().Done():
 			if len(batch) > 0 {
-				WriteBatch(w, flusher, batch, &eventID)
+				WriteBatch(w, flusher, batch)
 			}
 			return
 		case <-client.done:
 			if len(batch) > 0 {
-				WriteBatch(w, flusher, batch, &eventID)
+				WriteBatch(w, flusher, batch)
 			}
 			return
 		}
@@ -366,18 +365,24 @@ func ResourceType(typ cache.EventType) string {
 	}
 }
 
-func WriteBatch(w io.Writer, flusher http.Flusher, events []cache.Event, eventID *uint64) {
-	*eventID++
+func WriteBatch(w io.Writer, flusher http.Flusher, events []cache.Event) {
+	var maxID uint64
+	for _, e := range events {
+		if e.HistoryID > maxID {
+			maxID = e.HistoryID
+		}
+	}
+
 	if len(events) == 1 {
 		data, _ := json.Marshal(ToSSEEvent(events[0]))
-		fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", *eventID, events[0].Type, data)
+		fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", maxID, events[0].Type, data)
 	} else {
 		enriched := make([]Event, len(events))
 		for i, e := range events {
 			enriched[i] = ToSSEEvent(e)
 		}
 		data, _ := json.Marshal(enriched)
-		fmt.Fprintf(w, "id: %d\nevent: batch\ndata: %s\n\n", *eventID, data)
+		fmt.Fprintf(w, "id: %d\nevent: batch\ndata: %s\n\n", maxID, data)
 	}
 	flusher.Flush()
 }

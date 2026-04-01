@@ -1,6 +1,7 @@
 package sse
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -381,6 +382,53 @@ func TestSSE_TypeMatcher(t *testing.T) {
 	}
 	if match(cache.Event{Type: "service", Action: "update", ID: "s1"}) {
 		t.Error("should not match service event")
+	}
+}
+
+func TestSSE_WriteBatch_UsesHistoryID(t *testing.T) {
+	var buf bytes.Buffer
+	f := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	events := []cache.Event{
+		{Type: "service", Action: "update", ID: "s1", HistoryID: 42},
+	}
+	WriteBatch(&buf, f, events)
+
+	output := buf.String()
+	if !strings.Contains(output, "id: 42\n") {
+		t.Errorf("expected id: 42, got %q", output)
+	}
+}
+
+func TestSSE_WriteBatch_BatchUsesMaxHistoryID(t *testing.T) {
+	var buf bytes.Buffer
+	f := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	events := []cache.Event{
+		{Type: "service", Action: "update", ID: "s1", HistoryID: 10},
+		{Type: "service", Action: "update", ID: "s2", HistoryID: 12},
+		{Type: "node", Action: "update", ID: "n1", HistoryID: 11},
+	}
+	WriteBatch(&buf, f, events)
+
+	output := buf.String()
+	if !strings.Contains(output, "id: 12\n") {
+		t.Errorf("expected id: 12 (max), got %q", output)
+	}
+}
+
+func TestSSE_WriteBatch_SyncUsesHistoryID(t *testing.T) {
+	var buf bytes.Buffer
+	f := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	events := []cache.Event{
+		{Type: "sync", Action: "full_sync", HistoryID: 500},
+	}
+	WriteBatch(&buf, f, events)
+
+	output := buf.String()
+	if !strings.Contains(output, "id: 500\n") {
+		t.Errorf("expected id: 500, got %q", output)
 	}
 }
 
