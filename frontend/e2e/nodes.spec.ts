@@ -98,4 +98,15 @@ test.describe("Node Detail (/nodes/:id)", () => {
     // NodeActions renders a Remove button (may be disabled if node is not down)
     await expect(page.getByRole("button", { name: /Remove/i })).toBeVisible({ timeout: 10_000 });
   });
+
+  test("per-stack resource usage charts render when cAdvisor is available", async ({
+    page,
+    monitoring,
+  }) => {
+    test.skip(!monitoring?.cadvisor, "cAdvisor not available");
+
+    await expect(page.getByRole("heading", { name: /Resource Usage by Stack/i })).toBeVisible({
+      timeout: 15_000,
+    });
+  });
 });
