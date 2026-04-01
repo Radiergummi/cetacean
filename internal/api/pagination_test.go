@@ -10,7 +10,10 @@ import (
 
 func TestParsePagination_Defaults(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	p := parsePagination(r)
+	p, err := parsePagination(r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if p.Limit != 50 {
 		t.Errorf("expected limit 50, got %d", p.Limit)
@@ -28,7 +31,10 @@ func TestParsePagination_Defaults(t *testing.T) {
 
 func TestParsePagination_Custom(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/?limit=10&offset=20&sort=name&dir=desc", nil)
-	p := parsePagination(r)
+	p, err := parsePagination(r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if p.Limit != 10 {
 		t.Errorf("expected limit 10, got %d", p.Limit)
@@ -46,7 +52,10 @@ func TestParsePagination_Custom(t *testing.T) {
 
 func TestParsePagination_MaxLimit(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/?limit=9999", nil)
-	p := parsePagination(r)
+	p, err := parsePagination(r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if p.Limit != 200 {
 		t.Errorf("expected limit clamped to 200, got %d", p.Limit)
@@ -251,5 +260,98 @@ func TestSortItems_InvalidKey(t *testing.T) {
 			sorted[1].Name,
 			sorted[2].Name,
 		)
+	}
+}
+
+func TestParsePagination_RangeBasic(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("Range", "items 0-24")
+
+	p, err := parsePagination(r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if p.Offset != 0 {
+		t.Errorf("expected offset 0, got %d", p.Offset)
+	}
+	if p.Limit != 25 {
+		t.Errorf("expected limit 25, got %d", p.Limit)
+	}
+	if !p.RangeReq {
+		t.Error("expected RangeReq to be true")
+	}
+}
+
+func TestParsePagination_RangeMaxClamp(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("Range", "items 0-999")
+
+	p, err := parsePagination(r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if p.Limit != 200 {
+		t.Errorf("expected limit clamped to 200, got %d", p.Limit)
+	}
+	if p.Offset != 0 {
+		t.Errorf("expected offset 0, got %d", p.Offset)
+	}
+	if !p.RangeReq {
+		t.Error("expected RangeReq to be true")
+	}
+}
+
+func TestParsePagination_QueryParamsOverrideRange(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/?limit=5&offset=10", nil)
+	r.Header.Set("Range", "items 0-24")
+
+	p, err := parsePagination(r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if p.Limit != 5 {
+		t.Errorf("expected limit 5 from query param, got %d", p.Limit)
+	}
+	if p.Offset != 10 {
+		t.Errorf("expected offset 10 from query param, got %d", p.Offset)
+	}
+	if p.RangeReq {
+		t.Error("expected RangeReq to be false when query params present")
+	}
+}
+
+func TestParsePagination_RangeNonItemsUnitIgnored(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("Range", "bytes 0-1023")
+
+	p, err := parsePagination(r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if p.Limit != 50 {
+		t.Errorf("expected default limit 50, got %d", p.Limit)
+	}
+	if p.Offset != 0 {
+		t.Errorf("expected default offset 0, got %d", p.Offset)
+	}
+	if p.RangeReq {
+		t.Error("expected RangeReq to be false for non-items unit")
+	}
+}
+
+func TestParsePagination_RangeMultipartError(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("Range", "items 0-9, 50-59")
+
+	_, err := parsePagination(r)
+	if err == nil {
+		t.Fatal("expected error for multipart range")
+	}
+	if err != errMultipartRange {
+		t.Errorf("expected errMultipartRange, got %v", err)
 	}
 }

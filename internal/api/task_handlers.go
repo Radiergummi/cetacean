@@ -74,7 +74,11 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 	if tasks, ok = exprFilter(tasks, r.URL.Query().Get("filter"), filter.TaskEnv, w, r); !ok {
 		return
 	}
-	p := parsePagination(r)
+	p, err := parsePagination(r)
+	if err != nil {
+		writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
+		return
+	}
 	tasks = sortItems(tasks, p.Sort, p.Dir, map[string]func(swarm.Task) string{
 		"state":   func(t swarm.Task) string { return taskStateSortKey(t.Status.State) },
 		"service": func(t swarm.Task) string { return t.ServiceID },

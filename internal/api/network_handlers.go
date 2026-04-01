@@ -71,7 +71,11 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 	); !ok {
 		return
 	}
-	p := parsePagination(r)
+	p, err := parsePagination(r)
+	if err != nil {
+		writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
+		return
+	}
 	networks = sortItems(networks, p.Sort, p.Dir, map[string]func(network.Summary) string{
 		"name":   func(n network.Summary) string { return n.Name },
 		"driver": func(n network.Summary) string { return n.Driver },

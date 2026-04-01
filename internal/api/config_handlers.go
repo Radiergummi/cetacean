@@ -65,7 +65,11 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 	if configs, ok = exprFilter(configs, r.URL.Query().Get("filter"), filter.ConfigEnv, w, r); !ok {
 		return
 	}
-	p := parsePagination(r)
+	p, err := parsePagination(r)
+	if err != nil {
+		writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
+		return
+	}
 	configs = sortItems(configs, p.Sort, p.Dir, map[string]func(swarm.Config) string{
 		"name":    func(c swarm.Config) string { return c.Spec.Name },
 		"created": func(c swarm.Config) string { return c.CreatedAt.String() },

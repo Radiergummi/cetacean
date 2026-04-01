@@ -33,7 +33,11 @@ func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 	if nodes, ok = exprFilter(nodes, r.URL.Query().Get("filter"), filter.NodeEnv, w, r); !ok {
 		return
 	}
-	p := parsePagination(r)
+	p, err := parsePagination(r)
+	if err != nil {
+		writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
+		return
+	}
 	nodes = sortItems(nodes, p.Sort, p.Dir, map[string]func(swarm.Node) string{
 		"hostname":     func(n swarm.Node) string { return n.Description.Hostname },
 		"role":         func(n swarm.Node) string { return string(n.Spec.Role) },

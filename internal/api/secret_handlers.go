@@ -70,7 +70,11 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 	if secrets, ok = exprFilter(secrets, r.URL.Query().Get("filter"), filter.SecretEnv, w, r); !ok {
 		return
 	}
-	p := parsePagination(r)
+	p, err := parsePagination(r)
+	if err != nil {
+		writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
+		return
+	}
 	secrets = sortItems(secrets, p.Sort, p.Dir, map[string]func(swarm.Secret) string{
 		"name":    func(s swarm.Secret) string { return s.Spec.Name },
 		"created": func(s swarm.Secret) string { return s.CreatedAt.String() },

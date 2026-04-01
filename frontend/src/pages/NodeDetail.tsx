@@ -8,7 +8,7 @@ import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
 import { KeyValueEditor } from "../components/KeyValueEditor";
 import { LoadingDetail } from "../components/LoadingSkeleton";
-import { MetricsPanel } from "../components/metrics";
+import { MetricsPanel, StackDrillDownChart } from "../components/metrics";
 import ResourceGauge from "../components/metrics/ResourceGauge";
 import {
   AvailabilityEditor,
@@ -307,6 +307,32 @@ export default function NodeDetail() {
               },
             ]}
           />
+        </ErrorBoundary>
+      )}
+
+      {hasCadvisor && nodeId && (
+        <ErrorBoundary inline>
+          <MetricsPanel
+            header="Resource Usage by Stack"
+            stackable
+          >
+            <StackDrillDownChart
+              title="CPU Usage (by Stack)"
+              stackQuery={`topk(10, sum by (container_label_com_docker_stack_namespace)(rate(container_cpu_usage_seconds_total{container_label_com_docker_stack_namespace!="",container_label_com_docker_swarm_node_id="${escapePromQL(nodeId)}"}[5m])) * 100)`}
+              serviceQueryTemplate={`sum by (container_label_com_docker_swarm_service_name)(rate(container_cpu_usage_seconds_total{container_label_com_docker_stack_namespace="<STACK>",container_label_com_docker_swarm_service_name!="",container_label_com_docker_swarm_node_id="${escapePromQL(nodeId)}"}[5m])) * 100`}
+              unit="%"
+              yMin={0}
+              stackable
+            />
+            <StackDrillDownChart
+              title="Memory Usage (by Stack)"
+              stackQuery={`topk(10, sum by (container_label_com_docker_stack_namespace)(container_memory_usage_bytes{container_label_com_docker_stack_namespace!="",container_label_com_docker_swarm_node_id="${escapePromQL(nodeId)}"}))`}
+              serviceQueryTemplate={`sum by (container_label_com_docker_swarm_service_name)(container_memory_usage_bytes{container_label_com_docker_stack_namespace="<STACK>",container_label_com_docker_swarm_service_name!="",container_label_com_docker_swarm_node_id="${escapePromQL(nodeId)}"})`}
+              unit="bytes"
+              yMin={0}
+              stackable
+            />
+          </MetricsPanel>
         </ErrorBoundary>
       )}
 

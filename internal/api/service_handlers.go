@@ -47,7 +47,11 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 	); !ok {
 		return
 	}
-	p := parsePagination(r)
+	p, err := parsePagination(r)
+	if err != nil {
+		writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
+		return
+	}
 	services = sortItems(services, p.Sort, p.Dir, map[string]func(swarm.Service) string{
 		"name": func(s swarm.Service) string { return s.Spec.Name },
 		"mode": func(s swarm.Service) string {

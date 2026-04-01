@@ -67,7 +67,11 @@ func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 	if volumes, ok = exprFilter(volumes, r.URL.Query().Get("filter"), filter.VolumeEnv, w, r); !ok {
 		return
 	}
-	p := parsePagination(r)
+	p, err := parsePagination(r)
+	if err != nil {
+		writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
+		return
+	}
 	volumes = sortItems(volumes, p.Sort, p.Dir, map[string]func(volume.Volume) string{
 		"name":   func(v volume.Volume) string { return v.Name },
 		"driver": func(v volume.Volume) string { return v.Driver },

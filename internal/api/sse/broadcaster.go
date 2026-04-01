@@ -48,7 +48,11 @@ type Broadcaster struct {
 	replay            ReplaySource
 }
 
-func NewBroadcaster(batchInterval time.Duration, writeError ErrorWriter, replay ReplaySource) *Broadcaster {
+func NewBroadcaster(
+	batchInterval time.Duration,
+	writeError ErrorWriter,
+	replay ReplaySource,
+) *Broadcaster {
 	if batchInterval <= 0 {
 		batchInterval = 100 * time.Millisecond
 	}

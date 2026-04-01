@@ -157,7 +157,11 @@ func main() {
 	stateCache := cache.New(nil)
 
 	// SSE broadcaster — needs history for Last-Event-ID replay
-	broadcaster := sse.NewBroadcaster(cfg.SSEBatchInterval, api.WriteErrorCode, stateCache.History())
+	broadcaster := sse.NewBroadcaster(
+		cfg.SSEBatchInterval,
+		api.WriteErrorCode,
+		stateCache.History(),
+	)
 	defer broadcaster.Close()
 
 	// Wire cache changes to SSE broadcaster

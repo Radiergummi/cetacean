@@ -40,8 +40,6 @@ export function useNodeMetrics() {
       const now = Math.floor(Date.now() / 1000);
       const start = now - 3600;
       const step = 120;
-      // noinspection UnnecessaryLocalVariableJS
-      const cpuRangeQuery = cpuQuery;
 
       Promise.all([
         api.metricsQuery(cpuQuery).catch((error) => {
@@ -56,12 +54,10 @@ export function useNodeMetrics() {
           console.warn(error);
           return null;
         }),
-        api
-          .metricsQueryRange(cpuRangeQuery, String(start), String(now), String(step))
-          .catch((error) => {
-            console.warn(error);
-            return null;
-          }),
+        api.metricsQueryRange(cpuQuery, String(start), String(now), String(step)).catch((error) => {
+          console.warn(error);
+          return null;
+        }),
       ])
         .then(([cpuResponse, memResponse, diskResponse, cpuRangeResponse]) => {
           if (cancelled) {
@@ -114,17 +110,14 @@ export function useNodeMetrics() {
         return byInstance[instance];
       }
 
-      // Fallback: try matching by addr (works when IPs happen to match)
+      // Fallback: match by address (IP) or hostname against the instance label
+      const short = hostname.split(".")[0];
+
       for (const [key, metrics] of Object.entries(byInstance)) {
         if (key.startsWith(address + ":") || key === address) {
           return metrics;
         }
-      }
 
-      // Fallback: try matching Docker hostname against host portion of instance label
-      const short = hostname.split(".")[0];
-
-      for (const [key, metrics] of Object.entries(byInstance)) {
         const host = key.split(":")[0];
 
         if (host === hostname || host === short || host.split(".")[0] === short) {

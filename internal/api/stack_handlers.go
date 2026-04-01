@@ -36,7 +36,11 @@ func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
 	if stacks, ok = exprFilter(stacks, r.URL.Query().Get("filter"), filter.StackEnv, w, r); !ok {
 		return
 	}
-	p := parsePagination(r)
+	p, err := parsePagination(r)
+	if err != nil {
+		writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
+		return
+	}
 	stacks = sortItems(stacks, p.Sort, p.Dir, map[string]func(cache.Stack) string{
 		"name": func(s cache.Stack) string { return s.Name },
 	})

@@ -3,6 +3,7 @@ package api
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -10,33 +11,50 @@ import (
 	"strings"
 )
 
+var errMultipartRange = errors.New("multipart range not supported")
+
 type PageParams struct {
-	Limit  int
-	Offset int
-	Sort   string
-	Dir    string
+	Limit    int
+	Offset   int
+	Sort     string
+	Dir      string
+	RangeReq bool
 }
 
-func parsePagination(r *http.Request) PageParams {
+func parsePagination(r *http.Request) (PageParams, error) {
 	p := PageParams{
 		Limit:  50,
 		Offset: 0,
 		Dir:    "asc",
 	}
 
+	hasQueryParams := r.URL.Query().Get("limit") != "" || r.URL.Query().Get("offset") != ""
+
 	if v := r.URL.Query().Get("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			p.Limit = n
 		}
-	}
-	if p.Limit > 200 {
-		p.Limit = 200
 	}
 
 	if v := r.URL.Query().Get("offset"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
 			p.Offset = n
 		}
+	}
+
+	// Range header is only used when query params are absent.
+	if !hasQueryParams {
+		if rangeLimit, rangeOffset, ok, err := parseItemsRange(r.Header.Get("Range")); err != nil {
+			return p, err
+		} else if ok {
+			p.Limit = rangeLimit
+			p.Offset = rangeOffset
+			p.RangeReq = true
+		}
+	}
+
+	if p.Limit > 200 {
+		p.Limit = 200
 	}
 
 	p.Sort = r.URL.Query().Get("sort")
@@ -47,7 +65,43 @@ func parsePagination(r *http.Request) PageParams {
 		p.Dir = "asc"
 	}
 
-	return p
+	return p, nil
+}
+
+// parseItemsRange parses a Range header with the "items" unit.
+// Format: "items <start>-<end>" where start and end are inclusive, zero-based.
+// Returns (limit, offset, matched, error).
+func parseItemsRange(header string) (int, int, bool, error) {
+	if header == "" {
+		return 0, 0, false, nil
+	}
+
+	spec, ok := strings.CutPrefix(header, "items ")
+	if !ok {
+		return 0, 0, false, nil
+	}
+
+	if strings.Contains(spec, ",") {
+		return 0, 0, false, errMultipartRange
+	}
+
+	start, end, ok := strings.Cut(spec, "-")
+	if !ok {
+		return 0, 0, false, nil
+	}
+
+	startN, err := strconv.Atoi(strings.TrimSpace(start))
+	if err != nil || startN < 0 {
+		return 0, 0, false, nil
+	}
+
+	endN, err := strconv.Atoi(strings.TrimSpace(end))
+	if err != nil || endN < startN {
+		return 0, 0, false, nil
+	}
+
+	limit := endN - startN + 1
+	return limit, startN, true, nil
 }
 
 func applyPagination[T any](ctx context.Context, items []T, p PageParams) CollectionResponse[T] {
