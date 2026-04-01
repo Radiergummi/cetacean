@@ -238,11 +238,14 @@ Two meta endpoints, exempt from authentication and content negotiation:
 
 **Liveness** -- `GET /-/health`
 
-Always returns 200. Includes version, commit hash, and build date.
+Always returns 200. Includes version, commit hash, build date, and the configured operations level.
 
 ```json
-{ "status": "ok", "version": "1.2.3", "commit": "abc1234", "buildDate": "2026-03-15" }
+{ "status": "ok", "version": "1.2.3", "commit": "abc1234", "buildDate": "2026-03-15", "operationsLevel": 1 }
 ```
+
+Before the first Docker sync completes, the `status` field is `"error"` instead of `"ok"` (the endpoint still returns
+200). Use the readiness endpoint below if you need to distinguish "running but not synced" from "running and ready."
 
 **Readiness** -- `GET /-/ready`
 
@@ -252,12 +255,105 @@ Returns 200 after the first Docker sync completes. Returns 503 until then.
 { "status": "ready" }
 ```
 
-The default Docker Compose healthcheck uses `cetacean healthcheck`, which hits the readiness endpoint internally.
+While not ready, all resource endpoints (services, nodes, tasks, etc.) return `503 ENG001` for JSON requests. The SPA
+and meta endpoints (`/-/*`, `/api*`, `/auth/*`, `/assets/*`) continue to work.
 
-```dockerfile
-HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
-  CMD ["cetacean", "healthcheck"]
+### Built-in Healthcheck Command
+
+The Cetacean binary includes a `healthcheck` subcommand that hits the readiness endpoint internally:
+
+```bash
+cetacean healthcheck
 ```
+
+This is what the Dockerfile uses. It reads `CETACEAN_LISTEN_ADDR` and `CETACEAN_BASE_PATH` from the environment so it
+targets the correct address, even behind a base path. Exit code 0 means ready; non-zero means not ready (or
+unreachable).
+
+### Docker Compose / Swarm
+
+The built-in Docker image includes a `HEALTHCHECK` instruction, so containers get health checks automatically with no
+configuration needed. If you need to customise the timings, override it in your Compose file:
+
+```yaml
+services:
+  cetacean:
+    image: cetacean:latest
+    healthcheck:
+      test: ["CMD", "cetacean", "healthcheck"]
+      interval: 10s
+      timeout: 3s
+      start_period: 30s
+      retries: 3
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+```
+
+The `start_period` is important: Cetacean needs to complete a full Docker sync before it becomes ready. On large
+clusters (hundreds of services/tasks) this can take several seconds. Set `start_period` generously — health check
+failures during this window are not counted toward `retries`.
+
+If you use `depends_on` with a service that needs Cetacean to be ready:
+
+```yaml
+services:
+  cetacean:
+    image: cetacean:latest
+    healthcheck:
+      test: ["CMD", "cetacean", "healthcheck"]
+      interval: 10s
+      timeout: 3s
+      start_period: 30s
+      retries: 3
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  monitoring:
+    image: my-monitoring-sidecar:latest
+    depends_on:
+      cetacean:
+        condition: service_healthy
+```
+
+### External Health Checks
+
+For load balancers or monitoring systems that probe Cetacean externally, hit the endpoints directly:
+
+```bash
+# Liveness (always 200 if the process is running)
+curl -sf http://cetacean:9000/-/health
+
+# Readiness (200 only after first sync)
+curl -sf http://cetacean:9000/-/ready
+```
+
+With a base path:
+
+```bash
+curl -sf http://cetacean:9000/my-base-path/-/ready
+```
+
+Both endpoints return JSON with `Cache-Control: no-store`. They are exempt from authentication, so they work regardless
+of `auth.mode`.
+
+### Tailscale tsnet Mode
+
+In tsnet mode, Cetacean runs two listeners: authenticated routes on the tailnet and meta endpoints on the regular
+listener. Health checks from Docker (which connect via the regular network, not the tailnet) reach `/-/health` and
+`/-/ready` on the regular listener. No special configuration is needed — the built-in `cetacean healthcheck` command
+connects to the regular listener address.
+
+### Choosing Between Liveness and Readiness
+
+| Use case | Endpoint | Why |
+|---|---|---|
+| Container orchestrator restart policy | `/-/ready` | Restart only if Cetacean can't sync with Docker |
+| Load balancer health check | `/-/ready` | Don't route traffic until data is available |
+| Uptime monitoring (is it running?) | `/-/health` | Always 200 if the process is up |
+| Dependency gating (`depends_on`) | `/-/ready` | Downstream services need data to be available |
 
 ## Server Timeouts
 
@@ -379,6 +475,21 @@ hide disabled action buttons.
 | Rotate unlock key              | `POST /swarm/rotate-unlock-key`         |      —      |       —       |        —        |      ✔      |
 | Force CA rotation              | `POST /swarm/force-rotate-ca`           |      —      |       —       |        —        |      ✔      |
 | Unlock swarm                   | `POST /swarm/unlock`                    |      —      |       —       |        —        |      ✔      |
+
+### Interaction with ACL
+
+When an [ACL policy](authorization.md) is active, operations level and ACL are checked independently -- both must
+allow a write for it to succeed. Operations level is a global ceiling (which _categories_ of writes exist at all),
+while ACL controls _who_ can write to _which_ resources.
+
+For example, with `operations_level=1` (operational):
+- A user with `write` on `service:webapp` can scale and restart that service
+- The same user cannot patch its environment variables (requires level 2), even though ACL allows it
+- A user _without_ a `write` grant cannot scale any service, even though the level permits scaling
+
+This lets you set a conservative operations level as a safety net while delegating fine-grained access through ACL
+policy. See [Authorization — Interaction with Operations Level](authorization.md#interaction-with-operations-level)
+for the full decision matrix.
 
 ## Recommendations
 

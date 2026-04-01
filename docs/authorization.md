@@ -100,6 +100,145 @@ In addition to file-based policy, auth providers can supply per-user grants dire
 
 Provider grants omit the `audience` field -- they are implicitly scoped to the authenticated user.
 
+### Policy Examples
+
+#### Read-only observers
+
+Everyone can browse, but only the ops group can make changes:
+
+```yaml
+grants:
+  - resources: ["*"]
+    audience: ["*"]
+    permissions: ["read"]
+
+  - resources: ["*"]
+    audience: ["group:ops"]
+    permissions: ["write"]
+```
+
+#### Team-scoped stacks
+
+Each team can view and manage their own stacks. A `stack:X` grant covers the stack and all its member services,
+configs, secrets, networks, and volumes. Shared infrastructure is read-only for everyone:
+
+```yaml
+grants:
+  - resources: ["stack:frontend-*"]
+    audience: ["group:frontend"]
+    permissions: ["read", "write"]
+
+  - resources: ["stack:api-*"]
+    audience: ["group:backend"]
+    permissions: ["read", "write"]
+
+  - resources: ["stack:monitoring", "stack:ingress"]
+    audience: ["*"]
+    permissions: ["read"]
+```
+
+#### Secrets restricted to platform team
+
+Developers can manage services but never view secrets or configs. The platform team has full access:
+
+```yaml
+grants:
+  - resources: ["service:*", "stack:*", "node:*", "task:*", "network:*", "volume:*"]
+    audience: ["group:developers"]
+    permissions: ["read", "write"]
+
+  - resources: ["*"]
+    audience: ["group:platform"]
+    permissions: ["read", "write"]
+```
+
+Note that developers can still see services that _reference_ a secret (the cross-reference list), but not the secret
+detail page itself.
+
+#### On-call with limited blast radius
+
+On-call engineers can scale, restart, and rollback any service (requires `write`), but cluster-level resources like
+nodes and swarm config are view-only. Combine with `operations_level=1` to restrict to reactive ops only:
+
+```yaml
+grants:
+  - resources: ["service:*", "task:*"]
+    audience: ["group:oncall"]
+    permissions: ["read", "write"]
+
+  - resources: ["node:*", "swarm:*", "config:*", "secret:*", "network:*", "volume:*"]
+    audience: ["group:oncall"]
+    permissions: ["read"]
+```
+
+#### Multi-tenant isolation
+
+Each tenant sees only their resources. No cross-visibility, no global wildcard. Name stacks with a tenant prefix:
+
+```yaml
+grants:
+  - resources: ["stack:acme-*"]
+    audience: ["group:tenant-acme"]
+    permissions: ["read", "write"]
+
+  - resources: ["stack:globex-*"]
+    audience: ["group:tenant-globex"]
+    permissions: ["read", "write"]
+```
+
+Tenants cannot see each other's stacks, services, or infrastructure. Shared nodes and networks are not visible unless
+explicitly granted.
+
+#### Single user with full access
+
+For small deployments with one admin and several viewers:
+
+```yaml
+grants:
+  - resources: ["*"]
+    audience: ["user:admin@example.com"]
+    permissions: ["read", "write"]
+
+  - resources: ["*"]
+    audience: ["*"]
+    permissions: ["read"]
+```
+
+#### Testing a policy
+
+After applying a policy, check effective permissions for the current user:
+
+```bash
+curl -s http://localhost:9000/auth/whoami | jq .permissions
+```
+
+The `permissions` field shows the resource patterns and permissions the ACL evaluator resolved for the authenticated
+identity. If a resource is missing from this map, the user cannot access it.
+
+### Interaction with Operations Level
+
+ACL and [operations level](configuration.md#operations-level) are independent checks that _both_ must pass for a
+write operation to succeed. Operations level acts as a global ceiling -- it controls which categories of write
+operations are available to _anyone_. ACL controls which specific resources each user can modify.
+
+| Scenario | Result |
+|---|---|
+| Operations level allows the action, ACL grants `write` | Allowed |
+| Operations level allows the action, ACL denies `write` | Denied (`403 ACL002`) |
+| Operations level blocks the action, ACL grants `write` | Denied (`403 OPS001`) |
+| Operations level blocks the action, ACL denies `write` | Denied (`403 OPS001`) |
+
+A common pattern is to use operations level as a coarse safety net and ACL for fine-grained per-user control:
+
+- **`operations_level=1`** (operational) + ACL grants → users can scale, restart, and rollback the services they have
+  `write` grants for, but nobody can modify service definitions or delete resources regardless of grants.
+- **`operations_level=2`** (configuration) + ACL grants → platform team members with `write` on `service:*` can edit
+  env vars, resources, and placement. Dangerous operations (node changes, deletions) are still blocked for everyone.
+- **`operations_level=3`** (impactful) + ACL grants → full write capability, scoped per user by ACL. Use this only
+  when ACL policies are well-tested.
+
+Operations level is set once at startup and applies uniformly. ACL policies can be hot-reloaded without restart.
+
 ### Allow Header
 
 Every GET and HEAD response includes an `Allow` header listing the HTTP methods available for that resource. The header reflects both the configured operations level and the user's ACL write permission:

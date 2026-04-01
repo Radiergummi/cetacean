@@ -263,13 +263,13 @@ The code is the last path segment of `type` (e.g. `SVC001`). Codes use a three-l
 
 Generic HTTP errors (no domain-specific code) use `"type": "about:blank"`.
 
-Browse the full error reference at [`GET /api/errors`](#api-documentation) or look up a single code at
+Browse the error reference interactively at [`GET /api/errors`](#api-documentation) or look up a single code at
 `GET /api/errors/{code}`.
 
 ### Common error scenarios
 
 **Version conflicts (409)** -- All write endpoints use Docker's optimistic concurrency. If the resource was modified by
-another client between your read and write, the server returns `409 Conflict` with a `SVC001`, `NOD001`, or similar code.
+another client between your read and write, the server returns `409 Conflict` with a `SVC001`, `NOD002`, or similar code.
 Re-read the resource and retry.
 
 **Operations level (403)** -- Requests to endpoints above the configured [operations level](configuration.md#operations-level)
@@ -280,6 +280,198 @@ access denied returns `ACL002`. The response includes the resource and permissio
 
 **Unsupported patch type (415)** -- PATCH endpoints validate `Content-Type`. Sending `application/json` instead of
 `application/json-patch+json` or `application/merge-patch+json` returns `415 Unsupported Media Type`.
+
+### Error code reference
+
+#### API — Protocol and content negotiation
+
+| Code | Status | Title | Description | Suggestion |
+|------|--------|-------|-------------|------------|
+| API001 | 406 | SSE Not Supported | This endpoint does not support Server-Sent Events. | Use `Accept: application/json` instead of `text/event-stream`. |
+| API002 | 406 | SSE Required | This endpoint only supports Server-Sent Events. | Use `Accept: text/event-stream`. |
+| API003 | 406 | Not Acceptable | The `Accept` header does not match any media type this endpoint can produce. | Use `Accept: application/json`, `text/event-stream`, or `text/html`. |
+| API004 | 415 | Invalid Patch Content-Type | The `Content-Type` header does not match a supported patch format. | Use `Content-Type: application/merge-patch+json` or `application/json-patch+json`. |
+| API005 | 500 | Streaming Not Supported | The server's response writer does not support streaming (no `http.Flusher`). | Server configuration issue. Check that no middleware is buffering responses. |
+| API006 | 400 | Invalid Request Body | The request body could not be decoded as valid JSON. | Ensure the request body is well-formed JSON matching the expected schema. |
+| API007 | 400 | Unreadable Request Body | The request body could not be read. | Ensure the request includes a body and `Content-Length` is correct. |
+| API008 | 400 | Invalid JSON | The request body is not valid JSON. | Check for syntax errors in the JSON payload. |
+| API009 | 500 | Internal Serialization Error | The server failed to serialize or deserialize internal state. | Server bug. Check the Cetacean logs. |
+| API010 | 409 | Patch Test Failed | A JSON Patch `test` operation failed — the resource state does not match the expected value. | Reload the resource and retry the patch with updated test values. |
+| API011 | 400 | Patch Application Failed | The JSON Patch could not be applied to the resource. | Check the patch operations for correctness. |
+
+#### AUT — Authentication
+
+| Code | Status | Title | Description | Suggestion |
+|------|--------|-------|-------------|------------|
+| AUT001 | 401 | Not Authenticated | No valid credentials were provided. | Log in or provide a valid authentication token. |
+| AUT002 | 403 | Authorization Denied | The identity provider denied authorization. | Check your account permissions with the identity provider. |
+| AUT003 | 400 | Authentication Callback Error | The authentication callback contained invalid or missing parameters. | Retry the login flow from the beginning. |
+| AUT004 | 500 | Authentication Server Error | An internal error occurred during authentication. | Retry the login flow. If it persists, check server logs. |
+
+#### ACL — Authorization (RBAC)
+
+| Code | Status | Title | Description | Suggestion |
+|------|--------|-------|-------------|------------|
+| ACL001 | 403 | Access Denied | You do not have permission to access this resource. | Check your [ACL policy grants](authorization.md). |
+| ACL002 | 403 | Write Access Denied | You do not have write permission on this resource. | Check your [ACL policy grants](authorization.md) for `write` permissions. |
+
+#### OPS — Operations level
+
+| Code | Status | Title | Description | Suggestion |
+|------|--------|-------|-------------|------------|
+| OPS001 | 403 | Operations Level Too Low | The operation requires a higher [operations level](configuration.md#operations-level) than the server is configured for. | Increase `CETACEAN_OPERATIONS_LEVEL` and restart. |
+
+#### FLT — Filter expressions
+
+| Code | Status | Title | Description | Suggestion |
+|------|--------|-------|-------------|------------|
+| FLT001 | 400 | Filter Expression Too Long | The filter expression exceeds the maximum allowed length. | Shorten the filter expression. |
+| FLT002 | 400 | Invalid Filter Expression | The filter expression could not be compiled. | Check the expression syntax. Filters use the [expr-lang](https://expr-lang.org/) expression language. |
+| FLT003 | 400 | Filter Evaluation Error | The filter expression compiled but failed during evaluation. | Check that the expression references valid fields for this resource type. |
+
+#### SEA — Search
+
+| Code | Status | Title | Description | Suggestion |
+|------|--------|-------|-------------|------------|
+| SEA001 | 400 | Missing Search Query | The required query parameter `q` is missing. | Provide a search query: `/search?q=term`. |
+| SEA002 | 400 | Search Query Too Long | The search query exceeds the maximum allowed length of 200 characters. | Shorten the search query. |
+
+#### MTR — Metrics / Prometheus
+
+| Code | Status | Title | Description | Suggestion |
+|------|--------|-------|-------------|------------|
+| MTR001 | 503 | Prometheus Not Configured | No Prometheus URL is configured. | Set `CETACEAN_PROMETHEUS_URL` and restart. |
+| MTR002 | 502 | Prometheus Unreachable | The configured Prometheus server is not responding. | Check that Prometheus is running and reachable at the configured URL. |
+| MTR003 | 400 | Missing Metrics Query | The required query parameter is missing. | Provide a PromQL query parameter. |
+| MTR004 | 400 | Invalid Metrics Step | The step parameter is outside the allowed range. | Use a step value between 5 and 300 seconds. |
+| MTR005 | 429 | Too Many Metrics Streams | The maximum number of concurrent metrics stream connections has been reached. | Close an existing metrics stream connection before opening a new one. |
+| MTR006 | 400 | Missing Label Name | The label name path parameter is missing. | Provide a label name in the URL path. |
+| MTR007 | 500 | Prometheus Request Failed | Failed to create the request to the Prometheus server. | Server-side error. Check the Cetacean logs. |
+
+#### LOG — Log streaming
+
+| Code | Status | Title | Description | Suggestion |
+|------|--------|-------|-------------|------------|
+| LOG001 | 429 | Too Many Log Streams | The maximum number of concurrent log stream connections has been reached. | Close an existing log stream before opening a new one. |
+| LOG002 | 400 | Invalid Stream Parameter | The `stream` parameter must be either `stdout` or `stderr`. | Use `stream=stdout` or `stream=stderr`. |
+| LOG003 | 400 | Invalid After Parameter | The `after` parameter must be an RFC 3339 timestamp or a Go duration string. | Use a format like `2024-01-01T00:00:00Z` or `1h30m`. |
+| LOG004 | 400 | Invalid Before Parameter | The `before` parameter must be an RFC 3339 timestamp or a Go duration string. | Use a format like `2024-01-01T00:00:00Z` or `1h30m`. |
+| LOG005 | 400 | Before Not Supported For SSE | The `before` parameter is not supported for SSE log streams because they are open-ended. | Remove the `before` parameter when using SSE, or use a JSON request instead. |
+| LOG006 | 500 | Log Retrieval Failed | Failed to retrieve logs from the Docker Engine. | Check that the service or task still exists and the Docker Engine is reachable. |
+| LOG007 | 500 | Log Parse Failed | Logs were retrieved but could not be parsed. | Server-side error. Check the Cetacean logs. |
+| LOG008 | 500 | Log Stream Failed | Failed to open the log stream from the Docker Engine. | Check that the service or task still exists and the Docker Engine is reachable. |
+
+#### SSE — SSE connections
+
+| Code | Status | Title | Description | Suggestion |
+|------|--------|-------|-------------|------------|
+| SSE001 | 429 | Too Many SSE Connections | The maximum number of concurrent SSE connections has been reached. | Close an existing SSE connection before opening a new one. |
+
+#### ENG — Docker Engine
+
+| Code | Status | Title | Description | Suggestion |
+|------|--------|-------|-------------|------------|
+| ENG001 | 503 | Docker Engine Unavailable | The Docker Engine is not responding. The daemon may be stopped, restarting, or the socket may be unreachable. | Check that the Docker daemon is running and that Cetacean has access to the Docker socket. |
+| ENG002 | 503 | Docker Version Check Failed | Could not determine the latest Docker Engine version from the GitHub API. | Transient network error. Try again later. |
+| ENG003 | 400 | Docker Validation Error | The Docker Engine rejected the request due to invalid arguments. | Check the request parameters for correctness. |
+| ENG004 | 500 | Docker Engine Error | An unexpected error occurred while communicating with the Docker Engine. | Check the Cetacean and Docker daemon logs. |
+
+#### SWM — Swarm operations
+
+| Code | Status | Title | Description | Suggestion |
+|------|--------|-------|-------------|------------|
+| SWM001 | 501 | Swarm API Not Available | This node may not be a swarm manager, or the Docker Engine may not support swarm mode. | Ensure Cetacean is connected to a swarm manager node. |
+| SWM002 | 503 | Swarm Inspect Failed | Failed to inspect the current swarm state. | Check that the swarm is healthy and retry. |
+| SWM003 | 500 | Swarm Update Failed | The swarm configuration update failed. | Check the Cetacean and Docker daemon logs. |
+| SWM004 | 501 | Disk Usage Not Available | Disk usage information is not available from the Docker Engine. | Ensure Cetacean is connected to a Docker Engine that supports the disk usage API. |
+| SWM005 | 500 | Disk Usage Failed | Failed to retrieve disk usage information. | Check the Docker daemon logs. |
+| SWM006 | 500 | Token Rotation Failed | Failed to rotate the swarm join token. | Check the Docker daemon logs. |
+| SWM007 | 500 | Unlock Key Rotation Failed | Failed to rotate the swarm unlock key. | Check the Docker daemon logs. |
+| SWM008 | 500 | Swarm Unlock Failed | Failed to unlock the swarm with the provided key. | Verify the unlock key is correct and try again. |
+| SWM009 | 500 | Unlock Key Retrieval Failed | Failed to retrieve the swarm unlock key. | Check the Docker daemon logs. |
+| SWM010 | 400 | Unlock Key Required | The unlock key is required to unlock the swarm. | Provide the `unlockKey` field in the request body. |
+| SWM011 | 400 | Invalid Token Target | The token rotation target must be either `worker` or `manager`. | Use `target=worker` or `target=manager`. |
+
+#### NOD — Node operations
+
+| Code | Status | Title | Description | Suggestion |
+|------|--------|-------|-------------|------------|
+| NOD001 | 409 | Node Not Down | The node cannot be removed because it is not in the down state. | Drain the node first, wait for it to reach the down state, or use force removal. |
+| NOD002 | 409 | Node Version Conflict | The node was modified by another client between read and write. | Reload the node and retry. |
+| NOD003 | 404 | Node Not Found | The specified node does not exist in the swarm. | Check the node ID or hostname. |
+| NOD004 | 400 | Invalid Availability Value | The availability value must be one of: `active`, `drain`, `pause`. | Use `availability=active`, `availability=drain`, or `availability=pause`. |
+| NOD005 | 400 | Invalid Role Value | The role value must be one of: `worker`, `manager`. | Use `role=worker` or `role=manager`. |
+
+#### SVC — Service operations
+
+| Code | Status | Title | Description | Suggestion |
+|------|--------|-------|-------------|------------|
+| SVC001 | 409 | Service Version Conflict | The service was modified by another client between read and write. | Reload the service and retry. |
+| SVC002 | 409 | Service In Use | The service cannot be removed because it is managed by a stack. | Remove the stack that manages this service first. |
+| SVC003 | 404 | Service Not Found | The specified service does not exist in the swarm. | Check the service ID or name. |
+| SVC004 | 400 | Replicas Required | The `replicas` field is required for this operation. | Provide the `replicas` field in the request body. |
+| SVC005 | 400 | Cannot Scale Global Service | Global-mode services run one task per node and cannot be scaled manually. | Switch the service to replicated mode first. |
+| SVC006 | 400 | Image Required | The `image` field is required for image updates. | Provide the `image` field in the request body. |
+| SVC007 | 400 | No Previous Spec | The service has no previous specification to rollback to. | Rollback is only available after at least one update. |
+| SVC008 | 400 | Invalid Service Mode | The service mode must be one of: `replicated`, `global`. | Use `mode=replicated` or `mode=global`. |
+| SVC009 | 400 | Replicas Required For Replicated Mode | When switching to replicated mode, the `replicas` field is required. | Provide the `replicas` field alongside the mode change. |
+| SVC010 | 400 | Invalid Endpoint Mode | The endpoint mode must be one of: `vip`, `dnsrr`. | Use `mode=vip` or `mode=dnsrr`. |
+| SVC011 | 400 | Invalid Resource Specification | The merged resource specification is not valid. | Check the resource limits and reservations. |
+| SVC012 | 400 | Invalid Update Policy | The merged update policy specification is not valid. | Check the update policy fields. |
+| SVC013 | 400 | Invalid Rollback Policy | The merged rollback policy specification is not valid. | Check the rollback policy fields. |
+| SVC014 | 400 | Invalid Healthcheck | The merged healthcheck specification is not valid. | Check the healthcheck fields. |
+| SVC015 | 400 | Config Missing Required Fields | Each config reference must include `configID` and `configName`. | Provide both fields for every config entry. |
+| SVC016 | 400 | Secret Missing Required Fields | Each secret reference must include `secretID` and `secretName`. | Provide both fields for every secret entry. |
+| SVC017 | 400 | Network Missing Target | Each network attachment must include a target network ID. | Provide the `target` field for every network entry. |
+| SVC018 | 400 | Invalid Patch Result | The JSON patch produced an invalid result. | Check the patch operations for correctness. |
+| SVC019 | 400 | Invalid Log Driver Specification | The merged log driver specification is not valid. | Check the log driver name and options. |
+
+#### TSK — Task operations
+
+| Code | Status | Title | Description | Suggestion |
+|------|--------|-------|-------------|------------|
+| TSK001 | 409 | Task Already Removed | The task could not be removed because Docker no longer tracks it. | The task may have been cleaned up. Refresh the page. |
+| TSK002 | 404 | Task Not Found | The specified task does not exist. | Tasks are ephemeral and may have been cleaned up. |
+
+#### STK — Stack operations
+
+| Code | Status | Title | Description | Suggestion |
+|------|--------|-------|-------------|------------|
+| STK001 | 404 | Stack Not Found | The specified stack does not exist. Stacks are derived from service labels and disappear when all services are removed. | Check the stack name. |
+
+#### VOL — Volume operations
+
+| Code | Status | Title | Description | Suggestion |
+|------|--------|-------|-------------|------------|
+| VOL001 | 409 | Volume In Use | The volume cannot be removed because it is mounted by one or more containers. | Stop or remove the containers using this volume first, or use force removal. |
+| VOL002 | 404 | Volume Not Found | The specified volume does not exist. | Check the volume name. |
+
+#### NET — Network operations
+
+| Code | Status | Title | Description | Suggestion |
+|------|--------|-------|-------------|------------|
+| NET001 | 409 | Network Has Active Endpoints | The network cannot be removed because it has active endpoints from running containers or services. | Disconnect or remove the services attached to this network first. |
+| NET002 | 404 | Network Not Found | The specified network does not exist. | Check the network ID. |
+
+#### CFG — Config operations
+
+| Code | Status | Title | Description | Suggestion |
+|------|--------|-------|-------------|------------|
+| CFG001 | 409 | Config In Use | The config cannot be removed because it is referenced by one or more services. | Remove the config reference from all services first. |
+| CFG002 | 404 | Config Not Found | The specified config does not exist. | Check the config ID. |
+| CFG003 | 409 | Config Name Conflict | A config with this name already exists. | Choose a different name or remove the existing config. |
+| CFG004 | 400 | Invalid Config | The config creation request is invalid. | Provide a non-empty name and valid base64-encoded data. |
+| CFG005 | 409 | Config Version Conflict | The config was modified concurrently. | Retry with the latest version. |
+
+#### SEC — Secret operations
+
+| Code | Status | Title | Description | Suggestion |
+|------|--------|-------|-------------|------------|
+| SEC001 | 409 | Secret In Use | The secret cannot be removed because it is referenced by one or more services. | Remove the secret reference from all services first. |
+| SEC002 | 404 | Secret Not Found | The specified secret does not exist. | Check the secret ID. |
+| SEC003 | 409 | Secret Name Conflict | A secret with this name already exists. | Choose a different name or remove the existing secret. |
+| SEC004 | 400 | Invalid Secret | The secret creation request is invalid. | Provide a non-empty name and valid base64-encoded data. |
+| SEC005 | 409 | Secret Version Conflict | The secret was modified concurrently. | Retry with the latest version. |
 
 ## Caching
 

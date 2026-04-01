@@ -244,6 +244,25 @@ staticClients:
 Identifies users via the Tailscale WhoIs API. Every request from a tailnet peer is automatically authenticated -- no
 login flow needed.
 
+#### Choosing a Mode
+
+Tailscale auth has two modes. Pick based on your deployment:
+
+| | Local mode (default) | tsnet mode |
+|---|---|---|
+| **How it works** | Queries the host's Tailscale daemon to identify peers | Embeds a Tailscale node inside the Cetacean process |
+| **Tailscale installed on host?** | Yes (daemon must be running) | No |
+| **Network binding** | Cetacean listens on all interfaces (`CETACEAN_LISTEN_ADDR`). Only requests from Tailscale IPs are authenticated; others are rejected. | Authenticated routes listen exclusively on the tailnet. Non-tailnet traffic cannot reach them. |
+| **Docker health checks** | Work normally (health endpoint is auth-exempt) | Work normally — meta endpoints (`/-/health`, `/-/ready`) remain on the regular listener |
+| **Config complexity** | Minimal: just `-auth-mode tailscale` | Requires an auth key, hostname, and persistent state directory |
+| **Best for** | Hosts already running Tailscale (bare-metal, VMs) | Containers, Docker Swarm services, or hosts without Tailscale installed |
+
+**Security note on local mode:** Cetacean binds to `CETACEAN_LISTEN_ADDR` (default `:9000`, all interfaces). A
+defense-in-depth IP range check rejects requests not from Tailscale's CGNAT (`100.64.0.0/10`) or ULA
+(`fd7a:115c:a1e0::/48`) ranges, but this is an application-layer check, not a socket-level restriction. For tighter
+isolation, bind to your node's Tailscale IP (e.g. `-listen-addr 100.x.x.x:9000`) or use tsnet mode, which only
+accepts connections through the embedded Tailscale node.
+
 #### Local Mode (Default)
 
 Uses the local Tailscale daemon to identify peers. Cetacean must run on a node inside the tailnet.
