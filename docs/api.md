@@ -526,7 +526,7 @@ curl http://localhost:9000/nodes/abc123/tasks
 |---|---|---|---|
 | PUT | `/nodes/{id}/availability` | 3 | Set node availability (active, drain, pause). |
 | GET | `/nodes/{id}/labels` | — | Get node labels as key/value map. |
-| PATCH | `/nodes/{id}/labels` | 3 | Patch node labels (JSON Patch, RFC 6902). |
+| PATCH | `/nodes/{id}/labels` | 3 | Patch node labels (JSON Patch or Merge Patch). |
 | GET | `/nodes/{id}/role` | — | Get node role (worker or manager). |
 | PUT | `/nodes/{id}/role` | 3 | Promote or demote a node. |
 | DELETE | `/nodes/{id}` | 3 | Remove a node from the swarm. |
@@ -611,9 +611,9 @@ Sub-resource endpoints for reading and modifying individual service configuratio
 | Method | Path | Patch Type | Description |
 |---|---|---|---|
 | GET | `/services/{id}/env` | — | Get environment variables. |
-| PATCH | `/services/{id}/env` | JSON Patch | Patch environment variables. |
+| PATCH | `/services/{id}/env` | JSON Patch or Merge Patch | Patch environment variables. |
 | GET | `/services/{id}/labels` | — | Get service labels. |
-| PATCH | `/services/{id}/labels` | JSON Patch | Patch service labels. |
+| PATCH | `/services/{id}/labels` | JSON Patch or Merge Patch | Patch service labels. |
 | GET | `/services/{id}/resources` | — | Get CPU/memory reservations and limits. |
 | PATCH | `/services/{id}/resources` | Merge Patch | Patch resource requirements. |
 | GET | `/services/{id}/healthcheck` | — | Get healthcheck config. |
@@ -630,13 +630,13 @@ Sub-resource endpoints for reading and modifying individual service configuratio
 | GET | `/services/{id}/log-driver` | — | Get log driver config. |
 | PATCH | `/services/{id}/log-driver` | Merge Patch | Patch log driver config. |
 | GET | `/services/{id}/configs` | — | Get config references. |
-| PATCH | `/services/{id}/configs` | — | Replace config references. |
+| PATCH | `/services/{id}/configs` | Merge Patch | Replace config references. |
 | GET | `/services/{id}/secrets` | — | Get secret references. |
-| PATCH | `/services/{id}/secrets` | — | Replace secret references. |
+| PATCH | `/services/{id}/secrets` | Merge Patch | Replace secret references. |
 | GET | `/services/{id}/networks` | — | Get network attachments. |
-| PATCH | `/services/{id}/networks` | — | Replace network attachments. |
+| PATCH | `/services/{id}/networks` | Merge Patch | Replace network attachments. |
 | GET | `/services/{id}/mounts` | — | Get mount configuration. |
-| PATCH | `/services/{id}/mounts` | — | Replace mount configuration. |
+| PATCH | `/services/{id}/mounts` | Merge Patch | Replace mount configuration. |
 | GET | `/services/{id}/container-config` | — | Get container-level config. |
 | PATCH | `/services/{id}/container-config` | Merge Patch | Patch container-level config. |
 
