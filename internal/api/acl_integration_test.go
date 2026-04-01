@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
 // Fix 1: ACL list filtering via HTTP handler.
@@ -985,4 +987,176 @@ func TestHandleGetStack_ACLDenied(t *testing.T) {
 		t.Fatalf("expected 403 for denied stack, got %d", w.Code)
 	}
 	assertACLErrorCode(t, w, "ACL001")
+}
+
+// --- Task 5: Write handler ACL integration tests with name resolvers ---
+
+func TestServiceScaleACL_DeniedByResourceName(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "webapp"},
+			Mode: swarm.ServiceMode{
+				Replicated: &swarm.ReplicatedService{Replicas: func() *uint64 { v := uint64(1); return &v }()},
+			},
+		},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"service:*"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+		{
+			Resources:   []string{"service:other"},
+			Audience:    []string{"*"},
+			Permissions: []string{"write"},
+		},
+	}})
+
+	wc := &mockWriteClient{}
+	h := newTestHandlers(t, withCache(c), withACL(e), withWriteClient(wc))
+
+	handler := h.requireWriteACL(h.serviceName)(
+		requireLevel(config.OpsOperational, config.OpsImpactful)(h.HandleScaleService),
+	)
+
+	body := `{"replicas": 3}`
+	req := httptest.NewRequest("PUT", "/services/svc1/scale", strings.NewReader(body))
+	req.SetPathValue("id", "svc1")
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d; body: %s", w.Code, w.Body.String())
+	}
+	assertACLErrorCode(t, w, "ACL002")
+}
+
+func TestServiceScaleACL_AllowedByResourceName(t *testing.T) {
+	c := cache.New(nil)
+	replicas := uint64(1)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "webapp"},
+			Mode: swarm.ServiceMode{
+				Replicated: &swarm.ReplicatedService{Replicas: &replicas},
+			},
+		},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"service:webapp"},
+			Audience:    []string{"*"},
+			Permissions: []string{"write"},
+		},
+	}})
+
+	wc := &mockWriteClient{
+		mockServiceLifecycleWriter: mockServiceLifecycleWriter{
+			scaleServiceFn: func(_ context.Context, id string, r uint64) (swarm.Service, error) {
+				return swarm.Service{ID: id}, nil
+			},
+		},
+	}
+	h := newTestHandlers(t, withCache(c), withACL(e), withWriteClient(wc))
+
+	handler := h.requireWriteACL(h.serviceName)(
+		requireLevel(config.OpsOperational, config.OpsImpactful)(h.HandleScaleService),
+	)
+
+	body := `{"replicas": 3}`
+	req := httptest.NewRequest("PUT", "/services/svc1/scale", strings.NewReader(body))
+	req.SetPathValue("id", "svc1")
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code == http.StatusForbidden {
+		t.Fatalf("expected non-403, got 403; body: %s", w.Body.String())
+	}
+}
+
+func TestTaskRemoveACL_ResolvesToParentService(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "webapp"}},
+	})
+	c.SetTask(swarm.Task{ID: "task1", ServiceID: "svc1"})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"service:webapp"},
+			Audience:    []string{"*"},
+			Permissions: []string{"write"},
+		},
+	}})
+
+	wc := &mockWriteClient{
+		mockResourceRemover: mockResourceRemover{
+			removeTaskFn: func(_ context.Context, id string) error {
+				return nil
+			},
+		},
+	}
+	h := newTestHandlers(t, withCache(c), withACL(e), withWriteClient(wc))
+
+	handler := h.requireWriteACL(h.taskServiceResource)(
+		requireLevel(config.OpsImpactful, config.OpsImpactful)(h.HandleRemoveTask),
+	)
+
+	req := httptest.NewRequest("DELETE", "/tasks/task1", nil)
+	req.SetPathValue("id", "task1")
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code == http.StatusForbidden {
+		t.Fatalf("expected non-403, got 403; body: %s", w.Body.String())
+	}
+}
+
+func TestTaskRemoveACL_DeniedWhenParentServiceNotGranted(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "webapp"}},
+	})
+	c.SetTask(swarm.Task{ID: "task1", ServiceID: "svc1"})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"service:other"},
+			Audience:    []string{"*"},
+			Permissions: []string{"write"},
+		},
+	}})
+
+	wc := &mockWriteClient{}
+	h := newTestHandlers(t, withCache(c), withACL(e), withWriteClient(wc))
+
+	handler := h.requireWriteACL(h.taskServiceResource)(
+		requireLevel(config.OpsImpactful, config.OpsImpactful)(h.HandleRemoveTask),
+	)
+
+	req := httptest.NewRequest("DELETE", "/tasks/task1", nil)
+	req.SetPathValue("id", "task1")
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d; body: %s", w.Code, w.Body.String())
+	}
+	assertACLErrorCode(t, w, "ACL002")
 }
