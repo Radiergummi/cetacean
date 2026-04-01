@@ -18,7 +18,6 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-// Fix 1: ACL list filtering via HTTP handler.
 func TestHandleListServices_ACLFiltering(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
@@ -101,7 +100,7 @@ func TestHandleListServices_NilPolicyReturnsAll(t *testing.T) {
 	}
 }
 
-// Fix 2: requireAnyGrant returns 403 with ACL001 when identity has no grants.
+// requireAnyGrant returns 403 with ACL001 when identity has no grants.
 func TestHandleCluster_ACL001_NoGrants(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
@@ -321,7 +320,7 @@ func assertACLErrorCode(t *testing.T, w *httptest.ResponseRecorder, code string)
 	}
 }
 
-// --- Task 1: List handler ACL filter tests ---
+// --- List handler ACL filter tests ---
 
 func TestHandleListNodes_ACLFiltering(t *testing.T) {
 	c := cache.New(nil)
@@ -602,7 +601,7 @@ func TestHandleListStacks_ACLFiltering(t *testing.T) {
 	}
 }
 
-// --- Task 2: Detail handler ACL denial tests ---
+// --- Detail handler ACL denial tests ---
 
 func TestHandleGetNode_ACLDenied(t *testing.T) {
 	c := cache.New(nil)
@@ -798,7 +797,7 @@ func TestHandleGetVolume_ACLDenied(t *testing.T) {
 	assertACLErrorCode(t, w, "ACL001")
 }
 
-// --- Task 3: Cross-reference filtering in detail responses ---
+// --- Cross-reference filtering in detail responses ---
 
 func TestHandleGetConfig_CrossRefFiltering(t *testing.T) {
 	c := cache.New(nil)
@@ -928,7 +927,7 @@ func TestHandleGetSecret_CrossRefFiltering(t *testing.T) {
 	}
 }
 
-// --- Task 4: Search endpoint ACL filtering ---
+// --- Search endpoint ACL filtering ---
 
 func TestHandleSearch_ACLFiltering(t *testing.T) {
 	c := cache.New(nil)
@@ -1012,7 +1011,7 @@ func TestHandleGetStack_ACLDenied(t *testing.T) {
 	assertACLErrorCode(t, w, "ACL001")
 }
 
-// --- Task 5: Write handler ACL integration tests with name resolvers ---
+// --- Write handler ACL integration with name resolvers ---
 
 func TestServiceScaleACL_DeniedByResourceName(t *testing.T) {
 	c := cache.New(nil)

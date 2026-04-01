@@ -24,7 +24,7 @@ func TestMatchResource(t *testing.T) {
 		{"stack:monitoring", "stack:other", false},
 		{"*:*", "service:foo", true},
 
-		// Fix 8: Malformed resource strings against typed patterns.
+		// Malformed resource strings against typed patterns.
 		{"service:*", "nocolon", false},  // no colon in resource
 		{"service:*", ":noname", false},  // empty type in resource
 		{"service:*", "service:", false}, // empty resource names never match
@@ -68,7 +68,7 @@ func TestMatchAudience(t *testing.T) {
 	}
 }
 
-// Fix 5: Empty-subject identity matching.
+// Empty-subject identity matching.
 func TestMatchAudience_EmptySubject(t *testing.T) {
 	tests := []struct {
 		name string
@@ -89,10 +89,10 @@ func TestMatchAudience_EmptySubject(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "user:* with empty subject but populated email matches via subject",
+			name: "user:* with empty subject but populated email matches via email",
 			expr: "user:*",
 			id:   &auth.Identity{Subject: "", Email: "alice@example.com"},
-			want: true, // matches on subject already (glob matches empty)
+			want: true, // subject is empty (skipped), falls through to email match
 		},
 		{
 			name: "user:*@example.com with empty subject matches via email",

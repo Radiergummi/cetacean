@@ -427,7 +427,7 @@ func TestEvaluator_SetOnNil(t *testing.T) {
 	e.SetSource(&mockSource{})
 }
 
-// Fix 3: Stack grant isolation -- service in stack B denied when only stack A granted.
+// Stack grant isolation: service in stack B denied when only stack A granted.
 func TestEvaluator_StackGrantIsolation(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
@@ -453,7 +453,7 @@ func TestEvaluator_StackGrantIsolation(t *testing.T) {
 	}
 }
 
-// Fix 4: Empty but non-nil grants list denies all access (distinct from nil policy).
+// Empty but non-nil grants list denies all access (distinct from nil policy).
 func TestEvaluator_EmptyGrantsDenyAll(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{}})
@@ -470,7 +470,7 @@ func TestEvaluator_EmptyGrantsDenyAll(t *testing.T) {
 	}
 }
 
-// Fix 6: Provider grants with invalid resource types/permissions are inert.
+// Provider grants with invalid resource types/permissions are inert.
 func TestEvaluator_ProviderGrantsWithUnknownPermissions(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{}})
@@ -500,7 +500,7 @@ func TestEvaluator_ProviderGrantsWithUnknownPermissions(t *testing.T) {
 	}
 }
 
-// Fix 8: Malformed resources against typed patterns.
+// Malformed resources (no colon, empty type, empty name) are always denied.
 func TestEvaluator_MalformedResourceAgainstTypedPattern(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{

@@ -132,7 +132,7 @@ func TestValidate_EmptyPermissions(t *testing.T) {
 	}
 }
 
-// Fix 4: {"grants": []} parses successfully but creates an empty policy.
+// {"grants": []} parses successfully but creates an empty policy.
 // ParsePolicy requires len(p.Grants) > 0, so it fails to parse.
 func TestParsePolicy_EmptyGrantsReturnsError(t *testing.T) {
 	data := []byte(`{"grants":[]}`)
