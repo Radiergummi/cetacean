@@ -357,6 +357,23 @@ func TestParsePagination_RangeMultipartError(t *testing.T) {
 	}
 }
 
+func TestParsePagination_InvalidQueryParamsFallBackToRange(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/?limit=abc", nil)
+	r.Header.Set("Range", "items 0-24")
+
+	p, err := parsePagination(r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !p.RangeReq {
+		t.Error("expected RangeReq true when query param is invalid")
+	}
+	if p.Limit != 25 {
+		t.Errorf("expected limit 25 from Range header, got %d", p.Limit)
+	}
+}
+
 func TestWriteCollectionResponse_RangePartial(t *testing.T) {
 	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/nodes", nil)
 	r.Header.Set("Range", "items 0-9")

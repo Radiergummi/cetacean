@@ -28,22 +28,24 @@ func parsePagination(r *http.Request) (PageParams, error) {
 		Dir:    "asc",
 	}
 
-	hasQueryParams := r.URL.Query().Get("limit") != "" || r.URL.Query().Get("offset") != ""
+	var hasQueryPagination bool
 
 	if v := r.URL.Query().Get("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			p.Limit = n
+			hasQueryPagination = true
 		}
 	}
 
 	if v := r.URL.Query().Get("offset"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
 			p.Offset = n
+			hasQueryPagination = true
 		}
 	}
 
-	// Range header is only used when query params are absent.
-	if !hasQueryParams {
+	// Range header is only used when no valid query pagination params are present.
+	if !hasQueryPagination {
 		if rangeLimit, rangeOffset, ok, err := parseItemsRange(r.Header.Get("Range")); err != nil {
 			return p, err
 		} else if ok {

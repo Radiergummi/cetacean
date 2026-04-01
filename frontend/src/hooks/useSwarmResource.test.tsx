@@ -309,4 +309,47 @@ describe("useSwarmResource", () => {
     expect(result.current.data).toHaveLength(1);
     expect(result.current.data[0].ID).toBe("1");
   });
+
+  it("sync event resets to page 0 and discards subsequent pages", async () => {
+    const page0 = [
+      { ID: "1", Name: "a" },
+      { ID: "2", Name: "b" },
+    ];
+    const page1 = [{ ID: "3", Name: "c" }];
+    const refreshed = [
+      { ID: "1", Name: "a-refreshed" },
+      { ID: "2", Name: "b-refreshed" },
+    ];
+
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce({ items: page0, total: 3, limit: 50, offset: 0 })
+      .mockResolvedValueOnce({ items: page1, total: 3, limit: 50, offset: 50 })
+      .mockResolvedValueOnce({ items: refreshed, total: 2, limit: 50, offset: 0 });
+
+    const { result } = renderHook(
+      () => useSwarmResource(fetchFn, "service", ({ ID }: Item) => ID),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.data).toHaveLength(2);
+
+    // Load page 1
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.data).toHaveLength(3));
+
+    // Fire sync event — should reset to page 0 only
+    act(() =>
+      MockEventSource.instance.simulateEvent("service", {
+        type: "sync",
+        action: "sync",
+        id: "",
+      }),
+    );
+
+    await waitFor(() => expect(result.current.data).toEqual(refreshed));
+    expect(result.current.data).toHaveLength(2);
+    expect(result.current.total).toBe(2);
+  });
 });
