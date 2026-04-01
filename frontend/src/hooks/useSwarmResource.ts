@@ -106,7 +106,7 @@ export function useSwarmResource<T>(
           setData([...previous, resource]);
           setSSEOffset((offset) => offset + 1);
         }
-      } else if (event.action !== "remove") {
+      } else {
         // Replayed event without resource payload — schedule a single refetch.
         // Multiple payload-less events in a batch share one refetch via microtask.
         if (!pendingRefetch.current) {

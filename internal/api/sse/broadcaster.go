@@ -274,11 +274,12 @@ func (b *Broadcaster) replayEvents(
 		})
 	}
 
-	if len(replay) > 0 {
-		WriteBatch(w, flusher, replay)
+	if len(replay) == 0 {
+		return afterID
 	}
 
-	return entries[len(entries)-1].ID
+	WriteBatch(w, flusher, replay)
+	return replay[len(replay)-1].HistoryID
 }
 
 // TypeMatcher returns a match function that accepts events of the given type.

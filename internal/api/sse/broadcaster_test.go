@@ -574,6 +574,48 @@ func TestSSE_NoLastEventID_NoReplay(t *testing.T) {
 	}
 }
 
+func TestSSE_ReplayNoMatchingType_DoesNotDropLiveEvents(t *testing.T) {
+	h := cache.NewHistory(10)
+	// History contains only node events
+	h.Append(cache.HistoryEntry{Type: cache.EventNode, Action: "update", ResourceID: "n1"})
+	h.Append(cache.HistoryEntry{Type: cache.EventNode, Action: "update", ResourceID: "n2"})
+
+	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, h)
+	defer b.Close()
+
+	// Connect a service stream with Last-Event-ID: 0 — history has entries
+	// but none match "service", so replay should be empty and live events
+	// must NOT be suppressed.
+	req := httptest.NewRequest("GET", "/services", nil)
+	req.Header.Set("Last-Event-ID", "0")
+	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	done := make(chan struct{})
+	go func() {
+		b.ServeSSE(w, req, TypeMatcher(cache.EventService), cache.EventService)
+		close(done)
+	}()
+
+	waitForClients(t, b, 1)
+
+	// Broadcast a live service event — it must NOT be dropped
+	b.Broadcast(cache.Event{
+		Type: cache.EventService, Action: "create", ID: "s1", HistoryID: 3,
+	})
+	waitForBody(t, w, `"s1"`)
+
+	b.Close()
+	<-done
+
+	body := w.bodyString()
+	if !strings.Contains(body, `"s1"`) {
+		t.Errorf("live service event should not have been dropped, got: %s", body)
+	}
+	if strings.Contains(body, "event: sync") {
+		t.Error("should not send sync when history entries exist but don't match type")
+	}
+}
+
 func TestSSE_EndToEnd_ReplayThenLive(t *testing.T) {
 	h := cache.NewHistory(100)
 	// Simulate 5 past events (IDs will be 1–5 assigned by Append)
