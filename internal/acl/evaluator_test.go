@@ -553,7 +553,11 @@ func TestPermissionsFor_Deduplication(t *testing.T) {
 func TestEvaluator_TaskInheritsThroughStack(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"stack:monitoring"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"stack:monitoring"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
 	}})
 	e.SetResolver(&stubResolver{
 		services: map[string]string{"task-prom-1": "prometheus"},
@@ -569,7 +573,11 @@ func TestEvaluator_TaskInheritsThroughStack(t *testing.T) {
 func TestEvaluator_CaseSensitiveResourceNames(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:WebApp"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:WebApp"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
 	}})
 
 	id := &auth.Identity{Subject: "user1"}
@@ -584,7 +592,11 @@ func TestEvaluator_CaseSensitiveResourceNames(t *testing.T) {
 func TestEvaluator_CaseSensitiveAudience(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:*"}, Audience: []string{"user:Alice"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:*"},
+			Audience:    []string{"user:Alice"},
+			Permissions: []string{"read"},
+		},
 	}})
 
 	if !e.Can(&auth.Identity{Subject: "Alice"}, "read", "service:foo") {
@@ -598,8 +610,16 @@ func TestEvaluator_CaseSensitiveAudience(t *testing.T) {
 func TestEvaluator_OverlappingGrantsUnion(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:*"}, Audience: []string{"group:ops"}, Permissions: []string{"read"}},
-		{Resources: []string{"service:webapp"}, Audience: []string{"group:dev"}, Permissions: []string{"write"}},
+		{
+			Resources:   []string{"service:*"},
+			Audience:    []string{"group:ops"},
+			Permissions: []string{"read"},
+		},
+		{
+			Resources:   []string{"service:webapp"},
+			Audience:    []string{"group:dev"},
+			Permissions: []string{"write"},
+		},
 	}})
 
 	id := &auth.Identity{Subject: "alice", Groups: []string{"ops", "dev"}}

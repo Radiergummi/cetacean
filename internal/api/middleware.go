@@ -14,13 +14,11 @@ import (
 	"github.com/radiergummi/cetacean/internal/metrics"
 )
 
-type ctxKey int
-
-const reqIDKey ctxKey = 0
+type reqIDKey struct{}
 
 // RequestIDFrom extracts the request ID from a context.
 func RequestIDFrom(ctx context.Context) string {
-	if id, ok := ctx.Value(reqIDKey).(string); ok {
+	if id, ok := ctx.Value(reqIDKey{}).(string); ok {
 		return id
 	}
 	return ""
@@ -40,7 +38,7 @@ func requestID(next http.Handler) http.Handler {
 			}
 			return -1
 		}, id)
-		ctx := context.WithValue(r.Context(), reqIDKey, id)
+		ctx := context.WithValue(r.Context(), reqIDKey{}, id)
 		w.Header().Set("X-Request-ID", id)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

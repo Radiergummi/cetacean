@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -26,12 +27,19 @@ var notFoundCodes = map[string]string{
 	"plugin":  "PLG004",
 }
 
-func writeDockerError(w http.ResponseWriter, r *http.Request, err error, resource string) {
+func writeDockerError(
+	w http.ResponseWriter,
+	r *http.Request,
+	err error,
+	resource string,
+	id string,
+) {
 	if cerrdefs.IsNotFound(err) {
+		detail := fmt.Sprintf("%s %q not found", resource, id)
 		if code, ok := notFoundCodes[resource]; ok {
-			writeErrorCode(w, r, code, resource+" not found")
+			writeErrorCode(w, r, code, detail)
 		} else {
-			writeProblem(w, r, http.StatusNotFound, resource+" not found")
+			writeProblem(w, r, http.StatusNotFound, detail)
 		}
 		return
 	}
@@ -49,42 +57,42 @@ func writeDockerError(w http.ResponseWriter, r *http.Request, err error, resourc
 
 // writeServiceError handles Docker API errors for service mutations,
 // mapping version conflicts to SVC001.
-func writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
+func writeServiceError(w http.ResponseWriter, r *http.Request, err error, id string) {
 	if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
 		writeErrorCode(w, r, "SVC001", err.Error())
 		return
 	}
-	writeDockerError(w, r, err, "service")
+	writeDockerError(w, r, err, "service", id)
 }
 
 // writeNodeError handles Docker API errors for node mutations,
 // mapping version conflicts to NOD002.
-func writeNodeError(w http.ResponseWriter, r *http.Request, err error) {
+func writeNodeError(w http.ResponseWriter, r *http.Request, err error, id string) {
 	if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
 		writeErrorCode(w, r, "NOD002", err.Error())
 		return
 	}
-	writeDockerError(w, r, err, "node")
+	writeDockerError(w, r, err, "node", id)
 }
 
 // writeConfigError handles Docker API errors for config mutations,
 // mapping version conflicts to CFG005.
-func writeConfigError(w http.ResponseWriter, r *http.Request, err error) {
+func writeConfigError(w http.ResponseWriter, r *http.Request, err error, id string) {
 	if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
 		writeErrorCode(w, r, "CFG005", err.Error())
 		return
 	}
-	writeDockerError(w, r, err, "config")
+	writeDockerError(w, r, err, "config", id)
 }
 
 // writeSecretError handles Docker API errors for secret mutations,
 // mapping version conflicts to SEC005.
-func writeSecretError(w http.ResponseWriter, r *http.Request, err error) {
+func writeSecretError(w http.ResponseWriter, r *http.Request, err error, id string) {
 	if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
 		writeErrorCode(w, r, "SEC005", err.Error())
 		return
 	}
-	writeDockerError(w, r, err, "secret")
+	writeDockerError(w, r, err, "secret", id)
 }
 
 // writeServiceMutation calls a service writer function and writes the standard
@@ -97,7 +105,7 @@ func writeServiceMutation(
 ) {
 	updated, err := fn()
 	if err != nil {
-		writeServiceError(w, r, err)
+		writeServiceError(w, r, err, id)
 		return
 	}
 	writeMutationResponse(
@@ -119,7 +127,7 @@ func writeNodeMutation(
 ) {
 	updated, err := fn()
 	if err != nil {
-		writeNodeError(w, r, err)
+		writeNodeError(w, r, err, id)
 		return
 	}
 	writeMutationResponse(w, r, NewDetailResponse(r.Context(), "/nodes/"+id, "Node", NodeResponse{

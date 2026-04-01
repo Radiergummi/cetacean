@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/base64"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -19,7 +20,7 @@ func (h *Handlers) HandleRemoveConfig(w http.ResponseWriter, r *http.Request) {
 
 	_, ok := h.cache.GetConfig(id)
 	if !ok {
-		writeErrorCode(w, r, "CFG002", "config not found")
+		writeErrorCode(w, r, "CFG002", fmt.Sprintf("config %q not found", id))
 		return
 	}
 
@@ -31,7 +32,7 @@ func (h *Handlers) HandleRemoveConfig(w http.ResponseWriter, r *http.Request) {
 			writeErrorCode(w, r, "CFG001", err.Error())
 			return
 		}
-		writeDockerError(w, r, err, "config")
+		writeDockerError(w, r, err, "config", id)
 		return
 	}
 
@@ -67,7 +68,7 @@ func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 			writeErrorCode(w, r, "CFG003", err.Error())
 			return
 		}
-		writeDockerError(w, r, err, "config")
+		writeDockerError(w, r, err, "config", req.Name)
 		return
 	}
 
@@ -102,7 +103,7 @@ func (h *Handlers) HandleGetConfigLabels(w http.ResponseWriter, r *http.Request)
 	id := r.PathValue("id")
 	cfg, ok := h.cache.GetConfig(id)
 	if !ok {
-		writeErrorCode(w, r, "CFG002", "config not found")
+		writeErrorCode(w, r, "CFG002", fmt.Sprintf("config %q not found", id))
 		return
 	}
 	labels := cfg.Spec.Labels
@@ -144,7 +145,7 @@ func (h *Handlers) HandlePatchConfigLabels(w http.ResponseWriter, r *http.Reques
 
 	cfg, ok := h.cache.GetConfig(id)
 	if !ok {
-		writeErrorCode(w, r, "CFG002", "config not found")
+		writeErrorCode(w, r, "CFG002", fmt.Sprintf("config %q not found", id))
 		return
 	}
 
@@ -174,7 +175,7 @@ func (h *Handlers) HandlePatchConfigLabels(w http.ResponseWriter, r *http.Reques
 
 	result, err := h.configWriter.UpdateConfigLabels(r.Context(), id, updated)
 	if err != nil {
-		writeConfigError(w, r, err)
+		writeConfigError(w, r, err, id)
 		return
 	}
 

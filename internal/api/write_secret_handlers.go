@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/base64"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -19,7 +20,7 @@ func (h *Handlers) HandleRemoveSecret(w http.ResponseWriter, r *http.Request) {
 
 	_, ok := h.cache.GetSecret(id)
 	if !ok {
-		writeErrorCode(w, r, "SEC002", "secret not found")
+		writeErrorCode(w, r, "SEC002", fmt.Sprintf("secret %q not found", id))
 		return
 	}
 
@@ -31,7 +32,7 @@ func (h *Handlers) HandleRemoveSecret(w http.ResponseWriter, r *http.Request) {
 			writeErrorCode(w, r, "SEC001", err.Error())
 			return
 		}
-		writeDockerError(w, r, err, "secret")
+		writeDockerError(w, r, err, "secret", id)
 		return
 	}
 
@@ -67,7 +68,7 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 			writeErrorCode(w, r, "SEC003", err.Error())
 			return
 		}
-		writeDockerError(w, r, err, "secret")
+		writeDockerError(w, r, err, "secret", req.Name)
 		return
 	}
 
@@ -103,7 +104,7 @@ func (h *Handlers) HandleGetSecretLabels(w http.ResponseWriter, r *http.Request)
 	id := r.PathValue("id")
 	sec, ok := h.cache.GetSecret(id)
 	if !ok {
-		writeErrorCode(w, r, "SEC002", "secret not found")
+		writeErrorCode(w, r, "SEC002", fmt.Sprintf("secret %q not found", id))
 		return
 	}
 	labels := sec.Spec.Labels
@@ -145,7 +146,7 @@ func (h *Handlers) HandlePatchSecretLabels(w http.ResponseWriter, r *http.Reques
 
 	sec, ok := h.cache.GetSecret(id)
 	if !ok {
-		writeErrorCode(w, r, "SEC002", "secret not found")
+		writeErrorCode(w, r, "SEC002", fmt.Sprintf("secret %q not found", id))
 		return
 	}
 
@@ -175,7 +176,7 @@ func (h *Handlers) HandlePatchSecretLabels(w http.ResponseWriter, r *http.Reques
 
 	result, err := h.secretWriter.UpdateSecretLabels(r.Context(), id, updated)
 	if err != nil {
-		writeSecretError(w, r, err)
+		writeSecretError(w, r, err, id)
 		return
 	}
 

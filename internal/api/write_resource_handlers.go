@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -12,7 +13,7 @@ func (h *Handlers) HandleRemoveTask(w http.ResponseWriter, r *http.Request) {
 
 	_, ok := h.cache.GetTask(id)
 	if !ok {
-		writeErrorCode(w, r, "TSK002", "task not found")
+		writeErrorCode(w, r, "TSK002", fmt.Sprintf("task %q not found", id))
 		return
 	}
 
@@ -24,7 +25,7 @@ func (h *Handlers) HandleRemoveTask(w http.ResponseWriter, r *http.Request) {
 			writeErrorCode(w, r, "TSK001", err.Error())
 			return
 		}
-		writeDockerError(w, r, err, "task")
+		writeDockerError(w, r, err, "task", id)
 		return
 	}
 
@@ -36,7 +37,7 @@ func (h *Handlers) HandleRemoveNetwork(w http.ResponseWriter, r *http.Request) {
 
 	_, ok := h.cache.GetNetwork(id)
 	if !ok {
-		writeErrorCode(w, r, "NET002", "network not found")
+		writeErrorCode(w, r, "NET002", fmt.Sprintf("network %q not found", id))
 		return
 	}
 
@@ -48,7 +49,7 @@ func (h *Handlers) HandleRemoveNetwork(w http.ResponseWriter, r *http.Request) {
 			writeErrorCode(w, r, "NET001", err.Error())
 			return
 		}
-		writeDockerError(w, r, err, "network")
+		writeDockerError(w, r, err, "network", id)
 		return
 	}
 
@@ -60,7 +61,7 @@ func (h *Handlers) HandleRemoveVolume(w http.ResponseWriter, r *http.Request) {
 
 	_, ok := h.cache.GetVolume(name)
 	if !ok {
-		writeErrorCode(w, r, "VOL002", "volume not found")
+		writeErrorCode(w, r, "VOL002", fmt.Sprintf("volume %q not found", name))
 		return
 	}
 
@@ -74,7 +75,7 @@ func (h *Handlers) HandleRemoveVolume(w http.ResponseWriter, r *http.Request) {
 			writeErrorCode(w, r, "VOL001", err.Error())
 			return
 		}
-		writeDockerError(w, r, err, "volume")
+		writeDockerError(w, r, err, "volume", name)
 		return
 	}
 

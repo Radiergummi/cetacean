@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -30,7 +31,7 @@ func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 	if svc.Spec.Mode.Replicated == nil {
@@ -77,7 +78,7 @@ func (h *Handlers) HandleUpdateServiceMode(w http.ResponseWriter, r *http.Reques
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -115,7 +116,7 @@ func (h *Handlers) HandleUpdateServiceEndpointMode(w http.ResponseWriter, r *htt
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -142,7 +143,7 @@ func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Reque
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -158,7 +159,7 @@ func (h *Handlers) HandleRollbackService(w http.ResponseWriter, r *http.Request)
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 	if svc.PreviousSpec == nil {
@@ -178,7 +179,7 @@ func (h *Handlers) HandleRemoveService(w http.ResponseWriter, r *http.Request) {
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -190,7 +191,7 @@ func (h *Handlers) HandleRemoveService(w http.ResponseWriter, r *http.Request) {
 			writeErrorCode(w, r, "SVC002", err.Error())
 			return
 		}
-		writeDockerError(w, r, err, "service")
+		writeDockerError(w, r, err, "service", id)
 		return
 	}
 
@@ -218,7 +219,7 @@ func (h *Handlers) HandleRemoveStack(w http.ResponseWriter, r *http.Request) {
 
 	stack, ok := h.cache.GetStack(name)
 	if !ok {
-		writeErrorCode(w, r, "STK001", "stack not found")
+		writeErrorCode(w, r, "STK001", fmt.Sprintf("stack %q not found", name))
 		return
 	}
 
@@ -289,7 +290,7 @@ func (h *Handlers) HandleRestartService(w http.ResponseWriter, r *http.Request) 
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -318,7 +319,7 @@ func (h *Handlers) HandleGetServiceEnv(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 	var env []string
@@ -360,7 +361,7 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -391,7 +392,7 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 
 	result, err := h.serviceSpec.UpdateServiceEnv(r.Context(), id, updated)
 	if err != nil {
-		writeServiceError(w, r, err)
+		writeServiceError(w, r, err, id)
 		return
 	}
 
@@ -406,7 +407,7 @@ func (h *Handlers) HandleGetServiceLabels(w http.ResponseWriter, r *http.Request
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 	labels := svc.Spec.Labels
@@ -448,7 +449,7 @@ func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Reque
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -478,7 +479,7 @@ func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Reque
 
 	result, err := h.serviceSpec.UpdateServiceLabels(r.Context(), id, updated)
 	if err != nil {
-		writeServiceError(w, r, err)
+		writeServiceError(w, r, err, id)
 		return
 	}
 
@@ -493,7 +494,7 @@ func (h *Handlers) HandleGetServiceResources(w http.ResponseWriter, r *http.Requ
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 	resources := svc.Spec.TaskTemplate.Resources
@@ -531,7 +532,7 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -548,7 +549,7 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 	slog.Info("updating service resources", "service", id)
 	updated, err := h.serviceSpec.UpdateServiceResources(r.Context(), id, &result)
 	if err != nil {
-		writeServiceError(w, r, err)
+		writeServiceError(w, r, err, id)
 		return
 	}
 	writeMutationResponse(w, r, NewDetailResponse(
@@ -584,7 +585,7 @@ func (h *Handlers) HandleGetServicePorts(w http.ResponseWriter, r *http.Request)
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 	var ports []swarm.PortConfig
@@ -620,7 +621,7 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -636,7 +637,7 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 
 	updated, err := h.serviceSpec.UpdateServicePorts(r.Context(), id, patch.Ports)
 	if err != nil {
-		writeServiceError(w, r, err)
+		writeServiceError(w, r, err, id)
 		return
 	}
 
@@ -660,7 +661,7 @@ func (h *Handlers) HandleGetServiceHealthcheck(w http.ResponseWriter, r *http.Re
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -689,7 +690,7 @@ func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Re
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -703,7 +704,7 @@ func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Re
 
 	updated, err := h.serviceSpec.UpdateServiceHealthcheck(r.Context(), id, &hc)
 	if err != nil {
-		writeServiceError(w, r, err)
+		writeServiceError(w, r, err, id)
 		return
 	}
 
@@ -726,7 +727,7 @@ func (h *Handlers) HandleGetServicePlacement(w http.ResponseWriter, r *http.Requ
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -755,7 +756,7 @@ func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Requ
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -769,7 +770,7 @@ func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Requ
 
 	updated, err := h.serviceSpec.UpdateServicePlacement(r.Context(), id, &placement)
 	if err != nil {
-		writeServiceError(w, r, err)
+		writeServiceError(w, r, err, id)
 		return
 	}
 
@@ -792,7 +793,7 @@ func (h *Handlers) HandleGetServiceUpdatePolicy(w http.ResponseWriter, r *http.R
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 	policy := svc.Spec.UpdateConfig
@@ -830,7 +831,7 @@ func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -855,7 +856,7 @@ func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http
 
 	updated, err := h.serviceSpec.UpdateServiceUpdatePolicy(r.Context(), id, &result)
 	if err != nil {
-		writeServiceError(w, r, err)
+		writeServiceError(w, r, err, id)
 		return
 	}
 
@@ -877,7 +878,7 @@ func (h *Handlers) HandleGetServiceRollbackPolicy(w http.ResponseWriter, r *http
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 	policy := svc.Spec.RollbackConfig
@@ -914,7 +915,7 @@ func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *ht
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -939,7 +940,7 @@ func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *ht
 
 	updated, err := h.serviceSpec.UpdateServiceRollbackPolicy(r.Context(), id, &result)
 	if err != nil {
-		writeServiceError(w, r, err)
+		writeServiceError(w, r, err, id)
 		return
 	}
 
@@ -960,7 +961,7 @@ func (h *Handlers) HandleGetServiceLogDriver(w http.ResponseWriter, r *http.Requ
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 	writeCachedJSON(
@@ -994,7 +995,7 @@ func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Re
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -1019,7 +1020,7 @@ func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Re
 
 	updated, err := h.serviceSpec.UpdateServiceLogDriver(r.Context(), id, &result)
 	if err != nil {
-		writeServiceError(w, r, err)
+		writeServiceError(w, r, err, id)
 		return
 	}
 
@@ -1050,7 +1051,7 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -1076,7 +1077,7 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 
 	updated, err := h.serviceSpec.UpdateServiceHealthcheck(r.Context(), id, &result)
 	if err != nil {
-		writeServiceError(w, r, err)
+		writeServiceError(w, r, err, id)
 		return
 	}
 
@@ -1157,7 +1158,7 @@ func (h *Handlers) HandleGetServiceContainerConfig(w http.ResponseWriter, r *htt
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -1181,7 +1182,7 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -1229,7 +1230,7 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 		},
 	)
 	if err != nil {
-		writeServiceError(w, r, err)
+		writeServiceError(w, r, err, id)
 		return
 	}
 
@@ -1290,7 +1291,7 @@ func (h *Handlers) HandleGetServiceConfigs(w http.ResponseWriter, r *http.Reques
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -1320,7 +1321,7 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -1363,7 +1364,7 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 
 	updated, err := h.serviceAttachment.UpdateServiceConfigs(r.Context(), id, configs)
 	if err != nil {
-		writeServiceError(w, r, err)
+		writeServiceError(w, r, err, id)
 		return
 	}
 
@@ -1380,7 +1381,7 @@ func (h *Handlers) HandleGetServiceSecrets(w http.ResponseWriter, r *http.Reques
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -1410,7 +1411,7 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -1453,7 +1454,7 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 
 	updated, err := h.serviceAttachment.UpdateServiceSecrets(r.Context(), id, secrets)
 	if err != nil {
-		writeServiceError(w, r, err)
+		writeServiceError(w, r, err, id)
 		return
 	}
 
@@ -1470,7 +1471,7 @@ func (h *Handlers) HandleGetServiceNetworks(w http.ResponseWriter, r *http.Reque
 	id := r.PathValue("id")
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -1505,7 +1506,7 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -1533,7 +1534,7 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 
 	updated, err := h.serviceAttachment.UpdateServiceNetworks(r.Context(), id, networks)
 	if err != nil {
-		writeServiceError(w, r, err)
+		writeServiceError(w, r, err, id)
 		return
 	}
 
@@ -1552,7 +1553,7 @@ func (h *Handlers) HandleGetServiceMounts(w http.ResponseWriter, r *http.Request
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -1590,7 +1591,7 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 
 	_, ok := h.cache.GetService(id)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", "service not found")
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -1606,7 +1607,7 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 
 	updated, err := h.serviceAttachment.UpdateServiceMounts(r.Context(), id, req.Mounts)
 	if err != nil {
-		writeServiceError(w, r, err)
+		writeServiceError(w, r, err, id)
 		return
 	}
 

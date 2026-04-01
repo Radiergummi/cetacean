@@ -97,7 +97,7 @@ func TestHandleServiceLogs_JSON_NotFound(t *testing.T) {
 }
 
 func withContentType(r *http.Request, ct ContentType) *http.Request {
-	return r.WithContext(context.WithValue(r.Context(), contentTypeKey, ct))
+	return r.WithContext(context.WithValue(r.Context(), contentTypeKey{}, ct))
 }
 
 func TestHandleServiceLogs_SSE(t *testing.T) {

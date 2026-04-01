@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -45,7 +46,7 @@ func (h *Handlers) HandleUpdateNodeAvailability(w http.ResponseWriter, r *http.R
 
 	_, ok := h.cache.GetNode(id)
 	if !ok {
-		writeErrorCode(w, r, "NOD003", "node not found")
+		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
 
@@ -83,7 +84,7 @@ func (h *Handlers) HandleUpdateNodeRole(w http.ResponseWriter, r *http.Request) 
 
 	_, ok := h.cache.GetNode(id)
 	if !ok {
-		writeErrorCode(w, r, "NOD003", "node not found")
+		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
 
@@ -99,7 +100,7 @@ func (h *Handlers) HandleRemoveNode(w http.ResponseWriter, r *http.Request) {
 
 	_, ok := h.cache.GetNode(id)
 	if !ok {
-		writeErrorCode(w, r, "NOD003", "node not found")
+		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
 
@@ -113,7 +114,7 @@ func (h *Handlers) HandleRemoveNode(w http.ResponseWriter, r *http.Request) {
 			writeErrorCode(w, r, "NOD001", err.Error())
 			return
 		}
-		writeDockerError(w, r, err, "node")
+		writeDockerError(w, r, err, "node", id)
 		return
 	}
 
@@ -125,7 +126,7 @@ func (h *Handlers) HandleGetNodeRole(w http.ResponseWriter, r *http.Request) {
 
 	node, ok := h.cache.GetNode(id)
 	if !ok {
-		writeErrorCode(w, r, "NOD003", "node not found")
+		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
 
@@ -147,7 +148,7 @@ func (h *Handlers) HandleGetNodeLabels(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	node, ok := h.cache.GetNode(id)
 	if !ok {
-		writeErrorCode(w, r, "NOD003", "node not found")
+		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
 	labels := node.Spec.Labels
@@ -189,7 +190,7 @@ func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request)
 
 	node, ok := h.cache.GetNode(id)
 	if !ok {
-		writeErrorCode(w, r, "NOD003", "node not found")
+		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
 
@@ -219,7 +220,7 @@ func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request)
 
 	result, err := h.nodeWriter.UpdateNodeLabels(r.Context(), id, updated)
 	if err != nil {
-		writeNodeError(w, r, err)
+		writeNodeError(w, r, err, id)
 		return
 	}
 

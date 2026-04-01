@@ -10,7 +10,7 @@ import (
 
 func TestWriteProblem(t *testing.T) {
 	req := httptest.NewRequest("GET", "/nodes/missing", nil)
-	ctx := context.WithValue(req.Context(), reqIDKey, "test-req-123")
+	ctx := context.WithValue(req.Context(), reqIDKey{}, "test-req-123")
 	req = req.WithContext(ctx)
 
 	w := httptest.NewRecorder()
@@ -66,7 +66,7 @@ func TestWriteProblem_NoRequestID(t *testing.T) {
 
 func TestWriteProblemTyped(t *testing.T) {
 	req := httptest.NewRequest("GET", "/nodes?filter=bad", nil)
-	ctx := context.WithValue(req.Context(), reqIDKey, "typed-req-456")
+	ctx := context.WithValue(req.Context(), reqIDKey{}, "typed-req-456")
 	req = req.WithContext(ctx)
 
 	w := httptest.NewRecorder()

@@ -773,7 +773,7 @@ func TestHandleGetConfig_CrossRefFiltering(t *testing.T) {
 		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "shared-config"}},
 	})
 	c.SetService(swarm.Service{
-		ID:   "svc1",
+		ID: "svc1",
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: "allowed-svc"},
 			TaskTemplate: swarm.TaskSpec{
@@ -786,7 +786,7 @@ func TestHandleGetConfig_CrossRefFiltering(t *testing.T) {
 		},
 	})
 	c.SetService(swarm.Service{
-		ID:   "svc2",
+		ID: "svc2",
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: "denied-svc"},
 			TaskTemplate: swarm.TaskSpec{
@@ -837,7 +837,7 @@ func TestHandleGetSecret_CrossRefFiltering(t *testing.T) {
 		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "shared-secret"}},
 	})
 	c.SetService(swarm.Service{
-		ID:   "svc1",
+		ID: "svc1",
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: "allowed-svc"},
 			TaskTemplate: swarm.TaskSpec{
@@ -850,7 +850,7 @@ func TestHandleGetSecret_CrossRefFiltering(t *testing.T) {
 		},
 	})
 	c.SetService(swarm.Service{
-		ID:   "svc2",
+		ID: "svc2",
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: "denied-svc"},
 			TaskTemplate: swarm.TaskSpec{
@@ -983,11 +983,13 @@ func TestHandleGetStack_ACLDenied(t *testing.T) {
 func TestServiceScaleACL_DeniedByResourceName(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
-		ID:   "svc1",
+		ID: "svc1",
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: "webapp"},
 			Mode: swarm.ServiceMode{
-				Replicated: &swarm.ReplicatedService{Replicas: func() *uint64 { v := uint64(1); return &v }()},
+				Replicated: &swarm.ReplicatedService{
+					Replicas: func() *uint64 { v := uint64(1); return &v }(),
+				},
 			},
 		},
 	})
@@ -1030,7 +1032,7 @@ func TestServiceScaleACL_AllowedByResourceName(t *testing.T) {
 	c := cache.New(nil)
 	replicas := uint64(1)
 	c.SetService(swarm.Service{
-		ID:   "svc1",
+		ID: "svc1",
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: "webapp"},
 			Mode: swarm.ServiceMode{
@@ -1153,7 +1155,11 @@ func TestTaskRemoveACL_DeniedWhenParentServiceNotGranted(t *testing.T) {
 func TestHandleStackSummary_ACL001_NoGrants(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
-		{Resources: []string{"service:*"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:*"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read"},
+		},
 	}})
 
 	h := newTestHandlers(t, withACL(e))

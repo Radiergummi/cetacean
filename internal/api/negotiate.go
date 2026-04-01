@@ -35,11 +35,11 @@ func (ct ContentType) String() string {
 	}
 }
 
-const contentTypeKey ctxKey = 1
+type contentTypeKey struct{}
 
 // ContentTypeFromContext returns the negotiated content type, defaulting to JSON.
 func ContentTypeFromContext(ctx context.Context) ContentType {
-	if ct, ok := ctx.Value(contentTypeKey).(ContentType); ok {
+	if ct, ok := ctx.Value(contentTypeKey{}).(ContentType); ok {
 		return ct
 	}
 	return ContentTypeJSON
@@ -72,7 +72,7 @@ func negotiate(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), contentTypeKey, ct)
+		ctx := context.WithValue(r.Context(), contentTypeKey{}, ct)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
