@@ -25,6 +25,7 @@ func NewRouter(
 	authProvider auth.Provider,
 	basePath string,
 	corsConfig *CORSConfig,
+	tlsEnabled bool,
 ) http.Handler {
 	auth.SetErrorWriter(WriteErrorCode)
 
@@ -403,7 +404,7 @@ func NewRouter(
 	handler = negotiate(handler)
 	handler = auth.Middleware(authProvider)(handler)
 	handler = cors(corsConfig)(handler)
-	handler = securityHeaders(handler)
+	handler = securityHeaders(handler, tlsEnabled)
 	handler = recovery(handler)
 	handler = requestID(handler)
 	return basePathMiddleware(basePath, handler)
@@ -439,13 +440,16 @@ func isResourcePath(path string) bool {
 	}
 }
 
-func securityHeaders(next http.Handler) http.Handler {
+func securityHeaders(next http.Handler, tlsEnabled bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().
 			Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:")
+		if tlsEnabled {
+			w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+		}
 		next.ServeHTTP(w, r)
 	})
 }

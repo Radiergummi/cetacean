@@ -114,7 +114,7 @@ func TestRequestLogger_5xxLevel(t *testing.T) {
 func TestSecurityHeaders(t *testing.T) {
 	handler := securityHeaders(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	}))
+	}), false)
 
 	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
@@ -135,6 +135,24 @@ func TestSecurityHeaders(t *testing.T) {
 	}
 	if got := w.Header().Get("Referrer-Policy"); got != "no-referrer" {
 		t.Errorf("Referrer-Policy=%q, want no-referrer", got)
+	}
+	if got := w.Header().Get("Strict-Transport-Security"); got != "" {
+		t.Errorf("Strict-Transport-Security=%q, want empty when TLS disabled", got)
+	}
+}
+
+func TestSecurityHeaders_HSTS(t *testing.T) {
+	handler := securityHeaders(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}), true)
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	want := "max-age=63072000; includeSubDomains"
+	if got := w.Header().Get("Strict-Transport-Security"); got != want {
+		t.Errorf("Strict-Transport-Security=%q, want %q", got, want)
 	}
 }
 
@@ -283,6 +301,7 @@ func TestNewRouter_Smoke(t *testing.T) {
 		&auth.NoneProvider{},
 		"",
 		nil,
+		false,
 	)
 	if router == nil {
 		t.Fatal("NewRouter returned nil")

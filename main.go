@@ -344,6 +344,7 @@ func main() {
 		authProvider,
 		cfg.BasePath,
 		corsConfig,
+		tlsCfg.Enabled(),
 	)
 
 	var serverTLSConfig *tls.Config
