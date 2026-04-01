@@ -12,6 +12,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -105,6 +106,10 @@ func (h *Handlers) HandleGetSecretLabels(w http.ResponseWriter, r *http.Request)
 	sec, ok := h.cache.GetSecret(id)
 	if !ok {
 		writeErrorCode(w, r, "SEC002", fmt.Sprintf("secret %q not found", id))
+		return
+	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "secret:"+sec.Spec.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}
 	labels := sec.Spec.Labels

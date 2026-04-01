@@ -1434,3 +1434,118 @@ func TestServiceSubResourceGET_ACLDenied(t *testing.T) {
 		})
 	}
 }
+
+func TestNodeSubResourceGET_ACLDenied(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{
+		ID:          "node1",
+		Description: swarm.NodeDescription{Hostname: "worker-1"},
+		Spec:        swarm.NodeSpec{Role: swarm.NodeRoleWorker},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{Resources: []string{"node:other"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	identity := &auth.Identity{Subject: "user1"}
+
+	for _, sub := range []struct {
+		name    string
+		handler func(http.ResponseWriter, *http.Request)
+	}{
+		{"role", h.HandleGetNodeRole},
+		{"labels", h.HandleGetNodeLabels},
+	} {
+		t.Run(sub.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/nodes/node1/"+sub.name, nil)
+			req.SetPathValue("id", "node1")
+			req = req.WithContext(auth.ContextWithIdentity(req.Context(), identity))
+			w := httptest.NewRecorder()
+			sub.handler(w, req)
+
+			if w.Code != http.StatusForbidden {
+				t.Errorf("GET /nodes/node1/%s: expected 403, got %d", sub.name, w.Code)
+			}
+		})
+	}
+}
+
+func TestConfigLabelsGET_ACLDenied(t *testing.T) {
+	c := cache.New(nil)
+	c.SetConfig(swarm.Config{
+		ID:   "cfg1",
+		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "app-config"}},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"config:other"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/configs/cfg1/labels", nil)
+	req.SetPathValue("id", "cfg1")
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleGetConfigLabels(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", w.Code)
+	}
+}
+
+func TestSecretLabelsGET_ACLDenied(t *testing.T) {
+	c := cache.New(nil)
+	c.SetSecret(swarm.Secret{
+		ID:   "sec1",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "app-secret"}},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"secret:other"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/secrets/sec1/labels", nil)
+	req.SetPathValue("id", "sec1")
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleGetSecretLabels(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", w.Code)
+	}
+}
+
+func TestHandleClusterMetrics_ACL001_NoGrants(t *testing.T) {
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"service:*"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withACL(e))
+	req := httptest.NewRequest("GET", "/cluster/metrics", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "bob"}))
+	w := httptest.NewRecorder()
+	h.HandleClusterMetrics(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status=%d, want 403", w.Code)
+	}
+	assertACLErrorCode(t, w, "ACL001")
+}

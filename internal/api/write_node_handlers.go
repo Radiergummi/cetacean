@@ -10,6 +10,8 @@ import (
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
+
+	"github.com/radiergummi/cetacean/internal/auth"
 )
 
 type updateAvailabilityRequest struct {
@@ -129,6 +131,14 @@ func (h *Handlers) HandleGetNodeRole(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
+	if !h.acl.Can(
+		auth.IdentityFromContext(r.Context()),
+		"read",
+		"node:"+node.Description.Hostname,
+	) {
+		writeErrorCode(w, r, "ACL001", "access denied")
+		return
+	}
 
 	managerCount := 0
 	for _, n := range h.cache.ListNodes() {
@@ -149,6 +159,14 @@ func (h *Handlers) HandleGetNodeLabels(w http.ResponseWriter, r *http.Request) {
 	node, ok := h.cache.GetNode(id)
 	if !ok {
 		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
+		return
+	}
+	if !h.acl.Can(
+		auth.IdentityFromContext(r.Context()),
+		"read",
+		"node:"+node.Description.Hostname,
+	) {
+		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}
 	labels := node.Spec.Labels

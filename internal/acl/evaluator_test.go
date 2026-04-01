@@ -349,6 +349,10 @@ func TestEvaluator_MalformedResource(t *testing.T) {
 	}
 }
 
+// TestEvaluator_EmptyNameResource verifies that "service:" (empty name) does
+// not match a concrete grant like "service:specific". Note that "service:"
+// DOES match a wildcard grant "service:*" because path.Match("*","") is true
+// — see TestEvaluator_MalformedResourceAgainstTypedPattern/"empty name matches glob".
 func TestEvaluator_EmptyNameResource(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{

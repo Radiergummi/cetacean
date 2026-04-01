@@ -105,6 +105,9 @@ func (h *Handlers) HandleClusterCapacity(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAnyGrant(w, r) {
+		return
+	}
 	if h.promClient == nil {
 		writeErrorCode(w, r, "MTR001", "prometheus not configured")
 		return

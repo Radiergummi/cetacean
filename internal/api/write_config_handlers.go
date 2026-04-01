@@ -12,6 +12,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -104,6 +105,10 @@ func (h *Handlers) HandleGetConfigLabels(w http.ResponseWriter, r *http.Request)
 	cfg, ok := h.cache.GetConfig(id)
 	if !ok {
 		writeErrorCode(w, r, "CFG002", fmt.Sprintf("config %q not found", id))
+		return
+	}
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "config:"+cfg.Spec.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}
 	labels := cfg.Spec.Labels
