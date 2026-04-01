@@ -21,11 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Table/grid view toggle on the tasks page with tasks grouped by service in card view
 - Arrow-key navigation for radio card groups
 - Series labels in the Prometheus query result table
+- Per-stack CPU and memory usage charts on the node detail page with drill-down to individual services
 
 ### Fixed
 - Layout shift in the header when the live connection timer changes width
 - Pressing Escape in a combobox dropdown closing the parent editor panel
-- Node-exporter recommendations not matching nodes when the Prometheus instance label uses a hostname instead of an IP
+- Node metrics table columns, gauges, and chart tooltips when the Prometheus instance label uses a hostname instead of an IP
+- Sizing recommendations comparing aggregate usage across all tasks to per-task limits, producing incorrect percentages and suggestions for multi-replica services
 - Sizing recommendations comparing aggregate usage across all tasks to per-task limits, producing incorrect percentages and suggestions for multi-replica services
 
 ## [0.10.0] - 2026-03-31
