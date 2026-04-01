@@ -153,12 +153,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	// SSE broadcaster
-	broadcaster := sse.NewBroadcaster(cfg.SSEBatchInterval, api.WriteErrorCode, nil)
+	// State cache — created first so its history can be passed to the broadcaster
+	stateCache := cache.New(nil)
+
+	// SSE broadcaster — needs history for Last-Event-ID replay
+	broadcaster := sse.NewBroadcaster(cfg.SSEBatchInterval, api.WriteErrorCode, stateCache.History())
 	defer broadcaster.Close()
 
-	// State cache — broadcasts changes via SSE
-	stateCache := cache.New(func(e cache.Event) {
+	// Wire cache changes to SSE broadcaster
+	stateCache.SetOnChange(func(e cache.Event) {
 		broadcaster.Broadcast(e)
 	})
 

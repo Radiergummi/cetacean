@@ -129,6 +129,10 @@ func New(onChange OnChangeFunc) *Cache {
 
 func (c *Cache) History() *History { return c.history }
 
+func (c *Cache) SetOnChange(fn OnChangeFunc) {
+	c.onChange = fn
+}
+
 func (c *Cache) notify(e Event) {
 	// Populate the Name field for SSE authorization checks.
 	if e.Name == "" {
