@@ -11,8 +11,8 @@ import {
 import PageHeader from "../components/PageHeader";
 import RecommendationSummary from "../components/RecommendationSummary";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
-import { stackResourceCharts } from "../lib/stackQueries";
 import { useResourceStream } from "../hooks/useResourceStream";
+import { stackResourceCharts } from "../lib/stackQueries";
 import { TrendingDown, TrendingUp } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
