@@ -82,6 +82,5 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 		"scope":  func(n network.Summary) string { return n.Scope },
 	})
 	resp := applyPagination(r.Context(), networks, p)
-	writePaginationLinks(w, r, resp.Total, resp.Limit, resp.Offset)
-	writeCachedJSON(w, r, resp)
+	writeCollectionResponse(w, r, resp, p)
 }

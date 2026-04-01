@@ -78,6 +78,5 @@ func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 		"scope":  func(v volume.Volume) string { return v.Scope },
 	})
 	resp := applyPagination(r.Context(), volumes, p)
-	writePaginationLinks(w, r, resp.Total, resp.Limit, resp.Offset)
-	writeCachedJSON(w, r, resp)
+	writeCollectionResponse(w, r, resp, p)
 }

@@ -71,11 +71,11 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writePaginationLinks(w, r, paged.Total, paged.Limit, paged.Offset)
-	writeCachedJSON(
+	writeCollectionResponse(
 		w,
 		r,
 		NewCollectionResponse(r.Context(), items, paged.Total, paged.Limit, paged.Offset),
+		p,
 	)
 }
 

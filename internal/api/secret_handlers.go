@@ -81,6 +81,5 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 		"updated": func(s swarm.Secret) string { return s.UpdatedAt.String() },
 	})
 	resp := applyPagination(r.Context(), secrets, p)
-	writePaginationLinks(w, r, resp.Total, resp.Limit, resp.Offset)
-	writeCachedJSON(w, r, resp)
+	writeCollectionResponse(w, r, resp, p)
 }

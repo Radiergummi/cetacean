@@ -355,3 +355,151 @@ func TestParsePagination_RangeMultipartError(t *testing.T) {
 		t.Errorf("expected errMultipartRange, got %v", err)
 	}
 }
+
+func TestWriteCollectionResponse_RangePartial(t *testing.T) {
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/nodes", nil)
+	r.Header.Set("Range", "items 0-9")
+	w := httptest.NewRecorder()
+
+	p := PageParams{Limit: 10, Offset: 0, RangeReq: true}
+	resp := CollectionResponse[int]{
+		Context: jsonLDContext,
+		Type:    "Collection",
+		Items:   []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+		Total:   100,
+		Limit:   10,
+		Offset:  0,
+	}
+
+	writeCollectionResponse(w, r, resp, p)
+
+	if w.Code != http.StatusPartialContent {
+		t.Errorf("expected 206, got %d", w.Code)
+	}
+
+	cr := w.Header().Get("Content-Range")
+	if cr != "items 0-9/100" {
+		t.Errorf("expected Content-Range items 0-9/100, got %q", cr)
+	}
+
+	ar := w.Header().Get("Accept-Ranges")
+	if ar != "items" {
+		t.Errorf("expected Accept-Ranges: items, got %q", ar)
+	}
+}
+
+func TestWriteCollectionResponse_RangeFullCollection(t *testing.T) {
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/nodes", nil)
+	r.Header.Set("Range", "items 0-4")
+	w := httptest.NewRecorder()
+
+	p := PageParams{Limit: 10, Offset: 0, RangeReq: true}
+	resp := CollectionResponse[int]{
+		Context: jsonLDContext,
+		Type:    "Collection",
+		Items:   []int{0, 1, 2, 3, 4},
+		Total:   5,
+		Limit:   10,
+		Offset:  0,
+	}
+
+	writeCollectionResponse(w, r, resp, p)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for full collection, got %d", w.Code)
+	}
+
+	if cr := w.Header().Get("Content-Range"); cr != "" {
+		t.Errorf("expected no Content-Range for full collection, got %q", cr)
+	}
+
+	ar := w.Header().Get("Accept-Ranges")
+	if ar != "items" {
+		t.Errorf("expected Accept-Ranges: items, got %q", ar)
+	}
+}
+
+func TestWriteCollectionResponse_RangeBeyondTotal(t *testing.T) {
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/nodes", nil)
+	r.Header.Set("Range", "items 50-59")
+	w := httptest.NewRecorder()
+
+	p := PageParams{Limit: 10, Offset: 50, RangeReq: true}
+	resp := CollectionResponse[int]{
+		Context: jsonLDContext,
+		Type:    "Collection",
+		Items:   []int{},
+		Total:   5,
+		Limit:   10,
+		Offset:  50,
+	}
+
+	writeCollectionResponse(w, r, resp, p)
+
+	if w.Code != http.StatusRequestedRangeNotSatisfiable {
+		t.Errorf("expected 416, got %d", w.Code)
+	}
+
+	cr := w.Header().Get("Content-Range")
+	if cr != "items */5" {
+		t.Errorf("expected Content-Range items */5, got %q", cr)
+	}
+}
+
+func TestWriteCollectionResponse_RangeEmptyCollection(t *testing.T) {
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/nodes", nil)
+	r.Header.Set("Range", "items 0-9")
+	w := httptest.NewRecorder()
+
+	p := PageParams{Limit: 10, Offset: 0, RangeReq: true}
+	resp := CollectionResponse[int]{
+		Context: jsonLDContext,
+		Type:    "Collection",
+		Items:   []int{},
+		Total:   0,
+		Limit:   10,
+		Offset:  0,
+	}
+
+	writeCollectionResponse(w, r, resp, p)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for empty collection, got %d", w.Code)
+	}
+
+	ar := w.Header().Get("Accept-Ranges")
+	if ar != "items" {
+		t.Errorf("expected Accept-Ranges: items, got %q", ar)
+	}
+}
+
+func TestWriteCollectionResponse_QueryParams(t *testing.T) {
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/nodes", nil)
+	w := httptest.NewRecorder()
+
+	p := PageParams{Limit: 10, Offset: 0, RangeReq: false}
+	resp := CollectionResponse[int]{
+		Context: jsonLDContext,
+		Type:    "Collection",
+		Items:   []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+		Total:   100,
+		Limit:   10,
+		Offset:  0,
+	}
+
+	writeCollectionResponse(w, r, resp, p)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	ar := w.Header().Get("Accept-Ranges")
+	if ar != "items" {
+		t.Errorf("expected Accept-Ranges: items, got %q", ar)
+	}
+
+	link := w.Header().Get("Link")
+	if !strings.Contains(link, `rel="next"`) {
+		t.Errorf("expected next Link header, got %q", link)
+	}
+}

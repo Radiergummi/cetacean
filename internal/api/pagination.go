@@ -118,6 +118,53 @@ func applyPagination[T any](ctx context.Context, items []T, p PageParams) Collec
 	return NewCollectionResponse(ctx, result, total, p.Limit, p.Offset)
 }
 
+// writeCollectionResponse writes a CollectionResponse with the appropriate
+// status code and headers based on whether the request used the Range header.
+//
+// For Range requests:
+//   - Empty collection → 200 OK
+//   - Offset beyond total → 416 with Content-Range: items */TOTAL
+//   - Full collection covered → 200 OK
+//   - Partial → 206 with Content-Range: items START-END/TOTAL
+//
+// For query-param requests: 200 OK with Link pagination headers.
+// Always sets Accept-Ranges: items.
+func writeCollectionResponse[T any](
+	w http.ResponseWriter,
+	r *http.Request,
+	resp CollectionResponse[T],
+	p PageParams,
+) {
+	w.Header().Set("Accept-Ranges", "items")
+
+	if p.RangeReq {
+		if resp.Total == 0 {
+			writeCachedJSONStatus(w, r, http.StatusOK, resp)
+			return
+		}
+
+		if resp.Offset >= resp.Total {
+			w.Header().Set("Content-Range", fmt.Sprintf("items */%d", resp.Total))
+			writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable,
+				"range start is beyond the total number of items")
+			return
+		}
+
+		last := resp.Offset + len(resp.Items) - 1
+		if resp.Offset == 0 && last >= resp.Total-1 {
+			writeCachedJSONStatus(w, r, http.StatusOK, resp)
+			return
+		}
+
+		w.Header().Set("Content-Range", fmt.Sprintf("items %d-%d/%d", resp.Offset, last, resp.Total))
+		writeCachedJSONStatus(w, r, http.StatusPartialContent, resp)
+		return
+	}
+
+	writePaginationLinks(w, r, resp.Total, resp.Limit, resp.Offset)
+	writeCachedJSON(w, r, resp)
+}
+
 func writePaginationLinks(w http.ResponseWriter, r *http.Request, total, limit, offset int) {
 	buildLink := func(newOffset int) string {
 		q := r.URL.Query()

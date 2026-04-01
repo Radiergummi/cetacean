@@ -45,8 +45,7 @@ func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
 		"name": func(s cache.Stack) string { return s.Name },
 	})
 	resp := applyPagination(r.Context(), stacks, p)
-	writePaginationLinks(w, r, resp.Total, resp.Limit, resp.Offset)
-	writeCachedJSON(w, r, resp)
+	writeCollectionResponse(w, r, resp, p)
 }
 
 func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {

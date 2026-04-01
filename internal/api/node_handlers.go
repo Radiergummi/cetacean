@@ -45,8 +45,7 @@ func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 		"availability": func(n swarm.Node) string { return string(n.Spec.Availability) },
 	})
 	resp := applyPagination(r.Context(), nodes, p)
-	writePaginationLinks(w, r, resp.Total, resp.Limit, resp.Offset)
-	writeCachedJSON(w, r, resp)
+	writeCollectionResponse(w, r, resp, p)
 }
 
 func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {

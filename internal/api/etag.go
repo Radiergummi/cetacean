@@ -48,7 +48,36 @@ func etagMatch(header, etag string) bool {
 // writeCachedJSON marshals v to JSON with ETag-based conditional caching.
 // Returns 304 Not Modified if the client's If-None-Match header matches.
 func writeCachedJSON(w http.ResponseWriter, r *http.Request, v any) {
-	writeCachedJSONTimed(w, r, v, time.Time{})
+	writeCachedJSONStatus(w, r, http.StatusOK, v)
+}
+
+// writeCachedJSONStatus is like writeCachedJSON but uses a custom status code.
+// If the client's If-None-Match header matches the ETag, 304 is returned
+// regardless of the requested status code (per RFC 9110 §13.1.2).
+func writeCachedJSONStatus(w http.ResponseWriter, r *http.Request, status int, v any) {
+	rc := http.NewResponseController(w)
+	_ = rc.SetWriteDeadline(time.Now().Add(30 * time.Second))
+
+	body, err := json.Marshal(v)
+	if err != nil {
+		w.Header().Set("Cache-Control", "no-store")
+		writeErrorCode(w, r, "API009", "failed to serialize response")
+		return
+	}
+
+	etag := computeETag(body)
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-cache")
+
+	if etagMatch(r.Header.Get("If-None-Match"), etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+
+	w.WriteHeader(status)
+	w.Write(body)         //nolint:errcheck
+	w.Write([]byte{'\n'}) //nolint:errcheck
 }
 
 // writeCachedJSONTimed is like writeCachedJSON but also sets a Last-Modified

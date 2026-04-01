@@ -85,17 +85,11 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 		"node":    func(t swarm.Task) string { return t.NodeID },
 	})
 	paged := applyPagination(r.Context(), tasks, p)
-	writePaginationLinks(w, r, paged.Total, paged.Limit, paged.Offset)
-	writeCachedJSON(
+	writeCollectionResponse(
 		w,
 		r,
-		NewCollectionResponse(
-			r.Context(),
-			h.enrichTasks(paged.Items),
-			paged.Total,
-			paged.Limit,
-			paged.Offset,
-		),
+		NewCollectionResponse(r.Context(), h.enrichTasks(paged.Items), paged.Total, paged.Limit, paged.Offset),
+		p,
 	)
 }
 
