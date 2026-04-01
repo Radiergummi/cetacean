@@ -36,8 +36,8 @@ export default function TaskList() {
     loadMore,
   } = useSwarmResource(
     useCallback(
-      (offset: number) =>
-        api.tasks({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }),
+      (offset: number, signal: AbortSignal) =>
+        api.tasks({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }, signal),
       [debouncedSearch, sortKey, sortDir],
     ),
     "task",

@@ -15,7 +15,7 @@ const ssePathMap: Record<string, string> = {
 };
 
 export function useSwarmResource<T>(
-  fetchFn: (offset: number) => Promise<CollectionResponse<T>>,
+  fetchFn: (offset: number, signal: AbortSignal) => Promise<CollectionResponse<T>>,
   sseType: string,
   getId: (item: T) => string,
 ) {
@@ -54,7 +54,7 @@ export function useSwarmResource<T>(
 
       setError(null);
 
-      fetchFn(pageNumber * pageSize)
+      fetchFn(pageNumber * pageSize, controller.signal)
         .then((response) => {
           if (controller.signal.aborted) {
             return;

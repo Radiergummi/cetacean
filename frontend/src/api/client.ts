@@ -244,6 +244,7 @@ export interface ListParams {
   filter?: string;
 }
 
+/** Items per Range request page. Backend default is also 50; max is 200. */
 export const pageSize = 50;
 
 function buildListQueryString(params?: ListParams): string {
@@ -329,27 +330,33 @@ export const api = {
     patch<void>(`/plugins/${encodeURIComponent(name)}/settings`, settings, "application/json"),
   clusterMetrics: () => fetchJSON<ClusterMetrics>("/cluster/metrics"),
   monitoringStatus: () => fetchJSON<MonitoringStatus>("/-/metrics/status"),
-  nodes: (params?: ListParams) => fetchRange<Node>("/nodes", params),
+  nodes: (params?: ListParams, signal?: AbortSignal) => fetchRange<Node>("/nodes", params, signal),
   node: (id: string, signal?: AbortSignal) =>
     fetchJSON<{ node: Node }>(`/nodes/${id}`, signal).then((r) => r.node),
-  services: (params?: ListParams) => fetchRange<ServiceListItem>("/services", params),
+  services: (params?: ListParams, signal?: AbortSignal) =>
+    fetchRange<ServiceListItem>("/services", params, signal),
   recommendations: () => fetchJSON<RecommendationsResponse>("/recommendations"),
   service: (id: string, signal?: AbortSignal) =>
     fetchJSON<ServiceDetail>(`/services/${id}`, signal),
-  tasks: (params?: ListParams) => fetchRange<Task>("/tasks", params),
-  stacks: (params?: ListParams) => fetchRange<Stack>("/stacks", params),
+  tasks: (params?: ListParams, signal?: AbortSignal) => fetchRange<Task>("/tasks", params, signal),
+  stacks: (params?: ListParams, signal?: AbortSignal) =>
+    fetchRange<Stack>("/stacks", params, signal),
   stacksSummary: () =>
     fetchJSON<CollectionResponse<StackSummary>>("/stacks/summary").then((r) => r.items),
   stack: (name: string) =>
     fetchJSON<{ stack: StackDetail }>(`/stacks/${name}`).then((r) => r.stack),
-  configs: (params?: ListParams) => fetchRange<Config>("/configs", params),
+  configs: (params?: ListParams, signal?: AbortSignal) =>
+    fetchRange<Config>("/configs", params, signal),
   config: (id: string, signal?: AbortSignal) => fetchJSON<ConfigDetail>(`/configs/${id}`, signal),
-  secrets: (params?: ListParams) => fetchRange<Secret>("/secrets", params),
+  secrets: (params?: ListParams, signal?: AbortSignal) =>
+    fetchRange<Secret>("/secrets", params, signal),
   secret: (id: string, signal?: AbortSignal) => fetchJSON<SecretDetail>(`/secrets/${id}`, signal),
-  networks: (params?: ListParams) => fetchRange<Network>("/networks", params),
+  networks: (params?: ListParams, signal?: AbortSignal) =>
+    fetchRange<Network>("/networks", params, signal),
   network: (id: string, signal?: AbortSignal) =>
     fetchJSON<NetworkDetail>(`/networks/${id}`, signal),
-  volumes: (params?: ListParams) => fetchRange<Volume>("/volumes", params),
+  volumes: (params?: ListParams, signal?: AbortSignal) =>
+    fetchRange<Volume>("/volumes", params, signal),
   volume: (name: string, signal?: AbortSignal) =>
     fetchJSON<VolumeDetail>(`/volumes/${name}`, signal),
   task: (id: string) => fetchJSON<{ task: Task }>(`/tasks/${id}`).then((r) => r.task),

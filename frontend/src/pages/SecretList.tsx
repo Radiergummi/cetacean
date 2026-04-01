@@ -31,8 +31,8 @@ export default function SecretList() {
     loadMore,
   } = useSwarmResource(
     useCallback(
-      (offset: number) =>
-        api.secrets({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }),
+      (offset: number, signal: AbortSignal) =>
+        api.secrets({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }, signal),
       [debouncedSearch, sortKey, sortDir],
     ),
     "secret",

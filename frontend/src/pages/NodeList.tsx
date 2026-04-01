@@ -33,8 +33,8 @@ export default function NodeList() {
     loadMore,
   } = useSwarmResource(
     useCallback(
-      (offset: number) =>
-        api.nodes({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }),
+      (offset: number, signal: AbortSignal) =>
+        api.nodes({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }, signal),
       [debouncedSearch, sortKey, sortDir],
     ),
     "node",

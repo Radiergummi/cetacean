@@ -29,8 +29,8 @@ export default function NetworkList() {
     loadMore,
   } = useSwarmResource(
     useCallback(
-      (offset: number) =>
-        api.networks({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }),
+      (offset: number, signal: AbortSignal) =>
+        api.networks({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }, signal),
       [debouncedSearch, sortKey, sortDir],
     ),
     "network",

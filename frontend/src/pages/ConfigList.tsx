@@ -31,8 +31,8 @@ export default function ConfigList() {
     loadMore,
   } = useSwarmResource(
     useCallback(
-      (offset: number) =>
-        api.configs({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }),
+      (offset: number, signal: AbortSignal) =>
+        api.configs({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }, signal),
       [debouncedSearch, sortKey, sortDir],
     ),
     "config",

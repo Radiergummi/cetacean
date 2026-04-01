@@ -167,6 +167,7 @@ describe("useSwarmResource", () => {
     );
 
     expect(result.current.data).toEqual([{ ID: "2", Name: "b" }]);
+    expect(result.current.total).toBe(1);
   });
 
   it("retry re-fetches data", async () => {
@@ -225,9 +226,11 @@ describe("useSwarmResource", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.data).toHaveLength(2);
     expect(result.current.hasMore).toBe(true);
+    expect(fetchFn).toHaveBeenCalledWith(0, expect.any(AbortSignal));
 
     act(() => result.current.loadMore());
     await waitFor(() => expect(result.current.loadingMore).toBe(false));
+    expect(fetchFn).toHaveBeenCalledWith(50, expect.any(AbortSignal));
 
     expect(result.current.data).toHaveLength(3);
     expect(result.current.data).toEqual([
