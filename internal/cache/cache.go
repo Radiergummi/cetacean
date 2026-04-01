@@ -27,11 +27,12 @@ const (
 )
 
 type Event struct {
-	Type     EventType `json:"type"`
-	Action   string    `json:"action"`
-	ID       string    `json:"id"`
-	Name     string    `json:"name,omitempty"`
-	Resource any       `json:"resource,omitempty"`
+	Type      EventType `json:"type"`
+	Action    string    `json:"action"`
+	ID        string    `json:"id"`
+	Name      string    `json:"name,omitempty"`
+	Resource  any       `json:"resource,omitempty"`
+	HistoryID uint64    `json:"-"`
 }
 
 type Stack struct {
@@ -143,7 +144,10 @@ func (c *Cache) notify(e Event) {
 			ResourceID: e.ID,
 			Name:       e.Name,
 		})
+		e.HistoryID = c.history.Count()
 		metrics.RecordCacheMutation(string(e.Type), e.Action)
+	} else {
+		e.HistoryID = c.history.Count()
 	}
 	if c.onChange != nil {
 		c.onChange(e)

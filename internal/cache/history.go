@@ -82,6 +82,12 @@ func NewHistory(size int) *History {
 	}
 }
 
+func (h *History) Count() uint64 {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.count
+}
+
 func (h *History) Append(e HistoryEntry) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
