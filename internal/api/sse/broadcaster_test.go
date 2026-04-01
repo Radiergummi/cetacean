@@ -606,6 +606,51 @@ func TestSSE_NoLastEventID_NoReplay(t *testing.T) {
 	}
 }
 
+func TestSSE_EndToEnd_ReplayThenLive(t *testing.T) {
+	h := cache.NewHistory(100)
+	// Simulate 5 past events (IDs will be 1–5 assigned by Append)
+	for i := range 5 {
+		h.Append(cache.HistoryEntry{
+			Type:       "service",
+			Action:     "update",
+			ResourceID: fmt.Sprintf("s%d", i),
+			Name:       fmt.Sprintf("svc-%d", i),
+		})
+	}
+
+	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, h)
+	defer b.Close()
+
+	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+	req := httptest.NewRequest("GET", "/services", nil)
+	req.Header.Set("Last-Event-ID", "3") // Should replay IDs 4, 5 (svc-3, svc-4)
+
+	done := make(chan struct{})
+	go func() {
+		b.ServeSSE(w, req, TypeMatcher("service"), "service")
+		close(done)
+	}()
+	waitForClients(t, b, 1)
+
+	// Now broadcast a live event
+	b.Broadcast(cache.Event{
+		Type: "service", Action: "create", ID: "s5", Name: "svc-5", HistoryID: 6,
+	})
+
+	waitForBody(t, w, `"s5"`)
+	b.Close()
+	<-done
+
+	body := w.bodyString()
+	// Should contain replayed events (s3, s4) and live event (s5)
+	if !strings.Contains(body, `"s3"`) || !strings.Contains(body, `"s4"`) {
+		t.Errorf("missing replayed events in %q", body)
+	}
+	if !strings.Contains(body, `"s5"`) {
+		t.Errorf("missing live event in %q", body)
+	}
+}
+
 // flushRecorder implements http.Flusher for testing SSE with thread-safe body access.
 type flushRecorder struct {
 	*httptest.ResponseRecorder
