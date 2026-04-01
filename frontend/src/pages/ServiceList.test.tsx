@@ -72,7 +72,10 @@ function wrapper({ children }: { children: ReactNode }) {
 describe("ServiceList", () => {
   it("renders service list with replica health", async () => {
     const items = [fakeService("s1", "web", 3, 3), fakeService("s2", "api", 2, 1)];
-    mockServices.mockResolvedValue({ data: { items, total: 2, limit: 50, offset: 0 }, allowedMethods: new Set() });
+    mockServices.mockResolvedValue({
+      data: { items, total: 2, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
     render(<ServiceList />, { wrapper });
 
     await waitFor(() => {
@@ -89,7 +92,12 @@ describe("ServiceList", () => {
     vi.useFakeTimers();
     mockServices
       .mockResolvedValueOnce({
-        data: { items: [fakeService("s1", "web-frontend"), fakeService("s2", "api-backend")], total: 2, limit: 50, offset: 0 },
+        data: {
+          items: [fakeService("s1", "web-frontend"), fakeService("s2", "api-backend")],
+          total: 2,
+          limit: 50,
+          offset: 0,
+        },
         allowedMethods: new Set(),
       })
       .mockResolvedValueOnce({
@@ -119,7 +127,10 @@ describe("ServiceList", () => {
   });
 
   it("shows empty state", async () => {
-    mockServices.mockResolvedValue({ data: { items: [], total: 0, limit: 50, offset: 0 }, allowedMethods: new Set() });
+    mockServices.mockResolvedValue({
+      data: { items: [], total: 0, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
     render(<ServiceList />, { wrapper });
 
     await waitFor(() => {

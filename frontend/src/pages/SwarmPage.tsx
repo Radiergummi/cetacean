@@ -126,7 +126,10 @@ export default function SwarmPage() {
 
   useEffect(() => {
     fetchSwarmInfo();
-    api.plugins().then(({ data: pluginsData }) => setPlugins(pluginsData)).catch(console.warn);
+    api
+      .plugins()
+      .then(({ data: pluginsData }) => setPlugins(pluginsData))
+      .catch(console.warn);
   }, [fetchSwarmInfo]);
 
   // Orchestration draft
@@ -696,7 +699,10 @@ export default function SwarmPage() {
         open={installOpen}
         onOpenChange={setInstallOpen}
         onInstalled={() => {
-          api.plugins().then(({ data: pluginsData }) => setPlugins(pluginsData)).catch(console.warn);
+          api
+            .plugins()
+            .then(({ data: pluginsData }) => setPlugins(pluginsData))
+            .catch(console.warn);
         }}
       />
     </div>

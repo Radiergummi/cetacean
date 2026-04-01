@@ -79,9 +79,7 @@ function parseAllowHeader(response: Response): Set<string> {
     return new Set();
   }
 
-  return new Set(
-    header.split(",").map((method) => method.trim().toUpperCase()),
-  );
+  return new Set(header.split(",").map((method) => method.trim().toUpperCase()));
 }
 
 function redirectToLogin(): never {
@@ -649,7 +647,8 @@ export const api = {
       "application/merge-patch+json",
     ),
 
-  health: (signal?: AbortSignal) => fetchJSON<HealthInfo>(`/-/health`, signal).then(({ data }) => data),
+  health: (signal?: AbortSignal) =>
+    fetchJSON<HealthInfo>(`/-/health`, signal).then(({ data }) => data),
 };
 
 export interface HealthInfo {

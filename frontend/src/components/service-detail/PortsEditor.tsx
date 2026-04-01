@@ -29,7 +29,6 @@ export function PortsEditor({
   onSaved,
   canEdit = false,
 }: PortsEditorProps & { canEdit?: boolean }) {
-
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);

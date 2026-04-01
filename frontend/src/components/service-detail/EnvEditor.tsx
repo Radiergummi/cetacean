@@ -15,7 +15,6 @@ export function EnvEditor({
   onSaved: (updated: Record<string, string>) => void;
   canEdit?: boolean;
 }) {
-
   async function handleSave(operations: PatchOp[]) {
     const updated = await api.patchServiceEnv(serviceId, operations);
 

@@ -22,7 +22,6 @@ export function NetworksEditor({
   onSaved,
   canEdit = false,
 }: NetworksEditorProps & { canEdit?: boolean }) {
-
   const [availableNetworks, setAvailableNetworks] = useState<ComboboxOption[]>([]);
   const [newNetworkId, setNewNetworkId] = useState("");
   const [newAliases, setNewAliases] = useState<string[]>([]);

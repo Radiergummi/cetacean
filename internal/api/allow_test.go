@@ -24,7 +24,11 @@ func TestSetAllowList_POST(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{
 		Grants: []acl.Grant{
-			{Resources: []string{"config:*"}, Audience: []string{"*"}, Permissions: []string{"write"}},
+			{
+				Resources:   []string{"config:*"},
+				Audience:    []string{"*"},
+				Permissions: []string{"write"},
+			},
 		},
 	})
 	h := &Handlers{operationsLevel: config.OpsConfiguration, acl: e}
@@ -44,7 +48,11 @@ func TestSetAllowList_NoWrite(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{
 		Grants: []acl.Grant{
-			{Resources: []string{"config:*"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+			{
+				Resources:   []string{"config:*"},
+				Audience:    []string{"*"},
+				Permissions: []string{"read"},
+			},
 		},
 	})
 	h := &Handlers{operationsLevel: config.OpsConfiguration, acl: e}

@@ -21,7 +21,6 @@ export function ConfigsEditor({
   onSaved,
   canEdit = false,
 }: ConfigsEditorProps & { canEdit?: boolean }) {
-
   const [availableConfigs, setAvailableConfigs] = useState<ComboboxOption[]>([]);
   const [newConfigId, setNewConfigId] = useState("");
   const [newTargetPath, setNewTargetPath] = useState("");

@@ -114,7 +114,11 @@ function IPAMPanel({ network }: { network: Network }) {
 
 export default function NetworkDetail() {
   const { id } = useParams<{ id: string }>();
-  const { data, history, error, retry, allowedMethods } = useDetailResource(id, api.network, `/networks/${id}`);
+  const { data, history, error, retry, allowedMethods } = useDetailResource(
+    id,
+    api.network,
+    `/networks/${id}`,
+  );
 
   if (error) {
     return (

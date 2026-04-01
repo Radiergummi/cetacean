@@ -19,7 +19,6 @@ export function EndpointModeEditor({
   currentMode: EndpointMode;
   canEdit?: boolean;
 }) {
-
   const [editing, setEditing] = useState(false);
   const [mode, setMode] = useState<EndpointMode>(currentMode);
   useEscapeCancel(editing, () => setEditing(false));

@@ -149,7 +149,6 @@ export default function ContainerImage({
   serviceId?: string;
   canEdit?: boolean;
 }) {
-
   if (!image) {
     return null;
   }

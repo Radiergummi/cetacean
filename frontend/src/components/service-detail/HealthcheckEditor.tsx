@@ -130,7 +130,6 @@ export function HealthcheckEditor({
   onSaved: (updated: Healthcheck | null) => void;
   canEdit?: boolean;
 }) {
-
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);

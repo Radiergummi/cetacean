@@ -45,7 +45,6 @@ export function EditablePanel({
   canEdit = false,
   headerActions,
 }: EditablePanelProps) {
-
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);

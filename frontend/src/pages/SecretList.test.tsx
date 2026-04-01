@@ -67,7 +67,12 @@ function wrapper({ children }: { children: ReactNode }) {
 describe("SecretList", () => {
   it("renders secret list", async () => {
     mockSecrets.mockResolvedValue({
-      data: { items: [fakeSecret("s1", "db-password"), fakeSecret("s2", "api-key")], total: 2, limit: 50, offset: 0 },
+      data: {
+        items: [fakeSecret("s1", "db-password"), fakeSecret("s2", "api-key")],
+        total: 2,
+        limit: 50,
+        offset: 0,
+      },
       allowedMethods: new Set(),
     });
     render(<SecretList />, { wrapper });
@@ -79,7 +84,10 @@ describe("SecretList", () => {
   });
 
   it("shows empty state", async () => {
-    mockSecrets.mockResolvedValue({ data: { items: [], total: 0, limit: 50, offset: 0 }, allowedMethods: new Set() });
+    mockSecrets.mockResolvedValue({
+      data: { items: [], total: 0, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
     render(<SecretList />, { wrapper });
 
     await waitFor(() => {

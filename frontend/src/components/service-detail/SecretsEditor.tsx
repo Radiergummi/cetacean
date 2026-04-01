@@ -21,7 +21,6 @@ export function SecretsEditor({
   onSaved,
   canEdit = false,
 }: SecretsEditorProps & { canEdit?: boolean }) {
-
   const [availableSecrets, setAvailableSecrets] = useState<ComboboxOption[]>([]);
   const [newSecretId, setNewSecretId] = useState("");
   const [newTargetPath, setNewTargetPath] = useState("");

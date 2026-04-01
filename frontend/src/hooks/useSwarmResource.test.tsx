@@ -49,7 +49,10 @@ function wrapper({ children }: { children: ReactNode }) {
 describe("useSwarmResource", () => {
   it("fetches initial data", async () => {
     const items: Item[] = [{ ID: "1", Name: "svc1" }];
-    const fetchFn = vi.fn().mockResolvedValue({ data: { items, total: 1, limit: 50, offset: 0 }, allowedMethods: new Set() });
+    const fetchFn = vi.fn().mockResolvedValue({
+      data: { items, total: 1, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
 
     const { result } = renderHook(
       () => useSwarmResource(fetchFn, "service", ({ ID }: Item) => ID),
@@ -82,7 +85,10 @@ describe("useSwarmResource", () => {
 
   it("updates item on SSE update event", async () => {
     const items: Item[] = [{ ID: "1", Name: "old" }];
-    const fetchFn = vi.fn().mockResolvedValue({ data: { items, total: 1, limit: 50, offset: 0 }, allowedMethods: new Set() });
+    const fetchFn = vi.fn().mockResolvedValue({
+      data: { items, total: 1, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
 
     const { result } = renderHook(
       () => useSwarmResource(fetchFn, "service", ({ ID }: Item) => ID),
@@ -138,7 +144,15 @@ describe("useSwarmResource", () => {
 
   it("removes item on SSE remove event", async () => {
     const fetchFn = vi.fn().mockResolvedValue({
-      data: { items: [{ ID: "1", Name: "a" }, { ID: "2", Name: "b" }], total: 2, limit: 50, offset: 0 },
+      data: {
+        items: [
+          { ID: "1", Name: "a" },
+          { ID: "2", Name: "b" },
+        ],
+        total: 2,
+        limit: 50,
+        offset: 0,
+      },
       allowedMethods: new Set(),
     });
 
@@ -192,7 +206,15 @@ describe("useSwarmResource", () => {
     const fetchFn = vi
       .fn()
       .mockResolvedValueOnce({
-        data: { items: [{ ID: "1", Name: "a" }, { ID: "2", Name: "b" }], total: 3, limit: 50, offset: 0 },
+        data: {
+          items: [
+            { ID: "1", Name: "a" },
+            { ID: "2", Name: "b" },
+          ],
+          total: 3,
+          limit: 50,
+          offset: 0,
+        },
         allowedMethods: new Set(),
       })
       .mockResolvedValueOnce({
@@ -242,7 +264,10 @@ describe("useSwarmResource", () => {
         fn: (
           offset: number,
           signal: AbortSignal,
-        ) => Promise<{ data: { items: Item[]; total: number; limit: number; offset: number }; allowedMethods: Set<string> }>;
+        ) => Promise<{
+          data: { items: Item[]; total: number; limit: number; offset: number };
+          allowedMethods: Set<string>;
+        }>;
       }) => useSwarmResource(fn, "service", ({ ID }: Item) => ID),
       {
         wrapper,
@@ -302,9 +327,18 @@ describe("useSwarmResource", () => {
 
     const fetchFn = vi
       .fn()
-      .mockResolvedValueOnce({ data: { items: page0, total: 3, limit: 50, offset: 0 }, allowedMethods: new Set() })
-      .mockResolvedValueOnce({ data: { items: page1, total: 3, limit: 50, offset: 50 }, allowedMethods: new Set() })
-      .mockResolvedValueOnce({ data: { items: refreshed, total: 2, limit: 50, offset: 0 }, allowedMethods: new Set() });
+      .mockResolvedValueOnce({
+        data: { items: page0, total: 3, limit: 50, offset: 0 },
+        allowedMethods: new Set(),
+      })
+      .mockResolvedValueOnce({
+        data: { items: page1, total: 3, limit: 50, offset: 50 },
+        allowedMethods: new Set(),
+      })
+      .mockResolvedValueOnce({
+        data: { items: refreshed, total: 2, limit: 50, offset: 0 },
+        allowedMethods: new Set(),
+      });
 
     const { result } = renderHook(
       () => useSwarmResource(fetchFn, "service", ({ ID }: Item) => ID),

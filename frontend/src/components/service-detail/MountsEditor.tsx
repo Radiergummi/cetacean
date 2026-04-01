@@ -54,7 +54,6 @@ export function MountsEditor({
   onSaved,
   canEdit = false,
 }: MountsEditorProps & { canEdit?: boolean }) {
-
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);

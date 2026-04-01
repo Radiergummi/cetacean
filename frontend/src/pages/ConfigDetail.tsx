@@ -20,7 +20,11 @@ import { useParams } from "react-router-dom";
 
 export default function ConfigDetail() {
   const { id } = useParams<{ id: string }>();
-  const { data, history, error, retry, allowedMethods } = useDetailResource(id, api.config, `/configs/${id}`);
+  const { data, history, error, retry, allowedMethods } = useDetailResource(
+    id,
+    api.config,
+    `/configs/${id}`,
+  );
   const [labels, setLabels] = useState<Record<string, string>>({});
 
   useEffect(() => {

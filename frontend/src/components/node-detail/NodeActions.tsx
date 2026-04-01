@@ -20,13 +20,7 @@ import { Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-export function NodeActions({
-  node,
-  allowedMethods,
-}: {
-  node: Node;
-  allowedMethods: Set<string>;
-}) {
+export function NodeActions({ node, allowedMethods }: { node: Node; allowedMethods: Set<string> }) {
   const canImpact = allowedMethods.has("DELETE");
   const navigate = useNavigate();
   const remove = useAsyncAction({ toast: true });

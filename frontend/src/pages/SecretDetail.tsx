@@ -16,7 +16,11 @@ import { useParams } from "react-router-dom";
 
 export default function SecretDetail() {
   const { id } = useParams<{ id: string }>();
-  const { data, history, error, retry, allowedMethods } = useDetailResource(id, api.secret, `/secrets/${id}`);
+  const { data, history, error, retry, allowedMethods } = useDetailResource(
+    id,
+    api.secret,
+    `/secrets/${id}`,
+  );
   const [labels, setLabels] = useState<Record<string, string>>({});
 
   useEffect(() => {
