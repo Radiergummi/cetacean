@@ -1,6 +1,7 @@
 package acl
 
 import (
+	"log/slog"
 	"path"
 	"strings"
 
@@ -34,8 +35,14 @@ func matchResource(expression, resource string) bool {
 		return false
 	}
 
-	// Pattern uses glob matching.
-	matched, _ := path.Match(exprPattern, resName)
+	// Pattern uses glob matching. Errors indicate malformed patterns (e.g.,
+	// unclosed '['), which should have been caught by policy validation. Log
+	// and deny rather than silently ignoring.
+	matched, err := path.Match(exprPattern, resName)
+	if err != nil {
+		slog.Warn("ACL glob match error", "pattern", exprPattern, "name", resName, "error", err)
+		return false
+	}
 	return matched
 }
 
@@ -56,19 +63,41 @@ func matchAudience(expression string, id *auth.Identity) bool {
 	switch kind {
 	case "user":
 		if id.Subject != "" {
-			if matched, _ := path.Match(pattern, id.Subject); matched {
+			if matched, err := path.Match(pattern, id.Subject); err != nil {
+				slog.Warn(
+					"ACL audience match error",
+					"pattern",
+					pattern,
+					"subject",
+					id.Subject,
+					"error",
+					err,
+				)
+			} else if matched {
 				return true
 			}
 		}
 		if id.Email != "" {
-			if matched, _ := path.Match(pattern, id.Email); matched {
+			if matched, err := path.Match(pattern, id.Email); err != nil {
+				slog.Warn(
+					"ACL audience match error",
+					"pattern",
+					pattern,
+					"email",
+					id.Email,
+					"error",
+					err,
+				)
+			} else if matched {
 				return true
 			}
 		}
 		return false
 	case "group":
 		for _, g := range id.Groups {
-			if matched, _ := path.Match(pattern, g); matched {
+			if matched, err := path.Match(pattern, g); err != nil {
+				slog.Warn("ACL audience match error", "pattern", pattern, "group", g, "error", err)
+			} else if matched {
 				return true
 			}
 		}

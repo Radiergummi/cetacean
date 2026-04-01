@@ -118,22 +118,23 @@ func Validate(p *Policy) error {
 }
 
 // ParsePolicy auto-detects format (JSON, TOML, YAML) and parses a policy.
+// An empty grants list is valid and represents a default-deny policy.
 func ParsePolicy(data []byte) (*Policy, error) {
 	// Try JSON first (fast, unambiguous).
 	var p Policy
-	if err := json.Unmarshal(data, &p); err == nil && len(p.Grants) > 0 {
+	if err := json.Unmarshal(data, &p); err == nil && p.Grants != nil {
 		return &p, nil
 	}
 
 	// Try TOML (has brackets/equals that rarely appear in YAML).
 	p = Policy{}
-	if err := toml.Unmarshal(data, &p); err == nil && len(p.Grants) > 0 {
+	if err := toml.Unmarshal(data, &p); err == nil && p.Grants != nil {
 		return &p, nil
 	}
 
 	// Fall back to YAML.
 	p = Policy{}
-	if err := yaml.Unmarshal(data, &p); err == nil && len(p.Grants) > 0 {
+	if err := yaml.Unmarshal(data, &p); err == nil && p.Grants != nil {
 		return &p, nil
 	}
 
