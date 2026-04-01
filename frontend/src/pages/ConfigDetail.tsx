@@ -12,7 +12,6 @@ import { RemoveResourceAction } from "../components/RemoveResourceAction";
 import ResourceName from "../components/ResourceName";
 import ServiceRefList from "../components/ServiceRefList";
 import { useDetailResource } from "../hooks/useDetailResource";
-import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
 import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
 import { parseStackLabels } from "../lib/parseStackLabels";
 import { Copy } from "lucide-react";
@@ -21,8 +20,7 @@ import { useParams } from "react-router-dom";
 
 export default function ConfigDetail() {
   const { id } = useParams<{ id: string }>();
-  const { data, history, error, retry } = useDetailResource(id, api.config, `/configs/${id}`);
-  const { level, loading: levelLoading } = useOperationsLevel();
+  const { data, history, error, retry, allowedMethods } = useDetailResource(id, api.config, `/configs/${id}`);
   const [labels, setLabels] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -77,6 +75,7 @@ export default function ConfigDetail() {
             resourceName={name}
             listPath={stack ? `/stacks/${stack}` : "/configs"}
             onRemove={() => api.removeConfig(config.ID)}
+            canDelete={allowedMethods.has("DELETE")}
             disabled={services.length > 0}
             disabledTitle="Cannot remove a config that is in use by services"
           />
@@ -109,7 +108,7 @@ export default function ConfigDetail() {
         defaultOpen={Object.keys(labels).length > 0}
         keyPlaceholder="com.example.my-label"
         valuePlaceholder="value"
-        editDisabled={levelLoading || level < opsLevel.configuration}
+        editDisabled={!allowedMethods.has("PATCH")}
         isKeyReadOnly={isReservedLabelKey}
         validateKey={validateLabelKey}
         onSave={async (ops) => {

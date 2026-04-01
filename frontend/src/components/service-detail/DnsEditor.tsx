@@ -10,10 +10,12 @@ export function DnsEditor({
   serviceId,
   config,
   onSaved,
+  canEdit = false,
 }: {
   serviceId: string;
   config: ContainerConfig;
   onSaved: (updated: ContainerConfig) => void;
+  canEdit?: boolean;
 }) {
   const [nameservers, setNameservers] = useState<string[]>([]);
   const [searchDomains, setSearchDomains] = useState<string[]>([]);
@@ -47,6 +49,7 @@ export function DnsEditor({
       title="DNS"
       empty={config.dnsConfig == null}
       emptyDescription="Click Edit to configure custom DNS settings."
+      canEdit={canEdit}
       onOpen={resetForm}
       onSave={save}
       display={

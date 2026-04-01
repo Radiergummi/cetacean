@@ -29,6 +29,7 @@ export default function SecretList() {
     retry,
     hasMore,
     loadMore,
+    allowedMethods,
   } = useSwarmResource(
     useCallback(
       (offset: number, signal: AbortSignal) =>
@@ -104,6 +105,7 @@ export default function SecretList() {
           <CreateDataResourceForm
             resourceType="Secret"
             basePath="/secrets"
+            canCreate={allowedMethods.has("POST")}
             onCreate={async (name, data) => {
               const response = await api.createSecret(name, data);
               return { id: response.secret.ID };

@@ -1,5 +1,4 @@
 import { useAsyncAction } from "../hooks/useAsyncAction";
-import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -21,6 +20,7 @@ interface CreateResourceDialogProps {
   children: ReactNode;
   canSubmit: boolean;
   onReset: () => void;
+  canCreate?: boolean;
 }
 
 export default function CreateResourceDialog({
@@ -29,10 +29,9 @@ export default function CreateResourceDialog({
   children,
   canSubmit,
   onReset,
+  canCreate = false,
 }: CreateResourceDialogProps) {
   const [open, setOpen] = useState(false);
-  const { level, loading: levelLoading } = useOperationsLevel();
-  const canCreate = !levelLoading && level >= opsLevel.configuration;
   const action = useAsyncAction({ toast: true });
   const navigate = useNavigate();
 

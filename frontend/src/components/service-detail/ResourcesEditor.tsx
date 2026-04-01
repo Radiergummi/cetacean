@@ -5,7 +5,6 @@ import type { ClusterCapacity } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
-import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { formatBytes, formatCores, formatNumber, formatPercentage } from "@/lib/format";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil } from "lucide-react";
@@ -53,15 +52,15 @@ export function ResourcesEditor({
   pids,
   allocation,
   onSaved,
+  canEdit = false,
 }: {
   serviceId: string;
   resources: ServiceResourceShape;
   pids?: number;
   allocation?: AllocationData;
   onSaved: (updated: ServiceResourceShape) => void;
+  canEdit?: boolean;
 }) {
-  const { level, loading: levelLoading } = useOperationsLevel();
-  const canEdit = !levelLoading && level >= opsLevel.configuration;
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);

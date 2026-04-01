@@ -15,7 +15,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
-import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { stackNamespaceLabel } from "@/lib/parseStackLabels";
 import type { LucideIcon } from "lucide-react";
 import { RefreshCw, RotateCcw, Trash2 } from "lucide-react";
@@ -88,10 +87,17 @@ function ConfirmAction({
   );
 }
 
-export function ServiceActions({ service, serviceId }: { service: Service; serviceId: string }) {
-  const { level, loading: levelLoading } = useOperationsLevel();
-  const canWrite = !levelLoading && level >= opsLevel.operational;
-  const canImpact = !levelLoading && level >= opsLevel.impactful;
+export function ServiceActions({
+  service,
+  serviceId,
+  allowedMethods,
+}: {
+  service: Service;
+  serviceId: string;
+  allowedMethods: Set<string>;
+}) {
+  const canWrite = allowedMethods.has("POST");
+  const canImpact = allowedMethods.has("DELETE");
 
   const navigate = useNavigate();
   const rollback = useAsyncAction({ toast: true });

@@ -69,10 +69,8 @@ function wrapper({ children }: { children: ReactNode }) {
 describe("VolumeList", () => {
   it("renders volume list", async () => {
     mockVolumes.mockResolvedValue({
-      items: [fakeVolume("db-data"), fakeVolume("cache-vol")],
-      total: 2,
-      limit: 50,
-      offset: 0,
+      data: { items: [fakeVolume("db-data"), fakeVolume("cache-vol")], total: 2, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
     });
     render(<VolumeList />, { wrapper });
 
@@ -83,7 +81,7 @@ describe("VolumeList", () => {
   });
 
   it("shows empty state", async () => {
-    mockVolumes.mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 });
+    mockVolumes.mockResolvedValue({ data: { items: [], total: 0, limit: 50, offset: 0 }, allowedMethods: new Set() });
     render(<VolumeList />, { wrapper });
 
     await waitFor(() => {

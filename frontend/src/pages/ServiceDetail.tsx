@@ -53,7 +53,6 @@ import { SizingBanner } from "../components/SizingBanner";
 import TasksTable from "../components/TasksTable";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
-import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
 import { useRecommendations } from "../hooks/useRecommendations";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
@@ -104,7 +103,7 @@ export default function ServiceDetail() {
   const [containerConfig, setContainerConfig] = useState<ContainerConfig | null>(null);
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const monitoring = useMonitoringStatus();
-  const { level: operationsLevel, loading: levelLoading } = useOperationsLevel();
+  const [allowedMethods, setAllowedMethods] = useState<Set<string>>(new Set());
   const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
   const hasCadvisor = !!monitoring?.cadvisor?.targets;
   const [error, setError] = useState(false);
@@ -136,11 +135,12 @@ export default function ServiceDetail() {
 
       api
         .service(id, signal)
-        .then((response) => {
+        .then(({ data: response, allowedMethods: methods }) => {
           setService(response.service);
           setChanges(response.changes ?? []);
           setIntegrations(response.integrations ?? []);
           applyDerivedState(response.service);
+          setAllowedMethods(methods);
         })
         .catch(() => {
           if (!signal.aborted) {
@@ -179,7 +179,7 @@ export default function ServiceDetail() {
   useEffect(() => {
     api
       .networks()
-      .then((result) => {
+      .then(({ data: result }) => {
         const map: Record<string, string> = {};
 
         for (const network of result.items) {
@@ -339,7 +339,7 @@ export default function ServiceDetail() {
   const taskTemplate = service.Spec.TaskTemplate;
   const containerSpec = taskTemplate?.ContainerSpec;
   const placement = taskTemplate?.Placement;
-  const canEditConfig = !levelLoading && operationsLevel >= opsLevel.configuration;
+  const canPatch = allowedMethods.has("PATCH");
   const hasPlacementContent =
     (placement?.Constraints && placement.Constraints.length > 0) ||
     (placement?.Preferences && placement.Preferences.length > 0) ||
@@ -390,18 +390,19 @@ export default function ServiceDetail() {
           <ServiceActions
             service={service}
             serviceId={id!}
+            allowedMethods={allowedMethods}
           />
         }
       />
 
       <SizingBanner
         hints={serviceRecommendations}
-        canFix={canEditConfig}
+        canFix={canPatch}
         onFixed={() => {
           if (id) {
             api
               .service(id)
-              .then((response) => {
+              .then(({ data: response }) => {
                 setService(response.service);
                 applyDerivedState(response.service);
               })
@@ -417,10 +418,12 @@ export default function ServiceDetail() {
         <ContainerImage
           image={containerSpec?.Image ?? ""}
           serviceId={id}
+          canEdit={allowedMethods.has("PUT")}
         />
         <ReplicaCard
           service={service}
           tasks={tasks}
+          allowedMethods={allowedMethods}
         />
         <ServiceStatusCard service={service} />
         <ResourceLink
@@ -489,26 +492,31 @@ export default function ServiceDetail() {
               serviceId={id!}
               config={containerConfig}
               onSaved={setContainerConfig}
+              canEdit={canPatch}
             />
             <RuntimeEditor
               serviceId={id!}
               config={containerConfig}
               onSaved={setContainerConfig}
+              canEdit={canPatch}
             />
             <CapabilitiesEditor
               serviceId={id!}
               config={containerConfig}
               onSaved={setContainerConfig}
+              canEdit={canPatch}
             />
             <ExtraHostsEditor
               serviceId={id!}
               config={containerConfig}
               onSaved={setContainerConfig}
+              canEdit={canPatch}
             />
             <DnsEditor
               serviceId={id!}
               config={containerConfig}
               onSaved={setContainerConfig}
+              canEdit={canPatch}
             />
           </div>
         ) : (
@@ -519,11 +527,12 @@ export default function ServiceDetail() {
       </CollapsibleSection>
 
       {/* Environment variables */}
-      {envVars !== null && (hasEnvContent || canEditConfig) && (
+      {envVars !== null && (hasEnvContent || canPatch) && (
         <EnvEditor
           serviceId={id!}
           envVars={envVars}
           onSaved={setEnvVars}
+          canEdit={canPatch}
         />
       )}
 
@@ -535,7 +544,7 @@ export default function ServiceDetail() {
           rawLabels,
           serviceId: id!,
           onSaved: setServiceLabels,
-          editable: canEditConfig,
+          editable: canPatch,
         };
 
         switch (integration.name) {
@@ -577,14 +586,14 @@ export default function ServiceDetail() {
       })}
 
       {/* Labels */}
-      {serviceLabels !== null && (hasLabelsContent || canEditConfig) && (
+      {serviceLabels !== null && (hasLabelsContent || canPatch) && (
         <KeyValueEditor
           title="Labels"
           entries={filteredLabels ?? {}}
           defaultOpen={Object.keys(filteredLabels ?? {}).length > 0}
           keyPlaceholder="com.example.my-label"
           valuePlaceholder="value"
-          editDisabled={levelLoading || operationsLevel < opsLevel.configuration}
+          editDisabled={!canPatch}
           isKeyReadOnly={isReservedLabelKey}
           validateKey={validateLabelKey}
           onSave={async (ops) => {
@@ -596,20 +605,22 @@ export default function ServiceDetail() {
       )}
 
       {/* Healthcheck */}
-      {healthcheck !== undefined && (hasHealthcheckContent || canEditConfig) && (
+      {healthcheck !== undefined && (hasHealthcheckContent || canPatch) && (
         <HealthcheckEditor
           serviceId={id!}
           healthcheck={healthcheck}
           onSaved={setHealthcheck}
+          canEdit={canPatch}
         />
       )}
 
       {/* Ports */}
-      {specPorts !== null && (hasPortsContent || canEditConfig) && (
+      {specPorts !== null && (hasPortsContent || canPatch) && (
         <PortsEditor
           serviceId={id!}
           ports={specPorts}
           onSaved={setSpecPorts}
+          canEdit={canPatch}
         />
       )}
 
@@ -618,6 +629,7 @@ export default function ServiceDetail() {
           serviceId={id!}
           mounts={serviceMounts}
           onSaved={setServiceMounts}
+          canEdit={canPatch}
         />
       )}
 
@@ -630,6 +642,7 @@ export default function ServiceDetail() {
         }))}
         networkNames={networkNames}
         onSaved={refetchService}
+        canEdit={canPatch}
       />
 
       {/* Configs */}
@@ -641,6 +654,7 @@ export default function ServiceDetail() {
           fileName: cfg.File?.Name ?? "",
         }))}
         onSaved={refetchService}
+        canEdit={canPatch}
       />
 
       {/* Secrets */}
@@ -652,6 +666,7 @@ export default function ServiceDetail() {
           fileName: sec.File?.Name ?? "",
         }))}
         onSaved={refetchService}
+        canEdit={canPatch}
       />
 
       {/* Deploy: Resources, Placement, Restart, Update, Rollback */}
@@ -666,11 +681,12 @@ export default function ServiceDetail() {
                 <EndpointModeEditor
                   serviceId={id!}
                   currentMode={service.Spec.EndpointSpec.Mode as "vip" | "dnsrr"}
+                  canEdit={allowedMethods.has("DELETE")}
                 />
               </div>
             )}
 
-            {serviceResources !== null && (hasResourcesContent || canEditConfig) && (
+            {serviceResources !== null && (hasResourcesContent || canPatch) && (
               <div
                 id="resources-section"
                 className="flex flex-col gap-3 rounded-lg border p-3"
@@ -679,6 +695,7 @@ export default function ServiceDetail() {
                   serviceId={id!}
                   resources={serviceResources}
                   onSaved={setServiceResources}
+                  canEdit={canPatch}
                   pids={taskTemplate.Resources?.Limits?.Pids}
                   allocation={{
                     cpuReserved,
@@ -692,12 +709,13 @@ export default function ServiceDetail() {
               </div>
             )}
 
-            {(hasPlacementContent || canEditConfig) && (
+            {(hasPlacementContent || canPatch) && (
               <div className="flex flex-col gap-3 rounded-lg border p-3">
                 <PlacementEditor
                   serviceId={id!}
                   placement={taskTemplate.Placement ?? null}
                   onSaved={refetchService}
+                  canEdit={canPatch}
                 />
               </div>
             )}
@@ -736,26 +754,29 @@ export default function ServiceDetail() {
               serviceId={id!}
               logDriver={taskTemplate.LogDriver ?? null}
               onSaved={refetchService}
+              canEdit={canPatch}
             />
 
-            {(service.Spec.UpdateConfig || canEditConfig) && (
+            {(service.Spec.UpdateConfig || canPatch) && (
               <div className="flex flex-col gap-3 rounded-lg border p-3">
                 <PolicyEditor
                   type="update"
                   serviceId={id!}
                   policy={service.Spec.UpdateConfig ?? null}
                   onSaved={refetchService}
+                  canEdit={canPatch}
                 />
               </div>
             )}
 
-            {(service.Spec.RollbackConfig || canEditConfig) && (
+            {(service.Spec.RollbackConfig || canPatch) && (
               <div className="flex flex-col gap-3 rounded-lg border p-3">
                 <PolicyEditor
                   type="rollback"
                   serviceId={id!}
                   policy={service.Spec.RollbackConfig ?? null}
                   onSaved={refetchService}
+                  canEdit={canPatch}
                 />
               </div>
             )}

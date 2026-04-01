@@ -253,9 +253,12 @@ export default function Topology() {
     }
     setError(null);
     try {
-      const [net, place] = await Promise.all([api.topologyNetworks(), api.topologyPlacement()]);
-      setNetworkData(net);
-      setPlacementData(place);
+      const [networkResult, placementResult] = await Promise.all([
+        api.topologyNetworks(),
+        api.topologyPlacement(),
+      ]);
+      setNetworkData(networkResult);
+      setPlacementData(placementResult);
     } catch (error) {
       setError(getErrorMessage(error, "Failed to load topology"));
     } finally {

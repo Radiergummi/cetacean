@@ -25,7 +25,6 @@ import {
 import { Button } from "../components/ui/button";
 import { useAsyncAction } from "../hooks/useAsyncAction";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
-import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
@@ -41,8 +40,8 @@ export default function TaskDetail() {
   const [task, setTask] = useState<Task | null>(null);
   const [service, setService] = useState<Service | null>(null);
   const [error, setError] = useState(false);
-  const { level, loading: levelLoading } = useOperationsLevel();
-  const canRemove = !levelLoading && level >= opsLevel.impactful;
+  const [allowedMethods, setAllowedMethods] = useState<Set<string>>(new Set());
+  const canRemove = allowedMethods.has("DELETE");
   const removal = useAsyncAction({ toast: true });
 
   const fetchTask = useCallback(() => {
@@ -52,7 +51,10 @@ export default function TaskDetail() {
 
     api
       .task(id)
-      .then(setTask)
+      .then(({ data: taskData, allowedMethods: methods }) => {
+        setTask(taskData);
+        setAllowedMethods(methods);
+      })
       .catch(() => setError(true));
   }, [id]);
 
@@ -68,7 +70,7 @@ export default function TaskDetail() {
 
     api
       .service(serviceId)
-      .then(({ service }) => setService(service))
+      .then(({ data: { service } }) => setService(service))
       .catch(console.warn);
   }, [serviceId]);
 

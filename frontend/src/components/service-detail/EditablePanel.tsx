@@ -1,7 +1,6 @@
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
-import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { showErrorToast } from "@/lib/showErrorToast";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil } from "lucide-react";
@@ -27,8 +26,8 @@ interface EditablePanelProps {
   emptyDescription?: string;
   /** Whether to wrap in a bordered div (default true) */
   bordered?: boolean;
-  /** Minimum operations level required to edit (default: opsLevel.configuration) */
-  requiredLevel?: number;
+  /** Whether editing is allowed (default false) */
+  canEdit?: boolean;
   /** Extra buttons rendered next to Edit in the title row (only shown when not editing) */
   headerActions?: ReactNode;
 }
@@ -43,11 +42,9 @@ export function EditablePanel({
   empty,
   emptyDescription,
   bordered = true,
-  requiredLevel,
+  canEdit = false,
   headerActions,
 }: EditablePanelProps) {
-  const { level, loading: levelLoading } = useOperationsLevel();
-  const canEdit = !levelLoading && level >= (requiredLevel ?? opsLevel.configuration);
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);

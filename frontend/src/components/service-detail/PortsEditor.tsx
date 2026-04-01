@@ -6,7 +6,6 @@ import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
-import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -24,9 +23,12 @@ const defaultPort: PortConfig = {
   PublishMode: "ingress",
 };
 
-export function PortsEditor({ serviceId, ports, onSaved }: PortsEditorProps) {
-  const { level, loading: levelLoading } = useOperationsLevel();
-  const canEdit = !levelLoading && level >= opsLevel.configuration;
+export function PortsEditor({
+  serviceId,
+  ports,
+  onSaved,
+  canEdit = false,
+}: PortsEditorProps & { canEdit?: boolean }) {
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);

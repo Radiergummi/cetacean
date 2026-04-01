@@ -5,7 +5,6 @@ import ResourceName from "@/components/ResourceName";
 import SimpleTable from "@/components/SimpleTable";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
-import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { splitStackPrefix } from "@/lib/searchConstants";
 import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
@@ -16,9 +15,12 @@ interface SecretsEditorProps {
   onSaved: (secrets: ServiceSecretRef[]) => void;
 }
 
-export function SecretsEditor({ serviceId, secrets, onSaved }: SecretsEditorProps) {
-  const { level, loading: levelLoading } = useOperationsLevel();
-  const canEdit = !levelLoading && level >= opsLevel.configuration;
+export function SecretsEditor({
+  serviceId,
+  secrets,
+  onSaved,
+  canEdit = false,
+}: SecretsEditorProps & { canEdit?: boolean }) {
 
   const [availableSecrets, setAvailableSecrets] = useState<ComboboxOption[]>([]);
   const [newSecretId, setNewSecretId] = useState("");
@@ -27,7 +29,7 @@ export function SecretsEditor({ serviceId, secrets, onSaved }: SecretsEditorProp
   const fetchSecrets = useCallback(() => {
     api
       .secrets()
-      .then((response) => {
+      .then(({ data: response }) => {
         setAvailableSecrets(
           response.items.map((secret) => ({
             value: secret.ID,

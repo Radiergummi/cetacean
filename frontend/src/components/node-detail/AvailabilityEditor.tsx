@@ -14,7 +14,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
-import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { cn } from "@/lib/utils";
 import { CircleCheck, CirclePause, LogOut, Pencil } from "lucide-react";
 import { useState } from "react";
@@ -42,9 +41,15 @@ const availabilityOptions = [
   },
 ];
 
-export function AvailabilityEditor({ nodeId, current }: { nodeId: string; current: string }) {
-  const { level, loading: levelLoading } = useOperationsLevel();
-  const canEdit = !levelLoading && level >= opsLevel.impactful;
+export function AvailabilityEditor({
+  nodeId,
+  current,
+  canEdit = false,
+}: {
+  nodeId: string;
+  current: string;
+  canEdit?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState<Availability>(current as Availability);
   const [drainPending, setDrainPending] = useState(false);

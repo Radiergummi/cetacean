@@ -9,7 +9,6 @@ import { RemoveResourceAction } from "../components/RemoveResourceAction";
 import ResourceName from "../components/ResourceName";
 import ServiceRefList from "../components/ServiceRefList";
 import { useDetailResource } from "../hooks/useDetailResource";
-import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
 import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
 import { parseStackLabels } from "../lib/parseStackLabels";
 import { useEffect, useState } from "react";
@@ -17,8 +16,7 @@ import { useParams } from "react-router-dom";
 
 export default function SecretDetail() {
   const { id } = useParams<{ id: string }>();
-  const { data, history, error, retry } = useDetailResource(id, api.secret, `/secrets/${id}`);
-  const { level, loading: levelLoading } = useOperationsLevel();
+  const { data, history, error, retry, allowedMethods } = useDetailResource(id, api.secret, `/secrets/${id}`);
   const [labels, setLabels] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -64,6 +62,7 @@ export default function SecretDetail() {
             resourceName={name}
             listPath={stack ? `/stacks/${stack}` : "/secrets"}
             onRemove={() => api.removeSecret(secret.ID)}
+            canDelete={allowedMethods.has("DELETE")}
             disabled={services.length > 0}
             disabledTitle="Cannot remove a secret that is in use by services"
           />
@@ -96,7 +95,7 @@ export default function SecretDetail() {
         defaultOpen={Object.keys(labels).length > 0}
         keyPlaceholder="com.example.my-label"
         valuePlaceholder="value"
-        editDisabled={levelLoading || level < opsLevel.configuration}
+        editDisabled={!allowedMethods.has("PATCH")}
         isKeyReadOnly={isReservedLabelKey}
         validateKey={validateLabelKey}
         onSave={async (ops) => {

@@ -7,7 +7,6 @@ import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
-import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { getErrorMessage } from "@/lib/utils";
 import { ArrowRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -49,9 +48,12 @@ function sourceLabel(type: string): string {
   }
 }
 
-export function MountsEditor({ serviceId, mounts, onSaved }: MountsEditorProps) {
-  const { level, loading: levelLoading } = useOperationsLevel();
-  const canEdit = !levelLoading && level >= opsLevel.configuration;
+export function MountsEditor({
+  serviceId,
+  mounts,
+  onSaved,
+  canEdit = false,
+}: MountsEditorProps & { canEdit?: boolean }) {
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);

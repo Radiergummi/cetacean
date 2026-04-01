@@ -9,6 +9,7 @@ interface CreateDataResourceFormProps {
   resourceType: string;
   onCreate: (name: string, data: string) => Promise<{ id: string }>;
   basePath: string;
+  canCreate?: boolean;
 }
 
 /**
@@ -19,6 +20,7 @@ export default function CreateDataResourceForm({
   resourceType,
   onCreate,
   basePath,
+  canCreate,
 }: CreateDataResourceFormProps) {
   const [name, setName] = useState("");
   const [text, setText] = useState("");
@@ -68,6 +70,7 @@ export default function CreateDataResourceForm({
       onSubmit={handleSubmit}
       canSubmit={canSubmit}
       onReset={reset}
+      canCreate={canCreate}
     >
       <div className="flex flex-col gap-4 py-2">
         <div className="flex flex-col gap-2">

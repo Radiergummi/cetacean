@@ -15,6 +15,7 @@ export default function StackDetail() {
   const { name } = useParams<{ name: string }>();
   const [stack, setStack] = useState<StackDetailType | null>(null);
   const [error, setError] = useState(false);
+  const [allowedMethods, setAllowedMethods] = useState<Set<string>>(new Set());
   const [taskCounts, setTaskCounts] = useState<
     Record<string, { running: number; desired: number }>
   >({});
@@ -23,7 +24,10 @@ export default function StackDetail() {
     if (name) {
       api
         .stack(name)
-        .then(setStack)
+        .then(({ data: stackData, allowedMethods: methods }) => {
+          setStack(stackData);
+          setAllowedMethods(methods);
+        })
         .catch(() => setError(true));
     }
   }, [name]);
@@ -120,6 +124,7 @@ export default function StackDetail() {
         actions={
           <StackActions
             stackName={stack.name}
+            allowedMethods={allowedMethods}
             resourceCounts={{
               services: stack.services?.length ?? 0,
               networks: stack.networks?.length ?? 0,

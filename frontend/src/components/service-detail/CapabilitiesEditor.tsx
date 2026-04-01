@@ -44,10 +44,12 @@ export function CapabilitiesEditor({
   serviceId,
   config,
   onSaved,
+  canEdit = false,
 }: {
   serviceId: string;
   config: ContainerConfig;
   onSaved: (updated: ContainerConfig) => void;
+  canEdit?: boolean;
 }) {
   const [addList, setAddList] = useState<string[]>([]);
   const [dropList, setDropList] = useState<string[]>([]);
@@ -72,6 +74,7 @@ export function CapabilitiesEditor({
       title="Capabilities"
       empty={isEmpty}
       emptyDescription="Click Edit to add or drop Linux capabilities."
+      canEdit={canEdit}
       onOpen={resetForm}
       onSave={save}
       display={

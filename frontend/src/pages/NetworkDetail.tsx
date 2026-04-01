@@ -114,7 +114,7 @@ function IPAMPanel({ network }: { network: Network }) {
 
 export default function NetworkDetail() {
   const { id } = useParams<{ id: string }>();
-  const { data, history, error, retry } = useDetailResource(id, api.network, `/networks/${id}`);
+  const { data, history, error, retry, allowedMethods } = useDetailResource(id, api.network, `/networks/${id}`);
 
   if (error) {
     return (
@@ -152,6 +152,7 @@ export default function NetworkDetail() {
             resourceName={network.Name}
             listPath={stack ? `/stacks/${stack}` : "/networks"}
             onRemove={() => api.removeNetwork(network.Id)}
+            canDelete={allowedMethods.has("DELETE")}
             disabled={services.length > 0}
             disabledTitle="Cannot remove a network that is in use by services"
           />

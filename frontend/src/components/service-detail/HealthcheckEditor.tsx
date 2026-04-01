@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
 import { NumberField } from "@/components/ui/number-field";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
-import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { formatDuration, nanosToSeconds } from "@/lib/format";
 import { joinCommand, parseCommand } from "@/lib/parseCommand";
 import { cn, getErrorMessage } from "@/lib/utils";
@@ -124,13 +123,13 @@ export function HealthcheckEditor({
   serviceId,
   healthcheck,
   onSaved,
+  canEdit = false,
 }: {
   serviceId: string;
   healthcheck: Healthcheck | null;
   onSaved: (updated: Healthcheck | null) => void;
+  canEdit?: boolean;
 }) {
-  const { level, loading: levelLoading } = useOperationsLevel();
-  const canEdit = !levelLoading && level >= opsLevel.configuration;
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);

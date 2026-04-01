@@ -2,20 +2,19 @@ import { api } from "@/api/client";
 import type { PatchOp } from "@/api/types";
 import { KeyValueEditor } from "@/components/KeyValueEditor";
 import { DockerDocsLink } from "@/components/service-detail/DockerDocsLink";
-import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { handleCopyWithTemplates, renderSwarmTemplate } from "@/lib/swarmTemplates";
 
 export function EnvEditor({
   serviceId,
   envVars,
   onSaved,
+  canEdit = false,
 }: {
   serviceId: string;
   envVars: Record<string, string>;
   onSaved: (updated: Record<string, string>) => void;
+  canEdit?: boolean;
 }) {
-  const { level, loading: levelLoading } = useOperationsLevel();
-  const canEdit = !levelLoading && level >= opsLevel.configuration;
 
   async function handleSave(operations: PatchOp[]) {
     const updated = await api.patchServiceEnv(serviceId, operations);

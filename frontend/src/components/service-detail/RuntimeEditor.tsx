@@ -45,10 +45,12 @@ export function RuntimeEditor({
   serviceId,
   config,
   onSaved,
+  canEdit = false,
 }: {
   serviceId: string;
   config: ContainerConfig;
   onSaved: (updated: ContainerConfig) => void;
+  canEdit?: boolean;
 }) {
   const [hostnameInput, setHostnameInput] = useState("");
   const [initValue, setInitValue] = useState<boolean | undefined>(undefined);
@@ -104,6 +106,7 @@ export function RuntimeEditor({
       title="Runtime"
       empty={isEmpty}
       emptyDescription="Click Edit to configure runtime options like hostname, init, TTY, or stop behavior."
+      canEdit={canEdit}
       onOpen={resetForm}
       onSave={save}
       display={

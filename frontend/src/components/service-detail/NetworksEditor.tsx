@@ -5,7 +5,6 @@ import ResourceName from "@/components/ResourceName";
 import SimpleTable from "@/components/SimpleTable";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { MultiCombobox } from "@/components/ui/multi-combobox";
-import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -21,9 +20,8 @@ export function NetworksEditor({
   networks,
   networkNames,
   onSaved,
-}: NetworksEditorProps) {
-  const { level, loading: levelLoading } = useOperationsLevel();
-  const canEdit = !levelLoading && level >= opsLevel.configuration;
+  canEdit = false,
+}: NetworksEditorProps & { canEdit?: boolean }) {
 
   const [availableNetworks, setAvailableNetworks] = useState<ComboboxOption[]>([]);
   const [newNetworkId, setNewNetworkId] = useState("");
@@ -32,7 +30,7 @@ export function NetworksEditor({
   const fetchNetworks = useCallback(() => {
     api
       .networks()
-      .then((response) => {
+      .then(({ data: response }) => {
         setAvailableNetworks(
           response.items.map((network) => ({
             value: network.Id,

@@ -32,7 +32,12 @@ interface LogDriverEditorProps {
   onSaved: () => void;
 }
 
-export function LogDriverEditor({ serviceId, logDriver, onSaved }: LogDriverEditorProps) {
+export function LogDriverEditor({
+  serviceId,
+  logDriver,
+  onSaved,
+  canEdit = false,
+}: LogDriverEditorProps & { canEdit?: boolean }) {
   const [driverName, setDriverName] = useState("");
   const [options, setOptions] = useState<[string, string][]>([]);
 
@@ -70,6 +75,7 @@ export function LogDriverEditor({ serviceId, logDriver, onSaved }: LogDriverEdit
       title="Log Driver"
       empty={!logDriver}
       emptyDescription="Click Edit to choose how container logs are collected and forwarded."
+      canEdit={canEdit}
       onOpen={resetForm}
       onSave={save}
       actions={

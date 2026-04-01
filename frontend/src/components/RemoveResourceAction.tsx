@@ -14,7 +14,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
-import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { getErrorInfo } from "@/lib/errors";
 import { Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -25,6 +24,7 @@ interface RemoveResourceActionProps {
   listPath: string;
   onRemove: () => Promise<void>;
   onForceRemove?: () => Promise<void>;
+  canDelete?: boolean;
   disabled?: boolean;
   disabledTitle?: string;
 }
@@ -35,15 +35,14 @@ export function RemoveResourceAction({
   listPath,
   onRemove,
   onForceRemove,
+  canDelete = false,
   disabled,
   disabledTitle,
 }: RemoveResourceActionProps) {
-  const { level, loading: levelLoading } = useOperationsLevel();
-  const canImpact = !levelLoading && level >= opsLevel.impactful;
   const navigate = useNavigate();
   const remove = useAsyncAction({ toast: true });
 
-  if (!canImpact) {
+  if (!canDelete) {
     return null;
   }
 

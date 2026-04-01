@@ -15,15 +15,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
-import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { getErrorInfo } from "@/lib/errors";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-export function NodeActions({ node }: { node: Node }) {
-  const { level, loading: levelLoading } = useOperationsLevel();
-  const canImpact = !levelLoading && level >= opsLevel.impactful;
+export function NodeActions({
+  node,
+  allowedMethods,
+}: {
+  node: Node;
+  allowedMethods: Set<string>;
+}) {
+  const canImpact = allowedMethods.has("DELETE");
   const navigate = useNavigate();
   const remove = useAsyncAction({ toast: true });
   const [dialogOpen, setDialogOpen] = useState(false);

@@ -29,6 +29,7 @@ export default function ConfigList() {
     retry,
     hasMore,
     loadMore,
+    allowedMethods,
   } = useSwarmResource(
     useCallback(
       (offset: number, signal: AbortSignal) =>
@@ -106,6 +107,7 @@ export default function ConfigList() {
           <CreateDataResourceForm
             resourceType="Config"
             basePath="/configs"
+            canCreate={allowedMethods.has("POST")}
             onCreate={async (name, data) => {
               const response = await api.createConfig(name, data);
               return { id: response.config.ID };

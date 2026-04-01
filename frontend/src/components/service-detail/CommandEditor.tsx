@@ -10,10 +10,12 @@ export function CommandEditor({
   serviceId,
   config,
   onSaved,
+  canEdit = false,
 }: {
   serviceId: string;
   config: ContainerConfig;
   onSaved: (updated: ContainerConfig) => void;
+  canEdit?: boolean;
 }) {
   const [commandInput, setCommandInput] = useState("");
   const [argsInput, setArgsInput] = useState("");
@@ -50,6 +52,7 @@ export function CommandEditor({
       title="Command"
       empty={isEmpty}
       emptyDescription="Click Edit to configure the container entrypoint, args, working directory, or user."
+      canEdit={canEdit}
       onOpen={resetForm}
       onSave={save}
       display={

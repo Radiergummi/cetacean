@@ -67,7 +67,7 @@ function wrapper({ children }: { children: ReactNode }) {
 describe("ConfigList", () => {
   it("renders config list", async () => {
     const items = [fakeConfig("c1", "app-config"), fakeConfig("c2", "db-config")];
-    mockConfigs.mockResolvedValue({ items, total: 2, limit: 50, offset: 0 });
+    mockConfigs.mockResolvedValue({ data: { items, total: 2, limit: 50, offset: 0 }, allowedMethods: new Set() });
     render(<ConfigList />, { wrapper });
 
     await waitFor(() => {
@@ -79,16 +79,12 @@ describe("ConfigList", () => {
   it("filters by search", async () => {
     mockConfigs
       .mockResolvedValueOnce({
-        items: [fakeConfig("c1", "app-config"), fakeConfig("c2", "db-config")],
-        total: 2,
-        limit: 50,
-        offset: 0,
+        data: { items: [fakeConfig("c1", "app-config"), fakeConfig("c2", "db-config")], total: 2, limit: 50, offset: 0 },
+        allowedMethods: new Set(),
       })
       .mockResolvedValueOnce({
-        items: [fakeConfig("c2", "db-config")],
-        total: 1,
-        limit: 50,
-        offset: 0,
+        data: { items: [fakeConfig("c2", "db-config")], total: 1, limit: 50, offset: 0 },
+        allowedMethods: new Set(),
       });
     render(<ConfigList />, { wrapper });
 
@@ -107,7 +103,7 @@ describe("ConfigList", () => {
   });
 
   it("shows empty state", async () => {
-    mockConfigs.mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 });
+    mockConfigs.mockResolvedValue({ data: { items: [], total: 0, limit: 50, offset: 0 }, allowedMethods: new Set() });
     render(<ConfigList />, { wrapper });
 
     await waitFor(() => {

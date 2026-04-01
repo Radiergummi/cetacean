@@ -47,8 +47,10 @@ export default function ServiceSubResource() {
     const signal = controller.signal;
 
     Promise.all([
-      get<unknown>(`/services/${id}/${subResource}`, signal),
-      get<{ service?: { Spec?: { Name?: string } } }>(`/services/${id}`, signal).catch(() => null),
+      get<unknown>(`/services/${id}/${subResource}`, signal).then(({ data }) => data),
+      get<{ service?: { Spec?: { Name?: string } } }>(`/services/${id}`, signal)
+        .then(({ data }) => data)
+        .catch(() => null),
     ])
       .then(([subData, serviceData]) => {
         setData(subData);

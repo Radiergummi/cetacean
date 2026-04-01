@@ -8,7 +8,6 @@ import { NumberField } from "@/components/ui/number-field";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
-import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { cn } from "@/lib/utils";
 import { Copy, Globe, Pencil } from "lucide-react";
 import { useState } from "react";
@@ -81,10 +80,17 @@ function ReplicaDoughnut({ running, desired }: { running: number; desired: numbe
 
 type Mode = "replicated" | "global";
 
-export function ReplicaCard({ service, tasks }: { service: Service; tasks: Task[] }) {
-  const { level, loading: levelLoading } = useOperationsLevel();
-  const canScale = !levelLoading && level >= opsLevel.operational;
-  const canChangeMode = !levelLoading && level >= opsLevel.impactful;
+export function ReplicaCard({
+  service,
+  tasks,
+  allowedMethods,
+}: {
+  service: Service;
+  tasks: Task[];
+  allowedMethods: Set<string>;
+}) {
+  const canScale = allowedMethods.has("PUT");
+  const canChangeMode = allowedMethods.has("DELETE");
 
   const currentMode: Mode = service.Spec.Mode.Replicated ? "replicated" : "global";
   const currentReplicas = service.Spec.Mode.Replicated?.Replicas ?? 0;

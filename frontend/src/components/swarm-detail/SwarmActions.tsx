@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
-import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import type { LucideIcon } from "lucide-react";
 import { RefreshCw } from "lucide-react";
 
@@ -62,9 +61,14 @@ function ConfirmAction({
   );
 }
 
-export function SwarmActions({ onRotated }: { onRotated: () => void }) {
-  const { level, loading: levelLoading } = useOperationsLevel();
-  const canImpact = !levelLoading && level >= opsLevel.impactful;
+export function SwarmActions({
+  allowedMethods,
+  onRotated,
+}: {
+  allowedMethods: Set<string>;
+  onRotated: () => void;
+}) {
+  const canImpact = allowedMethods.has("POST");
 
   const rotateWorker = useAsyncAction({ toast: true });
   const rotateManager = useAsyncAction({ toast: true });

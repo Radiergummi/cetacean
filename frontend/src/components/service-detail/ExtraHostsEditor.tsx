@@ -50,10 +50,12 @@ export function ExtraHostsEditor({
   serviceId,
   config,
   onSaved,
+  canEdit = false,
 }: {
   serviceId: string;
   config: ContainerConfig;
   onSaved: (updated: ContainerConfig) => void;
+  canEdit?: boolean;
 }) {
   const [rows, setRows] = useState<HostRow[]>([]);
 
@@ -95,6 +97,7 @@ export function ExtraHostsEditor({
       title="Extra Hosts"
       empty={!config.hosts || config.hosts.length === 0}
       emptyDescription="Click Edit to add custom /etc/hosts entries."
+      canEdit={canEdit}
       onOpen={resetForm}
       onSave={save}
       actions={

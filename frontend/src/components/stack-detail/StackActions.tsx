@@ -13,13 +13,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
-import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 interface StackActionsProps {
   stackName: string;
+  allowedMethods: Set<string>;
   resourceCounts: {
     services: number;
     networks: number;
@@ -28,9 +28,8 @@ interface StackActionsProps {
   };
 }
 
-export function StackActions({ stackName, resourceCounts }: StackActionsProps) {
-  const { level, loading: levelLoading } = useOperationsLevel();
-  const canImpact = !levelLoading && level >= opsLevel.impactful;
+export function StackActions({ stackName, allowedMethods, resourceCounts }: StackActionsProps) {
+  const canImpact = allowedMethods.has("DELETE");
   const navigate = useNavigate();
   const remove = useAsyncAction({ toast: true });
   const [dialogOpen, setDialogOpen] = useState(false);

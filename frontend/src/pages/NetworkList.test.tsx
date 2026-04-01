@@ -74,10 +74,8 @@ function wrapper({ children }: { children: ReactNode }) {
 describe("NetworkList", () => {
   it("renders network list", async () => {
     mockNetworks.mockResolvedValue({
-      items: [fakeNetwork("n1", "ingress"), fakeNetwork("n2", "backend")],
-      total: 2,
-      limit: 50,
-      offset: 0,
+      data: { items: [fakeNetwork("n1", "ingress"), fakeNetwork("n2", "backend")], total: 2, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
     });
     render(<NetworkList />, { wrapper });
 
@@ -88,7 +86,7 @@ describe("NetworkList", () => {
   });
 
   it("shows empty state", async () => {
-    mockNetworks.mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 });
+    mockNetworks.mockResolvedValue({ data: { items: [], total: 0, limit: 50, offset: 0 }, allowedMethods: new Set() });
     render(<NetworkList />, { wrapper });
 
     await waitFor(() => {

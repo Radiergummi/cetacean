@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { RadioCard, RadioCardGroup } from "@/components/ui/radio-card";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
-import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { cn } from "@/lib/utils";
 import { Pencil } from "lucide-react";
 import { useState } from "react";
@@ -30,9 +29,13 @@ const roles = [
   },
 ] as const;
 
-export function RoleEditor({ nodeId, currentRole, isLeader, managerCount }: RoleEditorProps) {
-  const { level, loading: levelLoading } = useOperationsLevel();
-  const canEdit = !levelLoading && level >= opsLevel.impactful;
+export function RoleEditor({
+  nodeId,
+  currentRole,
+  isLeader,
+  managerCount,
+  canEdit = false,
+}: RoleEditorProps & { canEdit?: boolean }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(currentRole);
   const action = useAsyncAction({ toast: true });

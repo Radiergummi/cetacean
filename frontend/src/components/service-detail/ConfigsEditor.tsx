@@ -5,7 +5,6 @@ import ResourceName from "@/components/ResourceName";
 import SimpleTable from "@/components/SimpleTable";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
-import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { splitStackPrefix } from "@/lib/searchConstants";
 import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
@@ -16,9 +15,12 @@ interface ConfigsEditorProps {
   onSaved: (configs: ServiceConfigRef[]) => void;
 }
 
-export function ConfigsEditor({ serviceId, configs, onSaved }: ConfigsEditorProps) {
-  const { level, loading: levelLoading } = useOperationsLevel();
-  const canEdit = !levelLoading && level >= opsLevel.configuration;
+export function ConfigsEditor({
+  serviceId,
+  configs,
+  onSaved,
+  canEdit = false,
+}: ConfigsEditorProps & { canEdit?: boolean }) {
 
   const [availableConfigs, setAvailableConfigs] = useState<ComboboxOption[]>([]);
   const [newConfigId, setNewConfigId] = useState("");
@@ -27,7 +29,7 @@ export function ConfigsEditor({ serviceId, configs, onSaved }: ConfigsEditorProp
   const fetchConfigs = useCallback(() => {
     api
       .configs()
-      .then((response) => {
+      .then(({ data: response }) => {
         setAvailableConfigs(
           response.items.map((config) => ({
             value: config.ID,

@@ -36,7 +36,6 @@ import { Input } from "../components/ui/input";
 import { NumberField } from "../components/ui/number-field";
 import { Switch } from "../components/ui/switch";
 import { useAsyncAction } from "../hooks/useAsyncAction";
-import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
 import { formatDuration } from "../lib/format";
 import { EditablePanel } from "@/components/service-detail/EditablePanel";
 import { Check, Copy, KeyRound, LockOpen, Plus, RefreshCw } from "lucide-react";
@@ -113,18 +112,21 @@ export default function SwarmPage() {
   const [plugins, setPlugins] = useState<Plugin[]>([]);
   const [error, setError] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
-  const { level } = useOperationsLevel();
+  const [allowedMethods, setAllowedMethods] = useState<Set<string>>(new Set());
 
   const fetchSwarmInfo = useCallback(() => {
     api
       .swarm()
-      .then(setData)
+      .then(({ data: swarmData, allowedMethods: methods }) => {
+        setData(swarmData);
+        setAllowedMethods(methods);
+      })
       .catch(() => setError(true));
   }, []);
 
   useEffect(() => {
     fetchSwarmInfo();
-    api.plugins().then(setPlugins).catch(console.warn);
+    api.plugins().then(({ data: pluginsData }) => setPlugins(pluginsData)).catch(console.warn);
   }, [fetchSwarmInfo]);
 
   // Orchestration draft
@@ -175,7 +177,10 @@ export default function SwarmPage() {
         title="Swarm"
         actions={
           <>
-            <SwarmActions onRotated={fetchSwarmInfo} />
+            <SwarmActions
+              allowedMethods={allowedMethods}
+              onRotated={fetchSwarmInfo}
+            />
             <JoinTokenDialog
               label="Manager"
               token={swarm.JoinTokens.Manager}
@@ -224,7 +229,7 @@ export default function SwarmPage() {
         {/* Raft */}
         <EditablePanel
           title="Raft"
-          requiredLevel={opsLevel.configuration}
+          canEdit={allowedMethods.has("PATCH")}
           display={
             <KVTable
               rows={[
@@ -291,7 +296,7 @@ export default function SwarmPage() {
         {/* CA Configuration */}
         <EditablePanel
           title="CA Configuration"
-          requiredLevel={opsLevel.impactful}
+          canEdit={allowedMethods.has("POST")}
           headerActions={
             <AlertDialog>
               <AlertDialogTrigger
@@ -390,7 +395,7 @@ export default function SwarmPage() {
         {/* Orchestration */}
         <EditablePanel
           title="Orchestration"
-          requiredLevel={opsLevel.configuration}
+          canEdit={allowedMethods.has("PATCH")}
           display={
             <KVTable
               rows={[
@@ -426,7 +431,7 @@ export default function SwarmPage() {
         {/* Dispatcher */}
         <EditablePanel
           title="Dispatcher"
-          requiredLevel={opsLevel.configuration}
+          canEdit={allowedMethods.has("PATCH")}
           display={
             <KVTable
               rows={[
@@ -459,7 +464,7 @@ export default function SwarmPage() {
         <div className="space-y-3">
           <EditablePanel
             title="Encryption"
-            requiredLevel={opsLevel.impactful}
+            canEdit={allowedMethods.has("POST")}
             display={
               <KVTable
                 rows={[
@@ -666,7 +671,7 @@ export default function SwarmPage() {
       <CollapsibleSection
         title="Plugins"
         controls={
-          level >= opsLevel.impactful ? (
+          allowedMethods.has("POST") ? (
             <Button
               variant="outline"
               size="sm"
@@ -691,7 +696,7 @@ export default function SwarmPage() {
         open={installOpen}
         onOpenChange={setInstallOpen}
         onInstalled={() => {
-          api.plugins().then(setPlugins).catch(console.warn);
+          api.plugins().then(({ data: pluginsData }) => setPlugins(pluginsData)).catch(console.warn);
         }}
       />
     </div>

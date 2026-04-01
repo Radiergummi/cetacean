@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
-import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { imageRegistryUrl } from "@/lib/imageUrl";
 import { Pencil } from "lucide-react";
 import { useState } from "react";
@@ -143,13 +142,13 @@ export default function ContainerImage({
   image,
   label = "Image",
   serviceId,
+  canEdit = false,
 }: {
   image?: string;
   label?: string;
   serviceId?: string;
+  canEdit?: boolean;
 }) {
-  const { level, loading: levelLoading } = useOperationsLevel();
-  const canEdit = !levelLoading && level >= opsLevel.operational;
 
   if (!image) {
     return null;

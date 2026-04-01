@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { RadioCard, RadioCardGroup } from "@/components/ui/radio-card";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
-import { opsLevel, useOperationsLevel } from "@/hooks/useOperationsLevel";
 import { Globe, Pencil, Shuffle } from "lucide-react";
 import { useState } from "react";
 
@@ -14,12 +13,12 @@ type EndpointMode = "vip" | "dnsrr";
 export function EndpointModeEditor({
   serviceId,
   currentMode,
+  canEdit = false,
 }: {
   serviceId: string;
   currentMode: EndpointMode;
+  canEdit?: boolean;
 }) {
-  const { level, loading: levelLoading } = useOperationsLevel();
-  const canEdit = !levelLoading && level >= opsLevel.impactful;
 
   const [editing, setEditing] = useState(false);
   const [mode, setMode] = useState<EndpointMode>(currentMode);

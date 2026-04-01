@@ -25,7 +25,10 @@ describe("api client", () => {
       jsonResponse({ items: [{ ID: "n1" }], total: 1, limit: 50, offset: 0 }),
     );
     const result = await api.nodes();
-    expect(result).toEqual({ items: [{ ID: "n1" }], total: 1, limit: 50, offset: 0 });
+    expect(result).toEqual({
+      data: { items: [{ ID: "n1" }], total: 1, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
     expect(mockFetch).toHaveBeenCalledWith(
       "/nodes",
       expect.objectContaining({
@@ -61,7 +64,10 @@ describe("api client", () => {
       jsonResponse({ items: [{ ID: "n1" }], total: 100, limit: 50, offset: 0 }, 206),
     );
     const result = await api.nodes();
-    expect(result).toEqual({ items: [{ ID: "n1" }], total: 100, limit: 50, offset: 0 });
+    expect(result).toEqual({
+      data: { items: [{ ID: "n1" }], total: 100, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
   });
 
   it("sends filter query param", async () => {
@@ -73,7 +79,7 @@ describe("api client", () => {
   it("fetches a single node (unwraps JSON-LD wrapper)", async () => {
     mockFetch.mockReturnValue(jsonResponse({ node: { ID: "n1" } }));
     const result = await api.node("n1");
-    expect(result).toEqual({ ID: "n1" });
+    expect(result).toEqual({ data: { ID: "n1" }, allowedMethods: new Set() });
     expect(mockFetch).toHaveBeenCalledWith(
       "/nodes/n1",
       expect.objectContaining({ headers: { Accept: "application/json" } }),

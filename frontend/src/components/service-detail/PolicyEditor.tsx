@@ -44,7 +44,13 @@ const emptyDescriptions: Record<string, string> = {
   rollback: "Click Edit to control how failed updates are automatically reverted.",
 };
 
-export function PolicyEditor({ type, serviceId, policy, onSaved }: PolicyEditorProps) {
+export function PolicyEditor({
+  type,
+  serviceId,
+  policy,
+  onSaved,
+  canEdit = false,
+}: PolicyEditorProps & { canEdit?: boolean }) {
   const [form, setForm] = useState<FormState>(policyToForm(null));
 
   const patchFunction =
@@ -116,6 +122,7 @@ export function PolicyEditor({ type, serviceId, policy, onSaved }: PolicyEditorP
     <EditablePanel
       title={titles[type]}
       bordered={false}
+      canEdit={canEdit}
       empty={!policy}
       emptyDescription={emptyDescriptions[type]}
       onOpen={resetForm}

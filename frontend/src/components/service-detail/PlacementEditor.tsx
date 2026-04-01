@@ -14,7 +14,12 @@ interface PlacementEditorProps {
   onSaved: () => void;
 }
 
-export function PlacementEditor({ serviceId, placement, onSaved }: PlacementEditorProps) {
+export function PlacementEditor({
+  serviceId,
+  placement,
+  onSaved,
+  canEdit = false,
+}: PlacementEditorProps & { canEdit?: boolean }) {
   const [constraints, setConstraints] = useState<string[]>([]);
   const [maxReplicas, setMaxReplicas] = useState<number>(0);
 
@@ -48,6 +53,7 @@ export function PlacementEditor({ serviceId, placement, onSaved }: PlacementEdit
     <EditablePanel
       title="Placement"
       bordered={false}
+      canEdit={canEdit}
       empty={
         !placement?.Constraints?.length &&
         !placement?.MaxReplicas &&

@@ -6,7 +6,6 @@ import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import PluginTable from "../components/PluginTable";
 import { Button } from "../components/ui/button";
-import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
 import { Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -14,13 +13,16 @@ export default function PluginList() {
   const [plugins, setPlugins] = useState<Plugin[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [installOpen, setInstallOpen] = useState(false);
-  const { level } = useOperationsLevel();
+  const [allowedMethods, setAllowedMethods] = useState<Set<string>>(new Set());
 
   const fetchPlugins = useCallback(() => {
     setError(null);
     api
       .plugins()
-      .then(setPlugins)
+      .then(({ data: pluginsData, allowedMethods: methods }) => {
+        setPlugins(pluginsData);
+        setAllowedMethods(methods);
+      })
       .catch((thrown) => {
         setError(thrown instanceof Error ? thrown.message : "Failed to load plugins");
       });
@@ -49,7 +51,7 @@ export default function PluginList() {
         title="Plugins"
         breadcrumbs={[{ label: "Swarm", to: "/swarm" }, { label: "Plugins" }]}
         actions={
-          level >= opsLevel.impactful ? (
+          allowedMethods.has("POST") ? (
             <Button onClick={() => setInstallOpen(true)}>
               <Plus data-icon="inline-start" />
               Install Plugin

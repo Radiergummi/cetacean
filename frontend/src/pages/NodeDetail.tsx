@@ -23,7 +23,6 @@ import TasksTable from "../components/TasksTable";
 import { useGaugeValue } from "../hooks/useGaugeValue";
 import { useInstanceResolver } from "../hooks/useInstanceResolver";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
-import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { formatBytes, formatNumber } from "../lib/format";
@@ -58,7 +57,7 @@ export default function NodeDetail() {
   const [managerCount, setManagerCount] = useState<number | null>(null);
 
   const monitoring = useMonitoringStatus();
-  const { level: operationsLevel, loading: levelLoading } = useOperationsLevel();
+  const [allowedMethods, setAllowedMethods] = useState<Set<string>>(new Set());
   const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
   const hasCadvisor = !!monitoring?.cadvisor?.targets;
   const { resolve } = useInstanceResolver();
@@ -75,9 +74,10 @@ export default function NodeDetail() {
 
       api
         .node(id, signal)
-        .then((node) => {
+        .then(({ data: node, allowedMethods: methods }) => {
           setNode(node);
           setNodeLabels(node.Spec.Labels ?? {});
+          setAllowedMethods(methods);
         })
         .catch(() => {
           if (!signal.aborted) {
@@ -104,7 +104,7 @@ export default function NodeDetail() {
       api.history({ resourceId: id, limit: 10 }, signal).then(setHistory).catch(ignore);
       api
         .nodeRole(id, signal)
-        .then(({ managerCount: count }) => setManagerCount(count))
+        .then(({ data: { managerCount: count } }) => setManagerCount(count))
         .catch(ignore);
     },
     [id],
@@ -198,7 +198,10 @@ export default function NodeDetail() {
         ]}
       />
 
-      <NodeActions node={node} />
+      <NodeActions
+        node={node}
+        allowedMethods={allowedMethods}
+      />
 
       <MetadataGrid>
         <RoleEditor
@@ -206,11 +209,13 @@ export default function NodeDetail() {
           currentRole={node.Spec.Role}
           isLeader={node.ManagerStatus?.Leader ?? false}
           managerCount={managerCount}
+          canEdit={allowedMethods.has("PUT")}
         />
         <StatusCard state={node.Status.State} />
         <AvailabilityEditor
           nodeId={node.ID}
           current={node.Spec.Availability}
+          canEdit={allowedMethods.has("PUT")}
         />
         <EngineCard version={node.Description.Engine.EngineVersion} />
         <OsCard
@@ -278,7 +283,7 @@ export default function NodeDetail() {
           defaultOpen={Object.keys(nodeLabels).length > 0}
           keyPlaceholder="com.example.my-label"
           valuePlaceholder="value"
-          editDisabled={levelLoading || operationsLevel < opsLevel.impactful}
+          editDisabled={!allowedMethods.has("PATCH")}
           isKeyReadOnly={isReservedLabelKey}
           validateKey={validateLabelKey}
           onSave={async (ops) => {

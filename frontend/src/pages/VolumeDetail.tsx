@@ -21,7 +21,7 @@ import { useParams } from "react-router-dom";
 
 export default function VolumeDetail() {
   const { name } = useParams<{ name: string }>();
-  const { data, history, error, retry } = useDetailResource(name, api.volume, `/volumes/${name}`);
+  const { data, history, error, retry, allowedMethods } = useDetailResource(name, api.volume, `/volumes/${name}`);
 
   if (error) {
     return (
@@ -61,6 +61,7 @@ export default function VolumeDetail() {
             listPath={stack ? `/stacks/${stack}` : "/volumes"}
             onRemove={() => api.removeVolume(volume.Name)}
             onForceRemove={() => api.removeVolume(volume.Name, true)}
+            canDelete={allowedMethods.has("DELETE")}
             disabled={services.length > 0}
             disabledTitle="Cannot remove a volume that is in use by services"
           />

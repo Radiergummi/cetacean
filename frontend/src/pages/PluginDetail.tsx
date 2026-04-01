@@ -24,7 +24,6 @@ import {
 } from "../components/ui/alert-dialog";
 import { Button } from "../components/ui/button";
 import { useAsyncAction } from "../hooks/useAsyncAction";
-import { opsLevel, useOperationsLevel } from "../hooks/useOperationsLevel";
 import { joinCommand, parseCommand } from "../lib/parseCommand";
 import { ArrowUpCircle, Power, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -43,7 +42,7 @@ export default function PluginDetail() {
   const { name: rawName } = useParams<{ name: string }>();
   const name = decodeURIComponent(rawName!);
   const navigate = useNavigate();
-  const { level } = useOperationsLevel();
+  const [allowedMethods, setAllowedMethods] = useState<Set<string>>(new Set());
 
   const [plugin, setPlugin] = useState<Plugin | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,8 +56,9 @@ export default function PluginDetail() {
     setError(null);
     api
       .plugin(name)
-      .then((result) => {
+      .then(({ data: result, allowedMethods: methods }) => {
         setPlugin(result);
+        setAllowedMethods(methods);
       })
       .catch((thrown) => {
         setError(thrown instanceof Error ? thrown.message : "Failed to load plugin");
@@ -101,7 +101,7 @@ export default function PluginDetail() {
         ]}
         actions={
           <>
-            {level >= opsLevel.configuration && !plugin.Enabled && (
+            {allowedMethods.has("POST") && !plugin.Enabled && (
               <Button
                 variant="secondary"
                 size="sm"
@@ -122,7 +122,7 @@ export default function PluginDetail() {
               </Button>
             )}
 
-            {level >= opsLevel.configuration && plugin.Enabled && (
+            {allowedMethods.has("POST") && plugin.Enabled && (
               <AlertDialog>
                 <AlertDialogTrigger
                   render={
@@ -165,7 +165,7 @@ export default function PluginDetail() {
               </AlertDialog>
             )}
 
-            {level >= opsLevel.impactful && (
+            {allowedMethods.has("DELETE") && (
               <Button
                 variant="secondary"
                 size="sm"
@@ -176,7 +176,7 @@ export default function PluginDetail() {
               </Button>
             )}
 
-            {level >= opsLevel.impactful && (
+            {allowedMethods.has("DELETE") && (
               <AlertDialog>
                 <AlertDialogTrigger
                   render={
@@ -278,6 +278,7 @@ export default function PluginDetail() {
             title="Args"
             empty={args.length === 0}
             emptyDescription="Click Edit to configure plugin arguments."
+            canEdit={allowedMethods.has("PATCH")}
             onOpen={() => setDraftArgs(joinCommand(args))}
             onSave={async () => {
               const parsed = parseCommand(draftArgs);
