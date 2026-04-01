@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - HTTP Range Request pagination on all list API endpoints (`Range: items 0-49` returns `206 Partial Content` with `Content-Range`)
 - Infinite scroll on all resource list pages — items load automatically as you scroll down
 
+### Security
+- Service tasks, service logs, task logs, and node tasks endpoints now enforce ACL read checks — previously accessible to any authenticated user regardless of grants
+
 ### Fixed
 - Layout shift in the header when the live connection timer changes width
 - Pressing Escape in a combobox dropdown closing the parent editor panel
