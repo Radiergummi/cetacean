@@ -33,6 +33,10 @@ func labelsMatch(labels map[string]string, q string) bool {
 }
 
 func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAnyGrant(w, r) {
+		return
+	}
+
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	if q == "" {
 		writeErrorCode(w, r, "SEA001", "missing required query parameter: q")

@@ -1549,3 +1549,40 @@ func TestHandleClusterMetrics_ACL001_NoGrants(t *testing.T) {
 	}
 	assertACLErrorCode(t, w, "ACL001")
 }
+
+func TestHandleSearch_ACL001_NoGrants(t *testing.T) {
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{Resources: []string{"service:*"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+	}})
+
+	h := newTestHandlers(t, withACL(e))
+	req := httptest.NewRequest("GET", "/search?q=test", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "bob"}))
+	w := httptest.NewRecorder()
+	h.HandleSearch(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status=%d, want 403", w.Code)
+	}
+	assertACLErrorCode(t, w, "ACL001")
+}
+
+func TestHandleGetUnlockKey_ACLDenied_ReadOnly(t *testing.T) {
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		// User has read on services but no swarm:cluster write.
+		{Resources: []string{"service:*"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+	}})
+
+	h := newTestHandlers(t, withACL(e))
+	req := httptest.NewRequest("GET", "/swarm/unlock-key", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleGetUnlockKey(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status=%d, want 403 (unlock key requires swarm:cluster write)", w.Code)
+	}
+	assertACLErrorCode(t, w, "ACL002")
+}
