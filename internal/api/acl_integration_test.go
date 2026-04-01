@@ -3,9 +3,12 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
+	"github.com/docker/docker/api/types/volume"
 	json "github.com/goccy/go-json"
 
 	"github.com/radiergummi/cetacean/internal/acl"
@@ -278,4 +281,528 @@ func TestHandleCluster_ACL001_WithGrants(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status=%d, want 200 for identity with grants", w.Code)
 	}
+}
+
+// assertACLErrorCode decodes a problem detail response and checks that the
+// type field contains the given error code.
+func assertACLErrorCode(t *testing.T, w *httptest.ResponseRecorder, code string) {
+	t.Helper()
+	var p ProblemDetail
+	if err := json.NewDecoder(w.Body).Decode(&p); err != nil {
+		t.Fatalf("decode problem: %v", err)
+	}
+	if !strings.Contains(p.Type, code) {
+		t.Errorf("expected %s in problem type, got %q", code, p.Type)
+	}
+}
+
+// --- Task 1: List handler ACL filter tests ---
+
+func TestHandleListNodes_ACLFiltering(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{
+		ID:          "node1",
+		Description: swarm.NodeDescription{Hostname: "worker-1"},
+	})
+	c.SetNode(swarm.Node{
+		ID:          "node2",
+		Description: swarm.NodeDescription{Hostname: "worker-2"},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"node:worker-1"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/nodes", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleListNodes(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	var resp struct {
+		Total int `json:"total"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Total != 1 {
+		t.Fatalf("expected 1 filtered node, got %d", resp.Total)
+	}
+}
+
+func TestHandleListTasks_ACLFiltering(t *testing.T) {
+	c := cache.New(nil)
+	c.SetTask(swarm.Task{ID: "task1"})
+	c.SetTask(swarm.Task{ID: "task2"})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"task:task1"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/tasks", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleListTasks(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	var resp struct {
+		Total int `json:"total"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Total != 1 {
+		t.Fatalf("expected 1 filtered task, got %d", resp.Total)
+	}
+}
+
+func TestHandleListConfigs_ACLFiltering(t *testing.T) {
+	c := cache.New(nil)
+	c.SetConfig(swarm.Config{
+		ID:   "cfg1",
+		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "app-config"}},
+	})
+	c.SetConfig(swarm.Config{
+		ID:   "cfg2",
+		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "other-config"}},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"config:app-*"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/configs", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleListConfigs(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	var resp struct {
+		Total int `json:"total"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Total != 1 {
+		t.Fatalf("expected 1 filtered config, got %d", resp.Total)
+	}
+}
+
+func TestHandleListSecrets_ACLFiltering(t *testing.T) {
+	c := cache.New(nil)
+	c.SetSecret(swarm.Secret{
+		ID:   "sec1",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "app-secret"}},
+	})
+	c.SetSecret(swarm.Secret{
+		ID:   "sec2",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "other-secret"}},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"secret:app-*"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/secrets", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleListSecrets(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	var resp struct {
+		Total int `json:"total"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Total != 1 {
+		t.Fatalf("expected 1 filtered secret, got %d", resp.Total)
+	}
+}
+
+func TestHandleListNetworks_ACLFiltering(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{ID: "net1", Name: "frontend"})
+	c.SetNetwork(network.Summary{ID: "net2", Name: "backend"})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"network:frontend"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/networks", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleListNetworks(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	var resp struct {
+		Total int `json:"total"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Total != 1 {
+		t.Fatalf("expected 1 filtered network, got %d", resp.Total)
+	}
+}
+
+func TestHandleListVolumes_ACLFiltering(t *testing.T) {
+	c := cache.New(nil)
+	c.SetVolume(volume.Volume{Name: "data-vol"})
+	c.SetVolume(volume.Volume{Name: "cache-vol"})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"volume:data-*"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/volumes", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleListVolumes(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	var resp struct {
+		Total int `json:"total"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Total != 1 {
+		t.Fatalf("expected 1 filtered volume, got %d", resp.Total)
+	}
+}
+
+func TestHandleListStacks_ACLFiltering(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{
+				Name:   "monitoring_prometheus",
+				Labels: map[string]string{"com.docker.stack.namespace": "monitoring"},
+			},
+		},
+	})
+	c.SetService(swarm.Service{
+		ID: "svc2",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{
+				Name:   "production_api",
+				Labels: map[string]string{"com.docker.stack.namespace": "production"},
+			},
+		},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"stack:monitoring"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/stacks", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleListStacks(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	var resp struct {
+		Total int `json:"total"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Total != 1 {
+		t.Fatalf("expected 1 filtered stack, got %d", resp.Total)
+	}
+}
+
+// --- Task 2: Detail handler ACL denial tests ---
+
+func TestHandleGetNode_ACLDenied(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{
+		ID:          "node1",
+		Description: swarm.NodeDescription{Hostname: "worker-1"},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"node:other"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/nodes/node1", nil)
+	req.SetPathValue("id", "node1")
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleGetNode(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for denied node, got %d", w.Code)
+	}
+	assertACLErrorCode(t, w, "ACL001")
+}
+
+func TestHandleGetService_ACLDenied(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "webapp"}},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"service:other"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/services/svc1", nil)
+	req.SetPathValue("id", "svc1")
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleGetService(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for denied service, got %d", w.Code)
+	}
+	assertACLErrorCode(t, w, "ACL001")
+}
+
+func TestHandleGetTask_ACLDenied(t *testing.T) {
+	c := cache.New(nil)
+	c.SetTask(swarm.Task{ID: "task1"})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"task:other"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/tasks/task1", nil)
+	req.SetPathValue("id", "task1")
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleGetTask(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for denied task, got %d", w.Code)
+	}
+	assertACLErrorCode(t, w, "ACL001")
+}
+
+func TestHandleGetConfig_ACLDenied(t *testing.T) {
+	c := cache.New(nil)
+	c.SetConfig(swarm.Config{
+		ID:   "cfg1",
+		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "app-config"}},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"config:other"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/configs/cfg1", nil)
+	req.SetPathValue("id", "cfg1")
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleGetConfig(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for denied config, got %d", w.Code)
+	}
+	assertACLErrorCode(t, w, "ACL001")
+}
+
+func TestHandleGetSecret_ACLDenied(t *testing.T) {
+	c := cache.New(nil)
+	c.SetSecret(swarm.Secret{
+		ID:   "sec1",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "app-secret"}},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"secret:other"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/secrets/sec1", nil)
+	req.SetPathValue("id", "sec1")
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleGetSecret(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for denied secret, got %d", w.Code)
+	}
+	assertACLErrorCode(t, w, "ACL001")
+}
+
+func TestHandleGetNetwork_ACLDenied(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{ID: "net1", Name: "frontend"})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"network:other"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/networks/net1", nil)
+	req.SetPathValue("id", "net1")
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleGetNetwork(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for denied network, got %d", w.Code)
+	}
+	assertACLErrorCode(t, w, "ACL001")
+}
+
+func TestHandleGetVolume_ACLDenied(t *testing.T) {
+	c := cache.New(nil)
+	c.SetVolume(volume.Volume{Name: "data-vol"})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"volume:other"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/volumes/data-vol", nil)
+	req.SetPathValue("name", "data-vol")
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleGetVolume(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for denied volume, got %d", w.Code)
+	}
+	assertACLErrorCode(t, w, "ACL001")
+}
+
+func TestHandleGetStack_ACLDenied(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{
+				Name:   "monitoring_prometheus",
+				Labels: map[string]string{"com.docker.stack.namespace": "monitoring"},
+			},
+		},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"stack:other"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/stacks/monitoring", nil)
+	req.SetPathValue("name", "monitoring")
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleGetStack(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for denied stack, got %d", w.Code)
+	}
+	assertACLErrorCode(t, w, "ACL001")
 }
