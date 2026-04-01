@@ -75,7 +75,7 @@ func TestSSE_BroadcastsEvents(t *testing.T) {
 	b.Close()
 	<-done
 
-	body := w.Body.String()
+	body := w.bodyString()
 	if !strings.Contains(body, `"action":"update"`) {
 		t.Errorf("expected action:update in body, got: %s", body)
 	}
@@ -103,7 +103,7 @@ func TestSSE_FiltersByType(t *testing.T) {
 	b.Close()
 	<-done
 
-	body := w.Body.String()
+	body := w.bodyString()
 	if strings.Contains(body, "event: node") {
 		t.Error("node event should have been filtered out")
 	}
@@ -134,7 +134,7 @@ func TestSSE_BatchesRapidEvents(t *testing.T) {
 	b.Close()
 	<-done
 
-	body := w.Body.String()
+	body := w.bodyString()
 
 	// We should see at least one event line (either individual "event: task" or "event: batch")
 	hasIndividual := strings.Contains(body, "event: task")
@@ -182,7 +182,7 @@ func TestSSE_EventContainsJSONLD(t *testing.T) {
 	b.Close()
 	<-done
 
-	body := w.Body.String()
+	body := w.bodyString()
 	if !strings.Contains(body, `"@type":"Service"`) {
 		t.Errorf("expected @type field in body, got: %s", body)
 	}
@@ -212,7 +212,7 @@ func TestSSE_BatchEventContainsJSONLD(t *testing.T) {
 	b.Close()
 	<-done
 
-	body := w.Body.String()
+	body := w.bodyString()
 	if !strings.Contains(body, `"@type":"Task"`) {
 		t.Errorf("expected @type Task in body, got: %s", body)
 	}
