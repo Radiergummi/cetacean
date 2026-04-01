@@ -59,7 +59,8 @@ func TestAclMatchWrap_SyncEvent(t *testing.T) {
 
 	h := newTestHandlers(t, withACL(e))
 	r := httptest.NewRequest("GET", "/services", nil)
-	// bob has no grants, but sync events should always pass.
+	// bob has no grants, but sync events carry no resource data and must
+	// always pass so clients refetch via ACL-filtered JSON endpoints.
 	r = r.WithContext(auth.ContextWithIdentity(r.Context(), &auth.Identity{Subject: "bob"}))
 
 	matcher := h.aclMatchWrap(r, nil)
