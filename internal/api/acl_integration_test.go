@@ -222,6 +222,11 @@ func TestHandleNodeTasks_ACLFiltering(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
 		{
+			Resources:   []string{"node:worker1"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+		{
 			Resources:   []string{"task:task-allowed"},
 			Audience:    []string{"*"},
 			Permissions: []string{"read"},
@@ -249,6 +254,35 @@ func TestHandleNodeTasks_ACLFiltering(t *testing.T) {
 	if resp.Total != 1 {
 		t.Fatalf("expected 1 filtered task, got %d", resp.Total)
 	}
+}
+
+func TestHandleNodeTasks_ACLDenied(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{
+		ID:          "node1",
+		Description: swarm.NodeDescription{Hostname: "worker1"},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"node:other"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/nodes/node1/tasks", nil)
+	req.SetPathValue("id", "node1")
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleNodeTasks(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", w.Code)
+	}
+	assertACLErrorCode(t, w, "ACL001")
 }
 
 func TestHandleCluster_ACL001_WithGrants(t *testing.T) {
