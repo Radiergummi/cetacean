@@ -433,44 +433,22 @@ func TestSSE_WriteBatch_SyncUsesHistoryID(t *testing.T) {
 }
 
 // mockReplaySource implements ReplaySource for testing.
-type mockReplaySource struct {
-	entries  []cache.HistoryEntry
-	count    uint64
-	oldestID uint64 // simulate ring buffer oldest; 0 means no gap check
-}
-
-func (m *mockReplaySource) Since(afterID uint64) ([]cache.HistoryEntry, bool) {
-	if afterID > m.count {
-		return nil, false
-	}
-	if m.oldestID > 0 && afterID > 0 && afterID < m.oldestID {
-		return nil, false
-	}
-	var result []cache.HistoryEntry
-	for _, e := range m.entries {
-		if e.ID > afterID {
-			result = append(result, e)
-		}
-	}
-	return result, true
-}
-
-func (m *mockReplaySource) Count() uint64 { return m.count }
-
 func TestSSE_ReplayOnReconnect(t *testing.T) {
-	replay := &mockReplaySource{
-		entries: []cache.HistoryEntry{
-			{ID: 5, Type: cache.EventService, Action: "update", ResourceID: "s1", Name: "web"},
-			{ID: 6, Type: cache.EventNode, Action: "update", ResourceID: "n1", Name: "node-1"},
-			{ID: 7, Type: cache.EventService, Action: "update", ResourceID: "s2", Name: "api"},
-		},
-		count: 7,
-	}
-	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, replay)
+	h := cache.NewHistory(100)
+	// Build history: 4 service events + 1 node event interleaved
+	h.Append(cache.HistoryEntry{Type: cache.EventService, Action: "update", ResourceID: "s0"})
+	h.Append(cache.HistoryEntry{Type: cache.EventService, Action: "update", ResourceID: "s1"})
+	h.Append(cache.HistoryEntry{Type: cache.EventService, Action: "update", ResourceID: "s2"})
+	h.Append(cache.HistoryEntry{Type: cache.EventNode, Action: "update", ResourceID: "n1"})
+	h.Append(cache.HistoryEntry{Type: cache.EventService, Action: "update", ResourceID: "s3"})
+	// IDs are 1–5. Reconnect with Last-Event-ID: 2 → replay IDs 3,4,5.
+	// Only service events (IDs 3,5) should appear; node event (ID 4) filtered out.
+
+	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, h)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/services", nil)
-	req.Header.Set("Last-Event-ID", "4")
+	req.Header.Set("Last-Event-ID", "2")
 	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
 
 	done := make(chan struct{})
@@ -480,19 +458,17 @@ func TestSSE_ReplayOnReconnect(t *testing.T) {
 	}()
 
 	waitForClients(t, b, 1)
-
-	// Wait for replay events to appear
-	waitForBody(t, w, `"s2"`)
+	waitForBody(t, w, `"s3"`)
 
 	b.Close()
 	<-done
 
 	body := w.bodyString()
-	if !strings.Contains(body, `"s1"`) {
-		t.Error("expected service s1 in replay")
-	}
 	if !strings.Contains(body, `"s2"`) {
 		t.Error("expected service s2 in replay")
+	}
+	if !strings.Contains(body, `"s3"`) {
+		t.Error("expected service s3 in replay")
 	}
 	if strings.Contains(body, `"n1"`) {
 		t.Error("node event should have been filtered out of replay")
@@ -500,14 +476,13 @@ func TestSSE_ReplayOnReconnect(t *testing.T) {
 }
 
 func TestSSE_ReplayTooOld_SendsSync(t *testing.T) {
-	replay := &mockReplaySource{
-		entries: []cache.HistoryEntry{
-			{ID: 50, Type: cache.EventService, Action: "update", ResourceID: "s1", Name: "web"},
-		},
-		count:    100,
-		oldestID: 50, // afterID=1 < 50, so Since returns ok=false
+	h := cache.NewHistory(3) // ring size 3
+	for range 10 {
+		h.Append(cache.HistoryEntry{Type: cache.EventService, Action: "update", ResourceID: "s1"})
 	}
-	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, replay)
+	// Ring holds IDs 8,9,10. Requesting replay from ID 1 → too old → sync.
+
+	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, h)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/services", nil)
@@ -530,23 +505,20 @@ func TestSSE_ReplayTooOld_SendsSync(t *testing.T) {
 	if !strings.Contains(body, `"action":"full_sync"`) {
 		t.Errorf("expected sync event, got: %s", body)
 	}
-	if !strings.Contains(body, "id: 100\n") {
-		t.Errorf("expected sync id: 100, got: %s", body)
+	if !strings.Contains(body, "id: 10\n") {
+		t.Errorf("expected sync id: 10, got: %s", body)
 	}
 }
 
 func TestSSE_ReplayIneligible_SendsSync(t *testing.T) {
-	replay := &mockReplaySource{
-		entries: []cache.HistoryEntry{
-			{ID: 5, Type: cache.EventService, Action: "update", ResourceID: "s1", Name: "web"},
-		},
-		count: 10,
-	}
-	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, replay)
+	h := cache.NewHistory(10)
+	h.Append(cache.HistoryEntry{Type: cache.EventService, Action: "update", ResourceID: "s1"})
+
+	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, h)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events", nil)
-	req.Header.Set("Last-Event-ID", "4")
+	req.Header.Set("Last-Event-ID", "0")
 	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
 
 	done := make(chan struct{})
@@ -569,13 +541,10 @@ func TestSSE_ReplayIneligible_SendsSync(t *testing.T) {
 }
 
 func TestSSE_NoLastEventID_NoReplay(t *testing.T) {
-	replay := &mockReplaySource{
-		entries: []cache.HistoryEntry{
-			{ID: 5, Type: cache.EventService, Action: "update", ResourceID: "s1", Name: "web"},
-		},
-		count: 10,
-	}
-	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, replay)
+	h := cache.NewHistory(10)
+	h.Append(cache.HistoryEntry{Type: cache.EventService, Action: "update", ResourceID: "s1"})
+
+	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, h)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/services", nil)

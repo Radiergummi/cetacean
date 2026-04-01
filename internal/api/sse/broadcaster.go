@@ -199,6 +199,9 @@ func (b *Broadcaster) ServeSSE(
 				}
 				return
 			}
+			// Skip events that were already sent during replay. The HistoryID > 0
+			// guard avoids filtering events that didn't go through history. Once
+			// we see the first event beyond the replay window, stop checking.
 			if skipBelow > 0 && e.HistoryID > 0 && e.HistoryID <= skipBelow {
 				continue
 			}
