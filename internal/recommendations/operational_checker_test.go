@@ -109,7 +109,7 @@ func TestOperationalChecker_NodeDiskAboveThreshold(t *testing.T) {
 	})
 
 	diskResults := []prom.Result{
-		{Labels: map[string]string{"instance": "192.168.1.10"}, Value: 95},
+		{Labels: map[string]string{"instance": "192.168.1.10:9100"}, Value: 95},
 	}
 	query := mockOperationalQuery(nil, diskResults, nil)
 	oc := NewOperationalChecker(query, c, 24*time.Hour)
@@ -148,7 +148,7 @@ func TestOperationalChecker_NodeDiskBelowThreshold(t *testing.T) {
 	})
 
 	diskResults := []prom.Result{
-		{Labels: map[string]string{"instance": "192.168.1.10"}, Value: 85},
+		{Labels: map[string]string{"instance": "192.168.1.10:9100"}, Value: 85},
 	}
 	query := mockOperationalQuery(nil, diskResults, nil)
 	oc := NewOperationalChecker(query, c, 24*time.Hour)
@@ -157,6 +157,36 @@ func TestOperationalChecker_NodeDiskBelowThreshold(t *testing.T) {
 
 	if len(recs) != 0 {
 		t.Errorf("expected 0 recommendations, got %d: %+v", len(recs), recs)
+	}
+}
+
+func TestOperationalChecker_NodeDiskHostnameInstance(t *testing.T) {
+	c := newOperationalCache(nil, []swarm.Node{
+		{
+			ID:          "node1",
+			Description: swarm.NodeDescription{Hostname: "worker1"},
+			Status:      swarm.NodeStatus{Addr: "192.168.1.10"},
+		},
+	})
+
+	diskResults := []prom.Result{
+		{Labels: map[string]string{"instance": "worker1:9100"}, Value: 95},
+	}
+	query := mockOperationalQuery(nil, diskResults, nil)
+	oc := NewOperationalChecker(query, c, 24*time.Hour)
+
+	recs := oc.Check(context.Background())
+
+	if len(recs) != 1 {
+		t.Fatalf("expected 1 recommendation, got %d", len(recs))
+	}
+
+	if recs[0].TargetID != "node1" {
+		t.Errorf("expected targetId %q, got %q", "node1", recs[0].TargetID)
+	}
+
+	if recs[0].TargetName != "worker1" {
+		t.Errorf("expected targetName %q, got %q", "worker1", recs[0].TargetName)
 	}
 }
 
@@ -170,7 +200,7 @@ func TestOperationalChecker_NodeMemoryAboveThreshold(t *testing.T) {
 	})
 
 	memResults := []prom.Result{
-		{Labels: map[string]string{"instance": "192.168.1.10"}, Value: 95},
+		{Labels: map[string]string{"instance": "192.168.1.10:9100"}, Value: 95},
 	}
 	query := mockOperationalQuery(nil, nil, memResults)
 	oc := NewOperationalChecker(query, c, 24*time.Hour)
@@ -209,10 +239,10 @@ func TestOperationalChecker_AllHealthy(t *testing.T) {
 		{Labels: map[string]string{serviceLabelKey: "web"}, Value: 1},
 	}
 	diskResults := []prom.Result{
-		{Labels: map[string]string{"instance": "192.168.1.10"}, Value: 50},
+		{Labels: map[string]string{"instance": "192.168.1.10:9100"}, Value: 50},
 	}
 	memResults := []prom.Result{
-		{Labels: map[string]string{"instance": "192.168.1.10"}, Value: 60},
+		{Labels: map[string]string{"instance": "192.168.1.10:9100"}, Value: 60},
 	}
 	query := mockOperationalQuery(flakyResults, diskResults, memResults)
 	oc := NewOperationalChecker(query, c, 24*time.Hour)

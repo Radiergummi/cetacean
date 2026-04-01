@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"net"
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -165,10 +166,17 @@ func (oc *OperationalChecker) nodeRecs(
 		targetName := entry.key
 		targetID := ""
 
-		if ref, ok := nodesByAddr[entry.key]; ok {
+		// Strip port from the Prometheus instance label (e.g. "10.0.0.5:9100" → "10.0.0.5",
+		// "myhost:9100" → "myhost") before matching against swarm node addresses/hostnames.
+		host := entry.key
+		if h, _, err := net.SplitHostPort(entry.key); err == nil {
+			host = h
+		}
+
+		if ref, ok := nodesByAddr[host]; ok {
 			targetName = ref.hostname
 			targetID = ref.id
-		} else if ref, ok := nodesByHostname[entry.key]; ok {
+		} else if ref, ok := nodesByHostname[host]; ok {
 			targetName = ref.hostname
 			targetID = ref.id
 		}

@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - Layout shift in the header when the live connection timer changes width
 - Pressing Escape in a combobox dropdown closing the parent editor panel
+- Node-exporter recommendations not matching nodes when the Prometheus instance label uses a hostname instead of an IP
 
 ## [0.10.0] - 2026-03-31
 

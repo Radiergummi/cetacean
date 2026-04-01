@@ -100,6 +100,8 @@ The service detail page is the most feature-rich:
 - **Metrics charts** -- CPU and memory over time (requires [monitoring](monitoring.md))
 - **Log viewer** -- live-tailing logs with search and filtering
 - **Activity history** -- recent changes to this service
+- **Integration panels** -- structured views for detected ecosystem tools (Traefik, Shepherd, Swarm Cronjob, Diun).
+  See [integrations](integrations.md)
 
 ### Stacks
 
