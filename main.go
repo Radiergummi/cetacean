@@ -332,20 +332,20 @@ func main() {
 		slog.Info("CORS enabled", "origins", cfg.CORSOrigins)
 	}
 
-	router := api.NewRouter(
-		handlers,
-		broadcaster,
-		metricsProxy,
-		spa,
-		openapiSpec,
-		scalarJS,
-		cfg.Pprof,
-		cfg.SelfMetrics,
-		authProvider,
-		cfg.BasePath,
-		corsConfig,
-		tlsCfg.Enabled(),
-	)
+	router := api.NewRouter(api.RouterConfig{
+		Handlers:          handlers,
+		Broadcaster:       broadcaster,
+		MetricsProxy:      metricsProxy,
+		SPA:               spa,
+		OpenAPISpec:       openapiSpec,
+		ScalarJS:          scalarJS,
+		EnablePprof:       cfg.Pprof,
+		EnableSelfMetrics: cfg.SelfMetrics,
+		AuthProvider:      authProvider,
+		BasePath:          cfg.BasePath,
+		CORS:              corsConfig,
+		TLSEnabled:        tlsCfg.Enabled(),
+	})
 
 	var serverTLSConfig *tls.Config
 	if authCfg.Mode == "cert" {

@@ -13,21 +13,30 @@ import (
 	"github.com/radiergummi/cetacean/internal/metrics"
 )
 
-func NewRouter(
-	h *Handlers,
-	b *sse.Broadcaster,
-	metricsProxy *prometheus.Proxy,
-	spa http.Handler,
-	openapiSpec []byte,
-	scalarJS []byte,
-	enablePprof bool,
-	enableSelfMetrics bool,
-	authProvider auth.Provider,
-	basePath string,
-	corsConfig *CORSConfig,
-	tlsEnabled bool,
-) http.Handler {
+// RouterConfig holds all dependencies and options for NewRouter.
+type RouterConfig struct {
+	Handlers          *Handlers
+	Broadcaster       *sse.Broadcaster
+	MetricsProxy      *prometheus.Proxy
+	SPA               http.Handler
+	OpenAPISpec       []byte
+	ScalarJS          []byte
+	EnablePprof       bool
+	EnableSelfMetrics bool
+	AuthProvider      auth.Provider
+	BasePath          string
+	CORS              *CORSConfig
+	TLSEnabled        bool
+}
+
+func NewRouter(cfg RouterConfig) http.Handler {
 	auth.SetErrorWriter(WriteErrorCode)
+
+	h := cfg.Handlers
+	b := cfg.Broadcaster
+	metricsProxy := cfg.MetricsProxy
+	spa := cfg.SPA
+	authProvider := cfg.AuthProvider
 
 	mux := http.NewServeMux()
 
@@ -57,7 +66,7 @@ func NewRouter(
 	mux.HandleFunc("GET /-/ready", h.HandleReady)
 	mux.HandleFunc("GET /-/metrics/status", h.HandleMonitoringStatus)
 	mux.HandleFunc("GET /-/docker-latest-version", h.HandleDockerLatestVersion)
-	if enableSelfMetrics {
+	if cfg.EnableSelfMetrics {
 		mux.Handle("GET /-/metrics", metrics.Handler())
 	}
 	mux.HandleFunc("GET /-/metrics/labels", metricsProxy.HandleMetricsLabels)
@@ -70,8 +79,8 @@ func NewRouter(
 	))
 
 	// API documentation (content-negotiated)
-	mux.HandleFunc("GET /api", HandleAPIDoc(openapiSpec))
-	mux.HandleFunc("GET /api/scalar.js", HandleScalarJS(scalarJS))
+	mux.HandleFunc("GET /api", HandleAPIDoc(cfg.OpenAPISpec))
+	mux.HandleFunc("GET /api/scalar.js", HandleScalarJS(cfg.ScalarJS))
 	mux.HandleFunc("GET /api/context.jsonld", HandleContext)
 	mux.HandleFunc("GET /api/errors", contentNegotiated(HandleErrorIndex, spa))
 	mux.HandleFunc("GET /api/errors/{code}", contentNegotiated(HandleErrorDetail, spa))
@@ -386,7 +395,7 @@ func NewRouter(
 	mux.HandleFunc("GET /topology/placement", contentNegotiated(h.HandlePlacementTopology, spa))
 
 	// Profiling (opt-in via CETACEAN_PPROF=true)
-	if enablePprof {
+	if cfg.EnablePprof {
 		mux.HandleFunc("/debug/pprof/", pprof.Index)
 		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
 		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
@@ -403,11 +412,11 @@ func NewRouter(
 	handler = requireReady(h)(handler)
 	handler = negotiate(handler)
 	handler = auth.Middleware(authProvider)(handler)
-	handler = cors(corsConfig)(handler)
-	handler = securityHeaders(handler, tlsEnabled)
+	handler = cors(cfg.CORS)(handler)
+	handler = securityHeaders(handler, cfg.TLSEnabled)
 	handler = recovery(handler)
 	handler = requestID(handler)
-	return basePathMiddleware(basePath, handler)
+	return basePathMiddleware(cfg.BasePath, handler)
 }
 
 func requireReady(h *Handlers) func(http.Handler) http.Handler {

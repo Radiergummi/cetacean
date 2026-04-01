@@ -289,20 +289,15 @@ func TestNewRouter_Smoke(t *testing.T) {
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}
 	spa := NewSPAHandler(fs.FS(fsys), "")
 
-	router := NewRouter(
-		h,
-		b,
-		prom,
-		spa,
-		[]byte("openapi: '3.1.0'"),
-		nil,
-		false,
-		true,
-		&auth.NoneProvider{},
-		"",
-		nil,
-		false,
-	)
+	router := NewRouter(RouterConfig{
+		Handlers:          h,
+		Broadcaster:       b,
+		MetricsProxy:      prom,
+		SPA:               spa,
+		OpenAPISpec:       []byte("openapi: '3.1.0'"),
+		EnableSelfMetrics: true,
+		AuthProvider:      &auth.NoneProvider{},
+	})
 	if router == nil {
 		t.Fatal("NewRouter returned nil")
 	}

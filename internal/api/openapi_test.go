@@ -88,7 +88,14 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte("<html></html>"))
 	})
-	router := NewRouter(h, b, nil, noopSPA, specBytes, nil, false, true, &auth.NoneProvider{}, "", nil, false)
+	router := NewRouter(RouterConfig{
+		Handlers:          h,
+		Broadcaster:       b,
+		SPA:               noopSPA,
+		OpenAPISpec:       specBytes,
+		EnableSelfMetrics: true,
+		AuthProvider:      &auth.NoneProvider{},
+	})
 
 	tests := []struct {
 		name       string
