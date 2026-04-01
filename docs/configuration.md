@@ -336,14 +336,16 @@ hide disabled action buttons.
 | Patch mounts                   | `PATCH /services/{id}/mounts`           |      —      |       —       |        ✔        |      ✔      |
 | Patch container config         | `PATCH /services/{id}/container-config` |      —      |       —       |        ✔        |      ✔      |
 | Patch resources                | `PATCH /services/{id}/resources`        |      —      |       —       |        ✔        |      ✔      |
-| Update healthcheck             | `PUT\|PATCH /services/{id}/healthcheck` |      —      |       —       |        ✔        |      ✔      |
+| Replace healthcheck            | `PUT /services/{id}/healthcheck`        |      —      |       —       |        ✔        |      ✔      |
+| Patch healthcheck              | `PATCH /services/{id}/healthcheck`      |      —      |       —       |        ✔        |      ✔      |
 | Update placement               | `PUT /services/{id}/placement`          |      —      |       —       |        ✔        |      ✔      |
 | Patch ports                    | `PATCH /services/{id}/ports`            |      —      |       —       |        ✔        |      ✔      |
 | Patch update policy            | `PATCH /services/{id}/update-policy`    |      —      |       —       |        ✔        |      ✔      |
 | Patch rollback policy          | `PATCH /services/{id}/rollback-policy`  |      —      |       —       |        ✔        |      ✔      |
 | Patch log driver               | `PATCH /services/{id}/log-driver`       |      —      |       —       |        ✔        |      ✔      |
 | **Plugin management**          |                                         |             |               |                 |             |
-| Enable/disable plugin          | `POST /plugins/{name}/enable\|disable`  |      —      |       —       |        ✔        |      ✔      |
+| Enable plugin                  | `POST /plugins/{name}/enable`           |      —      |       —       |        ✔        |      ✔      |
+| Disable plugin                 | `POST /plugins/{name}/disable`          |      —      |       —       |        ✔        |      ✔      |
 | Update plugin settings         | `PATCH /plugins/{name}/settings`        |      —      |       —       |        ✔        |      ✔      |
 | **Resource creation**          |                                         |             |               |                 |             |
 | Create config                  | `POST /configs`                         |      —      |       —       |        ✔        |      ✔      |

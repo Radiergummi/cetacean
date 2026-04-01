@@ -28,7 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Pressing Escape in a combobox dropdown closing the parent editor panel
 - Node metrics table columns, gauges, and chart tooltips when the Prometheus instance label uses a hostname instead of an IP
 - Sizing recommendations comparing aggregate usage across all tasks to per-task limits, producing incorrect percentages and suggestions for multi-replica services
-- Sizing recommendations comparing aggregate usage across all tasks to per-task limits, producing incorrect percentages and suggestions for multi-replica services
 
 ## [0.10.0] - 2026-03-31
 
