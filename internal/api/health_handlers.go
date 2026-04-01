@@ -44,6 +44,8 @@ func (h *Handlers) streamResource(
 	w http.ResponseWriter, r *http.Request, typ cache.EventType, id string,
 ) {
 	resMatch := sse.ResourceMatcher(typ, id)
+	// No replay for per-resource streams: cross-resource matchers can't be
+	// reconstructed from history, so reconnects fall back to a sync event.
 	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, resMatch), "")
 }
 

@@ -199,13 +199,14 @@ func (b *Broadcaster) ServeSSE(
 				}
 				return
 			}
-			// Skip events that were already sent during replay. The HistoryID > 0
-			// guard avoids filtering events that didn't go through history. Once
-			// we see the first event beyond the replay window, stop checking.
-			if skipBelow > 0 && e.HistoryID > 0 && e.HistoryID <= skipBelow {
-				continue
+			// Skip events already sent during replay. Only clear the dedup
+			// window once we see a definitive event beyond it (HistoryID > 0).
+			if skipBelow > 0 && e.HistoryID > 0 {
+				if e.HistoryID <= skipBelow {
+					continue
+				}
+				skipBelow = 0
 			}
-			skipBelow = 0
 			batch = append(batch, e)
 		case <-batchTicker.C:
 			if len(batch) > 0 {
@@ -236,21 +237,29 @@ func (b *Broadcaster) replayEvents(
 	afterID uint64,
 	replayType cache.EventType,
 ) uint64 {
+	writeSync := func() uint64 {
+		count := b.replay.Count()
+		WriteBatch(w, flusher, []cache.Event{{
+			Type: cache.EventSync, Action: "full_sync", HistoryID: count,
+		}})
+		return count
+	}
+
+	// Detail/stack streams are ineligible for replay — send sync.
 	if replayType == "" {
-		b.writeSyncEvent(w, flusher)
-		return b.replay.Count()
+		return writeSync()
 	}
 
 	entries, ok := b.replay.Since(afterID)
 	if !ok {
-		b.writeSyncEvent(w, flusher)
-		return b.replay.Count()
+		return writeSync()
 	}
 
 	if len(entries) == 0 {
 		return afterID
 	}
 
+	// Filter entries by type and convert to cache.Event (no Resource payload).
 	var replay []cache.Event
 	for _, e := range entries {
 		if e.Type != replayType {
@@ -265,21 +274,11 @@ func (b *Broadcaster) replayEvents(
 		})
 	}
 
-	maxID := entries[len(entries)-1].ID
 	if len(replay) > 0 {
 		WriteBatch(w, flusher, replay)
 	}
 
-	return maxID
-}
-
-func (b *Broadcaster) writeSyncEvent(w io.Writer, flusher http.Flusher) {
-	syncEvent := cache.Event{
-		Type:      cache.EventSync,
-		Action:    "full_sync",
-		HistoryID: b.replay.Count(),
-	}
-	WriteBatch(w, flusher, []cache.Event{syncEvent})
+	return entries[len(entries)-1].ID
 }
 
 // TypeMatcher returns a match function that accepts events of the given type.

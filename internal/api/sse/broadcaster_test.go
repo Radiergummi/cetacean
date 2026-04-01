@@ -432,7 +432,6 @@ func TestSSE_WriteBatch_SyncUsesHistoryID(t *testing.T) {
 	}
 }
 
-// mockReplaySource implements ReplaySource for testing.
 func TestSSE_ReplayOnReconnect(t *testing.T) {
 	h := cache.NewHistory(100)
 	// Build history: 4 service events + 1 node event interleaved
