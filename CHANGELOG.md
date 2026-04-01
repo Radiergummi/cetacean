@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 - Service tasks, service logs, task logs, and node tasks endpoints now enforce ACL read checks — previously accessible to any authenticated user regardless of grants
+- Topology endpoints now filter services and nodes by per-resource ACL grants instead of showing the entire cluster to any authenticated user
+- History endpoint now filters events by per-resource ACL read permission instead of showing all resource changes
+- SSE event replay on reconnect now applies ACL filtering (previously replayed events bypassed ACL)
+- Policy validation rejects malformed glob patterns at load time instead of silently creating dead grants
+- Task-to-service-to-stack ACL inheritance chain now resolves correctly (previously stopped at service level)
 
 ### Fixed
 - Layout shift in the header when the live connection timer changes width
