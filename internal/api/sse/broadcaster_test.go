@@ -293,6 +293,27 @@ func TestSSE_429OnConnectionLimit(t *testing.T) {
 	}
 }
 
+func TestSSE_Keepalive(t *testing.T) {
+	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter)
+	b.keepaliveInterval = 50 * time.Millisecond
+	defer b.Close()
+
+	req := httptest.NewRequest("GET", "/events", nil)
+	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	done := make(chan struct{})
+	go func() {
+		b.ServeSSE(w, req, nil)
+		close(done)
+	}()
+
+	waitForClients(t, b, 1)
+	waitForBody(t, w, ": keepalive")
+
+	b.Close()
+	<-done
+}
+
 func TestSSE_ResourceMatcher_Config(t *testing.T) {
 	match := ResourceMatcher("config", "cfg1")
 	if !match(cache.Event{Type: "config", Action: "update", ID: "cfg1"}) {

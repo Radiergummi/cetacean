@@ -30,13 +30,14 @@ const MaxClients = 256
 type ErrorWriter func(w http.ResponseWriter, r *http.Request, code, detail string)
 
 type Broadcaster struct {
-	mu            sync.RWMutex
-	clients       map[*sseClient]struct{}
-	closed        bool
-	inbox         chan cache.Event
-	stop          chan struct{}
-	batchInterval time.Duration
-	writeError    ErrorWriter
+	mu                sync.RWMutex
+	clients           map[*sseClient]struct{}
+	closed            bool
+	inbox             chan cache.Event
+	stop              chan struct{}
+	batchInterval     time.Duration
+	keepaliveInterval time.Duration
+	writeError        ErrorWriter
 }
 
 func NewBroadcaster(batchInterval time.Duration, writeError ErrorWriter) *Broadcaster {
@@ -44,11 +45,12 @@ func NewBroadcaster(batchInterval time.Duration, writeError ErrorWriter) *Broadc
 		batchInterval = 100 * time.Millisecond
 	}
 	b := &Broadcaster{
-		clients:       make(map[*sseClient]struct{}),
-		inbox:         make(chan cache.Event, 256),
-		stop:          make(chan struct{}),
-		batchInterval: batchInterval,
-		writeError:    writeError,
+		clients:           make(map[*sseClient]struct{}),
+		inbox:             make(chan cache.Event, 256),
+		stop:              make(chan struct{}),
+		batchInterval:     batchInterval,
+		keepaliveInterval: 15 * time.Second,
+		writeError:        writeError,
 	}
 	go b.fanOut()
 	return b
@@ -168,6 +170,8 @@ func (b *Broadcaster) ServeSSE(
 	var eventID uint64
 	batchTicker := time.NewTicker(b.batchInterval)
 	defer batchTicker.Stop()
+	keepalive := time.NewTicker(b.keepaliveInterval)
+	defer keepalive.Stop()
 	var batch []cache.Event
 
 	for {
@@ -184,7 +188,11 @@ func (b *Broadcaster) ServeSSE(
 			if len(batch) > 0 {
 				WriteBatch(w, flusher, batch, &eventID)
 				batch = batch[:0]
+				keepalive.Reset(b.keepaliveInterval)
 			}
+		case <-keepalive.C:
+			fmt.Fprint(w, ": keepalive\n\n")
+			flusher.Flush()
 		case <-r.Context().Done():
 			if len(batch) > 0 {
 				WriteBatch(w, flusher, batch, &eventID)

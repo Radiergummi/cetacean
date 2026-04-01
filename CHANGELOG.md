@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `Last-Modified` / `If-Modified-Since` conditional requests on resource detail endpoints
 - `Strict-Transport-Security` (HSTS) header when TLS is enabled
 - Structured error responses (RFC 9457) for all authentication and OIDC callback errors
+- SSE keepalive comments on idle connections to prevent proxy timeouts
 - Footer with version info, GitHub, docs, and API links
 - Table/grid view toggle on the tasks page with tasks grouped by service in card view
 - Arrow-key navigation for radio card groups
