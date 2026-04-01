@@ -16,8 +16,8 @@ const (
 	serviceLabelKey = "container_label_com_docker_swarm_service_name"
 	serviceFilter   = `container_label_com_docker_swarm_service_id!=""`
 
-	cpuInstantQuery    = `sum by (` + serviceLabelKey + `)(rate(container_cpu_usage_seconds_total{` + serviceFilter + `}[5m])) * 100`
-	memoryInstantQuery = `avg_over_time(sum by (` + serviceLabelKey + `)(container_memory_usage_bytes{` + serviceFilter + `})[1h:])`
+	cpuInstantQuery    = `avg by (` + serviceLabelKey + `)(rate(container_cpu_usage_seconds_total{` + serviceFilter + `}[5m])) * 100`
+	memoryInstantQuery = `avg_over_time(avg by (` + serviceLabelKey + `)(container_memory_usage_bytes{` + serviceFilter + `})[1h:])`
 )
 
 // QueryFunc executes a Prometheus instant query and returns results.
@@ -71,7 +71,7 @@ func (sc *SizingChecker) Check(ctx context.Context) []Recommendation {
 
 	go func() {
 		query := fmt.Sprintf(
-			`quantile_over_time(0.95, (sum by (%s)(rate(container_cpu_usage_seconds_total{%s}[5m])))[%s:5m]) * 100`,
+			`quantile_over_time(0.95, (avg by (%s)(rate(container_cpu_usage_seconds_total{%s}[5m])))[%s:5m]) * 100`,
 			serviceLabelKey,
 			serviceFilter,
 			lookbackStr,
@@ -82,7 +82,7 @@ func (sc *SizingChecker) Check(ctx context.Context) []Recommendation {
 
 	go func() {
 		query := fmt.Sprintf(
-			`quantile_over_time(0.95, (sum by (%s)(container_memory_usage_bytes{%s}))[%s:5m])`,
+			`quantile_over_time(0.95, (avg by (%s)(container_memory_usage_bytes{%s}))[%s:5m])`,
 			serviceLabelKey, serviceFilter, lookbackStr,
 		)
 		data, err := queryByService(tickCtx, sc.query, query)
