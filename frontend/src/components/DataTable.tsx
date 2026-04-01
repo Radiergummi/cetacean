@@ -172,8 +172,11 @@ export default function DataTable<T>({
     row?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex, useVirtual]);
 
+  const onLoadMoreRef = useRef(onLoadMore);
+  onLoadMoreRef.current = onLoadMore;
+
   useEffect(() => {
-    if (!hasMore || !onLoadMore || !sentinelRef.current) {
+    if (!hasMore || !onLoadMoreRef.current || !sentinelRef.current) {
       return;
     }
 
@@ -181,7 +184,7 @@ export default function DataTable<T>({
       (entries) => {
         for (const entry of entries) {
           if (entry.isIntersecting) {
-            onLoadMore();
+            onLoadMoreRef.current?.();
           }
         }
       },
@@ -191,7 +194,7 @@ export default function DataTable<T>({
     observer.observe(sentinelRef.current);
 
     return () => observer.disconnect();
-  }, [hasMore, onLoadMore]);
+  }, [hasMore]);
 
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent) => {

@@ -273,7 +273,7 @@ async function fetchRange<T>(
     signal: composeSignals(signal, AbortSignal.timeout(defaultTimeoutMilliseconds)),
   });
 
-  if (!res.ok && res.status !== 206) {
+  if (!res.ok) {
     if (res.status === 401 && res.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
       redirectToLogin();
     }

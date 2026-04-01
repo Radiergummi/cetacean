@@ -56,15 +56,10 @@ describe("api client", () => {
     );
   });
 
-  it("accepts 206 as success", async () => {
-    const response = {
-      ok: false,
-      status: 206,
-      statusText: "Partial Content",
-      json: () => Promise.resolve({ items: [{ ID: "n1" }], total: 100, limit: 50, offset: 0 }),
-      headers: new Headers(),
-    };
-    mockFetch.mockReturnValue(Promise.resolve(response));
+  it("accepts 206 Partial Content as success", async () => {
+    mockFetch.mockReturnValue(
+      jsonResponse({ items: [{ ID: "n1" }], total: 100, limit: 50, offset: 0 }, 206),
+    );
     const result = await api.nodes();
     expect(result).toEqual({ items: [{ ID: "n1" }], total: 100, limit: 50, offset: 0 });
   });

@@ -32,6 +32,7 @@ export function useSwarmResource<T>(
   const pendingRefetch = useRef(false);
   const loadingMoreRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
+  const nextPageRef = useRef(0);
 
   const loadPage = useCallback(
     (pageNumber: number) => {
@@ -61,16 +62,18 @@ export function useSwarmResource<T>(
 
           if (isFirstPage) {
             setPages(new Map([[0, response.items]]));
-            setSSEOffset(0);
+            nextPageRef.current = 1;
           } else {
             setPages((previous) => {
               const next = new Map(previous);
               next.set(pageNumber, response.items);
               return next;
             });
+            nextPageRef.current = pageNumber + 1;
           }
 
           setServerTotal(response.total);
+          setSSEOffset(0);
           hasLoadedRef.current = true;
         })
         .catch((event) => {
@@ -186,9 +189,8 @@ export function useSwarmResource<T>(
       return;
     }
 
-    const nextPage = Math.ceil(data.length / pageSize);
-    loadPageRef.current(nextPage);
-  }, [data.length]);
+    loadPageRef.current(nextPageRef.current);
+  }, []);
 
   const retry = useCallback(() => {
     loadPageRef.current(0);

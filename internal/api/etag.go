@@ -122,6 +122,7 @@ func writeCachedJSONTimed(w http.ResponseWriter, r *http.Request, v any, lastMod
 		}
 	}
 
+	w.WriteHeader(http.StatusOK)
 	w.Write(body)         //nolint:errcheck
 	w.Write([]byte{'\n'}) //nolint:errcheck
 }
