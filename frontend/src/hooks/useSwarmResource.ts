@@ -26,6 +26,7 @@ export function useSwarmResource<T>(
   const getIdRef = useRef(getId);
   getIdRef.current = getId;
   const hasLoadedRef = useRef(false);
+  const pendingRefetch = useRef(false);
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -106,8 +107,15 @@ export function useSwarmResource<T>(
           setSSEOffset((offset) => offset + 1);
         }
       } else if (event.action !== "remove") {
-        // Replayed event without resource payload — refetch to pick up changes
-        loadRef.current();
+        // Replayed event without resource payload — schedule a single refetch.
+        // Multiple payload-less events in a batch share one refetch via microtask.
+        if (!pendingRefetch.current) {
+          pendingRefetch.current = true;
+          queueMicrotask(() => {
+            pendingRefetch.current = false;
+            loadRef.current();
+          });
+        }
       }
     }, []),
   );
