@@ -111,13 +111,10 @@ export function useSwarmResource<T>(
       const currentPages = pagesRef.current;
 
       if (event.action === "remove") {
-        let found = false;
-
         for (const [pageNumber, items] of currentPages) {
           const filtered = items.filter((item) => getIdRef.current(item) !== event.id);
 
           if (filtered.length < items.length) {
-            found = true;
             setPages((previous) => {
               const next = new Map(previous);
               next.set(pageNumber, filtered);
@@ -127,9 +124,8 @@ export function useSwarmResource<T>(
           }
         }
 
-        if (found) {
-          setSSEOffset((offset) => offset - 1);
-        }
+        // Always decrement: the item may be in an unloaded page.
+        setSSEOffset((offset) => offset - 1);
       } else if (event.resource) {
         const resource = event.resource as T;
         let found = false;
