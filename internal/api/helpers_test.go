@@ -8,6 +8,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/recommendations"
 )
 
 type testHandlersConfig struct {
@@ -21,6 +22,7 @@ type testHandlersConfig struct {
 	promClient      *prometheus.Client
 	operationsLevel config.OperationsLevel
 	aclEval         *acl.Evaluator
+	recEngine       *recommendations.Engine
 }
 
 type testHandlersOption func(*testHandlersConfig)
@@ -65,6 +67,10 @@ func withBroadcaster(b *sse.Broadcaster) testHandlersOption {
 	return func(cfg *testHandlersConfig) { cfg.broadcaster = b }
 }
 
+func withRecEngine(e *recommendations.Engine) testHandlersOption {
+	return func(cfg *testHandlersConfig) { cfg.recEngine = e }
+}
+
 // newTestHandlers creates a Handlers instance with sensible test defaults.
 // All dependencies default to nil except cache (empty), ready (closed), and
 // operationsLevel (OpsImpactful). Use option functions to override.
@@ -91,7 +97,7 @@ func newTestHandlers(t testing.TB, opts ...testHandlersOption) *Handlers {
 		cfg.ready,
 		cfg.promClient,
 		cfg.operationsLevel,
-		nil, // recEngine
+		cfg.recEngine,
 		cfg.aclEval,
 	)
 }

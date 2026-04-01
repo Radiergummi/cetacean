@@ -12,10 +12,13 @@ import (
 	"github.com/docker/docker/api/types/volume"
 	json "github.com/goccy/go-json"
 
+	"time"
+
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/recommendations"
 )
 
 func TestHandleListServices_ACLFiltering(t *testing.T) {
@@ -1610,5 +1613,75 @@ func TestGetUnlockKey_BlockedAtOpsLevel0(t *testing.T) {
 
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("status=%d, want 403 (unlock key blocked at ops level 0)", w.Code)
+	}
+}
+
+// stubChecker is a recommendations.Checker that returns fixed results.
+type stubChecker struct {
+	results []recommendations.Recommendation
+}
+
+func (s *stubChecker) Name() string                                           { return "stub" }
+func (s *stubChecker) Interval() time.Duration                                { return time.Hour }
+func (s *stubChecker) Check(context.Context) []recommendations.Recommendation { return s.results }
+
+func TestHandleRecommendations_ACLFiltering(t *testing.T) {
+	recs := []recommendations.Recommendation{
+		{
+			Scope:      recommendations.ScopeService,
+			TargetID:   "svc1",
+			TargetName: "webapp",
+			Message:    "webapp needs more memory",
+		},
+		{
+			Scope:      recommendations.ScopeService,
+			TargetID:   "svc2",
+			TargetName: "billing",
+			Message:    "billing is over-provisioned",
+		},
+		{
+			Scope:      recommendations.ScopeNode,
+			TargetID:   "node1",
+			TargetName: "worker-1",
+			Message:    "worker-1 disk pressure",
+		},
+	}
+
+	engine := recommendations.NewEngine(&stubChecker{results: recs})
+
+	// Force a tick so the engine has results. Run does one synchronous tick
+	// before entering its loop, and returns immediately on a cancelled context.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	engine.Run(ctx)
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		// Only grant read on service:webapp — billing and node recs should be filtered out.
+		{
+			Resources:   []string{"service:webapp"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withACL(e), withRecEngine(engine))
+	req := httptest.NewRequest("GET", "/recommendations", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleRecommendations(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	var resp struct {
+		Total int `json:"total"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Total != 1 {
+		t.Fatalf("expected 1 recommendation (webapp only), got %d", resp.Total)
 	}
 }
