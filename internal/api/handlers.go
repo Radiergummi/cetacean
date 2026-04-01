@@ -288,6 +288,16 @@ func (h *Handlers) requireAnyGrant(w http.ResponseWriter, r *http.Request) bool 
 	return false
 }
 
+// withAnyGrant wraps a handler with a requireAnyGrant check.
+func (h *Handlers) withAnyGrant(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !h.requireAnyGrant(w, r) {
+			return
+		}
+		next(w, r)
+	}
+}
+
 func searchFilter[T any](items []T, query string, name func(T) string) []T {
 	if query == "" {
 		return items

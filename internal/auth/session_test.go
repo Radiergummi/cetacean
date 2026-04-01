@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -285,13 +286,11 @@ func TestSessionCodecCookieSizeLimit(t *testing.T) {
 	}
 }
 
-func TestSessionCodecCookieSizeOverflow(t *testing.T) {
+func TestSessionCodecDropsHintWhenCookieTooLarge(t *testing.T) {
 	codec := NewSessionCodec()
 
-	// Verify that many groups with long names DOES exceed the 4KB limit.
-	// This documents the known limitation for enterprise deployments with
-	// extensive group memberships.
-	groups := make([]string, 100)
+	// Moderate groups + a large ID token hint should exceed the limit.
+	groups := make([]string, 40)
 	for i := range groups {
 		groups[i] = fmt.Sprintf("enterprise-group-%d-with-long-name", i)
 	}
@@ -304,11 +303,61 @@ func TestSessionCodecCookieSizeOverflow(t *testing.T) {
 		Provider:    "oidc",
 	}
 
+	largeHint := strings.Repeat("x", 1500) // simulate a large JWT
+
 	w := httptest.NewRecorder()
-	codec.Set(w, id, time.Hour)
+	codec.Set(w, id, time.Hour, largeHint)
 
 	cookie := w.Result().Cookies()[0]
-	if len(cookie.Value) <= 4096 {
-		t.Error("expected cookie to exceed 4KB with 100 long group names")
+	if len(cookie.Value) > maxCookieValueLen {
+		t.Errorf(
+			"cookie value = %d bytes, want <= %d (hint should have been dropped)",
+			len(cookie.Value),
+			maxCookieValueLen,
+		)
+	}
+
+	// The session should still be valid and readable.
+	r := httptest.NewRequest("GET", "/", nil)
+	r.AddCookie(cookie)
+	env, err := codec.GetEnvelope(r)
+	if err != nil {
+		t.Fatalf("session unreadable after hint drop: %v", err)
+	}
+	if env.IDTokenHint != "" {
+		t.Error("expected IDTokenHint to be empty after size-based drop")
+	}
+	if env.Identity.Subject != "user-123" {
+		t.Errorf("Subject = %q, want %q", env.Identity.Subject, "user-123")
+	}
+}
+
+func TestSessionCodecKeepsHintWhenCookieFits(t *testing.T) {
+	codec := NewSessionCodec()
+
+	id := &Identity{
+		Subject:  "user-123",
+		Provider: "oidc",
+	}
+
+	hint := "eyJhbGciOiJSUzI1NiJ9.small-token-payload.signature"
+
+	w := httptest.NewRecorder()
+	codec.Set(w, id, time.Hour, hint)
+
+	cookie := w.Result().Cookies()[0]
+
+	r := httptest.NewRequest("GET", "/", nil)
+	r.AddCookie(cookie)
+	env, err := codec.GetEnvelope(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if env.IDTokenHint != hint {
+		t.Errorf(
+			"IDTokenHint = %q, want %q (should be preserved when cookie fits)",
+			env.IDTokenHint,
+			hint,
+		)
 	}
 }

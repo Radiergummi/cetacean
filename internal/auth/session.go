@@ -17,6 +17,12 @@ import (
 
 const cookieName = "__Host-cetacean_session"
 
+// maxCookieValueLen is a conservative limit for the cookie value. Browsers
+// enforce ~4096 bytes for the entire Set-Cookie header (name + value +
+// attributes). The cookie name, path, and attributes consume ~100 bytes,
+// leaving ~3900 for the value. We use 3800 for safety margin.
+const maxCookieValueLen = 3800
+
 // sessionEnvelope is the signed payload stored in the cookie. It wraps the
 // identity with a server-side expiry timestamp that cannot be tampered with.
 type sessionEnvelope struct {
@@ -56,6 +62,8 @@ func NewSessionCodecWithKey(hexKey string) (*SessionCodec, error) {
 // Set serializes the identity with an expiry, signs it, and sets it as a cookie.
 // Raw claims are excluded to keep the cookie compact (browsers enforce ~4KB).
 // The optional idTokenHint is stored for RP-initiated logout (RFC 9722).
+// If the resulting cookie would exceed browser size limits, the hint is dropped
+// (id_token_hint is OPTIONAL per RFC 9722 — logout degrades gracefully).
 func (s *SessionCodec) Set(
 	w http.ResponseWriter,
 	id *Identity,
@@ -78,20 +86,15 @@ func (s *SessionCodec) Set(
 		env.IDTokenHint = idTokenHint[0]
 	}
 
-	payload, err := json.Marshal(env)
-	if err != nil {
-		panic("auth: failed to marshal session: " + err.Error())
+	value := s.signEnvelope(&env)
+
+	// If the cookie is too large (enterprise IdPs with many group claims +
+	// large ID tokens), drop the hint and re-encode. This sacrifices
+	// RP-initiated logout's id_token_hint but keeps authentication working.
+	if len(value) > maxCookieValueLen && env.IDTokenHint != "" {
+		env.IDTokenHint = ""
+		value = s.signEnvelope(&env)
 	}
-
-	mac := hmac.New(sha256.New, s.key)
-	mac.Write(payload)
-	sig := mac.Sum(nil)
-
-	value := base64.RawURLEncoding.EncodeToString(
-		payload,
-	) + "." + base64.RawURLEncoding.EncodeToString(
-		sig,
-	)
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     cookieName,
@@ -102,6 +105,23 @@ func (s *SessionCodec) Set(
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 	})
+}
+
+func (s *SessionCodec) signEnvelope(env *sessionEnvelope) string {
+	payload, err := json.Marshal(env)
+	if err != nil {
+		panic("auth: failed to marshal session: " + err.Error())
+	}
+
+	mac := hmac.New(sha256.New, s.key)
+	mac.Write(payload)
+	sig := mac.Sum(nil)
+
+	return base64.RawURLEncoding.EncodeToString(
+		payload,
+	) + "." + base64.RawURLEncoding.EncodeToString(
+		sig,
+	)
 }
 
 // Get reads and verifies the session cookie, returning the identity.

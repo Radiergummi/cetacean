@@ -12,10 +12,11 @@ import (
 
 func TestWhoamiHandler_ReturnsIdentityJSON(t *testing.T) {
 	p := NewHeadersProvider(config.HeadersConfig{
-		Subject: "X-User",
-		Name:    "X-Name",
-		Email:   "X-Email",
-		Groups:  "X-Groups",
+		Subject:        "X-User",
+		Name:           "X-Name",
+		Email:          "X-Email",
+		Groups:         "X-Groups",
+		TrustedProxies: anyProxy,
 	})
 
 	handler := WhoamiHandler(p)
@@ -58,7 +59,8 @@ func TestWhoamiHandler_ReturnsIdentityJSON(t *testing.T) {
 
 func TestWhoamiHandler_Returns401WithoutHeaders(t *testing.T) {
 	p := NewHeadersProvider(config.HeadersConfig{
-		Subject: "X-User",
+		Subject:        "X-User",
+		TrustedProxies: anyProxy,
 	})
 
 	handler := WhoamiHandler(p)
@@ -75,9 +77,10 @@ func TestWhoamiHandler_Returns401WithoutHeaders(t *testing.T) {
 
 func TestWhoamiHandler_ValidSecret(t *testing.T) {
 	p := NewHeadersProvider(config.HeadersConfig{
-		Subject:      "X-User",
-		SecretHeader: "X-Proxy-Secret",
-		SecretValue:  "s3cret",
+		Subject:        "X-User",
+		SecretHeader:   "X-Proxy-Secret",
+		SecretValue:    "s3cret",
+		TrustedProxies: anyProxy,
 	})
 
 	handler := WhoamiHandler(p)
@@ -103,9 +106,10 @@ func TestWhoamiHandler_ValidSecret(t *testing.T) {
 
 func TestWhoamiHandler_InvalidSecret_Returns401(t *testing.T) {
 	p := NewHeadersProvider(config.HeadersConfig{
-		Subject:      "X-User",
-		SecretHeader: "X-Proxy-Secret",
-		SecretValue:  "s3cret",
+		Subject:        "X-User",
+		SecretHeader:   "X-Proxy-Secret",
+		SecretValue:    "s3cret",
+		TrustedProxies: anyProxy,
 	})
 
 	handler := WhoamiHandler(p)
@@ -123,7 +127,8 @@ func TestWhoamiHandler_InvalidSecret_Returns401(t *testing.T) {
 
 func TestWhoamiHandler_SetsCacheControlNoStore(t *testing.T) {
 	p := NewHeadersProvider(config.HeadersConfig{
-		Subject: "X-User",
+		Subject:        "X-User",
+		TrustedProxies: anyProxy,
 	})
 
 	handler := WhoamiHandler(p)

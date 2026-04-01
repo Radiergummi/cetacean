@@ -231,6 +231,10 @@ type TargetStatus struct {
 }
 
 func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAnyGrant(w, r) {
+		return
+	}
+
 	if h.promClient == nil {
 		writeJSON(w, MonitoringStatus{})
 		return

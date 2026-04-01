@@ -8,12 +8,15 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"testing"
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/config"
 )
+
+var anyProxy = []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0")}
 
 func TestIntegration_NoneMode(t *testing.T) {
 	provider := &auth.NoneProvider{}
@@ -67,10 +70,11 @@ func TestIntegration_NoneMode(t *testing.T) {
 
 func TestIntegration_HeadersMode_ValidHeaders(t *testing.T) {
 	provider := auth.NewHeadersProvider(config.HeadersConfig{
-		Subject: "X-User",
-		Name:    "X-User-Name",
-		Email:   "X-User-Email",
-		Groups:  "X-User-Groups",
+		Subject:        "X-User",
+		Name:           "X-User-Name",
+		Email:          "X-User-Email",
+		Groups:         "X-User-Groups",
+		TrustedProxies: anyProxy,
 	})
 	mw := auth.Middleware(provider)
 
@@ -114,7 +118,8 @@ func TestIntegration_HeadersMode_ValidHeaders(t *testing.T) {
 
 func TestIntegration_HeadersMode_MissingHeaders(t *testing.T) {
 	provider := auth.NewHeadersProvider(config.HeadersConfig{
-		Subject: "X-User",
+		Subject:        "X-User",
+		TrustedProxies: anyProxy,
 	})
 	mw := auth.Middleware(provider)
 
@@ -137,9 +142,10 @@ func TestIntegration_HeadersMode_MissingHeaders(t *testing.T) {
 
 func TestIntegration_HeadersMode_ValidSecret(t *testing.T) {
 	provider := auth.NewHeadersProvider(config.HeadersConfig{
-		Subject:      "X-User",
-		SecretHeader: "X-Proxy-Secret",
-		SecretValue:  "s3cret",
+		Subject:        "X-User",
+		SecretHeader:   "X-Proxy-Secret",
+		SecretValue:    "s3cret",
+		TrustedProxies: anyProxy,
 	})
 	mw := auth.Middleware(provider)
 
@@ -169,9 +175,10 @@ func TestIntegration_HeadersMode_ValidSecret(t *testing.T) {
 
 func TestIntegration_HeadersMode_InvalidSecret(t *testing.T) {
 	provider := auth.NewHeadersProvider(config.HeadersConfig{
-		Subject:      "X-User",
-		SecretHeader: "X-Proxy-Secret",
-		SecretValue:  "s3cret",
+		Subject:        "X-User",
+		SecretHeader:   "X-Proxy-Secret",
+		SecretValue:    "s3cret",
+		TrustedProxies: anyProxy,
 	})
 	mw := auth.Middleware(provider)
 
@@ -194,9 +201,10 @@ func TestIntegration_HeadersMode_InvalidSecret(t *testing.T) {
 
 func TestIntegration_HeadersMode_MissingSecretHeader(t *testing.T) {
 	provider := auth.NewHeadersProvider(config.HeadersConfig{
-		Subject:      "X-User",
-		SecretHeader: "X-Proxy-Secret",
-		SecretValue:  "s3cret",
+		Subject:        "X-User",
+		SecretHeader:   "X-Proxy-Secret",
+		SecretValue:    "s3cret",
+		TrustedProxies: anyProxy,
 	})
 	mw := auth.Middleware(provider)
 
@@ -219,8 +227,9 @@ func TestIntegration_HeadersMode_MissingSecretHeader(t *testing.T) {
 
 func TestIntegration_HeadersMode_GroupsParsing(t *testing.T) {
 	provider := auth.NewHeadersProvider(config.HeadersConfig{
-		Subject: "X-User",
-		Groups:  "X-Groups",
+		Subject:        "X-User",
+		Groups:         "X-Groups",
+		TrustedProxies: anyProxy,
 	})
 	mw := auth.Middleware(provider)
 

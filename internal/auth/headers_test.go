@@ -10,13 +10,19 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
+// anyProxy matches all IPv4 addresses. Used in tests that aren't testing
+// proxy validation specifically, to satisfy the mandatory TrustedProxies
+// requirement without affecting test semantics.
+var anyProxy = []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0")}
+
 func TestHeadersProvider_Authenticate(t *testing.T) {
 	t.Run("all headers", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject: "X-User",
-			Name:    "X-Name",
-			Email:   "X-Email",
-			Groups:  "X-Groups",
+			Subject:        "X-User",
+			Name:           "X-Name",
+			Email:          "X-Email",
+			Groups:         "X-Groups",
+			TrustedProxies: anyProxy,
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -52,7 +58,8 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("missing subject header", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject: "X-User",
+			Subject:        "X-User",
+			TrustedProxies: anyProxy,
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -65,9 +72,10 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("valid shared secret", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:      "X-User",
-			SecretHeader: "X-Proxy-Secret",
-			SecretValue:  "s3cret",
+			Subject:        "X-User",
+			SecretHeader:   "X-Proxy-Secret",
+			SecretValue:    "s3cret",
+			TrustedProxies: anyProxy,
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -85,9 +93,10 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("invalid shared secret", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:      "X-User",
-			SecretHeader: "X-Proxy-Secret",
-			SecretValue:  "s3cret",
+			Subject:        "X-User",
+			SecretHeader:   "X-Proxy-Secret",
+			SecretValue:    "s3cret",
+			TrustedProxies: anyProxy,
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -102,9 +111,10 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("missing secret header entirely", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject:      "X-User",
-			SecretHeader: "X-Proxy-Secret",
-			SecretValue:  "s3cret",
+			Subject:        "X-User",
+			SecretHeader:   "X-Proxy-Secret",
+			SecretValue:    "s3cret",
+			TrustedProxies: anyProxy,
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -119,7 +129,8 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("empty subject header value", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject: "X-User",
+			Subject:        "X-User",
+			TrustedProxies: anyProxy,
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -133,7 +144,8 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("subject with leading and trailing whitespace", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject: "X-User",
+			Subject:        "X-User",
+			TrustedProxies: anyProxy,
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -151,8 +163,9 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("groups with only commas", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject: "X-User",
-			Groups:  "X-Groups",
+			Subject:        "X-User",
+			Groups:         "X-Groups",
+			TrustedProxies: anyProxy,
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -170,8 +183,9 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("groups with single value", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject: "X-User",
-			Groups:  "X-Groups",
+			Subject:        "X-User",
+			Groups:         "X-Groups",
+			TrustedProxies: anyProxy,
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -189,7 +203,8 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("header name case insensitivity", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject: "X-User",
+			Subject:        "X-User",
+			TrustedProxies: anyProxy,
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -209,7 +224,8 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("only subject header", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject: "X-Remote-User",
+			Subject:        "X-Remote-User",
+			TrustedProxies: anyProxy,
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -239,7 +255,8 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("subject with control characters rejected", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject: "X-User",
+			Subject:        "X-User",
+			TrustedProxies: anyProxy,
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -256,7 +273,8 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("subject with newline rejected", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject: "X-User",
+			Subject:        "X-User",
+			TrustedProxies: anyProxy,
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -270,7 +288,8 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("subject exceeding max length rejected", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject: "X-User",
+			Subject:        "X-User",
+			TrustedProxies: anyProxy,
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -287,7 +306,8 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("subject at max length accepted", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject: "X-User",
+			Subject:        "X-User",
+			TrustedProxies: anyProxy,
 		})
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -304,7 +324,8 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("extra headers captured in Raw", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject: "X-User",
+			Subject:        "X-User",
+			TrustedProxies: anyProxy,
 		}, "X-ACL")
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -327,7 +348,8 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 	t.Run("missing extra header not stored in Raw", func(t *testing.T) {
 		p := NewHeadersProvider(config.HeadersConfig{
-			Subject: "X-User",
+			Subject:        "X-User",
+			TrustedProxies: anyProxy,
 		}, "X-ACL")
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -483,8 +505,8 @@ func TestHeadersProvider_TrustedProxies(t *testing.T) {
 		}
 	})
 
-	t.Run("no trusted proxies configured skips check", func(t *testing.T) {
-		// No TrustedProxies — any IP should work.
+	t.Run("no trusted proxies configured rejects all", func(t *testing.T) {
+		// No TrustedProxies — proxy check always runs and rejects.
 		p := NewHeadersProvider(config.HeadersConfig{
 			Subject: "X-User",
 		})
@@ -494,8 +516,11 @@ func TestHeadersProvider_TrustedProxies(t *testing.T) {
 		r.Header.Set("X-User", "alice")
 
 		_, err := p.Authenticate(httptest.NewRecorder(), r)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+		if err == nil {
+			t.Fatal("expected error for missing trusted proxies")
+		}
+		if !strings.Contains(err.Error(), "not a trusted proxy") {
+			t.Errorf("error = %q, want mention of trusted proxy", err.Error())
 		}
 	})
 }

@@ -60,6 +60,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	swarmACL := h.requireWriteACL(swarmResource)
 
 	authProvider.RegisterRoutes(mux)
+	mux.HandleFunc("GET /auth/whoami", auth.WhoamiHandler(authProvider))
 
 	// Meta endpoints (no content negotiation, no discovery links)
 	mux.HandleFunc("GET /-/health", h.HandleHealth)
@@ -70,10 +71,13 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	}
 	// Metrics (content-negotiated: JSON → proxy, SSE → stream, HTML → SPA)
 	mux.HandleFunc("GET /metrics/status", h.HandleMonitoringStatus)
-	mux.HandleFunc("GET /metrics/labels", metricsProxy.HandleMetricsLabels)
-	mux.HandleFunc("GET /metrics/labels/{name}", metricsProxy.HandleMetricsLabelValues)
+	mux.HandleFunc("GET /metrics/labels", h.withAnyGrant(metricsProxy.HandleMetricsLabels))
+	mux.HandleFunc(
+		"GET /metrics/labels/{name}",
+		h.withAnyGrant(metricsProxy.HandleMetricsLabelValues),
+	)
 	mux.HandleFunc("GET /metrics", contentNegotiatedWithSSE(
-		metricsProxy.HandleMetrics,
+		h.withAnyGrant(metricsProxy.HandleMetrics),
 		h.HandleMetricsStream,
 		spa,
 	))

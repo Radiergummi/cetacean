@@ -266,9 +266,9 @@ func LoadAuth(flags *Flags, fc *fileConfig) (*AuthConfig, error) {
 				"CETACEAN_AUTH_HEADERS_SECRET_HEADER requires CETACEAN_AUTH_HEADERS_SECRET_VALUE",
 			)
 		}
-		if cfg.Headers.SecretHeader == "" && len(cfg.Headers.TrustedProxies) == 0 {
+		if len(cfg.Headers.TrustedProxies) == 0 {
 			return nil, fmt.Errorf(
-				"headers mode requires CETACEAN_AUTH_HEADERS_SECRET_HEADER or CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES (or both); without either, any client can spoof identity headers",
+				"headers mode requires CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES; set to the CIDR of your reverse proxy (use 0.0.0.0/0 to allow any source, but prefer a specific range)",
 			)
 		}
 	}

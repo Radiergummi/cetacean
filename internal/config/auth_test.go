@@ -235,6 +235,7 @@ func TestLoadAuth_HeadersHappyPath(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_GROUPS", "X-Groups")
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_HEADER", "X-Secret")
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_VALUE", "s3cret")
+	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "10.0.0.0/8")
 
 	cfg, err := LoadAuth(nil, nil)
 	if err != nil {
@@ -248,19 +249,18 @@ func TestLoadAuth_HeadersHappyPath(t *testing.T) {
 	}
 }
 
-func TestLoadAuth_HeadersRequiresSecretOrTrustedProxies(t *testing.T) {
+func TestLoadAuth_HeadersRequiresTrustedProxies(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "headers")
 	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
-	// Neither secret nor trusted proxies set.
+	// Secret set but no trusted proxies — should still fail.
+	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_HEADER", "X-Proxy-Secret")
+	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_VALUE", "s3cret")
 
 	_, err := LoadAuth(nil, nil)
 	if err == nil {
-		t.Fatal("expected error when neither secret nor trusted proxies are set")
+		t.Fatal("expected error when trusted proxies are not set")
 	}
-	if !strings.Contains(
-		err.Error(),
-		"CETACEAN_AUTH_HEADERS_SECRET_HEADER or CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES",
-	) {
+	if !strings.Contains(err.Error(), "CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -516,6 +516,7 @@ func TestLoadAuth_HeadersSecretFromFile(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_HEADER", "X-Secret")
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_VALUE_FILE", secretPath)
+	t.Setenv("CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES", "10.0.0.0/8")
 
 	cfg, err := LoadAuth(nil, nil)
 	if err != nil {

@@ -12,6 +12,10 @@ import (
 const maxMetricsStreamClients = 64
 
 func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAnyGrant(w, r) {
+		return
+	}
+
 	query := r.URL.Query().Get("query")
 	if query == "" {
 		writeErrorCode(w, r, "MTR003", "missing required parameter: query")

@@ -38,11 +38,9 @@ func NewHeadersProvider(cfg config.HeadersConfig, extraHeaders ...string) *Heade
 // remote address must match. If SecretHeader is configured, the proxy must
 // also send a matching secret value.
 func (p *HeadersProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (*Identity, error) {
-	// Check trusted proxy allowlist.
-	if len(p.cfg.TrustedProxies) > 0 {
-		if err := p.validateSourceIP(r.RemoteAddr); err != nil {
-			return nil, err
-		}
+	// Check trusted proxy allowlist (always configured; enforced at startup).
+	if err := p.validateSourceIP(r.RemoteAddr); err != nil {
+		return nil, err
 	}
 
 	// Check shared secret (constant-time).
