@@ -6,6 +6,9 @@ import (
 	"strings"
 
 	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 )
 
 type NetworkTopology struct {
@@ -67,7 +70,12 @@ func (h *Handlers) HandleNetworkTopology(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	services := h.cache.ListServices()
+	identity := auth.IdentityFromContext(r.Context())
+	services := acl.Filter(
+		h.acl, identity, "read",
+		h.cache.ListServices(),
+		func(s swarm.Service) string { return "service:" + s.Spec.Name },
+	)
 	networks := h.cache.ListNetworks()
 
 	// Build overlay network ID set for fast filtering.
@@ -180,7 +188,12 @@ func (h *Handlers) HandlePlacementTopology(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	clusterNodes := h.cache.ListNodes()
+	identity := auth.IdentityFromContext(r.Context())
+	clusterNodes := acl.Filter(
+		h.acl, identity, "read",
+		h.cache.ListNodes(),
+		func(n swarm.Node) string { return "node:" + n.Description.Hostname },
+	)
 	services := h.cache.ListServices()
 
 	// Build service name and image lookup.
@@ -193,11 +206,25 @@ func (h *Handlers) HandlePlacementTopology(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
+	// Build a set of readable service IDs for task filtering.
+	readableServiceIDs := make(map[string]bool, len(services))
+	for _, svc := range acl.Filter(
+		h.acl, identity, "read",
+		services,
+		func(s swarm.Service) string { return "service:" + s.Spec.Name },
+	) {
+		readableServiceIDs[svc.ID] = true
+	}
+
 	topoNodes := make([]TopoClusterNode, 0, len(clusterNodes))
 	for _, n := range clusterNodes {
 		tasks := h.cache.ListTasksByNode(n.ID)
 		topoTasks := make([]TopoTask, 0, len(tasks))
 		for _, t := range tasks {
+			if !readableServiceIDs[t.ServiceID] {
+				continue
+			}
+
 			var taskImage string
 			if t.Spec.ContainerSpec != nil {
 				taskImage = stripImageDigest(t.Spec.ContainerSpec.Image)

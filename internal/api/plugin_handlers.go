@@ -13,7 +13,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/auth"
 )
 
-func (h *Handlers) HandlePlugins(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleListPlugins(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
@@ -44,7 +44,7 @@ func (h *Handlers) HandlePlugins(w http.ResponseWriter, r *http.Request) {
 	)
 }
 
-func (h *Handlers) HandlePlugin(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleGetPlugin(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 
 	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "plugin:"+name) {

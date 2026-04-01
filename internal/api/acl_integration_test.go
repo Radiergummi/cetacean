@@ -1553,7 +1553,11 @@ func TestHandleClusterMetrics_ACL001_NoGrants(t *testing.T) {
 func TestHandleSearch_ACL001_NoGrants(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
-		{Resources: []string{"service:*"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:*"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read"},
+		},
 	}})
 
 	h := newTestHandlers(t, withACL(e))

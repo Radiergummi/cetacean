@@ -195,6 +195,41 @@ func TestValidate_EmptyNameAfterColon(t *testing.T) {
 	}
 }
 
+func TestValidate_MalformedGlobPattern(t *testing.T) {
+	tests := []struct {
+		name   string
+		policy *Policy
+	}{
+		{
+			name: "malformed resource glob",
+			policy: &Policy{Grants: []Grant{
+				{
+					Resources:   []string{"service:web[app"},
+					Audience:    []string{"*"},
+					Permissions: []string{"read"},
+				},
+			}},
+		},
+		{
+			name: "malformed audience glob",
+			policy: &Policy{Grants: []Grant{
+				{
+					Resources:   []string{"service:*"},
+					Audience:    []string{"user:alice["},
+					Permissions: []string{"read"},
+				},
+			}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := Validate(tt.policy); err == nil {
+				t.Fatal("expected validation error for malformed glob pattern")
+			}
+		})
+	}
+}
+
 func TestParsePolicyFile_YAML(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "policy.yaml")

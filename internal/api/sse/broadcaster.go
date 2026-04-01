@@ -170,7 +170,7 @@ func (b *Broadcaster) ServeSSE(
 	var skipBelow uint64
 	if lastID := r.Header.Get("Last-Event-ID"); lastID != "" && b.replay != nil {
 		if id, err := strconv.ParseUint(lastID, 10, 64); err == nil {
-			skipBelow = b.replayEvents(w, flusher, id, replayType)
+			skipBelow = b.replayEvents(w, flusher, id, replayType, client.match)
 		}
 	}
 
@@ -240,6 +240,7 @@ func (b *Broadcaster) replayEvents(
 	flusher http.Flusher,
 	afterID uint64,
 	replayType cache.EventType,
+	match func(cache.Event) bool,
 ) uint64 {
 	writeSync := func() uint64 {
 		count := b.replay.Count()
@@ -263,19 +264,26 @@ func (b *Broadcaster) replayEvents(
 		return afterID
 	}
 
-	// Filter entries by type and convert to cache.Event (no Resource payload).
+	// Filter entries by type and ACL, then convert to cache.Event (no Resource payload).
 	var replay []cache.Event
 	for _, e := range entries {
 		if e.Type != replayType {
 			continue
 		}
-		replay = append(replay, cache.Event{
+
+		ev := cache.Event{
 			Type:      e.Type,
 			Action:    e.Action,
 			ID:        e.ResourceID,
 			Name:      e.Name,
 			HistoryID: e.ID,
-		})
+		}
+
+		if match != nil && !match(ev) {
+			continue
+		}
+
+		replay = append(replay, ev)
 	}
 
 	if len(replay) == 0 {

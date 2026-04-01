@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -29,6 +30,18 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 	if entries == nil {
 		entries = []cache.HistoryEntry{}
 	}
+
+	// Filter entries by per-resource ACL read permission.
+	identity := auth.IdentityFromContext(r.Context())
+	filtered := entries[:0]
+	for _, e := range entries {
+		resource := string(e.Type) + ":" + e.Name
+		if h.acl.Can(identity, "read", resource) {
+			filtered = append(filtered, e)
+		}
+	}
+	entries = filtered
+
 	writeCachedJSON(
 		w, r,
 		NewCollectionResponse(r.Context(), entries, len(entries), len(entries), 0),

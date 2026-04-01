@@ -3,6 +3,7 @@ package acl
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -67,6 +68,10 @@ func validateGrant(g Grant) error {
 		if !validResourceTypes[parts[0]] {
 			return fmt.Errorf("unknown resource type %q", parts[0])
 		}
+
+		if _, err := path.Match(parts[1], ""); err != nil {
+			return fmt.Errorf("invalid glob pattern in resource %q: %w", r, err)
+		}
 	}
 
 	for _, a := range g.Audience {
@@ -81,6 +86,10 @@ func validateGrant(g Grant) error {
 
 		if !validAudienceKinds[parts[0]] {
 			return fmt.Errorf("unknown audience kind %q", parts[0])
+		}
+
+		if _, err := path.Match(parts[1], ""); err != nil {
+			return fmt.Errorf("invalid glob pattern in audience %q: %w", a, err)
 		}
 	}
 

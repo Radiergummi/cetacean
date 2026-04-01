@@ -76,7 +76,11 @@ func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
-	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "node:"+node.Description.Hostname) {
+	if !h.acl.Can(
+		auth.IdentityFromContext(r.Context()),
+		"read",
+		"node:"+node.Description.Hostname,
+	) {
 		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}

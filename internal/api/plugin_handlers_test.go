@@ -101,7 +101,7 @@ func newPluginHandlers(t testing.TB, pc *mockPluginClient) *Handlers {
 	return newTestHandlers(t, withPluginClient(pc))
 }
 
-func TestHandlePlugins_OK(t *testing.T) {
+func TestHandleListPlugins_OK(t *testing.T) {
 	pc := &mockPluginClient{
 		pluginListFn: func(_ context.Context) (types.PluginsListResponse, error) {
 			return types.PluginsListResponse{
@@ -116,7 +116,7 @@ func TestHandlePlugins_OK(t *testing.T) {
 	req.Header.Set("Accept", "application/json")
 	w := httptest.NewRecorder()
 
-	h.HandlePlugins(w, req)
+	h.HandleListPlugins(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
@@ -133,7 +133,7 @@ func TestHandlePlugins_OK(t *testing.T) {
 	}
 }
 
-func TestHandlePlugins_Empty(t *testing.T) {
+func TestHandleListPlugins_Empty(t *testing.T) {
 	pc := &mockPluginClient{
 		pluginListFn: func(_ context.Context) (types.PluginsListResponse, error) {
 			return nil, nil
@@ -145,14 +145,14 @@ func TestHandlePlugins_Empty(t *testing.T) {
 	req.Header.Set("Accept", "application/json")
 	w := httptest.NewRecorder()
 
-	h.HandlePlugins(w, req)
+	h.HandleListPlugins(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
-func TestHandlePlugin_OK(t *testing.T) {
+func TestHandleGetPlugin_OK(t *testing.T) {
 	pc := &mockPluginClient{
 		pluginInspectFn: func(_ context.Context, name string) (*types.Plugin, error) {
 			return &types.Plugin{Name: name, Enabled: true}, nil
@@ -163,7 +163,7 @@ func TestHandlePlugin_OK(t *testing.T) {
 	req := httptest.NewRequest("GET", "/plugins/my-plugin", nil)
 	req.SetPathValue("name", "my-plugin")
 	w := httptest.NewRecorder()
-	h.HandlePlugin(w, req)
+	h.HandleGetPlugin(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
@@ -178,7 +178,7 @@ func TestHandlePlugin_OK(t *testing.T) {
 	}
 }
 
-func TestHandlePlugin_NotFound(t *testing.T) {
+func TestHandleGetPlugin_NotFound(t *testing.T) {
 	pc := &mockPluginClient{
 		pluginInspectFn: func(_ context.Context, _ string) (*types.Plugin, error) {
 			return nil, errdefs.NotFound(fmt.Errorf("plugin not found"))
@@ -189,7 +189,7 @@ func TestHandlePlugin_NotFound(t *testing.T) {
 	req := httptest.NewRequest("GET", "/plugins/missing", nil)
 	req.SetPathValue("name", "missing")
 	w := httptest.NewRecorder()
-	h.HandlePlugin(w, req)
+	h.HandleGetPlugin(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("status=%d, want 404", w.Code)

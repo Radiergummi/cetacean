@@ -112,9 +112,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	mux.Handle("POST /swarm/unlock", swarmACL(tier3(h.HandlePostUnlockSwarm)))
 	mux.HandleFunc("GET /disk-usage", contentNegotiated(h.HandleDiskUsage, spa))
 	// Plugins
-	mux.HandleFunc("GET /plugins", contentNegotiated(h.HandlePlugins, spa))
-	mux.HandleFunc("GET /plugins/{name}", contentNegotiated(h.HandlePlugin, spa))
-	mux.HandleFunc("GET /swarm/plugins", contentNegotiated(h.HandlePlugins, spa))
+	mux.HandleFunc("GET /plugins", contentNegotiated(h.HandleListPlugins, spa))
+	mux.HandleFunc("GET /plugins/{name}", contentNegotiated(h.HandleGetPlugin, spa))
+	mux.HandleFunc("GET /swarm/plugins", contentNegotiated(h.HandleListPlugins, spa))
 	mux.Handle("POST /plugins/privileges", pluginWildACL(tier3(h.HandlePluginPrivileges)))
 	mux.Handle("POST /plugins", pluginWildACL(tier3(h.HandleInstallPlugin)))
 	mux.Handle("POST /plugins/{name}/enable", pluginACL(tier2(h.HandleEnablePlugin)))
