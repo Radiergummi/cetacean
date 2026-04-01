@@ -92,7 +92,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			spa.ServeHTTP(w, r)
 			return
 		}
-		b.ServeSSE(w, r, h.aclMatchWrap(r, nil))
+		b.ServeSSE(w, r, h.aclMatchWrap(r, nil), "")
 	})
 
 	// Cluster
@@ -298,7 +298,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		"GET /stacks/{name}",
 		contentNegotiatedWithSSE(h.HandleGetStack, func(w http.ResponseWriter, r *http.Request) {
 			stackMatch := sse.StackMatcher(h.cache, r.PathValue("name"))
-			h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, stackMatch))
+			h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, stackMatch), "")
 		}, spa),
 	)
 	mux.Handle("DELETE /stacks/{name}", stackACL(tier3(h.HandleRemoveStack)))

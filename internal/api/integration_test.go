@@ -33,7 +33,7 @@ func setupIntegrationRouter(t *testing.T) http.Handler {
 		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
 	})
 
-	b := sse.NewBroadcaster(100*time.Millisecond, noopErrorWriter)
+	b := sse.NewBroadcaster(100*time.Millisecond, noopErrorWriter, nil)
 	h := newTestHandlers(t, withCache(c), withBroadcaster(b))
 	spa := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")

@@ -154,7 +154,7 @@ func main() {
 	}
 
 	// SSE broadcaster
-	broadcaster := sse.NewBroadcaster(cfg.SSEBatchInterval, api.WriteErrorCode)
+	broadcaster := sse.NewBroadcaster(cfg.SSEBatchInterval, api.WriteErrorCode, nil)
 	defer broadcaster.Close()
 
 	// State cache — broadcasts changes via SSE

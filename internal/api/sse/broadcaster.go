@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +17,12 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/metrics"
 )
+
+// ReplaySource provides access to recent history entries for SSE replay.
+type ReplaySource interface {
+	Since(afterID uint64) ([]cache.HistoryEntry, bool)
+	Count() uint64
+}
 
 type sseClient struct {
 	events chan cache.Event
@@ -38,9 +45,10 @@ type Broadcaster struct {
 	batchInterval     time.Duration
 	keepaliveInterval time.Duration
 	writeError        ErrorWriter
+	replay            ReplaySource
 }
 
-func NewBroadcaster(batchInterval time.Duration, writeError ErrorWriter) *Broadcaster {
+func NewBroadcaster(batchInterval time.Duration, writeError ErrorWriter, replay ReplaySource) *Broadcaster {
 	if batchInterval <= 0 {
 		batchInterval = 100 * time.Millisecond
 	}
@@ -51,6 +59,7 @@ func NewBroadcaster(batchInterval time.Duration, writeError ErrorWriter) *Broadc
 		batchInterval:     batchInterval,
 		keepaliveInterval: 15 * time.Second,
 		writeError:        writeError,
+		replay:            replay,
 	}
 	go b.fanOut()
 	return b
@@ -113,13 +122,14 @@ func (b *Broadcaster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		match = func(e cache.Event) bool { return types[string(e.Type)] }
 	}
-	b.ServeSSE(w, r, match)
+	b.ServeSSE(w, r, match, "")
 }
 
 func (b *Broadcaster) ServeSSE(
 	w http.ResponseWriter,
 	r *http.Request,
 	match func(cache.Event) bool,
+	replayType cache.EventType,
 ) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -153,6 +163,13 @@ func (b *Broadcaster) ServeSSE(
 
 	flusher.Flush()
 
+	var skipBelow uint64
+	if lastID := r.Header.Get("Last-Event-ID"); lastID != "" && b.replay != nil {
+		if id, err := strconv.ParseUint(lastID, 10, 64); err == nil {
+			skipBelow = b.replayEvents(w, flusher, id, replayType)
+		}
+	}
+
 	defer func() {
 		b.mu.Lock()
 		delete(b.clients, client)
@@ -182,6 +199,10 @@ func (b *Broadcaster) ServeSSE(
 				}
 				return
 			}
+			if skipBelow > 0 && e.HistoryID > 0 && e.HistoryID <= skipBelow {
+				continue
+			}
+			skipBelow = 0
 			batch = append(batch, e)
 		case <-batchTicker.C:
 			if len(batch) > 0 {
@@ -204,6 +225,58 @@ func (b *Broadcaster) ServeSSE(
 			return
 		}
 	}
+}
+
+func (b *Broadcaster) replayEvents(
+	w io.Writer,
+	flusher http.Flusher,
+	afterID uint64,
+	replayType cache.EventType,
+) uint64 {
+	if replayType == "" {
+		b.writeSyncEvent(w, flusher)
+		return b.replay.Count()
+	}
+
+	entries, ok := b.replay.Since(afterID)
+	if !ok {
+		b.writeSyncEvent(w, flusher)
+		return b.replay.Count()
+	}
+
+	if len(entries) == 0 {
+		return afterID
+	}
+
+	var replay []cache.Event
+	for _, e := range entries {
+		if e.Type != replayType {
+			continue
+		}
+		replay = append(replay, cache.Event{
+			Type:      e.Type,
+			Action:    e.Action,
+			ID:        e.ResourceID,
+			Name:      e.Name,
+			HistoryID: e.ID,
+		})
+	}
+
+	maxID := entries[len(entries)-1].ID
+	if len(replay) > 0 {
+		WriteBatch(w, flusher, replay)
+	}
+
+	return maxID
+}
+
+func (b *Broadcaster) writeSyncEvent(w io.Writer, flusher http.Flusher) {
+	syncEvent := cache.Event{
+		Type:      cache.EventSync,
+		Action:    "full_sync",
+		HistoryID: b.replay.Count(),
+	}
+	WriteBatch(w, flusher, []cache.Event{syncEvent})
 }
 
 // TypeMatcher returns a match function that accepts events of the given type.

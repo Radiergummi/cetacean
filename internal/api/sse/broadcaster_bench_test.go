@@ -44,7 +44,7 @@ func setupClients(br *Broadcaster, n int, matchFn func(int) func(cache.Event) bo
 func BenchmarkBroadcast(b *testing.B) {
 	for _, nClients := range []int{10, 100} {
 		b.Run(fmt.Sprintf("clients=%d", nClients), func(b *testing.B) {
-			br := NewBroadcaster(0, noopErrorWriter)
+			br := NewBroadcaster(0, noopErrorWriter, nil)
 			defer br.Close()
 			setupClients(br, nClients, nil)
 
@@ -60,7 +60,7 @@ func BenchmarkBroadcast(b *testing.B) {
 func BenchmarkBroadcastWithPayload(b *testing.B) {
 	for _, nClients := range []int{10, 100} {
 		b.Run(fmt.Sprintf("clients=%d", nClients), func(b *testing.B) {
-			br := NewBroadcaster(0, noopErrorWriter)
+			br := NewBroadcaster(0, noopErrorWriter, nil)
 			defer br.Close()
 			setupClients(br, nClients, nil)
 
@@ -86,7 +86,7 @@ func BenchmarkBroadcastWithPayload(b *testing.B) {
 func BenchmarkBroadcastWithFiltering(b *testing.B) {
 	for _, nClients := range []int{10, 100} {
 		b.Run(fmt.Sprintf("clients=%d", nClients), func(b *testing.B) {
-			br := NewBroadcaster(0, noopErrorWriter)
+			br := NewBroadcaster(0, noopErrorWriter, nil)
 			defer br.Close()
 			setupClients(br, nClients, func(i int) func(cache.Event) bool {
 				if i%2 == 0 {
@@ -107,7 +107,7 @@ func BenchmarkBroadcastWithFiltering(b *testing.B) {
 func BenchmarkBroadcastWithResourceMatcher(b *testing.B) {
 	for _, nClients := range []int{10, 100} {
 		b.Run(fmt.Sprintf("clients=%d", nClients), func(b *testing.B) {
-			br := NewBroadcaster(0, noopErrorWriter)
+			br := NewBroadcaster(0, noopErrorWriter, nil)
 			defer br.Close()
 			setupClients(br, nClients, func(i int) func(cache.Event) bool {
 				return ResourceMatcher("service", fmt.Sprintf("svc-%d", i))
@@ -126,7 +126,7 @@ func BenchmarkBroadcastWithResourceMatcher(b *testing.B) {
 }
 
 func BenchmarkClientRegistration(b *testing.B) {
-	br := NewBroadcaster(0, noopErrorWriter)
+	br := NewBroadcaster(0, noopErrorWriter, nil)
 	defer br.Close()
 
 	steady := &sseClient{
@@ -174,7 +174,7 @@ func BenchmarkServeSSE(b *testing.B) {
 	for _, nEvents := range []int{1, 10} {
 		b.Run(fmt.Sprintf("events=%d", nEvents), func(b *testing.B) {
 			for b.Loop() {
-				br := NewBroadcaster(time.Millisecond, noopErrorWriter)
+				br := NewBroadcaster(time.Millisecond, noopErrorWriter, nil)
 
 				ctx, cancel := context.WithCancel(context.Background())
 				req := httptest.NewRequestWithContext(ctx, "GET", "/events", nil)
@@ -214,7 +214,7 @@ func BenchmarkServeSSE(b *testing.B) {
 
 func BenchmarkServeSSEFiltered(b *testing.B) {
 	for b.Loop() {
-		br := NewBroadcaster(time.Millisecond, noopErrorWriter)
+		br := NewBroadcaster(time.Millisecond, noopErrorWriter, nil)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		req := httptest.NewRequestWithContext(ctx, "GET", "/events?types=service", nil)

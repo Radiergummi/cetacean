@@ -55,7 +55,7 @@ func waitForBody(t *testing.T, w *flushRecorder, substr string) {
 }
 
 func TestSSE_BroadcastsEvents(t *testing.T) {
-	b := NewBroadcaster(0, noopErrorWriter)
+	b := NewBroadcaster(0, noopErrorWriter, nil)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events", nil)
@@ -82,7 +82,7 @@ func TestSSE_BroadcastsEvents(t *testing.T) {
 }
 
 func TestSSE_FiltersByType(t *testing.T) {
-	b := NewBroadcaster(0, noopErrorWriter)
+	b := NewBroadcaster(0, noopErrorWriter, nil)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events?types=service", nil)
@@ -110,7 +110,7 @@ func TestSSE_FiltersByType(t *testing.T) {
 }
 
 func TestSSE_BatchesRapidEvents(t *testing.T) {
-	b := NewBroadcaster(0, noopErrorWriter)
+	b := NewBroadcaster(0, noopErrorWriter, nil)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events", nil)
@@ -162,7 +162,7 @@ func TestSSE_BatchesRapidEvents(t *testing.T) {
 }
 
 func TestSSE_EventContainsJSONLD(t *testing.T) {
-	b := NewBroadcaster(0, noopErrorWriter)
+	b := NewBroadcaster(0, noopErrorWriter, nil)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events", nil)
@@ -189,7 +189,7 @@ func TestSSE_EventContainsJSONLD(t *testing.T) {
 }
 
 func TestSSE_BatchEventContainsJSONLD(t *testing.T) {
-	b := NewBroadcaster(0, noopErrorWriter)
+	b := NewBroadcaster(0, noopErrorWriter, nil)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events", nil)
@@ -266,7 +266,7 @@ func TestResourceType(t *testing.T) {
 }
 
 func TestSSE_429OnConnectionLimit(t *testing.T) {
-	b := NewBroadcaster(0, noopErrorWriter)
+	b := NewBroadcaster(0, noopErrorWriter, nil)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events", nil)
@@ -295,7 +295,7 @@ func TestSSE_429OnConnectionLimit(t *testing.T) {
 }
 
 func TestSSE_Keepalive(t *testing.T) {
-	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter)
+	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, nil)
 	b.keepaliveInterval = 50 * time.Millisecond
 	defer b.Close()
 
@@ -304,7 +304,7 @@ func TestSSE_Keepalive(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		b.ServeSSE(w, req, nil)
+		b.ServeSSE(w, req, nil, "")
 		close(done)
 	}()
 
@@ -429,6 +429,180 @@ func TestSSE_WriteBatch_SyncUsesHistoryID(t *testing.T) {
 	output := buf.String()
 	if !strings.Contains(output, "id: 500\n") {
 		t.Errorf("expected id: 500, got %q", output)
+	}
+}
+
+// mockReplaySource implements ReplaySource for testing.
+type mockReplaySource struct {
+	entries  []cache.HistoryEntry
+	count    uint64
+	oldestID uint64 // simulate ring buffer oldest; 0 means no gap check
+}
+
+func (m *mockReplaySource) Since(afterID uint64) ([]cache.HistoryEntry, bool) {
+	if afterID > m.count {
+		return nil, false
+	}
+	if m.oldestID > 0 && afterID > 0 && afterID < m.oldestID {
+		return nil, false
+	}
+	var result []cache.HistoryEntry
+	for _, e := range m.entries {
+		if e.ID > afterID {
+			result = append(result, e)
+		}
+	}
+	return result, true
+}
+
+func (m *mockReplaySource) Count() uint64 { return m.count }
+
+func TestSSE_ReplayOnReconnect(t *testing.T) {
+	replay := &mockReplaySource{
+		entries: []cache.HistoryEntry{
+			{ID: 5, Type: cache.EventService, Action: "update", ResourceID: "s1", Name: "web"},
+			{ID: 6, Type: cache.EventNode, Action: "update", ResourceID: "n1", Name: "node-1"},
+			{ID: 7, Type: cache.EventService, Action: "update", ResourceID: "s2", Name: "api"},
+		},
+		count: 7,
+	}
+	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, replay)
+	defer b.Close()
+
+	req := httptest.NewRequest("GET", "/services", nil)
+	req.Header.Set("Last-Event-ID", "4")
+	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	done := make(chan struct{})
+	go func() {
+		b.ServeSSE(w, req, nil, cache.EventService)
+		close(done)
+	}()
+
+	waitForClients(t, b, 1)
+
+	// Wait for replay events to appear
+	waitForBody(t, w, `"s2"`)
+
+	b.Close()
+	<-done
+
+	body := w.bodyString()
+	if !strings.Contains(body, `"s1"`) {
+		t.Error("expected service s1 in replay")
+	}
+	if !strings.Contains(body, `"s2"`) {
+		t.Error("expected service s2 in replay")
+	}
+	if strings.Contains(body, `"n1"`) {
+		t.Error("node event should have been filtered out of replay")
+	}
+}
+
+func TestSSE_ReplayTooOld_SendsSync(t *testing.T) {
+	replay := &mockReplaySource{
+		entries: []cache.HistoryEntry{
+			{ID: 50, Type: cache.EventService, Action: "update", ResourceID: "s1", Name: "web"},
+		},
+		count:    100,
+		oldestID: 50, // afterID=1 < 50, so Since returns ok=false
+	}
+	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, replay)
+	defer b.Close()
+
+	req := httptest.NewRequest("GET", "/services", nil)
+	req.Header.Set("Last-Event-ID", "1")
+	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	done := make(chan struct{})
+	go func() {
+		b.ServeSSE(w, req, nil, cache.EventService)
+		close(done)
+	}()
+
+	waitForClients(t, b, 1)
+	waitForBody(t, w, "event: sync")
+
+	b.Close()
+	<-done
+
+	body := w.bodyString()
+	if !strings.Contains(body, `"action":"full_sync"`) {
+		t.Errorf("expected sync event, got: %s", body)
+	}
+	if !strings.Contains(body, "id: 100\n") {
+		t.Errorf("expected sync id: 100, got: %s", body)
+	}
+}
+
+func TestSSE_ReplayIneligible_SendsSync(t *testing.T) {
+	replay := &mockReplaySource{
+		entries: []cache.HistoryEntry{
+			{ID: 5, Type: cache.EventService, Action: "update", ResourceID: "s1", Name: "web"},
+		},
+		count: 10,
+	}
+	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, replay)
+	defer b.Close()
+
+	req := httptest.NewRequest("GET", "/events", nil)
+	req.Header.Set("Last-Event-ID", "4")
+	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	done := make(chan struct{})
+	go func() {
+		// Empty replayType means ineligible for replay
+		b.ServeSSE(w, req, nil, "")
+		close(done)
+	}()
+
+	waitForClients(t, b, 1)
+	waitForBody(t, w, "event: sync")
+
+	b.Close()
+	<-done
+
+	body := w.bodyString()
+	if !strings.Contains(body, `"action":"full_sync"`) {
+		t.Errorf("expected sync event, got: %s", body)
+	}
+}
+
+func TestSSE_NoLastEventID_NoReplay(t *testing.T) {
+	replay := &mockReplaySource{
+		entries: []cache.HistoryEntry{
+			{ID: 5, Type: cache.EventService, Action: "update", ResourceID: "s1", Name: "web"},
+		},
+		count: 10,
+	}
+	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, replay)
+	defer b.Close()
+
+	req := httptest.NewRequest("GET", "/services", nil)
+	// No Last-Event-ID header
+	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	done := make(chan struct{})
+	go func() {
+		b.ServeSSE(w, req, nil, cache.EventService)
+		close(done)
+	}()
+
+	waitForClients(t, b, 1)
+
+	// Send a real event to confirm we're connected and receiving
+	b.Broadcast(cache.Event{Type: cache.EventService, Action: "update", ID: "s99", HistoryID: 20})
+	waitForBody(t, w, `"s99"`)
+
+	b.Close()
+	<-done
+
+	body := w.bodyString()
+	if strings.Contains(body, "event: sync") {
+		t.Error("should not have sent sync event without Last-Event-ID")
+	}
+	if strings.Contains(body, `"s1"`) {
+		t.Error("should not have replayed events without Last-Event-ID")
 	}
 }
 

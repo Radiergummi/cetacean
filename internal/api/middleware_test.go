@@ -283,7 +283,7 @@ func TestRequestIDFrom_Empty(t *testing.T) {
 func TestNewRouter_Smoke(t *testing.T) {
 	c := cache.New(nil)
 	h := newTestHandlers(t, withCache(c))
-	b := sse.NewBroadcaster(0, noopErrorWriter)
+	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
 	defer b.Close()
 	prom := promapi.NewProxy("http://localhost:9090", noopErrorWriter)
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}

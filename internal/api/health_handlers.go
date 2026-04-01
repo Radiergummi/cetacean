@@ -37,14 +37,14 @@ func (h *Handlers) HandleRecommendations(w http.ResponseWriter, r *http.Request)
 
 func (h *Handlers) streamList(w http.ResponseWriter, r *http.Request, typ cache.EventType) {
 	typMatch := sse.TypeMatcher(typ)
-	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, typMatch))
+	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, typMatch), typ)
 }
 
 func (h *Handlers) streamResource(
 	w http.ResponseWriter, r *http.Request, typ cache.EventType, id string,
 ) {
 	resMatch := sse.ResourceMatcher(typ, id)
-	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, resMatch))
+	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, resMatch), typ)
 }
 
 // aclMatchWrap wraps an SSE match function with an ACL authorization check.

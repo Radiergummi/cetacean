@@ -82,7 +82,7 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 	})
 
 	h := newTestHandlers(t, withCache(c))
-	b := sse.NewBroadcaster(0, noopErrorWriter)
+	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
 	defer b.Close()
 	noopSPA := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
