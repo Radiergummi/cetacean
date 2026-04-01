@@ -67,4 +67,29 @@ describe("DataTable", () => {
     );
     expect(container.querySelectorAll("tbody tr")).toHaveLength(0);
   });
+
+  it("renders sentinel when hasMore is true", () => {
+    render(
+      <DataTable
+        columns={columns}
+        data={data}
+        keyFn={({ id }) => id}
+        hasMore
+        onLoadMore={() => {}}
+      />,
+    );
+    expect(screen.getByTestId("load-more-sentinel")).toBeInTheDocument();
+  });
+
+  it("does not render sentinel when hasMore is false", () => {
+    render(
+      <DataTable
+        columns={columns}
+        data={data}
+        keyFn={({ id }) => id}
+        hasMore={false}
+      />,
+    );
+    expect(screen.queryByTestId("load-more-sentinel")).not.toBeInTheDocument();
+  });
 });

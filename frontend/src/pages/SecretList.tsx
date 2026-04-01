@@ -27,6 +27,8 @@ export default function SecretList() {
     loading,
     error,
     retry,
+    hasMore,
+    loadMore,
   } = useSwarmResource(
     useCallback(
       (offset: number) =>
@@ -126,6 +128,8 @@ export default function SecretList() {
           data={secrets}
           keyFn={({ ID }) => ID}
           onRowClick={({ ID }) => navigate(`/secrets/${ID}`)}
+          hasMore={hasMore}
+          onLoadMore={loadMore}
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -56,6 +56,8 @@ export default function ServiceList() {
     loading,
     error,
     retry,
+    hasMore,
+    loadMore,
   } = useSwarmResource(
     useCallback(
       (offset: number) =>
@@ -293,6 +295,8 @@ export default function ServiceList() {
           data={services}
           keyFn={({ ID }) => ID}
           onRowClick={({ ID }) => navigate(`/services/${ID}`)}
+          hasMore={hasMore}
+          onLoadMore={loadMore}
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

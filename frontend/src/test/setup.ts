@@ -1,6 +1,11 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
+import { afterEach, vi } from "vitest";
+
+// IntersectionObserver is not available in jsdom
+(globalThis as unknown as Record<string, unknown>).IntersectionObserver = vi.fn(function () {
+  return { observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() };
+});
 
 // Chart.js requires matchMedia which jsdom does not provide
 Object.defineProperty(window, "matchMedia", {

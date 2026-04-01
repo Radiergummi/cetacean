@@ -27,6 +27,8 @@ export default function ConfigList() {
     loading,
     error,
     retry,
+    hasMore,
+    loadMore,
   } = useSwarmResource(
     useCallback(
       (offset: number) =>
@@ -127,6 +129,8 @@ export default function ConfigList() {
           data={configs}
           keyFn={({ ID }) => ID}
           onRowClick={({ ID }) => navigate(`/configs/${ID}`)}
+          hasMore={hasMore}
+          onLoadMore={loadMore}
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -14,6 +14,8 @@ interface Props<T> {
   keyFn: (item: T) => string;
   rowClassName?: (item: T) => string;
   onRowClick?: (item: T) => void;
+  hasMore?: boolean;
+  onLoadMore?: () => void;
 }
 
 const VIRTUAL_THRESHOLD = 100;
@@ -133,8 +135,17 @@ function VirtualBody<T>({
   );
 }
 
-export default function DataTable<T>({ columns, data, keyFn, rowClassName, onRowClick }: Props<T>) {
+export default function DataTable<T>({
+  columns,
+  data,
+  keyFn,
+  rowClassName,
+  onRowClick,
+  hasMore,
+  onLoadMore,
+}: Props<T>) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLTableRowElement>(null);
   const useVirtual = data.length > VIRTUAL_THRESHOLD;
   const [selectedIndex, setSelectedIndex] = useState(-1);
 
@@ -160,6 +171,27 @@ export default function DataTable<T>({ columns, data, keyFn, rowClassName, onRow
     const row = scrollRef.current?.querySelector(`tbody tr:nth-child(${selectedIndex + 1})`);
     row?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex, useVirtual]);
+
+  useEffect(() => {
+    if (!hasMore || !onLoadMore || !sentinelRef.current) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            onLoadMore();
+          }
+        }
+      },
+      { root: scrollRef.current, rootMargin: "200px" },
+    );
+
+    observer.observe(sentinelRef.current);
+
+    return () => observer.disconnect();
+  }, [hasMore, onLoadMore]);
 
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
@@ -237,6 +269,22 @@ export default function DataTable<T>({ columns, data, keyFn, rowClassName, onRow
             onRowClick={onRowClick}
             selectedIndex={selectedIndex}
           />
+        )}
+
+        {hasMore && (
+          <tfoot>
+            <tr
+              ref={sentinelRef}
+              data-testid="load-more-sentinel"
+            >
+              <td
+                colSpan={columns.length}
+                className="p-3 text-center text-sm text-muted-foreground"
+              >
+                Loading…
+              </td>
+            </tr>
+          </tfoot>
         )}
       </table>
     </div>

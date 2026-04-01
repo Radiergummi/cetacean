@@ -32,6 +32,8 @@ export default function TaskList() {
     loading,
     error,
     retry,
+    hasMore,
+    loadMore,
   } = useSwarmResource(
     useCallback(
       (offset: number) =>
@@ -237,6 +239,8 @@ export default function TaskList() {
           data={filteredTasks}
           keyFn={({ ID }) => ID}
           onRowClick={({ ID }) => navigate(`/tasks/${ID}`)}
+          hasMore={hasMore}
+          onLoadMore={loadMore}
         />
       ) : (
         <div className="space-y-6">

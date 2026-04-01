@@ -29,6 +29,8 @@ export default function NodeList() {
     loading,
     error,
     retry,
+    hasMore,
+    loadMore,
   } = useSwarmResource(
     useCallback(
       (offset: number) =>
@@ -237,6 +239,8 @@ export default function NodeList() {
           data={nodes}
           keyFn={({ ID }) => ID}
           onRowClick={({ ID }) => navigate(`/nodes/${ID}`)}
+          hasMore={hasMore}
+          onLoadMore={loadMore}
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
