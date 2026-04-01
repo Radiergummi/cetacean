@@ -28,9 +28,26 @@ import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { formatBytes, formatNumber } from "../lib/format";
 import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
+import { stackResourceCharts } from "../lib/stackQueries";
 import { escapePromQL } from "../lib/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
+
+function buildInstanceFilter(instance: string, address: string, hostname: string): string {
+  if (instance) {
+    return `instance="${escapePromQL(instance)}"`;
+  }
+
+  if (address) {
+    return `instance=~"${escapePromQL(address)}:.*"`;
+  }
+
+  if (hostname) {
+    return `instance=~"${escapePromQL(hostname)}(\\..+)?:.*"`;
+  }
+
+  return "";
+}
 
 export default function NodeDetail() {
   const { id } = useParams<{ id: string }>();
@@ -138,13 +155,11 @@ export default function NodeDetail() {
   const nodeId = node?.ID || "";
   const hostname = node?.Description?.Hostname || "";
   const instance = resolve(hostname) || "";
-  const instanceFilter = instance
-    ? `instance="${escapePromQL(instance)}"`
-    : node?.Status?.Addr
-      ? `instance=~"${escapePromQL(node.Status.Addr)}:.*"`
-      : hostname
-        ? `instance=~"${escapePromQL(hostname)}(\\..+)?:.*"`
-        : "";
+  const instanceFilter = buildInstanceFilter(instance, node?.Status?.Addr ?? "", hostname);
+
+  const nodeStackCharts = stackResourceCharts(
+    nodeId ? `container_label_com_docker_swarm_node_id="${escapePromQL(nodeId)}"` : "",
+  );
 
   const taskMetrics = useTaskMetrics(
     nodeId ? `container_label_com_docker_swarm_node_id="${escapePromQL(nodeId)}"` : "",
@@ -316,22 +331,8 @@ export default function NodeDetail() {
             header="Resource Usage by Stack"
             stackable
           >
-            <StackDrillDownChart
-              title="CPU Usage (by Stack)"
-              stackQuery={`topk(10, sum by (container_label_com_docker_stack_namespace)(rate(container_cpu_usage_seconds_total{container_label_com_docker_stack_namespace!="",container_label_com_docker_swarm_node_id="${escapePromQL(nodeId)}"}[5m])) * 100)`}
-              serviceQueryTemplate={`sum by (container_label_com_docker_swarm_service_name)(rate(container_cpu_usage_seconds_total{container_label_com_docker_stack_namespace="<STACK>",container_label_com_docker_swarm_service_name!="",container_label_com_docker_swarm_node_id="${escapePromQL(nodeId)}"}[5m])) * 100`}
-              unit="%"
-              yMin={0}
-              stackable
-            />
-            <StackDrillDownChart
-              title="Memory Usage (by Stack)"
-              stackQuery={`topk(10, sum by (container_label_com_docker_stack_namespace)(container_memory_usage_bytes{container_label_com_docker_stack_namespace!="",container_label_com_docker_swarm_node_id="${escapePromQL(nodeId)}"}))`}
-              serviceQueryTemplate={`sum by (container_label_com_docker_swarm_service_name)(container_memory_usage_bytes{container_label_com_docker_stack_namespace="<STACK>",container_label_com_docker_swarm_service_name!="",container_label_com_docker_swarm_node_id="${escapePromQL(nodeId)}"})`}
-              unit="bytes"
-              yMin={0}
-              stackable
-            />
+            <StackDrillDownChart {...nodeStackCharts.cpu} />
+            <StackDrillDownChart {...nodeStackCharts.memory} />
           </MetricsPanel>
         </ErrorBoundary>
       )}

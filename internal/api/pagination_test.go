@@ -503,3 +503,105 @@ func TestWriteCollectionResponse_QueryParams(t *testing.T) {
 		t.Errorf("expected next Link header, got %q", link)
 	}
 }
+
+func TestRangeRequest_EndToEnd(t *testing.T) {
+	items := make([]int, 100)
+	for i := range items {
+		items[i] = i
+	}
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p, err := parsePagination(r)
+		if err != nil {
+			writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
+			return
+		}
+
+		resp := applyPagination(r.Context(), items, p)
+		writeCollectionResponse(w, r, resp, p)
+	})
+
+	t.Run("range returns 206 with Content-Range", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/items", nil)
+		r.Header.Set("Range", "items 0-9")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, r)
+
+		if w.Code != http.StatusPartialContent {
+			t.Errorf("expected 206, got %d", w.Code)
+		}
+
+		cr := w.Header().Get("Content-Range")
+		if cr != "items 0-9/100" {
+			t.Errorf("expected Content-Range items 0-9/100, got %q", cr)
+		}
+
+		ar := w.Header().Get("Accept-Ranges")
+		if ar != "items" {
+			t.Errorf("expected Accept-Ranges: items, got %q", ar)
+		}
+	})
+
+	t.Run("query params override range", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/items?limit=5&offset=10", nil)
+		r.Header.Set("Range", "items 0-9")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, r)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d", w.Code)
+		}
+
+		cr := w.Header().Get("Content-Range")
+		if cr != "" {
+			t.Errorf("expected no Content-Range header, got %q", cr)
+		}
+	})
+
+	t.Run("multipart range returns 416", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/items", nil)
+		r.Header.Set("Range", "items 0-9, 20-29")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, r)
+
+		if w.Code != http.StatusRequestedRangeNotSatisfiable {
+			t.Errorf("expected 416, got %d", w.Code)
+		}
+	})
+
+	t.Run("range beyond total returns 416", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/items", nil)
+		r.Header.Set("Range", "items 200-209")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, r)
+
+		if w.Code != http.StatusRequestedRangeNotSatisfiable {
+			t.Errorf("expected 416, got %d", w.Code)
+		}
+
+		cr := w.Header().Get("Content-Range")
+		if cr != "items */100" {
+			t.Errorf("expected Content-Range items */100, got %q", cr)
+		}
+	})
+
+	t.Run("no range and no query params returns 200 with defaults", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/items", nil)
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, r)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d", w.Code)
+		}
+
+		ar := w.Header().Get("Accept-Ranges")
+		if ar != "items" {
+			t.Errorf("expected Accept-Ranges: items, got %q", ar)
+		}
+	})
+}

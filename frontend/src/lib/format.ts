@@ -197,11 +197,8 @@ export function nanosToSeconds(nanoseconds: number | undefined): number | undefi
 }
 
 /**
- * Extract the hostname from a Prometheus series label string.
- *
- * Series labels from `seriesLabel()` join all metric label values with ", ".
- * This takes the first segment (the `instance` value), strips the port suffix,
- * and discards any remaining label values (e.g. "job").
+ * Chart label transform: turns a raw Prometheus series label like
+ * "node.example.com:9100, node-exporter" into just "node.example.com".
  */
 export function instanceToHostname(label: string): string {
   const instance = label.split(", ")[0];

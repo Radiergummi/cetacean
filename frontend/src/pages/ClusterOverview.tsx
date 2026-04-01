@@ -11,10 +11,13 @@ import {
 import PageHeader from "../components/PageHeader";
 import RecommendationSummary from "../components/RecommendationSummary";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { stackResourceCharts } from "../lib/stackQueries";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { TrendingDown, TrendingUp } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+
+const clusterStackCharts = stackResourceCharts();
 
 export default function ClusterOverview() {
   const [snapshot, setSnapshot] = useState<ClusterSnapshot | null>(null);
@@ -174,22 +177,8 @@ export default function ClusterOverview() {
             header="Resource Usage by Stack"
             stackable
           >
-            <StackDrillDownChart
-              title="CPU Usage (by Stack)"
-              stackQuery={`topk(10, sum by (container_label_com_docker_stack_namespace)(rate(container_cpu_usage_seconds_total{container_label_com_docker_stack_namespace!=""}[5m])) * 100)`}
-              serviceQueryTemplate={`sum by (container_label_com_docker_swarm_service_name)(rate(container_cpu_usage_seconds_total{container_label_com_docker_stack_namespace="<STACK>", container_label_com_docker_swarm_service_name!=""}[5m])) * 100`}
-              unit="%"
-              yMin={0}
-              stackable
-            />
-            <StackDrillDownChart
-              title="Memory Usage (by Stack)"
-              stackQuery={`topk(10, sum by (container_label_com_docker_stack_namespace)(container_memory_usage_bytes{container_label_com_docker_stack_namespace!=""}))`}
-              serviceQueryTemplate={`sum by (container_label_com_docker_swarm_service_name)(container_memory_usage_bytes{container_label_com_docker_stack_namespace="<STACK>", container_label_com_docker_swarm_service_name!=""})`}
-              unit="bytes"
-              yMin={0}
-              stackable
-            />
+            <StackDrillDownChart {...clusterStackCharts.cpu} />
+            <StackDrillDownChart {...clusterStackCharts.memory} />
           </MetricsPanel>
         </div>
       )}

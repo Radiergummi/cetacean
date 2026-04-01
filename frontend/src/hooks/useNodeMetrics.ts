@@ -2,7 +2,7 @@ import { api } from "../api/client";
 import type { PrometheusResponse } from "../api/types";
 import { useInstanceResolver } from "./useInstanceResolver";
 import { useMonitoringStatus } from "./useMonitoringStatus";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 export interface NodeMetrics {
   cpu: number | null;
@@ -101,6 +101,8 @@ export function useNodeMetrics() {
     };
   }, [hasPrometheus]);
 
+  const instanceEntries = useMemo(() => Object.entries(byInstance), [byInstance]);
+
   const getForNode = useCallback(
     (hostname: string, address: string): NodeMetrics => {
       // Resolve hostname → instance via node_uname_info mapping
@@ -113,7 +115,7 @@ export function useNodeMetrics() {
       // Fallback: match by address (IP) or hostname against the instance label
       const short = hostname.split(".")[0];
 
-      for (const [key, metrics] of Object.entries(byInstance)) {
+      for (const [key, metrics] of instanceEntries) {
         if (key.startsWith(address + ":") || key === address) {
           return metrics;
         }
@@ -127,10 +129,10 @@ export function useNodeMetrics() {
 
       return emptyMetrics;
     },
-    [byInstance, resolve],
+    [byInstance, instanceEntries, resolve],
   );
 
-  return { getForNode, hasData: Object.keys(byInstance).length > 0 };
+  return { getForNode, hasData: instanceEntries.length > 0 };
 }
 
 function parseInstant(resp: PrometheusResponse | null): [string, number][] | null {
