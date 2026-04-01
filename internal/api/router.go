@@ -108,7 +108,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	mux.Handle("POST /swarm/rotate-token", swarmACL(tier3(h.HandlePostRotateToken)))
 	mux.Handle("POST /swarm/rotate-unlock-key", swarmACL(tier3(h.HandlePostRotateUnlockKey)))
 	mux.Handle("POST /swarm/force-rotate-ca", swarmACL(tier3(h.HandlePostForceRotateCA)))
-	mux.HandleFunc("GET /swarm/unlock-key", h.HandleGetUnlockKey)
+	mux.Handle("GET /swarm/unlock-key", swarmACL(http.HandlerFunc(h.HandleGetUnlockKey)))
 	mux.Handle("POST /swarm/unlock", swarmACL(tier3(h.HandlePostUnlockSwarm)))
 	mux.HandleFunc("GET /disk-usage", contentNegotiated(h.HandleDiskUsage, spa))
 	// Plugins

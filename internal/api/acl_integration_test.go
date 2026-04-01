@@ -1580,10 +1580,14 @@ func TestHandleGetUnlockKey_ACLDenied_ReadOnly(t *testing.T) {
 	}})
 
 	h := newTestHandlers(t, withACL(e))
+
+	// Compose the middleware chain as the router does: swarmACL wraps the handler.
+	handler := h.requireWriteACL(swarmResource)(http.HandlerFunc(h.HandleGetUnlockKey))
+
 	req := httptest.NewRequest("GET", "/swarm/unlock-key", nil)
 	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
 	w := httptest.NewRecorder()
-	h.HandleGetUnlockKey(w, req)
+	handler.ServeHTTP(w, req)
 
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("status=%d, want 403 (unlock key requires swarm:cluster write)", w.Code)

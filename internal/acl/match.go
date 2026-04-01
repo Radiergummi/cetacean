@@ -29,6 +29,11 @@ func matchResource(expression, resource string) bool {
 		return false
 	}
 
+	// Empty resource names never match any pattern.
+	if resName == "" {
+		return false
+	}
+
 	// Pattern uses glob matching.
 	matched, _ := path.Match(exprPattern, resName)
 	return matched
@@ -50,8 +55,10 @@ func matchAudience(expression string, id *auth.Identity) bool {
 
 	switch kind {
 	case "user":
-		if matched, _ := path.Match(pattern, id.Subject); matched {
-			return true
+		if id.Subject != "" {
+			if matched, _ := path.Match(pattern, id.Subject); matched {
+				return true
+			}
 		}
 		if id.Email != "" {
 			if matched, _ := path.Match(pattern, id.Email); matched {

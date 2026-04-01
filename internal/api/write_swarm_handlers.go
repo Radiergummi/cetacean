@@ -9,8 +9,6 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
-
-	"github.com/radiergummi/cetacean/internal/auth"
 )
 
 func (h *Handlers) HandlePatchSwarmOrchestration(w http.ResponseWriter, r *http.Request) {
@@ -387,13 +385,7 @@ func (h *Handlers) HandlePostForceRotateCA(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *Handlers) HandleGetUnlockKey(w http.ResponseWriter, r *http.Request) {
-	if !h.requireAnyGrant(w, r) {
-		return
-	}
-	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "write", "swarm:cluster") {
-		writeErrorCode(w, r, "ACL002", "write access denied")
-		return
-	}
+	// ACL write check is handled by swarmACL middleware in the router.
 	if h.systemClient == nil {
 		writeErrorCode(w, r, "SWM001", "swarm API not available")
 		return

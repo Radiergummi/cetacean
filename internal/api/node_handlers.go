@@ -20,9 +20,7 @@ func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 		auth.IdentityFromContext(r.Context()),
 		"read",
 		nodes,
-		func(n swarm.Node) string {
-			return "node:" + n.Description.Hostname
-		},
+		func(n swarm.Node) string { return nodeResource(n) },
 	)
 	nodes = searchFilter(
 		nodes,
@@ -55,11 +53,7 @@ func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
-	if !h.acl.Can(
-		auth.IdentityFromContext(r.Context()),
-		"read",
-		"node:"+node.Description.Hostname,
-	) {
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", nodeResource(node)) {
 		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}
@@ -76,11 +70,7 @@ func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
-	if !h.acl.Can(
-		auth.IdentityFromContext(r.Context()),
-		"read",
-		"node:"+node.Description.Hostname,
-	) {
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", nodeResource(node)) {
 		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}

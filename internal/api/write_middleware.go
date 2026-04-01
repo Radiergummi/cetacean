@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/docker/docker/api/types/swarm"
+
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/config"
 )
@@ -52,12 +54,19 @@ func (h *Handlers) serviceName(r *http.Request) string {
 	return "service:" + id
 }
 
+// nodeResource returns a consistent ACL resource string for a node.
+// Prefers "node:<hostname>", falls back to "node:<id>" if hostname is empty.
+func nodeResource(n swarm.Node) string {
+	if n.Description.Hostname != "" {
+		return "node:" + n.Description.Hostname
+	}
+	return "node:" + n.ID
+}
+
 func (h *Handlers) nodeName(r *http.Request) string {
 	id := r.PathValue("id")
 	if n, ok := h.cache.GetNode(id); ok {
-		if n.Description.Hostname != "" {
-			return "node:" + n.Description.Hostname
-		}
+		return nodeResource(n)
 	}
 	return "node:" + id
 }

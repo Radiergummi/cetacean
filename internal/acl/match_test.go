@@ -25,9 +25,9 @@ func TestMatchResource(t *testing.T) {
 		{"*:*", "service:foo", true},
 
 		// Fix 8: Malformed resource strings against typed patterns.
-		{"service:*", "nocolon", false}, // no colon in resource
-		{"service:*", ":noname", false}, // empty type in resource
-		{"service:*", "service:", true}, // path.Match("*","") = true; glob matches empty name
+		{"service:*", "nocolon", false},  // no colon in resource
+		{"service:*", ":noname", false},  // empty type in resource
+		{"service:*", "service:", false}, // empty resource names never match
 	}
 	for _, tt := range tests {
 		t.Run(tt.expr+"_"+tt.resource, func(t *testing.T) {
@@ -77,10 +77,10 @@ func TestMatchAudience_EmptySubject(t *testing.T) {
 		want bool
 	}{
 		{
-			name: "user:* with empty subject and empty email matches via subject (glob matches empty)",
+			name: "user:* with empty subject and empty email does not match",
 			expr: "user:*",
 			id:   &auth.Identity{Subject: "", Email: ""},
-			want: true, // path.Match("*","") = true, so empty subject matches user:*
+			want: false, // empty subject never matches any pattern
 		},
 		{
 			name: "user:alice with empty subject does not match",
