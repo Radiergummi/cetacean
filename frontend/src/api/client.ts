@@ -555,8 +555,7 @@ export const api = {
       "application/merge-patch+json",
     ),
 
-  health: (signal?: AbortSignal) =>
-    fetchJSON<HealthInfo>(`/-/health`, signal),
+  health: (signal?: AbortSignal) => fetchJSON<HealthInfo>(`/-/health`, signal),
 };
 
 export interface HealthInfo {

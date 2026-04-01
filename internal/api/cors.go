@@ -83,7 +83,8 @@ func cors(cfg *CORSConfig) func(http.Handler) http.Handler {
 			w.Header().Add("Vary", "Origin")
 
 			// Preflight
-			if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
+			if r.Method == http.MethodOptions &&
+				r.Header.Get("Access-Control-Request-Method") != "" {
 				w.Header().Set("Access-Control-Allow-Methods", allowedMethods)
 				w.Header().Set("Access-Control-Allow-Headers", allowedHeaders)
 				w.Header().Set("Access-Control-Max-Age", "86400")

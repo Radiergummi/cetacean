@@ -168,7 +168,7 @@ func resolveFloat(
 func resolveStringSlice(envKey string, file []string) []string {
 	if v := os.Getenv(envKey); v != "" {
 		var out []string
-		for _, s := range strings.Split(v, ",") {
+		for s := range strings.SplitSeq(v, ",") {
 			s = strings.TrimSpace(s)
 			if s != "" {
 				out = append(out, s)

@@ -27,9 +27,15 @@ func (h *Handlers) HandlePlugins(w http.ResponseWriter, r *http.Request) {
 		plugins = types.PluginsListResponse{}
 	}
 
-	plugins = acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", plugins, func(p *types.Plugin) string {
-		return "plugin:" + p.Name
-	})
+	plugins = acl.Filter(
+		h.acl,
+		auth.IdentityFromContext(r.Context()),
+		"read",
+		plugins,
+		func(p *types.Plugin) string {
+			return "plugin:" + p.Name
+		},
+	)
 
 	writeCachedJSON(
 		w,

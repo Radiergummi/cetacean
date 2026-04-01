@@ -26,19 +26,36 @@ func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setAllow(w, r, "config", cfg.Spec.Name)
-	writeCachedJSONTimed(w, r, NewDetailResponse(r.Context(), "/configs/"+id, "Config", ConfigResponse{
-		Config: cfg,
-		Services: acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", h.cache.ServicesUsingConfig(id), func(ref cache.ServiceRef) string {
-			return "service:" + ref.Name
+	writeCachedJSONTimed(
+		w,
+		r,
+		NewDetailResponse(r.Context(), "/configs/"+id, "Config", ConfigResponse{
+			Config: cfg,
+			Services: acl.Filter(
+				h.acl,
+				auth.IdentityFromContext(r.Context()),
+				"read",
+				h.cache.ServicesUsingConfig(id),
+				func(ref cache.ServiceRef) string {
+					return "service:" + ref.Name
+				},
+			),
 		}),
-	}), cfg.UpdatedAt)
+		cfg.UpdatedAt,
+	)
 }
 
 func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 	configs := h.cache.ListConfigs()
-	configs = acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", configs, func(c swarm.Config) string {
-		return "config:" + c.Spec.Name
-	})
+	configs = acl.Filter(
+		h.acl,
+		auth.IdentityFromContext(r.Context()),
+		"read",
+		configs,
+		func(c swarm.Config) string {
+			return "config:" + c.Spec.Name
+		},
+	)
 	configs = searchFilter(
 		configs,
 		r.URL.Query().Get("search"),

@@ -15,9 +15,9 @@ import (
 // permissions. Provider-sourced grants omit audience (they are implicitly
 // scoped to the authenticated user).
 type Grant struct {
-	Resources   []string `json:"resources" yaml:"resources" toml:"resources"`
+	Resources   []string `json:"resources"          yaml:"resources"          toml:"resources"`
 	Audience    []string `json:"audience,omitempty" yaml:"audience,omitempty" toml:"audience,omitempty"`
-	Permissions []string `json:"permissions" yaml:"permissions" toml:"permissions"`
+	Permissions []string `json:"permissions"        yaml:"permissions"        toml:"permissions"`
 }
 
 // Policy holds a list of grants loaded from a file or inline string.
@@ -60,7 +60,11 @@ func Validate(p *Policy) error {
 			}
 			parts := strings.SplitN(r, ":", 2)
 			if len(parts) != 2 || parts[1] == "" {
-				return fmt.Errorf("grant %d: invalid resource expression %q (expected type:pattern)", i, r)
+				return fmt.Errorf(
+					"grant %d: invalid resource expression %q (expected type:pattern)",
+					i,
+					r,
+				)
 			}
 			if !validResourceTypes[parts[0]] {
 				return fmt.Errorf("grant %d: unknown resource type %q", i, parts[0])
@@ -72,7 +76,11 @@ func Validate(p *Policy) error {
 			}
 			parts := strings.SplitN(a, ":", 2)
 			if len(parts) != 2 || parts[1] == "" {
-				return fmt.Errorf("grant %d: invalid audience expression %q (expected kind:pattern)", i, a)
+				return fmt.Errorf(
+					"grant %d: invalid audience expression %q (expected kind:pattern)",
+					i,
+					a,
+				)
 			}
 			if !validAudienceKinds[parts[0]] {
 				return fmt.Errorf("grant %d: unknown audience kind %q", i, parts[0])

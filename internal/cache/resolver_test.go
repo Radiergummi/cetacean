@@ -11,12 +11,22 @@ import (
 func TestStackOf(t *testing.T) {
 	c := New(nil)
 	c.SetService(swarm.Service{
-		ID:   "svc1",
-		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "webapp", Labels: map[string]string{"com.docker.stack.namespace": "mystack"}}},
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{
+				Name:   "webapp",
+				Labels: map[string]string{"com.docker.stack.namespace": "mystack"},
+			},
+		},
 	})
 	c.SetConfig(swarm.Config{
-		ID:   "cfg1",
-		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "myconfig", Labels: map[string]string{"com.docker.stack.namespace": "mystack"}}},
+		ID: "cfg1",
+		Spec: swarm.ConfigSpec{
+			Annotations: swarm.Annotations{
+				Name:   "myconfig",
+				Labels: map[string]string{"com.docker.stack.namespace": "mystack"},
+			},
+		},
 	})
 
 	// Lookup by name (not Docker ID) — this is what the ACL evaluator passes.
@@ -57,8 +67,13 @@ func TestServiceOfTask(t *testing.T) {
 func TestStackOf_Secrets(t *testing.T) {
 	c := New(nil)
 	c.SetSecret(swarm.Secret{
-		ID:   "sec1",
-		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "mysecret", Labels: map[string]string{"com.docker.stack.namespace": "mystack"}}},
+		ID: "sec1",
+		Spec: swarm.SecretSpec{
+			Annotations: swarm.Annotations{
+				Name:   "mysecret",
+				Labels: map[string]string{"com.docker.stack.namespace": "mystack"},
+			},
+		},
 	})
 
 	if got := c.StackOf("secret", "mysecret"); got != "mystack" {

@@ -18,9 +18,15 @@ import (
 
 func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
 	stacks := h.cache.ListStacks()
-	stacks = acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", stacks, func(s cache.Stack) string {
-		return "stack:" + s.Name
-	})
+	stacks = acl.Filter(
+		h.acl,
+		auth.IdentityFromContext(r.Context()),
+		"read",
+		stacks,
+		func(s cache.Stack) string {
+			return "stack:" + s.Name
+		},
+	)
 	stacks = searchFilter(
 		stacks,
 		r.URL.Query().Get("search"),
@@ -63,9 +69,15 @@ func (h *Handlers) HandleStackSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	summaries := h.cache.ListStackSummaries()
-	summaries = acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", summaries, func(s cache.StackSummary) string {
-		return "stack:" + s.Name
-	})
+	summaries = acl.Filter(
+		h.acl,
+		auth.IdentityFromContext(r.Context()),
+		"read",
+		summaries,
+		func(s cache.StackSummary) string {
+			return "stack:" + s.Name
+		},
+	)
 
 	if h.promClient != nil && len(summaries) > 0 {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)

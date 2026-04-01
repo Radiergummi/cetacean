@@ -26,7 +26,9 @@ func requireLevel(required, configured config.OperationsLevel) func(http.Handler
 // requireWriteACL returns middleware that checks ACL write permission for a
 // resource. The resourceFunc extracts the resource string (e.g. "service:name")
 // from the request.
-func (h *Handlers) requireWriteACL(resourceFunc func(*http.Request) string) func(http.Handler) http.Handler {
+func (h *Handlers) requireWriteACL(
+	resourceFunc func(*http.Request) string,
+) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			resource := resourceFunc(r)

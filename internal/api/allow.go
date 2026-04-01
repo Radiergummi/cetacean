@@ -30,7 +30,10 @@ type methodSpec struct {
 // uses are enabled.
 var resourceWriteMethods = map[string][]methodSpec{
 	"service": {
-		{"PUT", config.OpsOperational},     // scale, image (tier1); mode, endpoint-mode are tier3 but PUT is available if tier1 is enabled
+		{
+			"PUT",
+			config.OpsOperational,
+		}, // scale, image (tier1); mode, endpoint-mode are tier3 but PUT is available if tier1 is enabled
 		{"POST", config.OpsOperational},    // rollback, restart
 		{"PATCH", config.OpsConfiguration}, // env, labels, resources, etc.
 		{"DELETE", config.OpsImpactful},    // remove
@@ -63,13 +66,22 @@ var resourceWriteMethods = map[string][]methodSpec{
 		{"DELETE", config.OpsImpactful},
 	},
 	"plugin": {
-		{"POST", config.OpsConfiguration},   // enable, disable (tier2); install, privileges, upgrade (tier3)
-		{"PATCH", config.OpsConfiguration},  // settings
-		{"DELETE", config.OpsImpactful},     // remove
+		{
+			"POST",
+			config.OpsConfiguration,
+		}, // enable, disable (tier2); install, privileges, upgrade (tier3)
+		{"PATCH", config.OpsConfiguration}, // settings
+		{"DELETE", config.OpsImpactful},    // remove
 	},
 	"swarm": {
-		{"PATCH", config.OpsConfiguration},  // orchestration, raft, dispatcher (tier2); ca, encryption (tier3)
-		{"POST", config.OpsImpactful},       // rotate-token, rotate-unlock-key, force-rotate-ca, unlock
+		{
+			"PATCH",
+			config.OpsConfiguration,
+		}, // orchestration, raft, dispatcher (tier2); ca, encryption (tier3)
+		{
+			"POST",
+			config.OpsImpactful,
+		}, // rotate-token, rotate-unlock-key, force-rotate-ca, unlock
 	},
 }
 
@@ -87,7 +99,11 @@ var resourceAcceptPatch = map[string]string{
 
 // setAllow sets the Allow response header for a detail endpoint based on the
 // configured operations level and ACL write permission.
-func (h *Handlers) setAllow(w http.ResponseWriter, r *http.Request, resourceType, resourceName string) {
+func (h *Handlers) setAllow(
+	w http.ResponseWriter,
+	r *http.Request,
+	resourceType, resourceName string,
+) {
 	methods := []string{"GET", "HEAD"}
 
 	id := auth.IdentityFromContext(r.Context())

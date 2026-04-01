@@ -37,7 +37,11 @@ func TestEvaluator_NilPolicyAllowsAll(t *testing.T) {
 func TestEvaluator_BasicGrant(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:webapp"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:webapp"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read"},
+		},
 	}})
 
 	alice := &auth.Identity{Subject: "alice"}
@@ -69,7 +73,11 @@ func TestEvaluator_WriteImpliesRead(t *testing.T) {
 func TestEvaluator_GlobMatch(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:webapp-*"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:webapp-*"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
 	}})
 
 	id := &auth.Identity{Subject: "anyone"}
@@ -84,7 +92,11 @@ func TestEvaluator_GlobMatch(t *testing.T) {
 func TestEvaluator_StackResolution(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"stack:monitoring"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"stack:monitoring"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
 	}})
 	e.SetResolver(&stubResolver{
 		stacks: map[string]string{"service:svc1": "monitoring"},
@@ -102,7 +114,11 @@ func TestEvaluator_StackResolution(t *testing.T) {
 func TestEvaluator_TaskInheritance(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:webapp"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:webapp"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
 	}})
 	e.SetResolver(&stubResolver{
 		services: map[string]string{"task123": "webapp"},
@@ -117,7 +133,11 @@ func TestEvaluator_TaskInheritance(t *testing.T) {
 func TestEvaluator_EmailMatch(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"*"}, Audience: []string{"user:*@example.com"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"*"},
+			Audience:    []string{"user:*@example.com"},
+			Permissions: []string{"read"},
+		},
 	}})
 
 	id := &auth.Identity{Subject: "sub-12345", Email: "alice@example.com"}
@@ -129,7 +149,11 @@ func TestEvaluator_EmailMatch(t *testing.T) {
 func TestFilter(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:allow-*"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:allow-*"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
 	}})
 
 	type svc struct{ name string }
@@ -154,7 +178,13 @@ func TestFilter_NilEvaluator(t *testing.T) {
 	type svc struct{ name string }
 	items := []svc{{name: "a"}, {name: "b"}}
 
-	filtered := Filter[svc](nil, nil, "read", items, func(s svc) string { return "service:" + s.name })
+	filtered := Filter[svc](
+		nil,
+		nil,
+		"read",
+		items,
+		func(s svc) string { return "service:" + s.name },
+	)
 	if len(filtered) != 2 {
 		t.Fatal("nil evaluator should pass all items through")
 	}
@@ -163,7 +193,11 @@ func TestFilter_NilEvaluator(t *testing.T) {
 func TestHasAnyGrant(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:foo"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:foo"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read"},
+		},
 	}})
 
 	alice := &auth.Identity{Subject: "alice"}
@@ -180,8 +214,16 @@ func TestHasAnyGrant(t *testing.T) {
 func TestPermissionsFor(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:webapp-*"}, Audience: []string{"user:alice"}, Permissions: []string{"read", "write"}},
-		{Resources: []string{"stack:monitoring"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:webapp-*"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read", "write"},
+		},
+		{
+			Resources:   []string{"stack:monitoring"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read"},
+		},
 	}})
 
 	alice := &auth.Identity{Subject: "alice"}
@@ -245,7 +287,11 @@ func TestEvaluator_EmptyAudienceMatchesEveryone(t *testing.T) {
 func TestEvaluator_OverlappingFileAndProviderGrants(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:webapp"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:webapp"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read"},
+		},
 	}})
 	e.SetSource(&mockSource{
 		grants: []Grant{
@@ -272,7 +318,11 @@ func TestEvaluator_OverlappingFileAndProviderGrants(t *testing.T) {
 func TestEvaluator_TaskWithNoParentServiceAndNoStack(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:webapp"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:webapp"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
 	}})
 	e.SetResolver(&stubResolver{
 		services: map[string]string{}, // no task->service mapping
@@ -302,7 +352,11 @@ func TestEvaluator_MalformedResource(t *testing.T) {
 func TestEvaluator_EmptyNameResource(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:specific"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:specific"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
 	}})
 
 	id := &auth.Identity{Subject: "anyone"}
@@ -314,7 +368,11 @@ func TestEvaluator_EmptyNameResource(t *testing.T) {
 func TestPermissionsFor_IncludesProviderGrants(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:webapp"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:webapp"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read"},
+		},
 	}})
 	e.SetSource(&mockSource{
 		grants: []Grant{
@@ -339,7 +397,11 @@ func TestHasAnyGrant_ProviderOnlyGrants(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
 		// File grant only for alice.
-		{Resources: []string{"service:foo"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:foo"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read"},
+		},
 	}})
 	e.SetSource(&mockSource{
 		grants: []Grant{
@@ -366,7 +428,11 @@ func TestEvaluator_SetOnNil(t *testing.T) {
 func TestEvaluator_StackGrantIsolation(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"stack:alpha"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"stack:alpha"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
 	}})
 	e.SetResolver(&stubResolver{
 		stacks: map[string]string{
@@ -461,7 +527,11 @@ func TestEvaluator_MalformedResourceAgainstTypedPattern(t *testing.T) {
 func TestPermissionsFor_Deduplication(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:webapp-*"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:webapp-*"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read"},
+		},
 	}})
 	e.SetSource(&mockSource{
 		grants: []Grant{
@@ -483,7 +553,11 @@ func TestPermissionsFor_Deduplication(t *testing.T) {
 func TestEvaluator_NilIdentityWithActivePolicy(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:*"}, Audience: []string{"group:ops"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:*"},
+			Audience:    []string{"group:ops"},
+			Permissions: []string{"read"},
+		},
 	}})
 
 	if e.Can(nil, "read", "service:foo") {

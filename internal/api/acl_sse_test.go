@@ -29,7 +29,11 @@ func TestAclMatchWrap_ReadableEvent(t *testing.T) {
 func TestAclMatchWrap_UnreadableEvent(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
-		{Resources: []string{"service:webapp"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:webapp"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read"},
+		},
 	}})
 
 	h := newTestHandlers(t, withACL(e))
@@ -46,7 +50,11 @@ func TestAclMatchWrap_UnreadableEvent(t *testing.T) {
 func TestAclMatchWrap_SyncEvent(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
-		{Resources: []string{"service:webapp"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:webapp"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read"},
+		},
 	}})
 
 	h := newTestHandlers(t, withACL(e))
@@ -82,7 +90,11 @@ func TestAclMatchWrap_InnerMatcherRejects(t *testing.T) {
 func TestAclMatchWrap_StackEventFiltered(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
-		{Resources: []string{"stack:webapp"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"stack:webapp"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
 	}})
 
 	h := newTestHandlers(t, withACL(e))

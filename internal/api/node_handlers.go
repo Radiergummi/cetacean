@@ -15,9 +15,15 @@ import (
 
 func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 	nodes := h.cache.ListNodes()
-	nodes = acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", nodes, func(n swarm.Node) string {
-		return "node:" + n.Description.Hostname
-	})
+	nodes = acl.Filter(
+		h.acl,
+		auth.IdentityFromContext(r.Context()),
+		"read",
+		nodes,
+		func(n swarm.Node) string {
+			return "node:" + n.Description.Hostname
+		},
+	)
 	nodes = searchFilter(
 		nodes,
 		r.URL.Query().Get("search"),
@@ -46,7 +52,11 @@ func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
-	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "node:"+node.Description.Hostname) {
+	if !h.acl.Can(
+		auth.IdentityFromContext(r.Context()),
+		"read",
+		"node:"+node.Description.Hostname,
+	) {
 		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}

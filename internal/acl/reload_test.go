@@ -12,7 +12,11 @@ import (
 func TestReloadPolicy_ValidFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "policy.json")
-	if err := os.WriteFile(path, []byte(`{"grants":[{"resources":["service:*"],"audience":["*"],"permissions":["read"]}]}`), 0600); err != nil {
+	if err := os.WriteFile(
+		path,
+		[]byte(`{"grants":[{"resources":["service:*"],"audience":["*"],"permissions":["read"]}]}`),
+		0600,
+	); err != nil {
 		t.Fatal(err)
 	}
 
@@ -32,7 +36,11 @@ func TestReloadPolicy_InvalidFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "policy.json")
 	// Write a valid policy first.
-	if err := os.WriteFile(path, []byte(`{"grants":[{"resources":["service:*"],"audience":["*"],"permissions":["read"]}]}`), 0600); err != nil {
+	if err := os.WriteFile(
+		path,
+		[]byte(`{"grants":[{"resources":["service:*"],"audience":["*"],"permissions":["read"]}]}`),
+		0600,
+	); err != nil {
 		t.Fatal(err)
 	}
 	e := NewEvaluator()
@@ -60,7 +68,11 @@ func TestReloadPolicy_InvalidGrants(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "policy.json")
 	// Write a valid policy first.
-	if err := os.WriteFile(path, []byte(`{"grants":[{"resources":["service:*"],"audience":["*"],"permissions":["read"]}]}`), 0600); err != nil {
+	if err := os.WriteFile(
+		path,
+		[]byte(`{"grants":[{"resources":["service:*"],"audience":["*"],"permissions":["read"]}]}`),
+		0600,
+	); err != nil {
 		t.Fatal(err)
 	}
 	e := NewEvaluator()
@@ -69,7 +81,11 @@ func TestReloadPolicy_InvalidGrants(t *testing.T) {
 	original := e.policy.Load()
 
 	// Overwrite with structurally valid JSON but invalid grant (bad resource type).
-	if err := os.WriteFile(path, []byte(`{"grants":[{"resources":["badtype:*"],"audience":["*"],"permissions":["read"]}]}`), 0600); err != nil {
+	if err := os.WriteFile(
+		path,
+		[]byte(`{"grants":[{"resources":["badtype:*"],"audience":["*"],"permissions":["read"]}]}`),
+		0600,
+	); err != nil {
 		t.Fatal(err)
 	}
 	reloadPolicy(e, path)
@@ -91,7 +107,13 @@ func TestReloadPolicy_MissingFile(t *testing.T) {
 }
 
 // pollUntil polls condition every interval until it returns true or deadline expires.
-func pollUntil(t *testing.T, deadline time.Duration, interval time.Duration, condition func() bool, msg string) {
+func pollUntil(
+	t *testing.T,
+	deadline time.Duration,
+	interval time.Duration,
+	condition func() bool,
+	msg string,
+) {
 	t.Helper()
 	end := time.Now().Add(deadline)
 	for time.Now().Before(end) {
@@ -150,7 +172,11 @@ func TestWatchPolicyFile_InitialLoadAndReload(t *testing.T) {
 func TestWatchPolicyFile_InvalidUpdateKeepsOldPolicy(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "policy.json")
-	if err := os.WriteFile(path, []byte(`{"grants":[{"resources":["service:*"],"audience":["*"],"permissions":["read"]}]}`), 0600); err != nil {
+	if err := os.WriteFile(
+		path,
+		[]byte(`{"grants":[{"resources":["service:*"],"audience":["*"],"permissions":["read"]}]}`),
+		0600,
+	); err != nil {
 		t.Fatal(err)
 	}
 

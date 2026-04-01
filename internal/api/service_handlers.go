@@ -23,9 +23,15 @@ type ServiceListItem struct {
 
 func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 	services := h.cache.ListServices()
-	services = acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", services, func(s swarm.Service) string {
-		return "service:" + s.Spec.Name
-	})
+	services = acl.Filter(
+		h.acl,
+		auth.IdentityFromContext(r.Context()),
+		"read",
+		services,
+		func(s swarm.Service) string {
+			return "service:" + s.Spec.Name
+		},
+	)
 	services = searchFilter(
 		services,
 		r.URL.Query().Get("search"),
@@ -88,7 +94,12 @@ func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
 		detail.Integrations = detected
 	}
 	h.setAllow(w, r, "service", svc.Spec.Name)
-	writeCachedJSONTimed(w, r, NewDetailResponse(r.Context(), "/services/"+id, "Service", detail), svc.UpdatedAt)
+	writeCachedJSONTimed(
+		w,
+		r,
+		NewDetailResponse(r.Context(), "/services/"+id, "Service", detail),
+		svc.UpdatedAt,
+	)
 }
 
 func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {

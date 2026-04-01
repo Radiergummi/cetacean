@@ -249,7 +249,10 @@ func TestIfNoneMatchTakesPrecedenceOverIfModifiedSince(t *testing.T) {
 	// ETag should take precedence → 304.
 	r2 := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
 	r2.Header.Set("If-None-Match", etag)
-	r2.Header.Set("If-Modified-Since", time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).Format(http.TimeFormat))
+	r2.Header.Set(
+		"If-Modified-Since",
+		time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).Format(http.TimeFormat),
+	)
 	w2 := httptest.NewRecorder()
 	writeCachedJSONTimed(w2, r2, data, ts)
 

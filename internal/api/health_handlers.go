@@ -50,7 +50,10 @@ func (h *Handlers) streamResource(
 // aclMatchWrap wraps an SSE match function with an ACL authorization check.
 // Events that pass the type/resource matcher are further filtered by ACL.
 // Sync events always pass through.
-func (h *Handlers) aclMatchWrap(r *http.Request, inner func(cache.Event) bool) func(cache.Event) bool {
+func (h *Handlers) aclMatchWrap(
+	r *http.Request,
+	inner func(cache.Event) bool,
+) func(cache.Event) bool {
 	id := auth.IdentityFromContext(r.Context())
 	return func(ev cache.Event) bool {
 		if inner != nil && !inner(ev) {

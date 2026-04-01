@@ -28,12 +28,23 @@ func (h *Handlers) HandleGetSecret(w http.ResponseWriter, r *http.Request) {
 	// Never expose secret data — clear it before responding.
 	sec.Spec.Data = nil
 	h.setAllow(w, r, "secret", sec.Spec.Name)
-	writeCachedJSONTimed(w, r, NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", SecretResponse{
-		Secret: sec,
-		Services: acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", h.cache.ServicesUsingSecret(id), func(ref cache.ServiceRef) string {
-			return "service:" + ref.Name
+	writeCachedJSONTimed(
+		w,
+		r,
+		NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", SecretResponse{
+			Secret: sec,
+			Services: acl.Filter(
+				h.acl,
+				auth.IdentityFromContext(r.Context()),
+				"read",
+				h.cache.ServicesUsingSecret(id),
+				func(ref cache.ServiceRef) string {
+					return "service:" + ref.Name
+				},
+			),
 		}),
-	}), sec.UpdatedAt)
+		sec.UpdatedAt,
+	)
 }
 
 func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
@@ -41,9 +52,15 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 	for i := range secrets {
 		secrets[i].Spec.Data = nil
 	}
-	secrets = acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", secrets, func(s swarm.Secret) string {
-		return "secret:" + s.Spec.Name
-	})
+	secrets = acl.Filter(
+		h.acl,
+		auth.IdentityFromContext(r.Context()),
+		"read",
+		secrets,
+		func(s swarm.Secret) string {
+			return "secret:" + s.Spec.Name
+		},
+	)
 	secrets = searchFilter(
 		secrets,
 		r.URL.Query().Get("search"),

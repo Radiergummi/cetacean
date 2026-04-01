@@ -107,7 +107,8 @@ func TestExtractGrantsFromRaw_FieldValues(t *testing.T) {
 		t.Fatalf("expected 1 grant, got %d", len(grants))
 	}
 	g := grants[0]
-	if len(g.Resources) != 2 || g.Resources[0] != "service:webapp" || g.Resources[1] != "node:orb-*" {
+	if len(g.Resources) != 2 || g.Resources[0] != "service:webapp" ||
+		g.Resources[1] != "node:orb-*" {
 		t.Errorf("resources = %v", g.Resources)
 	}
 	if len(g.Permissions) != 2 || g.Permissions[0] != "read" || g.Permissions[1] != "write" {
@@ -383,7 +384,9 @@ func TestHeadersSource(t *testing.T) {
 			src:  HeadersSource{Header: ""},
 			id: &auth.Identity{
 				Subject: "alice",
-				Raw:     map[string]any{"header:X-ACL": `[{"resources":["service:*"],"permissions":["read"]}]`},
+				Raw: map[string]any{
+					"header:X-ACL": `[{"resources":["service:*"],"permissions":["read"]}]`,
+				},
 			},
 			want: 0,
 		},

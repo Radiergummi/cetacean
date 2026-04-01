@@ -73,7 +73,13 @@ func (e *Evaluator) Can(id *auth.Identity, permission string, resource string) b
 }
 
 // Filter returns only items the identity can access with the given permission.
-func Filter[T any](e *Evaluator, id *auth.Identity, permission string, items []T, resourceFunc func(T) string) []T {
+func Filter[T any](
+	e *Evaluator,
+	id *auth.Identity,
+	permission string,
+	items []T,
+	resourceFunc func(T) string,
+) []T {
 	if e == nil {
 		return items
 	}

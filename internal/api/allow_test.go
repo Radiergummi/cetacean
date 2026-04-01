@@ -129,13 +129,20 @@ func TestSetAllow_DifferentResourceTypes(t *testing.T) {
 			h := newTestHandlers(t, withACL(e), withOpsLevel(config.OpsImpactful))
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest("GET", "/"+tt.resourceType+"s/test", nil)
-			r = r.WithContext(auth.ContextWithIdentity(r.Context(), &auth.Identity{Subject: "alice"}))
+			r = r.WithContext(
+				auth.ContextWithIdentity(r.Context(), &auth.Identity{Subject: "alice"}),
+			)
 			h.setAllow(w, r, tt.resourceType, "test")
 
 			allow := w.Header().Get("Allow")
 			for _, method := range tt.wantMethods {
 				if !strings.Contains(allow, method) {
-					t.Errorf("Allow header %q missing method %s for %s", allow, method, tt.resourceType)
+					t.Errorf(
+						"Allow header %q missing method %s for %s",
+						allow,
+						method,
+						tt.resourceType,
+					)
 				}
 			}
 		})

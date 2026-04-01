@@ -370,12 +370,18 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 	for i := range allResults {
 		before := len(allResults[i].results)
 		prefix := resourcePrefixes[i]
-		allResults[i].results = acl.Filter(h.acl, identity, "read", allResults[i].results, func(sr searchResult) string {
-			if i == stTasks {
-				return prefix + sr.ID
-			}
-			return prefix + sr.Name
-		})
+		allResults[i].results = acl.Filter(
+			h.acl,
+			identity,
+			"read",
+			allResults[i].results,
+			func(sr searchResult) string {
+				if i == stTasks {
+					return prefix + sr.ID
+				}
+				return prefix + sr.Name
+			},
+		)
 		if removed := before - len(allResults[i].results); removed > 0 {
 			allResults[i].count -= removed
 		}

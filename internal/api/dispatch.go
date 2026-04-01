@@ -34,17 +34,3 @@ func contentNegotiatedWithSSE(
 		}
 	}
 }
-
-// sseOnly is for endpoints that only support SSE (like /events).
-func sseOnly(sseHandler http.Handler, spa http.Handler) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		switch ContentTypeFromContext(r.Context()) {
-		case ContentTypeHTML:
-			spa.ServeHTTP(w, r)
-		case ContentTypeSSE:
-			sseHandler.ServeHTTP(w, r)
-		default:
-			writeErrorCode(w, r, "API002", "this endpoint only supports text/event-stream")
-		}
-	}
-}

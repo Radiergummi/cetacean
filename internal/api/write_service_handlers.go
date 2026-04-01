@@ -647,9 +647,13 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 	if resultPorts == nil {
 		resultPorts = []swarm.PortConfig{}
 	}
-	writeMutationResponse(w, r, NewDetailResponse(r.Context(), "/services/"+id+"/ports", "ServicePorts", map[string]any{
-		"ports": resultPorts,
-	}))
+	writeMutationResponse(
+		w,
+		r,
+		NewDetailResponse(r.Context(), "/services/"+id+"/ports", "ServicePorts", map[string]any{
+			"ports": resultPorts,
+		}),
+	)
 }
 
 func (h *Handlers) HandleGetServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
@@ -1363,9 +1367,13 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	writeMutationResponse(w, r, NewDetailResponse(r.Context(), "/services/"+id+"/configs", "ServiceConfigs", map[string]any{
-		"configs": extractConfigRefs(updated.Spec.TaskTemplate.ContainerSpec),
-	}))
+	writeMutationResponse(
+		w,
+		r,
+		NewDetailResponse(r.Context(), "/services/"+id+"/configs", "ServiceConfigs", map[string]any{
+			"configs": extractConfigRefs(updated.Spec.TaskTemplate.ContainerSpec),
+		}),
+	)
 }
 
 func (h *Handlers) HandleGetServiceSecrets(w http.ResponseWriter, r *http.Request) {
@@ -1449,9 +1457,13 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	writeMutationResponse(w, r, NewDetailResponse(r.Context(), "/services/"+id+"/secrets", "ServiceSecrets", map[string]any{
-		"secrets": extractSecretRefs(updated.Spec.TaskTemplate.ContainerSpec),
-	}))
+	writeMutationResponse(
+		w,
+		r,
+		NewDetailResponse(r.Context(), "/services/"+id+"/secrets", "ServiceSecrets", map[string]any{
+			"secrets": extractSecretRefs(updated.Spec.TaskTemplate.ContainerSpec),
+		}),
+	)
 }
 
 func (h *Handlers) HandleGetServiceNetworks(w http.ResponseWriter, r *http.Request) {
@@ -1606,7 +1618,11 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 		mounts = []mount.Mount{}
 	}
 
-	writeMutationResponse(w, r, NewDetailResponse(r.Context(), "/services/"+id+"/mounts", "ServiceMounts", map[string]any{
-		"mounts": mounts,
-	}))
+	writeMutationResponse(
+		w,
+		r,
+		NewDetailResponse(r.Context(), "/services/"+id+"/mounts", "ServiceMounts", map[string]any{
+			"mounts": mounts,
+		}),
+	)
 }

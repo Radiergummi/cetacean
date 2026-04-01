@@ -242,7 +242,11 @@ func TestRequireWriteACL_WithoutWriteGrant(t *testing.T) {
 func TestRequireWriteACL_NilIdentityWithActivePolicy(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
-		{Resources: []string{"service:*"}, Audience: []string{"user:alice"}, Permissions: []string{"write"}},
+		{
+			Resources:   []string{"service:*"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"write"},
+		},
 	}})
 
 	h := newTestHandlers(t, withACL(e))

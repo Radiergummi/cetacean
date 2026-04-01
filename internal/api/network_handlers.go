@@ -31,9 +31,15 @@ func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 		r,
 		NewDetailResponse(r.Context(), "/networks/"+id, "Network", NetworkResponse{
 			Network: net,
-			Services: acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", h.cache.ServicesUsingNetwork(id), func(ref cache.ServiceRef) string {
-				return "service:" + ref.Name
-			}),
+			Services: acl.Filter(
+				h.acl,
+				auth.IdentityFromContext(r.Context()),
+				"read",
+				h.cache.ServicesUsingNetwork(id),
+				func(ref cache.ServiceRef) string {
+					return "service:" + ref.Name
+				},
+			),
 		}),
 		net.Created,
 	)
@@ -41,9 +47,15 @@ func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 	networks := h.cache.ListNetworks()
-	networks = acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", networks, func(n network.Summary) string {
-		return "network:" + n.Name
-	})
+	networks = acl.Filter(
+		h.acl,
+		auth.IdentityFromContext(r.Context()),
+		"read",
+		networks,
+		func(n network.Summary) string {
+			return "network:" + n.Name
+		},
+	)
 	networks = searchFilter(
 		networks,
 		r.URL.Query().Get("search"),

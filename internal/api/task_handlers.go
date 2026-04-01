@@ -61,9 +61,15 @@ func taskStateSortKey(state swarm.TaskState) string {
 
 func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 	tasks := h.cache.ListTasks()
-	tasks = acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", tasks, func(t swarm.Task) string {
-		return "task:" + t.ID
-	})
+	tasks = acl.Filter(
+		h.acl,
+		auth.IdentityFromContext(r.Context()),
+		"read",
+		tasks,
+		func(t swarm.Task) string {
+			return "task:" + t.ID
+		},
+	)
 	var ok bool
 	if tasks, ok = exprFilter(tasks, r.URL.Query().Get("filter"), filter.TaskEnv, w, r); !ok {
 		return

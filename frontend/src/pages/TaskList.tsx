@@ -248,7 +248,7 @@ export default function TaskList() {
                 >
                   <ResourceName name={group.name} />
                 </Link>
-                <span className="inline-flex size-5 items-center justify-center rounded-full bg-muted text-xs tabular-nums text-muted-foreground">
+                <span className="inline-flex size-5 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground tabular-nums">
                   {group.tasks.length}
                 </span>
               </h3>
@@ -261,9 +261,7 @@ export default function TaskList() {
                     to={`/tasks/${task.ID}`}
                     badge={<TaskStatusBadge state={task.Status.State} />}
                     subtitle={task.NodeHostname}
-                    meta={[
-                      <span key="desired">{task.DesiredState}</span>,
-                    ]}
+                    meta={[<span key="desired">{task.DesiredState}</span>]}
                   />
                 ))}
               </div>

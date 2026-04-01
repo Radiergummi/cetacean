@@ -25,9 +25,9 @@ func TestMatchResource(t *testing.T) {
 		{"*:*", "service:foo", true},
 
 		// Fix 8: Malformed resource strings against typed patterns.
-		{"service:*", "nocolon", false},         // no colon in resource
-		{"service:*", ":noname", false},          // empty type in resource
-		{"service:*", "service:", true},           // path.Match("*","") = true; glob matches empty name
+		{"service:*", "nocolon", false}, // no colon in resource
+		{"service:*", ":noname", false}, // empty type in resource
+		{"service:*", "service:", true}, // path.Match("*","") = true; glob matches empty name
 	}
 	for _, tt := range tests {
 		t.Run(tt.expr+"_"+tt.resource, func(t *testing.T) {

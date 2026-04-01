@@ -263,7 +263,13 @@ func main() {
 		} else if aclCfg.PolicyFile != "" {
 			p, err := acl.ParsePolicyFile(aclCfg.PolicyFile)
 			if err != nil {
-				slog.Error("failed to load ACL policy file", "path", aclCfg.PolicyFile, "error", err)
+				slog.Error(
+					"failed to load ACL policy file",
+					"path",
+					aclCfg.PolicyFile,
+					"error",
+					err,
+				)
 				os.Exit(1)
 			}
 			if err := acl.Validate(p); err != nil {

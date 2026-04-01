@@ -14,7 +14,11 @@ import (
 func TestHandleProfile_WithPermissions(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
-		{Resources: []string{"service:webapp"}, Audience: []string{"user:alice"}, Permissions: []string{"read", "write"}},
+		{
+			Resources:   []string{"service:webapp"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read", "write"},
+		},
 	}})
 
 	h := newTestHandlers(t, withACL(e))
@@ -70,7 +74,11 @@ func TestHandleProfile_NoPolicyNoPermissions(t *testing.T) {
 func TestHandleProfile_ProviderAndFileGrants(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
-		{Resources: []string{"service:webapp"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:webapp"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read"},
+		},
 	}})
 	e.SetSource(&mockACLSource{
 		grants: []acl.Grant{

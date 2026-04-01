@@ -59,7 +59,9 @@ export default function ConnectionStatus() {
         {connected ? (
           <>
             <span>Live</span>
-            {ago ? <span className="hidden min-w-16 tabular-nums xl:inline"> · {ago}</span> : undefined}
+            {ago ? (
+              <span className="hidden min-w-16 tabular-nums xl:inline"> · {ago}</span>
+            ) : undefined}
           </>
         ) : (
           "Reconnecting"

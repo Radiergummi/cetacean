@@ -5,8 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	json "github.com/goccy/go-json"
 	"github.com/docker/docker/api/types/swarm"
+	json "github.com/goccy/go-json"
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
@@ -31,7 +31,11 @@ func TestHandleListServices_ACLFiltering(t *testing.T) {
 
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
-		{Resources: []string{"service:webapp-*"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:webapp-*"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
 	}})
 
 	h := newTestHandlers(t, withCache(c), withACL(e))
@@ -97,7 +101,11 @@ func TestHandleCluster_ACL001_NoGrants(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
 		// Only alice has grants; bob has none.
-		{Resources: []string{"service:*"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:*"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read"},
+		},
 	}})
 
 	h := newTestHandlers(t, withACL(e))
@@ -128,7 +136,11 @@ func TestHandleCluster_ACL001_NoGrants(t *testing.T) {
 func TestHandleCluster_ACL001_WithGrants(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
-		{Resources: []string{"service:*"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:*"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read"},
+		},
 	}})
 
 	h := newTestHandlers(t, withACL(e))

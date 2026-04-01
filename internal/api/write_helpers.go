@@ -100,9 +100,13 @@ func writeServiceMutation(
 		writeServiceError(w, r, err)
 		return
 	}
-	writeMutationResponse(w, r, NewDetailResponse(r.Context(), "/services/"+id, "Service", ServiceResponse{
-		Service: updated,
-	}))
+	writeMutationResponse(
+		w,
+		r,
+		NewDetailResponse(r.Context(), "/services/"+id, "Service", ServiceResponse{
+			Service: updated,
+		}),
+	)
 }
 
 // writeNodeMutation calls a node writer function and writes the standard

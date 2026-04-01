@@ -310,7 +310,7 @@ func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 	writeCachedJSONTimed(w, r, NewDetailResponse(r.Context(), "/swarm", "Swarm", SwarmResponse{
 		Swarm:       sw,
 		ManagerAddr: managerAddr,
-	}), sw.ClusterInfo.UpdatedAt)
+	}), sw.UpdatedAt)
 }
 
 type DiskUsageSummary struct {

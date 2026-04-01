@@ -33,9 +33,15 @@ func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
 		r,
 		NewDetailResponse(r.Context(), "/volumes/"+name, "Volume", VolumeResponse{
 			Volume: vol,
-			Services: acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", h.cache.ServicesUsingVolume(name), func(ref cache.ServiceRef) string {
-				return "service:" + ref.Name
-			}),
+			Services: acl.Filter(
+				h.acl,
+				auth.IdentityFromContext(r.Context()),
+				"read",
+				h.cache.ServicesUsingVolume(name),
+				func(ref cache.ServiceRef) string {
+					return "service:" + ref.Name
+				},
+			),
 		}),
 		created,
 	)
@@ -43,9 +49,15 @@ func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 	volumes := h.cache.ListVolumes()
-	volumes = acl.Filter(h.acl, auth.IdentityFromContext(r.Context()), "read", volumes, func(v volume.Volume) string {
-		return "volume:" + v.Name
-	})
+	volumes = acl.Filter(
+		h.acl,
+		auth.IdentityFromContext(r.Context()),
+		"read",
+		volumes,
+		func(v volume.Volume) string {
+			return "volume:" + v.Name
+		},
+	)
 	volumes = searchFilter(
 		volumes,
 		r.URL.Query().Get("search"),

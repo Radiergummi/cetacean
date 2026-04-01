@@ -213,12 +213,18 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		"GET /services/{id}/update-policy",
 		contentNegotiated(h.HandleGetServiceUpdatePolicy, spa),
 	)
-	mux.Handle("PATCH /services/{id}/update-policy", svcACL(tier2(h.HandlePatchServiceUpdatePolicy)))
+	mux.Handle(
+		"PATCH /services/{id}/update-policy",
+		svcACL(tier2(h.HandlePatchServiceUpdatePolicy)),
+	)
 	mux.HandleFunc(
 		"GET /services/{id}/rollback-policy",
 		contentNegotiated(h.HandleGetServiceRollbackPolicy, spa),
 	)
-	mux.Handle("PATCH /services/{id}/rollback-policy", svcACL(tier2(h.HandlePatchServiceRollbackPolicy)))
+	mux.Handle(
+		"PATCH /services/{id}/rollback-policy",
+		svcACL(tier2(h.HandlePatchServiceRollbackPolicy)),
+	)
 	mux.HandleFunc(
 		"GET /services/{id}/log-driver",
 		contentNegotiated(h.HandleGetServiceLogDriver, spa),
@@ -240,7 +246,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		"GET /services/{id}/container-config",
 		contentNegotiated(h.HandleGetServiceContainerConfig, spa),
 	)
-	mux.Handle("PATCH /services/{id}/container-config", svcACL(tier2(h.HandlePatchServiceContainerConfig)))
+	mux.Handle(
+		"PATCH /services/{id}/container-config",
+		svcACL(tier2(h.HandlePatchServiceContainerConfig)),
+	)
 
 	// Service write operations — tier 3 (impactful)
 	mux.Handle("PUT /services/{id}/mode", svcACL(tier3(h.HandleUpdateServiceMode)))

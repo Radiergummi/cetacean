@@ -8,7 +8,10 @@ function Footer() {
 
   useEffect(() => {
     const controller = new AbortController();
-    api.health(controller.signal).then(setHealth).catch(() => {});
+    api
+      .health(controller.signal)
+      .then(setHealth)
+      .catch(() => {});
 
     return () => controller.abort();
   }, []);
@@ -35,7 +38,10 @@ function Footer() {
           )}
         </div>
 
-        <nav className="flex items-center gap-4" aria-label="Footer">
+        <nav
+          className="flex items-center gap-4"
+          aria-label="Footer"
+        >
           <a
             href="https://github.com/radiergummi/cetacean"
             target="_blank"

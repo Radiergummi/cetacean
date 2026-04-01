@@ -7,7 +7,9 @@ import (
 )
 
 func TestParsePolicy_JSON(t *testing.T) {
-	data := []byte(`{"grants":[{"resources":["*"],"audience":["group:ops"],"permissions":["read","write"]}]}`)
+	data := []byte(
+		`{"grants":[{"resources":["*"],"audience":["group:ops"],"permissions":["read","write"]}]}`,
+	)
 	p, err := ParsePolicy(data)
 	if err != nil {
 		t.Fatal(err)
@@ -21,7 +23,9 @@ func TestParsePolicy_JSON(t *testing.T) {
 }
 
 func TestParsePolicy_YAML(t *testing.T) {
-	data := []byte("grants:\n  - resources: [\"*\"]\n    audience: [\"group:ops\"]\n    permissions: [\"read\"]\n")
+	data := []byte(
+		"grants:\n  - resources: [\"*\"]\n    audience: [\"group:ops\"]\n    permissions: [\"read\"]\n",
+	)
 	p, err := ParsePolicy(data)
 	if err != nil {
 		t.Fatal(err)
@@ -32,7 +36,9 @@ func TestParsePolicy_YAML(t *testing.T) {
 }
 
 func TestParsePolicy_TOML(t *testing.T) {
-	data := []byte("[[grants]]\nresources = [\"*\"]\naudience = [\"group:ops\"]\npermissions = [\"read\"]\n")
+	data := []byte(
+		"[[grants]]\nresources = [\"*\"]\naudience = [\"group:ops\"]\npermissions = [\"read\"]\n",
+	)
 	p, err := ParsePolicy(data)
 	if err != nil {
 		t.Fatal(err)
@@ -45,7 +51,13 @@ func TestParsePolicy_TOML(t *testing.T) {
 func TestParsePolicyFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "policy.json")
-	if err := os.WriteFile(path, []byte(`{"grants":[{"resources":["service:*"],"audience":["user:alice"],"permissions":["read"]}]}`), 0600); err != nil {
+	if err := os.WriteFile(
+		path,
+		[]byte(
+			`{"grants":[{"resources":["service:*"],"audience":["user:alice"],"permissions":["read"]}]}`,
+		),
+		0600,
+	); err != nil {
 		t.Fatal(err)
 	}
 	p, err := ParsePolicyFile(path)
@@ -59,8 +71,16 @@ func TestParsePolicyFile(t *testing.T) {
 
 func TestValidate_Valid(t *testing.T) {
 	p := &Policy{Grants: []Grant{
-		{Resources: []string{"*"}, Audience: []string{"group:ops"}, Permissions: []string{"read", "write"}},
-		{Resources: []string{"service:webapp-*"}, Audience: []string{"user:alice@example.com"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"*"},
+			Audience:    []string{"group:ops"},
+			Permissions: []string{"read", "write"},
+		},
+		{
+			Resources:   []string{"service:webapp-*"},
+			Audience:    []string{"user:alice@example.com"},
+			Permissions: []string{"read"},
+		},
 	}}
 	if err := Validate(p); err != nil {
 		t.Fatal(err)
@@ -138,19 +158,31 @@ func TestValidate_EmptyNameAfterColon(t *testing.T) {
 		{
 			name: "empty resource name",
 			policy: &Policy{Grants: []Grant{
-				{Resources: []string{"service:"}, Audience: []string{"group:ops"}, Permissions: []string{"read"}},
+				{
+					Resources:   []string{"service:"},
+					Audience:    []string{"group:ops"},
+					Permissions: []string{"read"},
+				},
 			}},
 		},
 		{
 			name: "empty audience user value",
 			policy: &Policy{Grants: []Grant{
-				{Resources: []string{"service:*"}, Audience: []string{"user:"}, Permissions: []string{"read"}},
+				{
+					Resources:   []string{"service:*"},
+					Audience:    []string{"user:"},
+					Permissions: []string{"read"},
+				},
 			}},
 		},
 		{
 			name: "empty audience group value",
 			policy: &Policy{Grants: []Grant{
-				{Resources: []string{"service:*"}, Audience: []string{"group:"}, Permissions: []string{"read"}},
+				{
+					Resources:   []string{"service:*"},
+					Audience:    []string{"group:"},
+					Permissions: []string{"read"},
+				},
 			}},
 		},
 	}
@@ -166,7 +198,9 @@ func TestValidate_EmptyNameAfterColon(t *testing.T) {
 func TestParsePolicyFile_YAML(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "policy.yaml")
-	data := []byte("grants:\n  - resources: [\"service:*\"]\n    audience: [\"user:alice\"]\n    permissions: [\"read\", \"write\"]\n")
+	data := []byte(
+		"grants:\n  - resources: [\"service:*\"]\n    audience: [\"user:alice\"]\n    permissions: [\"read\", \"write\"]\n",
+	)
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +223,9 @@ func TestParsePolicyFile_YAML(t *testing.T) {
 func TestParsePolicyFile_TOML(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "policy.toml")
-	data := []byte("[[grants]]\nresources = [\"node:*\"]\naudience = [\"group:ops\"]\npermissions = [\"read\"]\n")
+	data := []byte(
+		"[[grants]]\nresources = [\"node:*\"]\naudience = [\"group:ops\"]\npermissions = [\"read\"]\n",
+	)
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)
 	}
