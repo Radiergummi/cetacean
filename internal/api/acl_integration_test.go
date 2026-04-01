@@ -124,18 +124,7 @@ func TestHandleCluster_ACL001_NoGrants(t *testing.T) {
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("status=%d, want 403", w.Code)
 	}
-
-	var problem ProblemDetail
-	if err := json.NewDecoder(w.Body).Decode(&problem); err != nil {
-		t.Fatalf("decode problem: %v", err)
-	}
-	if problem.Status != http.StatusForbidden {
-		t.Errorf("problem status=%d, want 403", problem.Status)
-	}
-	// The type URL should reference ACL001.
-	if problem.Type == "" {
-		t.Fatal("problem type should be set")
-	}
+	assertACLErrorCode(t, w, "ACL001")
 }
 
 // Verify sub-resource endpoints enforce ACL read checks.
@@ -1159,4 +1148,22 @@ func TestTaskRemoveACL_DeniedWhenParentServiceNotGranted(t *testing.T) {
 		t.Fatalf("expected 403, got %d; body: %s", w.Code, w.Body.String())
 	}
 	assertACLErrorCode(t, w, "ACL002")
+}
+
+func TestHandleStackSummary_ACL001_NoGrants(t *testing.T) {
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{Resources: []string{"service:*"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+	}})
+
+	h := newTestHandlers(t, withACL(e))
+	req := httptest.NewRequest("GET", "/stacks/summary", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "bob"}))
+	w := httptest.NewRecorder()
+	h.HandleStackSummary(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status=%d, want 403", w.Code)
+	}
+	assertACLErrorCode(t, w, "ACL001")
 }

@@ -191,10 +191,15 @@ func (e *Evaluator) grantMatchesResource(g Grant, resource string) bool {
 							return true
 						}
 					}
-					// Also check if the parent service's stack grants access.
-					// We need the service ID to look up its stack, but we only
-					// have the name. Use the resolver to check stack membership
-					// of the service by name-as-ID (the resolver handles this).
+					// Also check the parent service's stack (task→service→stack).
+					if stackName := e.resolver.StackOf("service", svcName); stackName != "" {
+						stackResource := "stack:" + stackName
+						for _, expr := range g.Resources {
+							if matchResource(expr, stackResource) {
+								return true
+							}
+						}
+					}
 				}
 			}
 

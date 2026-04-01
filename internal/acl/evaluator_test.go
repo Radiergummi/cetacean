@@ -550,6 +550,70 @@ func TestPermissionsFor_Deduplication(t *testing.T) {
 	}
 }
 
+func TestEvaluator_TaskInheritsThroughStack(t *testing.T) {
+	e := NewEvaluator()
+	e.SetPolicy(&Policy{Grants: []Grant{
+		{Resources: []string{"stack:monitoring"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+	}})
+	e.SetResolver(&stubResolver{
+		services: map[string]string{"task-prom-1": "prometheus"},
+		stacks:   map[string]string{"service:prometheus": "monitoring"},
+	})
+
+	id := &auth.Identity{Subject: "user1"}
+	if !e.Can(id, "read", "task:task-prom-1") {
+		t.Fatal("task should be readable via task→service→stack chain")
+	}
+}
+
+func TestEvaluator_CaseSensitiveResourceNames(t *testing.T) {
+	e := NewEvaluator()
+	e.SetPolicy(&Policy{Grants: []Grant{
+		{Resources: []string{"service:WebApp"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+	}})
+
+	id := &auth.Identity{Subject: "user1"}
+	if !e.Can(id, "read", "service:WebApp") {
+		t.Fatal("exact case match should be allowed")
+	}
+	if e.Can(id, "read", "service:webapp") {
+		t.Fatal("different case should not match")
+	}
+}
+
+func TestEvaluator_CaseSensitiveAudience(t *testing.T) {
+	e := NewEvaluator()
+	e.SetPolicy(&Policy{Grants: []Grant{
+		{Resources: []string{"service:*"}, Audience: []string{"user:Alice"}, Permissions: []string{"read"}},
+	}})
+
+	if !e.Can(&auth.Identity{Subject: "Alice"}, "read", "service:foo") {
+		t.Fatal("exact case audience should match")
+	}
+	if e.Can(&auth.Identity{Subject: "alice"}, "read", "service:foo") {
+		t.Fatal("different case audience should not match")
+	}
+}
+
+func TestEvaluator_OverlappingGrantsUnion(t *testing.T) {
+	e := NewEvaluator()
+	e.SetPolicy(&Policy{Grants: []Grant{
+		{Resources: []string{"service:*"}, Audience: []string{"group:ops"}, Permissions: []string{"read"}},
+		{Resources: []string{"service:webapp"}, Audience: []string{"group:dev"}, Permissions: []string{"write"}},
+	}})
+
+	id := &auth.Identity{Subject: "alice", Groups: []string{"ops", "dev"}}
+	if !e.Can(id, "read", "service:backend") {
+		t.Fatal("ops group should grant read on all services")
+	}
+	if !e.Can(id, "write", "service:webapp") {
+		t.Fatal("dev group should grant write on webapp")
+	}
+	if e.Can(id, "write", "service:backend") {
+		t.Fatal("dev group write should not extend to backend")
+	}
+}
+
 func TestEvaluator_NilIdentityWithActivePolicy(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{

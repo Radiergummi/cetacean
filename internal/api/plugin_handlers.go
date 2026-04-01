@@ -57,7 +57,7 @@ func (h *Handlers) HandlePlugin(w http.ResponseWriter, r *http.Request) {
 
 	plugin, err := h.pluginClient.PluginInspect(ctx, name)
 	if err != nil {
-		writeDockerError(w, r, err, "plugin")
+		writeDockerError(w, r, err, "plugin", name)
 		return
 	}
 
@@ -76,7 +76,7 @@ func (h *Handlers) HandleEnablePlugin(w http.ResponseWriter, r *http.Request) {
 	slog.Info("enabling plugin", "plugin", name)
 
 	if err := h.pluginClient.PluginEnable(r.Context(), name); err != nil {
-		writeDockerError(w, r, err, "plugin")
+		writeDockerError(w, r, err, "plugin", name)
 		return
 	}
 
@@ -88,7 +88,7 @@ func (h *Handlers) HandleDisablePlugin(w http.ResponseWriter, r *http.Request) {
 	slog.Info("disabling plugin", "plugin", name)
 
 	if err := h.pluginClient.PluginDisable(r.Context(), name); err != nil {
-		writeDockerError(w, r, err, "plugin")
+		writeDockerError(w, r, err, "plugin", name)
 		return
 	}
 
@@ -101,7 +101,7 @@ func (h *Handlers) HandleRemovePlugin(w http.ResponseWriter, r *http.Request) {
 	slog.Info("removing plugin", "plugin", name, "force", force)
 
 	if err := h.pluginClient.PluginRemove(r.Context(), name, force); err != nil {
-		writeDockerError(w, r, err, "plugin")
+		writeDockerError(w, r, err, "plugin", name)
 		return
 	}
 
@@ -160,7 +160,7 @@ func (h *Handlers) HandleInstallPlugin(w http.ResponseWriter, r *http.Request) {
 
 	plugin, err := h.pluginClient.PluginInstall(r.Context(), req.Remote)
 	if err != nil {
-		writeDockerError(w, r, err, "plugin")
+		writeDockerError(w, r, err, "plugin", req.Remote)
 		return
 	}
 
@@ -190,7 +190,7 @@ func (h *Handlers) HandleUpgradePlugin(w http.ResponseWriter, r *http.Request) {
 	slog.Info("upgrading plugin", "plugin", name, "remote", req.Remote)
 
 	if err := h.pluginClient.PluginUpgrade(r.Context(), name, req.Remote); err != nil {
-		writeDockerError(w, r, err, "plugin")
+		writeDockerError(w, r, err, "plugin", name)
 		return
 	}
 
@@ -201,7 +201,7 @@ func (h *Handlers) HandleUpgradePlugin(w http.ResponseWriter, r *http.Request) {
 
 	plugin, err := h.pluginClient.PluginInspect(r.Context(), name)
 	if err != nil {
-		writeDockerError(w, r, err, "plugin")
+		writeDockerError(w, r, err, "plugin", name)
 		return
 	}
 
@@ -226,7 +226,7 @@ func (h *Handlers) HandleConfigurePlugin(w http.ResponseWriter, r *http.Request)
 	slog.Info("configuring plugin", "plugin", name, "settings", settings)
 
 	if err := h.pluginClient.PluginConfigure(r.Context(), name, settings); err != nil {
-		writeDockerError(w, r, err, "plugin")
+		writeDockerError(w, r, err, "plugin", name)
 		return
 	}
 
@@ -237,7 +237,7 @@ func (h *Handlers) HandleConfigurePlugin(w http.ResponseWriter, r *http.Request)
 
 	plugin, err := h.pluginClient.PluginInspect(r.Context(), name)
 	if err != nil {
-		writeDockerError(w, r, err, "plugin")
+		writeDockerError(w, r, err, "plugin", name)
 		return
 	}
 
