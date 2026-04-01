@@ -1,16 +1,20 @@
 import { api } from "../api/client";
+import type { FetchResult } from "../api/client";
 import type { HistoryEntry } from "../api/types";
 import { useResourceStream } from "./useResourceStream";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+const emptyMethods = new Set<string>();
+
 export function useDetailResource<T>(
   key: string | undefined,
-  fetchFn: (key: string, signal?: AbortSignal) => Promise<T>,
+  fetchFn: (key: string, signal?: AbortSignal) => Promise<FetchResult<T>>,
   ssePath: string,
 ) {
   const [data, setData] = useState<T | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [error, setError] = useState<Error | null>(null);
+  const [allowedMethods, setAllowedMethods] = useState<Set<string>>(emptyMethods);
   const abortRef = useRef<AbortController | null>(null);
 
   const fetchData = useCallback(() => {
@@ -26,9 +30,10 @@ export function useDetailResource<T>(
     setError(null);
 
     fetchFn(key, controller.signal)
-      .then((d) => {
+      .then(({ data: d, allowedMethods: methods }) => {
         if (!controller.signal.aborted) {
           setData(d);
+          setAllowedMethods(methods);
         }
       })
       .catch((thrown) => {
@@ -81,5 +86,5 @@ export function useDetailResource<T>(
     };
   }, []);
 
-  return { data, history, error, retry: fetchData };
+  return { data, history, error, retry: fetchData, allowedMethods };
 }

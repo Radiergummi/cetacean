@@ -1,4 +1,5 @@
 import { pageSize } from "../api/client";
+import type { FetchResult } from "../api/client";
 import type { CollectionResponse } from "../api/types";
 import { useResourceStream } from "./useResourceStream";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -14,8 +15,10 @@ const ssePathMap: Record<string, string> = {
   stack: "/stacks",
 };
 
+const emptyMethods = new Set<string>();
+
 export function useSwarmResource<T>(
-  fetchFn: (offset: number, signal: AbortSignal) => Promise<CollectionResponse<T>>,
+  fetchFn: (offset: number, signal: AbortSignal) => Promise<FetchResult<CollectionResponse<T>>>,
   sseType: string,
   getId: (item: T) => string,
 ) {
@@ -25,6 +28,7 @@ export function useSwarmResource<T>(
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [allowedMethods, setAllowedMethods] = useState<Set<string>>(emptyMethods);
 
   const getIdRef = useRef(getId);
   getIdRef.current = getId;
@@ -55,7 +59,7 @@ export function useSwarmResource<T>(
       setError(null);
 
       fetchFn(pageNumber * pageSize, controller.signal)
-        .then((response) => {
+        .then(({ data: response, allowedMethods: methods }) => {
           if (controller.signal.aborted) {
             return;
           }
@@ -63,6 +67,7 @@ export function useSwarmResource<T>(
           if (isFirstPage) {
             setPages(new Map([[0, response.items]]));
             nextPageRef.current = 1;
+            setAllowedMethods(methods);
           } else {
             setPages((previous) => {
               const next = new Map(previous);
@@ -196,5 +201,5 @@ export function useSwarmResource<T>(
     loadPageRef.current(0);
   }, []);
 
-  return { data, total, loading, loadingMore, error, retry, hasMore, loadMore };
+  return { data, total, loading, loadingMore, error, retry, hasMore, loadMore, allowedMethods };
 }

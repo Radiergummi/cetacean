@@ -1,14 +1,23 @@
-# Dev Auth Compose — test all auth modes simultaneously
+# Dev Auth & ACL Compose — test all auth and authorization modes
 #
 # Build first:   docker build -t cetacean:latest .
 # Start:         docker compose -f compose.dev-auth.yaml up
 #
-# Ports:
+# Authentication ports:
 #   9001  no auth        (direct)
 #   9002  oidc           (Caddy TLS → cetacean → Dex)
 #   9003  headers        (Caddy injects headers → cetacean)
 #   9004  cert           (Caddy plain HTTP → mTLS → cetacean)
 #   9010  Dex            (OIDC login: dev@localhost / password)
+#
+# Authorization ports (file policy, ops level 2):
+#   9005  ACL admin      (group: ops — full read+write)
+#   9006  ACL viewer     (group: viewers — read-only everywhere)
+#   9007  ACL team dev   (group: frontend — read+write on frontend-* stacks, read elsewhere)
+#   9008  ACL on-call    (group: oncall — write services+tasks, read-only infra)
+#
+# Authorization ports (provider grants, no file policy):
+#   9009  ACL provider   (grants injected via X-ACL header)
 
 configs:
   dex-config:
@@ -70,6 +79,94 @@ configs:
           tls_client_auth /certs/client.pem /certs/client-key.pem
           tls_trusted_ca_certs /certs/ca.pem
         }
+      }
+
+  acl-policy:
+    content: |
+      grants:
+        # Ops: full access to everything
+        - resources: ["*"]
+          audience: ["group:ops"]
+          permissions: ["read", "write"]
+
+        # Viewers: read-only everywhere
+        - resources: ["*"]
+          audience: ["group:viewers"]
+          permissions: ["read"]
+
+        # Frontend team: full access to frontend-* stacks, read elsewhere
+        - resources: ["stack:frontend-*"]
+          audience: ["group:frontend"]
+          permissions: ["read", "write"]
+        - resources: ["*"]
+          audience: ["group:frontend"]
+          permissions: ["read"]
+
+        # On-call: write services and tasks, read-only infra
+        - resources: ["service:*", "task:*"]
+          audience: ["group:oncall"]
+          permissions: ["read", "write"]
+        - resources: ["node:*", "swarm:*", "config:*", "secret:*", "network:*", "volume:*"]
+          audience: ["group:oncall"]
+          permissions: ["read"]
+
+  caddyfile-acl:
+    content: |
+      # Admin (ops group — full access)
+      :9005 {
+        reverse_proxy cetacean-acl:9000 {
+          header_up X-Auth-User "admin@example.com"
+          header_up X-Auth-Name "Admin"
+          header_up X-Auth-Email "admin@example.com"
+          header_up X-Auth-Groups "ops"
+          header_up X-Proxy-Secret "acl-secret"
+        }
+      }
+
+      # Viewer (read-only)
+      :9006 {
+        reverse_proxy cetacean-acl:9000 {
+          header_up X-Auth-User "viewer@example.com"
+          header_up X-Auth-Name "Viewer"
+          header_up X-Auth-Email "viewer@example.com"
+          header_up X-Auth-Groups "viewers"
+          header_up X-Proxy-Secret "acl-secret"
+        }
+      }
+
+      # Team developer (frontend group)
+      :9007 {
+        reverse_proxy cetacean-acl:9000 {
+          header_up X-Auth-User "dev@frontend.team"
+          header_up X-Auth-Name "Frontend Dev"
+          header_up X-Auth-Email "dev@frontend.team"
+          header_up X-Auth-Groups "frontend"
+          header_up X-Proxy-Secret "acl-secret"
+        }
+      }
+
+      # On-call engineer
+      :9008 {
+        reverse_proxy cetacean-acl:9000 {
+          header_up X-Auth-User "oncall@example.com"
+          header_up X-Auth-Name "On-Call"
+          header_up X-Auth-Email "oncall@example.com"
+          header_up X-Auth-Groups "oncall"
+          header_up X-Proxy-Secret "acl-secret"
+        }
+      }
+
+  caddyfile-acl-provider:
+    content: |
+      :9009
+
+      reverse_proxy cetacean-acl-provider:9000 {
+        header_up X-Auth-User "alice@example.com"
+        header_up X-Auth-Name "Alice"
+        header_up X-Auth-Email "alice@example.com"
+        header_up X-Auth-Groups "engineering"
+        header_up X-Proxy-Secret "provider-secret"
+        header_up X-ACL '[{"resources":["service:*","task:*"],"permissions":["read","write"]},{"resources":["node:*"],"permissions":["read"]}]'
       }
 
 services:
@@ -174,6 +271,7 @@ services:
       CETACEAN_AUTH_HEADERS_GROUPS: X-Auth-Groups
       CETACEAN_AUTH_HEADERS_SECRET_HEADER: X-Proxy-Secret
       CETACEAN_AUTH_HEADERS_SECRET_VALUE: dev-secret
+      CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES: 0.0.0.0/0
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
@@ -222,6 +320,73 @@ services:
         condition: service_completed_successfully
       cetacean-cert:
         condition: service_started
+    networks:
+      - auth-dev
+
+  # --- Auth mode: headers + file ACL policy (ports 9005–9008 via caddy-acl) ---
+  cetacean-acl:
+    build: .
+    environment:
+      CETACEAN_AUTH_MODE: headers
+      CETACEAN_AUTH_HEADERS_SUBJECT: X-Auth-User
+      CETACEAN_AUTH_HEADERS_NAME: X-Auth-Name
+      CETACEAN_AUTH_HEADERS_EMAIL: X-Auth-Email
+      CETACEAN_AUTH_HEADERS_GROUPS: X-Auth-Groups
+      CETACEAN_AUTH_HEADERS_SECRET_HEADER: X-Proxy-Secret
+      CETACEAN_AUTH_HEADERS_SECRET_VALUE: acl-secret
+      CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES: 0.0.0.0/0
+      CETACEAN_ACL_POLICY_FILE: /etc/cetacean/acl-policy.yaml
+      CETACEAN_OPERATIONS_LEVEL: "2"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    configs:
+      - source: acl-policy
+        target: /etc/cetacean/acl-policy.yaml
+    networks:
+      - auth-dev
+
+  caddy-acl:
+    image: caddy:2
+    ports:
+      - "9005:9005"
+      - "9006:9006"
+      - "9007:9007"
+      - "9008:9008"
+    configs:
+      - source: caddyfile-acl
+        target: /etc/caddy/Caddyfile
+    depends_on:
+      - cetacean-acl
+    networks:
+      - auth-dev
+
+  # --- Auth mode: headers + provider-sourced ACL grants (port 9009 via caddy-acl-provider) ---
+  cetacean-acl-provider:
+    build: .
+    environment:
+      CETACEAN_AUTH_MODE: headers
+      CETACEAN_AUTH_HEADERS_SUBJECT: X-Auth-User
+      CETACEAN_AUTH_HEADERS_NAME: X-Auth-Name
+      CETACEAN_AUTH_HEADERS_EMAIL: X-Auth-Email
+      CETACEAN_AUTH_HEADERS_GROUPS: X-Auth-Groups
+      CETACEAN_AUTH_HEADERS_SECRET_HEADER: X-Proxy-Secret
+      CETACEAN_AUTH_HEADERS_SECRET_VALUE: provider-secret
+      CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES: 0.0.0.0/0
+      CETACEAN_AUTH_HEADERS_ACL: X-ACL
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - auth-dev
+
+  caddy-acl-provider:
+    image: caddy:2
+    ports:
+      - "9009:9009"
+    configs:
+      - source: caddyfile-acl-provider
+        target: /etc/caddy/Caddyfile
+    depends_on:
+      - cetacean-acl-provider
     networks:
       - auth-dev
 
