@@ -106,6 +106,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	aclCfg := config.LoadACL(flags, fc)
+
 	var authProvider auth.Provider
 	var tsnetServer *tsnet.Server
 	var tsnetLn net.Listener
@@ -146,7 +148,11 @@ func main() {
 	case "cert":
 		authProvider = &auth.CertProvider{}
 	case "headers":
-		authProvider = auth.NewHeadersProvider(authCfg.Headers)
+		var extraHeaders []string
+		if aclCfg.HeadersACL != "" {
+			extraHeaders = append(extraHeaders, aclCfg.HeadersACL)
+		}
+		authProvider = auth.NewHeadersProvider(authCfg.Headers, extraHeaders...)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown auth mode %q\n", authCfg.Mode)
 		//nolint:gocritic // exitAfterDefer: tsnet defers only run in the tailscale case, not here
@@ -247,7 +253,6 @@ func main() {
 	}
 
 	// ACL
-	aclCfg := config.LoadACL(flags, fc)
 	var aclEval *acl.Evaluator
 	var stopPolicyWatch func()
 	if authCfg.Mode != "none" {

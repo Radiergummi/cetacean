@@ -20,11 +20,17 @@ const maxSubjectLen = 256
 // HeadersProvider authenticates requests using trusted proxy headers.
 type HeadersProvider struct {
 	cfg config.HeadersConfig
+
+	// extraHeaders are additional header names whose values are captured
+	// into Identity.Raw. Used to pass the ACL grants header through to
+	// the grant source.
+	extraHeaders []string
 }
 
 // NewHeadersProvider creates a new HeadersProvider with the given configuration.
-func NewHeadersProvider(cfg config.HeadersConfig) *HeadersProvider {
-	return &HeadersProvider{cfg: cfg}
+// Extra header names are captured into Identity.Raw for use by grant sources.
+func NewHeadersProvider(cfg config.HeadersConfig, extraHeaders ...string) *HeadersProvider {
+	return &HeadersProvider{cfg: cfg, extraHeaders: extraHeaders}
 }
 
 // Authenticate reads identity information from request headers set by a
@@ -77,15 +83,22 @@ func (p *HeadersProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (
 		}
 	}
 
+	raw := map[string]any{
+		"subject_header": p.cfg.Subject,
+	}
+	for _, h := range p.extraHeaders {
+		if v := r.Header.Get(h); v != "" {
+			raw[h] = v
+		}
+	}
+
 	return &Identity{
 		Subject:     subject,
 		Provider:    "headers",
 		DisplayName: displayName,
 		Email:       email,
 		Groups:      groups,
-		Raw: map[string]any{
-			"subject_header": p.cfg.Subject,
-		},
+		Raw:         raw,
 	}, nil
 }
 

@@ -301,6 +301,47 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 			t.Errorf("Subject length = %d, want %d", len(id.Subject), maxSubjectLen)
 		}
 	})
+
+	t.Run("extra headers captured in Raw", func(t *testing.T) {
+		p := NewHeadersProvider(config.HeadersConfig{
+			Subject: "X-User",
+		}, "X-ACL")
+
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.Header.Set("X-User", "alice")
+		r.Header.Set("X-ACL", `[{"resources":["service:*"],"permissions":["read"]}]`)
+
+		id, err := p.Authenticate(httptest.NewRecorder(), r)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		aclVal, ok := id.Raw["X-ACL"].(string)
+		if !ok {
+			t.Fatal("expected X-ACL in Raw map")
+		}
+		if aclVal == "" {
+			t.Fatal("expected non-empty X-ACL value in Raw")
+		}
+	})
+
+	t.Run("missing extra header not stored in Raw", func(t *testing.T) {
+		p := NewHeadersProvider(config.HeadersConfig{
+			Subject: "X-User",
+		}, "X-ACL")
+
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.Header.Set("X-User", "alice")
+
+		id, err := p.Authenticate(httptest.NewRecorder(), r)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if _, ok := id.Raw["X-ACL"]; ok {
+			t.Fatal("expected X-ACL to not be in Raw when header is absent")
+		}
+	})
 }
 
 func TestHeadersProvider_TrustedProxies(t *testing.T) {
