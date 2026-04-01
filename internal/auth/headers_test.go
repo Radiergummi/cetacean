@@ -330,7 +330,7 @@ func TestHeadersProvider_Authenticate(t *testing.T) {
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set("X-User", "alice")
-		r.Header.Set("X-ACL", `[{"resources":["service:*"],"permissions":["read"]}]`)
+		r.Header.Set("X-Acl", `[{"resources":["service:*"],"permissions":["read"]}]`)
 
 		id, err := p.Authenticate(httptest.NewRecorder(), r)
 		if err != nil {

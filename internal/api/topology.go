@@ -192,7 +192,7 @@ func (h *Handlers) HandlePlacementTopology(w http.ResponseWriter, r *http.Reques
 	clusterNodes := acl.Filter(
 		h.acl, identity, "read",
 		h.cache.ListNodes(),
-		func(n swarm.Node) string { return nodeResource(n) },
+		nodeResource,
 	)
 	services := h.cache.ListServices()
 

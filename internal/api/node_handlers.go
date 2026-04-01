@@ -20,7 +20,7 @@ func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 		auth.IdentityFromContext(r.Context()),
 		"read",
 		nodes,
-		func(n swarm.Node) string { return nodeResource(n) },
+		nodeResource,
 	)
 	nodes = searchFilter(
 		nodes,
