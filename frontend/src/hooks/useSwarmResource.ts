@@ -105,6 +105,9 @@ export function useSwarmResource<T>(
           setData([...previous, resource]);
           setSSEOffset((offset) => offset + 1);
         }
+      } else if (event.action !== "remove") {
+        // Replayed event without resource payload — refetch to pick up changes
+        loadRef.current();
       }
     }, []),
   );
