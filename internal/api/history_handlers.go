@@ -10,6 +10,10 @@ import (
 // --- History ---
 
 func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAnyGrant(w, r) {
+		return
+	}
+
 	q := r.URL.Query()
 	limit := 50
 	if v := q.Get("limit"); v != "" {

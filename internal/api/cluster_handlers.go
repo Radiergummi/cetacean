@@ -6,6 +6,10 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/radiergummi/cetacean/internal/auth"
 )
 
 func (h *Handlers) getLocalNodeID() string {
@@ -77,6 +81,10 @@ type ResourceMetric struct {
 }
 
 func (h *Handlers) HandleClusterCapacity(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAnyGrant(w, r) {
+		return
+	}
+
 	snap := h.cache.Snapshot()
 	writeCachedJSON(
 		w,
@@ -284,6 +292,10 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 }
 
 func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAnyGrant(w, r) {
+		return
+	}
+
 	if h.systemClient == nil {
 		writeErrorCode(w, r, "SWM001", "swarm inspect not available")
 		return
@@ -307,6 +319,11 @@ func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Redact join tokens unless the caller has swarm write permission.
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "write", "swarm:cluster") {
+		sw.JoinTokens = swarm.JoinTokens{}
+	}
+
 	writeCachedJSONTimed(w, r, NewDetailResponse(r.Context(), "/swarm", "Swarm", SwarmResponse{
 		Swarm:       sw,
 		ManagerAddr: managerAddr,
@@ -322,6 +339,10 @@ type DiskUsageSummary struct {
 }
 
 func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAnyGrant(w, r) {
+		return
+	}
+
 	if h.systemClient == nil {
 		writeErrorCode(w, r, "SWM004", "disk usage not available")
 		return

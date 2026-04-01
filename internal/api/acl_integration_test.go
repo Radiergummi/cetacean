@@ -1173,3 +1173,171 @@ func TestHandleStackSummary_ACL001_NoGrants(t *testing.T) {
 	}
 	assertACLErrorCode(t, w, "ACL001")
 }
+
+// --- Cluster-wide endpoint ACL gates ---
+
+func aclPolicyForAlice() *acl.Evaluator {
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"service:*"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read"},
+		},
+	}})
+	return e
+}
+
+func TestHandleClusterCapacity_ACL001_NoGrants(t *testing.T) {
+	h := newTestHandlers(t, withACL(aclPolicyForAlice()))
+	req := httptest.NewRequest("GET", "/cluster/capacity", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "bob"}))
+	w := httptest.NewRecorder()
+	h.HandleClusterCapacity(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status=%d, want 403", w.Code)
+	}
+	assertACLErrorCode(t, w, "ACL001")
+}
+
+func TestHandleDiskUsage_ACL001_NoGrants(t *testing.T) {
+	h := newTestHandlers(t, withACL(aclPolicyForAlice()))
+	req := httptest.NewRequest("GET", "/disk-usage", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "bob"}))
+	w := httptest.NewRecorder()
+	h.HandleDiskUsage(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status=%d, want 403", w.Code)
+	}
+	assertACLErrorCode(t, w, "ACL001")
+}
+
+func TestHandleHistory_ACL001_NoGrants(t *testing.T) {
+	h := newTestHandlers(t, withACL(aclPolicyForAlice()))
+	req := httptest.NewRequest("GET", "/history", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "bob"}))
+	w := httptest.NewRecorder()
+	h.HandleHistory(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status=%d, want 403", w.Code)
+	}
+	assertACLErrorCode(t, w, "ACL001")
+}
+
+func TestHandleNetworkTopology_ACL001_NoGrants(t *testing.T) {
+	h := newTestHandlers(t, withACL(aclPolicyForAlice()))
+	req := httptest.NewRequest("GET", "/topology/networks", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "bob"}))
+	w := httptest.NewRecorder()
+	h.HandleNetworkTopology(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status=%d, want 403", w.Code)
+	}
+	assertACLErrorCode(t, w, "ACL001")
+}
+
+func TestHandlePlacementTopology_ACL001_NoGrants(t *testing.T) {
+	h := newTestHandlers(t, withACL(aclPolicyForAlice()))
+	req := httptest.NewRequest("GET", "/topology/placement", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "bob"}))
+	w := httptest.NewRecorder()
+	h.HandlePlacementTopology(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status=%d, want 403", w.Code)
+	}
+	assertACLErrorCode(t, w, "ACL001")
+}
+
+func TestHandleSwarm_ACL001_NoGrants(t *testing.T) {
+	h := newTestHandlers(t, withACL(aclPolicyForAlice()), withSystemClient(&mockSystemClient{
+		swarmInspectFn: func(_ context.Context) (swarm.Swarm, error) {
+			return swarm.Swarm{}, nil
+		},
+	}))
+	req := httptest.NewRequest("GET", "/swarm", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "bob"}))
+	w := httptest.NewRecorder()
+	h.HandleSwarm(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status=%d, want 403", w.Code)
+	}
+	assertACLErrorCode(t, w, "ACL001")
+}
+
+func TestHandleSwarm_RedactsJoinTokensWithoutSwarmWrite(t *testing.T) {
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		// Read on everything, but no write on swarm:cluster.
+		{Resources: []string{"*"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+	}})
+
+	h := newTestHandlers(t, withACL(e), withSystemClient(&mockSystemClient{
+		swarmInspectFn: func(_ context.Context) (swarm.Swarm, error) {
+			return swarm.Swarm{
+				JoinTokens: swarm.JoinTokens{
+					Worker:  "SWMTKN-1-worker-secret",
+					Manager: "SWMTKN-1-manager-secret",
+				},
+			}, nil
+		},
+	}))
+
+	req := httptest.NewRequest("GET", "/swarm", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleSwarm(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	body := w.Body.String()
+	if strings.Contains(body, "SWMTKN") {
+		t.Fatal("join tokens should be redacted for users without swarm:cluster write")
+	}
+}
+
+func TestHandleSwarm_IncludesJoinTokensWithSwarmWrite(t *testing.T) {
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"swarm:cluster"},
+			Audience:    []string{"*"},
+			Permissions: []string{"write"},
+		},
+	}})
+
+	h := newTestHandlers(t, withACL(e), withSystemClient(&mockSystemClient{
+		swarmInspectFn: func(_ context.Context) (swarm.Swarm, error) {
+			return swarm.Swarm{
+				JoinTokens: swarm.JoinTokens{
+					Worker:  "SWMTKN-1-worker-secret",
+					Manager: "SWMTKN-1-manager-secret",
+				},
+			}, nil
+		},
+	}))
+
+	req := httptest.NewRequest("GET", "/swarm", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "admin"}))
+	w := httptest.NewRecorder()
+	h.HandleSwarm(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "SWMTKN-1-worker-secret") {
+		t.Fatal("join tokens should be present for users with swarm:cluster write")
+	}
+	if !strings.Contains(body, "SWMTKN-1-manager-secret") {
+		t.Fatal("manager join token should be present")
+	}
+}

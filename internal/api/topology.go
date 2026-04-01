@@ -63,6 +63,10 @@ type TopoTask struct {
 }
 
 func (h *Handlers) HandleNetworkTopology(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAnyGrant(w, r) {
+		return
+	}
+
 	services := h.cache.ListServices()
 	networks := h.cache.ListNetworks()
 
@@ -172,6 +176,10 @@ func (h *Handlers) HandleNetworkTopology(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *Handlers) HandlePlacementTopology(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAnyGrant(w, r) {
+		return
+	}
+
 	clusterNodes := h.cache.ListNodes()
 	services := h.cache.ListServices()
 
