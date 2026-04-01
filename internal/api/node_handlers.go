@@ -14,6 +14,7 @@ import (
 // --- Nodes ---
 
 func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {
+	h.setAllowList(w, r, "node")
 	nodes := h.cache.ListNodes()
 	nodes = acl.Filter(
 		h.acl,

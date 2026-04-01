@@ -46,6 +46,7 @@ func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
+	h.setAllowList(w, r, "config")
 	configs := h.cache.ListConfigs()
 	configs = acl.Filter(
 		h.acl,

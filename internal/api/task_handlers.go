@@ -60,6 +60,7 @@ func taskStateSortKey(state swarm.TaskState) string {
 }
 
 func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
+	h.setAllowList(w, r, "task")
 	tasks := h.cache.ListTasks()
 	tasks = acl.Filter(
 		h.acl,

@@ -13,9 +13,50 @@ import (
 func TestSetAllowList(t *testing.T) {
 	h := newTestHandlers(t)
 	w := httptest.NewRecorder()
-	h.setAllowList(w)
+	r := httptest.NewRequest("GET", "/nodes", nil)
+	h.setAllowList(w, r, "node")
 	if got := w.Header().Get("Allow"); got != "GET, HEAD" {
 		t.Errorf("setAllowList() = %q, want %q", got, "GET, HEAD")
+	}
+}
+
+func TestSetAllowList_POST(t *testing.T) {
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{
+		Grants: []acl.Grant{
+			{Resources: []string{"config:*"}, Audience: []string{"*"}, Permissions: []string{"write"}},
+		},
+	})
+	h := &Handlers{operationsLevel: config.OpsConfiguration, acl: e}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/configs", nil)
+	r = r.WithContext(auth.ContextWithIdentity(r.Context(), &auth.Identity{Subject: "alice"}))
+
+	h.setAllowList(w, r, "config")
+
+	got := w.Header().Get("Allow")
+	if got != "GET, HEAD, POST" {
+		t.Errorf("setAllowList(config, write grant) = %q, want %q", got, "GET, HEAD, POST")
+	}
+}
+
+func TestSetAllowList_NoWrite(t *testing.T) {
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{
+		Grants: []acl.Grant{
+			{Resources: []string{"config:*"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+		},
+	})
+	h := &Handlers{operationsLevel: config.OpsConfiguration, acl: e}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/configs", nil)
+	r = r.WithContext(auth.ContextWithIdentity(r.Context(), &auth.Identity{Subject: "alice"}))
+
+	h.setAllowList(w, r, "config")
+
+	got := w.Header().Get("Allow")
+	if got != "GET, HEAD" {
+		t.Errorf("setAllowList(config, read only) = %q, want %q", got, "GET, HEAD")
 	}
 }
 

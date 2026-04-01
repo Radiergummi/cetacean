@@ -14,6 +14,7 @@ import (
 )
 
 func (h *Handlers) HandleListPlugins(w http.ResponseWriter, r *http.Request) {
+	h.setAllowList(w, r, "plugin")
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 

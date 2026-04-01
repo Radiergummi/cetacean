@@ -48,6 +48,7 @@ func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
+	h.setAllowList(w, r, "volume")
 	volumes := h.cache.ListVolumes()
 	volumes = acl.Filter(
 		h.acl,

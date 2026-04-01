@@ -17,6 +17,7 @@ import (
 // --- Stacks ---
 
 func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
+	h.setAllowList(w, r, "stack")
 	stacks := h.cache.ListStacks()
 	stacks = acl.Filter(
 		h.acl,

@@ -44,6 +44,7 @@ type ServiceListItem struct {
 }
 
 func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
+	h.setAllowList(w, r, "service")
 	services := h.cache.ListServices()
 	services = acl.Filter(
 		h.acl,

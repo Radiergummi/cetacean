@@ -48,6 +48,7 @@ func (h *Handlers) HandleGetSecret(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
+	h.setAllowList(w, r, "secret")
 	secrets := h.cache.ListSecrets()
 	for i := range secrets {
 		secrets[i].Spec.Data = nil

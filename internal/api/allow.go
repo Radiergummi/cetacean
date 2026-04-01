@@ -128,7 +128,24 @@ func (h *Handlers) setAllow(
 	}
 }
 
+// listCreateMethods maps resource types that support creation via POST to
+// the minimum operations tier required.
+var listCreateMethods = map[string]config.OperationsLevel{
+	"config": config.OpsConfiguration,
+	"secret": config.OpsConfiguration,
+	"plugin": config.OpsConfiguration,
+}
+
 // setAllowList sets the Allow header for list endpoints.
-func (h *Handlers) setAllowList(w http.ResponseWriter) {
-	w.Header().Set("Allow", "GET, HEAD")
+func (h *Handlers) setAllowList(w http.ResponseWriter, r *http.Request, resourceType string) {
+	methods := []string{"GET", "HEAD"}
+
+	if tier, ok := listCreateMethods[resourceType]; ok && h.operationsLevel >= tier {
+		id := auth.IdentityFromContext(r.Context())
+		if h.acl.Can(id, "write", resourceType+":*") {
+			methods = append(methods, "POST")
+		}
+	}
+
+	w.Header().Set("Allow", strings.Join(methods, ", "))
 }

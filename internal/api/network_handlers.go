@@ -46,6 +46,7 @@ func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
+	h.setAllowList(w, r, "network")
 	networks := h.cache.ListNetworks()
 	networks = acl.Filter(
 		h.acl,
