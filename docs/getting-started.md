@@ -1,6 +1,6 @@
 # Getting Started
 
-Cetacean is a read-only dashboard for Docker Swarm Mode clusters. One binary, zero dependencies, real-time updates.
+Cetacean is a real-time observability and management dashboard for Docker Swarm Mode clusters. One binary, zero dependencies, real-time updates.
 Think of it as a docker CLI with a UI and a memory.
 
 ## Requirements
@@ -80,10 +80,13 @@ See [Monitoring](monitoring.md) for the setup guide.
 By default, anyone who can reach Cetacean can see everything. That might be fine on a private network. If it's not,
 see [Authentication](authentication.md) for OIDC, Tailscale, mTLS, and proxy header options.
 
+Once authenticated, you can optionally restrict access to specific resources with [Authorization](authorization.md).
+
 ## Next Steps
 
 - [Configuration](configuration.md) -- every knob you can turn
 - [Monitoring](monitoring.md) -- Prometheus, node-exporter, cAdvisor
 - [Authentication](authentication.md) -- lock it down
+- [Authorization](authorization.md) -- per-resource access control
 - [Dashboard Guide](dashboard.md) -- keyboard shortcuts, search, charts
 - [API Reference](api.md) -- endpoints, query parameters, SSE

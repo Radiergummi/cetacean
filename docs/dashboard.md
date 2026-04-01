@@ -7,8 +7,9 @@ scales, a task fails, or a node goes down, you'll see it happen.
 
 The top bar has everything:
 
-- **Nav links** -- Nodes, Stacks, Services, Configs, Secrets, Networks, Volumes, Swarm, Topology
+- **Nav links** -- Nodes, Stacks, Services, Tasks, Configs, Secrets, Networks, Volumes, Swarm, Topology, Metrics
 - **Search** -- `Cmd K` (Mac) or `Ctrl K` (Linux/Windows) opens the command palette
+- **Recommendations badge** -- bulb icon with count; amber when there are active recommendations
 - **Theme toggle** -- cycles Light → Dark → System
 - **Connection indicator** -- shows whether the SSE stream is healthy
 - **User badge** -- your identity (hidden when auth is `none`)
@@ -33,8 +34,11 @@ Press `?` to see all shortcuts. The highlights:
 | `g x`              | Go to secrets           |
 | `g w`              | Go to networks          |
 | `g v`              | Go to volumes           |
+| `g a`              | Go to tasks             |
 | `g i`              | Go to swarm info        |
 | `g t`              | Go to topology          |
+| `g m`              | Go to metrics console   |
+| `g r`              | Go to recommendations   |
 
 In tables: `j`/`↓` to move down, `k`/`↑` to move up, `Enter` to open the selected row.
 
@@ -44,6 +48,10 @@ The `g` shortcuts are chords -- press `g`, release, then press the second key.
 
 **Command palette** (`Cmd K`): type to search across all resource types. Results appear grouped by type (services first,
 then stacks, nodes, tasks, configs, secrets, networks, volumes). Arrow keys to navigate, Enter to open, Esc to close.
+
+The palette also supports **actions** -- type an action name (e.g., "scale", "restart", "drain") to trigger multi-step
+workflows with confirmation dialogs. Actions respect [operations level](configuration.md#operations-level) and
+[authorization](authorization.md) settings.
 
 Results show live state: a spinning orb for updating resources, colored dots for running/failed/completed. The palette
 polls every 2 seconds to keep state indicators fresh without reordering results.
@@ -65,7 +73,10 @@ Every resource type has a list page with:
 Tables auto-virtualize above 100 rows, so even large clusters stay smooth.
 
 Grid view shows resource cards with status badges, gauges, and metadata at a glance. Useful for nodes (CPU/memory
-gauges) and services (replica health).
+gauges) and services (replica health). In grid view, tasks are grouped by service.
+
+The tasks page has an additional **state filter** -- a segmented control to quickly show all tasks, only running, only
+failed, or any other state.
 
 ### Filtering
 
@@ -94,11 +105,18 @@ Click any resource to see its detail page. Every detail page:
 
 The service detail page is the most feature-rich:
 
-- **Replica card** -- running/desired count with health indicator
-- **Task table** -- every task with state, node, timestamps, and live metrics
+- **Status and replica card** -- running/desired count, convergence state, deployment status
+- **Action buttons** -- scale, update image, rollback, restart (gated by [operations level](configuration.md#operations-level))
+- **Configuration editors** -- inline editors for environment variables, labels, resources (CPU/memory), healthcheck,
+  placement constraints, ports, update/rollback policies, log driver, configs, secrets, networks, mounts, container
+  config, capabilities, DNS, extra hosts, endpoint mode, and service mode. Each editor shows the current values and
+  supports patch-based editing.
 - **Resource allocation** -- horizontal bar charts showing reserved vs. actual CPU/memory, with limit markers
 - **Metrics charts** -- CPU and memory over time (requires [monitoring](monitoring.md))
-- **Log viewer** -- live-tailing logs with search and filtering
+- **Healthcheck timeline** -- color-coded status history when healthchecks are configured
+- **Task table** -- every task with state, node, timestamps, and live per-task metrics sparklines
+- **Log viewer** -- live-tailing logs with search, filtering, and task scoping
+- **Sizing recommendations** -- per-service banners when resource issues are detected (see [recommendations](recommendations.md))
 - **Activity history** -- recent changes to this service
 - **Integration panels** -- structured views for detected ecosystem tools (Traefik, Shepherd, Swarm Cronjob, Diun).
   See [integrations](integrations.md)
@@ -110,13 +128,27 @@ networks, and volumes in separate tables. Each item links to its own detail page
 
 ### Nodes
 
-Node detail shows the tasks running on that node, resource gauges (CPU, memory, disk), and node metadata (role,
-availability, engine version, address).
+Node detail shows:
+
+- **Resource gauges** -- CPU, memory, and disk usage (requires [monitoring](monitoring.md))
+- **Metrics charts** -- CPU, memory, disk I/O, and network I/O over time
+- **Per-stack resource charts** -- CPU and memory usage broken down by stack, with drill-down to individual services
+  (requires cAdvisor)
+- **Task table** -- all tasks on this node with state, service, and live metrics
+- **Labels editor** -- key-value editor for node metadata (validates reserved keys)
+- **Availability control** -- switch between active, pause, and drain
+- **Role editor** -- promote or demote between manager and worker
+- **Node metadata** -- OS, kernel version, Docker engine version, address
 
 ### Tasks
 
 Task detail shows the container state, linked service and node, resource gauges for the running container, metrics
-charts, and a log viewer scoped to that single task.
+charts, a log viewer scoped to that single task, and a force-remove action button.
+
+### Metrics Console
+
+The metrics console (`/metrics`, `g m`) is a PromQL query builder for running ad-hoc Prometheus queries. Results are
+displayed as time-series charts or tabular data with series labels. Requires [monitoring](monitoring.md).
 
 ## Log Viewer
 

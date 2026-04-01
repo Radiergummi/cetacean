@@ -212,6 +212,7 @@ The code is the last path segment of `type` (e.g. `SVC001`). Codes use a three-l
 | `SEA` | Search |
 | `MTR` | Metrics / Prometheus |
 | `LOG` | Log streaming |
+| `ACL` | Authorization (RBAC) |
 | `SSE` | SSE connections |
 | `ENG` | Docker Engine |
 | `SWM` | Swarm operations |
@@ -246,6 +247,32 @@ curl -H 'If-None-Match: "3a7f..."' http://localhost:9000/services
 Static resources (`/api`, `/api/context.jsonld`) return `Cache-Control: public, max-age=3600`.
 
 SSE and streaming endpoints do not set caching headers.
+
+Detail endpoints also return `Last-Modified` based on the resource's update timestamp. Use `If-Modified-Since` for
+conditional requests alongside or instead of ETags.
+
+## Response Headers
+
+Beyond standard caching headers, Cetacean sets several headers to help clients discover capabilities:
+
+**`Allow`** -- GET and HEAD responses include an `Allow` header listing the HTTP methods available for that resource,
+based on the current [operations level](configuration.md#operations-level) and [ACL](authorization.md) permissions. A
+client can inspect this before attempting a write.
+
+**`Accept-Patch`** -- Resources that support PATCH include `Accept-Patch` listing the accepted content types
+(`application/json-patch+json`, `application/merge-patch+json`, or both). Present only when the operations level and
+ACL permit writes.
+
+**`Prefer: return=minimal`** -- Write endpoints honor RFC 7240 `Prefer: return=minimal`. When set, successful writes
+return `204 No Content` instead of the updated resource. The response includes `Preference-Applied: return=minimal`.
+
+**Security headers** -- All responses include:
+
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Referrer-Policy: no-referrer`
+- `Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:`
+- `Strict-Transport-Security: max-age=63072000; includeSubDomains` (when TLS is enabled)
 
 ## Real-Time Events (SSE)
 
@@ -305,9 +332,12 @@ curl -H "Accept: text/event-stream" "http://localhost:9000/events?types=service,
 
 Valid types: `node`, `service`, `task`, `config`, `secret`, `network`, `volume`, `stack`.
 
-### Reconnection
+### Reconnection and Replay
 
-The server assigns incrementing `id:` values to each event. EventSource clients automatically send `Last-Event-ID` on reconnect.
+The server assigns incrementing `id:` values to each event. EventSource clients automatically send `Last-Event-ID` on
+reconnect. The server replays missed events from its in-memory history buffer (last 10,000 events), then resumes live
+streaming. If the requested ID is too old (no longer in the buffer), the server sends a `sync` event to tell the client
+to do a full reload.
 
 ### Per-resource SSE
 
@@ -432,6 +462,7 @@ Write operations on the swarm configuration. Gated by [operations level](configu
 | POST | `/swarm/rotate-token` | 3 | Rotate worker or manager join token. |
 | POST | `/swarm/rotate-unlock-key` | 3 | Rotate swarm unlock key. |
 | POST | `/swarm/force-rotate-ca` | 3 | Force CA certificate rotation. |
+| POST | `/swarm/unlock` | 3 | Unlock the swarm. |
 
 PATCH endpoints accept `application/merge-patch+json`.
 
@@ -663,6 +694,7 @@ curl http://localhost:9000/stacks/myapp
 | GET | `/configs/{id}/labels` | Get config labels. | -- |
 | PATCH | `/configs/{id}/labels` | Patch config labels. Tier 2. | -- |
 | POST | `/configs` | Create a config. Tier 2. | -- |
+| DELETE | `/configs/{id}` | Remove a config. Tier 3. | -- |
 
 ```bash
 curl http://localhost:9000/configs
@@ -683,6 +715,7 @@ Secret data is always redacted in API responses.
 | GET | `/secrets/{id}/labels` | Get secret labels. | -- |
 | PATCH | `/secrets/{id}/labels` | Patch secret labels. Tier 2. | -- |
 | POST | `/secrets` | Create a secret. Tier 2. | -- |
+| DELETE | `/secrets/{id}` | Remove a secret. Tier 3. | -- |
 
 ```bash
 curl http://localhost:9000/secrets
@@ -698,6 +731,7 @@ curl -X POST -d '{"name": "my-secret", "data": "c3VwZXJzZWNyZXQ="}' http://local
 |---|---|---|---|
 | GET | `/networks` | List networks. | `search`, `filter`, `sort`, `dir`, `limit`, `offset` |
 | GET | `/networks/{id}` | Network detail with cross-referenced services. | -- |
+| DELETE | `/networks/{id}` | Remove a network. Tier 3. | -- |
 
 ```bash
 curl http://localhost:9000/networks
@@ -712,11 +746,31 @@ Volumes are keyed by name, not ID.
 |---|---|---|---|
 | GET | `/volumes` | List volumes. | `search`, `filter`, `sort`, `dir`, `limit`, `offset` |
 | GET | `/volumes/{name}` | Volume detail with cross-referenced services. | -- |
+| DELETE | `/volumes/{name}` | Remove a volume. Tier 3. | -- |
 
 ```bash
 curl http://localhost:9000/volumes
 curl http://localhost:9000/volumes/my-data
 ```
+
+### Plugins
+
+| Method | Path | Description | Parameters |
+|---|---|---|---|
+| GET | `/plugins` | List installed plugins. | -- |
+| GET | `/plugins/{name}` | Plugin detail. | -- |
+
+#### Plugin Write Operations
+
+| Method | Path | Tier | Description |
+|---|---|---|---|
+| POST | `/plugins/privileges` | 3 | Request plugin privileges. |
+| POST | `/plugins` | 3 | Install a plugin. |
+| POST | `/plugins/{name}/enable` | 2 | Enable a plugin. |
+| POST | `/plugins/{name}/disable` | 2 | Disable a plugin. |
+| PATCH | `/plugins/{name}/settings` | 2 | Update plugin settings (`application/merge-patch+json`). |
+| POST | `/plugins/{name}/upgrade` | 3 | Upgrade a plugin. |
+| DELETE | `/plugins/{name}` | 3 | Remove a plugin. |
 
 ### Search
 

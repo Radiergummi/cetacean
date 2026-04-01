@@ -4,8 +4,7 @@ Cetacean supports pluggable authentication with five modes. Authentication is op
 allows anonymous access. One mode is active at a time, selected via the `-auth-mode` flag, `CETACEAN_AUTH_MODE`
 environment variable, or `auth.mode` in a [config file](configuration.md#config-file).
 
-All authentication is identity-only (who you are). There is no authorization layer—every authenticated user has the
-same read-only access to all swarm resources.
+All authentication is identity-only (who you are). For per-resource access control, see [Authorization](authorization.md).
 
 ## Quick Start
 

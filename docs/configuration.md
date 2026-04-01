@@ -342,6 +342,14 @@ hide disabled action buttons.
 | Patch update policy            | `PATCH /services/{id}/update-policy`    |      —      |       —       |        ✔        |      ✔      |
 | Patch rollback policy          | `PATCH /services/{id}/rollback-policy`  |      —      |       —       |        ✔        |      ✔      |
 | Patch log driver               | `PATCH /services/{id}/log-driver`       |      —      |       —       |        ✔        |      ✔      |
+| **Plugin management**          |                                         |             |               |                 |             |
+| Enable/disable plugin          | `POST /plugins/{name}/enable\|disable`  |      —      |       —       |        ✔        |      ✔      |
+| Update plugin settings         | `PATCH /plugins/{name}/settings`        |      —      |       —       |        ✔        |      ✔      |
+| **Resource creation**          |                                         |             |               |                 |             |
+| Create config                  | `POST /configs`                         |      —      |       —       |        ✔        |      ✔      |
+| Create secret                  | `POST /secrets`                         |      —      |       —       |        ✔        |      ✔      |
+| Patch config labels            | `PATCH /configs/{id}/labels`            |      —      |       —       |        ✔        |      ✔      |
+| Patch secret labels            | `PATCH /secrets/{id}/labels`            |      —      |       —       |        ✔        |      ✔      |
 | **Dangerous operations**       |                                         |             |               |                 |             |
 | Change node availability       | `PUT /nodes/{id}/availability`          |      —      |       —       |        —        |      ✔      |
 | Patch node labels              | `PATCH /nodes/{id}/labels`              |      —      |       —       |        —        |      ✔      |
@@ -352,6 +360,13 @@ hide disabled action buttons.
 | Change node role               | `PUT /nodes/{id}/role`                  |      —      |       —       |        —        |      ✔      |
 | Remove node                    | `DELETE /nodes/{id}`                    |      —      |       —       |        —        |      ✔      |
 | Remove stack                   | `DELETE /stacks/{name}`                 |      —      |       —       |        —        |      ✔      |
+| Remove config                  | `DELETE /configs/{id}`                  |      —      |       —       |        —        |      ✔      |
+| Remove secret                  | `DELETE /secrets/{id}`                  |      —      |       —       |        —        |      ✔      |
+| Remove network                 | `DELETE /networks/{id}`                 |      —      |       —       |        —        |      ✔      |
+| Remove volume                  | `DELETE /volumes/{name}`                |      —      |       —       |        —        |      ✔      |
+| Install plugin                 | `POST /plugins`                         |      —      |       —       |        —        |      ✔      |
+| Upgrade plugin                 | `POST /plugins/{name}/upgrade`          |      —      |       —       |        —        |      ✔      |
+| Remove plugin                  | `DELETE /plugins/{name}`                |      —      |       —       |        —        |      ✔      |
 | **Swarm configuration**        |                                         |             |               |                 |             |
 | Patch orchestration config     | `PATCH /swarm/orchestration`            |      —      |       —       |        ✔        |      ✔      |
 | Patch Raft config              | `PATCH /swarm/raft`                     |      —      |       —       |        ✔        |      ✔      |
@@ -361,6 +376,7 @@ hide disabled action buttons.
 | Rotate join token              | `POST /swarm/rotate-token`              |      —      |       —       |        —        |      ✔      |
 | Rotate unlock key              | `POST /swarm/rotate-unlock-key`         |      —      |       —       |        —        |      ✔      |
 | Force CA rotation              | `POST /swarm/force-rotate-ca`           |      —      |       —       |        —        |      ✔      |
+| Unlock swarm                   | `POST /swarm/unlock`                    |      —      |       —       |        —        |      ✔      |
 
 ## Recommendations
 
