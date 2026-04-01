@@ -26,7 +26,7 @@ export function SecretsEditor({ serviceId, secrets, onSaved }: SecretsEditorProp
 
   const fetchSecrets = useCallback(() => {
     api
-      .secrets({ limit: 0 })
+      .secrets()
       .then((response) => {
         setAvailableSecrets(
           response.items.map((secret) => ({

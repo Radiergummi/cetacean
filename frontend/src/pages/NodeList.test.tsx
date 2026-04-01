@@ -94,7 +94,7 @@ describe("NodeList", () => {
 
   it("renders node list", async () => {
     const items = [fakeNode("n1", "node-alpha"), fakeNode("n2", "node-beta")];
-    mockNodes.mockResolvedValue({ items, total: 2 });
+    mockNodes.mockResolvedValue({ items, total: 2, limit: 50, offset: 0 });
     render(<NodeList />, { wrapper });
 
     await waitFor(() => {
@@ -108,10 +108,14 @@ describe("NodeList", () => {
       .mockResolvedValueOnce({
         items: [fakeNode("n1", "node-alpha"), fakeNode("n2", "node-beta")],
         total: 2,
+        limit: 50,
+        offset: 0,
       })
       .mockResolvedValueOnce({
         items: [fakeNode("n2", "node-beta")],
         total: 1,
+        limit: 50,
+        offset: 0,
       });
     render(<NodeList />, { wrapper });
 
@@ -130,7 +134,7 @@ describe("NodeList", () => {
   });
 
   it("shows empty state when no results", async () => {
-    mockNodes.mockResolvedValue({ items: [], total: 0 });
+    mockNodes.mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 });
     render(<NodeList />, { wrapper });
 
     await waitFor(() => {
@@ -150,8 +154,8 @@ describe("NodeList", () => {
 
   it("shows search empty state", async () => {
     mockNodes
-      .mockResolvedValueOnce({ items: [fakeNode("n1", "node-alpha")], total: 1 })
-      .mockResolvedValueOnce({ items: [], total: 0 });
+      .mockResolvedValueOnce({ items: [fakeNode("n1", "node-alpha")], total: 1, limit: 50, offset: 0 })
+      .mockResolvedValueOnce({ items: [], total: 0, limit: 50, offset: 0 });
     render(<NodeList />, { wrapper });
 
     await waitFor(() => {

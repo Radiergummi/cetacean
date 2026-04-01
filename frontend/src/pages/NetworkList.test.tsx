@@ -75,6 +75,8 @@ describe("NetworkList", () => {
     mockNetworks.mockResolvedValue({
       items: [fakeNetwork("n1", "ingress"), fakeNetwork("n2", "backend")],
       total: 2,
+      limit: 50,
+      offset: 0,
     });
     render(<NetworkList />, { wrapper });
 
@@ -85,7 +87,7 @@ describe("NetworkList", () => {
   });
 
   it("shows empty state", async () => {
-    mockNetworks.mockResolvedValue({ items: [], total: 0 });
+    mockNetworks.mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 });
     render(<NetworkList />, { wrapper });
 
     await waitFor(() => {

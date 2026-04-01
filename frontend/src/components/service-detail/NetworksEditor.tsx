@@ -31,7 +31,7 @@ export function NetworksEditor({
 
   const fetchNetworks = useCallback(() => {
     api
-      .networks({ limit: 0 })
+      .networks()
       .then((response) => {
         setAvailableNetworks(
           response.items.map((network) => ({

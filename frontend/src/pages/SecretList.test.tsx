@@ -68,6 +68,8 @@ describe("SecretList", () => {
     mockSecrets.mockResolvedValue({
       items: [fakeSecret("s1", "db-password"), fakeSecret("s2", "api-key")],
       total: 2,
+      limit: 50,
+      offset: 0,
     });
     render(<SecretList />, { wrapper });
 
@@ -78,7 +80,7 @@ describe("SecretList", () => {
   });
 
   it("shows empty state", async () => {
-    mockSecrets.mockResolvedValue({ items: [], total: 0 });
+    mockSecrets.mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 });
     render(<SecretList />, { wrapper });
 
     await waitFor(() => {

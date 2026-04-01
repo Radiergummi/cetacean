@@ -178,7 +178,7 @@ export default function ServiceDetail() {
 
   useEffect(() => {
     api
-      .networks({ limit: 0 })
+      .networks()
       .then((result) => {
         const map: Record<string, string> = {};
 

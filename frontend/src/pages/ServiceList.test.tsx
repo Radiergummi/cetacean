@@ -71,7 +71,7 @@ function wrapper({ children }: { children: ReactNode }) {
 describe("ServiceList", () => {
   it("renders service list with replica health", async () => {
     const items = [fakeService("s1", "web", 3, 3), fakeService("s2", "api", 2, 1)];
-    mockServices.mockResolvedValue({ items, total: 2 });
+    mockServices.mockResolvedValue({ items, total: 2, limit: 50, offset: 0 });
     render(<ServiceList />, { wrapper });
 
     await waitFor(() => {
@@ -90,10 +90,14 @@ describe("ServiceList", () => {
       .mockResolvedValueOnce({
         items: [fakeService("s1", "web-frontend"), fakeService("s2", "api-backend")],
         total: 2,
+        limit: 50,
+        offset: 0,
       })
       .mockResolvedValueOnce({
         items: [fakeService("s2", "api-backend")],
         total: 1,
+        limit: 50,
+        offset: 0,
       });
     render(<ServiceList />, { wrapper });
 
@@ -118,7 +122,7 @@ describe("ServiceList", () => {
   });
 
   it("shows empty state", async () => {
-    mockServices.mockResolvedValue({ items: [], total: 0 });
+    mockServices.mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 });
     render(<ServiceList />, { wrapper });
 
     await waitFor(() => {

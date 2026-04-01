@@ -13,7 +13,6 @@ import type {
   SecretDetail,
   NetworkDetail,
   VolumeDetail,
-  PagedResponse,
   CollectionResponse,
   HistoryEntry,
   NetworkTopology,
@@ -238,22 +237,51 @@ function buildLogStreamURL(path: string, opts?: { after?: string; stream?: strin
 }
 
 export interface ListParams {
-  limit?: number;
   offset?: number;
   sort?: string;
   dir?: "asc" | "desc";
   search?: string;
+  filter?: string;
 }
 
-function buildListURL(path: string, params?: ListParams): string {
+export const pageSize = 50;
+
+function buildListQueryString(params?: ListParams): string {
   const qs = new URLSearchParams();
-  if (params?.limit != null) qs.set("limit", String(params.limit));
-  if (params?.offset != null) qs.set("offset", String(params.offset));
   if (params?.sort) qs.set("sort", params.sort);
   if (params?.dir) qs.set("dir", params.dir);
   if (params?.search) qs.set("search", params.search);
+  if (params?.filter) qs.set("filter", params.filter);
   const query = qs.toString();
-  return `${path}${query ? `?${query}` : ""}`;
+  return query ? `?${query}` : "";
+}
+
+async function fetchRange<T>(
+  path: string,
+  params?: ListParams,
+  signal?: AbortSignal,
+): Promise<CollectionResponse<T>> {
+  const offset = params?.offset ?? 0;
+  const end = offset + pageSize - 1;
+  const url = `${path}${buildListQueryString(params)}`;
+
+  const res = await fetch(apiPath(url), {
+    headers: {
+      Accept: "application/json",
+      Range: `items ${offset}-${end}`,
+    },
+    signal: composeSignals(signal, AbortSignal.timeout(defaultTimeoutMilliseconds)),
+  });
+
+  if (!res.ok && res.status !== 206) {
+    if (res.status === 401 && res.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
+      redirectToLogin();
+    }
+
+    await throwResponseError(res);
+  }
+
+  return res.json();
 }
 
 export const api = {
@@ -301,32 +329,27 @@ export const api = {
     patch<void>(`/plugins/${encodeURIComponent(name)}/settings`, settings, "application/json"),
   clusterMetrics: () => fetchJSON<ClusterMetrics>("/cluster/metrics"),
   monitoringStatus: () => fetchJSON<MonitoringStatus>("/-/metrics/status"),
-  nodes: (params?: ListParams) => fetchJSON<PagedResponse<Node>>(buildListURL("/nodes", params)),
+  nodes: (params?: ListParams) => fetchRange<Node>("/nodes", params),
   node: (id: string, signal?: AbortSignal) =>
     fetchJSON<{ node: Node }>(`/nodes/${id}`, signal).then((r) => r.node),
-  services: (params?: ListParams) =>
-    fetchJSON<PagedResponse<ServiceListItem>>(buildListURL("/services", params)),
+  services: (params?: ListParams) => fetchRange<ServiceListItem>("/services", params),
   recommendations: () => fetchJSON<RecommendationsResponse>("/recommendations"),
   service: (id: string, signal?: AbortSignal) =>
     fetchJSON<ServiceDetail>(`/services/${id}`, signal),
-  tasks: (params?: ListParams) => fetchJSON<PagedResponse<Task>>(buildListURL("/tasks", params)),
-  stacks: (params?: ListParams) => fetchJSON<PagedResponse<Stack>>(buildListURL("/stacks", params)),
+  tasks: (params?: ListParams) => fetchRange<Task>("/tasks", params),
+  stacks: (params?: ListParams) => fetchRange<Stack>("/stacks", params),
   stacksSummary: () =>
     fetchJSON<CollectionResponse<StackSummary>>("/stacks/summary").then((r) => r.items),
   stack: (name: string) =>
     fetchJSON<{ stack: StackDetail }>(`/stacks/${name}`).then((r) => r.stack),
-  configs: (params?: ListParams) =>
-    fetchJSON<PagedResponse<Config>>(buildListURL("/configs", params)),
+  configs: (params?: ListParams) => fetchRange<Config>("/configs", params),
   config: (id: string, signal?: AbortSignal) => fetchJSON<ConfigDetail>(`/configs/${id}`, signal),
-  secrets: (params?: ListParams) =>
-    fetchJSON<PagedResponse<Secret>>(buildListURL("/secrets", params)),
+  secrets: (params?: ListParams) => fetchRange<Secret>("/secrets", params),
   secret: (id: string, signal?: AbortSignal) => fetchJSON<SecretDetail>(`/secrets/${id}`, signal),
-  networks: (params?: ListParams) =>
-    fetchJSON<PagedResponse<Network>>(buildListURL("/networks", params)),
+  networks: (params?: ListParams) => fetchRange<Network>("/networks", params),
   network: (id: string, signal?: AbortSignal) =>
     fetchJSON<NetworkDetail>(`/networks/${id}`, signal),
-  volumes: (params?: ListParams) =>
-    fetchJSON<PagedResponse<Volume>>(buildListURL("/volumes", params)),
+  volumes: (params?: ListParams) => fetchRange<Volume>("/volumes", params),
   volume: (name: string, signal?: AbortSignal) =>
     fetchJSON<VolumeDetail>(`/volumes/${name}`, signal),
   task: (id: string) => fetchJSON<{ task: Task }>(`/tasks/${id}`).then((r) => r.task),

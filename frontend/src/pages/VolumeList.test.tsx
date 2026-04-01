@@ -70,6 +70,8 @@ describe("VolumeList", () => {
     mockVolumes.mockResolvedValue({
       items: [fakeVolume("db-data"), fakeVolume("cache-vol")],
       total: 2,
+      limit: 50,
+      offset: 0,
     });
     render(<VolumeList />, { wrapper });
 
@@ -80,7 +82,7 @@ describe("VolumeList", () => {
   });
 
   it("shows empty state", async () => {
-    mockVolumes.mockResolvedValue({ items: [], total: 0 });
+    mockVolumes.mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 });
     render(<VolumeList />, { wrapper });
 
     await waitFor(() => {

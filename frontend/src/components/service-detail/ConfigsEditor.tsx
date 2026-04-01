@@ -26,7 +26,7 @@ export function ConfigsEditor({ serviceId, configs, onSaved }: ConfigsEditorProp
 
   const fetchConfigs = useCallback(() => {
     api
-      .configs({ limit: 0 })
+      .configs()
       .then((response) => {
         setAvailableConfigs(
           response.items.map((config) => ({

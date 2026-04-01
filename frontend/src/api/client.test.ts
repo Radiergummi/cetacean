@@ -15,17 +15,72 @@ function jsonResponse(data: unknown, status = 200) {
     statusText: status === 200 ? "OK" : "Not Found",
     json: () => Promise.resolve(data),
     text: () => Promise.resolve(typeof data === "string" ? data : JSON.stringify(data)),
+    headers: new Headers(),
   });
 }
 
 describe("api client", () => {
-  it("fetches nodes", async () => {
-    mockFetch.mockReturnValue(jsonResponse({ items: [{ ID: "n1" }], total: 1 }));
+  it("fetches nodes with Range header", async () => {
+    mockFetch.mockReturnValue(
+      jsonResponse({ items: [{ ID: "n1" }], total: 1, limit: 50, offset: 0 }),
+    );
     const result = await api.nodes();
-    expect(result).toEqual({ items: [{ ID: "n1" }], total: 1 });
+    expect(result).toEqual({ items: [{ ID: "n1" }], total: 1, limit: 50, offset: 0 });
     expect(mockFetch).toHaveBeenCalledWith(
       "/nodes",
-      expect.objectContaining({ headers: { Accept: "application/json" } }),
+      expect.objectContaining({
+        headers: { Accept: "application/json", Range: "items 0-49" },
+      }),
+    );
+  });
+
+  it("sends Range header with query params for nodes list", async () => {
+    mockFetch.mockReturnValue(
+      jsonResponse({ items: [], total: 0, limit: 50, offset: 0 }),
+    );
+    await api.nodes({ sort: "hostname", dir: "desc", search: "web" });
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/nodes?sort=hostname&dir=desc&search=web",
+      expect.objectContaining({
+        headers: { Accept: "application/json", Range: "items 0-49" },
+      }),
+    );
+  });
+
+  it("sends custom Range offset", async () => {
+    mockFetch.mockReturnValue(
+      jsonResponse({ items: [], total: 100, limit: 50, offset: 50 }),
+    );
+    await api.nodes({ offset: 50 });
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/nodes",
+      expect.objectContaining({
+        headers: { Accept: "application/json", Range: "items 50-99" },
+      }),
+    );
+  });
+
+  it("accepts 206 as success", async () => {
+    const response = {
+      ok: false,
+      status: 206,
+      statusText: "Partial Content",
+      json: () => Promise.resolve({ items: [{ ID: "n1" }], total: 100, limit: 50, offset: 0 }),
+      headers: new Headers(),
+    };
+    mockFetch.mockReturnValue(Promise.resolve(response));
+    const result = await api.nodes();
+    expect(result).toEqual({ items: [{ ID: "n1" }], total: 100, limit: 50, offset: 0 });
+  });
+
+  it("sends filter query param", async () => {
+    mockFetch.mockReturnValue(
+      jsonResponse({ items: [], total: 0, limit: 50, offset: 0 }),
+    );
+    await api.services({ filter: "Spec.Name contains 'web'" });
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining("filter="),
+      expect.anything(),
     );
   });
 
@@ -47,12 +102,26 @@ describe("api client", () => {
   });
 
   it("throws on non-ok response with problem detail", async () => {
-    mockFetch.mockReturnValue(jsonResponse({ detail: "node not found" }, 404));
+    const response = {
+      ok: false,
+      status: 404,
+      statusText: "Not Found",
+      json: () => Promise.resolve({ detail: "node not found" }),
+      headers: new Headers(),
+    };
+    mockFetch.mockReturnValue(Promise.resolve(response));
     await expect(api.nodes()).rejects.toThrow("node not found");
   });
 
   it("throws on non-ok response with status text fallback", async () => {
-    mockFetch.mockReturnValue(jsonResponse(null, 404));
+    const response = {
+      ok: false,
+      status: 404,
+      statusText: "Not Found",
+      json: () => Promise.resolve(null),
+      headers: new Headers(),
+    };
+    mockFetch.mockReturnValue(Promise.resolve(response));
     await expect(api.nodes()).rejects.toThrow("Not Found");
   });
 
