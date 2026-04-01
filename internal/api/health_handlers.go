@@ -44,7 +44,7 @@ func (h *Handlers) streamResource(
 	w http.ResponseWriter, r *http.Request, typ cache.EventType, id string,
 ) {
 	resMatch := sse.ResourceMatcher(typ, id)
-	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, resMatch), typ)
+	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, resMatch), "")
 }
 
 // aclMatchWrap wraps an SSE match function with an ACL authorization check.
