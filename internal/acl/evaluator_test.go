@@ -468,7 +468,7 @@ func TestEvaluator_EmptyGrantsDenyAll(t *testing.T) {
 }
 
 // Fix 6: Provider grants with invalid resource types/permissions are inert.
-func TestEvaluator_ProviderGrantsWithInvalidStringsAreInert(t *testing.T) {
+func TestEvaluator_ProviderGrantsWithUnknownPermissions(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{}})
 	e.SetSource(&mockSource{
@@ -484,14 +484,16 @@ func TestEvaluator_ProviderGrantsWithInvalidStringsAreInert(t *testing.T) {
 		t.Fatal("grant with permission 'admin' should not satisfy 'read' check")
 	}
 
-	// "admin" is not recognized by hasPermission (only read/write + write-implies-read).
+	// "admin" doesn't match "service:foo" because the resource pattern differs.
 	if e.Can(id, "admin", "service:foo") {
-		t.Fatal("unrecognized permission 'admin' should not match service:foo")
+		t.Fatal("resource mismatch should deny even with matching permission")
 	}
 
-	// Exact permission+resource match works (strings match literally).
+	// Exact permission + resource match succeeds: unknown permissions pass
+	// through when sourced directly from a provider (not via extractGrantsFromRaw,
+	// which validates them).
 	if !e.Can(id, "admin", "badtype:foo") {
-		t.Fatal("exact permission+resource match should succeed even with invalid strings")
+		t.Fatal("exact permission+resource match should succeed for direct provider grants")
 	}
 }
 

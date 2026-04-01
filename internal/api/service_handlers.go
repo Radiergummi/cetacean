@@ -16,6 +16,28 @@ import (
 
 // --- Services ---
 
+// lookupServiceACL resolves a service by path ID, checks read ACL, and returns
+// it. Returns false (and writes the error response) if not found or denied.
+func (h *Handlers) lookupServiceACL(
+	w http.ResponseWriter,
+	r *http.Request,
+) (swarm.Service, bool) {
+	id := r.PathValue("id")
+	svc, ok := h.cache.GetService(id)
+
+	if !ok {
+		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+		return swarm.Service{}, false
+	}
+
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "service:"+svc.Spec.Name) {
+		writeErrorCode(w, r, "ACL001", "access denied")
+		return swarm.Service{}, false
+	}
+
+	return svc, true
+}
+
 type ServiceListItem struct {
 	swarm.Service
 	RunningTasks int `json:"RunningTasks"`
@@ -80,16 +102,11 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	svc, ok := h.cache.GetService(id)
+	svc, ok := h.lookupServiceACL(w, r)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
-	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "service:"+svc.Spec.Name) {
-		writeErrorCode(w, r, "ACL001", "access denied")
-		return
-	}
+	id := r.PathValue("id")
 	detail := ServiceResponse{Service: svc}
 	if changes := DiffServiceSpecs(svc.PreviousSpec, &svc.Spec); len(changes) > 0 {
 		detail.Changes = changes
@@ -107,31 +124,20 @@ func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	svc, ok := h.cache.GetService(id)
+	_, ok := h.lookupServiceACL(w, r)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
-	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "service:"+svc.Spec.Name) {
-		writeErrorCode(w, r, "ACL001", "access denied")
-		return
-	}
-	tasks := h.enrichTasks(h.cache.ListTasksByService(id))
+	tasks := h.enrichTasks(h.cache.ListTasksByService(r.PathValue("id")))
 	writeCachedJSON(w, r, NewCollectionResponse(r.Context(), tasks, len(tasks), len(tasks), 0))
 }
 
 func (h *Handlers) HandleServiceLogs(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	svc, ok := h.cache.GetService(id)
+	_, ok := h.lookupServiceACL(w, r)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
-	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "service:"+svc.Spec.Name) {
-		writeErrorCode(w, r, "ACL001", "access denied")
-		return
-	}
+	id := r.PathValue("id")
 	h.serveLogs(
 		w,
 		r,
