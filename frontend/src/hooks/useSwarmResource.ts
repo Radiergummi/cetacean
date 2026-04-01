@@ -1,5 +1,5 @@
-import type { CollectionResponse } from "../api/types";
 import { pageSize } from "../api/client";
+import type { CollectionResponse } from "../api/types";
 import { useResourceStream } from "./useResourceStream";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 

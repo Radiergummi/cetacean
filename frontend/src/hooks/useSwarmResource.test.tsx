@@ -49,9 +49,7 @@ function wrapper({ children }: { children: ReactNode }) {
 describe("useSwarmResource", () => {
   it("fetches initial data", async () => {
     const items: Item[] = [{ ID: "1", Name: "svc1" }];
-    const fetchFn = vi
-      .fn()
-      .mockResolvedValue({ items, total: 1, limit: 50, offset: 0 });
+    const fetchFn = vi.fn().mockResolvedValue({ items, total: 1, limit: 50, offset: 0 });
 
     const { result } = renderHook(
       () => useSwarmResource(fetchFn, "service", ({ ID }: Item) => ID),
@@ -84,9 +82,7 @@ describe("useSwarmResource", () => {
 
   it("updates item on SSE update event", async () => {
     const items: Item[] = [{ ID: "1", Name: "old" }];
-    const fetchFn = vi
-      .fn()
-      .mockResolvedValue({ items, total: 1, limit: 50, offset: 0 });
+    const fetchFn = vi.fn().mockResolvedValue({ items, total: 1, limit: 50, offset: 0 });
 
     const { result } = renderHook(
       () => useSwarmResource(fetchFn, "service", ({ ID }: Item) => ID),
@@ -257,8 +253,13 @@ describe("useSwarmResource", () => {
     });
 
     const { result, rerender } = renderHook(
-      ({ fn }: { fn: (offset: number) => Promise<{ items: Item[]; total: number; limit: number; offset: number }> }) =>
-        useSwarmResource(fn, "service", ({ ID }: Item) => ID),
+      ({
+        fn,
+      }: {
+        fn: (
+          offset: number,
+        ) => Promise<{ items: Item[]; total: number; limit: number; offset: number }>;
+      }) => useSwarmResource(fn, "service", ({ ID }: Item) => ID),
       {
         wrapper,
         initialProps: { fn: fetchFn1 },

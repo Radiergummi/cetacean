@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -351,7 +352,7 @@ func TestParsePagination_RangeMultipartError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for multipart range")
 	}
-	if err != errMultipartRange {
+	if !errors.Is(err, errMultipartRange) {
 		t.Errorf("expected errMultipartRange, got %v", err)
 	}
 }

@@ -35,9 +35,7 @@ describe("api client", () => {
   });
 
   it("sends Range header with query params for nodes list", async () => {
-    mockFetch.mockReturnValue(
-      jsonResponse({ items: [], total: 0, limit: 50, offset: 0 }),
-    );
+    mockFetch.mockReturnValue(jsonResponse({ items: [], total: 0, limit: 50, offset: 0 }));
     await api.nodes({ sort: "hostname", dir: "desc", search: "web" });
     expect(mockFetch).toHaveBeenCalledWith(
       "/nodes?sort=hostname&dir=desc&search=web",
@@ -48,9 +46,7 @@ describe("api client", () => {
   });
 
   it("sends custom Range offset", async () => {
-    mockFetch.mockReturnValue(
-      jsonResponse({ items: [], total: 100, limit: 50, offset: 50 }),
-    );
+    mockFetch.mockReturnValue(jsonResponse({ items: [], total: 100, limit: 50, offset: 50 }));
     await api.nodes({ offset: 50 });
     expect(mockFetch).toHaveBeenCalledWith(
       "/nodes",
@@ -74,14 +70,9 @@ describe("api client", () => {
   });
 
   it("sends filter query param", async () => {
-    mockFetch.mockReturnValue(
-      jsonResponse({ items: [], total: 0, limit: 50, offset: 0 }),
-    );
+    mockFetch.mockReturnValue(jsonResponse({ items: [], total: 0, limit: 50, offset: 0 }));
     await api.services({ filter: "Spec.Name contains 'web'" });
-    expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining("filter="),
-      expect.anything(),
-    );
+    expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("filter="), expect.anything());
   });
 
   it("fetches a single node (unwraps JSON-LD wrapper)", async () => {

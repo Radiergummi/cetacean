@@ -155,7 +155,12 @@ describe("NodeList", () => {
 
   it("shows search empty state", async () => {
     mockNodes
-      .mockResolvedValueOnce({ items: [fakeNode("n1", "node-alpha")], total: 1, limit: 50, offset: 0 })
+      .mockResolvedValueOnce({
+        items: [fakeNode("n1", "node-alpha")],
+        total: 1,
+        limit: 50,
+        offset: 0,
+      })
       .mockResolvedValueOnce({ items: [], total: 0, limit: 50, offset: 0 });
     render(<NodeList />, { wrapper });
 

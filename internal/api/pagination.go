@@ -91,12 +91,16 @@ func parseItemsRange(header string) (int, int, bool, error) {
 	}
 
 	startN, err := strconv.Atoi(strings.TrimSpace(start))
-	if err != nil || startN < 0 {
-		return 0, 0, false, nil
+	if err != nil {
+		return 0, 0, false, nil //nolint:nilerr // malformed range is not an error
 	}
 
 	endN, err := strconv.Atoi(strings.TrimSpace(end))
-	if err != nil || endN < startN {
+	if err != nil {
+		return 0, 0, false, nil //nolint:nilerr // malformed range is not an error
+	}
+
+	if startN < 0 || endN < startN {
 		return 0, 0, false, nil
 	}
 
@@ -156,7 +160,10 @@ func writeCollectionResponse[T any](
 			return
 		}
 
-		w.Header().Set("Content-Range", fmt.Sprintf("items %d-%d/%d", resp.Offset, last, resp.Total))
+		w.Header().Set(
+			"Content-Range",
+			fmt.Sprintf("items %d-%d/%d", resp.Offset, last, resp.Total),
+		)
 		writeCachedJSONStatus(w, r, http.StatusPartialContent, resp)
 		return
 	}
