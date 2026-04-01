@@ -773,6 +773,186 @@ func TestHandleGetVolume_ACLDenied(t *testing.T) {
 	assertACLErrorCode(t, w, "ACL001")
 }
 
+// --- Task 3: Cross-reference filtering in detail responses ---
+
+func TestHandleGetConfig_CrossRefFiltering(t *testing.T) {
+	c := cache.New(nil)
+	c.SetConfig(swarm.Config{
+		ID:   "cfg1",
+		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "shared-config"}},
+	})
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "allowed-svc"},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{
+					Configs: []*swarm.ConfigReference{
+						{ConfigID: "cfg1", ConfigName: "shared-config"},
+					},
+				},
+			},
+		},
+	})
+	c.SetService(swarm.Service{
+		ID:   "svc2",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "denied-svc"},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{
+					Configs: []*swarm.ConfigReference{
+						{ConfigID: "cfg1", ConfigName: "shared-config"},
+					},
+				},
+			},
+		},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"config:*", "service:allowed-*"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/configs/cfg1", nil)
+	req.SetPathValue("id", "cfg1")
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleGetConfig(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	var resp struct {
+		Services []json.RawMessage `json:"services"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Services) != 1 {
+		t.Fatalf("expected 1 service in cross-references, got %d", len(resp.Services))
+	}
+}
+
+func TestHandleGetSecret_CrossRefFiltering(t *testing.T) {
+	c := cache.New(nil)
+	c.SetSecret(swarm.Secret{
+		ID:   "sec1",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "shared-secret"}},
+	})
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "allowed-svc"},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{
+					Secrets: []*swarm.SecretReference{
+						{SecretID: "sec1", SecretName: "shared-secret"},
+					},
+				},
+			},
+		},
+	})
+	c.SetService(swarm.Service{
+		ID:   "svc2",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "denied-svc"},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{
+					Secrets: []*swarm.SecretReference{
+						{SecretID: "sec1", SecretName: "shared-secret"},
+					},
+				},
+			},
+		},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"secret:*", "service:allowed-*"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/secrets/sec1", nil)
+	req.SetPathValue("id", "sec1")
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleGetSecret(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	var resp struct {
+		Services []json.RawMessage `json:"services"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Services) != 1 {
+		t.Fatalf("expected 1 service in cross-references, got %d", len(resp.Services))
+	}
+}
+
+// --- Task 4: Search endpoint ACL filtering ---
+
+func TestHandleSearch_ACLFiltering(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "webapp-api"}},
+	})
+	c.SetService(swarm.Service{
+		ID:   "svc2",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "backend-worker"}},
+	})
+	c.SetNode(swarm.Node{
+		ID:          "node1",
+		Description: swarm.NodeDescription{Hostname: "worker-1"},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"service:webapp-*"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/search?q=w&limit=0", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleSearch(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	var resp struct {
+		Counts map[string]int `json:"counts"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Counts["services"] != 1 {
+		t.Fatalf("expected services count=1, got %d", resp.Counts["services"])
+	}
+	if resp.Counts["nodes"] != 0 {
+		t.Fatalf("expected nodes count=0, got %d", resp.Counts["nodes"])
+	}
+}
+
 func TestHandleGetStack_ACLDenied(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
