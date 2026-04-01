@@ -26,6 +26,7 @@ Supported `_FILE` variants: `CETACEAN_AUTH_OIDC_CLIENT_SECRET_FILE`, `CETACEAN_A
 | `-recommendations`| `CETACEAN_RECOMMENDATIONS`    | `server.recommendations`    | `true`                        | Enable recommendation engine                                                    |
 | _—_               | `CETACEAN_OPERATIONS_LEVEL`   | `server.operations_level`   | `1`                           | Write operation tier: 0=read-only, 1=operational, 2=configuration, 3=impactful |
 | _—_               | `CETACEAN_SSE_BATCH_INTERVAL` | `server.sse.batch_interval` | `100ms`                       | SSE event batching window (Go duration)                                        |
+| _—_               | `CETACEAN_CORS_ORIGINS`       | `server.cors.origins`       | _—_                           | Allowed CORS origins (comma-separated or `*`). Unset = CORS disabled.          |
 | _—_               | `CETACEAN_SNAPSHOT`           | `storage.snapshot`          | `true`                        | Enable disk persistence of swarm state                                         |
 | _—_               | `CETACEAN_DATA_DIR`           | `storage.data_dir`          | `./data`                      | Directory for snapshot file                                                    |
 | `-tls-cert`       | `CETACEAN_TLS_CERT`           | `tls.cert`                  | _—_                           | Server certificate path (PEM)                                                  |
@@ -58,6 +59,38 @@ injected at runtime via a `<base>` tag.
 When deploying behind a reverse proxy that **preserves** the path prefix (e.g., forwards `/cetacean/nodes` as-is), set
 `CETACEAN_BASE_PATH=/cetacean`. When the proxy **strips** the prefix before forwarding, leave `CETACEAN_BASE_PATH`
 unset.
+
+## CORS
+
+By default, Cetacean does not set any CORS headers — the embedded SPA is served from the same origin and doesn't need
+them. Enable CORS when external scripts or dashboards on other origins need to call the API.
+
+```bash
+# Allow specific origins
+CETACEAN_CORS_ORIGINS=https://grafana.example.com,https://internal.example.com
+
+# Allow any origin (not recommended with authentication)
+CETACEAN_CORS_ORIGINS=*
+```
+
+Or in TOML:
+
+```toml
+[server.cors]
+origins = ["https://grafana.example.com", "https://internal.example.com"]
+```
+
+When enabled, Cetacean handles `OPTIONS` preflight requests (responding with `204 No Content`) and adds the following
+headers to cross-origin responses:
+
+- `Access-Control-Allow-Origin` — the requesting origin (reflected from the allow-list)
+- `Access-Control-Allow-Methods` — `GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS`
+- `Access-Control-Allow-Headers` — `Accept, Authorization, Content-Type, If-None-Match, X-Request-ID`
+- `Access-Control-Expose-Headers` — `ETag, Link, Allow, Location, Retry-After, X-Request-ID`
+- `Access-Control-Max-Age` — `86400` (24 hours)
+
+Requests from origins not in the allow-list receive no CORS headers and are blocked by the browser's same-origin policy
+as before.
 
 ## Authentication and Authorization Settings
 
@@ -130,6 +163,9 @@ operations_level = 1
 
 [server.sse]
 batch_interval = "100ms"
+
+# [server.cors]
+# origins = ["https://grafana.example.com"]
 
 [docker]
 host = "unix:///var/run/docker.sock"

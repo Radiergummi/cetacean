@@ -41,6 +41,7 @@ type Config struct {
 	SelfMetrics      bool            // CETACEAN_SELF_METRICS, default true
 	Recommendations  bool            // CETACEAN_RECOMMENDATIONS, default true
 	OperationsLevel  OperationsLevel // CETACEAN_OPERATIONS_LEVEL
+	CORSOrigins      []string        // CETACEAN_CORS_ORIGINS, default empty (disabled)
 }
 
 // Load merges configuration from flags, environment variables, a TOML
@@ -66,6 +67,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		fSnapshot        *bool
 		fOpsLevel        *int
 		fBasePath        *string
+		fCORSOrigins     []string
 	)
 	if fc != nil {
 		if fc.Server != nil {
@@ -77,6 +79,9 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 			fBasePath = fc.Server.BasePath
 			if fc.Server.SSE != nil {
 				fSSEBatch = fc.Server.SSE.BatchInterval
+			}
+			if fc.Server.CORS != nil {
+				fCORSOrigins = fc.Server.CORS.Origins
 			}
 		}
 		if fc.Docker != nil {
@@ -148,6 +153,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 			true,
 		),
 		OperationsLevel: OperationsLevel(opsLevel),
+		CORSOrigins:     resolveStringSlice("CETACEAN_CORS_ORIGINS", fCORSOrigins),
 	}
 
 	if err := ValidateBasePath(cfg.BasePath); err != nil {

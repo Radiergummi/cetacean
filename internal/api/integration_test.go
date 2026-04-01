@@ -52,6 +52,7 @@ func setupIntegrationRouter(t *testing.T) http.Handler {
 		true,
 		&auth.NoneProvider{},
 		"",
+		nil,
 	)
 }
 

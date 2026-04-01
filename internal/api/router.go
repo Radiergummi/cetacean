@@ -24,6 +24,7 @@ func NewRouter(
 	enableSelfMetrics bool,
 	authProvider auth.Provider,
 	basePath string,
+	corsConfig *CORSConfig,
 ) http.Handler {
 	auth.SetErrorWriter(WriteErrorCode)
 
@@ -401,6 +402,7 @@ func NewRouter(
 	handler = requireReady(h)(handler)
 	handler = negotiate(handler)
 	handler = auth.Middleware(authProvider)(handler)
+	handler = cors(corsConfig)(handler)
 	handler = securityHeaders(handler)
 	handler = recovery(handler)
 	handler = requestID(handler)

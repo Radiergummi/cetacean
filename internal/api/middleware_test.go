@@ -282,6 +282,7 @@ func TestNewRouter_Smoke(t *testing.T) {
 		true,
 		&auth.NoneProvider{},
 		"",
+		nil,
 	)
 	if router == nil {
 		t.Fatal("NewRouter returned nil")

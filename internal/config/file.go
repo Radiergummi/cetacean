@@ -72,13 +72,18 @@ type fileSizingThresholds struct {
 }
 
 type fileServer struct {
-	ListenAddr      *string  `toml:"listen_addr"`
-	Pprof           *bool    `toml:"pprof"`
-	SelfMetrics     *bool    `toml:"self_metrics"`
-	Recommendations *bool    `toml:"recommendations"`
-	SSE             *fileSSE `toml:"sse"`
-	OperationsLevel *int     `toml:"operations_level"`
-	BasePath        *string  `toml:"base_path"`
+	ListenAddr      *string   `toml:"listen_addr"`
+	Pprof           *bool     `toml:"pprof"`
+	SelfMetrics     *bool     `toml:"self_metrics"`
+	Recommendations *bool     `toml:"recommendations"`
+	SSE             *fileSSE  `toml:"sse"`
+	CORS            *fileCORS `toml:"cors"`
+	OperationsLevel *int      `toml:"operations_level"`
+	BasePath        *string   `toml:"base_path"`
+}
+
+type fileCORS struct {
+	Origins []string `toml:"origins"`
 }
 
 type fileSSE struct {

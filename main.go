@@ -326,6 +326,12 @@ func main() {
 		slog.Warn("pprof endpoints enabled", "path", "/debug/pprof/")
 	}
 
+	var corsConfig *api.CORSConfig
+	if len(cfg.CORSOrigins) > 0 {
+		corsConfig = &api.CORSConfig{AllowedOrigins: cfg.CORSOrigins}
+		slog.Info("CORS enabled", "origins", cfg.CORSOrigins)
+	}
+
 	router := api.NewRouter(
 		handlers,
 		broadcaster,
@@ -337,6 +343,7 @@ func main() {
 		cfg.SelfMetrics,
 		authProvider,
 		cfg.BasePath,
+		corsConfig,
 	)
 
 	var serverTLSConfig *tls.Config

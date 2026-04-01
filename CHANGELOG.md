@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Configurable CORS support for cross-origin API access (`CETACEAN_CORS_ORIGINS`)
 - Grant-based RBAC authorization with per-resource access control
 - `Allow` response header indicating available methods per resource
 - `Accept-Patch` response header advertising supported patch formats per resource (RFC 5789)
