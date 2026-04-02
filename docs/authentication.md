@@ -252,8 +252,7 @@ Tailscale auth has two modes. Pick based on your deployment:
 |---|---|---|
 | **How it works** | Queries the host's Tailscale daemon to identify peers | Embeds a Tailscale node inside the Cetacean process |
 | **Tailscale installed on host?** | Yes (daemon must be running) | No |
-| **Network binding** | Cetacean listens on all interfaces (`CETACEAN_LISTEN_ADDR`). Only requests from Tailscale IPs are authenticated; others are rejected. | Authenticated routes listen exclusively on the tailnet. Non-tailnet traffic cannot reach them. |
-| **Docker health checks** | Work normally (health endpoint is auth-exempt) | Work normally — meta endpoints (`/-/health`, `/-/ready`) remain on the regular listener |
+| **Network binding** | Listens on all interfaces (`CETACEAN_LISTEN_ADDR`); only Tailscale IPs are authenticated, others rejected | Authenticated routes listen exclusively on the tailnet; non-tailnet traffic cannot reach them |
 | **Config complexity** | Minimal: just `-auth-mode tailscale` | Requires an auth key, hostname, and persistent state directory |
 | **Best for** | Hosts already running Tailscale (bare-metal, VMs) | Containers, Docker Swarm services, or hosts without Tailscale installed |
 
