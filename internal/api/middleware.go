@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"runtime/debug"
 	"strings"
@@ -26,7 +27,7 @@ func RequestIDFrom(ctx context.Context) string {
 
 func requestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id := r.Header.Get("X-Request-ID")
+		id := r.Header.Get("Request-Id")
 		if id == "" || len(id) > 64 || strings.ContainsAny(id, "\r\n") {
 			var buf [8]byte
 			_, _ = rand.Read(buf[:])
@@ -39,7 +40,7 @@ func requestID(next http.Handler) http.Handler {
 			return -1
 		}, id)
 		ctx := context.WithValue(r.Context(), reqIDKey{}, id)
-		w.Header().Set("X-Request-ID", id)
+		w.Header().Set("Request-Id", id)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -126,6 +127,7 @@ func requestLogger(next http.Handler) http.Handler {
 			"status", sw.status,
 			"duration_ms", duration.Milliseconds(),
 			"bytes", sw.written,
+			"client_ip", clientIP(r),
 		)
 	})
 }
@@ -148,4 +150,14 @@ func recovery(next http.Handler) http.Handler {
 		}()
 		next.ServeHTTP(w, r)
 	})
+}
+
+// clientIP extracts the host portion of r.RemoteAddr (which may have been
+// rewritten by the realIP middleware).
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }

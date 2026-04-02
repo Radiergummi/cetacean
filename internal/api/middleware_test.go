@@ -247,9 +247,9 @@ func TestRequestID_Generated(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
-	got := w.Header().Get("X-Request-ID")
+	got := w.Header().Get("Request-Id")
 	if got == "" {
-		t.Fatal("expected X-Request-ID response header")
+		t.Fatal("expected Request-Id response header")
 	}
 	if len(got) != 16 { // 8 bytes = 16 hex chars
 		t.Errorf("request ID length=%d, want 16", len(got))
@@ -262,12 +262,12 @@ func TestRequestID_Forwarded(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("X-Request-ID", "from-proxy-123")
+	req.Header.Set("Request-Id", "from-proxy-123")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
-	if got := w.Header().Get("X-Request-ID"); got != "from-proxy-123" {
-		t.Errorf("X-Request-ID=%q, want from-proxy-123", got)
+	if got := w.Header().Get("Request-Id"); got != "from-proxy-123" {
+		t.Errorf("Request-Id=%q, want from-proxy-123", got)
 	}
 	if got := w.Body.String(); got != "from-proxy-123" {
 		t.Errorf("context ID=%q, want from-proxy-123", got)
@@ -315,7 +315,7 @@ func TestNewRouter_Smoke(t *testing.T) {
 		t.Errorf("X-Content-Type-Options=%q, want nosniff", got)
 	}
 	// Verify request ID is set
-	if got := w.Header().Get("X-Request-ID"); got == "" {
-		t.Error("expected X-Request-ID header from middleware chain")
+	if got := w.Header().Get("Request-Id"); got == "" {
+		t.Error("expected Request-Id header from middleware chain")
 	}
 }

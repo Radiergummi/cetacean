@@ -27,7 +27,7 @@ var exposedHeaders = strings.Join([]string{
 	"Allow",
 	"Location",
 	"Retry-After",
-	"X-Request-ID",
+	"Request-Id",
 }, ", ")
 
 // allowedMethods lists methods the API supports.
@@ -42,7 +42,7 @@ var allowedHeaders = strings.Join([]string{
 	"Authorization",
 	"Content-Type",
 	"If-None-Match",
-	"X-Request-ID",
+	"Request-Id",
 }, ", ")
 
 func cors(cfg *CORSConfig) func(http.Handler) http.Handler {
