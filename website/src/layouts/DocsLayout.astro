@@ -44,5 +44,21 @@ const { title, description, slug, headings } = Astro.props;
       </main>
       <TableOfContents headings={headings} />
     </div>
+    <script is:inline>
+      document.querySelectorAll(".prose pre").forEach(function(pre) {
+        var button = document.createElement("button");
+        button.className = "copy-button";
+        button.textContent = "Copy";
+        button.addEventListener("click", function() {
+          var code = pre.querySelector("code");
+          navigator.clipboard.writeText(code ? code.textContent : pre.textContent).then(function() {
+            button.textContent = "Copied!";
+            setTimeout(function() { button.textContent = "Copy"; }, 2000);
+          });
+        });
+        pre.style.position = "relative";
+        pre.appendChild(button);
+      });
+    </script>
   </body>
 </html>

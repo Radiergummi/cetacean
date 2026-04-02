@@ -108,3 +108,25 @@
   }
   .prose img { @apply rounded-lg my-4; }
 }
+
+.copy-button {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  background: var(--background);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+.prose pre:hover .copy-button {
+  opacity: 1;
+}
+.copy-button:hover {
+  color: var(--foreground);
+}

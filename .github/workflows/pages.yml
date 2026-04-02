@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "docs/**"
+      - "website/**"
       - "CHANGELOG.md"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
@@ -24,25 +25,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Copy changelog into docs
-        run: |
-          cat > docs/changelog.md << 'FRONT'
-          ---
-          title: Changelog
-          ---
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
-          {% raw %}
-          FRONT
-          cat CHANGELOG.md >> docs/changelog.md
-          echo '{% endraw %}' >> docs/changelog.md
+      - name: Install and build
+        working-directory: website
+        run: |
+          npm ci
+          npm run build
 
       - uses: actions/configure-pages@v5
 
-      - uses: actions/jekyll-build-pages@v1
-        with:
-          source: docs
-
       - uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/dist
 
   deploy:
     runs-on: ubuntu-latest
