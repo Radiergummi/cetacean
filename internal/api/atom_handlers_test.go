@@ -235,15 +235,23 @@ func TestPaginationLinks(t *testing.T) {
 		entries := make([]cache.HistoryEntry, 3)
 		links := paginationLinks(req, entries, 0, 50)
 
-		var hasNext bool
+		var hasNext, hasPrevious bool
 		for _, l := range links {
 			if l.Rel == "next" {
 				hasNext = true
+			}
+
+			if l.Rel == "previous" {
+				hasPrevious = true
 			}
 		}
 
 		if hasNext {
 			t.Error("expected no next link when len(entries) < limit")
+		}
+
+		if hasPrevious {
+			t.Error("expected no previous link on first page (beforeID=0)")
 		}
 	})
 
@@ -278,6 +286,27 @@ func TestPaginationLinks(t *testing.T) {
 			if l.Href != "/history" {
 				t.Errorf("alternate href = %q, want /history (no query params)", l.Href)
 			}
+		}
+	})
+
+	t.Run("includes previous link on non-first page", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/history?before=100&limit=25", nil)
+		entries := make([]cache.HistoryEntry, 3)
+		links := paginationLinks(req, entries, 100, 25)
+
+		var previousHref string
+		for _, l := range links {
+			if l.Rel == "previous" {
+				previousHref = l.Href
+			}
+		}
+
+		if previousHref == "" {
+			t.Fatal("expected previous link on non-first page (beforeID > 0)")
+		}
+
+		if previousHref != "/history" {
+			t.Errorf("previous href = %q, want /history (subscription document)", previousHref)
 		}
 	})
 

@@ -80,6 +80,10 @@ func (h *Handlers) atomDetailHandler(
 
 // HandleAtomSearch serves history entries matching a name search as an Atom feed.
 func (h *Handlers) HandleAtomSearch(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAnyGrant(w, r) {
+		return
+	}
+
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	if q == "" {
 		writeErrorCode(w, r, "SEA001", "missing required query parameter: q")
@@ -88,10 +92,6 @@ func (h *Handlers) HandleAtomSearch(w http.ResponseWriter, r *http.Request) {
 
 	if len(q) > 200 {
 		writeErrorCode(w, r, "SEA002", "query too long (max 200 characters)")
-		return
-	}
-
-	if !h.requireAnyGrant(w, r) {
 		return
 	}
 
@@ -163,6 +163,7 @@ func (h *Handlers) HandleAtomRecommendations(w http.ResponseWriter, r *http.Requ
 	}
 
 	selfHref := absPath(r.Context(), r.URL.Path)
+	alternateHref := absPath(r.Context(), "/recommendations")
 	writeCachedAtom(w, r, atomxml.Feed{
 		Title:   "Recommendations",
 		Author:  &atomxml.Author{Name: "Cetacean"},
@@ -170,7 +171,7 @@ func (h *Handlers) HandleAtomRecommendations(w http.ResponseWriter, r *http.Requ
 		Updated: lastTick,
 		Links: []atomxml.Link{
 			{Rel: "self", Href: selfHref, Type: "application/atom+xml"},
-			{Rel: "alternate", Href: selfHref, Type: "text/html"},
+			{Rel: "alternate", Href: alternateHref, Type: "text/html"},
 		},
 		Entries: atomEntries,
 	})
@@ -259,7 +260,6 @@ func writeCachedAtom(w http.ResponseWriter, r *http.Request, feed atomxml.Feed) 
 
 	var buf bytes.Buffer
 	if err := atomxml.Render(&buf, feed); err != nil {
-		w.Header().Set("Cache-Control", "no-store")
 		writeErrorCode(w, r, "API009", "failed to serialize Atom feed")
 		return
 	}
@@ -335,8 +335,8 @@ func historyToEntries(r *http.Request, entries []cache.HistoryEntry) []atomxml.E
 		}
 
 		title := content
-		if len(title) > 80 {
-			title = title[:80]
+		if runes := []rune(title); len(runes) > 80 {
+			title = string(runes[:80])
 		}
 
 		var links []atomxml.Link
@@ -390,8 +390,10 @@ func resourcePath(typ cache.EventType, id string) string {
 	}
 }
 
-// paginationLinks builds self, alternate, and (optionally) next links for the feed.
+// paginationLinks builds self, alternate, and (optionally) next/previous links
+// for the feed per RFC 5005 (Feed Paging and Archiving).
 // A next link is included when len(entries) == limit, indicating more entries may exist.
+// A previous link is included on non-first pages, pointing back to the subscription document.
 func paginationLinks(
 	r *http.Request,
 	entries []cache.HistoryEntry,
@@ -415,6 +417,15 @@ func paginationLinks(
 	links := []atomxml.Link{
 		{Rel: "self", Href: selfHref, Type: "application/atom+xml"},
 		{Rel: "alternate", Href: alternateHref, Type: "text/html"},
+	}
+
+	// On non-first pages, link back to the subscription document (first page).
+	if beforeID > 0 {
+		links = append(links, atomxml.Link{
+			Rel:  "previous",
+			Href: alternateHref,
+			Type: "application/atom+xml",
+		})
 	}
 
 	if len(entries) == limit && len(entries) > 0 {
