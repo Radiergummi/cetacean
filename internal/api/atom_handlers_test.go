@@ -81,18 +81,6 @@ func TestFeedID(t *testing.T) {
 		}
 	})
 
-	t.Run("prefers X-Forwarded-Host", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/history", nil)
-		req.Host = "internal:9000"
-		req.Header.Set("X-Forwarded-Host", "public.example.com")
-
-		got := feedID(req)
-		want := "tag:public.example.com,2026:/history"
-
-		if got != want {
-			t.Errorf("feedID = %q, want %q", got, want)
-		}
-	})
 }
 
 func TestHistoryToEntries(t *testing.T) {

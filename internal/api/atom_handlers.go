@@ -270,7 +270,7 @@ func writeCachedAtom(w http.ResponseWriter, r *http.Request, feed atomxml.Feed) 
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Content-Type", "application/atom+xml;charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Vary", "Authorization, Cookie")
+	w.Header().Add("Vary", "Authorization, Cookie")
 
 	if etagMatch(r.Header.Get("If-None-Match"), etag) {
 		w.WriteHeader(http.StatusNotModified)
@@ -282,15 +282,8 @@ func writeCachedAtom(w http.ResponseWriter, r *http.Request, feed atomxml.Feed) 
 }
 
 // feedID builds a tag URI for the feed: tag:{host},{year}:{path}.
-// Prefers X-Forwarded-Host over r.Host.
 func feedID(r *http.Request) string {
-	host := r.Header.Get("X-Forwarded-Host")
-	if host == "" {
-		host = r.Host
-	}
-
-	// Tag URI date: year the feed scheme was introduced (must remain stable).
-	return fmt.Sprintf("tag:%s,2026:%s", host, r.URL.Path)
+	return fmt.Sprintf("tag:%s,2026:%s", r.Host, r.URL.Path)
 }
 
 // parseAtomPagination reads ?before= and ?limit= from the query string.
