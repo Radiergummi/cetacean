@@ -1,22 +1,29 @@
 ---
 title: Home
+description: Real-time observability and management dashboard for Docker Swarm Mode clusters.
+category: overview
+tags: [ docker, swarm, dashboard, observability ]
 ---
 
 # Cetacean
 
-Real-time observability and management dashboard for Docker Swarm Mode clusters.
+Cetacean is a real-time observability and management dashboard for Docker Swarm Mode clusters. It connects to the
+Docker socket, caches swarm state in memory, and pushes updates to browsers via SSE — no polling, no refresh.
 
-Single Go binary with an embedded React SPA. Connects to the Docker socket, caches all swarm state in memory, and pushes updates to browsers via SSE.
+Every resource in your swarm (nodes, services, tasks, configs, secrets, networks, volumes) is browsable with
+cross-references, live metrics, and inline editing. Optional Prometheus integration adds CPU/memory charts, capacity
+bars, and resource sizing recommendations.
 
 ## Documentation
 
-- [Getting Started](getting-started) — Installation, quick start, first run
-- [Configuration](configuration) — Environment variables, CLI flags, config file, health checks
-- [Monitoring](monitoring) — Prometheus, node-exporter, cAdvisor setup
-- [Authentication](authentication) — OIDC, Tailscale, mTLS, trusted proxy headers
-- [Authorization](authorization) — Grant-based RBAC with per-resource access control
-- [Dashboard Guide](dashboard) — Navigation, keyboard shortcuts, search, charts, logs
-- [Recommendations](recommendations) — Cluster health checks, sizing, configuration hygiene
-- [Integrations](integrations) — Traefik, Shepherd, Swarm Cronjob, Diun
-- [API Reference](api) — REST endpoints, SSE streaming, query parameters, write operations
-- [Changelog](changelog) — Release history
+|                                    |                                                |
+|------------------------------------|------------------------------------------------|
+| [Getting Started](getting-started) | Install, deploy, and add monitoring            |
+| [Configuration](configuration)     | Flags, env vars, TOML config, operations level |
+| [Monitoring](monitoring)           | Prometheus, node-exporter, cAdvisor            |
+| [Authentication](authentication)   | OIDC, Tailscale, mTLS, proxy headers           |
+| [Authorization](authorization)     | Grant-based RBAC per resource                  |
+| [Dashboard Guide](dashboard)       | Shortcuts, command palette, charts, logs       |
+| [Integrations](integrations)       | Traefik, Shepherd, Swarm Cronjob, Diun         |
+| [Recommendations](recommendations) | Automated cluster health checks                |
+| [API Reference](api)               | REST, SSE, write operations, error codes       |

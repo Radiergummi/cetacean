@@ -1,3 +1,10 @@
+---
+title: Configuration
+description: CLI flags, environment variables, TOML config file, operations level, health checks, and snapshots.
+category: reference
+tags: [configuration, environment, toml, operations-level]
+---
+
 # Configuration
 
 Cetacean can be configured through CLI flags, environment variables, or a TOML config file. When the same setting is
@@ -31,54 +38,6 @@ startup. The `_FILE` variant has lower precedence than the direct env var.
 
 > **Note:** TLS cert and key must be set together or not at all. Required for `cert` auth mode (mTLS), optional
 > otherwise.
-
-### Sub-Path Deployment
-
-Set `server.base_path` to serve Cetacean under a URL prefix, for example, behind a reverse proxy that routes
-`/cetacean/` to your Cetacean instance:
-
-```bash
-CETACEAN_BASE_PATH=/cetacean
-```
-
-Or in TOML:
-
-```toml
-[server]
-base_path = "/cetacean"
-```
-
-## CORS
-
-By default, Cetacean does not set any CORS headers because it serves the embedded webapp from the same origin and
-doesn’t need them. Enable CORS when external scripts or dashboards on other origins need to call the API.
-
-```bash
-# Allow specific origins
-CETACEAN_CORS_ORIGINS=https://grafana.example.com,https://internal.example.com
-
-# Allow any origin (not recommended with authentication)
-CETACEAN_CORS_ORIGINS=*
-```
-
-Or in TOML:
-
-```toml
-[server.cors]
-origins = ["https://grafana.example.com", "https://internal.example.com"]
-```
-
-When enabled, Cetacean handles `OPTIONS` preflight requests (responding with `204 No Content`) and adds the following
-headers to cross-origin responses:
-
-- `Access-Control-Allow-Origin` — the requesting origin (reflected from the allow-list)
-- `Access-Control-Allow-Methods` — `GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS`
-- `Access-Control-Allow-Headers` — `Accept, Authorization, Content-Type, If-None-Match, X-Request-ID`
-- `Access-Control-Expose-Headers` — `ETag, Link, Allow, Location, Retry-After, X-Request-ID`
-- `Access-Control-Max-Age` — `86400` (24 hours)
-
-Requests from origins not in the allowlist receive no CORS headers and will be blocked by the browser’s same-origin
-policy as before.
 
 ## Authentication and Authorization Settings
 
@@ -133,79 +92,14 @@ See [Authentication](authentication.md) for detailed usage guides, flow diagrams
 
 ## Config File
 
-Pass a TOML file via `-config` or `CETACEAN_CONFIG`:
+Pass a TOML file via `-config` or `CETACEAN_CONFIG`. Every field is optional — omitting a key uses the default.
 
 ```bash
 cetacean -config /etc/cetacean/config.toml
 ```
 
-The file uses nested TOML tables. Every field is optional, so you can omit what you don't need. Omitting a key means
-_use the default,_ which is different from setting it to its zero value. For example, omitting `snapshot` defaults to
-`true`, while `snapshot = false` explicitly disables it.
-
-```toml
-[server]
-listen_addr = ":9000"
-pprof = false
-operations_level = 1
-# trusted_proxies = "10.0.0.0/8"
-
-[server.sse]
-batch_interval = "100ms"
-
-# [server.cors]
-# origins = ["https://grafana.example.com"]
-
-[docker]
-host = "unix:///var/run/docker.sock"
-
-[prometheus]
-url = "http://prometheus:9090"
-
-[logging]
-level = "info"
-format = "json"
-
-[storage]
-data_dir = "./data"
-snapshot = true
-
-[tls]
-cert = "/etc/cetacean/server.pem"
-key = "/etc/cetacean/server-key.pem"
-
-[auth]
-mode = "oidc"
-
-[auth.oidc]
-issuer = "https://idp.example.com"
-client_id = "cetacean"
-client_secret = "secret"
-redirect_url = "https://cetacean.example.com/auth/callback"
-scopes = "openid,profile,email"       # comma-separated
-session_key = ""                       # hex-encoded 32 bytes; random if empty
-
-# [auth.tailscale]
-# mode = "local"                       # "local" or "tsnet"
-# authkey = "tskey-auth-..."           # required for tsnet
-# hostname = "cetacean"
-# state_dir = "/var/lib/cetacean/tsnet"
-# capability = "example.com/cap/cetacean"
-
-# [auth.cert]
-# ca = "/etc/cetacean/ca.pem"
-
-# [auth.headers]
-# subject = "X-Remote-User"
-# name = "X-Remote-Name"
-# email = "X-Remote-Email"
-# groups = "X-Remote-Groups"
-# secret_header = "X-Proxy-Secret"
-# secret_value = "my-secret"
-# trusted_proxies = "..."
-```
-
-Only the active auth mode’s section matters. You can leave the others commented out or absent entirely.
+See [`config.reference.toml`](./config.reference.toml) for a complete reference with all options, defaults, and
+descriptions. Copy it as a starting point and uncomment what you need.
 
 ## Subcommands
 
@@ -232,93 +126,22 @@ The binary includes a `cetacean healthcheck` subcommand (used by the built-in Do
 
 ## Operations Level
 
-The `operations_level` setting controls which write operations are available. Use this to restrict Cetacean to a
-read-only dashboard or limit it to safe operational actions. The default is `1`. Requests to endpoints above the
-configured level receive a `403 Forbidden` response.
+The `operations_level` setting controls which write operations are available. The default is `1`. Requests above the
+configured level receive `403 Forbidden`. Each level includes everything below it.
 
-| Operation                      | Endpoint                                | 0 Read-only | 1 Operational | 2 Configuration | 3 Impactful |
-|--------------------------------|-----------------------------------------|:-----------:|:-------------:|:---------------:|:-----------:|
-| Browse all resources           | `GET /…`                                |      ✔      |       ✔       |        ✔        |      ✔      |
-| **Reactive ops**               |                                         |             |               |                 |             |
-| Scale service                  | `PUT /services/{id}/scale`              |      —      |       ✔       |        ✔        |      ✔      |
-| Update service image           | `PUT /services/{id}/image`              |      —      |       ✔       |        ✔        |      ✔      |
-| Rollback service               | `POST /services/{id}/rollback`          |      —      |       ✔       |        ✔        |      ✔      |
-| Restart service                | `POST /services/{id}/restart`           |      —      |       ✔       |        ✔        |      ✔      |
-| **Service definition changes** |                                         |             |               |                 |             |
-| Patch environment variables    | `PATCH /services/{id}/env`              |      —      |       —       |        ✔        |      ✔      |
-| Patch service labels           | `PATCH /services/{id}/labels`           |      —      |       —       |        ✔        |      ✔      |
-| Patch configs                  | `PATCH /services/{id}/configs`          |      —      |       —       |        ✔        |      ✔      |
-| Patch secrets                  | `PATCH /services/{id}/secrets`          |      —      |       —       |        ✔        |      ✔      |
-| Patch networks                 | `PATCH /services/{id}/networks`         |      —      |       —       |        ✔        |      ✔      |
-| Patch mounts                   | `PATCH /services/{id}/mounts`           |      —      |       —       |        ✔        |      ✔      |
-| Patch container config         | `PATCH /services/{id}/container-config` |      —      |       —       |        ✔        |      ✔      |
-| Patch resources                | `PATCH /services/{id}/resources`        |      —      |       —       |        ✔        |      ✔      |
-| Replace healthcheck            | `PUT /services/{id}/healthcheck`        |      —      |       —       |        ✔        |      ✔      |
-| Patch healthcheck              | `PATCH /services/{id}/healthcheck`      |      —      |       —       |        ✔        |      ✔      |
-| Update placement               | `PUT /services/{id}/placement`          |      —      |       —       |        ✔        |      ✔      |
-| Patch ports                    | `PATCH /services/{id}/ports`            |      —      |       —       |        ✔        |      ✔      |
-| Patch update policy            | `PATCH /services/{id}/update-policy`    |      —      |       —       |        ✔        |      ✔      |
-| Patch rollback policy          | `PATCH /services/{id}/rollback-policy`  |      —      |       —       |        ✔        |      ✔      |
-| Patch log driver               | `PATCH /services/{id}/log-driver`       |      —      |       —       |        ✔        |      ✔      |
-| **Plugin management**          |                                         |             |               |                 |             |
-| Enable plugin                  | `POST /plugins/{name}/enable`           |      —      |       —       |        ✔        |      ✔      |
-| Disable plugin                 | `POST /plugins/{name}/disable`          |      —      |       —       |        ✔        |      ✔      |
-| Update plugin settings         | `PATCH /plugins/{name}/settings`        |      —      |       —       |        ✔        |      ✔      |
-| **Resource creation**          |                                         |             |               |                 |             |
-| Create config                  | `POST /configs`                         |      —      |       —       |        ✔        |      ✔      |
-| Create secret                  | `POST /secrets`                         |      —      |       —       |        ✔        |      ✔      |
-| Patch config labels            | `PATCH /configs/{id}/labels`            |      —      |       —       |        ✔        |      ✔      |
-| Patch secret labels            | `PATCH /secrets/{id}/labels`            |      —      |       —       |        ✔        |      ✔      |
-| **Dangerous operations**       |                                         |             |               |                 |             |
-| Change node availability       | `PUT /nodes/{id}/availability`          |      —      |       —       |        —        |      ✔      |
-| Patch node labels              | `PATCH /nodes/{id}/labels`              |      —      |       —       |        —        |      ✔      |
-| Change service mode            | `PUT /services/{id}/mode`               |      —      |       —       |        —        |      ✔      |
-| Change endpoint mode           | `PUT /services/{id}/endpoint-mode`      |      —      |       —       |        —        |      ✔      |
-| Remove service                 | `DELETE /services/{id}`                 |      —      |       —       |        —        |      ✔      |
-| Remove task                    | `DELETE /tasks/{id}`                    |      —      |       —       |        —        |      ✔      |
-| Change node role               | `PUT /nodes/{id}/role`                  |      —      |       —       |        —        |      ✔      |
-| Remove node                    | `DELETE /nodes/{id}`                    |      —      |       —       |        —        |      ✔      |
-| Remove stack                   | `DELETE /stacks/{name}`                 |      —      |       —       |        —        |      ✔      |
-| Remove config                  | `DELETE /configs/{id}`                  |      —      |       —       |        —        |      ✔      |
-| Remove secret                  | `DELETE /secrets/{id}`                  |      —      |       —       |        —        |      ✔      |
-| Remove network                 | `DELETE /networks/{id}`                 |      —      |       —       |        —        |      ✔      |
-| Remove volume                  | `DELETE /volumes/{name}`                |      —      |       —       |        —        |      ✔      |
-| Install plugin                 | `POST /plugins`                         |      —      |       —       |        —        |      ✔      |
-| Upgrade plugin                 | `POST /plugins/{name}/upgrade`          |      —      |       —       |        —        |      ✔      |
-| Remove plugin                  | `DELETE /plugins/{name}`                |      —      |       —       |        —        |      ✔      |
-| **Swarm configuration**        |                                         |             |               |                 |             |
-| Patch orchestration config     | `PATCH /swarm/orchestration`            |      —      |       —       |        ✔        |      ✔      |
-| Patch Raft config              | `PATCH /swarm/raft`                     |      —      |       —       |        ✔        |      ✔      |
-| Patch dispatcher config        | `PATCH /swarm/dispatcher`               |      —      |       —       |        ✔        |      ✔      |
-| Patch CA config                | `PATCH /swarm/ca`                       |      —      |       —       |        —        |      ✔      |
-| Toggle encryption              | `PATCH /swarm/encryption`               |      —      |       —       |        —        |      ✔      |
-| Rotate join token              | `POST /swarm/rotate-token`              |      —      |       —       |        —        |      ✔      |
-| Rotate unlock key              | `POST /swarm/rotate-unlock-key`         |      —      |       —       |        —        |      ✔      |
-| Force CA rotation              | `POST /swarm/force-rotate-ca`           |      —      |       —       |        —        |      ✔      |
-| Unlock swarm                   | `POST /swarm/unlock`                    |      —      |       —       |        —        |      ✔      |
+| Operation                                                         | 0 Read-only | 1 Operational | 2 Configuration | 3 Impactful |
+|-------------------------------------------------------------------|:-----------:|:-------------:|:---------------:|:-----------:|
+| Browse all resources                                              |      ✔      |       ✔       |        ✔        |      ✔      |
+| Scale, restart, rollback, update image                            |      —      |       ✔       |        ✔        |      ✔      |
+| Edit service definitions (env, resources, ports, placement, etc.) |      —      |       —       |        ✔        |      ✔      |
+| Create/edit configs, secrets, plugins                             |      —      |       —       |        ✔        |      ✔      |
+| Edit swarm settings (raft, orchestration, dispatcher)             |      —      |       —       |        ✔        |      ✔      |
+| Delete resources, change node availability/role                   |      —      |       —       |        —        |      ✔      |
+| Change service/endpoint mode, remove nodes/stacks                 |      —      |       —       |        —        |      ✔      |
+| Manage CA, encryption, rotate tokens, unlock swarm                |      —      |       —       |        —        |      ✔      |
 
-### Interaction with ACL
-
-When an [ACL policy](authorization.md) is active, operations level and ACL are checked independently: both must allow a
-write for it to succeed. Operations level is a global ceiling (which _categories_ of writes exist at all),
-while ACL controls _who_ can write to _which_ resources.
-
-For example, with `operations_level=1` (operational):
-
-- A user with `write` on `service:webapp` can scale and restart that service
-- The same user cannot patch its environment variables (requires level 2), even though ACL allows it
-- A user _without_ a `write` grant cannot scale any service, even though the level permits scaling
-
-This lets you set a conservative operations level as a safety net while delegating fine-grained access through ACL
-policy. See [Authorization — Interaction with Operations Level](authorization.md#interaction-with-operations-level)
-for the full decision matrix.
-
-## Recommendations
-
-Cetacean continuously evaluates cluster health and surfaces recommendations on the dashboard, service list, and detail
-pages. Sizing thresholds are configurable; see [docs/recommendations.md](recommendations.md) for the full reference
-including all check categories, configuration options, and where recommendations appear.  
-You can disable the recommendation engine entirely by setting the `recommendations` option to `false`.
+When combined with [ACL](authorization.md#interaction-with-operations-level), both checks must pass — operations level
+is the global ceiling, ACL controls per-user scope.
 
 ## Profiling
 

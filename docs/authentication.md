@@ -1,3 +1,10 @@
+---
+title: Authentication
+description: OIDC, Tailscale, mTLS client certificates, and trusted proxy header authentication.
+category: guide
+tags: [authentication, oidc, tailscale, mtls, headers, security]
+---
+
 # Authentication
 
 Cetacean supports pluggable authentication with five modes. Authentication is optional: The default mode (`none`)
@@ -43,35 +50,10 @@ and config file keys are listed in each provider's configuration table.
 
 ## Identity Model
 
-Every authenticated request produces an `Identity`:
-
-```json
-{
-  "subject": "user-123",
-  "displayName": "Alice",
-  "email": "alice@example.com",
-  "groups": [
-    "admin",
-    "developers"
-  ],
-  "provider": "oidc",
-  "raw": {
-    "sub": "user-123",
-    "email_verified": true
-  }
-}
-```
-
-| Field         | Type     | Description                                                                         |
-|---------------|----------|-------------------------------------------------------------------------------------|
-| `subject`     | string   | Unique identifier (OIDC `sub`, Tailscale user ID, cert CN/SPIFFE URI, header value) |
-| `displayName` | string   | Human-friendly name                                                                 |
-| `email`       | string   | Email address (if available)                                                        |
-| `groups`      | string[] | Group memberships (if available)                                                    |
-| `provider`    | string   | Provider name: `none`, `oidc`, `tailscale`, `cert`, `headers`                       |
-| `raw`         | object   | Provider-specific claims (excluded from session cookies)                            |
-
-The identity is available at `GET /auth/whoami` in all modes.
+Every provider produces the same identity structure, available at `GET /auth/whoami`. The `subject` is the unique
+identifier (OIDC `sub`, Tailscale user ID, certificate CN/SPIFFE URI, or header value). `groups` are used for
+[authorization](authorization.md) audience matching. How each field is populated depends on the provider — see the
+sections below.
 
 ## Providers
 
@@ -99,7 +81,11 @@ OpenID Connect with authorization code flow for browsers and Bearer token valida
 | `-auth-oidc-scopes`        | `CETACEAN_AUTH_OIDC_SCOPES`        | `auth.oidc.scopes`        | No       | `openid,profile,email` | Comma-separated OIDC scopes                                                    |
 | `-auth-oidc-session-key`   | `CETACEAN_AUTH_OIDC_SESSION_KEY`   | `auth.oidc.session_key`   | No       | random                 | Hex-encoded 32-byte HMAC key for session cookies. Random per-process if unset. |
 
-#### Browser Flow (Authorization Code)
+#### Browser Flow
+
+Unauthenticated browser requests are redirected to `/auth/login`, which initiates the standard authorization code flow
+with your IdP. After authentication, the callback exchanges the code for tokens, validates the ID token, sets a session
+cookie, and redirects to the original URL.
 
 ```
 Browser                        Cetacean                          IdP
@@ -124,18 +110,10 @@ Browser                        Cetacean                          IdP
   │◄── 200 JSON ──────────────────┤                               │
 ```
 
-1. Unauthenticated browser request → 302 redirect to `/auth/login`
-2. `/auth/login` redirects to the IdP's Authorize endpoint
-3. IdP authenticates the user and redirects back to `/auth/callback`
-4. Callback exchanges the authorization code for tokens, validates the ID token, sets a session cookie, and redirects
-   to the original URL
+#### Machine Flow
 
-The redirect URL from `/auth/login?redirect=/services` must be a relative path starting with `/`. Protocol-relative
-URLs (`//...`) and backslash prefixes are rejected.
-
-#### Machine Flow (Bearer Token)
-
-Send an ID token in the `Authorization` header:
+For scripts and API clients, send an ID token in the `Authorization` header. The token is validated against the IdP's
+JWKS endpoint on every request.
 
 ```bash
 curl -H "Authorization: Bearer eyJhbGci..." \
@@ -143,59 +121,20 @@ curl -H "Authorization: Bearer eyJhbGci..." \
      http://localhost:9000/services
 ```
 
-The token is validated against the IdP's JWKS endpoint on every request.
+#### Session Persistence
 
-When a Bearer-authenticated request fails, the response includes `WWW-Authenticate: Bearer`.
-
-#### Session Cookies
-
-Browser sessions use signed ephemeral cookies:
-
-| Property | Value                                                          |
-|----------|----------------------------------------------------------------|
-| Name     | `__Host-cetacean_session`                                      |
-| Signing  | HMAC-SHA256 with 32-byte key                                   |
-| HttpOnly | Yes (no JavaScript access)                                     |
-| Secure   | Yes (HTTPS only)                                               |
-| SameSite | Lax                                                            |
-| MaxAge   | min(ID token expiry, 8 hours)                                  |
-| Content  | Subject, display name, email, groups, provider (no raw claims) |
-
-If the session key is not set, the signing key is generated randomly at startup. Restarting the server invalidates all
-sessions (users must re-authenticate).
-
-Set `auth.oidc.session_key` to a fixed 32-byte hex-encoded value for session persistence across restarts:
+By default, the session signing key is generated randomly at startup — restarting the server invalidates all browser
+sessions. Set `auth.oidc.session_key` to a fixed value for persistence across restarts:
 
 ```bash
-# Generate a key
-openssl rand -hex 32
-
-# Use it (flag, env var, or config file)
-./cetacean -auth-oidc-session-key a1b2c3...  # 64 hex characters
+openssl rand -hex 32   # generate a 32-byte key
+./cetacean -auth-oidc-session-key a1b2c3...
 ```
 
 #### Logout
 
-```bash
-# Browser: POST (CSRF-protected)
-curl -X POST http://localhost:9000/auth/logout
-
-# Or simply navigate to POST /auth/logout in the UI
-```
-
-Logout clears the session cookie. If the IdP advertises an `end_session_endpoint` (RFC 9722), the user is redirected to
-the IdP for single sign-out with `id_token_hint`.
-
-The logout endpoint validates the request origin to prevent cross-site logout attacks.
-
-#### Auth Endpoints
-
-| Method | Path                         | Description                                      |
-|--------|------------------------------|--------------------------------------------------|
-| GET    | `/auth/login?redirect={url}` | Initiate OIDC login flow                         |
-| GET    | `/auth/callback`             | OAuth callback (IdP redirects here)              |
-| POST   | `/auth/logout`               | Clear session, optionally redirect to IdP logout |
-| GET    | `/auth/whoami`               | Current identity                                 |
+`POST /auth/logout` clears the session cookie. If the IdP supports it (RFC 9722), the user is also redirected to the
+IdP for sign-out.
 
 #### IdP Setup Examples
 
@@ -286,15 +225,6 @@ remain on the regular listener for Docker health checks.
 | `-auth-tailscale-state-dir`  | `CETACEAN_AUTH_TAILSCALE_STATE_DIR`  | `auth.tailscale.state_dir`  | No         | --         | State directory for tsnet               |
 | `-auth-tailscale-capability` | `CETACEAN_AUTH_TAILSCALE_CAPABILITY` | `auth.tailscale.capability` | No         | --         | App capability key for group extraction |
 
-#### Identity Extraction
-
-| Identity field | Source                                     |
-|----------------|--------------------------------------------|
-| Subject        | Tailscale user ID (numeric)                |
-| DisplayName    | User display name                          |
-| Email          | Login name (usually email)                 |
-| Groups         | From app capability grants (if configured) |
-
 #### Capability-Based Groups
 
 Tailscale ACL capabilities can map users to application groups. Set `auth.tailscale.capability`:
@@ -332,22 +262,12 @@ Then in your Tailscale ACL policy, grant capabilities to users or groups:
 
 Multiple grants are deduplicated and merged into the identity's `groups` array.
 
-#### Address Validation
-
-As a defense-in-depth measure, the provider validates that the remote address is in Tailscale IP ranges before calling
-WhoIs:
-
-- IPv4: `100.64.0.0/10` (CGNAT)
-- IPv6: `fd7a:115c:a1e0::/48` (ULA)
-
-Requests from non-Tailscale IPs are rejected immediately.
-
 ---
 
 ### Client Certificates (mTLS)
 
-Authenticates via mTLS client certificates. Supports standard X.509 certificates and SPIFFE X.509-SVIDs for workload
-identity.
+Authenticates via mTLS client certificates. Supports standard X.509 certificates and SPIFFE X.509-SVIDs for
+workload identity.
 
 **Requires TLS termination at Cetacean** (not behind a TLS-terminating proxy).
 
@@ -369,52 +289,9 @@ identity.
 
 Clients without a valid certificate cannot connect.
 
-#### Identity Extraction
-
-Identity fields are extracted from the client certificate in priority order:
-
-1. **SPIFFE URI SAN** (the highest priority, for workload identity)
-    - Subject set to the full SPIFFE URI (e.g., `spiffe://example.com/service/web`)
-    - DisplayName set to the path component
-2. **Email SAN** (fallback)
-    - First email address used as subject and display name
-3. **Common Name (CN)** (fallback)
-    - CN used as Subject and display name
-
-Groups are extracted from the certificate's Organizational Unit (OU) fields.
-
-#### SPIFFE Support
-
-[SPIFFE](https://spiffe.io/) X.509-SVIDs are validated per the SPIFFE specification:
-
-- URI must start with `spiffe://`
-- Trust domain: lowercase alphanumeric, `.`, `-`, `_` (max 255 chars)
-- Path: must start with `/`, no empty segments, no `.` or `..` segments
-- Max total length: 2048 bytes
-- No query or fragment components
-
-```bash
-# Generate a SPIFFE-compatible client cert (using your SPIFFE CA)
-# The URI SAN should be: spiffe://trust-domain/path/to/workload
-
-# Example with curl
-curl --cert client.pem --key client-key.pem \
-     --cacert ca.pem \
-     https://cetacean.example.com:9000/services
-```
-
-#### Raw Claims
-
-The `raw` field in the identity includes certificate metadata:
-
-```json
-{
-  "serial": "0a:1b:2c:3d",
-  "issuer_cn": "My CA",
-  "not_after": "2027-01-15T00:00:00Z",
-  "spiffe_id": "spiffe://example.com/service/web"
-}
-```
+Identity is extracted from the certificate: SPIFFE URI SAN (highest priority), then email SAN, then Common Name.
+Groups come from Organizational Unit (OU) fields. [SPIFFE](https://spiffe.io/) X.509-SVIDs are supported for
+workload identity.
 
 ---
 
@@ -422,8 +299,8 @@ The `raw` field in the identity includes certificate metadata:
 
 Reads identity from HTTP headers set by a trusted reverse proxy (nginx, Traefik, Envoy, etc.).
 
-**Important:** This mode trusts that the proxy sets headers correctly. You must configure at least one security
-mechanism to prevent clients from spoofing headers by bypassing the proxy.
+> **Important:** This mode trusts that the proxy sets headers correctly. You must configure at least one security
+> mechanism to prevent clients from spoofing headers by bypassing the proxy.
 
 #### Configuration
 
@@ -437,34 +314,20 @@ mechanism to prevent clients from spoofing headers by bypassing the proxy.
 | `-auth-headers-secret-value`    | `CETACEAN_AUTH_HEADERS_SECRET_VALUE`    | `auth.headers.secret_value`    | Conditional    | --      | Shared secret value (required if secret header set) |
 | `-auth-headers-trusted-proxies` | `CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES` | `auth.headers.trusted_proxies` | **Deprecated** | --      | Use `-trusted-proxies` instead                      |
 
-Header auth requires the general `-trusted-proxies` setting (see [General Settings](configuration.md#general-settings)).
-The headers-specific `-auth-headers-trusted-proxies` is deprecated and will be removed in v1. The shared secret is
-optional, additional protection.
+Header auth requires the general `trusted_proxies` setting (see [General Settings](configuration.md#general-settings)).
 
-#### Security Mechanisms
+> **Note:** The headers-specific `auth.headers.trusted_proxies` option is deprecated and will be removed in v1.
 
-**IP Allowlist (required):** only accept headers from known proxy IPs:
+#### Security
 
-```bash
-./cetacean \
-  -auth-mode headers \
-  -auth-headers-subject X-Remote-User \
-  -trusted-proxies 10.0.0.1,10.0.0.2,127.0.0.1
-```
-
-Supports individual IPs and CIDR notation (`10.0.0.0/8`). Bare IPs are treated as `/32` (IPv4) or `/128` (IPv6).
-
-**Shared Secret (optional):** additionally requires the proxy to prove its identity with a secret header.
-
-**IP Allowlist + Shared Secret:** for maximum security, combine both mechanisms:
+The `trusted_proxies` setting is required—it restricts which IPs can set identity headers. Supports individual IPs and
+CIDR notation (`10.0.0.0/8`). For additional protection, configure a shared secret that the proxy must include with
+every request:
 
 ```bash
 ./cetacean \
   -auth-mode headers \
   -auth-headers-subject X-Remote-User \
-  -auth-headers-name X-Remote-Name \
-  -auth-headers-email X-Remote-Email \
-  -auth-headers-groups X-Remote-Groups \
   -auth-headers-secret-header X-Proxy-Secret \
   -auth-headers-secret-value my-secret-value \
   -trusted-proxies 10.0.0.0/8
@@ -514,37 +377,12 @@ http:
           - url: "http://cetacean:9000"
 ```
 
-#### Subject Validation
-
-The subject header value is validated:
-
-- Must not be empty
-- Max 256 characters
-- No control characters
-
-Missing or invalid subject → 401 Unauthorized.
-
 ---
 
 ## TLS
 
-TLS termination is available in any auth mode. It is **required** for cert mode (mTLS).
-
-| Flag        | Env var             | Config file key | Required               | Default | Description                   |
-|-------------|---------------------|-----------------|------------------------|---------|-------------------------------|
-| `-tls-cert` | `CETACEAN_TLS_CERT` | `tls.cert`      | No (Yes for cert mode) | --      | Server certificate path (PEM) |
-| `-tls-key`  | `CETACEAN_TLS_KEY`  | `tls.key`       | No (Yes for cert mode) | --      | Server private key path (PEM) |
-
-```bash
-# TLS with any auth mode
-./cetacean -tls-cert /path/to/cert.pem -tls-key /path/to/key.pem
-```
-
-When TLS is enabled, Cetacean listens on HTTPS. This is useful when:
-
-- Using cert mode (required for mTLS)
-- Running without a TLS-terminating proxy
-- Ensuring session cookies are transmitted securely (OIDC cookies have `Secure` flag)
+TLS termination is available in any auth mode and required for cert mode (mTLS). Set `-tls-cert` and `-tls-key` to
+enable HTTPS. See the [TLS settings](configuration.md#general-settings) in the configuration reference.
 
 ## Docker Compose Examples
 
@@ -630,75 +468,15 @@ services:
         constraints: [ node.role == manager ]
 ```
 
-## API Usage
+## Verifying Your Setup
 
-### Check Current Identity
+Check the current identity with `GET /auth/whoami`:
 
 ```bash
 curl -s http://localhost:9000/auth/whoami | jq .
 ```
 
-Response:
-
-```json
-{
-  "subject": "alice",
-  "displayName": "Alice Smith",
-  "email": "alice@example.com",
-  "groups": [
-    "admin"
-  ],
-  "provider": "oidc"
-}
-```
-
-The response includes `Cache-Control: no-store` to prevent identity caching.
-
-### Unauthenticated Requests
-
-Behavior depends on the auth mode and request type:
-
-| Mode      | Browser (Accept: text/html)         | API (Accept: application/json)   |
-|-----------|-------------------------------------|----------------------------------|
-| none      | Always authenticated (anonymous)    | Always authenticated (anonymous) |
-| oidc      | 302 redirect to `/auth/login`       | 401 + `WWW-Authenticate: Bearer` |
-| tailscale | 401                                 | 401                              |
-| cert      | TLS handshake fails (no valid cert) | TLS handshake fails              |
-| headers   | 401                                 | 401                              |
-
-### Frontend Integration
-
-The Cetacean SPA automatically:
-
-1. Fetches identity from `/auth/whoami` on page load
-2. Displays the user badge in the nav bar (hidden in `none` mode)
-3. On 401 with `WWW-Authenticate: Bearer` (OIDC), redirects to `/auth/login` with the current URL as the redirect target
-
-## Security Properties
-
-### Session Management
-
-- Session cookies are signed with HMAC-SHA256
-- Session TTL capped at 8 hours (or ID token expiry, whichever is shorter)
-- Cookie flags: `HttpOnly`, `Secure`, `SameSite=Lax`
-- By default, sessions are ephemeral -- server restart invalidates all sessions
-- Set `auth.oidc.session_key` for persistence across restarts
-
-### CSRF Protection
-
-- OIDC login flow uses random state parameter (128-bit entropy)
-- PKCE (S256) prevents authorization code interception
-- Logout endpoint validates request origin to prevent cross-site attacks
-
-### RFC Compliance
-
-| RFC               | Feature                                                                 |
-|-------------------|-------------------------------------------------------------------------|
-| RFC 6750          | Bearer token authentication scheme                                      |
-| RFC 9110          | `WWW-Authenticate` response header                                      |
-| RFC 9207          | OIDC Authorization Server Issuer Identification (mix-up attack defense) |
-| RFC 9722          | RP-Initiated Logout with `id_token_hint`                                |
-| SPIFFE X.509-SVID | SPIFFE trust domain and path validation                                 |
+See the [API reference](/api) for response schema and auth endpoint details.
 
 ## Authorization
 

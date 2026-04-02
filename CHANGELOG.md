@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Tailscale auth mode comparison table in the authentication docs
 - Configurable CORS support for cross-origin API access (`CETACEAN_CORS_ORIGINS`)
 - Grant-based RBAC authorization with per-resource access control
-- `Allow` response header indicating available methods per resource
+- `Allow` response header indicating available methods per resource — the dashboard uses this to show or hide write controls per resource and per user
 - `Accept-Patch` response header advertising supported patch formats per resource (RFC 5789)
 - `Prefer: return=minimal` support on all write endpoints (RFC 7240)
 - `Last-Modified` / `If-Modified-Since` conditional requests on resource detail endpoints

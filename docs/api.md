@@ -1,5 +1,8 @@
 ---
 title: API Reference
+description: REST endpoints, SSE streaming, query parameters, write operations, and error codes.
+category: reference
+tags: [api, rest, sse, json-ld, openapi]
 ---
 
 # Cetacean API Reference
@@ -79,36 +82,8 @@ curl "http://localhost:9000/services?filter=name+contains+'web'"
 
 ### Range header pagination
 
-All list endpoints also accept the HTTP `Range` header with the `items` unit. This follows the pattern used by
-[Heroku](https://devcenter.heroku.com/articles/platform-api-reference#ranges) and other APIs for cursor-free
-pagination.
-
-```bash
-# First 25 items
-curl -H "Range: items 0-24" http://localhost:9000/services
-
-# Items 50-74
-curl -H "Range: items 50-74" http://localhost:9000/services
-```
-
-The response uses standard HTTP range semantics:
-
-| Status                      | Meaning                                                                                              |
-|-----------------------------|------------------------------------------------------------------------------------------------------|
-| `200 OK`                    | The full collection fits within the requested range (or no Range header).                            |
-| `206 Partial Content`       | A subset was returned. Check `Content-Range` for position.                                           |
-| `416 Range Not Satisfiable` | The requested offset is beyond the total. `Content-Range: items */TOTAL` tells you the actual count. |
-
-Partial responses include a `Content-Range` header:
-
-```
-Content-Range: items 0-24/142
-```
-
-All list responses include `Accept-Ranges: items` to advertise support.
-
-When both query parameters (`limit`/`offset`) and a `Range` header are present, query parameters take precedence.
-Multipart ranges (e.g., `items 0-9, 50-59`) are not supported and return `416`.
+List endpoints also accept `Range: items 0-24` for HTTP range-based pagination. Returns `206 Partial Content` with
+`Content-Range: items 0-24/142`. When both query parameters and Range are present, query parameters take precedence.
 
 ### Sort fields by resource
 
@@ -159,76 +134,9 @@ curl "http://localhost:9000/stacks?filter=services+>+5"
 
 ## Response Format
 
-All responses use JSON-LD annotations (`@context`, `@id`, `@type`) for self-description.
-
-### Collections
-
-```json
-{
-  "@context": "/api/context.jsonld",
-  "@type": "Collection",
-  "items": [
-    {
-      "ID": "abc123",
-      "Spec": {
-        "...": "..."
-      }
-    }
-  ],
-  "total": 42,
-  "limit": 50,
-  "offset": 0
-}
-```
-
-Pagination links are provided via RFC 8288 `Link` headers:
-
-```
-Link: </services?limit=50&offset=50>; rel="next"
-```
-
-### Detail responses
-
-```json
-{
-  "@context": "/api/context.jsonld",
-  "@id": "/nodes/abc123",
-  "@type": "Node",
-  "node": {
-    "...": "..."
-  },
-  "services": [
-    {
-      "@id": "/services/def456",
-      "name": "web"
-    }
-  ]
-}
-```
-
-Detail responses for configs, secrets, networks, and volumes include a `services` array of cross-references to services
-that use the resource.
-
-Task details include linked service and node references:
-
-```json
-{
-  "@context": "/api/context.jsonld",
-  "@id": "/tasks/abc123",
-  "@type": "Task",
-  "task": {
-    "...": "..."
-  },
-  "service": {
-    "@id": "/services/def456",
-    "name": "web"
-  },
-  "node": {
-    "@id": "/nodes/ghi789",
-    "hostname": "worker-1"
-  }
-}
-```
+All responses include JSON-LD annotations (`@context`, `@id`, `@type`) for self-description. Collection responses
+wrap items in `{ items, total, limit, offset }` with RFC 8288 `Link` headers for pagination. Detail responses wrap
+the resource with cross-references (e.g., services using a config, or the service and node for a task).
 
 ## Errors
 
@@ -311,198 +219,6 @@ access denied returns `ACL002`. The response includes the resource and permissio
 **Unsupported patch type (415):** PATCH endpoints validate `Content-Type`. Sending `application/json` instead of
 `application/json-patch+json` or `application/merge-patch+json` returns `415 Unsupported Media Type`.
 
-### Error code reference
-
-#### API — Protocol and content negotiation
-
-| Code   | Status | Title                        | Description                                                                                  | Suggestion                                                                         |
-|--------|--------|------------------------------|----------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------|
-| API001 | 406    | SSE Not Supported            | This endpoint does not support Server-Sent Events.                                           | Use `Accept: application/json` instead of `text/event-stream`.                     |
-| API002 | 406    | SSE Required                 | This endpoint only supports Server-Sent Events.                                              | Use `Accept: text/event-stream`.                                                   |
-| API003 | 406    | Not Acceptable               | The `Accept` header does not match any media type this endpoint can produce.                 | Use `Accept: application/json`, `text/event-stream`, or `text/html`.               |
-| API004 | 415    | Invalid Patch Content-Type   | The `Content-Type` header does not match a supported patch format.                           | Use `Content-Type: application/merge-patch+json` or `application/json-patch+json`. |
-| API005 | 500    | Streaming Not Supported      | The server's response writer does not support streaming (no `http.Flusher`).                 | Server configuration issue. Check that no middleware is buffering responses.       |
-| API006 | 400    | Invalid Request Body         | The request body could not be decoded as valid JSON.                                         | Ensure the request body is well-formed JSON matching the expected schema.          |
-| API007 | 400    | Unreadable Request Body      | The request body could not be read.                                                          | Ensure the request includes a body and `Content-Length` is correct.                |
-| API008 | 400    | Invalid JSON                 | The request body is not valid JSON.                                                          | Check for syntax errors in the JSON payload.                                       |
-| API009 | 500    | Internal Serialization Error | The server failed to serialize or deserialize internal state.                                | Server bug. Check the Cetacean logs.                                               |
-| API010 | 409    | Patch Test Failed            | A JSON Patch `test` operation failed — the resource state does not match the expected value. | Reload the resource and retry the patch with updated test values.                  |
-| API011 | 400    | Patch Application Failed     | The JSON Patch could not be applied to the resource.                                         | Check the patch operations for correctness.                                        |
-
-#### AUT — Authentication
-
-| Code   | Status | Title                         | Description                                                          | Suggestion                                                 |
-|--------|--------|-------------------------------|----------------------------------------------------------------------|------------------------------------------------------------|
-| AUT001 | 401    | Not Authenticated             | No valid credentials were provided.                                  | Log in or provide a valid authentication token.            |
-| AUT002 | 403    | Authorization Denied          | The identity provider denied authorization.                          | Check your account permissions with the identity provider. |
-| AUT003 | 400    | Authentication Callback Error | The authentication callback contained invalid or missing parameters. | Retry the login flow from the beginning.                   |
-| AUT004 | 500    | Authentication Server Error   | An internal error occurred during authentication.                    | Retry the login flow. If it persists, check server logs.   |
-
-#### ACL — Authorization (RBAC)
-
-| Code   | Status | Title               | Description                                         | Suggestion                                                                |
-|--------|--------|---------------------|-----------------------------------------------------|---------------------------------------------------------------------------|
-| ACL001 | 403    | Access Denied       | You do not have permission to access this resource. | Check your [ACL policy grants](authorization.md).                         |
-| ACL002 | 403    | Write Access Denied | You do not have write permission on this resource.  | Check your [ACL policy grants](authorization.md) for `write` permissions. |
-
-#### OPS — Operations level
-
-| Code   | Status | Title                    | Description                                                                                                              | Suggestion                                      |
-|--------|--------|--------------------------|--------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------|
-| OPS001 | 403    | Operations Level Too Low | The operation requires a higher [operations level](configuration.md#operations-level) than the server is configured for. | Increase `server.operations_level` and restart. |
-
-#### FLT — Filter expressions
-
-| Code   | Status | Title                      | Description                                                  | Suggestion                                                                                            |
-|--------|--------|----------------------------|--------------------------------------------------------------|-------------------------------------------------------------------------------------------------------|
-| FLT001 | 400    | Filter Expression Too Long | The filter expression exceeds the maximum allowed length.    | Shorten the filter expression.                                                                        |
-| FLT002 | 400    | Invalid Filter Expression  | The filter expression could not be compiled.                 | Check the expression syntax. Filters use the [expr-lang](https://expr-lang.org/) expression language. |
-| FLT003 | 400    | Filter Evaluation Error    | The filter expression compiled but failed during evaluation. | Check that the expression references valid fields for this resource type.                             |
-
-#### SEA — Search
-
-| Code   | Status | Title                 | Description                                                            | Suggestion                                |
-|--------|--------|-----------------------|------------------------------------------------------------------------|-------------------------------------------|
-| SEA001 | 400    | Missing Search Query  | The required query parameter `q` is missing.                           | Provide a search query: `/search?q=term`. |
-| SEA002 | 400    | Search Query Too Long | The search query exceeds the maximum allowed length of 200 characters. | Shorten the search query.                 |
-
-#### MTR — Metrics / Prometheus
-
-| Code   | Status | Title                     | Description                                                                   | Suggestion                                                            |
-|--------|--------|---------------------------|-------------------------------------------------------------------------------|-----------------------------------------------------------------------|
-| MTR001 | 503    | Prometheus Not Configured | No Prometheus URL is configured.                                              | Set `prometheus.url` and restart.                                     |
-| MTR002 | 502    | Prometheus Unreachable    | The configured Prometheus server is not responding.                           | Check that Prometheus is running and reachable at the configured URL. |
-| MTR003 | 400    | Missing Metrics Query     | The required query parameter is missing.                                      | Provide a PromQL query parameter.                                     |
-| MTR004 | 400    | Invalid Metrics Step      | The step parameter is outside the allowed range.                              | Use a step value between 5 and 300 seconds.                           |
-| MTR005 | 429    | Too Many Metrics Streams  | The maximum number of concurrent metrics stream connections has been reached. | Close an existing metrics stream connection before opening a new one. |
-| MTR006 | 400    | Missing Label Name        | The label name path parameter is missing.                                     | Provide a label name in the URL path.                                 |
-| MTR007 | 500    | Prometheus Request Failed | Failed to create the request to the Prometheus server.                        | Server-side error. Check the Cetacean logs.                           |
-
-#### LOG — Log streaming
-
-| Code   | Status | Title                        | Description                                                                              | Suggestion                                                                      |
-|--------|--------|------------------------------|------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------|
-| LOG001 | 429    | Too Many Log Streams         | The maximum number of concurrent log stream connections has been reached.                | Close an existing log stream before opening a new one.                          |
-| LOG002 | 400    | Invalid Stream Parameter     | The `stream` parameter must be either `stdout` or `stderr`.                              | Use `stream=stdout` or `stream=stderr`.                                         |
-| LOG003 | 400    | Invalid After Parameter      | The `after` parameter must be an RFC 3339 timestamp or a Go duration string.             | Use a format like `2024-01-01T00:00:00Z` or `1h30m`.                            |
-| LOG004 | 400    | Invalid Before Parameter     | The `before` parameter must be an RFC 3339 timestamp or a Go duration string.            | Use a format like `2024-01-01T00:00:00Z` or `1h30m`.                            |
-| LOG005 | 400    | Before Not Supported For SSE | The `before` parameter is not supported for SSE log streams because they are open-ended. | Remove the `before` parameter when using SSE, or use a JSON request instead.    |
-| LOG006 | 500    | Log Retrieval Failed         | Failed to retrieve logs from the Docker Engine.                                          | Check that the service or task still exists and the Docker Engine is reachable. |
-| LOG007 | 500    | Log Parse Failed             | Logs were retrieved but could not be parsed.                                             | Server-side error. Check the Cetacean logs.                                     |
-| LOG008 | 500    | Log Stream Failed            | Failed to open the log stream from the Docker Engine.                                    | Check that the service or task still exists and the Docker Engine is reachable. |
-
-#### SSE — SSE connections
-
-| Code   | Status | Title                    | Description                                                        | Suggestion                                                 |
-|--------|--------|--------------------------|--------------------------------------------------------------------|------------------------------------------------------------|
-| SSE001 | 429    | Too Many SSE Connections | The maximum number of concurrent SSE connections has been reached. | Close an existing SSE connection before opening a new one. |
-
-#### ENG — Docker Engine
-
-| Code   | Status | Title                       | Description                                                                                                   | Suggestion                                                                                 |
-|--------|--------|-----------------------------|---------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------|
-| ENG001 | 503    | Docker Engine Unavailable   | The Docker Engine is not responding. The daemon may be stopped, restarting, or the socket may be unreachable. | Check that the Docker daemon is running and that Cetacean has access to the Docker socket. |
-| ENG002 | 503    | Docker Version Check Failed | Could not determine the latest Docker Engine version from the GitHub API.                                     | Transient network error. Try again later.                                                  |
-| ENG003 | 400    | Docker Validation Error     | The Docker Engine rejected the request due to invalid arguments.                                              | Check the request parameters for correctness.                                              |
-| ENG004 | 500    | Docker Engine Error         | An unexpected error occurred while communicating with the Docker Engine.                                      | Check the Cetacean and Docker daemon logs.                                                 |
-
-#### SWM — Swarm operations
-
-| Code   | Status | Title                       | Description                                                                            | Suggestion                                                                        |
-|--------|--------|-----------------------------|----------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------|
-| SWM001 | 501    | Swarm API Not Available     | This node may not be a swarm manager, or the Docker Engine may not support swarm mode. | Ensure Cetacean is connected to a swarm manager node.                             |
-| SWM002 | 503    | Swarm Inspect Failed        | Failed to inspect the current swarm state.                                             | Check that the swarm is healthy and retry.                                        |
-| SWM003 | 500    | Swarm Update Failed         | The swarm configuration update failed.                                                 | Check the Cetacean and Docker daemon logs.                                        |
-| SWM004 | 501    | Disk Usage Not Available    | Disk usage information is not available from the Docker Engine.                        | Ensure Cetacean is connected to a Docker Engine that supports the disk usage API. |
-| SWM005 | 500    | Disk Usage Failed           | Failed to retrieve disk usage information.                                             | Check the Docker daemon logs.                                                     |
-| SWM006 | 500    | Token Rotation Failed       | Failed to rotate the swarm join token.                                                 | Check the Docker daemon logs.                                                     |
-| SWM007 | 500    | Unlock Key Rotation Failed  | Failed to rotate the swarm unlock key.                                                 | Check the Docker daemon logs.                                                     |
-| SWM008 | 500    | Swarm Unlock Failed         | Failed to unlock the swarm with the provided key.                                      | Verify the unlock key is correct and try again.                                   |
-| SWM009 | 500    | Unlock Key Retrieval Failed | Failed to retrieve the swarm unlock key.                                               | Check the Docker daemon logs.                                                     |
-| SWM010 | 400    | Unlock Key Required         | The unlock key is required to unlock the swarm.                                        | Provide the `unlockKey` field in the request body.                                |
-| SWM011 | 400    | Invalid Token Target        | The token rotation target must be either `worker` or `manager`.                        | Use `target=worker` or `target=manager`.                                          |
-
-#### NOD — Node operations
-
-| Code   | Status | Title                      | Description                                                        | Suggestion                                                                       |
-|--------|--------|----------------------------|--------------------------------------------------------------------|----------------------------------------------------------------------------------|
-| NOD001 | 409    | Node Not Down              | The node cannot be removed because it is not in the down state.    | Drain the node first, wait for it to reach the down state, or use force removal. |
-| NOD002 | 409    | Node Version Conflict      | The node was modified by another client between read and write.    | Reload the node and retry.                                                       |
-| NOD003 | 404    | Node Not Found             | The specified node does not exist in the swarm.                    | Check the node ID or hostname.                                                   |
-| NOD004 | 400    | Invalid Availability Value | The availability value must be one of: `active`, `drain`, `pause`. | Use `availability=active`, `availability=drain`, or `availability=pause`.        |
-| NOD005 | 400    | Invalid Role Value         | The role value must be one of: `worker`, `manager`.                | Use `role=worker` or `role=manager`.                                             |
-
-#### SVC — Service operations
-
-| Code   | Status | Title                                 | Description                                                               | Suggestion                                              |
-|--------|--------|---------------------------------------|---------------------------------------------------------------------------|---------------------------------------------------------|
-| SVC001 | 409    | Service Version Conflict              | The service was modified by another client between read and write.        | Reload the service and retry.                           |
-| SVC002 | 409    | Service In Use                        | The service cannot be removed because it is managed by a stack.           | Remove the stack that manages this service first.       |
-| SVC003 | 404    | Service Not Found                     | The specified service does not exist in the swarm.                        | Check the service ID or name.                           |
-| SVC004 | 400    | Replicas Required                     | The `replicas` field is required for this operation.                      | Provide the `replicas` field in the request body.       |
-| SVC005 | 400    | Cannot Scale Global Service           | Global-mode services run one task per node and cannot be scaled manually. | Switch the service to replicated mode first.            |
-| SVC006 | 400    | Image Required                        | The `image` field is required for image updates.                          | Provide the `image` field in the request body.          |
-| SVC007 | 400    | No Previous Spec                      | The service has no previous specification to rollback to.                 | Rollback is only available after at least one update.   |
-| SVC008 | 400    | Invalid Service Mode                  | The service mode must be one of: `replicated`, `global`.                  | Use `mode=replicated` or `mode=global`.                 |
-| SVC009 | 400    | Replicas Required For Replicated Mode | When switching to replicated mode, the `replicas` field is required.      | Provide the `replicas` field alongside the mode change. |
-| SVC010 | 400    | Invalid Endpoint Mode                 | The endpoint mode must be one of: `vip`, `dnsrr`.                         | Use `mode=vip` or `mode=dnsrr`.                         |
-| SVC011 | 400    | Invalid Resource Specification        | The merged resource specification is not valid.                           | Check the resource limits and reservations.             |
-| SVC012 | 400    | Invalid Update Policy                 | The merged update policy specification is not valid.                      | Check the update policy fields.                         |
-| SVC013 | 400    | Invalid Rollback Policy               | The merged rollback policy specification is not valid.                    | Check the rollback policy fields.                       |
-| SVC014 | 400    | Invalid Healthcheck                   | The merged healthcheck specification is not valid.                        | Check the healthcheck fields.                           |
-| SVC015 | 400    | Config Missing Required Fields        | Each config reference must include `configID` and `configName`.           | Provide both fields for every config entry.             |
-| SVC016 | 400    | Secret Missing Required Fields        | Each secret reference must include `secretID` and `secretName`.           | Provide both fields for every secret entry.             |
-| SVC017 | 400    | Network Missing Target                | Each network attachment must include a target network ID.                 | Provide the `target` field for every network entry.     |
-| SVC018 | 400    | Invalid Patch Result                  | The JSON patch produced an invalid result.                                | Check the patch operations for correctness.             |
-| SVC019 | 400    | Invalid Log Driver Specification      | The merged log driver specification is not valid.                         | Check the log driver name and options.                  |
-
-#### TSK — Task operations
-
-| Code   | Status | Title                | Description                                                       | Suggestion                                           |
-|--------|--------|----------------------|-------------------------------------------------------------------|------------------------------------------------------|
-| TSK001 | 409    | Task Already Removed | The task could not be removed because Docker no longer tracks it. | The task may have been cleaned up. Refresh the page. |
-| TSK002 | 404    | Task Not Found       | The specified task does not exist.                                | Tasks are ephemeral and may have been cleaned up.    |
-
-#### STK — Stack operations
-
-| Code   | Status | Title           | Description                                                                                                             | Suggestion            |
-|--------|--------|-----------------|-------------------------------------------------------------------------------------------------------------------------|-----------------------|
-| STK001 | 404    | Stack Not Found | The specified stack does not exist. Stacks are derived from service labels and disappear when all services are removed. | Check the stack name. |
-
-#### VOL — Volume operations
-
-| Code   | Status | Title            | Description                                                                   | Suggestion                                                                   |
-|--------|--------|------------------|-------------------------------------------------------------------------------|------------------------------------------------------------------------------|
-| VOL001 | 409    | Volume In Use    | The volume cannot be removed because it is mounted by one or more containers. | Stop or remove the containers using this volume first, or use force removal. |
-| VOL002 | 404    | Volume Not Found | The specified volume does not exist.                                          | Check the volume name.                                                       |
-
-#### NET — Network operations
-
-| Code   | Status | Title                        | Description                                                                                        | Suggestion                                                        |
-|--------|--------|------------------------------|----------------------------------------------------------------------------------------------------|-------------------------------------------------------------------|
-| NET001 | 409    | Network Has Active Endpoints | The network cannot be removed because it has active endpoints from running containers or services. | Disconnect or remove the services attached to this network first. |
-| NET002 | 404    | Network Not Found            | The specified network does not exist.                                                              | Check the network ID.                                             |
-
-#### CFG — Config operations
-
-| Code   | Status | Title                   | Description                                                                    | Suggestion                                              |
-|--------|--------|-------------------------|--------------------------------------------------------------------------------|---------------------------------------------------------|
-| CFG001 | 409    | Config In Use           | The config cannot be removed because it is referenced by one or more services. | Remove the config reference from all services first.    |
-| CFG002 | 404    | Config Not Found        | The specified config does not exist.                                           | Check the config ID.                                    |
-| CFG003 | 409    | Config Name Conflict    | A config with this name already exists.                                        | Choose a different name or remove the existing config.  |
-| CFG004 | 400    | Invalid Config          | The config creation request is invalid.                                        | Provide a non-empty name and valid base64-encoded data. |
-| CFG005 | 409    | Config Version Conflict | The config was modified concurrently.                                          | Retry with the latest version.                          |
-
-#### SEC — Secret operations
-
-| Code   | Status | Title                   | Description                                                                    | Suggestion                                              |
-|--------|--------|-------------------------|--------------------------------------------------------------------------------|---------------------------------------------------------|
-| SEC001 | 409    | Secret In Use           | The secret cannot be removed because it is referenced by one or more services. | Remove the secret reference from all services first.    |
-| SEC002 | 404    | Secret Not Found        | The specified secret does not exist.                                           | Check the secret ID.                                    |
-| SEC003 | 409    | Secret Name Conflict    | A secret with this name already exists.                                        | Choose a different name or remove the existing secret.  |
-| SEC004 | 400    | Invalid Secret          | The secret creation request is invalid.                                        | Provide a non-empty name and valid base64-encoded data. |
-| SEC005 | 409    | Secret Version Conflict | The secret was modified concurrently.                                          | Retry with the latest version.                          |
-
 ## Caching
 
 JSON responses include an `ETag` header (SHA-256 of the response body). Use `If-None-Match` for conditional requests:
@@ -539,13 +255,8 @@ ACL permit write operations.
 **`Prefer: return=minimal`:** Write endpoints honor RFC 7240 `Prefer: return=minimal`. When set, successful writes
 return `204 No Content` instead of the updated resource. The response includes `Preference-Applied: return=minimal`.
 
-**Security headers:** All responses include:
-
-- `X-Content-Type-Options: nosniff`
-- `X-Frame-Options: DENY`
-- `Referrer-Policy: no-referrer`
-- `Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:`
-- `Strict-Transport-Security: max-age=63072000; includeSubDomains` (when TLS is enabled)
+Standard security headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Content-Security-Policy`)
+are set on all responses. HSTS is added when TLS is enabled.
 
 ## Real-Time Events (SSE)
 
@@ -554,7 +265,7 @@ open a per-resource event stream.
 
 ### Per-resource streams
 
-List endpoints stream events filtered by resource type. Detail endpoints stream events for a single resource. Stack
+List Endpoints stream events filtered by resource type. Detail Endpoints stream events for a single resource. Stack
 streams include events for all member resources (services, tasks, configs, secrets, networks, volumes).
 
 ```bash
@@ -656,14 +367,6 @@ No content negotiation. No discovery `Link` headers.
 | GET    | `/metrics/labels/{name}`   | Proxied Prometheus label values for a given label name.                 |
 | GET    | `/-/docker-latest-version` | Latest Docker Engine version (cached).                                  |
 
-```bash
-curl http://localhost:9000/-/health
-# {"status":"ok","version":"...","commit":"...","buildDate":"..."}
-
-curl http://localhost:9000/-/ready
-# {"status":"ready"}  (or 503 {"status":"not_ready"})
-```
-
 ### Monitoring
 
 | Method | Path       | Description                                                                                                              | Parameters                                                  |
@@ -693,11 +396,6 @@ curl -H "Accept: text/event-stream" "http://localhost:9000/metrics?query=up&step
 | GET    | `/disk-usage`       | Disk usage summary by type (images, containers, volumes, build cache). |
 | GET    | `/swarm`            | Swarm inspect: join tokens, raft config, CA config.                    |
 | GET    | `/swarm/unlock-key` | Current swarm unlock key (when autolock enabled).                      |
-
-```bash
-curl http://localhost:9000/cluster
-curl http://localhost:9000/cluster/metrics
-```
 
 ### Swarm Write Operations
 
@@ -735,12 +433,6 @@ curl -X POST -d '{"role": "worker"}' http://localhost:9000/swarm/rotate-token
 | GET    | `/nodes/{id}`       | Node detail.             | --                                                   |
 | GET    | `/nodes/{id}/tasks` | Tasks running on a node. | --                                                   |
 
-```bash
-curl http://localhost:9000/nodes
-curl http://localhost:9000/nodes/abc123
-curl http://localhost:9000/nodes/abc123/tasks
-```
-
 #### Node Write Operations
 
 | Method | Path                       | Tier | Description                                    |
@@ -775,20 +467,11 @@ curl -X PATCH -H "Content-Type: application/json-patch+json" \
 | GET    | `/services/{id}/logs`  | Service logs. Supports SSE for streaming.     | `limit`, `after`, `before`, `stream`                 |
 
 ```bash
-# List services
-curl http://localhost:9000/services
-
-# Get a specific service
-curl http://localhost:9000/services/abc123
-
-# Fetch recent logs (JSON)
-curl http://localhost:9000/services/abc123/logs
-
 # Stream logs via SSE
 curl -H "Accept: text/event-stream" http://localhost:9000/services/abc123/logs
 
 # Logs with filters
-curl "http://localhost:9000/services/abc123/logs?limit=100&stream=stderr&after=2026-03-12T00:00:00Z"
+curl "http://localhost:9000/services/abc123/logs?limit=100&stream=stderr&after=1h"
 ```
 
 #### Log parameters
@@ -904,12 +587,6 @@ curl -X DELETE http://localhost:9000/services/abc123
 | GET    | `/tasks/{id}`      | Task detail with service and node cross-references.      | --                                         |
 | GET    | `/tasks/{id}/logs` | Task logs. Supports SSE for streaming.                   | `limit`, `after`, `before`, `stream`       |
 
-```bash
-curl http://localhost:9000/tasks
-curl http://localhost:9000/tasks/abc123
-curl -H "Accept: text/event-stream" http://localhost:9000/tasks/abc123/logs
-```
-
 #### Task Write Operations
 
 | Method | Path          | Tier | Description          |
@@ -925,12 +602,6 @@ Stacks are derived from `com.docker.stack.namespace` labels.
 | GET    | `/stacks`         | List stacks.                                                        | `search`, `filter`, `sort`, `dir`, `limit`, `offset` |
 | GET    | `/stacks/summary` | Stack summaries with resource usage (requires Prometheus).          | --                                                   |
 | GET    | `/stacks/{name}`  | Stack detail: services, tasks, configs, secrets, networks, volumes. | --                                                   |
-
-```bash
-curl http://localhost:9000/stacks
-curl http://localhost:9000/stacks/summary
-curl http://localhost:9000/stacks/myapp
-```
 
 #### Stack Write Operations
 
@@ -949,14 +620,6 @@ curl http://localhost:9000/stacks/myapp
 | POST   | `/configs`             | Create a config. Tier 2.                                              | --                                                   |
 | DELETE | `/configs/{id}`        | Remove a config. Tier 3.                                              | --                                                   |
 
-```bash
-curl http://localhost:9000/configs
-curl http://localhost:9000/configs/abc123
-
-# Create a config (data is base64-encoded)
-curl -X POST -d '{"name": "my-config", "data": "aGVsbG8="}' http://localhost:9000/configs
-```
-
 ### Secrets
 
 Secret data is always redacted in API responses.
@@ -970,14 +633,6 @@ Secret data is always redacted in API responses.
 | POST   | `/secrets`             | Create a secret. Tier 2.                      | --                                                   |
 | DELETE | `/secrets/{id}`        | Remove a secret. Tier 3.                      | --                                                   |
 
-```bash
-curl http://localhost:9000/secrets
-curl http://localhost:9000/secrets/abc123
-
-# Create a secret (data is base64-encoded)
-curl -X POST -d '{"name": "my-secret", "data": "c3VwZXJzZWNyZXQ="}' http://localhost:9000/secrets
-```
-
 ### Networks
 
 | Method | Path             | Description                                    | Parameters                                           |
@@ -985,11 +640,6 @@ curl -X POST -d '{"name": "my-secret", "data": "c3VwZXJzZWNyZXQ="}' http://local
 | GET    | `/networks`      | List networks.                                 | `search`, `filter`, `sort`, `dir`, `limit`, `offset` |
 | GET    | `/networks/{id}` | Network detail with cross-referenced services. | --                                                   |
 | DELETE | `/networks/{id}` | Remove a network. Tier 3.                      | --                                                   |
-
-```bash
-curl http://localhost:9000/networks
-curl http://localhost:9000/networks/abc123
-```
 
 ### Volumes
 
@@ -1000,11 +650,6 @@ Volumes are keyed by name, not ID.
 | GET    | `/volumes`        | List volumes.                                 | `search`, `filter`, `sort`, `dir`, `limit`, `offset` |
 | GET    | `/volumes/{name}` | Volume detail with cross-referenced services. | --                                                   |
 | DELETE | `/volumes/{name}` | Remove a volume. Tier 3.                      | --                                                   |
-
-```bash
-curl http://localhost:9000/volumes
-curl http://localhost:9000/volumes/my-data
-```
 
 ### Plugins
 
@@ -1071,25 +716,13 @@ curl "http://localhost:9000/history?resourceId=abc123"
 | GET    | `/topology/networks`  | Network topology: overlay networks and their connected services. |
 | GET    | `/topology/placement` | Placement topology: tasks grouped by node.                       |
 
-```bash
-curl http://localhost:9000/topology/networks
-curl http://localhost:9000/topology/placement
-```
-
 ### Recommendations
 
 | Method | Path               | Description                                                                               |
 |--------|--------------------|-------------------------------------------------------------------------------------------|
 | GET    | `/recommendations` | All active cluster health recommendations, sorted by severity. Includes severity summary. |
 
-Returns a JSON-LD `RecommendationCollection` with `items` (array of recommendations), `total`, `summary` (severity
-counts), and `computedAt`. Four domains: resource sizing, config hygiene (missing health checks, restart policies),
-operational (flaky services, disk/memory pressure), and cluster topology (single replicas, manager workloads, uneven
-distribution).
-
-```bash
-curl http://localhost:9000/recommendations
-```
+See [Recommendations](recommendations.md) for categories and configuration.
 
 ### Profile
 
@@ -1099,10 +732,6 @@ curl http://localhost:9000/recommendations
 
 Unlike `/auth/whoami`, this endpoint participates in content negotiation and includes ETag support.
 
-```bash
-curl http://localhost:9000/profile
-```
-
 ### Events
 
 | Method | Path      | Description                                 | Parameters                |
@@ -1110,11 +739,6 @@ curl http://localhost:9000/profile
 | GET    | `/events` | SSE-only. Real-time resource change stream. | `types` (comma-separated) |
 
 Returns `406` for non-SSE requests. See [Real-Time Events](#real-time-events-sse) for details.
-
-```bash
-curl -H "Accept: text/event-stream" http://localhost:9000/events
-curl -H "Accept: text/event-stream" "http://localhost:9000/events?types=service,task"
-```
 
 ### Authentication
 
@@ -1126,11 +750,6 @@ See [Authentication](authentication.md) for full details on each auth mode.
 | GET    | `/auth/login`    | Initiate OIDC login flow (OIDC mode only).                         |
 | GET    | `/auth/callback` | OIDC callback (OIDC mode only; redirected by IdP).                 |
 | POST   | `/auth/logout`   | Clear session, optionally redirect to IdP logout (OIDC mode only). |
-
-```bash
-curl http://localhost:9000/auth/whoami
-# {"subject":"anonymous","displayName":"Anonymous","provider":"none"}
-```
 
 ### API Documentation
 
@@ -1173,6 +792,5 @@ Link: </api>; rel="service-desc", </api/context.jsonld>; rel="describedby"
 
 ## Request ID
 
-Every request gets an `X-Request-ID` header in the response. You can send your own via the `X-Request-ID` request
-header (max 64 chars, ASCII printable); otherwise one is generated automatically. The request ID appears in error
-responses as `requestId` and in server logs.
+Every response includes a `Request-Id` header. Send your own via the `Request-Id` request header (max 64 chars, ASCII
+printable); otherwise one is generated. The ID appears in error responses as `requestId` and in server logs.
