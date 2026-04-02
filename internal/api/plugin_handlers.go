@@ -38,6 +38,7 @@ func (h *Handlers) HandleListPlugins(w http.ResponseWriter, r *http.Request) {
 		},
 	)
 
+	writeLinkTemplate(w, r, "/plugins/{name}")
 	writeCachedJSON(
 		w,
 		r,

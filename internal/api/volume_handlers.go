@@ -79,5 +79,6 @@ func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 		"scope":  func(v volume.Volume) string { return v.Scope },
 	})
 	resp := applyPagination(r.Context(), volumes, p)
+	writeLinkTemplate(w, r, "/volumes/{name}")
 	writeCollectionResponse(w, r, resp, p)
 }

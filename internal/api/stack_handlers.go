@@ -46,6 +46,7 @@ func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
 		"name": func(s cache.Stack) string { return s.Name },
 	})
 	resp := applyPagination(r.Context(), stacks, p)
+	writeLinkTemplate(w, r, "/stacks/{name}")
 	writeCollectionResponse(w, r, resp, p)
 }
 

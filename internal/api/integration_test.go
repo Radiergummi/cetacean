@@ -247,6 +247,38 @@ func TestContentNegotiationIntegration(t *testing.T) {
 		}
 	})
 
+	t.Run("Link-Template header on list endpoints", func(t *testing.T) {
+		tests := []struct {
+			path     string
+			template string
+		}{
+			{"/nodes", `/nodes/{id}`},
+			{"/services", `/services/{id}`},
+			{"/tasks", `/tasks/{id}`},
+			{"/stacks", `/stacks/{name}`},
+			{"/configs", `/configs/{id}`},
+			{"/secrets", `/secrets/{id}`},
+			{"/networks", `/networks/{id}`},
+			{"/volumes", `/volumes/{name}`},
+		}
+		for _, tt := range tests {
+			req := httptest.NewRequest("GET", tt.path, nil)
+			req.Header.Set("Accept", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("%s: status=%d, want 200", tt.path, w.Code)
+			}
+
+			got := w.Header().Get("Link-Template")
+			want := fmt.Sprintf("<%s>; rel=\"item\"", tt.template)
+			if got != want {
+				t.Errorf("%s: Link-Template=%q, want %q", tt.path, got, want)
+			}
+		}
+	})
+
 	t.Run("ETag and conditional request returns 304", func(t *testing.T) {
 		// First request: get the ETag
 		req1 := httptest.NewRequest("GET", "/nodes/node-0", nil)

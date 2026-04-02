@@ -44,6 +44,7 @@ func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 		"availability": func(n swarm.Node) string { return string(n.Spec.Availability) },
 	})
 	resp := applyPagination(r.Context(), nodes, p)
+	writeLinkTemplate(w, r, "/nodes/{id}")
 	writeCollectionResponse(w, r, resp, p)
 }
 

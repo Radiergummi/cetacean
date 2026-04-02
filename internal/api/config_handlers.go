@@ -77,5 +77,6 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 		"updated": func(c swarm.Config) string { return c.UpdatedAt.String() },
 	})
 	resp := applyPagination(r.Context(), configs, p)
+	writeLinkTemplate(w, r, "/configs/{id}")
 	writeCollectionResponse(w, r, resp, p)
 }

@@ -82,5 +82,6 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 		"updated": func(s swarm.Secret) string { return s.UpdatedAt.String() },
 	})
 	resp := applyPagination(r.Context(), secrets, p)
+	writeLinkTemplate(w, r, "/secrets/{id}")
 	writeCollectionResponse(w, r, resp, p)
 }

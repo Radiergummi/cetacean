@@ -83,5 +83,6 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 		"scope":  func(n network.Summary) string { return n.Scope },
 	})
 	resp := applyPagination(r.Context(), networks, p)
+	writeLinkTemplate(w, r, "/networks/{id}")
 	writeCollectionResponse(w, r, resp, p)
 }

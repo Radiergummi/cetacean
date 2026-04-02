@@ -174,6 +174,17 @@ func writeCollectionResponse[T any](
 	writeCachedJSON(w, r, resp)
 }
 
+// writeLinkTemplate sets a Link-Template header (RFC 9652) on the response,
+// allowing clients to construct detail URLs from collection items.
+// The template should be a relative path with RFC 6570 variables,
+// e.g. "/services/{id}".
+func writeLinkTemplate(w http.ResponseWriter, r *http.Request, template string) {
+	w.Header().Add("Link-Template", fmt.Sprintf(
+		`<%s>; rel="item"`,
+		absPath(r.Context(), template),
+	))
+}
+
 func writePaginationLinks(w http.ResponseWriter, r *http.Request, total, limit, offset int) {
 	buildLink := func(newOffset int) string {
 		q := r.URL.Query()

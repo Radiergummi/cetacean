@@ -86,6 +86,7 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 		"node":    func(t swarm.Task) string { return t.NodeID },
 	})
 	paged := applyPagination(r.Context(), tasks, p)
+	writeLinkTemplate(w, r, "/tasks/{id}")
 	writeCollectionResponse(
 		w,
 		r,
