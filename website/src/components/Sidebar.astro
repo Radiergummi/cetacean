@@ -1,0 +1,116 @@
+---
+import { sidebarGroups } from "../lib/navigation";
+
+interface Props {
+  currentSlug: string;
+}
+
+const { currentSlug } = Astro.props;
+---
+
+{/* Desktop sidebar */}
+<aside class="hidden md:block w-56 shrink-0 border-r border-border sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto py-6 px-4">
+  <nav>
+    {sidebarGroups.map((group) => (
+      <div class="mb-6">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+          {group.label}
+        </h3>
+        <ul class="space-y-1">
+          {group.items.map(({ slug, title }) => (
+            <li>
+              <a
+                href={`/${slug}`}
+                class:list={[
+                  "block rounded-md px-2 py-1.5 text-sm transition-colors",
+                  currentSlug === slug
+                    ? "bg-accent text-foreground font-medium"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
+                ]}
+              >
+                {title}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    ))}
+    <div class="border-t border-border pt-4 mt-4">
+      <a
+        href="/changelog"
+        class:list={[
+          "block rounded-md px-2 py-1.5 text-sm transition-colors",
+          currentSlug === "changelog"
+            ? "bg-accent text-foreground font-medium"
+            : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
+        ]}
+      >
+        Changelog
+      </a>
+    </div>
+  </nav>
+</aside>
+
+{/* Mobile sidebar overlay */}
+<div id="mobile-sidebar" class="fixed inset-0 z-40 hidden md:hidden">
+  <div id="mobile-sidebar-backdrop" class="absolute inset-0 bg-background/80 backdrop-blur-sm"></div>
+  <aside class="relative w-64 h-full bg-background border-r border-border overflow-y-auto py-6 px-4">
+    <nav>
+      {sidebarGroups.map((group) => (
+        <div class="mb-6">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+            {group.label}
+          </h3>
+          <ul class="space-y-1">
+            {group.items.map(({ slug, title }) => (
+              <li>
+                <a
+                  href={`/${slug}`}
+                  class:list={[
+                    "block rounded-md px-2 py-1.5 text-sm transition-colors",
+                    currentSlug === slug
+                      ? "bg-accent text-foreground font-medium"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
+                  ]}
+                >
+                  {title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      <div class="border-t border-border pt-4 mt-4">
+        <a
+          href="/changelog"
+          class:list={[
+            "block rounded-md px-2 py-1.5 text-sm transition-colors",
+            currentSlug === "changelog"
+              ? "bg-accent text-foreground font-medium"
+              : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
+          ]}
+        >
+          Changelog
+        </a>
+      </div>
+    </nav>
+  </aside>
+</div>
+
+<script is:inline>
+  (function () {
+    var toggle = document.getElementById("mobile-menu-toggle");
+    var sidebar = document.getElementById("mobile-sidebar");
+    var backdrop = document.getElementById("mobile-sidebar-backdrop");
+
+    if (!toggle || !sidebar || !backdrop) return;
+
+    toggle.addEventListener("click", function () {
+      sidebar.classList.toggle("hidden");
+    });
+
+    backdrop.addEventListener("click", function () {
+      sidebar.classList.add("hidden");
+    });
+  })();
+</script>
