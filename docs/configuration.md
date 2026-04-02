@@ -227,10 +227,17 @@ cetacean healthcheck      Exit 0 if ready, 1 otherwise (for Docker HEALTHCHECK)
 
 ## Snapshots
 
-Cetacean saves all cached swarm state to `${data_dir}/snapshot.json` after every sync. On startup, it loads the snapshot
-to serve stale-but-fast data while the live sync catches up. Secret data is never persisted.
+Cetacean persists swarm state to `${data_dir}/snapshot.json` so the dashboard can serve data immediately on startup,
+before the first Docker sync completes. Enabled by default. The snapshot is updated after every sync and event batch.
+Secret payloads are never written to disk.
 
-Writes are atomic (write to `.tmp`, then rename) so a crash mid-write won't corrupt it.
+| Setting | Default | Description |
+|---|---|---|
+| `CETACEAN_SNAPSHOT` / `storage.snapshot` | `true` | Enable or disable snapshot persistence |
+| `CETACEAN_DATA_DIR` / `storage.data_dir` | `./data` | Directory where the snapshot file is stored |
+
+Disable with `CETACEAN_SNAPSHOT=false` for read-only filesystems or environments where Docker is always reachable on
+startup.
 
 ## Health Checks
 
