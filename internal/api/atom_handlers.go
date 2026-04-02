@@ -310,14 +310,18 @@ func parseAtomPagination(r *http.Request) (beforeID uint64, limit int) {
 	return beforeID, limit
 }
 
+// emptyFeedEpoch is a stable timestamp for empty feeds so the ETag is
+// deterministic (time.Now would produce a different ETag every request).
+var emptyFeedEpoch = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
 // historyUpdated returns the timestamp of the most recent history entry,
-// or the current time if the slice is empty.
+// or a fixed epoch if the slice is empty.
 func historyUpdated(entries []cache.HistoryEntry) time.Time {
 	if len(entries) > 0 {
 		return entries[0].Timestamp
 	}
 
-	return time.Now()
+	return emptyFeedEpoch
 }
 
 // historyToEntries converts cache history entries to Atom feed entries.
@@ -400,6 +404,14 @@ func paginationLinks(
 	}
 
 	alternateHref := absPath(r.Context(), r.URL.Path)
+	if aq := r.URL.Query(); len(aq) > 0 {
+		aq.Del("before")
+		aq.Del("limit")
+
+		if encoded := aq.Encode(); encoded != "" {
+			alternateHref += "?" + encoded
+		}
+	}
 	links := []atomxml.Link{
 		{Rel: "self", Href: selfHref, Type: "application/atom+xml"},
 		{Rel: "alternate", Href: alternateHref, Type: "text/html"},

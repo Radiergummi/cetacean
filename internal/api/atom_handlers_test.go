@@ -323,13 +323,11 @@ func TestHistoryUpdated(t *testing.T) {
 		}
 	})
 
-	t.Run("returns current time when entries are empty", func(t *testing.T) {
-		before := time.Now()
+	t.Run("returns stable epoch when entries are empty", func(t *testing.T) {
 		got := historyUpdated(nil)
-		after := time.Now()
 
-		if got.Before(before) || got.After(after) {
-			t.Errorf("historyUpdated = %v, expected between %v and %v", got, before, after)
+		if !got.Equal(emptyFeedEpoch) {
+			t.Errorf("historyUpdated = %v, want %v", got, emptyFeedEpoch)
 		}
 	})
 }
