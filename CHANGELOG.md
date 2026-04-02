@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Per-sub-resource `Allow` headers on service mode and endpoint mode endpoints for fine-grained write control in the UI
 - General trusted proxies setting (`CETACEAN_TRUSTED_PROXIES`) for real client IP resolution behind reverse proxies — replaces the headers-auth-specific setting, which is now deprecated
 - Client IP in structured request logs when trusted proxies are configured
 - CLI flags for all settings that were previously env-var-only: `-operations-level`, `-sse-batch-interval`, `-cors-origins`, `-snapshot`, `-data-dir`, `-trusted-proxies`
@@ -41,6 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Policy validation rejects malformed glob patterns at load time instead of silently creating dead grants
 - Monitoring status, Prometheus label names, and label values endpoints moved from unauthenticated `/-/` prefix to authenticated `/metrics/` — previously exposed cluster node count and Prometheus label data without authentication
 - Task-to-service-to-stack ACL inheritance chain now resolves correctly (previously stopped at service level)
+
+### Changed
+- `X-Request-ID` header renamed to `Request-Id` per RFC 6648 (deprecation of `X-` prefix)
 
 ### Fixed
 - Layout shift in the header when the live connection timer changes width

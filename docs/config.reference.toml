@@ -1,0 +1,91 @@
+# Cetacean configuration reference.
+# All fields are optional — omitting a key uses the default shown.
+# Copy this file, uncomment what you need, and pass it with:
+#   cetacean -config /path/to/config.toml
+
+[server]
+# listen_addr = ":9000"                     # HTTP bind address
+# base_path = ""                            # URL prefix for sub-path deployments (e.g. "/cetacean")
+# pprof = false                             # Expose Go pprof endpoints at /debug/pprof/
+# self_metrics = true                       # Expose Prometheus metrics at /-/metrics
+# recommendations = true                    # Enable recommendation engine
+# operations_level = 1                      # 0=read-only, 1=operational, 2=configuration, 3=impactful
+# trusted_proxies = ""                      # Reverse proxy CIDRs/IPs (comma-separated)
+
+# [server.sse]
+# batch_interval = "100ms"                  # SSE event batching window
+
+# [server.cors]
+# origins = []                              # Allowed CORS origins, or ["*"] for any
+
+[docker]
+# host = "unix:///var/run/docker.sock"      # Docker socket URI
+
+[prometheus]
+# url = ""                                  # Prometheus base URL (unset = metrics disabled)
+
+[logging]
+# level = "info"                            # debug, info, warn, error
+# format = "json"                           # json or text
+
+[storage]
+# data_dir = "./data"                       # Directory for snapshot file
+# snapshot = true                           # Persist swarm state to disk
+
+[tls]
+# cert = ""                                 # Server certificate path (PEM)
+# key = ""                                  # Server private key path (PEM)
+
+# --- Authentication ---
+# Only the active mode's section is read. See docs/authentication.md for details.
+
+[auth]
+# mode = "none"                             # none, oidc, tailscale, cert, headers
+
+# [auth.oidc]
+# issuer = ""                               # OIDC issuer URL (must support Discovery)
+# client_id = ""                            # OAuth 2.0 client ID
+# client_secret = ""                        # OAuth 2.0 client secret
+# redirect_url = ""                         # Callback URL (HTTPS required, loopback exempt)
+# scopes = "openid,profile,email"           # Comma-separated OIDC scopes
+# session_key = ""                          # Hex-encoded 32-byte HMAC key (random if empty)
+# acl_claim = ""                            # Token claim containing ACL grants (JSON)
+
+# [auth.tailscale]
+# mode = "local"                            # local or tsnet
+# authkey = ""                              # Auth key for tsnet enrollment
+# hostname = "cetacean"                     # Tailscale hostname (tsnet)
+# state_dir = ""                            # State directory for tsnet
+# capability = ""                           # CapMap key for group extraction
+# acl_capability = ""                       # CapMap key for per-user ACL grants
+
+# [auth.cert]
+# ca = ""                                   # CA bundle path (PEM) — requires tls.cert and tls.key
+
+# [auth.headers]
+# subject = ""                              # Header name for subject (required)
+# name = ""                                 # Header name for display name
+# email = ""                                # Header name for email
+# groups = ""                               # Header name for groups (comma-separated)
+# secret_header = ""                        # Header name for shared secret
+# secret_value = ""                         # Shared secret value
+# acl = ""                                  # Header name for ACL grants (JSON)
+
+# --- Authorization ---
+# See docs/authorization.md for grant model and policy examples.
+
+# [acl]
+# policy = ""                               # Inline policy string (JSON, YAML, or TOML)
+# policy_file = ""                          # Path to policy file (hot-reloaded on change)
+
+# --- Recommendation sizing thresholds ---
+# See docs/recommendations.md for check categories.
+
+# [sizing]
+# headroom_multiplier = 2.0                 # Multiplier for suggested values
+
+# [sizing.thresholds]
+# over_provisioned = 0.20                   # Usage below this fraction of reservation
+# approaching_limit = 0.80                  # Usage above this fraction of limit → warning
+# at_limit = 0.95                           # Usage above this fraction of limit → critical
+# lookback = "168h"                         # Time window for p95 queries (default 7 days)
