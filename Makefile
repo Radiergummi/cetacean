@@ -4,16 +4,19 @@
 lint:
 	golangci-lint run ./...
 	cd frontend && npx oxlint
+	cd website && npx oxlint
 
 ## Format all code in place
 fmt:
 	golangci-lint fmt ./...
 	cd frontend && npx oxfmt --write .
+	cd website && npx oxfmt --write src/
 
 ## Check formatting without modifying files
 fmt-check:
 	golangci-lint fmt --diff ./... 2>&1 | diff /dev/null -
 	cd frontend && npx oxfmt --check .
+	cd website && npx oxfmt --check src/
 
 ## Build everything
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)

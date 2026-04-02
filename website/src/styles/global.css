@@ -76,26 +76,51 @@
     font-size: 0.9375rem;
     line-height: 1.75;
   }
-  .prose > :first-child { @apply mt-0; }
-  .prose h1 { @apply text-2xl font-semibold tracking-tight mt-0 mb-6; }
+  .prose > :first-child {
+    @apply mt-0;
+  }
+  .prose h1 {
+    @apply text-2xl font-semibold tracking-tight mt-0 mb-6;
+  }
   .prose h2 {
     @apply text-lg font-semibold tracking-tight mt-12 mb-4;
   }
-  .prose h3 { @apply text-base font-semibold mt-8 mb-3; }
-  .prose h4 { @apply text-sm font-semibold mt-6 mb-2; }
-  .prose p { @apply my-4; }
-  .prose a { @apply text-link underline decoration-link/30 underline-offset-2 hover:decoration-link/60 transition-colors; }
-  .prose strong { @apply font-semibold; }
-  .prose ul { @apply my-4 ml-6 list-disc; }
-  .prose ol { @apply my-4 ml-6 list-decimal; }
-  .prose li { @apply my-1.5; }
-  .prose li > ul, .prose li > ol { @apply my-1; }
+  .prose h3 {
+    @apply text-base font-semibold mt-8 mb-3;
+  }
+  .prose h4 {
+    @apply text-sm font-semibold mt-6 mb-2;
+  }
+  .prose p {
+    @apply my-4;
+  }
+  .prose a {
+    @apply text-link underline decoration-link/30 underline-offset-2 hover:decoration-link/60 transition-colors;
+  }
+  .prose strong {
+    @apply font-semibold;
+  }
+  .prose ul {
+    @apply my-4 ml-6 list-disc;
+  }
+  .prose ol {
+    @apply my-4 ml-6 list-decimal;
+  }
+  .prose li {
+    @apply my-1.5;
+  }
+  .prose li > ul,
+  .prose li > ol {
+    @apply my-1;
+  }
   .prose blockquote {
     @apply pl-4 my-6 text-muted-foreground;
     border-left: 2px solid var(--active);
     font-style: normal;
   }
-  .prose hr { @apply my-10 border-border; }
+  .prose hr {
+    @apply my-10 border-border;
+  }
 
   /* Tables — wrapped in a scrollable container to prevent overflow */
   .prose .table-wrapper {
@@ -112,7 +137,9 @@
   .prose tbody td {
     @apply px-3 py-2.5 border-b border-border;
   }
-  .prose tbody tr:last-child td { @apply border-b-0; }
+  .prose tbody tr:last-child td {
+    @apply border-b-0;
+  }
 
   /* Inline code */
   .prose code:not(pre code) {
@@ -126,10 +153,14 @@
     @apply rounded-lg my-6 p-4 overflow-x-auto text-[0.8125rem] leading-relaxed border border-border;
   }
 
-  .prose img { @apply rounded-lg my-6; }
+  .prose img {
+    @apply rounded-lg my-6;
+  }
 
   /* Tighten nested list spacing */
-  .prose li p { @apply my-1; }
+  .prose li p {
+    @apply my-1;
+  }
 }
 
 /* ── Code copy button ──────────────────────────────────────────────── */
@@ -149,7 +180,9 @@
   border: 1px solid var(--border);
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.2s, color 0.15s;
+  transition:
+    opacity 0.2s,
+    color 0.15s;
 }
 .prose pre:hover .copy-button {
   opacity: 1;
