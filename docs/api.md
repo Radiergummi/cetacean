@@ -35,6 +35,7 @@ prefix -- versioning lives in the media type.
 | `application/vnd.cetacean.v1+json` | JSON pinned to v1                       |
 | `text/html`                        | SPA                                     |
 | `text/event-stream`                | SSE (only on endpoints that support it) |
+| `application/atom+xml`             | Atom feed (resource and history endpoints) |
 
 All negotiated responses include `Vary: Accept`.
 
@@ -49,6 +50,47 @@ curl -H "Accept: application/json" http://localhost:9000/services
 
 # Pin to API v1
 curl -H "Accept: application/vnd.cetacean.v1+json" http://localhost:9000/services
+```
+
+## Atom Feeds
+
+Resource list endpoints, resource detail endpoints, and the history, search, and recommendations endpoints all support Atom feeds. Request via `Accept: application/atom+xml` or append `.atom` to any supported path.
+
+### Supported endpoints
+
+All resource list and detail endpoints support Atom:
+
+- `/nodes`, `/nodes/{id}`
+- `/services`, `/services/{id}`
+- `/tasks`, `/tasks/{id}`
+- `/stacks`, `/stacks/{name}`
+- `/configs`, `/configs/{id}`
+- `/secrets`, `/secrets/{id}`
+- `/networks`, `/networks/{id}`
+- `/volumes`, `/volumes/{name}`
+- `/events`, `/history`, `/search`, `/recommendations`
+
+Endpoints that do not produce resource change data (write sub-resources, log streams, metrics, topology) return `406 Not Acceptable`.
+
+### Pagination
+
+Atom feeds use cursor-based pagination. The feed includes a `next` link when more entries are available:
+
+| Parameter | Description                                      |
+|-----------|--------------------------------------------------|
+| `before`  | Return entries older than this cursor ID         |
+| `limit`   | Number of entries per page (default 50, max 200) |
+
+```bash
+# Request an Atom feed
+curl -H "Accept: application/atom+xml" http://localhost:9000/services
+
+# Request via extension
+curl http://localhost:9000/services.atom
+
+# Page through history feed
+curl "http://localhost:9000/history.atom?limit=50"
+curl "http://localhost:9000/history.atom?before=<cursor-id>&limit=50"
 ```
 
 ## Pagination

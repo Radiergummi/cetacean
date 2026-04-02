@@ -274,4 +274,35 @@ func TestNegotiate(t *testing.T) {
 			t.Errorf("got %q, want Unsupported", s)
 		}
 	})
+
+	t.Run("extension .atom strips suffix and returns Atom", func(t *testing.T) {
+		ct, path := run("/services.atom", "")
+		if ct != ContentTypeAtom {
+			t.Errorf("got %v, want Atom", ct)
+		}
+		if path != "/services" {
+			t.Errorf("got path %q, want /services", path)
+		}
+	})
+
+	t.Run("Accept application/atom+xml", func(t *testing.T) {
+		ct, _ := run("/services", "application/atom+xml")
+		if ct != ContentTypeAtom {
+			t.Errorf("got %v, want Atom", ct)
+		}
+	})
+
+	t.Run("Atom lower quality than JSON prefers JSON", func(t *testing.T) {
+		ct, _ := run("/services", "application/atom+xml;q=0.5, application/json;q=1.0")
+		if ct != ContentTypeJSON {
+			t.Errorf("got %v, want JSON", ct)
+		}
+	})
+
+	t.Run("Atom higher quality than JSON prefers Atom", func(t *testing.T) {
+		ct, _ := run("/services", "application/atom+xml;q=1.0, application/json;q=0.5")
+		if ct != ContentTypeAtom {
+			t.Errorf("got %v, want Atom", ct)
+		}
+	})
 }
