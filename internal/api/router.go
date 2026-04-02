@@ -443,8 +443,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 func requireReady(h *Handlers) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ct := ContentTypeFromContext(r.Context())
 			if !h.isReady() && isResourcePath(r.URL.Path) &&
-				ContentTypeFromContext(r.Context()) == ContentTypeJSON {
+				(ct == ContentTypeJSON || ct == ContentTypeAtom) {
 				writeErrorCode(w, r, "ENG001", "Docker daemon is not reachable")
 				return
 			}

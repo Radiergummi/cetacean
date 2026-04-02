@@ -14,6 +14,7 @@ const (
 	ContentTypeJSON ContentType = iota
 	ContentTypeHTML
 	ContentTypeSSE
+	ContentTypeAtom
 
 	// ContentTypeUnsupported means the client explicitly asked for a type we
 	// cannot provide. Dispatch helpers should return 406 Not Acceptable.
@@ -28,6 +29,8 @@ func (ct ContentType) String() string {
 		return "HTML"
 	case ContentTypeSSE:
 		return "SSE"
+	case ContentTypeAtom:
+		return "Atom"
 	case ContentTypeUnsupported:
 		return "Unsupported"
 	default:
@@ -63,6 +66,10 @@ func negotiate(next http.Handler) http.Handler {
 			ct = ContentTypeHTML
 			path = strings.TrimSuffix(path, ".html")
 			r.URL.Path = path
+		} else if strings.HasSuffix(path, ".atom") {
+			ct = ContentTypeAtom
+			path = strings.TrimSuffix(path, ".atom")
+			r.URL.Path = path
 		} else {
 			ct = parseAccept(r.Header.Get("Accept"))
 		}
@@ -89,6 +96,7 @@ var supportedTypes = []struct {
 	{"text", "html", ContentTypeHTML},
 	{"application", "xhtml+xml", ContentTypeHTML},
 	{"text", "event-stream", ContentTypeSSE},
+	{"application", "atom+xml", ContentTypeAtom},
 }
 
 // mediaRange is a parsed Accept header entry.
