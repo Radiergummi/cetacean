@@ -1,7 +1,10 @@
 package cache
 
 import (
+	"bytes"
+	"compress/gzip"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -51,8 +54,17 @@ func (c *Cache) WriteToDisk(path string) error {
 		return fmt.Errorf("marshal snapshot: %w", err)
 	}
 
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	if _, err := gz.Write(data); err != nil {
+		return fmt.Errorf("gzip snapshot: %w", err)
+	}
+	if err := gz.Close(); err != nil {
+		return fmt.Errorf("gzip close: %w", err)
+	}
+
 	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
+	if err := os.WriteFile(tmpPath, buf.Bytes(), 0600); err != nil {
 		return fmt.Errorf("write snapshot tmp: %w", err)
 	}
 
@@ -65,10 +77,24 @@ func (c *Cache) WriteToDisk(path string) error {
 }
 
 // LoadFromDisk reads a snapshot file and populates the cache via ReplaceAll.
+// Accepts both gzip-compressed and plain JSON for backward compatibility.
 func (c *Cache) LoadFromDisk(path string) error {
-	data, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("read snapshot: %w", err)
+	}
+
+	// Detect gzip by magic number, fall back to plain JSON.
+	data := raw
+	if len(raw) >= 2 && raw[0] == 0x1f && raw[1] == 0x8b {
+		gz, err := gzip.NewReader(bytes.NewReader(raw))
+		if err != nil {
+			return fmt.Errorf("gzip open snapshot: %w", err)
+		}
+		defer gz.Close()
+		if data, err = io.ReadAll(gz); err != nil {
+			return fmt.Errorf("gzip read snapshot: %w", err)
+		}
 	}
 
 	var snap DiskSnapshot
