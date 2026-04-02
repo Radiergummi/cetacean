@@ -18,7 +18,7 @@ docker stack deploy -c compose.yaml cetacean
 ```
 
 Cetacean is now at [http://localhost:9000](http://localhost:9000). It'll take a second to sync your swarm state, then
-you're in.
+you're in. The built-in image includes a `HEALTHCHECK` that gates on readiness — use `depends_on: { cetacean: { condition: service_healthy } }` for services that need Cetacean's data. Set `start_period` generously on large clusters.
 
 ### From Source
 
@@ -66,7 +66,7 @@ deploy:
 ```
 
 By default (operations level 1), Cetacean can perform safe operational actions like scaling and restarting services.
-Set `CETACEAN_OPERATIONS_LEVEL=0` for a fully read-only dashboard. See [Configuration](configuration.md#operations-level) for details.
+Set `server.operations_level` to `0` for a fully read-only dashboard. See [Configuration](configuration.md#operations-level) for details.
 
 ## Adding Monitoring
 

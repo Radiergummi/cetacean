@@ -1,44 +1,40 @@
 # Configuration
 
-Cetacean is configured through CLI flags, environment variables, or a TOML config file. When the same setting is
+Cetacean can be configured through CLI flags, environment variables, or a TOML config file. When the same setting is
 specified in multiple places, the precedence order is: **flag > env var > config file > default**.
 
-Sensitive settings (secrets, keys) also accept a `_FILE` suffix on their env var: set
-`CETACEAN_AUTH_OIDC_CLIENT_SECRET_FILE=/run/secrets/oidc_secret` and Cetacean reads the secret from that file at
-startup. This is the standard pattern for Docker Swarm secrets. The `_FILE` variant has lower precedence than the direct
-env var. Trailing newlines are trimmed.
-
-Supported `_FILE` variants: `CETACEAN_AUTH_OIDC_CLIENT_SECRET_FILE`, `CETACEAN_AUTH_OIDC_SESSION_KEY_FILE`,
-`CETACEAN_AUTH_TAILSCALE_AUTHKEY_FILE`, `CETACEAN_AUTH_HEADERS_SECRET_VALUE_FILE`.
+Sensitive settings (secrets, keys) also accept a `_FILE` suffix on their env var to read the secret from that file at
+startup. The `_FILE` variant has lower precedence than the direct env var.
 
 ## General Settings
 
-| Flag              | Env var                       | Config file key             | Default                       | Description                                                                    |
-|-------------------|-------------------------------|-----------------------------|-------------------------------|--------------------------------------------------------------------------------|
-| `-listen`         | `CETACEAN_LISTEN_ADDR`        | `server.listen_addr`        | `:9000`                       | HTTP server bind address                                                       |
-| `-base-path`      | `CETACEAN_BASE_PATH`          | `server.base_path`          | _—_                           | URL base path prefix for sub-path deployments (e.g., `/cetacean`)              |
-| `-docker-host`    | `CETACEAN_DOCKER_HOST`        | `docker.host`               | `unix:///var/run/docker.sock` | Docker socket URI                                                              |
-| `-prometheus-url` | `CETACEAN_PROMETHEUS_URL`     | `prometheus.url`            | _—_                           | Prometheus base URL. Unset = metrics disabled.                                 |
-| `-log-level`      | `CETACEAN_LOG_LEVEL`          | `logging.level`             | `info`                        | `debug`, `info`, `warn`, `error`                                               |
-| `-log-format`     | `CETACEAN_LOG_FORMAT`         | `logging.format`            | `json`                        | `json` or `text`                                                               |
-| `-pprof`          | `CETACEAN_PPROF`              | `server.pprof`              | `false`                       | Expose Go pprof endpoints at `/debug/pprof/`                                   |
-| `-self-metrics`   | `CETACEAN_SELF_METRICS`       | `server.self_metrics`       | `true`                        | Expose Prometheus metrics at `/-/metrics`                                       |
-| `-recommendations`| `CETACEAN_RECOMMENDATIONS`    | `server.recommendations`    | `true`                        | Enable recommendation engine                                                    |
-| _—_               | `CETACEAN_OPERATIONS_LEVEL`   | `server.operations_level`   | `1`                           | Write operation tier: 0=read-only, 1=operational, 2=configuration, 3=impactful |
-| _—_               | `CETACEAN_SSE_BATCH_INTERVAL` | `server.sse.batch_interval` | `100ms`                       | SSE event batching window (Go duration)                                        |
-| _—_               | `CETACEAN_CORS_ORIGINS`       | `server.cors.origins`       | _—_                           | Allowed CORS origins (comma-separated or `*`). Unset = CORS disabled.          |
-| _—_               | `CETACEAN_SNAPSHOT`           | `storage.snapshot`          | `true`                        | Enable disk persistence of swarm state                                         |
-| _—_               | `CETACEAN_DATA_DIR`           | `storage.data_dir`          | `./data`                      | Directory for snapshot file                                                    |
-| `-tls-cert`       | `CETACEAN_TLS_CERT`           | `tls.cert`                  | _—_                           | Server certificate path (PEM)                                                  |
-| `-tls-key`        | `CETACEAN_TLS_KEY`            | `tls.key`                   | _—_                           | Server private key path (PEM)                                                  |
-| `-config`         | `CETACEAN_CONFIG`             | _—_                         | _—_                           | Path to TOML config file                                                       |
-| `-version`        | _—_                           | _—_                         | _—_                           | Print version and exit                                                         |
+| Flag                  | Env var                       | Config file key             | Default                       | Description                                                                           |
+|-----------------------|-------------------------------|-----------------------------|-------------------------------|---------------------------------------------------------------------------------------|
+| `-listen`             | `CETACEAN_LISTEN_ADDR`        | `server.listen_addr`        | `:9000`                       | HTTP server bind address                                                              |
+| `-base-path`          | `CETACEAN_BASE_PATH`          | `server.base_path`          | _—_                           | URL base path prefix for sub-path deployments (e.g., `/cetacean`)                     |
+| `-docker-host`        | `CETACEAN_DOCKER_HOST`        | `docker.host`               | `unix:///var/run/docker.sock` | Docker socket URI                                                                     |
+| `-prometheus-url`     | `CETACEAN_PROMETHEUS_URL`     | `prometheus.url`            | _—_                           | Prometheus base URL. Unset = metrics disabled.                                        |
+| `-log-level`          | `CETACEAN_LOG_LEVEL`          | `logging.level`             | `info`                        | `debug`, `info`, `warn`, `error`                                                      |
+| `-log-format`         | `CETACEAN_LOG_FORMAT`         | `logging.format`            | `json`                        | `json` or `text`                                                                      |
+| `-pprof`              | `CETACEAN_PPROF`              | `server.pprof`              | `false`                       | Expose Go pprof endpoints at `/debug/pprof/`                                          |
+| `-self-metrics`       | `CETACEAN_SELF_METRICS`       | `server.self_metrics`       | `true`                        | Expose Prometheus metrics at `/-/metrics`                                             |
+| `-recommendations`    | `CETACEAN_RECOMMENDATIONS`    | `server.recommendations`    | `true`                        | Enable recommendation engine                                                          |
+| `-operations-level`   | `CETACEAN_OPERATIONS_LEVEL`   | `server.operations_level`   | `1`                           | Write operation tier: 0=read-only, 1=operational, 2=configuration, 3=impactful        |
+| `-sse-batch-interval` | `CETACEAN_SSE_BATCH_INTERVAL` | `server.sse.batch_interval` | `100ms`                       | SSE event batching window (Go duration)                                               |
+| `-cors-origins`       | `CETACEAN_CORS_ORIGINS`       | `server.cors.origins`       | _—_                           | Allowed CORS origins (comma-separated or `*`). Unset = CORS disabled.                 |
+| `-trusted-proxies`    | `CETACEAN_TRUSTED_PROXIES`    | `server.trusted_proxies`    | _—_                           | Trusted reverse proxy CIDRs/IPs (comma-separated). Enables real client IP resolution. |
+| `-snapshot`           | `CETACEAN_SNAPSHOT`           | `storage.snapshot`          | `true`                        | Enable disk persistence of swarm state                                                |
+| `-data-dir`           | `CETACEAN_DATA_DIR`           | `storage.data_dir`          | `./data`                      | Directory for snapshot file                                                           |
+| `-tls-cert`           | `CETACEAN_TLS_CERT`           | `tls.cert`                  | _—_                           | Server certificate path (PEM)                                                         |
+| `-tls-key`            | `CETACEAN_TLS_KEY`            | `tls.key`                   | _—_                           | Server private key path (PEM)                                                         |
+| `-config`             | `CETACEAN_CONFIG`             | _—_                         | _—_                           | Path to TOML config file                                                              |
 
-TLS cert and key must be set together or not at all. Required for `cert` auth mode (mTLS), optional otherwise.
+> **Note:** TLS cert and key must be set together or not at all. Required for `cert` auth mode (mTLS), optional
+> otherwise.
 
 ### Sub-Path Deployment
 
-Set `CETACEAN_BASE_PATH` to serve Cetacean under a URL prefix, for example behind a reverse proxy that routes
+Set `server.base_path` to serve Cetacean under a URL prefix, for example, behind a reverse proxy that routes
 `/cetacean/` to your Cetacean instance:
 
 ```bash
@@ -52,18 +48,10 @@ Or in TOML:
 base_path = "/cetacean"
 ```
 
-The value is normalized (leading slash added, trailing slash removed). All API responses, SSE endpoints, auth cookies,
-and the frontend router automatically adjust to the configured prefix. No frontend rebuild is needed — the base path is
-injected at runtime via a `<base>` tag.
-
-When deploying behind a reverse proxy that **preserves** the path prefix (e.g., forwards `/cetacean/nodes` as-is), set
-`CETACEAN_BASE_PATH=/cetacean`. When the proxy **strips** the prefix before forwarding, leave `CETACEAN_BASE_PATH`
-unset.
-
 ## CORS
 
-By default, Cetacean does not set any CORS headers — the embedded SPA is served from the same origin and doesn't need
-them. Enable CORS when external scripts or dashboards on other origins need to call the API.
+By default, Cetacean does not set any CORS headers because it serves the embedded webapp from the same origin and
+doesn’t need them. Enable CORS when external scripts or dashboards on other origins need to call the API.
 
 ```bash
 # Allow specific origins
@@ -89,8 +77,8 @@ headers to cross-origin responses:
 - `Access-Control-Expose-Headers` — `ETag, Link, Allow, Location, Retry-After, X-Request-ID`
 - `Access-Control-Max-Age` — `86400` (24 hours)
 
-Requests from origins not in the allow-list receive no CORS headers and are blocked by the browser's same-origin policy
-as before.
+Requests from origins not in the allowlist receive no CORS headers and will be blocked by the browser’s same-origin
+policy as before.
 
 ## Authentication and Authorization Settings
 
@@ -125,21 +113,21 @@ as before.
 |-----------------|-------------------------|-----------------|----------|---------|-------------------------|
 | `-auth-cert-ca` | `CETACEAN_AUTH_CERT_CA` | `auth.cert.ca`  | Yes      | _—_     | Path to CA bundle (PEM) |
 
-Requires `-tls-cert` and `-tls-key` to be set (mTLS needs TLS termination at Cetacean).
+> **Note:** Requires `-tls-cert` and `-tls-key` to be set (mTLS needs TLS termination at Cetacean).
 
 ### Trusted Proxy Headers
 
-| Flag                            | Env var                                 | Config file key                | Required    | Default | Description                                  |
-|---------------------------------|-----------------------------------------|--------------------------------|-------------|---------|----------------------------------------------|
-| `-auth-headers-subject`         | `CETACEAN_AUTH_HEADERS_SUBJECT`         | `auth.headers.subject`         | Yes         | _—_     | Header name for subject                      |
-| `-auth-headers-name`            | `CETACEAN_AUTH_HEADERS_NAME`            | `auth.headers.name`            | No          | _—_     | Header name for display name                 |
-| `-auth-headers-email`           | `CETACEAN_AUTH_HEADERS_EMAIL`           | `auth.headers.email`           | No          | _—_     | Header name for email                        |
-| `-auth-headers-groups`          | `CETACEAN_AUTH_HEADERS_GROUPS`          | `auth.headers.groups`          | No          | _—_     | Header name for groups (comma-separated)     |
-| `-auth-headers-secret-header`   | `CETACEAN_AUTH_HEADERS_SECRET_HEADER`   | `auth.headers.secret_header`   | No          | _—_     | Header name for shared secret                |
-| `-auth-headers-secret-value`    | `CETACEAN_AUTH_HEADERS_SECRET_VALUE`    | `auth.headers.secret_value`    | Conditional | _—_     | Secret value (required if secret header set) |
-| `-auth-headers-trusted-proxies` | `CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES` | `auth.headers.trusted_proxies` | No          | _—_     | Comma-separated CIDR/IP allowlist            |
+| Flag                            | Env var                                 | Config file key                | Required       | Default | Description                                  |
+|---------------------------------|-----------------------------------------|--------------------------------|----------------|---------|----------------------------------------------|
+| `-auth-headers-subject`         | `CETACEAN_AUTH_HEADERS_SUBJECT`         | `auth.headers.subject`         | Yes            | _—_     | Header name for subject                      |
+| `-auth-headers-name`            | `CETACEAN_AUTH_HEADERS_NAME`            | `auth.headers.name`            | No             | _—_     | Header name for display name                 |
+| `-auth-headers-email`           | `CETACEAN_AUTH_HEADERS_EMAIL`           | `auth.headers.email`           | No             | _—_     | Header name for email                        |
+| `-auth-headers-groups`          | `CETACEAN_AUTH_HEADERS_GROUPS`          | `auth.headers.groups`          | No             | _—_     | Header name for groups (comma-separated)     |
+| `-auth-headers-secret-header`   | `CETACEAN_AUTH_HEADERS_SECRET_HEADER`   | `auth.headers.secret_header`   | No             | _—_     | Header name for shared secret                |
+| `-auth-headers-secret-value`    | `CETACEAN_AUTH_HEADERS_SECRET_VALUE`    | `auth.headers.secret_value`    | Conditional    | _—_     | Secret value (required if secret header set) |
+| `-auth-headers-trusted-proxies` | `CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES` | `auth.headers.trusted_proxies` | **Deprecated** | _—_     | Use `-trusted-proxies` instead               |
 
-At least one of `secret_header`+`secret_value` or `trusted_proxies` must be configured.
+> **Note:** `trusted_proxies` is always required. The shared secret is optional, additional protection.
 
 See [Authentication](authentication.md) for detailed usage guides, flow diagrams, and deployment examples.
 
@@ -160,6 +148,7 @@ _use the default,_ which is different from setting it to its zero value. For exa
 listen_addr = ":9000"
 pprof = false
 operations_level = 1
+# trusted_proxies = "10.0.0.0/8"
 
 [server.sse]
 batch_interval = "100ms"
@@ -213,10 +202,10 @@ session_key = ""                       # hex-encoded 32 bytes; random if empty
 # groups = "X-Remote-Groups"
 # secret_header = "X-Proxy-Secret"
 # secret_value = "my-secret"
-# trusted_proxies = "10.0.0.0/8,192.168.1.1"
+# trusted_proxies = "..."
 ```
 
-Only the active auth mode's section matters. You can leave the others commented out or absent entirely.
+Only the active auth mode’s section matters. You can leave the others commented out or absent entirely.
 
 ## Subcommands
 
@@ -228,192 +217,24 @@ cetacean healthcheck      Exit 0 if ready, 1 otherwise (for Docker HEALTHCHECK)
 ## Snapshots
 
 Cetacean saves all cached swarm state to `${data_dir}/snapshot.json` after every sync. On startup, it loads the snapshot
-to serve stale-but-fast data while the live sync catches up. Secret data is never persisted.
-
-Writes are atomic (write to `.tmp`, then rename) so a crash mid-write won't corrupt it.
+to serve stale-but-fast data while the live sync catches up. Writes are crash-safe.
 
 ## Health Checks
 
 Two meta endpoints, exempt from authentication and content negotiation:
 
-**Liveness** -- `GET /-/health`
+| Endpoint        | Behavior                                        | Use for                             |
+|-----------------|-------------------------------------------------|-------------------------------------|
+| `GET /-/health` | Always 200 if the process is running            | Uptime monitoring, restart policies |
+| `GET /-/ready`  | 200 after the first Docker sync; 503 until then | Load balancers, `depends_on` gating |
 
-Always returns 200. Includes version, commit hash, build date, and the configured operations level.
-
-```json
-{ "status": "ok", "version": "1.2.3", "commit": "abc1234", "buildDate": "2026-03-15", "operationsLevel": 1 }
-```
-
-Before the first Docker sync completes, the `status` field is `"error"` instead of `"ok"` (the endpoint still returns
-200). Use the readiness endpoint below if you need to distinguish "running but not synced" from "running and ready."
-
-**Readiness** -- `GET /-/ready`
-
-Returns 200 after the first Docker sync completes. Returns 503 until then.
-
-```json
-{ "status": "ready" }
-```
-
-While not ready, all resource endpoints (services, nodes, tasks, etc.) return `503 ENG001` for JSON requests. The SPA
-and meta endpoints (`/-/*`, `/api*`, `/auth/*`, `/assets/*`) continue to work.
-
-### Built-in Healthcheck Command
-
-The Cetacean binary includes a `healthcheck` subcommand that hits the readiness endpoint internally:
-
-```bash
-cetacean healthcheck
-```
-
-This is what the Dockerfile uses. It reads `CETACEAN_LISTEN_ADDR` and `CETACEAN_BASE_PATH` from the environment so it
-targets the correct address, even behind a base path. Exit code 0 means ready; non-zero means not ready (or
-unreachable).
-
-### Docker Compose / Swarm
-
-The built-in Docker image includes a `HEALTHCHECK` instruction, so containers get health checks automatically with no
-configuration needed. If you need to customise the timings, override it in your Compose file:
-
-```yaml
-services:
-  cetacean:
-    image: cetacean:latest
-    healthcheck:
-      test: ["CMD", "cetacean", "healthcheck"]
-      interval: 10s
-      timeout: 3s
-      start_period: 30s
-      retries: 3
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    deploy:
-      placement:
-        constraints: [node.role == manager]
-```
-
-The `start_period` is important: Cetacean needs to complete a full Docker sync before it becomes ready. On large
-clusters (hundreds of services/tasks) this can take several seconds. Set `start_period` generously — health check
-failures during this window are not counted toward `retries`.
-
-If you use `depends_on` with a service that needs Cetacean to be ready:
-
-```yaml
-services:
-  cetacean:
-    image: cetacean:latest
-    healthcheck:
-      test: ["CMD", "cetacean", "healthcheck"]
-      interval: 10s
-      timeout: 3s
-      start_period: 30s
-      retries: 3
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-
-  monitoring:
-    image: my-monitoring-sidecar:latest
-    depends_on:
-      cetacean:
-        condition: service_healthy
-```
-
-### External Health Checks
-
-For load balancers or monitoring systems that probe Cetacean externally, hit the endpoints directly:
-
-```bash
-# Liveness (always 200 if the process is running)
-curl -sf http://cetacean:9000/-/health
-
-# Readiness (200 only after first sync)
-curl -sf http://cetacean:9000/-/ready
-```
-
-With a base path:
-
-```bash
-curl -sf http://cetacean:9000/my-base-path/-/ready
-```
-
-Both endpoints return JSON with `Cache-Control: no-store`. They are exempt from authentication, so they work regardless
-of `auth.mode`.
-
-### Tailscale tsnet Mode
-
-In tsnet mode, Cetacean runs two listeners: authenticated routes on the tailnet and meta endpoints on the regular
-listener. Health checks from Docker (which connect via the regular network, not the tailnet) reach `/-/health` and
-`/-/ready` on the regular listener. No special configuration is needed — the built-in `cetacean healthcheck` command
-connects to the regular listener address.
-
-### Choosing Between Liveness and Readiness
-
-| Use case | Endpoint | Why |
-|---|---|---|
-| Container orchestrator restart policy | `/-/ready` | Restart only if Cetacean can't sync with Docker |
-| Load balancer health check | `/-/ready` | Don't route traffic until data is available |
-| Uptime monitoring (is it running?) | `/-/health` | Always 200 if the process is up |
-| Dependency gating (`depends_on`) | `/-/ready` | Downstream services need data to be available |
-
-## Server Timeouts
-
-| Timeout | Value    | Why                            |
-|---------|----------|--------------------------------|
-| Read    | 5s       | Prevent slow-loris             |
-| Write   | 0 (none) | SSE connections are long-lived |
-| Idle    | 120s     | Clean up abandoned connections |
-
-The write timeout is intentionally zero because SSE streams are open-ended. Individual request timeouts are applied
-where needed (e.g., 30s for Prometheus proxy, 10s for instant queries).
-
-## Graceful Shutdown
-
-Send `SIGINT` or `SIGTERM` and Cetacean will:
-
-1. Stop accepting new connections
-2. Wait up to 5 seconds for in-flight requests to complete
-3. Close all SSE connections
-4. Exit
-
-## Docker Compose
-
-The default `compose.yaml` deploys Cetacean on a manager node with sensible resource limits:
-
-```yaml
-services:
-  cetacean:
-    image: cetacean:latest
-    ports:
-      - "9000:9000"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    environment:
-      CETACEAN_PROMETHEUS_URL: ${CETACEAN_PROMETHEUS_URL:-}
-    networks:
-      - monitoring
-    deploy:
-      placement:
-        constraints:
-          - node.role == manager
-      resources:
-        limits:
-          cpus: "2.0"
-          memory: 1G
-        reservations:
-          cpus: "0.5"
-          memory: 256M
-```
-
-For monitoring, see the [separate monitoring stack](monitoring.md).
+The binary includes a `cetacean healthcheck` subcommand (used by the built-in Docker `HEALTHCHECK`).
 
 ## Operations Level
 
 The `operations_level` setting controls which write operations are available. Use this to restrict Cetacean to a
 read-only dashboard or limit it to safe operational actions. The default is `1`. Requests to endpoints above the
 configured level receive a `403 Forbidden` response.
-
-The current level is exposed in the health endpoint (`GET /-/health`) as `operationsLevel`, which the frontend uses to
-hide disabled action buttons.
 
 | Operation                      | Endpoint                                | 0 Read-only | 1 Operational | 2 Configuration | 3 Impactful |
 |--------------------------------|-----------------------------------------|:-----------:|:-------------:|:---------------:|:-----------:|
@@ -478,11 +299,12 @@ hide disabled action buttons.
 
 ### Interaction with ACL
 
-When an [ACL policy](authorization.md) is active, operations level and ACL are checked independently -- both must
-allow a write for it to succeed. Operations level is a global ceiling (which _categories_ of writes exist at all),
+When an [ACL policy](authorization.md) is active, operations level and ACL are checked independently: both must allow a
+write for it to succeed. Operations level is a global ceiling (which _categories_ of writes exist at all),
 while ACL controls _who_ can write to _which_ resources.
 
 For example, with `operations_level=1` (operational):
+
 - A user with `write` on `service:webapp` can scale and restart that service
 - The same user cannot patch its environment variables (requires level 2), even though ACL allows it
 - A user _without_ a `write` grant cannot scale any service, even though the level permits scaling
@@ -493,7 +315,10 @@ for the full decision matrix.
 
 ## Recommendations
 
-Cetacean continuously evaluates cluster health and surfaces recommendations on the dashboard, service list, and detail pages. Sizing thresholds are configurable; see [docs/recommendations.md](recommendations.md) for the full reference including all check categories, configuration options, and where recommendations appear.
+Cetacean continuously evaluates cluster health and surfaces recommendations on the dashboard, service list, and detail
+pages. Sizing thresholds are configurable; see [docs/recommendations.md](recommendations.md) for the full reference
+including all check categories, configuration options, and where recommendations appear.  
+You can disable the recommendation engine entirely by setting the `recommendations` option to `false`.
 
 ## Profiling
 

@@ -80,11 +80,11 @@ Inline policy takes precedence over policy file. File format is detected by exte
 
 #### Hot Reload
 
-When using `CETACEAN_ACL_POLICY_FILE`, changes to the file are detected automatically:
+When using `acl.policy_file`, changes to the file are detected automatically:
 
 - Valid new policy: swapped atomically, logged
 - Invalid new policy: error logged, previous policy kept
-- Inline env var (`CETACEAN_ACL_POLICY`) requires a restart to change
+- Inline policy (`acl.policy`) requires a restart to change
 
 ### Provider Grant Sources
 

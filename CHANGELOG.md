@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- General trusted proxies setting (`CETACEAN_TRUSTED_PROXIES`) for real client IP resolution behind reverse proxies — replaces the headers-auth-specific setting, which is now deprecated
+- Client IP in structured request logs when trusted proxies are configured
+- CLI flags for all settings that were previously env-var-only: `-operations-level`, `-sse-batch-interval`, `-cors-origins`, `-snapshot`, `-data-dir`, `-trusted-proxies`
+- Gzip compression for snapshot files (existing plain JSON snapshots are read transparently)
+- Tailscale auth mode comparison table in the authentication docs
 - Configurable CORS support for cross-origin API access (`CETACEAN_CORS_ORIGINS`)
 - Grant-based RBAC authorization with per-resource access control
 - `Allow` response header indicating available methods per resource
@@ -24,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Per-stack CPU and memory usage charts on the node detail page with drill-down to individual services
 - HTTP Range Request pagination on all list API endpoints (`Range: items 0-49` returns `206 Partial Content` with `Content-Range`)
 - Infinite scroll on all resource list pages — items load automatically as you scroll down
+
+### Deprecated
+- `CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES` — use `CETACEAN_TRUSTED_PROXIES` instead; will be removed in v1
 
 ### Security
 - Service tasks, service logs, task logs, and node tasks endpoints now enforce ACL read checks — previously accessible to any authenticated user regardless of grants

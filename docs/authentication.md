@@ -1,10 +1,10 @@
 # Authentication
 
 Cetacean supports pluggable authentication with five modes. Authentication is optional: The default mode (`none`)
-allows anonymous access. One mode is active at a time, selected via the `-auth-mode` flag, `CETACEAN_AUTH_MODE`
-environment variable, or `auth.mode` in a [config file](configuration.md#config-file).
+allows anonymous access. One mode is active at a time via `auth.mode` (see [Configuration](configuration.md)).
 
-All authentication is identity-only (who you are). For per-resource access control, see [Authorization](authorization.md).
+All authentication is identity-only (who you are). For per-resource access control,
+see [Authorization](authorization.md).
 
 ## Quick Start
 
@@ -38,7 +38,7 @@ and config file keys are listed in each provider's configuration table.
 ./cetacean \
   -auth-mode headers \
   -auth-headers-subject X-Remote-User \
-  -auth-headers-trusted-proxies 10.0.0.0/8
+  -trusted-proxies 10.0.0.0/8
 ```
 
 ## Identity Model
@@ -47,12 +47,18 @@ Every authenticated request produces an `Identity`:
 
 ```json
 {
-    "subject": "user-123",
-    "displayName": "Alice",
-    "email": "alice@example.com",
-    "groups": [ "admin", "developers" ],
-    "provider": "oidc",
-    "raw": { "sub": "user-123", "email_verified": true }
+  "subject": "user-123",
+  "displayName": "Alice",
+  "email": "alice@example.com",
+  "groups": [
+    "admin",
+    "developers"
+  ],
+  "provider": "oidc",
+  "raw": {
+    "sub": "user-123",
+    "email_verified": true
+  }
 }
 ```
 
@@ -66,19 +72,6 @@ Every authenticated request produces an `Identity`:
 | `raw`         | object   | Provider-specific claims (excluded from session cookies)                            |
 
 The identity is available at `GET /auth/whoami` in all modes.
-
-## Route Exemptions
-
-The auth middleware skips these paths (accessible without authentication in all modes):
-
-| Path        | Reason                                                               |
-|-------------|----------------------------------------------------------------------|
-| `/-/*`      | Meta endpoints (health, ready, metrics/status)                       |
-| `/api*`     | API documentation (OpenAPI spec, JSON-LD context, Scalar playground) |
-| `/assets/*` | Static frontend assets                                               |
-| `/auth/*`   | Auth routes (login, callback, logout, whoami)                        |
-
-All other routes require authentication when a non-`none` provider is active.
 
 ## Providers
 
@@ -115,9 +108,6 @@ Browser                        Cetacean                          IdP
   │                               ├── 302 /auth/login ───────────►│
   │◄──────────────────────────────┤                               │
   ├── GET /auth/login ───────────►│                               │
-  │                               ├── Set cookies (state,         │
-  │                               │  nonce, PKCE verifier,        │
-  │                               │  redirect URL)                │
   │◄── 302 to IdP authorize ──────┤                               │
   ├── GET authorize ─────────────────────────────────────────────►│
   │                                                               │
@@ -135,11 +125,10 @@ Browser                        Cetacean                          IdP
 ```
 
 1. Unauthenticated browser request → 302 redirect to `/auth/login`
-2. `/auth/login` stores CSRF state, nonce, PKCE verifier, and redirect URL as short-lived cookies (5-minute TTL), then
-   redirects to the IdP
+2. `/auth/login` redirects to the IdP's Authorize endpoint
 3. IdP authenticates the user and redirects back to `/auth/callback`
-4. Callback validates state (CSRF), nonce, and issuer (RFC 9207), exchanges the authorization code with PKCE, validates
-   the ID token, creates a signed session cookie, and redirects to the original URL
+4. Callback exchanges the authorization code for tokens, validates the ID token, sets a session cookie, and redirects
+   to the original URL
 
 The redirect URL from `/auth/login?redirect=/services` must be a relative path starting with `/`. Protocol-relative
 URLs (`//...`) and backslash prefixes are rejected.
@@ -154,8 +143,7 @@ curl -H "Authorization: Bearer eyJhbGci..." \
      http://localhost:9000/services
 ```
 
-The token is validated against the IdP's JWKS endpoint on every request (no local caching). Multi-audience tokens are
-validated per OIDC Core Section 3.1.3.7 (`azp` must match client ID when multiple audiences are present).
+The token is validated against the IdP's JWKS endpoint on every request.
 
 When a Bearer-authenticated request fails, the response includes `WWW-Authenticate: Bearer`.
 
@@ -176,8 +164,7 @@ Browser sessions use signed ephemeral cookies:
 If the session key is not set, the signing key is generated randomly at startup. Restarting the server invalidates all
 sessions (users must re-authenticate).
 
-Set `auth.oidc.session_key` (or `-auth-oidc-session-key` / `CETACEAN_AUTH_OIDC_SESSION_KEY`) to a fixed 32-byte
-hex-encoded value for session persistence across restarts:
+Set `auth.oidc.session_key` to a fixed 32-byte hex-encoded value for session persistence across restarts:
 
 ```bash
 # Generate a key
@@ -199,7 +186,7 @@ curl -X POST http://localhost:9000/auth/logout
 Logout clears the session cookie. If the IdP advertises an `end_session_endpoint` (RFC 9722), the user is redirected to
 the IdP for single sign-out with `id_token_hint`.
 
-The logout endpoint uses `Sec-Fetch-Site` / `Origin` validation to prevent cross-site logout attacks.
+The logout endpoint validates the request origin to prevent cross-site logout attacks.
 
 #### Auth Endpoints
 
@@ -214,7 +201,7 @@ The logout endpoint uses `Sec-Fetch-Site` / `Origin` validation to prevent cross
 
 **Keycloak:**
 
-1. Create a client with "confidential" access type
+1. Create a client with `confidential` access type
 2. Set valid redirect URI to `https://cetacean.example.com/auth/callback`
 3. Enable "Standard Flow" (authorization code)
 4. Note the client ID and secret from the Credentials tab
@@ -248,16 +235,16 @@ login flow needed.
 
 Tailscale auth has two modes. Pick based on your deployment:
 
-| | Local mode (default) | tsnet mode |
-|---|---|---|
-| **How it works** | Queries the host's Tailscale daemon to identify peers | Embeds a Tailscale node inside the Cetacean process |
-| **Tailscale installed on host?** | Yes (daemon must be running) | No |
-| **Network binding** | Cetacean listens on all interfaces (`CETACEAN_LISTEN_ADDR`). Only requests from Tailscale IPs are authenticated; others are rejected. | Authenticated routes listen exclusively on the tailnet. Non-tailnet traffic cannot reach them. |
-| **Docker health checks** | Work normally (health endpoint is auth-exempt) | Work normally — meta endpoints (`/-/health`, `/-/ready`) remain on the regular listener |
-| **Config complexity** | Minimal: just `-auth-mode tailscale` | Requires an auth key, hostname, and persistent state directory |
-| **Best for** | Hosts already running Tailscale (bare-metal, VMs) | Containers, Docker Swarm services, or hosts without Tailscale installed |
+|                                  | Local mode (default)                                                                                    | tsnet mode                                                                                    |
+|----------------------------------|---------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------|
+| **How it works**                 | Queries the host's Tailscale daemon to identify peers                                                   | Embeds a Tailscale node inside the Cetacean process                                           |
+| **Tailscale installed on host?** | Yes (daemon must be running)                                                                            | No                                                                                            |
+| **Network binding**              | Listens on all interfaces (`server.listen_addr`); only Tailscale IPs are authenticated, others rejected | Authenticated routes listen exclusively on the tailnet; non-tailnet traffic cannot reach them |
+| **Docker health checks**         | Work normally (health endpoint is auth-exempt)                                                          | Work normally — meta endpoints (`/-/health`, `/-/ready`) remain on the regular listener       |
+| **Config complexity**            | Minimal: just `-auth-mode tailscale`                                                                    | Requires an auth key, hostname, and persistent state directory                                |
+| **Best for**                     | Hosts already running Tailscale (bare-metal, VMs)                                                       | Containers, Docker Swarm services, or hosts without Tailscale installed                       |
 
-**Security note on local mode:** Cetacean binds to `CETACEAN_LISTEN_ADDR` (default `:9000`, all interfaces). A
+**Security note on local mode:** Cetacean binds to `server.listen_addr` (default `:9000`, all interfaces). A
 defense-in-depth IP range check rejects requests not from Tailscale's CGNAT (`100.64.0.0/10`) or ULA
 (`fd7a:115c:a1e0::/48`) ranges, but this is an application-layer check, not a socket-level restriction. For tighter
 isolation, bind to your node's Tailscale IP (e.g. `-listen-addr 100.x.x.x:9000`) or use tsnet mode, which only
@@ -275,7 +262,7 @@ Requires the Tailscale daemon running locally (access to `/run/tailscale/tailsca
 
 #### tsnet Mode
 
-Embeds a Tailscale node directly into Cetacean. No local Tailscale installation needed.
+Embeds a Tailscale node directly into Cetacean. No local Tailscale installation is needed.
 
 ```bash
 ./cetacean \
@@ -286,7 +273,7 @@ Embeds a Tailscale node directly into Cetacean. No local Tailscale installation 
   -auth-tailscale-state-dir /var/lib/cetacean/tsnet
 ```
 
-In tsnet mode, authenticated routes are served on the tailnet listener. Meta endpoints (`/-/health`, `/-/ready`)
+In tsnet mode, authenticated routes are served on the tailnet listener. Meta-endpoints (`/-/health`, `/-/ready`)
 remain on the regular listener for Docker health checks.
 
 #### Configuration
@@ -310,8 +297,7 @@ remain on the regular listener for Docker health checks.
 
 #### Capability-Based Groups
 
-Tailscale ACL capabilities can map users to application groups. Set the capability key via
-`-auth-tailscale-capability`, `CETACEAN_AUTH_TAILSCALE_CAPABILITY`, or `auth.tailscale.capability`:
+Tailscale ACL capabilities can map users to application groups. Set `auth.tailscale.capability`:
 
 ```bash
 ./cetacean -auth-mode tailscale -auth-tailscale-capability example.com/cap/cetacean
@@ -321,19 +307,26 @@ Then in your Tailscale ACL policy, grant capabilities to users or groups:
 
 ```json
 {
-    "grants": [
-        {
-            "src": [ "group:admins" ],
-            "dst": [ "tag:cetacean" ],
-            "app": {
-                "example.com/cap/cetacean": [
-                    {
-                        "groups": [ "admin", "operators" ]
-                    }
-                ]
-            }
-        }
-    ]
+  "grants": [
+    {
+      "src": [
+        "group:admins"
+      ],
+      "dst": [
+        "tag:cetacean"
+      ],
+      "app": {
+        "example.com/cap/cetacean": [
+          {
+            "groups": [
+              "admin",
+              "operators"
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }
 ```
 
@@ -374,19 +367,19 @@ identity.
   -tls-key /etc/cetacean/server-key.pem
 ```
 
-The server is configured with `tls.RequireAndVerifyClientCert` -- clients without a valid certificate cannot connect.
+Clients without a valid certificate cannot connect.
 
 #### Identity Extraction
 
 Identity fields are extracted from the client certificate in priority order:
 
-1. **SPIFFE URI SAN** (highest priority, for workload identity)
+1. **SPIFFE URI SAN** (the highest priority, for workload identity)
     - Subject set to the full SPIFFE URI (e.g., `spiffe://example.com/service/web`)
     - DisplayName set to the path component
 2. **Email SAN** (fallback)
     - First email address used as subject and display name
 3. **Common Name (CN)** (fallback)
-    - CN used as subject and display name
+    - CN used as Subject and display name
 
 Groups are extracted from the certificate's Organizational Unit (OU) fields.
 
@@ -416,10 +409,10 @@ The `raw` field in the identity includes certificate metadata:
 
 ```json
 {
-    "serial": "0a:1b:2c:3d",
-    "issuer_cn": "My CA",
-    "not_after": "2027-01-15T00:00:00Z",
-    "spiffe_id": "spiffe://example.com/service/web"
+  "serial": "0a:1b:2c:3d",
+  "issuer_cn": "My CA",
+  "not_after": "2027-01-15T00:00:00Z",
+  "spiffe_id": "spiffe://example.com/service/web"
 }
 ```
 
@@ -434,44 +427,36 @@ mechanism to prevent clients from spoofing headers by bypassing the proxy.
 
 #### Configuration
 
-| Flag                            | Env var                                 | Config file key                | Required    | Default | Description                                         |
-|---------------------------------|-----------------------------------------|--------------------------------|-------------|---------|-----------------------------------------------------|
-| `-auth-headers-subject`         | `CETACEAN_AUTH_HEADERS_SUBJECT`         | `auth.headers.subject`         | Yes         | --      | Header name for subject (e.g., `X-Remote-User`)     |
-| `-auth-headers-name`            | `CETACEAN_AUTH_HEADERS_NAME`            | `auth.headers.name`            | No          | --      | Header name for display name                        |
-| `-auth-headers-email`           | `CETACEAN_AUTH_HEADERS_EMAIL`           | `auth.headers.email`           | No          | --      | Header name for email                               |
-| `-auth-headers-groups`          | `CETACEAN_AUTH_HEADERS_GROUPS`          | `auth.headers.groups`          | No          | --      | Header name for groups (comma-separated)            |
-| `-auth-headers-secret-header`   | `CETACEAN_AUTH_HEADERS_SECRET_HEADER`   | `auth.headers.secret_header`   | No          | --      | Header name for shared secret                       |
-| `-auth-headers-secret-value`    | `CETACEAN_AUTH_HEADERS_SECRET_VALUE`    | `auth.headers.secret_value`    | Conditional | --      | Shared secret value (required if secret header set) |
-| `-auth-headers-trusted-proxies` | `CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES` | `auth.headers.trusted_proxies` | No          | --      | Comma-separated CIDR/IP allowlist                   |
+| Flag                            | Env var                                 | Config file key                | Required       | Default | Description                                         |
+|---------------------------------|-----------------------------------------|--------------------------------|----------------|---------|-----------------------------------------------------|
+| `-auth-headers-subject`         | `CETACEAN_AUTH_HEADERS_SUBJECT`         | `auth.headers.subject`         | Yes            | --      | Header name for subject (e.g., `X-Remote-User`)     |
+| `-auth-headers-name`            | `CETACEAN_AUTH_HEADERS_NAME`            | `auth.headers.name`            | No             | --      | Header name for display name                        |
+| `-auth-headers-email`           | `CETACEAN_AUTH_HEADERS_EMAIL`           | `auth.headers.email`           | No             | --      | Header name for email                               |
+| `-auth-headers-groups`          | `CETACEAN_AUTH_HEADERS_GROUPS`          | `auth.headers.groups`          | No             | --      | Header name for groups (comma-separated)            |
+| `-auth-headers-secret-header`   | `CETACEAN_AUTH_HEADERS_SECRET_HEADER`   | `auth.headers.secret_header`   | No             | --      | Header name for shared secret                       |
+| `-auth-headers-secret-value`    | `CETACEAN_AUTH_HEADERS_SECRET_VALUE`    | `auth.headers.secret_value`    | Conditional    | --      | Shared secret value (required if secret header set) |
+| `-auth-headers-trusted-proxies` | `CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES` | `auth.headers.trusted_proxies` | **Deprecated** | --      | Use `-trusted-proxies` instead                      |
 
-At least one of `trusted_proxies` or `secret_header`+`secret_value` must be configured.
+Header auth requires the general `-trusted-proxies` setting (see [General Settings](configuration.md#general-settings)).
+The headers-specific `-auth-headers-trusted-proxies` is deprecated and will be removed in v1. The shared secret is
+optional, additional protection.
 
 #### Security Mechanisms
 
-**IP Allowlist** -- only accept headers from known proxy IPs:
+**IP Allowlist (required):** only accept headers from known proxy IPs:
 
 ```bash
 ./cetacean \
   -auth-mode headers \
   -auth-headers-subject X-Remote-User \
-  -auth-headers-trusted-proxies 10.0.0.1,10.0.0.2,127.0.0.1
+  -trusted-proxies 10.0.0.1,10.0.0.2,127.0.0.1
 ```
 
 Supports individual IPs and CIDR notation (`10.0.0.0/8`). Bare IPs are treated as `/32` (IPv4) or `/128` (IPv6).
 
-**Shared Secret** -- proxy proves its identity with a secret header:
+**Shared Secret (optional):** additionally requires the proxy to prove its identity with a secret header.
 
-```bash
-./cetacean \
-  -auth-mode headers \
-  -auth-headers-subject X-Remote-User \
-  -auth-headers-secret-header X-Proxy-Secret \
-  -auth-headers-secret-value my-secret-value
-```
-
-The secret is validated using constant-time comparison (HMAC-based) to prevent timing attacks.
-
-**Both** -- for maximum security, combine both mechanisms:
+**IP Allowlist + Shared Secret:** for maximum security, combine both mechanisms:
 
 ```bash
 ./cetacean \
@@ -482,7 +467,7 @@ The secret is validated using constant-time comparison (HMAC-based) to prevent t
   -auth-headers-groups X-Remote-Groups \
   -auth-headers-secret-header X-Proxy-Secret \
   -auth-headers-secret-value my-secret-value \
-  -auth-headers-trusted-proxies 10.0.0.0/8
+  -trusted-proxies 10.0.0.0/8
 ```
 
 #### Proxy Configuration Examples
@@ -637,7 +622,7 @@ services:
       CETACEAN_AUTH_HEADERS_SUBJECT: X-Remote-User
       CETACEAN_AUTH_HEADERS_NAME: X-Remote-Name
       CETACEAN_AUTH_HEADERS_EMAIL: X-Remote-Email
-      CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES: "10.0.0.0/8"
+      CETACEAN_TRUSTED_PROXIES: "10.0.0.0/8"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     deploy:
@@ -657,11 +642,13 @@ Response:
 
 ```json
 {
-    "subject": "alice",
-    "displayName": "Alice Smith",
-    "email": "alice@example.com",
-    "groups": [ "admin" ],
-    "provider": "oidc"
+  "subject": "alice",
+  "displayName": "Alice Smith",
+  "email": "alice@example.com",
+  "groups": [
+    "admin"
+  ],
+  "provider": "oidc"
 }
 ```
 
@@ -701,8 +688,7 @@ The Cetacean SPA automatically:
 
 - OIDC login flow uses random state parameter (128-bit entropy)
 - PKCE (S256) prevents authorization code interception
-- Logout endpoint uses `Sec-Fetch-Site` / `Origin` validation
-- All security-critical comparisons use constant-time algorithms
+- Logout endpoint validates request origin to prevent cross-site attacks
 
 ### RFC Compliance
 
@@ -714,14 +700,7 @@ The Cetacean SPA automatically:
 | RFC 9722          | RP-Initiated Logout with `id_token_hint`                                |
 | SPIFFE X.509-SVID | SPIFFE trust domain and path validation                                 |
 
-### Defense in Depth
-
-- Tailscale address validation before WhoIs API call
-- Headers provider requires IP allowlist or shared secret (cannot be unprotected)
-- OIDC validates issuer, state, nonce, and authorized party (`azp`)
-- Redirect URLs restricted to relative paths (no protocol-relative or absolute URLs)
-- Subject header values validated for length and control characters
-
 ## Authorization
 
-For per-resource access control — controlling which users can view or modify which resources — see [Authorization](authorization.md).
+For per-resource access control — controlling which users can view or modify which resources —
+see [Authorization](authorization.md).
