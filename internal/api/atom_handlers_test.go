@@ -355,6 +355,54 @@ func TestPaginationLinks(t *testing.T) {
 	})
 }
 
+func TestPaginationLinks_StaleCursorIncludesCurrentLink(t *testing.T) {
+	req := httptest.NewRequest("GET", "/history?before=9999&limit=50", nil)
+	entries := []cache.HistoryEntry{} // empty — cursor was evicted
+
+	links := paginationLinks(req, entries, 9999, 50)
+
+	var currentHref string
+	for _, l := range links {
+		if l.Rel == "current" {
+			currentHref = l.Href
+		}
+	}
+
+	if currentHref == "" {
+		t.Fatal("expected current link when beforeID > 0 and entries are empty (stale cursor)")
+	}
+
+	if currentHref != "/history" {
+		t.Errorf("current href = %q, want /history (no pagination params)", currentHref)
+	}
+}
+
+func TestPaginationLinks_StaleCursorPreservesQueryParams(t *testing.T) {
+	req := httptest.NewRequest("GET", "/search?q=myservice&before=9999&limit=50", nil)
+	entries := []cache.HistoryEntry{} // empty — cursor was evicted
+
+	links := paginationLinks(req, entries, 9999, 50)
+
+	var currentHref string
+	for _, l := range links {
+		if l.Rel == "current" {
+			currentHref = l.Href
+		}
+	}
+
+	if currentHref == "" {
+		t.Fatal("expected current link for stale cursor")
+	}
+
+	if !strings.Contains(currentHref, "q=myservice") {
+		t.Errorf("current href %q should preserve q param", currentHref)
+	}
+
+	if strings.Contains(currentHref, "before=") || strings.Contains(currentHref, "limit=") {
+		t.Errorf("current href %q should not contain pagination params", currentHref)
+	}
+}
+
 func TestHistoryUpdated(t *testing.T) {
 	t.Run("returns first entry timestamp when entries exist", func(t *testing.T) {
 		ts := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)

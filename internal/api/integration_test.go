@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/xml"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	atomxml "github.com/radiergummi/cetacean/internal/api/atom"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -442,6 +444,50 @@ func TestAPIDocEndpoints(t *testing.T) {
 		cc := w.Header().Get("Cache-Control")
 		if !strings.Contains(cc, "max-age=86400") {
 			t.Errorf("Cache-Control=%q, want max-age=86400", cc)
+		}
+	})
+}
+
+func TestEventsAtomRoute(t *testing.T) {
+	router := setupIntegrationRouter(t)
+
+	t.Run("Atom Accept header returns Atom feed", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/events", nil)
+		req.Header.Set("Accept", "application/atom+xml")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body = %s", w.Code, w.Body.String())
+		}
+
+		ct := w.Header().Get("Content-Type")
+		if !strings.HasPrefix(ct, "application/atom+xml") {
+			t.Errorf("Content-Type = %q, want application/atom+xml", ct)
+		}
+
+		var feed atomxml.Feed
+		if err := xml.Unmarshal(w.Body.Bytes(), &feed); err != nil {
+			t.Fatalf("invalid Atom XML: %v", err)
+		}
+
+		if feed.Title != "History" {
+			t.Errorf("feed.Title = %q, want %q", feed.Title, "History")
+		}
+	})
+
+	t.Run(".atom extension returns Atom feed", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/events.atom", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body = %s", w.Code, w.Body.String())
+		}
+
+		ct := w.Header().Get("Content-Type")
+		if !strings.HasPrefix(ct, "application/atom+xml") {
+			t.Errorf("Content-Type = %q, want application/atom+xml", ct)
 		}
 	})
 }

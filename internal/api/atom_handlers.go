@@ -421,10 +421,43 @@ func paginationLinks(
 	}
 
 	// On non-first pages, link back to the subscription document (first page).
+	// Per RFC 5005, this should point to the feed document, not the HTML alternate.
 	if beforeID > 0 {
+		firstPageHref := absPath(r.Context(), r.URL.Path)
+		if aq := r.URL.Query(); len(aq) > 0 {
+			aq.Del("before")
+			aq.Del("limit")
+
+			if encoded := aq.Encode(); encoded != "" {
+				firstPageHref += "?" + encoded
+			}
+		}
+
 		links = append(links, atomxml.Link{
 			Rel:  "previous",
-			Href: alternateHref,
+			Href: firstPageHref,
+			Type: "application/atom+xml",
+		})
+	}
+
+	// When the cursor has been evicted from the ring buffer, the result is
+	// empty despite requesting a non-first page. Include a "current" link
+	// (RFC 5005 Section 2) so feed readers can recover by restarting from
+	// the subscription document.
+	if beforeID > 0 && len(entries) == 0 {
+		currentHref := absPath(r.Context(), r.URL.Path)
+		if aq := r.URL.Query(); len(aq) > 0 {
+			aq.Del("before")
+			aq.Del("limit")
+
+			if encoded := aq.Encode(); encoded != "" {
+				currentHref += "?" + encoded
+			}
+		}
+
+		links = append(links, atomxml.Link{
+			Rel:  "current",
+			Href: currentHref,
 			Type: "application/atom+xml",
 		})
 	}
