@@ -1,18 +1,30 @@
 ---
-import { getEntry } from "astro:content";
 import Header from "../components/Header.astro";
 import Sidebar from "../components/Sidebar.astro";
-import Hero from "../components/Hero.astro";
+import TableOfContents from "../components/TableOfContents.astro";
 import "../styles/global.css";
 
-const home = await getEntry("docs", "index");
+interface Heading {
+  depth: number;
+  slug: string;
+  text: string;
+}
+
+interface Props {
+  title: string;
+  description: string;
+  slug: string;
+  headings: Heading[];
+}
+
+const { title, description, slug, headings } = Astro.props;
 ---
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content={home.data.description} />
-    <title>Cetacean — {home.data.description}</title>
+    <meta name="description" content={description} />
+    <title>{title} — Cetacean</title>
     <script is:inline>
       (function() {
         var theme = localStorage.getItem("theme") || "system";
@@ -22,12 +34,15 @@ const home = await getEntry("docs", "index");
     </script>
   </head>
   <body class="min-h-screen">
-    <Header currentPath="/" />
+    <Header currentPath={Astro.url.pathname} />
     <div class="flex">
-      <Sidebar currentSlug="" />
-      <main class="flex-1 min-w-0">
-        <Hero title="Cetacean" description={home.data.description} />
+      <Sidebar currentSlug={slug} />
+      <main class="flex-1 min-w-0 px-8 py-8 lg:px-12">
+        <article class="prose">
+          <slot />
+        </article>
       </main>
+      <TableOfContents headings={headings} />
     </div>
   </body>
 </html>

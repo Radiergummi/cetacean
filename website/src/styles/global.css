@@ -76,4 +76,35 @@
   html {
     @apply font-sans antialiased;
   }
+
+  .prose {
+    @apply text-foreground leading-7;
+    max-width: 720px;
+  }
+  .prose h1 { @apply text-3xl font-bold tracking-tight mt-8 mb-4; }
+  .prose h2 { @apply text-xl font-semibold tracking-tight mt-10 mb-4 pb-2 border-b border-border; }
+  .prose h3 { @apply text-lg font-semibold mt-8 mb-3; }
+  .prose h4 { @apply text-base font-semibold mt-6 mb-2; }
+  .prose p { @apply my-4; }
+  .prose a { @apply text-link underline underline-offset-2 hover:opacity-80; }
+  .prose strong { @apply font-semibold; }
+  .prose ul { @apply my-4 ml-6 list-disc; }
+  .prose ol { @apply my-4 ml-6 list-decimal; }
+  .prose li { @apply my-1; }
+  .prose li > ul, .prose li > ol { @apply my-1; }
+  .prose blockquote { @apply border-l-2 border-border pl-4 my-4 text-muted-foreground italic; }
+  .prose hr { @apply my-8 border-border; }
+  .prose table { @apply my-4 w-full text-sm border-collapse; }
+  .prose thead th { @apply text-left font-semibold px-3 py-2 border-b-2 border-border; }
+  .prose tbody td { @apply px-3 py-2 border-b border-border; }
+  .prose tbody tr:nth-child(even) { background: oklch(from var(--muted) l c h / 30%); }
+  .prose code:not(pre code) {
+    @apply rounded px-1 py-0.5 text-sm font-mono;
+    background: var(--code-background);
+    color: var(--code-foreground);
+  }
+  .prose pre {
+    @apply rounded-lg my-4 p-4 overflow-x-auto text-sm leading-relaxed;
+  }
+  .prose img { @apply rounded-lg my-4; }
 }

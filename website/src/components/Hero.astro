@@ -1,0 +1,21 @@
+---
+interface Props {
+  title: string;
+  description: string;
+}
+
+const { title, description } = Astro.props;
+---
+<div class="flex flex-col items-center justify-center py-20 text-center">
+  <span class="text-5xl mb-4">&#x1F40B;</span>
+  <h1 class="text-4xl font-bold tracking-tight mb-3">{title}</h1>
+  <p class="text-lg text-muted-foreground max-w-md mb-8">{description}</p>
+  <div class="flex gap-3">
+    <a href="/getting-started" class="inline-flex items-center rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity">
+      Get Started
+    </a>
+    <a href="https://github.com/Radiergummi/cetacean" target="_blank" rel="noopener" class="inline-flex items-center rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors">
+      GitHub
+    </a>
+  </div>
+</div>
