@@ -183,8 +183,8 @@ func recommendationToEntry(
 	updated time.Time,
 ) atomxml.Entry {
 	id := fmt.Sprintf(
-		"urn:cetacean:recommendation:%s:%s",
-		rec.TargetID, rec.Category,
+		"urn:cetacean:recommendation:%s:%s:%s",
+		rec.TargetID, rec.Category, rec.Resource,
 	)
 
 	var links []atomxml.Link
