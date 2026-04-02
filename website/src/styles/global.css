@@ -9,33 +9,37 @@
   --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.45 0 0);
+  --accent: oklch(0.955 0 0);
   --accent-foreground: oklch(0.205 0 0);
-  --border: oklch(0.922 0 0);
-  --link: oklch(0.488 0.243 264.376);
+  --border: oklch(0.91 0 0);
+  --link: oklch(0.488 0.195 264);
+  --active: oklch(0.488 0.195 264);
   --radius: 0.625rem;
-  --code-background: oklch(0.97 0 0);
-  --code-foreground: oklch(0.205 0 0);
+  --code-background: oklch(0.965 0 0);
+  --code-foreground: oklch(0.35 0 0);
+  --sidebar-background: oklch(0.98 0 0);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
+  --background: oklch(0.13 0 0);
+  --foreground: oklch(0.93 0 0);
   --primary: oklch(0.87 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.371 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --link: oklch(0.695 0.17 254.624);
-  --code-background: oklch(0.205 0 0);
-  --code-foreground: oklch(0.87 0 0);
+  --primary-foreground: oklch(0.13 0 0);
+  --muted: oklch(0.2 0 0);
+  --muted-foreground: oklch(0.55 0 0);
+  --accent: oklch(0.22 0 0);
+  --accent-foreground: oklch(0.93 0 0);
+  --border: oklch(1 0 0 / 8%);
+  --link: oklch(0.695 0.15 254);
+  --active: oklch(0.695 0.15 254);
+  --code-background: oklch(0.18 0 0);
+  --code-foreground: oklch(0.8 0 0);
+  --sidebar-background: oklch(0.155 0 0);
 }
 
 @theme inline {
-  --font-sans: "Geist Variable", sans-serif;
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-primary: var(--primary);
@@ -61,53 +65,91 @@
   html {
     @apply font-sans antialiased;
   }
+}
 
+/* ── Prose typography ──────────────────────────────────────────────── */
+
+@layer base {
   .prose {
-    @apply text-foreground leading-7;
+    @apply text-foreground;
     max-width: 720px;
+    font-size: 0.9375rem;
+    line-height: 1.75;
   }
-  .prose h1 { @apply text-3xl font-bold tracking-tight mt-8 mb-4; }
-  .prose h2 { @apply text-xl font-semibold tracking-tight mt-10 mb-4 pb-2 border-b border-border; }
-  .prose h3 { @apply text-lg font-semibold mt-8 mb-3; }
-  .prose h4 { @apply text-base font-semibold mt-6 mb-2; }
+  .prose > :first-child { @apply mt-0; }
+  .prose h1 { @apply text-2xl font-semibold tracking-tight mt-0 mb-6; }
+  .prose h2 {
+    @apply text-lg font-semibold tracking-tight mt-12 mb-4;
+  }
+  .prose h3 { @apply text-base font-semibold mt-8 mb-3; }
+  .prose h4 { @apply text-sm font-semibold mt-6 mb-2; }
   .prose p { @apply my-4; }
-  .prose a { @apply text-link underline underline-offset-2 hover:opacity-80; }
+  .prose a { @apply text-link underline decoration-link/30 underline-offset-2 hover:decoration-link/60 transition-colors; }
   .prose strong { @apply font-semibold; }
   .prose ul { @apply my-4 ml-6 list-disc; }
   .prose ol { @apply my-4 ml-6 list-decimal; }
-  .prose li { @apply my-1; }
+  .prose li { @apply my-1.5; }
   .prose li > ul, .prose li > ol { @apply my-1; }
-  .prose blockquote { @apply border-l-2 border-border pl-4 my-4 text-muted-foreground italic; }
-  .prose hr { @apply my-8 border-border; }
-  .prose table { @apply my-4 w-full text-sm border-collapse; }
-  .prose thead th { @apply text-left font-semibold px-3 py-2 border-b-2 border-border; }
-  .prose tbody td { @apply px-3 py-2 border-b border-border; }
-  .prose tbody tr:nth-child(even) { background: oklch(from var(--muted) l c h / 30%); }
+  .prose blockquote {
+    @apply pl-4 my-6 text-muted-foreground;
+    border-left: 2px solid var(--active);
+    font-style: normal;
+  }
+  .prose hr { @apply my-10 border-border; }
+
+  /* Tables — wrapped in a scrollable container to prevent overflow */
+  .prose .table-wrapper {
+    @apply my-6 overflow-x-auto -mx-1 px-1;
+  }
+  .prose table {
+    @apply w-full text-sm;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  .prose thead th {
+    @apply text-left font-medium text-muted-foreground px-3 py-2 border-b border-border text-xs uppercase tracking-wider whitespace-nowrap;
+  }
+  .prose tbody td {
+    @apply px-3 py-2.5 border-b border-border;
+  }
+  .prose tbody tr:last-child td { @apply border-b-0; }
+
+  /* Inline code */
   .prose code:not(pre code) {
-    @apply rounded px-1 py-0.5 text-sm font-mono;
+    @apply rounded-md px-1.5 py-0.5 text-[0.8125rem] font-mono font-medium;
     background: var(--code-background);
     color: var(--code-foreground);
   }
+
+  /* Code blocks */
   .prose pre {
-    @apply rounded-lg my-4 p-4 overflow-x-auto text-sm leading-relaxed;
+    @apply rounded-lg my-6 p-4 overflow-x-auto text-[0.8125rem] leading-relaxed border border-border;
   }
-  .prose img { @apply rounded-lg my-4; }
+
+  .prose img { @apply rounded-lg my-6; }
+
+  /* Tighten nested list spacing */
+  .prose li p { @apply my-1; }
 }
+
+/* ── Code copy button ──────────────────────────────────────────────── */
 
 .copy-button {
   position: absolute;
   top: 0.5rem;
   right: 0.5rem;
-  border-radius: 0.25rem;
-  padding: 0.125rem 0.5rem;
-  font-size: 0.75rem;
+  border-radius: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.6875rem;
   font-weight: 500;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
   color: var(--muted-foreground);
   background: var(--background);
   border: 1px solid var(--border);
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.15s, color 0.15s;
+  transition: opacity 0.2s, color 0.15s;
 }
 .prose pre:hover .copy-button {
   opacity: 1;

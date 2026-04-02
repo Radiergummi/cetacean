@@ -6,15 +6,23 @@ interface Props {
 
 const { title, description } = Astro.props;
 ---
-<div class="flex flex-col items-center justify-center py-20 text-center">
-  <span class="text-5xl mb-4">&#x1F40B;</span>
-  <h1 class="text-4xl font-bold tracking-tight mb-3">{title}</h1>
-  <p class="text-lg text-muted-foreground max-w-md mb-8">{description}</p>
+<div class="flex flex-col items-center justify-center py-24 px-8 text-center">
+  <span class="text-6xl mb-6">🐋</span>
+  <h1 class="text-3xl font-semibold tracking-tight mb-3">{title}</h1>
+  <p class="text-base text-muted-foreground max-w-sm mb-10 leading-relaxed">{description}</p>
   <div class="flex gap-3">
-    <a href="/getting-started" class="inline-flex items-center rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity">
+    <a
+      href="/getting-started"
+      class="inline-flex items-center rounded-lg bg-foreground px-5 py-2.5 text-sm font-medium text-background hover:opacity-90 transition-opacity"
+    >
       Get Started
     </a>
-    <a href="https://github.com/Radiergummi/cetacean" target="_blank" rel="noopener" class="inline-flex items-center rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors">
+    <a
+      href="https://github.com/Radiergummi/cetacean"
+      target="_blank"
+      rel="noopener"
+      class="inline-flex items-center rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors"
+    >
       GitHub
     </a>
   </div>

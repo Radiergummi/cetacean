@@ -35,9 +35,9 @@ const { title, description, slug, headings } = Astro.props;
   </head>
   <body class="min-h-screen">
     <Header currentPath={Astro.url.pathname} />
-    <div class="flex">
+    <div class="mx-auto flex max-w-[90rem]">
       <Sidebar currentSlug={slug} />
-      <main class="flex-1 min-w-0 px-8 py-8 lg:px-12">
+      <main class="flex-1 min-w-0 py-10 px-8 md:px-12 lg:px-16">
         <article class="prose mx-auto">
           <slot />
         </article>
@@ -45,6 +45,12 @@ const { title, description, slug, headings } = Astro.props;
       <TableOfContents headings={headings} />
     </div>
     <script is:inline>
+      document.querySelectorAll(".prose table").forEach(function(table) {
+        var wrapper = document.createElement("div");
+        wrapper.className = "table-wrapper";
+        table.parentNode.insertBefore(wrapper, table);
+        wrapper.appendChild(table);
+      });
       document.querySelectorAll(".prose pre").forEach(function(pre) {
         var button = document.createElement("button");
         button.className = "copy-button";

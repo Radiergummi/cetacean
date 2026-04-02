@@ -23,7 +23,7 @@ const home = await getEntry("docs", "index");
   </head>
   <body class="min-h-screen">
     <Header currentPath="/" />
-    <div class="flex">
+    <div class="mx-auto flex max-w-[90rem]">
       <Sidebar currentSlug="" />
       <main class="flex-1 min-w-0">
         <Hero title="Cetacean" description={home.data.description} />
