@@ -45,6 +45,8 @@ docs/task-state-timeline-plan.md
 # Build output
 cetacean
 frontend/dist/
+website/dist/
+website/.astro/
 node_modules/
 .worktrees/
 cetacean.toml
