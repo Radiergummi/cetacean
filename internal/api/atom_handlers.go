@@ -386,9 +386,10 @@ func paginationLinks(r *http.Request, entries []cache.HistoryEntry, beforeID uin
 		selfHref += "?" + r.URL.RawQuery
 	}
 
+	alternateHref := absPath(r.Context(), r.URL.Path)
 	links := []atomxml.Link{
 		{Rel: "self", Href: selfHref, Type: "application/atom+xml"},
-		{Rel: "alternate", Href: selfHref, Type: "text/html"},
+		{Rel: "alternate", Href: alternateHref, Type: "text/html"},
 	}
 
 	if len(entries) == limit && len(entries) > 0 {

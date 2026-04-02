@@ -275,4 +275,20 @@ func TestPaginationLinks(t *testing.T) {
 			t.Error("expected next link when len(entries) == limit")
 		}
 	})
+
+	t.Run("alternate link does not contain pagination params", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/history?before=100&limit=25", nil)
+		entries := make([]cache.HistoryEntry, 3)
+		links := paginationLinks(req, entries, 100, 25)
+
+		for _, l := range links {
+			if l.Rel != "alternate" {
+				continue
+			}
+
+			if l.Href != "/history" {
+				t.Errorf("alternate href = %q, want /history (no query params)", l.Href)
+			}
+		}
+	})
 }
