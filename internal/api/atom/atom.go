@@ -13,10 +13,16 @@ type Feed struct {
 	XMLName xml.Name  `xml:"feed"`
 	NS      string    `xml:"xmlns,attr"`
 	Title   string    `xml:"title"`
+	Author  *Author   `xml:"author,omitempty"`
 	ID      string    `xml:"id"`
 	Updated time.Time `xml:"updated"`
 	Links   []Link    `xml:"link"`
 	Entries []Entry   `xml:"entry"`
+}
+
+// Author is an Atom person construct (RFC 4287 Section 3.2).
+type Author struct {
+	Name string `xml:"name"`
 }
 
 // ContentElement renders <content type="text">...</content> per RFC 4287.

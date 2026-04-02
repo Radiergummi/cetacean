@@ -11,6 +11,7 @@ func TestRender(t *testing.T) {
 	updated := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
 	f := Feed{
 		Title:   "Cetacean — Services",
+		Author:  &Author{Name: "Cetacean"},
 		ID:      "tag:example.com,2026:/services",
 		Updated: updated,
 		Links: []Link{
@@ -48,6 +49,9 @@ func TestRender(t *testing.T) {
 	}
 	if !strings.Contains(out, `<title>Cetacean — Services</title>`) {
 		t.Error("missing feed title")
+	}
+	if !strings.Contains(out, `<author>`) || !strings.Contains(out, `<name>Cetacean</name>`) {
+		t.Error("missing feed author")
 	}
 	if !strings.Contains(out, `tag:example.com,2026:/services`) {
 		t.Error("missing feed id")
@@ -111,5 +115,23 @@ func TestRenderPaginationLinks(t *testing.T) {
 	}
 	if !strings.Contains(out, `before=100`) {
 		t.Error("next link missing cursor")
+	}
+}
+
+func TestRenderAuthorOmitted(t *testing.T) {
+	f := Feed{
+		Title:   "No Author",
+		ID:      "tag:example.com,2026:/test",
+		Updated: time.Now(),
+	}
+
+	var buf bytes.Buffer
+	if err := Render(&buf, f); err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+
+	out := buf.String()
+	if strings.Contains(out, `<author>`) {
+		t.Error("author element should be omitted when nil")
 	}
 }

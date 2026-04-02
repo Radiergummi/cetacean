@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/acl"
@@ -30,15 +31,11 @@ func (h *Handlers) atomListHandler(title string, eventType cache.EventType) http
 		})
 		entries = h.filterHistoryACL(r, entries)
 
-		updated := time.Now()
-		if len(entries) > 0 {
-			updated = entries[0].Timestamp
-		}
-
 		writeCachedAtom(w, r, atomxml.Feed{
 			Title:   title,
+			Author:  &atomxml.Author{Name: "Cetacean"},
 			ID:      feedID(r),
-			Updated: updated,
+			Updated: historyUpdated(entries),
 			Links:   paginationLinks(r, entries, beforeID, limit),
 			Entries: historyToEntries(r, entries),
 		})
@@ -70,15 +67,11 @@ func (h *Handlers) atomDetailHandler(
 
 		title := nameFunc(resourceID)
 
-		updated := time.Now()
-		if len(entries) > 0 {
-			updated = entries[0].Timestamp
-		}
-
 		writeCachedAtom(w, r, atomxml.Feed{
 			Title:   title,
+			Author:  &atomxml.Author{Name: "Cetacean"},
 			ID:      feedID(r),
-			Updated: updated,
+			Updated: historyUpdated(entries),
 			Links:   paginationLinks(r, entries, beforeID, limit),
 			Entries: historyToEntries(r, entries),
 		})
@@ -87,9 +80,14 @@ func (h *Handlers) atomDetailHandler(
 
 // HandleAtomSearch serves history entries matching a name search as an Atom feed.
 func (h *Handlers) HandleAtomSearch(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query().Get("q")
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	if q == "" {
-		writeErrorCode(w, r, "SEA001", "missing search query")
+		writeErrorCode(w, r, "SEA001", "missing required query parameter: q")
+		return
+	}
+
+	if len(q) > 200 {
+		writeErrorCode(w, r, "SEA002", "query too long (max 200 characters)")
 		return
 	}
 
@@ -106,15 +104,11 @@ func (h *Handlers) HandleAtomSearch(w http.ResponseWriter, r *http.Request) {
 	})
 	entries = h.filterHistoryACL(r, entries)
 
-	updated := time.Now()
-	if len(entries) > 0 {
-		updated = entries[0].Timestamp
-	}
-
 	feed := atomxml.Feed{
 		Title:   fmt.Sprintf("Cetacean — Search: %s", q),
+		Author:  &atomxml.Author{Name: "Cetacean"},
 		ID:      feedID(r),
-		Updated: updated,
+		Updated: historyUpdated(entries),
 		Links:   paginationLinks(r, entries, beforeID, limit),
 		Entries: historyToEntries(r, entries),
 	}
@@ -134,15 +128,11 @@ func (h *Handlers) HandleAtomHistory(w http.ResponseWriter, r *http.Request) {
 	})
 	entries = h.filterHistoryACL(r, entries)
 
-	updated := time.Now()
-	if len(entries) > 0 {
-		updated = entries[0].Timestamp
-	}
-
 	writeCachedAtom(w, r, atomxml.Feed{
 		Title:   "History",
+		Author:  &atomxml.Author{Name: "Cetacean"},
 		ID:      feedID(r),
-		Updated: updated,
+		Updated: historyUpdated(entries),
 		Links:   paginationLinks(r, entries, beforeID, limit),
 		Entries: historyToEntries(r, entries),
 	})
@@ -162,21 +152,22 @@ func (h *Handlers) HandleAtomRecommendations(w http.ResponseWriter, r *http.Requ
 		recommendationResource,
 	)
 
-	updated := h.recEngine.LastTick()
-	if updated.IsZero() {
-		updated = time.Now()
+	lastTick := h.recEngine.LastTick()
+	if lastTick.IsZero() {
+		lastTick = time.Now()
 	}
 
 	atomEntries := make([]atomxml.Entry, 0, len(results))
 	for _, rec := range results {
-		atomEntries = append(atomEntries, recommendationToEntry(r, rec))
+		atomEntries = append(atomEntries, recommendationToEntry(r, rec, lastTick))
 	}
 
 	selfHref := absPath(r.Context(), r.URL.Path)
 	writeCachedAtom(w, r, atomxml.Feed{
 		Title:   "Recommendations",
+		Author:  &atomxml.Author{Name: "Cetacean"},
 		ID:      feedID(r),
-		Updated: updated,
+		Updated: lastTick,
 		Links: []atomxml.Link{
 			{Rel: "self", Href: selfHref, Type: "application/atom+xml"},
 			{Rel: "alternate", Href: selfHref, Type: "text/html"},
@@ -186,8 +177,15 @@ func (h *Handlers) HandleAtomRecommendations(w http.ResponseWriter, r *http.Requ
 }
 
 // recommendationToEntry converts a single recommendation to an Atom entry.
-func recommendationToEntry(r *http.Request, rec recommendations.Recommendation) atomxml.Entry {
-	id := fmt.Sprintf("urn:cetacean:recommendation:%s:%s", rec.TargetID, rec.Category)
+func recommendationToEntry(
+	r *http.Request,
+	rec recommendations.Recommendation,
+	updated time.Time,
+) atomxml.Entry {
+	id := fmt.Sprintf(
+		"urn:cetacean:recommendation:%s:%s",
+		rec.TargetID, rec.Category,
+	)
 
 	var links []atomxml.Link
 	if rec.TargetID != "" {
@@ -202,9 +200,12 @@ func recommendationToEntry(r *http.Request, rec recommendations.Recommendation) 
 	}
 
 	return atomxml.Entry{
-		ID:      id,
-		Title:   fmt.Sprintf("[%s] %s: %s", rec.Severity, rec.Category, rec.TargetName),
-		Updated: time.Now(),
+		ID: id,
+		Title: fmt.Sprintf(
+			"[%s] %s: %s",
+			rec.Severity, rec.Category, rec.TargetName,
+		),
+		Updated: updated,
 		Content: atomxml.ContentElement{
 			Type:  "text",
 			Value: rec.Message,
@@ -231,7 +232,10 @@ func recommendationTargetPath(rec recommendations.Recommendation) string {
 
 // filterHistoryACL filters history entries by ACL read permission.
 // If no ACL evaluator is configured, returns entries unchanged.
-func (h *Handlers) filterHistoryACL(r *http.Request, entries []cache.HistoryEntry) []cache.HistoryEntry {
+func (h *Handlers) filterHistoryACL(
+	r *http.Request,
+	entries []cache.HistoryEntry,
+) []cache.HistoryEntry {
 	if h.acl == nil {
 		return entries
 	}
@@ -285,6 +289,7 @@ func feedID(r *http.Request) string {
 		host = r.Host
 	}
 
+	// Tag URI date: year the feed scheme was introduced (must remain stable).
 	return fmt.Sprintf("tag:%s,2026:%s", host, r.URL.Path)
 }
 
@@ -310,6 +315,16 @@ func parseAtomPagination(r *http.Request) (beforeID uint64, limit int) {
 	}
 
 	return beforeID, limit
+}
+
+// historyUpdated returns the timestamp of the most recent history entry,
+// or the current time if the slice is empty.
+func historyUpdated(entries []cache.HistoryEntry) time.Time {
+	if len(entries) > 0 {
+		return entries[0].Timestamp
+	}
+
+	return time.Now()
 }
 
 // historyToEntries converts cache history entries to Atom feed entries.
@@ -380,7 +395,12 @@ func resourcePath(typ cache.EventType, id string) string {
 
 // paginationLinks builds self, alternate, and (optionally) next links for the feed.
 // A next link is included when len(entries) == limit, indicating more entries may exist.
-func paginationLinks(r *http.Request, entries []cache.HistoryEntry, beforeID uint64, limit int) []atomxml.Link {
+func paginationLinks(
+	r *http.Request,
+	entries []cache.HistoryEntry,
+	beforeID uint64,
+	limit int,
+) []atomxml.Link {
 	selfHref := absPath(r.Context(), r.URL.Path)
 	if r.URL.RawQuery != "" {
 		selfHref += "?" + r.URL.RawQuery
@@ -394,10 +414,16 @@ func paginationLinks(r *http.Request, entries []cache.HistoryEntry, beforeID uin
 
 	if len(entries) == limit && len(entries) > 0 {
 		lastID := entries[len(entries)-1].ID
-		basePath := absPath(r.Context(), r.URL.Path)
+
+		// Build next link preserving existing query params.
+		q := r.URL.Query()
+		q.Set("before", strconv.FormatUint(lastID, 10))
+		q.Set("limit", strconv.Itoa(limit))
+		nextHref := absPath(r.Context(), r.URL.Path) + "?" + q.Encode()
+
 		links = append(links, atomxml.Link{
 			Rel:  "next",
-			Href: fmt.Sprintf("%s?before=%d&limit=%d", basePath, lastID, limit),
+			Href: nextHref,
 			Type: "application/atom+xml",
 		})
 	}

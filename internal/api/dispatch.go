@@ -23,7 +23,12 @@ func contentNegotiated(
 			writeErrorCode(w, r, "API001", "this endpoint does not support text/event-stream")
 		case ContentTypeAtom:
 			if atomHandler == nil {
-				writeErrorCode(w, r, "API003", "this endpoint does not support application/atom+xml")
+				writeErrorCode(
+					w,
+					r,
+					"API003",
+					"this endpoint does not support application/atom+xml",
+				)
 				return
 			}
 			atomHandler(w, r)
@@ -83,7 +88,12 @@ func contentNegotiatedWithSSE(
 			sseHandler(w, r)
 		case ContentTypeAtom:
 			if atomHandler == nil {
-				writeErrorCode(w, r, "API003", "this endpoint does not support application/atom+xml")
+				writeErrorCode(
+					w,
+					r,
+					"API003",
+					"this endpoint does not support application/atom+xml",
+				)
 				return
 			}
 			atomHandler(w, r)

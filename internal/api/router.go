@@ -162,7 +162,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	mux.HandleFunc("GET /nodes/{id}/tasks", contentNegotiated(h.HandleNodeTasks, nil, spa))
 
 	// Recommendations
-	mux.HandleFunc("GET /recommendations", contentNegotiated(h.HandleRecommendations, h.HandleAtomRecommendations, spa))
+	mux.HandleFunc(
+		"GET /recommendations",
+		contentNegotiated(h.HandleRecommendations, h.HandleAtomRecommendations, spa),
+	)
 
 	// Services
 	mux.HandleFunc(
@@ -213,7 +216,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	// Service write operations — tier 2 (configuration)
 	mux.HandleFunc("GET /services/{id}/env", contentNegotiated(h.HandleGetServiceEnv, nil, spa))
 	mux.Handle("PATCH /services/{id}/env", svcACL(tier2(h.HandlePatchServiceEnv)))
-	mux.HandleFunc("GET /services/{id}/labels", contentNegotiated(h.HandleGetServiceLabels, nil, spa))
+	mux.HandleFunc(
+		"GET /services/{id}/labels",
+		contentNegotiated(h.HandleGetServiceLabels, nil, spa),
+	)
 	mux.Handle("PATCH /services/{id}/labels", svcACL(tier2(h.HandlePatchServiceLabels)))
 	mux.HandleFunc(
 		"GET /services/{id}/resources",
@@ -254,16 +260,25 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		contentNegotiated(h.HandleGetServiceLogDriver, nil, spa),
 	)
 	mux.Handle("PATCH /services/{id}/log-driver", svcACL(tier2(h.HandlePatchServiceLogDriver)))
-	mux.HandleFunc("GET /services/{id}/configs", contentNegotiated(h.HandleGetServiceConfigs, nil, spa))
+	mux.HandleFunc(
+		"GET /services/{id}/configs",
+		contentNegotiated(h.HandleGetServiceConfigs, nil, spa),
+	)
 	mux.Handle("PATCH /services/{id}/configs", svcACL(tier2(h.HandlePatchServiceConfigs)))
-	mux.HandleFunc("GET /services/{id}/secrets", contentNegotiated(h.HandleGetServiceSecrets, nil, spa))
+	mux.HandleFunc(
+		"GET /services/{id}/secrets",
+		contentNegotiated(h.HandleGetServiceSecrets, nil, spa),
+	)
 	mux.Handle("PATCH /services/{id}/secrets", svcACL(tier2(h.HandlePatchServiceSecrets)))
 	mux.HandleFunc(
 		"GET /services/{id}/networks",
 		contentNegotiated(h.HandleGetServiceNetworks, nil, spa),
 	)
 	mux.Handle("PATCH /services/{id}/networks", svcACL(tier2(h.HandlePatchServiceNetworks)))
-	mux.HandleFunc("GET /services/{id}/mounts", contentNegotiated(h.HandleGetServiceMounts, nil, spa))
+	mux.HandleFunc(
+		"GET /services/{id}/mounts",
+		contentNegotiated(h.HandleGetServiceMounts, nil, spa),
+	)
 	mux.Handle("PATCH /services/{id}/mounts", svcACL(tier2(h.HandlePatchServiceMounts)))
 
 	mux.HandleFunc(
@@ -462,7 +477,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	// Topology
 	mux.HandleFunc("GET /topology/networks", contentNegotiated(h.HandleNetworkTopology, nil, spa))
-	mux.HandleFunc("GET /topology/placement", contentNegotiated(h.HandlePlacementTopology, nil, spa))
+	mux.HandleFunc(
+		"GET /topology/placement",
+		contentNegotiated(h.HandlePlacementTopology, nil, spa),
+	)
 
 	// Profiling (opt-in via CETACEAN_PPROF=true)
 	if cfg.EnablePprof {

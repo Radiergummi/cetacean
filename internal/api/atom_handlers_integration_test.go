@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -52,6 +53,10 @@ func TestAtomListHandler_ReturnsValidAtom(t *testing.T) {
 
 	if feed.Title != "Services" {
 		t.Errorf("feed.Title = %q, want %q", feed.Title, "Services")
+	}
+
+	if feed.Author == nil || feed.Author.Name != "Cetacean" {
+		t.Errorf("feed.Author = %v, want &{Cetacean}", feed.Author)
 	}
 
 	if len(feed.Entries) != 2 {
@@ -232,6 +237,31 @@ func TestHandleAtomSearch_FiltersEntriesByName(t *testing.T) {
 
 	t.Run("returns 400 when query is missing", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/search", nil)
+		req = withContentType(req, ContentTypeAtom)
+		w := httptest.NewRecorder()
+
+		h.HandleAtomSearch(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+		}
+	})
+
+	t.Run("returns 400 when query is whitespace only", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/search?q=+++", nil)
+		req = withContentType(req, ContentTypeAtom)
+		w := httptest.NewRecorder()
+
+		h.HandleAtomSearch(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+		}
+	})
+
+	t.Run("returns 400 when query exceeds 200 characters", func(t *testing.T) {
+		long := strings.Repeat("x", 201)
+		req := httptest.NewRequest("GET", "/search?q="+long, nil)
 		req = withContentType(req, ContentTypeAtom)
 		w := httptest.NewRecorder()
 

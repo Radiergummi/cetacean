@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -289,6 +290,58 @@ func TestPaginationLinks(t *testing.T) {
 			if l.Href != "/history" {
 				t.Errorf("alternate href = %q, want /history (no query params)", l.Href)
 			}
+		}
+	})
+
+	t.Run("next link preserves existing query params", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/search?q=myservice", nil)
+		entries := make([]cache.HistoryEntry, 50)
+		entries[49].ID = 42
+		links := paginationLinks(req, entries, 0, 50)
+
+		var nextHref string
+		for _, l := range links {
+			if l.Rel == "next" {
+				nextHref = l.Href
+			}
+		}
+
+		if nextHref == "" {
+			t.Fatal("expected next link")
+		}
+
+		if !strings.Contains(nextHref, "q=myservice") {
+			t.Errorf("next href %q should preserve q param", nextHref)
+		}
+
+		if !strings.Contains(nextHref, "before=42") {
+			t.Errorf("next href %q should contain before=42", nextHref)
+		}
+
+		if !strings.Contains(nextHref, "limit=50") {
+			t.Errorf("next href %q should contain limit=50", nextHref)
+		}
+	})
+}
+
+func TestHistoryUpdated(t *testing.T) {
+	t.Run("returns first entry timestamp when entries exist", func(t *testing.T) {
+		ts := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
+		entries := []cache.HistoryEntry{{Timestamp: ts}}
+
+		got := historyUpdated(entries)
+		if !got.Equal(ts) {
+			t.Errorf("historyUpdated = %v, want %v", got, ts)
+		}
+	})
+
+	t.Run("returns current time when entries are empty", func(t *testing.T) {
+		before := time.Now()
+		got := historyUpdated(nil)
+		after := time.Now()
+
+		if got.Before(before) || got.After(after) {
+			t.Errorf("historyUpdated = %v, expected between %v and %v", got, before, after)
 		}
 	})
 }
