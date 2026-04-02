@@ -95,11 +95,14 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	// SSE events
 	mux.HandleFunc("GET /events", func(w http.ResponseWriter, r *http.Request) {
 		ct := ContentTypeFromContext(r.Context())
-		if ct != ContentTypeSSE {
+		switch ct {
+		case ContentTypeSSE:
+			b.ServeSSE(w, r, h.aclMatchWrap(r, nil), "")
+		case ContentTypeAtom:
+			h.HandleAtomHistory(w, r)
+		default:
 			spa.ServeHTTP(w, r)
-			return
 		}
-		b.ServeSSE(w, r, h.aclMatchWrap(r, nil), "")
 	})
 
 	// Cluster
@@ -136,8 +139,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		contentNegotiatedWithSSE(
 			h.HandleListNodes,
 			func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, cache.EventNode) },
-			nil,
-		spa,
+			h.atomListHandler("Nodes", cache.EventNode),
+			spa,
 		),
 	)
 	mux.HandleFunc(
@@ -147,14 +150,19 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			func(w http.ResponseWriter, r *http.Request) {
 				h.streamResource(w, r, cache.EventNode, r.PathValue("id"))
 			},
-			nil,
-		spa,
+			h.atomDetailHandler(cache.EventNode, "id", func(id string) string {
+				if n, ok := h.cache.GetNode(id); ok {
+					return n.Description.Hostname
+				}
+				return id
+			}),
+			spa,
 		),
 	)
 	mux.HandleFunc("GET /nodes/{id}/tasks", contentNegotiated(h.HandleNodeTasks, nil, spa))
 
 	// Recommendations
-	mux.HandleFunc("GET /recommendations", contentNegotiated(h.HandleRecommendations, nil, spa))
+	mux.HandleFunc("GET /recommendations", contentNegotiated(h.HandleRecommendations, h.HandleAtomRecommendations, spa))
 
 	// Services
 	mux.HandleFunc(
@@ -162,8 +170,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		contentNegotiatedWithSSE(
 			h.HandleListServices,
 			func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, cache.EventService) },
-			nil,
-		spa,
+			h.atomListHandler("Services", cache.EventService),
+			spa,
 		),
 	)
 	mux.HandleFunc(
@@ -173,8 +181,13 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			func(w http.ResponseWriter, r *http.Request) {
 				h.streamResource(w, r, cache.EventService, r.PathValue("id"))
 			},
-			nil,
-		spa,
+			h.atomDetailHandler(cache.EventService, "id", func(id string) string {
+				if s, ok := h.cache.GetService(id); ok {
+					return s.Spec.Name
+				}
+				return id
+			}),
+			spa,
 		),
 	)
 	mux.HandleFunc("GET /services/{id}/tasks", contentNegotiated(h.HandleServiceTasks, nil, spa))
@@ -278,8 +291,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		contentNegotiatedWithSSE(
 			h.HandleListTasks,
 			func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, cache.EventTask) },
-			nil,
-		spa,
+			h.atomListHandler("Tasks", cache.EventTask),
+			spa,
 		),
 	)
 	mux.HandleFunc(
@@ -289,8 +302,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			func(w http.ResponseWriter, r *http.Request) {
 				h.streamResource(w, r, cache.EventTask, r.PathValue("id"))
 			},
-			nil,
-		spa,
+			h.atomDetailHandler(cache.EventTask, "id", func(id string) string {
+				return id
+			}),
+			spa,
 		),
 	)
 	mux.HandleFunc(
@@ -300,7 +315,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	mux.Handle("DELETE /tasks/{id}", taskACL(tier3(h.HandleRemoveTask)))
 
 	// History
-	mux.HandleFunc("GET /history", contentNegotiated(h.HandleHistory, nil, spa))
+	mux.HandleFunc("GET /history", contentNegotiated(h.HandleHistory, h.HandleAtomHistory, spa))
 
 	// Stacks
 	mux.HandleFunc(
@@ -308,8 +323,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		contentNegotiatedWithSSE(
 			h.HandleListStacks,
 			func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, cache.EventStack) },
-			nil,
-		spa,
+			h.atomListHandler("Stacks", cache.EventStack),
+			spa,
 		),
 	)
 	mux.HandleFunc("GET /stacks/summary", contentNegotiated(h.HandleStackSummary, nil, spa))
@@ -318,7 +333,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		contentNegotiatedWithSSE(h.HandleGetStack, func(w http.ResponseWriter, r *http.Request) {
 			stackMatch := sse.StackMatcher(h.cache, r.PathValue("name"))
 			h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, stackMatch), "")
-		}, nil, spa),
+		}, h.atomDetailHandler(cache.EventStack, "name", func(name string) string {
+			return name
+		}), spa),
 	)
 	mux.Handle("DELETE /stacks/{name}", stackACL(tier3(h.HandleRemoveStack)))
 
@@ -328,8 +345,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		contentNegotiatedWithSSE(
 			h.HandleListConfigs,
 			func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, cache.EventConfig) },
-			nil,
-		spa,
+			h.atomListHandler("Configs", cache.EventConfig),
+			spa,
 		),
 	)
 	mux.HandleFunc(
@@ -339,8 +356,13 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			func(w http.ResponseWriter, r *http.Request) {
 				h.streamResource(w, r, cache.EventConfig, r.PathValue("id"))
 			},
-			nil,
-		spa,
+			h.atomDetailHandler(cache.EventConfig, "id", func(id string) string {
+				if c, ok := h.cache.GetConfig(id); ok {
+					return c.Spec.Name
+				}
+				return id
+			}),
+			spa,
 		),
 	)
 	mux.Handle("DELETE /configs/{id}", cfgACL(tier3(h.HandleRemoveConfig)))
@@ -354,8 +376,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		contentNegotiatedWithSSE(
 			h.HandleListSecrets,
 			func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, cache.EventSecret) },
-			nil,
-		spa,
+			h.atomListHandler("Secrets", cache.EventSecret),
+			spa,
 		),
 	)
 	mux.HandleFunc(
@@ -365,8 +387,13 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			func(w http.ResponseWriter, r *http.Request) {
 				h.streamResource(w, r, cache.EventSecret, r.PathValue("id"))
 			},
-			nil,
-		spa,
+			h.atomDetailHandler(cache.EventSecret, "id", func(id string) string {
+				if s, ok := h.cache.GetSecret(id); ok {
+					return s.Spec.Name
+				}
+				return id
+			}),
+			spa,
 		),
 	)
 	mux.Handle("DELETE /secrets/{id}", secACL(tier3(h.HandleRemoveSecret)))
@@ -380,8 +407,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		contentNegotiatedWithSSE(
 			h.HandleListNetworks,
 			func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, cache.EventNetwork) },
-			nil,
-		spa,
+			h.atomListHandler("Networks", cache.EventNetwork),
+			spa,
 		),
 	)
 	mux.HandleFunc(
@@ -391,8 +418,13 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			func(w http.ResponseWriter, r *http.Request) {
 				h.streamResource(w, r, cache.EventNetwork, r.PathValue("id"))
 			},
-			nil,
-		spa,
+			h.atomDetailHandler(cache.EventNetwork, "id", func(id string) string {
+				if n, ok := h.cache.GetNetwork(id); ok {
+					return n.Name
+				}
+				return id
+			}),
+			spa,
 		),
 	)
 	mux.Handle("DELETE /networks/{id}", netACL(tier3(h.HandleRemoveNetwork)))
@@ -403,8 +435,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		contentNegotiatedWithSSE(
 			h.HandleListVolumes,
 			func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, cache.EventVolume) },
-			nil,
-		spa,
+			h.atomListHandler("Volumes", cache.EventVolume),
+			spa,
 		),
 	)
 	mux.HandleFunc(
@@ -414,8 +446,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			func(w http.ResponseWriter, r *http.Request) {
 				h.streamResource(w, r, cache.EventVolume, r.PathValue("name"))
 			},
-			nil,
-		spa,
+			h.atomDetailHandler(cache.EventVolume, "name", func(name string) string {
+				return name
+			}),
+			spa,
 		),
 	)
 	mux.Handle("DELETE /volumes/{name}", volACL(tier3(h.HandleRemoveVolume)))
