@@ -281,9 +281,10 @@ func writeCachedAtom(w http.ResponseWriter, r *http.Request, feed atomxml.Feed) 
 	w.Write(body) //nolint:errcheck
 }
 
-// feedID builds a tag URI for the feed: tag:{host},{year}:{path}.
+// feedID builds a tag URI (RFC 4151) for the feed: tag:{host},{year}:{path}.
+// The year 2026 is the date the tag namespace was minted and must remain constant.
 func feedID(r *http.Request) string {
-	return fmt.Sprintf("tag:%s,2026:%s", r.Host, r.URL.Path)
+	return fmt.Sprintf("tag:%s,2026:%s", r.Host, absPath(r.Context(), r.URL.Path))
 }
 
 // parseAtomPagination reads ?before= and ?limit= from the query string.

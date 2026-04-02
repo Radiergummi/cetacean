@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -81,6 +82,19 @@ func TestFeedID(t *testing.T) {
 		}
 	})
 
+	t.Run("includes base path", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/history", nil)
+		req.Host = "swarm.example.com"
+		ctx := context.WithValue(req.Context(), basePathKey, "/cetacean")
+		req = req.WithContext(ctx)
+
+		got := feedID(req)
+		want := "tag:swarm.example.com,2026:/cetacean/history"
+
+		if got != want {
+			t.Errorf("feedID = %q, want %q", got, want)
+		}
+	})
 }
 
 func TestHistoryToEntries(t *testing.T) {
