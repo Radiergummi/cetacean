@@ -1,4 +1,4 @@
-import { api } from "../api/client";
+import { api, emptyMethods } from "../api/client";
 import type {
   ContainerConfig,
   Healthcheck,
@@ -103,7 +103,7 @@ export default function ServiceDetail() {
   const [containerConfig, setContainerConfig] = useState<ContainerConfig | null>(null);
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const monitoring = useMonitoringStatus();
-  const [allowedMethods, setAllowedMethods] = useState<Set<string>>(new Set());
+  const [allowedMethods, setAllowedMethods] = useState(emptyMethods);
   const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
   const hasCadvisor = !!monitoring?.cadvisor?.targets;
   const [error, setError] = useState(false);

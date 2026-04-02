@@ -1,4 +1,4 @@
-import { api } from "../api/client";
+import { api, emptyMethods } from "../api/client";
 import type { Plugin } from "../api/types";
 import FetchError from "../components/FetchError";
 import InstallPluginDialog from "../components/InstallPluginDialog";
@@ -13,7 +13,7 @@ export default function PluginList() {
   const [plugins, setPlugins] = useState<Plugin[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [installOpen, setInstallOpen] = useState(false);
-  const [allowedMethods, setAllowedMethods] = useState<Set<string>>(new Set());
+  const [allowedMethods, setAllowedMethods] = useState(emptyMethods);
 
   const fetchPlugins = useCallback(() => {
     setError(null);

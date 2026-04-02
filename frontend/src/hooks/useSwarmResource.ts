@@ -1,4 +1,4 @@
-import { pageSize } from "../api/client";
+import { emptyMethods, pageSize, setsEqual } from "../api/client";
 import type { FetchResult } from "../api/client";
 import type { CollectionResponse } from "../api/types";
 import { useResourceStream } from "./useResourceStream";
@@ -14,8 +14,6 @@ const ssePathMap: Record<string, string> = {
   volume: "/volumes",
   stack: "/stacks",
 };
-
-const emptyMethods = new Set<string>();
 
 export function useSwarmResource<T>(
   fetchFn: (offset: number, signal: AbortSignal) => Promise<FetchResult<CollectionResponse<T>>>,
@@ -67,7 +65,7 @@ export function useSwarmResource<T>(
           if (isFirstPage) {
             setPages(new Map([[0, response.items]]));
             nextPageRef.current = 1;
-            setAllowedMethods(methods);
+            setAllowedMethods((previous) => (setsEqual(previous, methods) ? previous : methods));
           } else {
             setPages((previous) => {
               const next = new Map(previous);

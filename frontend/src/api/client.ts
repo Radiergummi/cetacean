@@ -190,6 +190,22 @@ export function del(path: string): Promise<void> {
   return mutationFetch(path, "DELETE");
 }
 
+export const emptyMethods: Set<string> = new Set();
+
+export function setsEqual(a: Set<string>, b: Set<string>): boolean {
+  if (a.size !== b.size) {
+    return false;
+  }
+
+  for (const item of a) {
+    if (!b.has(item)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export async function headAllowedMethods(path: string): Promise<Set<string>> {
   const res = await fetch(apiPath(path), {
     method: "HEAD",
@@ -526,7 +542,7 @@ export const api = {
     fetchJSON<{ role: "worker" | "manager"; isLeader: boolean; managerCount: number }>(
       `/nodes/${id}/role`,
       signal,
-    ),
+    ).then(({ data }) => data),
   serviceLabels: (id: string, signal?: AbortSignal) =>
     fetchJSON<{ labels: Record<string, string> }>(`/services/${id}/labels`, signal).then(
       ({ data }) => data.labels,

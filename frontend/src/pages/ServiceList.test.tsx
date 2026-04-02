@@ -26,6 +26,8 @@ class MockEventSource {
 
 vi.mock("../api/client", () => ({
   pageSize: 50,
+  emptyMethods: new Set(),
+  setsEqual: (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every((x) => b.has(x)),
   api: {
     services: vi.fn(),
     monitoringStatus: vi.fn().mockResolvedValue(null),

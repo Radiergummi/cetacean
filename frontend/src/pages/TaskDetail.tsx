@@ -1,4 +1,4 @@
-import { api } from "../api/client";
+import { api, emptyMethods } from "../api/client";
 import type { Service, Task } from "../api/types";
 import { ContainerImage, ResourceId, ResourceLink, Timestamp } from "../components/data";
 import ErrorBoundary from "../components/ErrorBoundary";
@@ -40,7 +40,7 @@ export default function TaskDetail() {
   const [task, setTask] = useState<Task | null>(null);
   const [service, setService] = useState<Service | null>(null);
   const [error, setError] = useState(false);
-  const [allowedMethods, setAllowedMethods] = useState<Set<string>>(new Set());
+  const [allowedMethods, setAllowedMethods] = useState(emptyMethods);
   const canRemove = allowedMethods.has("DELETE");
   const removal = useAsyncAction({ toast: true });
 

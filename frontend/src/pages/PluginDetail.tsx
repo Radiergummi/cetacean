@@ -1,4 +1,4 @@
-import { api } from "../api/client";
+import { api, emptyMethods } from "../api/client";
 import type { Plugin } from "../api/types";
 import CollapsibleSection from "../components/CollapsibleSection";
 import { ContainerImage, KVTable, MetadataGrid, ResourceId } from "../components/data";
@@ -42,7 +42,7 @@ export default function PluginDetail() {
   const { name: rawName } = useParams<{ name: string }>();
   const name = decodeURIComponent(rawName!);
   const navigate = useNavigate();
-  const [allowedMethods, setAllowedMethods] = useState<Set<string>>(new Set());
+  const [allowedMethods, setAllowedMethods] = useState(emptyMethods);
 
   const [plugin, setPlugin] = useState<Plugin | null>(null);
   const [error, setError] = useState<string | null>(null);

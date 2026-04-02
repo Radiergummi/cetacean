@@ -8,8 +8,8 @@ export interface PaletteAction {
   steps: PaletteStep[];
   execute: (...args: any[]) => Promise<void>;
   destructive?: boolean;
-  /** Minimum operations level required (undefined = always available). */
-  requiredLevel?: number;
+  /** HTTP method required to execute this action (checked via HEAD). */
+  requiredMethod?: string;
 }
 
 export interface PaletteStep {
@@ -37,7 +37,7 @@ const removeActions: PaletteAction[] = removeTargets.map(({ type, remove }) => {
     id: `remove-${type}`,
     label: `Remove ${label}`,
     keywords: [`remove ${type}`, `delete ${type}`],
-    requiredLevel: 3,
+    requiredMethod: "DELETE",
     steps: [{ type: "resource" as const, resourceType: type, label }],
     destructive: true,
     execute: async (resource: SearchResult) => {
@@ -52,7 +52,7 @@ export function getActions(): PaletteAction[] {
       id: "scale",
       label: "Scale Service",
       keywords: ["scale", "replicas"],
-      requiredLevel: 1,
+      requiredMethod: "PUT",
       steps: [
         { type: "resource", resourceType: "service", label: "Service" },
         { type: "number", label: "Replicas", placeholder: "Number of replicas" },
@@ -65,7 +65,7 @@ export function getActions(): PaletteAction[] {
       id: "image",
       label: "Update Image",
       keywords: ["image", "deploy", "tag"],
-      requiredLevel: 1,
+      requiredMethod: "PUT",
       steps: [
         { type: "resource", resourceType: "service", label: "Service" },
         { type: "text", label: "Image", placeholder: "e.g. nginx:1.27" },
@@ -78,7 +78,7 @@ export function getActions(): PaletteAction[] {
       id: "rollback",
       label: "Rollback Service",
       keywords: ["rollback", "revert"],
-      requiredLevel: 1,
+      requiredMethod: "POST",
       steps: [{ type: "resource", resourceType: "service", label: "Service" }],
       destructive: true,
       execute: async (service: SearchResult) => {
@@ -89,7 +89,7 @@ export function getActions(): PaletteAction[] {
       id: "restart",
       label: "Restart Service",
       keywords: ["restart", "redeploy"],
-      requiredLevel: 1,
+      requiredMethod: "POST",
       steps: [{ type: "resource", resourceType: "service", label: "Service" }],
       destructive: true,
       execute: async (service: SearchResult) => {
@@ -100,7 +100,7 @@ export function getActions(): PaletteAction[] {
       id: "drain",
       label: "Drain Node",
       keywords: ["drain"],
-      requiredLevel: 3,
+      requiredMethod: "PUT",
       steps: [{ type: "resource", resourceType: "node", label: "Node" }],
       destructive: true,
       execute: async (node: SearchResult) => {
@@ -111,7 +111,7 @@ export function getActions(): PaletteAction[] {
       id: "activate",
       label: "Activate Node",
       keywords: ["activate", "undrain"],
-      requiredLevel: 3,
+      requiredMethod: "PUT",
       steps: [{ type: "resource", resourceType: "node", label: "Node" }],
       execute: async (node: SearchResult) => {
         await api.updateNodeAvailability(node.id, "active");
@@ -121,7 +121,7 @@ export function getActions(): PaletteAction[] {
       id: "pause",
       label: "Pause Node",
       keywords: ["pause"],
-      requiredLevel: 3,
+      requiredMethod: "PUT",
       steps: [{ type: "resource", resourceType: "node", label: "Node" }],
       destructive: true,
       execute: async (node: SearchResult) => {
@@ -132,7 +132,7 @@ export function getActions(): PaletteAction[] {
       id: "remove-task",
       label: "Force Remove Task",
       keywords: ["remove task", "kill task", "kill"],
-      requiredLevel: 3,
+      requiredMethod: "DELETE",
       steps: [{ type: "resource", resourceType: "task", label: "Task" }],
       destructive: true,
       execute: async (task: SearchResult) => {
@@ -143,7 +143,7 @@ export function getActions(): PaletteAction[] {
       id: "promote-node",
       label: "Promote Node",
       keywords: ["promote"],
-      requiredLevel: 3,
+      requiredMethod: "PUT",
       steps: [{ type: "resource", resourceType: "node", label: "Node" }],
       execute: async (node: SearchResult) => {
         await api.updateNodeRole(node.id, "manager");
@@ -153,7 +153,7 @@ export function getActions(): PaletteAction[] {
       id: "demote-node",
       label: "Demote Node",
       keywords: ["demote"],
-      requiredLevel: 3,
+      requiredMethod: "PUT",
       steps: [{ type: "resource", resourceType: "node", label: "Node" }],
       destructive: true,
       execute: async (node: SearchResult) => {

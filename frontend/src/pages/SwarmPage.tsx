@@ -1,4 +1,4 @@
-import { api } from "../api/client";
+import { api, emptyMethods } from "../api/client";
 import type { Plugin, SwarmInfo } from "../api/types";
 import CollapsibleSection from "../components/CollapsibleSection";
 import { KVTable, MetadataGrid, ResourceId, Timestamp } from "../components/data";
@@ -112,7 +112,7 @@ export default function SwarmPage() {
   const [plugins, setPlugins] = useState<Plugin[]>([]);
   const [error, setError] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
-  const [allowedMethods, setAllowedMethods] = useState<Set<string>>(new Set());
+  const [allowedMethods, setAllowedMethods] = useState(emptyMethods);
 
   const fetchSwarmInfo = useCallback(() => {
     api

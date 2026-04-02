@@ -1,6 +1,5 @@
-import { api } from "../../api/client";
+import { api, headAllowedMethods } from "../../api/client";
 import type { SearchResourceType, SearchResponse, SearchResult } from "../../api/types";
-import { useOperationsLevel } from "../../hooks/useOperationsLevel";
 import { getActions, matchAction, type PaletteAction, type PaletteStep } from "../../lib/actions";
 import { resourcePath, statusColor, typeLabels, typeOrder } from "../../lib/searchConstants";
 import { showErrorToast } from "../../lib/showErrorToast";
@@ -113,14 +112,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
 
   // Action mode state
-  const { level: operationsLevel } = useOperationsLevel();
-  const actions = useMemo(
-    () =>
-      getActions().filter(
-        ({ requiredLevel }) => requiredLevel === undefined || operationsLevel >= requiredLevel,
-      ),
-    [operationsLevel],
-  );
+  const actions = useMemo(() => getActions(), []);
   const [activeAction, setActiveAction] = useState<PaletteAction | null>(null);
   const [actionStep, setActionStep] = useState(0);
   const [actionArgs, setActionArgs] = useState<unknown[]>([]);
@@ -335,7 +327,22 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   );
 
   const executeAction = useCallback(
-    (action: PaletteAction, args: unknown[]) => {
+    async (action: PaletteAction, args: unknown[]) => {
+      // Check permission via HEAD before executing
+      if (action.requiredMethod && action.steps[0]?.type === "resource") {
+        const resource = args[0] as SearchResult;
+        const path = resourcePath(action.steps[0].resourceType!, resource.id, resource.name);
+
+        if (path) {
+          const methods = await headAllowedMethods(path);
+
+          if (!methods.has(action.requiredMethod)) {
+            setActionError("You don't have permission to perform this action.");
+            return;
+          }
+        }
+      }
+
       if (action.destructive) {
         setPendingConfirm({ action, args });
         return;

@@ -326,6 +326,8 @@ func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	h.setAllow(w, r, "swarm", "cluster")
+
 	// Redact join tokens unless the caller has swarm write permission.
 	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "write", "swarm:cluster") {
 		sw.JoinTokens = swarm.JoinTokens{}

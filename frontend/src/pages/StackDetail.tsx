@@ -1,4 +1,4 @@
-import { api } from "../api/client";
+import { api, emptyMethods } from "../api/client";
 import type { StackDetail as StackDetailType, Task } from "../api/types";
 import CollapsibleSection from "../components/CollapsibleSection";
 import FetchError from "../components/FetchError";
@@ -15,7 +15,7 @@ export default function StackDetail() {
   const { name } = useParams<{ name: string }>();
   const [stack, setStack] = useState<StackDetailType | null>(null);
   const [error, setError] = useState(false);
-  const [allowedMethods, setAllowedMethods] = useState<Set<string>>(new Set());
+  const [allowedMethods, setAllowedMethods] = useState(emptyMethods);
   const [taskCounts, setTaskCounts] = useState<
     Record<string, { running: number; desired: number }>
   >({});

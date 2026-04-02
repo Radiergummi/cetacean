@@ -1,10 +1,8 @@
-import { api } from "../api/client";
+import { api, emptyMethods, setsEqual } from "../api/client";
 import type { FetchResult } from "../api/client";
 import type { HistoryEntry } from "../api/types";
 import { useResourceStream } from "./useResourceStream";
 import { useCallback, useEffect, useRef, useState } from "react";
-
-const emptyMethods = new Set<string>();
 
 export function useDetailResource<T>(
   key: string | undefined,
@@ -33,7 +31,7 @@ export function useDetailResource<T>(
       .then(({ data: d, allowedMethods: methods }) => {
         if (!controller.signal.aborted) {
           setData(d);
-          setAllowedMethods(methods);
+          setAllowedMethods((previous) => (setsEqual(previous, methods) ? previous : methods));
         }
       })
       .catch((thrown) => {

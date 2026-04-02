@@ -8,7 +8,6 @@ import ShortcutTooltip from "./components/ShortcutTooltip";
 import ThemeToggle from "./components/ThemeToggle";
 import { Toaster } from "./components/ui/sonner";
 import { AuthProvider } from "./hooks/AuthProvider";
-import { OperationsLevelProvider } from "./hooks/OperationsLevelProvider";
 import { useAuth } from "./hooks/useAuth";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { useRecommendations } from "./hooks/useRecommendations";
@@ -272,138 +271,136 @@ export default function App() {
   return (
     <BrowserRouter basename={basePath}>
       <AuthProvider>
-        <OperationsLevelProvider>
-          <ConnectionTracker>
-            <Toaster
-              theme="system"
-              richColors
-              position="bottom-right"
-              toastOptions={{ duration: 8000 }}
-            />
-            <Layout>
-              <Suspense fallback={<LoadingDetail />}>
-                <Routes>
-                  <Route
-                    path="/"
-                    element={<ClusterOverview />}
-                  />
-                  <Route
-                    path="/nodes"
-                    element={<NodeList />}
-                  />
-                  <Route
-                    path="/nodes/:id"
-                    element={<NodeDetail />}
-                  />
-                  <Route
-                    path="/stacks"
-                    element={<StackList />}
-                  />
-                  <Route
-                    path="/stacks/:name"
-                    element={<StackDetail />}
-                  />
-                  <Route
-                    path="/services"
-                    element={<ServiceList />}
-                  />
-                  <Route
-                    path="/services/:id"
-                    element={<ServiceDetail />}
-                  />
-                  <Route
-                    path="/services/:id/:subResource"
-                    element={<ServiceSubResource />}
-                  />
-                  <Route
-                    path="/tasks"
-                    element={<TaskList />}
-                  />
-                  <Route
-                    path="/tasks/:id"
-                    element={<TaskDetail />}
-                  />
-                  <Route
-                    path="/configs"
-                    element={<ConfigList />}
-                  />
-                  <Route
-                    path="/configs/:id"
-                    element={<ConfigDetail />}
-                  />
-                  <Route
-                    path="/secrets"
-                    element={<SecretList />}
-                  />
-                  <Route
-                    path="/secrets/:id"
-                    element={<SecretDetail />}
-                  />
-                  <Route
-                    path="/networks"
-                    element={<NetworkList />}
-                  />
-                  <Route
-                    path="/networks/:id"
-                    element={<NetworkDetail />}
-                  />
-                  <Route
-                    path="/volumes"
-                    element={<VolumeList />}
-                  />
-                  <Route
-                    path="/volumes/:name"
-                    element={<VolumeDetail />}
-                  />
-                  <Route
-                    path="/plugins"
-                    element={<PluginList />}
-                  />
-                  <Route
-                    path="/plugins/:name"
-                    element={<PluginDetail />}
-                  />
-                  <Route
-                    path="/swarm"
-                    element={<SwarmPage />}
-                  />
-                  <Route
-                    path="/metrics"
-                    element={<MetricsConsole />}
-                  />
-                  <Route
-                    path="/topology"
-                    element={<Topology />}
-                  />
-                  <Route
-                    path="/recommendations"
-                    element={<RecommendationsPage />}
-                  />
-                  <Route
-                    path="/search"
-                    element={<SearchPage />}
-                  />
-                  <Route
-                    path="/api/errors"
-                    element={<ErrorIndex />}
-                  />
-                  <Route
-                    path="/api/errors/:code"
-                    element={<ErrorCodeDetail />}
-                  />
-                  <Route
-                    path="/profile"
-                    element={<ProfilePage />}
-                  />
-                  <Route
-                    path="*"
-                    element={<NotFound />}
-                  />
-                </Routes>
-              </Suspense>
-            </Layout>
-          </ConnectionTracker>
-        </OperationsLevelProvider>
+        <ConnectionTracker>
+          <Toaster
+            theme="system"
+            richColors
+            position="bottom-right"
+            toastOptions={{ duration: 8000 }}
+          />
+          <Layout>
+            <Suspense fallback={<LoadingDetail />}>
+              <Routes>
+                <Route
+                  path="/"
+                  element={<ClusterOverview />}
+                />
+                <Route
+                  path="/nodes"
+                  element={<NodeList />}
+                />
+                <Route
+                  path="/nodes/:id"
+                  element={<NodeDetail />}
+                />
+                <Route
+                  path="/stacks"
+                  element={<StackList />}
+                />
+                <Route
+                  path="/stacks/:name"
+                  element={<StackDetail />}
+                />
+                <Route
+                  path="/services"
+                  element={<ServiceList />}
+                />
+                <Route
+                  path="/services/:id"
+                  element={<ServiceDetail />}
+                />
+                <Route
+                  path="/services/:id/:subResource"
+                  element={<ServiceSubResource />}
+                />
+                <Route
+                  path="/tasks"
+                  element={<TaskList />}
+                />
+                <Route
+                  path="/tasks/:id"
+                  element={<TaskDetail />}
+                />
+                <Route
+                  path="/configs"
+                  element={<ConfigList />}
+                />
+                <Route
+                  path="/configs/:id"
+                  element={<ConfigDetail />}
+                />
+                <Route
+                  path="/secrets"
+                  element={<SecretList />}
+                />
+                <Route
+                  path="/secrets/:id"
+                  element={<SecretDetail />}
+                />
+                <Route
+                  path="/networks"
+                  element={<NetworkList />}
+                />
+                <Route
+                  path="/networks/:id"
+                  element={<NetworkDetail />}
+                />
+                <Route
+                  path="/volumes"
+                  element={<VolumeList />}
+                />
+                <Route
+                  path="/volumes/:name"
+                  element={<VolumeDetail />}
+                />
+                <Route
+                  path="/plugins"
+                  element={<PluginList />}
+                />
+                <Route
+                  path="/plugins/:name"
+                  element={<PluginDetail />}
+                />
+                <Route
+                  path="/swarm"
+                  element={<SwarmPage />}
+                />
+                <Route
+                  path="/metrics"
+                  element={<MetricsConsole />}
+                />
+                <Route
+                  path="/topology"
+                  element={<Topology />}
+                />
+                <Route
+                  path="/recommendations"
+                  element={<RecommendationsPage />}
+                />
+                <Route
+                  path="/search"
+                  element={<SearchPage />}
+                />
+                <Route
+                  path="/api/errors"
+                  element={<ErrorIndex />}
+                />
+                <Route
+                  path="/api/errors/:code"
+                  element={<ErrorCodeDetail />}
+                />
+                <Route
+                  path="/profile"
+                  element={<ProfilePage />}
+                />
+                <Route
+                  path="*"
+                  element={<NotFound />}
+                />
+              </Routes>
+            </Suspense>
+          </Layout>
+        </ConnectionTracker>
       </AuthProvider>
     </BrowserRouter>
   );

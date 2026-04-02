@@ -1,4 +1,4 @@
-import { api } from "../api/client";
+import { api, emptyMethods } from "../api/client";
 import type { HistoryEntry, Node, Task } from "../api/types";
 import ActivitySection from "../components/ActivitySection";
 import { MetadataGrid } from "../components/data";
@@ -57,7 +57,7 @@ export default function NodeDetail() {
   const [managerCount, setManagerCount] = useState<number | null>(null);
 
   const monitoring = useMonitoringStatus();
-  const [allowedMethods, setAllowedMethods] = useState<Set<string>>(new Set());
+  const [allowedMethods, setAllowedMethods] = useState(emptyMethods);
   const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
   const hasCadvisor = !!monitoring?.cadvisor?.targets;
   const { resolve } = useInstanceResolver();
@@ -104,7 +104,7 @@ export default function NodeDetail() {
       api.history({ resourceId: id, limit: 10 }, signal).then(setHistory).catch(ignore);
       api
         .nodeRole(id, signal)
-        .then(({ data: { managerCount: count } }) => setManagerCount(count))
+        .then(({ managerCount: count }) => setManagerCount(count))
         .catch(ignore);
     },
     [id],
