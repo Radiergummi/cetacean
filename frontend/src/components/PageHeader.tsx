@@ -1,7 +1,10 @@
-import { ChevronRight } from "lucide-react";
+import { feedForPath } from "@/components/AtomFeedLink";
+import { buttonVariants } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ChevronRight, Rss } from "lucide-react";
 import type React from "react";
 import { useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 interface Crumb {
   label: React.ReactNode;
@@ -16,6 +19,9 @@ interface Props {
 }
 
 export default function PageHeader({ title, subtitle, breadcrumbs, actions }: Props) {
+  const { pathname, search } = useLocation();
+  const feed = feedForPath(pathname, search);
+
   useEffect(() => {
     const text = typeof title === "string" ? title : null;
 
@@ -75,7 +81,27 @@ export default function PageHeader({ title, subtitle, breadcrumbs, actions }: Pr
           </h1>
           {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
         </div>
-        {actions && <div className="flex items-center gap-2">{actions}</div>}
+        {(actions || feed) && (
+          <div className="flex items-center gap-2">
+            {actions}
+            {feed && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <a
+                      href={feed.href + ".atom"}
+                      className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
+                      aria-label="Atom feed"
+                    >
+                      <Rss className="size-3.5" />
+                    </a>
+                  }
+                />
+                <TooltipContent>Atom feed</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        )}
       </div>
     </header>
   );

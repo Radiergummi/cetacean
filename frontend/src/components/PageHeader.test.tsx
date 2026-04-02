@@ -3,8 +3,10 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect } from "vitest";
 
-function renderWithRouter(ui: React.ReactElement) {
-  return render(<MemoryRouter>{ui}</MemoryRouter>);
+function renderWithRouter(ui: React.ReactElement, initialRoute = "/") {
+  return render(
+    <MemoryRouter initialEntries={[initialRoute]}>{ui}</MemoryRouter>,
+  );
 }
 
 describe("PageHeader", () => {
@@ -41,5 +43,17 @@ describe("PageHeader", () => {
     const el = screen.getByText("Current");
     expect(el.tagName).toBe("SPAN");
     expect(el.closest("a")).toBeNull();
+  });
+
+  it("shows feed button on resource pages", () => {
+    renderWithRouter(<PageHeader title="Services" />, "/services");
+    const link = screen.getByLabelText("Atom feed");
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute("href", "/services.atom");
+  });
+
+  it("hides feed button on pages without feeds", () => {
+    renderWithRouter(<PageHeader title="Cluster" />, "/cluster");
+    expect(screen.queryByLabelText("Atom feed")).not.toBeInTheDocument();
   });
 });
