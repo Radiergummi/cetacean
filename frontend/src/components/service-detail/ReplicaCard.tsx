@@ -1,4 +1,4 @@
-import { api } from "@/api/client";
+import { api, headAllowedMethods } from "@/api/client";
 import type { Service, Task } from "@/api/types";
 import InfoCard from "@/components/InfoCard";
 import { DockerDocsLink } from "@/components/service-detail/DockerDocsLink";
@@ -10,7 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { cn } from "@/lib/utils";
 import { Copy, Globe, Pencil } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 function ReplicaDoughnut({ running, desired }: { running: number; desired: number }) {
   const size = 50;
@@ -90,7 +90,15 @@ export function ReplicaCard({
   allowedMethods: Set<string>;
 }) {
   const canScale = allowedMethods.has("PUT");
-  const canChangeMode = allowedMethods.has("DELETE");
+  const [canChangeMode, setCanChangeMode] = useState(false);
+
+  useEffect(() => {
+    headAllowedMethods(`/services/${service.ID}/mode`)
+      .then((methods) => {
+        setCanChangeMode(methods.has("PUT"));
+      })
+      .catch(() => {});
+  }, [service.ID]);
 
   const currentMode: Mode = service.Spec.Mode.Replicated ? "replicated" : "global";
   const currentReplicas = service.Spec.Mode.Replicated?.Replicas ?? 0;

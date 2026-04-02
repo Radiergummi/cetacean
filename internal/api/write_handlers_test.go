@@ -4350,3 +4350,188 @@ func TestPreferMinimal_PatchNodeLabels(t *testing.T) {
 		t.Errorf("Preference-Applied=%q, want %q", got, "return=minimal")
 	}
 }
+
+func TestHandleGetServiceMode(t *testing.T) {
+	replicas := uint64(3)
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "web"},
+			Mode: swarm.ServiceMode{
+				Replicated: &swarm.ReplicatedService{Replicas: &replicas},
+			},
+		},
+	})
+
+	h := newTestHandlers(t, withCache(c))
+	req := httptest.NewRequest("GET", "/services/svc1/mode", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetServiceMode(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["mode"] != "replicated" {
+		t.Errorf("mode=%v, want replicated", resp["mode"])
+	}
+
+	allow := w.Header().Get("Allow")
+	if allow != "GET, HEAD, PUT" {
+		t.Errorf("Allow=%q, want %q", allow, "GET, HEAD, PUT")
+	}
+}
+
+func TestHandleGetServiceMode_Global(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "web"},
+			Mode:        swarm.ServiceMode{Global: &swarm.GlobalService{}},
+		},
+	})
+
+	h := newTestHandlers(t, withCache(c))
+	req := httptest.NewRequest("GET", "/services/svc1/mode", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetServiceMode(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["mode"] != "global" {
+		t.Errorf("mode=%v, want global", resp["mode"])
+	}
+	if resp["replicas"] != nil {
+		t.Errorf("replicas=%v, want nil", resp["replicas"])
+	}
+}
+
+func TestHandleGetServiceMode_ReadOnly(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "web"},
+			Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{}},
+		},
+	})
+
+	h := newTestHandlers(t, withCache(c), withOpsLevel(config.OpsReadOnly))
+	req := httptest.NewRequest("GET", "/services/svc1/mode", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetServiceMode(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	allow := w.Header().Get("Allow")
+	if allow != "GET, HEAD" {
+		t.Errorf("Allow=%q, want %q", allow, "GET, HEAD")
+	}
+}
+
+func TestHandleGetServiceEndpointMode(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "web"},
+			EndpointSpec: &swarm.EndpointSpec{
+				Mode: swarm.ResolutionModeVIP,
+			},
+		},
+	})
+
+	h := newTestHandlers(t, withCache(c))
+	req := httptest.NewRequest("GET", "/services/svc1/endpoint-mode", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetServiceEndpointMode(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["endpointMode"] != "vip" {
+		t.Errorf("endpointMode=%v, want vip", resp["endpointMode"])
+	}
+
+	allow := w.Header().Get("Allow")
+	if allow != "GET, HEAD, PUT" {
+		t.Errorf("Allow=%q, want %q", allow, "GET, HEAD, PUT")
+	}
+}
+
+func TestHandleGetServiceEndpointMode_NilEndpointSpec(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+
+	h := newTestHandlers(t, withCache(c))
+	req := httptest.NewRequest("GET", "/services/svc1/endpoint-mode", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetServiceEndpointMode(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["endpointMode"] != "" {
+		t.Errorf("endpointMode=%v, want empty string", resp["endpointMode"])
+	}
+}
+
+func TestHandleGetServiceEndpointMode_ReadOnly(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "web"},
+			EndpointSpec: &swarm.EndpointSpec{
+				Mode: swarm.ResolutionModeDNSRR,
+			},
+		},
+	})
+
+	h := newTestHandlers(t, withCache(c), withOpsLevel(config.OpsReadOnly))
+	req := httptest.NewRequest("GET", "/services/svc1/endpoint-mode", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetServiceEndpointMode(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	allow := w.Header().Get("Allow")
+	if allow != "GET, HEAD" {
+		t.Errorf("Allow=%q, want %q", allow, "GET, HEAD")
+	}
+}

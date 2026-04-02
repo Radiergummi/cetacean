@@ -13,6 +13,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
 func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
@@ -44,6 +45,54 @@ func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
 	writeServiceMutation(w, r, id, func() (swarm.Service, error) {
 		return h.serviceLifecycle.ScaleService(r.Context(), id, *req.Replicas)
 	})
+}
+
+func (h *Handlers) HandleGetServiceMode(w http.ResponseWriter, r *http.Request) {
+	svc, ok := h.lookupServiceACL(w, r)
+	if !ok {
+		return
+	}
+	h.setAllowSubResource(w, r, "PUT", config.OpsImpactful, "service:"+svc.Spec.Name)
+
+	mode := "replicated"
+	var replicas *uint64
+	if svc.Spec.Mode.Global != nil {
+		mode = "global"
+	} else if svc.Spec.Mode.Replicated != nil {
+		replicas = svc.Spec.Mode.Replicated.Replicas
+	}
+
+	writeCachedJSON(w, r, NewDetailResponse(
+		r.Context(),
+		"/services/"+svc.ID+"/mode",
+		"ServiceMode",
+		map[string]any{
+			"mode":     mode,
+			"replicas": replicas,
+		},
+	))
+}
+
+func (h *Handlers) HandleGetServiceEndpointMode(w http.ResponseWriter, r *http.Request) {
+	svc, ok := h.lookupServiceACL(w, r)
+	if !ok {
+		return
+	}
+	h.setAllowSubResource(w, r, "PUT", config.OpsImpactful, "service:"+svc.Spec.Name)
+
+	endpointMode := ""
+	if svc.Spec.EndpointSpec != nil {
+		endpointMode = string(svc.Spec.EndpointSpec.Mode)
+	}
+
+	writeCachedJSON(w, r, NewDetailResponse(
+		r.Context(),
+		"/services/"+svc.ID+"/endpoint-mode",
+		"ServiceEndpointMode",
+		map[string]any{
+			"endpointMode": endpointMode,
+		},
+	))
 }
 
 func (h *Handlers) HandleUpdateServiceMode(w http.ResponseWriter, r *http.Request) {

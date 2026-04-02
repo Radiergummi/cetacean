@@ -256,7 +256,12 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	)
 
 	// Service write operations — tier 3 (impactful)
+	mux.HandleFunc("GET /services/{id}/mode", contentNegotiated(h.HandleGetServiceMode, spa))
 	mux.Handle("PUT /services/{id}/mode", svcACL(tier3(h.HandleUpdateServiceMode)))
+	mux.HandleFunc(
+		"GET /services/{id}/endpoint-mode",
+		contentNegotiated(h.HandleGetServiceEndpointMode, spa),
+	)
 	mux.Handle("PUT /services/{id}/endpoint-mode", svcACL(tier3(h.HandleUpdateServiceEndpointMode)))
 	mux.Handle("DELETE /services/{id}", svcACL(tier3(h.HandleRemoveService)))
 

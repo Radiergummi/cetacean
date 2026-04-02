@@ -1,4 +1,4 @@
-import { api, emptyMethods } from "../api/client";
+import { api, emptyMethods, headAllowedMethods } from "../api/client";
 import type {
   ContainerConfig,
   Healthcheck,
@@ -104,6 +104,7 @@ export default function ServiceDetail() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const monitoring = useMonitoringStatus();
   const [allowedMethods, setAllowedMethods] = useState(emptyMethods);
+  const [canChangeEndpointMode, setCanChangeEndpointMode] = useState(false);
   const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
   const hasCadvisor = !!monitoring?.cadvisor?.targets;
   const [error, setError] = useState(false);
@@ -189,6 +190,18 @@ export default function ServiceDetail() {
       })
       .catch(console.warn);
   }, []);
+
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
+
+    headAllowedMethods(`/services/${id}/endpoint-mode`)
+      .then((methods) => {
+        setCanChangeEndpointMode(methods.has("PUT"));
+      })
+      .catch(() => {});
+  }, [id]);
 
   useEffect(() => {
     if (!id) {
@@ -681,7 +694,7 @@ export default function ServiceDetail() {
                 <EndpointModeEditor
                   serviceId={id!}
                   currentMode={service.Spec.EndpointSpec.Mode as "vip" | "dnsrr"}
-                  canEdit={allowedMethods.has("DELETE")}
+                  canEdit={canChangeEndpointMode}
                 />
               </div>
             )}

@@ -128,6 +128,25 @@ func (h *Handlers) setAllow(
 	}
 }
 
+// setAllowSubResource sets the Allow header for a sub-resource endpoint
+// that supports a single write method at a given operations tier.
+func (h *Handlers) setAllowSubResource(
+	w http.ResponseWriter,
+	r *http.Request,
+	method string,
+	tier config.OperationsLevel,
+	resourceExpr string,
+) {
+	methods := []string{"GET", "HEAD"}
+	if h.operationsLevel >= tier {
+		id := auth.IdentityFromContext(r.Context())
+		if h.acl.Can(id, "write", resourceExpr) {
+			methods = append(methods, method)
+		}
+	}
+	w.Header().Set("Allow", strings.Join(methods, ", "))
+}
+
 // listCreateMethods maps resource types that support creation via POST to
 // the minimum operations tier required.
 var listCreateMethods = map[string]config.OperationsLevel{

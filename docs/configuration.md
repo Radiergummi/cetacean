@@ -8,6 +8,9 @@ Sensitive settings (secrets, keys) also accept a `_FILE` suffix on their env var
 startup. This is the standard pattern for Docker Swarm secrets. The `_FILE` variant has lower precedence than the direct
 env var. Trailing newlines are trimmed.
 
+Supported `_FILE` variants: `CETACEAN_AUTH_OIDC_CLIENT_SECRET_FILE`, `CETACEAN_AUTH_OIDC_SESSION_KEY_FILE`,
+`CETACEAN_AUTH_TAILSCALE_AUTHKEY_FILE`, `CETACEAN_AUTH_HEADERS_SECRET_VALUE_FILE`.
+
 ## General Settings
 
 | Flag              | Env var                       | Config file key             | Default                       | Description                                                                    |
@@ -101,17 +104,17 @@ as before.
 |----------------------------|------------------------------------|---------------------------|----------|------------------------|-----------------------------------------------------------|
 | `-auth-oidc-issuer`        | `CETACEAN_AUTH_OIDC_ISSUER`        | `auth.oidc.issuer`        | Yes      | _—_                    | OIDC issuer URL                                           |
 | `-auth-oidc-client-id`     | `CETACEAN_AUTH_OIDC_CLIENT_ID`     | `auth.oidc.client_id`     | Yes      | _—_                    | OAuth 2.0 client ID                                       |
-| `-auth-oidc-client-secret` | `CETACEAN_AUTH_OIDC_CLIENT_SECRET`, `…_FILE` | `auth.oidc.client_secret` | Yes      | _—_                    | OAuth 2.0 client secret                                   |
+| `-auth-oidc-client-secret` | `CETACEAN_AUTH_OIDC_CLIENT_SECRET` | `auth.oidc.client_secret` | Yes      | _—_                    | OAuth 2.0 client secret                                   |
 | `-auth-oidc-redirect-url`  | `CETACEAN_AUTH_OIDC_REDIRECT_URL`  | `auth.oidc.redirect_url`  | Yes      | _—_                    | Callback URL (HTTPS required, loopback exempt)            |
 | `-auth-oidc-scopes`        | `CETACEAN_AUTH_OIDC_SCOPES`        | `auth.oidc.scopes`        | No       | `openid,profile,email` | Comma-separated scopes                                    |
-| `-auth-oidc-session-key`   | `CETACEAN_AUTH_OIDC_SESSION_KEY`, `…_FILE`   | `auth.oidc.session_key`   | No       | random                 | Hex-encoded 32-byte HMAC key; random per-process if unset |
+| `-auth-oidc-session-key`   | `CETACEAN_AUTH_OIDC_SESSION_KEY`   | `auth.oidc.session_key`   | No       | random                 | Hex-encoded 32-byte HMAC key; random per-process if unset |
 
 ### Tailscale
 
 | Flag                         | Env var                              | Config file key             | Required   | Default    | Description                             |
 |------------------------------|--------------------------------------|-----------------------------|------------|------------|-----------------------------------------|
 | `-auth-tailscale-mode`       | `CETACEAN_AUTH_TAILSCALE_MODE`       | `auth.tailscale.mode`       | No         | `local`    | `local` or `tsnet`                      |
-| `-auth-tailscale-authkey`    | `CETACEAN_AUTH_TAILSCALE_AUTHKEY`, `…_FILE`    | `auth.tailscale.authkey`    | tsnet only | _—_        | Auth key for node enrollment            |
+| `-auth-tailscale-authkey`    | `CETACEAN_AUTH_TAILSCALE_AUTHKEY`    | `auth.tailscale.authkey`    | tsnet only | _—_        | Auth key for node enrollment            |
 | `-auth-tailscale-hostname`   | `CETACEAN_AUTH_TAILSCALE_HOSTNAME`   | `auth.tailscale.hostname`   | No         | `cetacean` | Tailscale node hostname                 |
 | `-auth-tailscale-state-dir`  | `CETACEAN_AUTH_TAILSCALE_STATE_DIR`  | `auth.tailscale.state_dir`  | No         | _—_        | State directory for tsnet               |
 | `-auth-tailscale-capability` | `CETACEAN_AUTH_TAILSCALE_CAPABILITY` | `auth.tailscale.capability` | No         | _—_        | App capability key for group extraction |
@@ -133,7 +136,7 @@ Requires `-tls-cert` and `-tls-key` to be set (mTLS needs TLS termination at Cet
 | `-auth-headers-email`           | `CETACEAN_AUTH_HEADERS_EMAIL`           | `auth.headers.email`           | No          | _—_     | Header name for email                        |
 | `-auth-headers-groups`          | `CETACEAN_AUTH_HEADERS_GROUPS`          | `auth.headers.groups`          | No          | _—_     | Header name for groups (comma-separated)     |
 | `-auth-headers-secret-header`   | `CETACEAN_AUTH_HEADERS_SECRET_HEADER`   | `auth.headers.secret_header`   | No          | _—_     | Header name for shared secret                |
-| `-auth-headers-secret-value`    | `CETACEAN_AUTH_HEADERS_SECRET_VALUE`, `…_FILE`    | `auth.headers.secret_value`    | Conditional | _—_     | Secret value (required if secret header set) |
+| `-auth-headers-secret-value`    | `CETACEAN_AUTH_HEADERS_SECRET_VALUE`    | `auth.headers.secret_value`    | Conditional | _—_     | Secret value (required if secret header set) |
 | `-auth-headers-trusted-proxies` | `CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES` | `auth.headers.trusted_proxies` | No          | _—_     | Comma-separated CIDR/IP allowlist            |
 
 At least one of `secret_header`+`secret_value` or `trusted_proxies` must be configured.
@@ -224,17 +227,10 @@ cetacean healthcheck      Exit 0 if ready, 1 otherwise (for Docker HEALTHCHECK)
 
 ## Snapshots
 
-Cetacean persists swarm state to `${data_dir}/snapshot.json` so the dashboard can serve data immediately on startup,
-before the first Docker sync completes. Enabled by default. The snapshot is updated after every sync and event batch.
-Secret payloads are never written to disk.
+Cetacean saves all cached swarm state to `${data_dir}/snapshot.json` after every sync. On startup, it loads the snapshot
+to serve stale-but-fast data while the live sync catches up. Secret data is never persisted.
 
-| Setting | Default | Description |
-|---|---|---|
-| `CETACEAN_SNAPSHOT` / `storage.snapshot` | `true` | Enable or disable snapshot persistence |
-| `CETACEAN_DATA_DIR` / `storage.data_dir` | `./data` | Directory where the snapshot file is stored |
-
-Disable with `CETACEAN_SNAPSHOT=false` for read-only filesystems or environments where Docker is always reachable on
-startup.
+Writes are atomic (write to `.tmp`, then rename) so a crash mid-write won't corrupt it.
 
 ## Health Checks
 
