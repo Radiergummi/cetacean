@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/radiergummi/cetacean/internal/api/sse"
@@ -33,6 +34,7 @@ func contentNegotiated(
 			}
 			atomHandler(w, r)
 		default:
+			addAtomLink(w, r, atomHandler != nil)
 			jsonHandler(w, r)
 		}
 	}
@@ -98,7 +100,26 @@ func contentNegotiatedWithSSE(
 			}
 			atomHandler(w, r)
 		default:
+			addAtomLink(w, r, atomHandler != nil)
 			jsonHandler(w, r)
 		}
 	}
+}
+
+// addAtomLink sets a Link header advertising the Atom feed alternate
+// (RFC 8288) when the endpoint supports Atom.
+func addAtomLink(w http.ResponseWriter, r *http.Request, hasAtom bool) {
+	if !hasAtom {
+		return
+	}
+
+	href := absPath(r.Context(), r.URL.Path) + ".atom"
+	if rq := r.URL.RawQuery; rq != "" {
+		href += "?" + rq
+	}
+
+	w.Header().Add("Link", fmt.Sprintf(
+		`<%s>; rel="alternate"; type="application/atom+xml"`,
+		href,
+	))
 }
