@@ -101,10 +101,10 @@ OpenID Connect with authorization code flow for browsers and Bearer token valida
 |----------------------------|------------------------------------|---------------------------|----------|------------------------|--------------------------------------------------------------------------------|
 | `-auth-oidc-issuer`        | `CETACEAN_AUTH_OIDC_ISSUER`        | `auth.oidc.issuer`        | Yes      | --                     | OIDC issuer URL (must support OIDC Discovery)                                  |
 | `-auth-oidc-client-id`     | `CETACEAN_AUTH_OIDC_CLIENT_ID`     | `auth.oidc.client_id`     | Yes      | --                     | OAuth 2.0 client ID                                                            |
-| `-auth-oidc-client-secret` | `CETACEAN_AUTH_OIDC_CLIENT_SECRET` | `auth.oidc.client_secret` | Yes      | --                     | OAuth 2.0 client secret                                                        |
+| `-auth-oidc-client-secret` | `CETACEAN_AUTH_OIDC_CLIENT_SECRET`, `…_FILE` | `auth.oidc.client_secret` | Yes      | --                     | OAuth 2.0 client secret                                                        |
 | `-auth-oidc-redirect-url`  | `CETACEAN_AUTH_OIDC_REDIRECT_URL`  | `auth.oidc.redirect_url`  | Yes      | --                     | Callback URL (must be HTTPS, or `http://localhost`/`http://127.0.0.1` for dev) |
 | `-auth-oidc-scopes`        | `CETACEAN_AUTH_OIDC_SCOPES`        | `auth.oidc.scopes`        | No       | `openid,profile,email` | Comma-separated OIDC scopes                                                    |
-| `-auth-oidc-session-key`   | `CETACEAN_AUTH_OIDC_SESSION_KEY`   | `auth.oidc.session_key`   | No       | random                 | Hex-encoded 32-byte HMAC key for session cookies. Random per-process if unset. |
+| `-auth-oidc-session-key`   | `CETACEAN_AUTH_OIDC_SESSION_KEY`, `…_FILE`   | `auth.oidc.session_key`   | No       | random                 | Hex-encoded 32-byte HMAC key for session cookies. Random per-process if unset. |
 
 #### Browser Flow (Authorization Code)
 
@@ -293,7 +293,7 @@ remain on the regular listener for Docker health checks.
 | Flag                         | Env var                              | Config file key             | Required   | Default    | Description                             |
 |------------------------------|--------------------------------------|-----------------------------|------------|------------|-----------------------------------------|
 | `-auth-tailscale-mode`       | `CETACEAN_AUTH_TAILSCALE_MODE`       | `auth.tailscale.mode`       | No         | `local`    | `local` or `tsnet`                      |
-| `-auth-tailscale-authkey`    | `CETACEAN_AUTH_TAILSCALE_AUTHKEY`    | `auth.tailscale.authkey`    | tsnet only | --         | Tailscale auth key for node enrollment  |
+| `-auth-tailscale-authkey`    | `CETACEAN_AUTH_TAILSCALE_AUTHKEY`, `…_FILE`    | `auth.tailscale.authkey`    | tsnet only | --         | Tailscale auth key for node enrollment  |
 | `-auth-tailscale-hostname`   | `CETACEAN_AUTH_TAILSCALE_HOSTNAME`   | `auth.tailscale.hostname`   | No         | `cetacean` | Tailscale node hostname (tsnet mode)    |
 | `-auth-tailscale-state-dir`  | `CETACEAN_AUTH_TAILSCALE_STATE_DIR`  | `auth.tailscale.state_dir`  | No         | --         | State directory for tsnet               |
 | `-auth-tailscale-capability` | `CETACEAN_AUTH_TAILSCALE_CAPABILITY` | `auth.tailscale.capability` | No         | --         | App capability key for group extraction |
@@ -440,7 +440,7 @@ mechanism to prevent clients from spoofing headers by bypassing the proxy.
 | `-auth-headers-email`           | `CETACEAN_AUTH_HEADERS_EMAIL`           | `auth.headers.email`           | No          | --      | Header name for email                               |
 | `-auth-headers-groups`          | `CETACEAN_AUTH_HEADERS_GROUPS`          | `auth.headers.groups`          | No          | --      | Header name for groups (comma-separated)            |
 | `-auth-headers-secret-header`   | `CETACEAN_AUTH_HEADERS_SECRET_HEADER`   | `auth.headers.secret_header`   | No          | --      | Header name for shared secret                       |
-| `-auth-headers-secret-value`    | `CETACEAN_AUTH_HEADERS_SECRET_VALUE`    | `auth.headers.secret_value`    | Conditional | --      | Shared secret value (required if secret header set) |
+| `-auth-headers-secret-value`    | `CETACEAN_AUTH_HEADERS_SECRET_VALUE`, `…_FILE`    | `auth.headers.secret_value`    | Conditional | --      | Shared secret value (required if secret header set) |
 | `-auth-headers-trusted-proxies` | `CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES` | `auth.headers.trusted_proxies` | No          | --      | Comma-separated CIDR/IP allowlist                   |
 
 At least one of `trusted_proxies` or `secret_header`+`secret_value` must be configured.
