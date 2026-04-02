@@ -1,15 +1,33 @@
 ---
 import { getEntry } from "astro:content";
-import DocsLayout from "../layouts/DocsLayout.astro";
+import Header from "../components/Header.astro";
+import Sidebar from "../components/Sidebar.astro";
 import Hero from "../components/Hero.astro";
+import "../styles/global.css";
 
 const home = await getEntry("docs", "index");
 ---
-<DocsLayout
-  title="Cetacean"
-  description={home.data.description}
-  slug=""
-  headings={[]}
->
-  <Hero title="Cetacean" description={home.data.description} />
-</DocsLayout>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={home.data.description} />
+    <title>Cetacean — {home.data.description}</title>
+    <script is:inline>
+      (function() {
+        var theme = localStorage.getItem("theme") || "system";
+        var dark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        if (dark) document.documentElement.classList.add("dark");
+      })();
+    </script>
+  </head>
+  <body class="min-h-screen">
+    <Header currentPath="/" />
+    <div class="flex">
+      <Sidebar currentSlug="" />
+      <main class="flex-1 min-w-0">
+        <Hero title="Cetacean" description={home.data.description} />
+      </main>
+    </div>
+  </body>
+</html>
