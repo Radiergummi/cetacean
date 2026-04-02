@@ -24,14 +24,13 @@ const errorDictionary: Record<string, ErrorInfo> = {
   // OPS: operations level
   OPS001: {
     title: "Operations level too low",
-    suggestion:
-      "Increase the CETACEAN_OPERATIONS_LEVEL environment variable and restart the server.",
+    suggestion: "Increase the server.operations_level setting and restart the server.",
   },
 
   // MTR: metrics / Prometheus
   MTR001: {
     title: "Prometheus not configured",
-    suggestion: "Set the CETACEAN_PROMETHEUS_URL environment variable and restart the server.",
+    suggestion: "Set the prometheus.url setting and restart the server.",
   },
   MTR002: {
     title: "Prometheus unreachable",

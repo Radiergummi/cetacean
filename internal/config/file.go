@@ -80,6 +80,7 @@ type fileServer struct {
 	CORS            *fileCORS `toml:"cors"`
 	OperationsLevel *int      `toml:"operations_level"`
 	BasePath        *string   `toml:"base_path"`
+	TrustedProxies  *string   `toml:"trusted_proxies"`
 }
 
 type fileCORS struct {

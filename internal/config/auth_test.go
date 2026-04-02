@@ -249,19 +249,21 @@ func TestLoadAuth_HeadersHappyPath(t *testing.T) {
 	}
 }
 
-func TestLoadAuth_HeadersRequiresTrustedProxies(t *testing.T) {
+func TestLoadAuth_HeadersNoTrustedProxies(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_MODE", "headers")
 	t.Setenv("CETACEAN_AUTH_HEADERS_SUBJECT", "X-User")
-	// Secret set but no trusted proxies — should still fail.
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_HEADER", "X-Proxy-Secret")
 	t.Setenv("CETACEAN_AUTH_HEADERS_SECRET_VALUE", "s3cret")
 
-	_, err := LoadAuth(nil, nil)
-	if err == nil {
-		t.Fatal("expected error when trusted proxies are not set")
+	// LoadAuth no longer rejects missing trusted proxies — that check
+	// moved to main.go where the general CETACEAN_TRUSTED_PROXIES is
+	// resolved and can provide the value.
+	cfg, err := LoadAuth(nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(err.Error(), "CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES") {
-		t.Errorf("unexpected error: %v", err)
+	if len(cfg.Headers.TrustedProxies) != 0 {
+		t.Errorf("expected empty TrustedProxies, got %v", cfg.Headers.TrustedProxies)
 	}
 }
 

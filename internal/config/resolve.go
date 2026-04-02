@@ -163,23 +163,30 @@ func resolveFloat(
 	return checkFloatRange(v, min, max, source)
 }
 
-// resolveStringSlice returns the env value split by commas, or the
-// file config value, or nil. Empty strings are filtered out.
-func resolveStringSlice(envKey string, file []string) []string {
+// resolveStringSlice returns the first set value split by commas in
+// precedence order: flag > env > file > nil. Empty strings are filtered out.
+func resolveStringSlice(flag *string, envKey string, file []string) []string {
+	if flag != nil {
+		return splitComma(*flag)
+	}
 	if v := os.Getenv(envKey); v != "" {
-		var out []string
-		for s := range strings.SplitSeq(v, ",") {
-			s = strings.TrimSpace(s)
-			if s != "" {
-				out = append(out, s)
-			}
-		}
-		return out
+		return splitComma(v)
 	}
 	if len(file) > 0 {
 		return file
 	}
 	return nil
+}
+
+func splitComma(s string) []string {
+	var out []string
+	for part := range strings.SplitSeq(s, ",") {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 func checkFloatRange(v, min, max float64, source string) (float64, error) {

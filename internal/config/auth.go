@@ -133,7 +133,7 @@ func LoadAuth(flags *Flags, fc *fileConfig) (*AuthConfig, error) {
 		if cfg.OIDC.Issuer == "" || cfg.OIDC.ClientID == "" || cfg.OIDC.ClientSecret == "" ||
 			cfg.OIDC.RedirectURL == "" {
 			return nil, fmt.Errorf(
-				"oidc mode requires CETACEAN_AUTH_OIDC_ISSUER, CETACEAN_AUTH_OIDC_CLIENT_ID, CETACEAN_AUTH_OIDC_CLIENT_SECRET, and CETACEAN_AUTH_OIDC_REDIRECT_URL",
+				"oidc mode requires auth.oidc.issuer, auth.oidc.client_id, auth.oidc.client_secret, and auth.oidc.redirect_url",
 			)
 		}
 		if err := validateRedirectURL(cfg.OIDC.RedirectURL); err != nil {
@@ -185,7 +185,7 @@ func LoadAuth(flags *Flags, fc *fileConfig) (*AuthConfig, error) {
 			)
 		}
 		if cfg.Tailscale.Mode == "tsnet" && cfg.Tailscale.AuthKey == "" {
-			return nil, fmt.Errorf("tailscale tsnet mode requires CETACEAN_AUTH_TAILSCALE_AUTHKEY")
+			return nil, fmt.Errorf("tailscale tsnet mode requires auth.tailscale.authkey")
 		}
 
 	case "cert":
@@ -199,7 +199,7 @@ func LoadAuth(flags *Flags, fc *fileConfig) (*AuthConfig, error) {
 			),
 		}
 		if cfg.Cert.CA == "" {
-			return nil, fmt.Errorf("cert mode requires CETACEAN_AUTH_CERT_CA")
+			return nil, fmt.Errorf("cert mode requires auth.cert.ca")
 		}
 
 	case "headers":
@@ -213,7 +213,10 @@ func LoadAuth(flags *Flags, fc *fileConfig) (*AuthConfig, error) {
 		if err != nil {
 			return nil, err
 		}
-		trustedProxies, err := parseTrustedProxies(
+		// Trusted proxies resolved separately via deprecation logic.
+		// LoadAuth still parses the legacy setting so main.go can
+		// implement the deprecation/fallback.
+		legacyTP, err := parseTrustedProxies(
 			resolve(
 				flags.HeadersTrustedProxies,
 				"CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES",
@@ -256,19 +259,14 @@ func LoadAuth(flags *Flags, fc *fileConfig) (*AuthConfig, error) {
 				"",
 			),
 			SecretValue:    secretValue,
-			TrustedProxies: trustedProxies,
+			TrustedProxies: legacyTP,
 		}
 		if cfg.Headers.Subject == "" {
-			return nil, fmt.Errorf("headers mode requires CETACEAN_AUTH_HEADERS_SUBJECT")
+			return nil, fmt.Errorf("headers mode requires auth.headers.subject")
 		}
 		if cfg.Headers.SecretHeader != "" && cfg.Headers.SecretValue == "" {
 			return nil, fmt.Errorf(
-				"CETACEAN_AUTH_HEADERS_SECRET_HEADER requires CETACEAN_AUTH_HEADERS_SECRET_VALUE",
-			)
-		}
-		if len(cfg.Headers.TrustedProxies) == 0 {
-			return nil, fmt.Errorf(
-				"headers mode requires CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES; set to the CIDR of your reverse proxy (use 0.0.0.0/0 to allow any source, but prefer a specific range)",
+				"auth.headers.secret_header requires auth.headers.secret_value",
 			)
 		}
 	}
@@ -327,7 +325,7 @@ func validateRedirectURL(raw string) error {
 		return nil
 	}
 	return fmt.Errorf(
-		"CETACEAN_AUTH_OIDC_REDIRECT_URL must use HTTPS (got %q); loopback addresses are exempt per OAuth 2.1",
+		"auth.oidc.redirect_url must use HTTPS (got %q); loopback addresses are exempt per OAuth 2.1",
 		u.Scheme+"://"+u.Host,
 	)
 }
@@ -356,7 +354,7 @@ func parseTrustedProxies(raw string) ([]netip.Prefix, error) {
 		}
 
 		return nil, fmt.Errorf(
-			"CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES: %q is not a valid CIDR or IP address",
+			"server.trusted_proxies: %q is not a valid CIDR or IP address",
 			s,
 		)
 	}

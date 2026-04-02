@@ -48,7 +48,7 @@ export default function MonitoringStatus({ status, source }: Props) {
         <p className="mt-3 text-xs">
           Then set{" "}
           <code className="rounded bg-blue-100 px-1 py-0.5 font-mono dark:bg-blue-500/20">
-            CETACEAN_PROMETHEUS_URL
+            prometheus.url
           </code>{" "}
           and restart Cetacean.
         </p>

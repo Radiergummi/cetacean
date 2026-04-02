@@ -1,7 +1,9 @@
 package config
 
 import (
+	"fmt"
 	"log/slog"
+	"net/netip"
 	"strings"
 	"time"
 )
@@ -42,6 +44,7 @@ type Config struct {
 	Recommendations  bool            // CETACEAN_RECOMMENDATIONS, default true
 	OperationsLevel  OperationsLevel // CETACEAN_OPERATIONS_LEVEL
 	CORSOrigins      []string        // CETACEAN_CORS_ORIGINS, default empty (disabled)
+	TrustedProxies   []netip.Prefix  // CETACEAN_TRUSTED_PROXIES
 }
 
 // Load merges configuration from flags, environment variables, a TOML
@@ -68,6 +71,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		fOpsLevel        *int
 		fBasePath        *string
 		fCORSOrigins     []string
+		fTrustedProxies  *string
 	)
 	if fc != nil {
 		if fc.Server != nil {
@@ -77,6 +81,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 			fRecommendations = fc.Server.Recommendations
 			fOpsLevel = fc.Server.OperationsLevel
 			fBasePath = fc.Server.BasePath
+			fTrustedProxies = fc.Server.TrustedProxies
 			if fc.Server.SSE != nil {
 				fSSEBatch = fc.Server.SSE.BatchInterval
 			}
@@ -101,7 +106,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 	}
 
 	batchInterval, err := resolveDuration(
-		nil,
+		flags.SSEBatchInterval,
 		"CETACEAN_SSE_BATCH_INTERVAL",
 		fSSEBatch,
 		100*time.Millisecond,
@@ -111,7 +116,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 	}
 
 	opsLevel, err := resolveInt(
-		nil,
+		flags.OperationsLevel,
 		"CETACEAN_OPERATIONS_LEVEL",
 		fOpsLevel,
 		int(OpsOperational),
@@ -136,8 +141,8 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		),
 		LogLevel:         resolve(flags.LogLevel, "CETACEAN_LOG_LEVEL", fLogLevel, "info"),
 		LogFormat:        resolve(flags.LogFormat, "CETACEAN_LOG_FORMAT", fLogFormat, "json"),
-		DataDir:          resolve(nil, "CETACEAN_DATA_DIR", fDataDir, "./data"),
-		Snapshot:         resolveBool(nil, "CETACEAN_SNAPSHOT", fSnapshot, true),
+		DataDir:          resolve(flags.DataDir, "CETACEAN_DATA_DIR", fDataDir, "./data"),
+		Snapshot:         resolveBool(flags.Snapshot, "CETACEAN_SNAPSHOT", fSnapshot, true),
 		SSEBatchInterval: batchInterval,
 		Pprof:            resolveBool(flags.Pprof, "CETACEAN_PPROF", fPprof, false),
 		SelfMetrics: resolveBool(
@@ -153,11 +158,29 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 			true,
 		),
 		OperationsLevel: OperationsLevel(opsLevel),
-		CORSOrigins:     resolveStringSlice("CETACEAN_CORS_ORIGINS", fCORSOrigins),
+		CORSOrigins: resolveStringSlice(
+			flags.CORSOrigins,
+			"CETACEAN_CORS_ORIGINS",
+			fCORSOrigins,
+		),
 	}
 
 	if err := ValidateBasePath(cfg.BasePath); err != nil {
 		return nil, err
+	}
+
+	trustedProxiesRaw := resolve(
+		flags.TrustedProxies,
+		"CETACEAN_TRUSTED_PROXIES",
+		fTrustedProxies,
+		"",
+	)
+	if trustedProxiesRaw != "" {
+		tp, err := parseTrustedProxies(trustedProxiesRaw)
+		if err != nil {
+			return nil, fmt.Errorf("server.trusted_proxies: %w", err)
+		}
+		cfg.TrustedProxies = tp
 	}
 
 	return cfg, nil

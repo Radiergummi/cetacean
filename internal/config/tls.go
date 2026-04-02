@@ -37,7 +37,7 @@ func LoadTLS(flags *Flags, fc *fileConfig) TLSConfig {
 
 func ValidateTLS(cfg TLSConfig) error {
 	if (cfg.Cert == "") != (cfg.Key == "") {
-		return fmt.Errorf("both CETACEAN_TLS_CERT and CETACEAN_TLS_KEY must be set, or neither")
+		return fmt.Errorf("both tls.cert and tls.key must be set, or neither")
 	}
 	return nil
 }

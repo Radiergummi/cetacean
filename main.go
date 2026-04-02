@@ -102,8 +102,33 @@ func main() {
 		os.Exit(1)
 	}
 	if authCfg.Mode == "cert" && !tlsCfg.Enabled() {
-		fmt.Fprintf(os.Stderr, "cert auth mode requires CETACEAN_TLS_CERT and CETACEAN_TLS_KEY\n")
+		fmt.Fprintf(os.Stderr, "cert auth mode requires tls.cert and tls.key\n")
 		os.Exit(1)
+	}
+
+	// Resolve trusted proxies for headers auth: the deprecated
+	// CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES falls back to the general setting.
+	if authCfg.Mode == "headers" {
+		if len(authCfg.Headers.TrustedProxies) > 0 {
+			if len(cfg.TrustedProxies) > 0 {
+				slog.Warn(
+					"auth.headers.trusted_proxies is deprecated and ignored when server.trusted_proxies is set; please remove the old setting",
+				)
+			} else {
+				slog.Warn(
+					"auth.headers.trusted_proxies is deprecated; use server.trusted_proxies instead",
+				)
+				cfg.TrustedProxies = authCfg.Headers.TrustedProxies
+			}
+		}
+		if len(cfg.TrustedProxies) == 0 {
+			fmt.Fprintf(
+				os.Stderr,
+				"headers auth mode requires server.trusted_proxies; set to the CIDR of your reverse proxy\n",
+			)
+			os.Exit(1)
+		}
+		authCfg.Headers.TrustedProxies = cfg.TrustedProxies
 	}
 
 	aclCfg := config.LoadACL(flags, fc)
@@ -363,6 +388,7 @@ func main() {
 		BasePath:          cfg.BasePath,
 		CORS:              corsConfig,
 		TLSEnabled:        tlsCfg.Enabled(),
+		TrustedProxies:    cfg.TrustedProxies,
 	})
 
 	var serverTLSConfig *tls.Config

@@ -127,7 +127,7 @@ var errorRegistry = map[string]ErrorDef{
 		Title:       "Operations Level Too Low",
 		Status:      http.StatusForbidden,
 		Description: "The requested operation requires a higher operations level than the server is configured for.",
-		Suggestion:  "Increase the CETACEAN_OPERATIONS_LEVEL environment variable and restart the server.",
+		Suggestion:  "Increase the server.operations_level setting and restart the server.",
 	},
 
 	// ── FLT: filter expressions ───────────────────────────────────────
@@ -155,7 +155,7 @@ var errorRegistry = map[string]ErrorDef{
 		Title:       "Prometheus Not Configured",
 		Status:      http.StatusServiceUnavailable,
 		Description: "Prometheus metrics are not available because no Prometheus URL is configured.",
-		Suggestion:  "Set the CETACEAN_PROMETHEUS_URL environment variable and restart the server.",
+		Suggestion:  "Set the prometheus.url setting and restart the server.",
 	},
 	"MTR002": {Code: "MTR002", Title: "Prometheus Unreachable", Status: http.StatusBadGateway,
 		Description: "The configured Prometheus server is not responding.",

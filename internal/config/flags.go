@@ -57,6 +57,16 @@ type Flags struct {
 	// ACL
 	ACLPolicy     *string
 	ACLPolicyFile *string
+
+	// Storage
+	Snapshot *bool
+	DataDir  *string
+
+	// Server
+	OperationsLevel  *int
+	SSEBatchInterval *string
+	CORSOrigins      *string
+	TrustedProxies   *string
 }
 
 // ParseFlags parses CLI flags from args (typically os.Args[1:]).
@@ -152,6 +162,36 @@ func ParseFlags(args []string) (*Flags, error) {
 	tlsCert := fs.String("tls-cert", "", "TLS certificate path (PEM)")
 	tlsKey := fs.String("tls-key", "", "TLS private key path (PEM)")
 
+	// Storage
+	snapshot := fs.Bool(
+		"snapshot",
+		false,
+		"Enable disk persistence (env: CETACEAN_SNAPSHOT, default true)",
+	)
+	dataDir := fs.String(
+		"data-dir",
+		"",
+		"Snapshot data directory (env: CETACEAN_DATA_DIR, default \"./data\")",
+	)
+
+	// Server
+	opsLevel := fs.Int(
+		"operations-level",
+		0,
+		"Write operation tier 0-3 (env: CETACEAN_OPERATIONS_LEVEL, default 1)",
+	)
+	sseBatch := fs.String(
+		"sse-batch-interval",
+		"",
+		"SSE batch interval (env: CETACEAN_SSE_BATCH_INTERVAL, default \"100ms\")",
+	)
+	corsOrigins := fs.String("cors-origins", "", "CORS origins (env: CETACEAN_CORS_ORIGINS)")
+	trustedProxies := fs.String(
+		"trusted-proxies",
+		"",
+		"Trusted proxy CIDRs/IPs (env: CETACEAN_TRUSTED_PROXIES)",
+	)
+
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}
@@ -221,6 +261,18 @@ func ParseFlags(args []string) (*Flags, error) {
 			f.TLSCert = tlsCert
 		case "tls-key":
 			f.TLSKey = tlsKey
+		case "snapshot":
+			f.Snapshot = snapshot
+		case "data-dir":
+			f.DataDir = dataDir
+		case "operations-level":
+			f.OperationsLevel = opsLevel
+		case "sse-batch-interval":
+			f.SSEBatchInterval = sseBatch
+		case "cors-origins":
+			f.CORSOrigins = corsOrigins
+		case "trusted-proxies":
+			f.TrustedProxies = trustedProxies
 		}
 	})
 

@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/pprof"
+	"net/netip"
 	"strings"
 
 	"github.com/radiergummi/cetacean/internal/api/prometheus"
@@ -27,6 +28,7 @@ type RouterConfig struct {
 	BasePath          string
 	CORS              *CORSConfig
 	TLSEnabled        bool
+	TrustedProxies    []netip.Prefix
 }
 
 func NewRouter(cfg RouterConfig) http.Handler {
@@ -433,6 +435,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	handler = cors(cfg.CORS)(handler)
 	handler = securityHeaders(handler, cfg.TLSEnabled)
 	handler = recovery(handler)
+	handler = realIP(cfg.TrustedProxies)(handler)
 	handler = requestID(handler)
 	return basePathMiddleware(cfg.BasePath, handler)
 }
