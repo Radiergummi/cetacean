@@ -11,13 +11,22 @@ import (
 // contentNegotiated wraps a JSON handler to dispatch based on content type.
 // HTML requests go to the SPA, SSE gets 406 (not supported here).
 // Unsupported types are already rejected by the negotiate middleware.
-func contentNegotiated(jsonHandler http.HandlerFunc, spa http.Handler) http.HandlerFunc {
+func contentNegotiated(
+	jsonHandler, atomHandler http.HandlerFunc,
+	spa http.Handler,
+) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch ContentTypeFromContext(r.Context()) {
 		case ContentTypeHTML:
 			spa.ServeHTTP(w, r)
 		case ContentTypeSSE:
 			writeErrorCode(w, r, "API001", "this endpoint does not support text/event-stream")
+		case ContentTypeAtom:
+			if atomHandler == nil {
+				writeErrorCode(w, r, "API003", "this endpoint does not support application/atom+xml")
+				return
+			}
+			atomHandler(w, r)
 		default:
 			jsonHandler(w, r)
 		}
@@ -63,7 +72,7 @@ func (h *Handlers) aclMatchWrap(
 
 // contentNegotiatedWithSSE is like contentNegotiated but allows SSE.
 func contentNegotiatedWithSSE(
-	jsonHandler, sseHandler http.HandlerFunc,
+	jsonHandler, sseHandler, atomHandler http.HandlerFunc,
 	spa http.Handler,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -72,6 +81,12 @@ func contentNegotiatedWithSSE(
 			spa.ServeHTTP(w, r)
 		case ContentTypeSSE:
 			sseHandler(w, r)
+		case ContentTypeAtom:
+			if atomHandler == nil {
+				writeErrorCode(w, r, "API003", "this endpoint does not support application/atom+xml")
+				return
+			}
+			atomHandler(w, r)
 		default:
 			jsonHandler(w, r)
 		}
