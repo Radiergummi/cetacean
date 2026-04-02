@@ -455,7 +455,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	mux.Handle("DELETE /volumes/{name}", volACL(tier3(h.HandleRemoveVolume)))
 
 	// Search
-	mux.HandleFunc("GET /search", contentNegotiated(h.HandleSearch, nil, spa))
+	mux.HandleFunc("GET /search", contentNegotiated(h.HandleSearch, h.HandleAtomSearch, spa))
 
 	// Profile
 	mux.HandleFunc("GET /profile", contentNegotiated(h.HandleProfile, nil, spa))

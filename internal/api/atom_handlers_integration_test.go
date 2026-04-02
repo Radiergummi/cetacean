@@ -185,3 +185,60 @@ func TestAtomListHandler_ConditionalNotModified(t *testing.T) {
 		t.Errorf("status = %d, want %d", w2.Code, http.StatusNotModified)
 	}
 }
+
+func TestHandleAtomSearch_FiltersEntriesByName(t *testing.T) {
+	c := cache.New(nil)
+
+	// Seed entries: two services with different names, plus a node.
+	c.SetService(swarm.Service{
+		ID:   "svc-match",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "myservice"}},
+	})
+	c.SetService(swarm.Service{
+		ID:   "svc-other",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "database"}},
+	})
+	c.SetNode(swarm.Node{
+		ID:          "node1",
+		Description: swarm.NodeDescription{Hostname: "worker-1"},
+	})
+
+	h := newTestHandlers(t, withCache(c))
+
+	t.Run("returns matching entries", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/search?q=myservice", nil)
+		req = withContentType(req, ContentTypeAtom)
+		w := httptest.NewRecorder()
+
+		h.HandleAtomSearch(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d: body = %s", w.Code, http.StatusOK, w.Body.String())
+		}
+
+		var feed atomxml.Feed
+		if err := xml.Unmarshal(w.Body.Bytes(), &feed); err != nil {
+			t.Fatalf("invalid XML: %v", err)
+		}
+
+		if feed.Title != "Cetacean — Search: myservice" {
+			t.Errorf("feed.Title = %q, want %q", feed.Title, "Cetacean — Search: myservice")
+		}
+
+		if len(feed.Entries) != 1 {
+			t.Errorf("len(feed.Entries) = %d, want 1", len(feed.Entries))
+		}
+	})
+
+	t.Run("returns 400 when query is missing", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/search", nil)
+		req = withContentType(req, ContentTypeAtom)
+		w := httptest.NewRecorder()
+
+		h.HandleAtomSearch(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+		}
+	})
+}

@@ -85,6 +85,42 @@ func (h *Handlers) atomDetailHandler(
 	}
 }
 
+// HandleAtomSearch serves history entries matching a name search as an Atom feed.
+func (h *Handlers) HandleAtomSearch(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("q")
+	if q == "" {
+		writeErrorCode(w, r, "SEA001", "missing search query")
+		return
+	}
+
+	if !h.requireAnyGrant(w, r) {
+		return
+	}
+
+	beforeID, limit := parseAtomPagination(r)
+
+	entries := h.cache.History().List(cache.HistoryQuery{
+		BeforeID:     beforeID,
+		NameContains: q,
+		Limit:        limit,
+	})
+	entries = h.filterHistoryACL(r, entries)
+
+	updated := time.Now()
+	if len(entries) > 0 {
+		updated = entries[0].Timestamp
+	}
+
+	feed := atomxml.Feed{
+		Title:   fmt.Sprintf("Cetacean — Search: %s", q),
+		ID:      feedID(r),
+		Updated: updated,
+		Links:   paginationLinks(r, entries, beforeID, limit),
+		Entries: historyToEntries(r, entries),
+	}
+	writeCachedAtom(w, r, feed)
+}
+
 // HandleAtomHistory serves the global history feed as Atom (no type filter).
 func (h *Handlers) HandleAtomHistory(w http.ResponseWriter, r *http.Request) {
 	if !h.requireAnyGrant(w, r) {
