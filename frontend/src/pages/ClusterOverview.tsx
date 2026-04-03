@@ -1,5 +1,4 @@
 import { api, type ClusterSnapshot } from "../api/client";
-import type { HistoryEntry } from "../api/types";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
 import {
@@ -13,56 +12,43 @@ import RecommendationSummary from "../components/RecommendationSummary";
 import { isPrometheusReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { stackResourceCharts } from "../lib/stackQueries";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { TrendingDown, TrendingUp } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 
 const clusterStackCharts = stackResourceCharts();
 
 export default function ClusterOverview() {
-  const [snapshot, setSnapshot] = useState<ClusterSnapshot | null>(null);
   const prevRef = useRef<ClusterSnapshot | null>(null);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const queryClientInstance = useQueryClient();
 
-  const fetchSnapshot = useCallback(() => {
-    api
-      .cluster()
-      .then((snapshot) => {
-        setSnapshot((previous) => {
-          if (previous) {
-            prevRef.current = previous;
-          }
+  const { data: snapshot } = useQuery({
+    queryKey: ["cluster"],
+    queryFn: () => api.cluster(),
+  });
 
-          return snapshot;
-        });
-      })
-      .catch(console.warn);
-  }, []);
-
-  const fetchHistory = useCallback(() => {
-    api
-      .history({ limit: 25 })
-      .then((entry) => {
-        setHistory(entry);
-        setHistoryLoading(false);
-      })
-      .catch(() => {
-        setHistoryLoading(false);
-      });
-  }, []);
+  const { data: history = [], isLoading: historyLoading } = useQuery({
+    queryKey: ["history", { limit: 25 }],
+    queryFn: () => api.history({ limit: 25 }),
+  });
 
   useEffect(() => {
-    fetchSnapshot();
-    fetchHistory();
+    return () => {
+      if (snapshot) {
+        prevRef.current = snapshot;
+      }
+    };
+  }, [snapshot]);
 
+  useEffect(() => {
     return () => {
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
       }
     };
-  }, [fetchSnapshot, fetchHistory]);
+  }, []);
 
   useResourceStream(
     "/events",
@@ -72,10 +58,10 @@ export default function ClusterOverview() {
       }
 
       debounceRef.current = setTimeout(() => {
-        fetchSnapshot();
-        fetchHistory();
+        queryClientInstance.invalidateQueries({ queryKey: ["cluster"] });
+        queryClientInstance.invalidateQueries({ queryKey: ["history"] });
       }, 2_000);
-    }, [fetchSnapshot, fetchHistory]),
+    }, [queryClientInstance]),
   );
 
   const monitoring = useMonitoringStatus();
