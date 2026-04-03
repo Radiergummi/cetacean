@@ -760,3 +760,36 @@ export interface RecommendationsResponse {
   summary: RecommendationSummary;
   computedAt: string;
 }
+
+export interface JGFDocument {
+  graphs: JGFGraph[];
+}
+
+export interface JGFGraph {
+  id: string;
+  type: string;
+  label: string;
+  directed: boolean;
+  metadata: JGFMetadata;
+  nodes: Record<string, JGFNode>;
+  edges?: JGFEdge[];
+  hyperedges?: JGFHyperedge[];
+}
+
+export type JGFMetadata = Record<string, unknown> & { "@context": string };
+
+export interface JGFNode {
+  label: string;
+  metadata: JGFMetadata;
+}
+
+export interface JGFEdge {
+  source: string;
+  target: string;
+  metadata: JGFMetadata;
+}
+
+export interface JGFHyperedge {
+  nodes: string[];
+  metadata: JGFMetadata;
+}

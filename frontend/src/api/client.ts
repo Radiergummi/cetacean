@@ -17,6 +17,7 @@ import type {
   HistoryEntry,
   NetworkTopology,
   PlacementTopology,
+  JGFDocument,
   StackSummary,
   SearchResponse,
   SwarmInfo,
@@ -140,6 +141,23 @@ async function fetchJSON<T>(path: string, signal?: AbortSignal): Promise<FetchRe
   const data = await res.json();
 
   return { data, allowedMethods };
+}
+
+async function fetchJGF<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const res = await fetch(apiPath(path), {
+    headers: { Accept: "application/vnd.jgf+json" },
+    signal: composeSignals(signal, AbortSignal.timeout(defaultTimeoutMilliseconds)),
+  });
+
+  if (!res.ok) {
+    if (res.status === 401 && res.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
+      redirectToLogin();
+    }
+
+    await throwResponseError(res);
+  }
+
+  return res.json();
 }
 
 async function mutationFetch<T>(
@@ -451,7 +469,10 @@ export const api = {
       signal,
     ).then(({ data }) => data.items);
   },
+  topology: () => fetchJGF<JGFDocument>("/topology"),
+  /** @deprecated Use api.topology() instead. */
   topologyNetworks: () => fetchJSON<NetworkTopology>("/topology/networks").then(({ data }) => data),
+  /** @deprecated Use api.topology() instead. */
   topologyPlacement: () =>
     fetchJSON<PlacementTopology>("/topology/placement").then(({ data }) => data),
   nodeTasks: (id: string, signal?: AbortSignal) =>

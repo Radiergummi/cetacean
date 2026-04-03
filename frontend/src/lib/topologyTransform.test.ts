@@ -1,27 +1,78 @@
-import type { NetworkTopology, PlacementTopology } from "../api/types";
-import { buildLogicalFlow, buildPhysicalFlow } from "./topologyTransform";
+import type { JGFGraph, JGFMetadata } from "../api/types";
+import { networkGraphToReactFlow, placementGraphToReactFlow } from "./topologyTransform";
 import { describe, it, expect } from "vitest";
 
-describe("buildLogicalFlow", () => {
+const baseMetadata: JGFMetadata = { "@context": "https://example.com" };
+
+function makeNetworkGraph(overrides: Partial<JGFGraph> = {}): JGFGraph {
+  return {
+    id: "network",
+    type: "network-topology",
+    label: "Network Topology",
+    directed: false,
+    metadata: baseMetadata,
+    nodes: {},
+    edges: [],
+    hyperedges: [],
+    ...overrides,
+  };
+}
+
+describe("networkGraphToReactFlow", () => {
   it("creates group nodes for stacks and service nodes as children", () => {
-    const data: NetworkTopology = {
-      nodes: [
-        {
-          id: "s1",
-          name: "web",
-          stack: "app",
-          replicas: 3,
-          image: "nginx:1.25",
-          mode: "replicated",
-          ports: ["80:8080/tcp"],
+    const graph = makeNetworkGraph({
+      nodes: {
+        "urn:cetacean:service:s1": {
+          label: "web",
+          metadata: {
+            ...baseMetadata,
+            kind: "service",
+            replicas: 3,
+            image: "nginx:1.25",
+            mode: "replicated",
+            ports: ["80:8080/tcp"],
+          },
         },
-        { id: "s2", name: "api", stack: "app", replicas: 2, image: "node:20", mode: "replicated" },
-        { id: "s3", name: "monitor", replicas: 1, image: "prom:latest", mode: "replicated" },
+        "urn:cetacean:service:s2": {
+          label: "api",
+          metadata: {
+            ...baseMetadata,
+            kind: "service",
+            replicas: 2,
+            image: "node:20",
+            mode: "replicated",
+          },
+        },
+        "urn:cetacean:service:s3": {
+          label: "monitor",
+          metadata: {
+            ...baseMetadata,
+            kind: "service",
+            replicas: 1,
+            image: "prom:latest",
+            mode: "replicated",
+          },
+        },
+      },
+      edges: [
+        {
+          source: "urn:cetacean:service:s1",
+          target: "urn:cetacean:service:s2",
+          metadata: {
+            ...baseMetadata,
+            networks: [{ id: "net1", name: "app_net", driver: "overlay", scope: "swarm" }],
+          },
+        },
       ],
-      edges: [{ source: "s1", target: "s2", networks: ["net1"] }],
-      networks: [{ id: "net1", name: "app_net", driver: "overlay", scope: "swarm" }],
-    };
-    const { nodes, edges } = buildLogicalFlow(data);
+      hyperedges: [
+        {
+          nodes: ["urn:cetacean:service:s1", "urn:cetacean:service:s2"],
+          metadata: { ...baseMetadata, kind: "stack", name: "app" },
+        },
+      ],
+    });
+
+    const { nodes, edges } = networkGraphToReactFlow(graph);
 
     const groups = nodes.filter(({ type }) => type === "stackGroup");
     const services = nodes.filter(({ type }) => type === "serviceCard");
@@ -29,7 +80,9 @@ describe("buildLogicalFlow", () => {
     expect(groups[0].data.label).toBe("app");
     expect(services.length).toBe(3);
     expect(services.filter(({ parentId }) => parentId === "stack:app").length).toBe(2);
-    expect(services.find(({ id }) => id === "s3")?.parentId).toBeUndefined();
+    expect(
+      services.find(({ id }) => id === "urn:cetacean:service:s3")?.parentId,
+    ).toBeUndefined();
 
     // One edge with all networks collapsed
     expect(edges.length).toBe(1);
@@ -39,56 +92,109 @@ describe("buildLogicalFlow", () => {
   });
 
   it("collapses multiple networks into a single edge per pair", () => {
-    const data: NetworkTopology = {
-      nodes: [
-        { id: "s1", name: "web", replicas: 1, image: "nginx", mode: "replicated" },
-        { id: "s2", name: "api", replicas: 1, image: "node", mode: "replicated" },
+    const graph = makeNetworkGraph({
+      nodes: {
+        "urn:cetacean:service:s1": {
+          label: "web",
+          metadata: { ...baseMetadata, kind: "service", replicas: 1, image: "nginx", mode: "replicated" },
+        },
+        "urn:cetacean:service:s2": {
+          label: "api",
+          metadata: { ...baseMetadata, kind: "service", replicas: 1, image: "node", mode: "replicated" },
+        },
+      },
+      edges: [
+        {
+          source: "urn:cetacean:service:s1",
+          target: "urn:cetacean:service:s2",
+          metadata: {
+            ...baseMetadata,
+            networks: [
+              { id: "net1", name: "backend", driver: "overlay", scope: "swarm" },
+              { id: "net2", name: "frontend", driver: "overlay", scope: "swarm" },
+            ],
+          },
+        },
       ],
-      edges: [{ source: "s1", target: "s2", networks: ["net1", "net2"] }],
-      networks: [
-        { id: "net1", name: "backend", driver: "overlay", scope: "swarm" },
-        { id: "net2", name: "frontend", driver: "overlay", scope: "swarm" },
-      ],
-    };
-    const { edges } = buildLogicalFlow(data);
+    });
+
+    const { edges } = networkGraphToReactFlow(graph);
     expect(edges.length).toBe(1);
     const names = (edges[0].data as { networks: Array<{ name: string }> }).networks
       .map(({ name }) => name)
       .sort();
     expect(names).toEqual(["backend", "frontend"]);
   });
+
   it("deduplicates bidirectional edges into a single edge", () => {
-    const data: NetworkTopology = {
-      nodes: [
-        { id: "s1", name: "web", replicas: 1, image: "nginx", mode: "replicated" },
-        { id: "s2", name: "api", replicas: 1, image: "node", mode: "replicated" },
-      ],
+    const graph = makeNetworkGraph({
+      nodes: {
+        "urn:cetacean:service:s1": {
+          label: "web",
+          metadata: { ...baseMetadata, kind: "service", replicas: 1, image: "nginx", mode: "replicated" },
+        },
+        "urn:cetacean:service:s2": {
+          label: "api",
+          metadata: { ...baseMetadata, kind: "service", replicas: 1, image: "node", mode: "replicated" },
+        },
+      },
       edges: [
-        { source: "s1", target: "s2", networks: ["net1"] },
-        { source: "s2", target: "s1", networks: ["net1"] },
+        {
+          source: "urn:cetacean:service:s1",
+          target: "urn:cetacean:service:s2",
+          metadata: {
+            ...baseMetadata,
+            networks: [{ id: "net1", name: "backend", driver: "overlay", scope: "swarm" }],
+          },
+        },
+        {
+          source: "urn:cetacean:service:s2",
+          target: "urn:cetacean:service:s1",
+          metadata: {
+            ...baseMetadata,
+            networks: [{ id: "net1", name: "backend", driver: "overlay", scope: "swarm" }],
+          },
+        },
       ],
-      networks: [{ id: "net1", name: "backend", driver: "overlay", scope: "swarm" }],
-    };
-    const { edges } = buildLogicalFlow(data);
+    });
+
+    const { edges } = networkGraphToReactFlow(graph);
     expect(edges.length).toBe(1);
   });
 
   it("merges networks from bidirectional edges", () => {
-    const data: NetworkTopology = {
-      nodes: [
-        { id: "s1", name: "web", replicas: 1, image: "nginx", mode: "replicated" },
-        { id: "s2", name: "api", replicas: 1, image: "node", mode: "replicated" },
-      ],
+    const graph = makeNetworkGraph({
+      nodes: {
+        "urn:cetacean:service:s1": {
+          label: "web",
+          metadata: { ...baseMetadata, kind: "service", replicas: 1, image: "nginx", mode: "replicated" },
+        },
+        "urn:cetacean:service:s2": {
+          label: "api",
+          metadata: { ...baseMetadata, kind: "service", replicas: 1, image: "node", mode: "replicated" },
+        },
+      },
       edges: [
-        { source: "s1", target: "s2", networks: ["net1"] },
-        { source: "s2", target: "s1", networks: ["net2"] },
+        {
+          source: "urn:cetacean:service:s1",
+          target: "urn:cetacean:service:s2",
+          metadata: {
+            ...baseMetadata,
+            networks: [{ id: "net1", name: "backend", driver: "overlay", scope: "swarm" }],
+          },
+        },
+        {
+          source: "urn:cetacean:service:s2",
+          target: "urn:cetacean:service:s1",
+          metadata: {
+            ...baseMetadata,
+            networks: [{ id: "net2", name: "frontend", driver: "overlay", scope: "swarm" }],
+          },
+        },
       ],
-      networks: [
-        { id: "net1", name: "backend", driver: "overlay", scope: "swarm" },
-        { id: "net2", name: "frontend", driver: "overlay", scope: "swarm" },
-      ],
-    };
-    const { edges } = buildLogicalFlow(data);
+    });
+
+    const { edges } = networkGraphToReactFlow(graph);
     expect(edges.length).toBe(1);
     const names = (edges[0].data as { networks: Array<{ name: string }> }).networks
       .map(({ name }) => name)
@@ -97,63 +203,59 @@ describe("buildLogicalFlow", () => {
   });
 });
 
-describe("buildPhysicalFlow", () => {
+describe("placementGraphToReactFlow", () => {
   it("aggregates tasks by service within each node", () => {
-    const data: PlacementTopology = {
-      nodes: [
+    const graph: JGFGraph = {
+      id: "placement",
+      type: "placement-topology",
+      label: "Placement Topology",
+      directed: false,
+      metadata: baseMetadata,
+      nodes: {
+        "urn:cetacean:node:n1": {
+          label: "worker-01",
+          metadata: { ...baseMetadata, kind: "node", role: "worker", state: "ready", availability: "active" },
+        },
+        "urn:cetacean:node:n2": {
+          label: "worker-02",
+          metadata: { ...baseMetadata, kind: "node", role: "worker", state: "ready", availability: "active" },
+        },
+        "urn:cetacean:service:svc1": {
+          label: "web",
+          metadata: { ...baseMetadata, kind: "service" },
+        },
+        "urn:cetacean:service:svc2": {
+          label: "api",
+          metadata: { ...baseMetadata, kind: "service" },
+        },
+      },
+      hyperedges: [
         {
-          id: "n1",
-          hostname: "worker-01",
-          role: "worker",
-          state: "ready",
-          availability: "active",
-          tasks: [
-            {
-              id: "t1",
-              serviceId: "svc1",
-              serviceName: "web",
-              state: "running",
-              slot: 1,
-              image: "nginx:1.25",
-            },
-            {
-              id: "t2",
-              serviceId: "svc1",
-              serviceName: "web",
-              state: "running",
-              slot: 2,
-              image: "nginx:1.25",
-            },
-            {
-              id: "t3",
-              serviceId: "svc2",
-              serviceName: "api",
-              state: "running",
-              slot: 1,
-              image: "node:20",
-            },
-          ],
+          nodes: ["urn:cetacean:service:svc1", "urn:cetacean:node:n1", "urn:cetacean:node:n2"],
+          metadata: {
+            ...baseMetadata,
+            kind: "placement",
+            tasks: [
+              { id: "t1", node: "urn:cetacean:node:n1", state: "running", slot: 1, image: "nginx:1.25" },
+              { id: "t2", node: "urn:cetacean:node:n1", state: "running", slot: 2, image: "nginx:1.25" },
+              { id: "t4", node: "urn:cetacean:node:n2", state: "running", slot: 3, image: "nginx:1.25" },
+            ],
+          },
         },
         {
-          id: "n2",
-          hostname: "worker-02",
-          role: "worker",
-          state: "ready",
-          availability: "active",
-          tasks: [
-            {
-              id: "t4",
-              serviceId: "svc1",
-              serviceName: "web",
-              state: "running",
-              slot: 3,
-              image: "nginx:1.25",
-            },
-          ],
+          nodes: ["urn:cetacean:service:svc2", "urn:cetacean:node:n1"],
+          metadata: {
+            ...baseMetadata,
+            kind: "placement",
+            tasks: [
+              { id: "t3", node: "urn:cetacean:node:n1", state: "running", slot: 1, image: "node:20" },
+            ],
+          },
         },
       ],
     };
-    const { nodes } = buildPhysicalFlow(data);
+
+    const { nodes } = placementGraphToReactFlow(graph);
 
     expect(nodes.length).toBe(2);
     expect(nodes[0].type).toBe("physicalNode");
@@ -162,7 +264,7 @@ describe("buildPhysicalFlow", () => {
       services: { serviceId: string; running: number; total: number }[];
     };
     expect(n1Data.services.length).toBe(2);
-    const webSvc = n1Data.services.find(({ serviceId }) => serviceId === "svc1");
+    const webSvc = n1Data.services.find(({ serviceId }) => serviceId === "urn:cetacean:service:svc1");
     expect(webSvc!.running).toBe(2);
     expect(webSvc!.total).toBe(2);
 

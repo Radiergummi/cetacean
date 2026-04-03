@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { NetworkTopology, PlacementTopology } from "../api/types";
+import type { JGFGraph } from "../api/types";
 import "@xyflow/react/dist/style.css";
 import EmptyState from "../components/EmptyState";
 import { LoadingPage } from "../components/LoadingSkeleton";
@@ -13,7 +13,7 @@ import ServiceCardNode from "../components/topology/ServiceCardNode";
 import { useMatchesBreakpoint } from "../hooks/useMatchesBreakpoint";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { computeLayout } from "../lib/layoutElk";
-import { buildLogicalFlow, buildPhysicalFlow, hashColor } from "../lib/topologyTransform";
+import { networkGraphToReactFlow, placementGraphToReactFlow, hashColor } from "../lib/topologyTransform";
 import { getErrorMessage } from "../lib/utils";
 import { ReactFlow, ReactFlowProvider, Background, type Node, type Edge } from "@xyflow/react";
 import { Info, Network, Server, X } from "lucide-react";
@@ -147,21 +147,24 @@ function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
   return { nodes, edges, ready };
 }
 
-function LogicalView({ data, isMobile }: { data: NetworkTopology; isMobile: boolean }) {
-  const { nodes: rawNodes, edges: rawEdges } = useMemo(() => buildLogicalFlow(data), [data]);
+function LogicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean }) {
+  const { nodes: rawNodes, edges: rawEdges } = useMemo(() => networkGraphToReactFlow(data), [data]);
   const { nodes, edges, ready } = useElkLayout(rawNodes, rawEdges);
 
   const stackColors = useMemo(() => {
     const map = new Map<string, string>();
-    for (const node of data.nodes) {
-      if (node.stack && !map.has(node.stack)) {
-        map.set(node.stack, hashColor(node.stack));
+    for (const hyperedge of data.hyperedges ?? []) {
+      if (hyperedge.metadata.kind === "stack") {
+        const name = hyperedge.metadata.name as string;
+        if (!map.has(name)) {
+          map.set(name, hashColor(name));
+        }
       }
     }
     return map;
   }, [data]);
 
-  if (data.nodes.length === 0) {
+  if (Object.keys(data.nodes).length === 0) {
     return (
       <EmptyState
         message="No overlay networks found"
@@ -204,10 +207,10 @@ function LogicalView({ data, isMobile }: { data: NetworkTopology; isMobile: bool
   );
 }
 
-function PhysicalView({ data, isMobile }: { data: PlacementTopology; isMobile: boolean }) {
-  const { nodes } = useMemo(() => buildPhysicalFlow(data), [data]);
+function PhysicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean }) {
+  const { nodes } = useMemo(() => placementGraphToReactFlow(data), [data]);
 
-  if (data.nodes.length === 0) {
+  if (Object.values(data.nodes).every(({ metadata }) => metadata.kind !== "node")) {
     return (
       <EmptyState
         message="No nodes found in the cluster"
@@ -241,8 +244,8 @@ function PhysicalView({ data, isMobile }: { data: PlacementTopology; isMobile: b
 export default function Topology() {
   const isMobile = useMatchesBreakpoint("md", "below");
   const [view, setView] = useState<View>("logical");
-  const [networkData, setNetworkData] = useState<NetworkTopology | null>(null);
-  const [placementData, setPlacementData] = useState<PlacementTopology | null>(null);
+  const [networkData, setNetworkData] = useState<JGFGraph | null>(null);
+  const [placementData, setPlacementData] = useState<JGFGraph | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const initialLoadRef = useRef(true);
@@ -253,12 +256,11 @@ export default function Topology() {
     }
     setError(null);
     try {
-      const [networkResult, placementResult] = await Promise.all([
-        api.topologyNetworks(),
-        api.topologyPlacement(),
-      ]);
-      setNetworkData(networkResult);
-      setPlacementData(placementResult);
+      const document = await api.topology();
+      const networkGraph = document.graphs.find((g) => g.id === "network") ?? null;
+      const placementGraph = document.graphs.find((g) => g.id === "placement") ?? null;
+      setNetworkData(networkGraph);
+      setPlacementData(placementGraph);
     } catch (error) {
       setError(getErrorMessage(error, "Failed to load topology"));
     } finally {
