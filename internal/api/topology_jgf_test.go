@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/docker/docker/api/types/network"
@@ -496,5 +497,65 @@ func TestBuildPlacementJGF_TaskImageFallback(t *testing.T) {
 	}
 	if task["image"] != "webapp:v2" {
 		t.Errorf("expected task image fallback to 'webapp:v2', got %v", task["image"])
+	}
+}
+
+func TestHandleTopologyGraphML(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{ID: "net1", Name: "frontend", Driver: "overlay"})
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "webapp"}},
+		Endpoint: swarm.Endpoint{
+			VirtualIPs: []swarm.EndpointVirtualIP{{NetworkID: "net1"}},
+		},
+	})
+
+	h := newTestHandlers(t, withCache(c))
+	req := httptest.NewRequest("GET", "/topology", nil)
+	w := httptest.NewRecorder()
+	h.HandleTopologyGraphML(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/graphml+xml" {
+		t.Errorf("Content-Type=%q, want application/graphml+xml", ct)
+	}
+	if !strings.Contains(w.Body.String(), "<graphml") {
+		t.Error("response should contain graphml")
+	}
+	if w.Header().Get("ETag") == "" {
+		t.Error("expected ETag header")
+	}
+}
+
+func TestHandleTopologyDOT(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{ID: "net1", Name: "frontend", Driver: "overlay"})
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "webapp"}},
+		Endpoint: swarm.Endpoint{
+			VirtualIPs: []swarm.EndpointVirtualIP{{NetworkID: "net1"}},
+		},
+	})
+
+	h := newTestHandlers(t, withCache(c))
+	req := httptest.NewRequest("GET", "/topology", nil)
+	w := httptest.NewRecorder()
+	h.HandleTopologyDOT(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "text/vnd.graphviz" {
+		t.Errorf("Content-Type=%q, want text/vnd.graphviz", ct)
+	}
+	if !strings.HasPrefix(w.Body.String(), "graph") {
+		t.Error("response should start with 'graph'")
+	}
+	if w.Header().Get("ETag") == "" {
+		t.Error("expected ETag header")
 	}
 }

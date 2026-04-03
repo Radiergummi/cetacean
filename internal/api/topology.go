@@ -11,6 +11,8 @@ import (
 	json "github.com/goccy/go-json"
 
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/api/dot"
+	"github.com/radiergummi/cetacean/internal/api/graphml"
 	"github.com/radiergummi/cetacean/internal/api/jgf"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -356,6 +358,50 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 
 	w.Write(body)         //nolint:errcheck
 	w.Write([]byte{'\n'}) //nolint:errcheck
+}
+
+// buildACLFilteredNetworkGraph builds the network JGF graph for the requesting
+// identity, applying ACL filtering on services.
+func (h *Handlers) buildACLFilteredNetworkGraph(r *http.Request) jgf.Graph {
+	identity := auth.IdentityFromContext(r.Context())
+	services := acl.Filter(
+		h.acl, identity, "read",
+		h.cache.ListServices(),
+		func(s swarm.Service) string { return "service:" + s.Spec.Name },
+	)
+	networks := h.cache.ListNetworks()
+	contextURL := absPath(r.Context(), jsonLDContext)
+	return buildNetworkJGF(services, networks, contextURL)
+}
+
+// HandleTopologyGraphML serves the network topology as a GraphML document.
+func (h *Handlers) HandleTopologyGraphML(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAnyGrant(w, r) {
+		return
+	}
+	g := h.buildACLFilteredNetworkGraph(r)
+	data, err := graphml.Render(g)
+	if err != nil {
+		writeErrorCode(w, r, "API009", "failed to render GraphML")
+		return
+	}
+	w.Header().Set("Content-Type", "application/graphml+xml")
+	writeRawWithETag(w, r, data)
+}
+
+// HandleTopologyDOT serves the network topology as a DOT (Graphviz) document.
+func (h *Handlers) HandleTopologyDOT(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAnyGrant(w, r) {
+		return
+	}
+	g := h.buildACLFilteredNetworkGraph(r)
+	data, err := dot.Render(g)
+	if err != nil {
+		writeErrorCode(w, r, "API009", "failed to render DOT")
+		return
+	}
+	w.Header().Set("Content-Type", "text/vnd.graphviz")
+	writeRawWithETag(w, r, data)
 }
 
 // buildNetworkJGF produces a JGF hypergraph of the network topology.

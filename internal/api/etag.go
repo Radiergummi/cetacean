@@ -45,6 +45,22 @@ func etagMatch(header, etag string) bool {
 	return false
 }
 
+// writeRawWithETag sets an ETag on pre-rendered bytes and returns 304 Not
+// Modified if the client's If-None-Match header matches.
+func writeRawWithETag(w http.ResponseWriter, r *http.Request, data []byte) {
+	etag := computeETag(data)
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "no-cache")
+
+	if etagMatch(r.Header.Get("If-None-Match"), etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(data) //nolint:errcheck
+}
+
 // writeCachedJSON marshals v to JSON with ETag-based conditional caching.
 // Returns 304 Not Modified if the client's If-None-Match header matches.
 func writeCachedJSON(w http.ResponseWriter, r *http.Request, v any) {

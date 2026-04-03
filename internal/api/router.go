@@ -482,6 +482,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			spa.ServeHTTP(w, r)
 		case ContentTypeJGF, ContentTypeJSON:
 			h.HandleTopology(w, r)
+		case ContentTypeGraphML:
+			h.HandleTopologyGraphML(w, r)
+		case ContentTypeDOT:
+			h.HandleTopologyDOT(w, r)
 		default:
 			writeErrorCode(w, r, "API003", "this endpoint only supports application/vnd.jgf+json")
 		}

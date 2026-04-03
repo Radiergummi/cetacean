@@ -314,6 +314,64 @@ func TestParseAccept_JGF(t *testing.T) {
 	}
 }
 
+func TestParseAccept_GraphML(t *testing.T) {
+	ct := parseAccept("application/graphml+xml")
+	if ct != ContentTypeGraphML {
+		t.Errorf("got %v, want ContentTypeGraphML", ct)
+	}
+}
+
+func TestParseAccept_DOT(t *testing.T) {
+	ct := parseAccept("text/vnd.graphviz")
+	if ct != ContentTypeDOT {
+		t.Errorf("got %v, want ContentTypeDOT", ct)
+	}
+}
+
+func TestNegotiate_GraphMLSuffix(t *testing.T) {
+	var captured ContentType
+	var capturedPath string
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captured = ContentTypeFromContext(r.Context())
+		capturedPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := negotiate(inner)
+	req := httptest.NewRequest("GET", "/topology.graphml", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if captured != ContentTypeGraphML {
+		t.Errorf("expected ContentTypeGraphML, got %v", captured)
+	}
+	if capturedPath != "/topology" {
+		t.Errorf("expected path /topology, got %s", capturedPath)
+	}
+}
+
+func TestNegotiate_DOTSuffix(t *testing.T) {
+	var captured ContentType
+	var capturedPath string
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captured = ContentTypeFromContext(r.Context())
+		capturedPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := negotiate(inner)
+	req := httptest.NewRequest("GET", "/topology.dot", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if captured != ContentTypeDOT {
+		t.Errorf("expected ContentTypeDOT, got %v", captured)
+	}
+	if capturedPath != "/topology" {
+		t.Errorf("expected path /topology, got %s", capturedPath)
+	}
+}
+
 func TestNegotiate_JGFSuffix(t *testing.T) {
 	var captured ContentType
 	var capturedPath string
