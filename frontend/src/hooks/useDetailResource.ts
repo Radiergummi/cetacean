@@ -12,14 +12,14 @@ export function useDetailResource<T>(
   const queryClient = useQueryClient();
 
   const resourceQuery = useQuery({
-    queryKey: ["detail", ssePath],
+    queryKey: ["detail", ssePath, key],
     queryFn: ({ signal }) => fetchFn(key!, signal),
     enabled: !!key,
     retry: 1,
   });
 
   const historyQuery = useQuery({
-    queryKey: ["history", { resourceId: key, limit: 10 }],
+    queryKey: ["detail-history", key],
     queryFn: ({ signal }) => api.history({ resourceId: key!, limit: 10 }, signal),
     enabled: !!key,
     retry: false,
@@ -36,8 +36,8 @@ export function useDetailResource<T>(
 
       debounceRef.current = setTimeout(() => {
         debounceRef.current = null;
-        queryClient.invalidateQueries({ queryKey: ["detail", ssePath] });
-        queryClient.invalidateQueries({ queryKey: ["history", { resourceId: key }] });
+        queryClient.invalidateQueries({ queryKey: ["detail", ssePath, key] });
+        queryClient.invalidateQueries({ queryKey: ["detail-history", key] });
       }, 500);
     }, [queryClient, ssePath, key]),
   );
@@ -56,8 +56,8 @@ export function useDetailResource<T>(
   const history = historyQuery.data ?? [];
 
   const retry = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["detail", ssePath] });
-    queryClient.invalidateQueries({ queryKey: ["history", { resourceId: key }] });
+    queryClient.invalidateQueries({ queryKey: ["detail", ssePath, key] });
+    queryClient.invalidateQueries({ queryKey: ["detail-history", key] });
   }, [queryClient, ssePath, key]);
 
   return { data, history, error, retry, allowedMethods };
