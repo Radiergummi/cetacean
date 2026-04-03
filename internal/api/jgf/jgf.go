@@ -91,10 +91,9 @@ func SortedStackNames(stacks map[string][]string) []string {
 	return names
 }
 
-// PortsCSV extracts a port list from node metadata and returns it as a
-// comma-separated string. Handles both []string (direct construction) and
-// []any (from JSON round-trip).
-func PortsCSV(v any) string {
+// JoinSlice joins a metadata value into a comma-separated string.
+// Handles both []string (direct construction) and []any (from JSON round-trip).
+func JoinSlice(v any) string {
 	switch ports := v.(type) {
 	case []string:
 		return strings.Join(ports, ", ")

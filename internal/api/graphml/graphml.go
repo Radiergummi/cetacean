@@ -209,7 +209,7 @@ func buildNodeElem(urn string, node jgf.Node) nodeElem {
 		elem.Data = append(elem.Data, dataElem{Key: "mode", Value: mode})
 	}
 
-	if ports := jgf.PortsCSV(node.Metadata["ports"]); ports != "" {
+	if ports := jgf.JoinSlice(node.Metadata["ports"]); ports != "" {
 		elem.Data = append(elem.Data, dataElem{Key: "ports", Value: ports})
 	}
 

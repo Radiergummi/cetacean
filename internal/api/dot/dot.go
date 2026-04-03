@@ -89,7 +89,7 @@ func nodeStatement(urn string, node jgf.Node) string {
 		}
 	}
 
-	if csv := jgf.PortsCSV(node.Metadata["ports"]); csv != "" {
+	if csv := jgf.JoinSlice(node.Metadata["ports"]); csv != "" {
 		attrs = append(attrs, "ports="+dotQuote(csv))
 	}
 
