@@ -86,3 +86,27 @@ func SortedStackNames(stacks map[string][]string) []string {
 	sort.Strings(names)
 	return names
 }
+
+// NetworkNames extracts network name strings from an edge metadata "networks"
+// value. Handles both []string (from JSON round-trip) and []any containing
+// map[string]any with a "name" key (from direct construction).
+func NetworkNames(v any) []string {
+	switch networks := v.(type) {
+	case []string:
+		return networks
+	case []any:
+		names := make([]string, 0, len(networks))
+		for _, entry := range networks {
+			switch e := entry.(type) {
+			case string:
+				names = append(names, e)
+			case map[string]any:
+				if name, ok := e["name"].(string); ok && name != "" {
+					names = append(names, name)
+				}
+			}
+		}
+		return names
+	}
+	return nil
+}

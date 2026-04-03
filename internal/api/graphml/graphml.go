@@ -242,30 +242,6 @@ func extractPorts(v any) string {
 }
 
 // extractNetworks converts an edge networks metadata value to a comma-separated string.
-// Accepts []string, []any, or more complex network objects (uses Name field if available).
 func extractNetworks(v any) string {
-	if v == nil {
-		return ""
-	}
-
-	switch networks := v.(type) {
-	case []string:
-		return strings.Join(networks, ",")
-	case []any:
-		parts := make([]string, 0, len(networks))
-		for _, n := range networks {
-			switch entry := n.(type) {
-			case string:
-				parts = append(parts, entry)
-			case map[string]any:
-				if name, ok := entry["name"].(string); ok && name != "" {
-					parts = append(parts, name)
-				}
-			}
-		}
-
-		return strings.Join(parts, ",")
-	}
-
-	return ""
+	return strings.Join(jgf.NetworkNames(v), ",")
 }

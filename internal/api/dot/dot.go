@@ -110,26 +110,7 @@ func nodeStatement(urn string, node jgf.Node) string {
 
 // extractNetworkNames collects network names from edge metadata.
 func extractNetworkNames(meta jgf.Metadata) string {
-	names := make([]string, 0)
-
-	switch v := meta["networks"].(type) {
-	case []any:
-		for _, entry := range v {
-			m, ok := entry.(map[string]any)
-			if !ok {
-				continue
-			}
-
-			name, _ := m["name"].(string)
-			if name != "" {
-				names = append(names, name)
-			}
-		}
-	case []string:
-		names = v
-	}
-
-	return strings.Join(names, ", ")
+	return strings.Join(jgf.NetworkNames(meta["networks"]), ", ")
 }
 
 // dotQuote produces a DOT-safe quoted string. DOT strings are enclosed in

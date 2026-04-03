@@ -560,7 +560,12 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		case ContentTypeDOT:
 			h.HandleTopologyDOT(w, r)
 		default:
-			writeErrorCode(w, r, "API003", "this endpoint only supports application/vnd.jgf+json")
+			writeErrorCode(
+				w,
+				r,
+				"API003",
+				"this endpoint supports application/vnd.jgf+json, application/graphml+xml, and text/vnd.graphviz",
+			)
 		}
 	})
 	mux.HandleFunc(

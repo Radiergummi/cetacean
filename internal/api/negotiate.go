@@ -66,39 +66,8 @@ func negotiate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Vary", "Accept")
 
-		var ct ContentType
-		path := r.URL.Path
-
-		// Extension suffix takes priority over Accept header.
-		if strings.HasSuffix(path, ".json") {
-			ct = ContentTypeJSON
-			path = strings.TrimSuffix(path, ".json")
-			r.URL.Path = path
-		} else if strings.HasSuffix(path, ".html") {
-			ct = ContentTypeHTML
-			path = strings.TrimSuffix(path, ".html")
-			r.URL.Path = path
-		} else if strings.HasSuffix(path, ".atom") {
-			ct = ContentTypeAtom
-			path = strings.TrimSuffix(path, ".atom")
-			r.URL.Path = path
-		} else if strings.HasSuffix(path, ".feed") {
-			ct = ContentTypeJSONFeed
-			path = strings.TrimSuffix(path, ".feed")
-			r.URL.Path = path
-		} else if strings.HasSuffix(path, ".jgf") {
-			ct = ContentTypeJGF
-			path = strings.TrimSuffix(path, ".jgf")
-			r.URL.Path = path
-		} else if strings.HasSuffix(path, ".graphml") {
-			ct = ContentTypeGraphML
-			path = strings.TrimSuffix(path, ".graphml")
-			r.URL.Path = path
-		} else if strings.HasSuffix(path, ".dot") {
-			ct = ContentTypeDOT
-			path = strings.TrimSuffix(path, ".dot")
-			r.URL.Path = path
-		} else {
+		ct := resolveExtension(r)
+		if ct == ContentTypeUnsupported {
 			ct = parseAccept(r.Header.Get("Accept"))
 		}
 
@@ -129,6 +98,35 @@ var supportedTypes = []struct {
 	{"application", "vnd.jgf+json", ContentTypeJGF},
 	{"application", "graphml+xml", ContentTypeGraphML},
 	{"text", "vnd.graphviz", ContentTypeDOT},
+}
+
+// extensionTypes maps URL extension suffixes to content types.
+// Extension suffix takes priority over the Accept header.
+var extensionTypes = []struct {
+	ext string
+	ct  ContentType
+}{
+	{".json", ContentTypeJSON},
+	{".html", ContentTypeHTML},
+	{".atom", ContentTypeAtom},
+	{".feed", ContentTypeJSONFeed},
+	{".jgf", ContentTypeJGF},
+	{".graphml", ContentTypeGraphML},
+	{".dot", ContentTypeDOT},
+}
+
+// resolveExtension checks for a known extension suffix on the request path.
+// If found, it strips the suffix from r.URL.Path and returns the content type.
+// Returns ContentTypeUnsupported if no extension matches.
+func resolveExtension(r *http.Request) ContentType {
+	path := r.URL.Path
+	for _, ext := range extensionTypes {
+		if trimmed, ok := strings.CutSuffix(path, ext.ext); ok {
+			r.URL.Path = trimmed
+			return ext.ct
+		}
+	}
+	return ContentTypeUnsupported
 }
 
 // mediaRange is a parsed Accept header entry.
