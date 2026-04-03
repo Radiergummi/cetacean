@@ -155,9 +155,7 @@ describe("useSwarmQuery", () => {
   });
 
   it("SSE bumps total for unknown items", async () => {
-    const fetchFn = vi
-      .fn()
-      .mockResolvedValue(makeFetchResult([{ ID: "1", Name: "a" }], 5));
+    const fetchFn = vi.fn().mockResolvedValue(makeFetchResult([{ ID: "1", Name: "a" }], 5));
 
     const { result } = renderHook(
       () => useSwarmQuery(["services"], fetchFn, "service", ({ ID }: Item) => ID),

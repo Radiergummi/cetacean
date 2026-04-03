@@ -72,33 +72,28 @@ export function useSwarmQuery<T>(
         }
 
         if (event.action === "remove") {
-          queryClient.setQueryData(
-            [...queryKey],
-            (old: typeof query.data) => {
-              if (!old) {
-                return old;
-              }
+          queryClient.setQueryData([...queryKey], (old: typeof query.data) => {
+            if (!old) {
+              return old;
+            }
 
-              return {
-                ...old,
-                pages: old.pages.map((page) => {
-                  const filtered = page.items.filter(
-                    (item) => getIdRef.current(item) !== event.id,
-                  );
+            return {
+              ...old,
+              pages: old.pages.map((page) => {
+                const filtered = page.items.filter((item) => getIdRef.current(item) !== event.id);
 
-                  if (filtered.length === page.items.length) {
-                    return page;
-                  }
+                if (filtered.length === page.items.length) {
+                  return page;
+                }
 
-                  return {
-                    ...page,
-                    items: filtered,
-                    total: page.total - 1,
-                  };
-                }),
-              };
-            },
-          );
+                return {
+                  ...page,
+                  items: filtered,
+                  total: page.total - 1,
+                };
+              }),
+            };
+          });
         } else if (event.resource) {
           const resource = event.resource as T;
           let found = false;
@@ -113,42 +108,36 @@ export function useSwarmQuery<T>(
 
           if (found) {
             // Update in-place.
-            queryClient.setQueryData(
-              [...queryKey],
-              (old: typeof query.data) => {
-                if (!old) {
-                  return old;
-                }
+            queryClient.setQueryData([...queryKey], (old: typeof query.data) => {
+              if (!old) {
+                return old;
+              }
 
-                return {
-                  ...old,
-                  pages: old.pages.map((page) => ({
-                    ...page,
-                    items: page.items.map((item) =>
-                      getIdRef.current(item) === event.id ? resource : item,
-                    ),
-                  })),
-                };
-              },
-            );
+              return {
+                ...old,
+                pages: old.pages.map((page) => ({
+                  ...page,
+                  items: page.items.map((item) =>
+                    getIdRef.current(item) === event.id ? resource : item,
+                  ),
+                })),
+              };
+            });
           } else {
             // Unknown item: bump total on all pages so hasMore updates.
-            queryClient.setQueryData(
-              [...queryKey],
-              (old: typeof query.data) => {
-                if (!old) {
-                  return old;
-                }
+            queryClient.setQueryData([...queryKey], (old: typeof query.data) => {
+              if (!old) {
+                return old;
+              }
 
-                return {
-                  ...old,
-                  pages: old.pages.map((page) => ({
-                    ...page,
-                    total: page.total + 1,
-                  })),
-                };
-              },
-            );
+              return {
+                ...old,
+                pages: old.pages.map((page) => ({
+                  ...page,
+                  total: page.total + 1,
+                })),
+              };
+            });
           }
         } else {
           // Event without resource payload — invalidate.
