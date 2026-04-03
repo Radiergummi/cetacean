@@ -13,14 +13,23 @@ export default function PluginList() {
   const queryClientInstance = useQueryClient();
   const [installOpen, setInstallOpen] = useState(false);
 
-  const { data: pluginResult, error: queryError, isLoading, refetch } = useQuery({
+  const {
+    data: pluginResult,
+    error: queryError,
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ["plugins"],
     queryFn: () => api.plugins(),
   });
 
   const plugins = pluginResult?.data ?? null;
   const allowedMethods = pluginResult?.allowedMethods ?? emptyMethods;
-  const error = queryError ? (queryError instanceof Error ? queryError.message : "Failed to load plugins") : null;
+  const error = queryError
+    ? queryError instanceof Error
+      ? queryError.message
+      : "Failed to load plugins"
+    : null;
 
   if (error) {
     return (

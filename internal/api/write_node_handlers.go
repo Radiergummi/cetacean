@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -44,9 +43,7 @@ func (h *Handlers) HandleUpdateNodeAvailability(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	_, ok := h.cache.GetNode(id)
-	if !ok {
-		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
+	if _, ok := lookupOr404(w, r, "node", id, h.cache.GetNode); !ok {
 		return
 	}
 
@@ -82,9 +79,7 @@ func (h *Handlers) HandleUpdateNodeRole(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	_, ok := h.cache.GetNode(id)
-	if !ok {
-		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
+	if _, ok := lookupOr404(w, r, "node", id, h.cache.GetNode); !ok {
 		return
 	}
 
@@ -98,9 +93,7 @@ func (h *Handlers) HandleUpdateNodeRole(w http.ResponseWriter, r *http.Request) 
 func (h *Handlers) HandleRemoveNode(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	_, ok := h.cache.GetNode(id)
-	if !ok {
-		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
+	if _, ok := lookupOr404(w, r, "node", id, h.cache.GetNode); !ok {
 		return
 	}
 
@@ -124,9 +117,8 @@ func (h *Handlers) HandleRemoveNode(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleGetNodeRole(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	node, ok := h.cache.GetNode(id)
+	node, ok := lookupOr404(w, r, "node", id, h.cache.GetNode)
 	if !ok {
-		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
 	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", nodeResource(node)) {
@@ -150,9 +142,8 @@ func (h *Handlers) HandleGetNodeRole(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleGetNodeLabels(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	node, ok := h.cache.GetNode(id)
+	node, ok := lookupOr404(w, r, "node", id, h.cache.GetNode)
 	if !ok {
-		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
 	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", nodeResource(node)) {
@@ -176,9 +167,8 @@ func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request)
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	node, ok := h.cache.GetNode(id)
+	node, ok := lookupOr404(w, r, "node", id, h.cache.GetNode)
 	if !ok {
-		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
 
@@ -191,7 +181,7 @@ func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request)
 
 	result, err := h.nodeWriter.UpdateNodeLabels(r.Context(), id, updated)
 	if err != nil {
-		writeNodeError(w, r, err, id)
+		writeResourceError(w, r, err, "node", id, "NOD002")
 		return
 	}
 

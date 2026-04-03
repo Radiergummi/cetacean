@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -27,9 +26,8 @@ type removeStackResponse struct {
 func (h *Handlers) HandleRemoveStack(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 
-	stack, ok := h.cache.GetStack(name)
+	stack, ok := lookupOr404(w, r, "stack", name, h.cache.GetStack)
 	if !ok {
-		writeErrorCode(w, r, "STK001", fmt.Sprintf("stack %q not found", name))
 		return
 	}
 

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -11,9 +10,7 @@ import (
 func (h *Handlers) HandleRemoveTask(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	_, ok := h.cache.GetTask(id)
-	if !ok {
-		writeErrorCode(w, r, "TSK002", fmt.Sprintf("task %q not found", id))
+	if _, ok := lookupOr404(w, r, "task", id, h.cache.GetTask); !ok {
 		return
 	}
 
@@ -35,9 +32,7 @@ func (h *Handlers) HandleRemoveTask(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleRemoveNetwork(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	_, ok := h.cache.GetNetwork(id)
-	if !ok {
-		writeErrorCode(w, r, "NET002", fmt.Sprintf("network %q not found", id))
+	if _, ok := lookupOr404(w, r, "network", id, h.cache.GetNetwork); !ok {
 		return
 	}
 
@@ -59,9 +54,7 @@ func (h *Handlers) HandleRemoveNetwork(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleRemoveVolume(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 
-	_, ok := h.cache.GetVolume(name)
-	if !ok {
-		writeErrorCode(w, r, "VOL002", fmt.Sprintf("volume %q not found", name))
+	if _, ok := lookupOr404(w, r, "volume", name, h.cache.GetVolume); !ok {
 		return
 	}
 

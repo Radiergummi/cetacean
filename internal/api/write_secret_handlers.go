@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/base64"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -18,9 +17,7 @@ import (
 func (h *Handlers) HandleRemoveSecret(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	_, ok := h.cache.GetSecret(id)
-	if !ok {
-		writeErrorCode(w, r, "SEC002", fmt.Sprintf("secret %q not found", id))
+	if _, ok := lookupOr404(w, r, "secret", id, h.cache.GetSecret); !ok {
 		return
 	}
 
@@ -102,9 +99,8 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleGetSecretLabels(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	sec, ok := h.cache.GetSecret(id)
+	sec, ok := lookupOr404(w, r, "secret", id, h.cache.GetSecret)
 	if !ok {
-		writeErrorCode(w, r, "SEC002", fmt.Sprintf("secret %q not found", id))
 		return
 	}
 	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "secret:"+sec.Spec.Name) {
@@ -128,9 +124,8 @@ func (h *Handlers) HandlePatchSecretLabels(w http.ResponseWriter, r *http.Reques
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	sec, ok := h.cache.GetSecret(id)
+	sec, ok := lookupOr404(w, r, "secret", id, h.cache.GetSecret)
 	if !ok {
-		writeErrorCode(w, r, "SEC002", fmt.Sprintf("secret %q not found", id))
 		return
 	}
 
@@ -143,7 +138,7 @@ func (h *Handlers) HandlePatchSecretLabels(w http.ResponseWriter, r *http.Reques
 
 	result, err := h.secretWriter.UpdateSecretLabels(r.Context(), id, updated)
 	if err != nil {
-		writeSecretError(w, r, err, id)
+		writeResourceError(w, r, err, "secret", id, "SEC005")
 		return
 	}
 

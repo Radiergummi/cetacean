@@ -33,7 +33,11 @@ function StateOrb({ state }: { state: string }) {
 export default function SearchPage() {
   const [input, query, setInput] = useSearchParam("q");
 
-  const { data, isLoading: loading, error: queryError } = useQuery({
+  const {
+    data,
+    isLoading: loading,
+    error: queryError,
+  } = useQuery({
     queryKey: ["search", query],
     queryFn: ({ signal }) => api.search(query!, 0, signal),
     enabled: !!query,

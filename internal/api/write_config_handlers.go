@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/base64"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -18,9 +17,7 @@ import (
 func (h *Handlers) HandleRemoveConfig(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	_, ok := h.cache.GetConfig(id)
-	if !ok {
-		writeErrorCode(w, r, "CFG002", fmt.Sprintf("config %q not found", id))
+	if _, ok := lookupOr404(w, r, "config", id, h.cache.GetConfig); !ok {
 		return
 	}
 
@@ -101,9 +98,8 @@ func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleGetConfigLabels(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	cfg, ok := h.cache.GetConfig(id)
+	cfg, ok := lookupOr404(w, r, "config", id, h.cache.GetConfig)
 	if !ok {
-		writeErrorCode(w, r, "CFG002", fmt.Sprintf("config %q not found", id))
 		return
 	}
 	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "config:"+cfg.Spec.Name) {
@@ -127,9 +123,8 @@ func (h *Handlers) HandlePatchConfigLabels(w http.ResponseWriter, r *http.Reques
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	cfg, ok := h.cache.GetConfig(id)
+	cfg, ok := lookupOr404(w, r, "config", id, h.cache.GetConfig)
 	if !ok {
-		writeErrorCode(w, r, "CFG002", fmt.Sprintf("config %q not found", id))
 		return
 	}
 
@@ -142,7 +137,7 @@ func (h *Handlers) HandlePatchConfigLabels(w http.ResponseWriter, r *http.Reques
 
 	result, err := h.configWriter.UpdateConfigLabels(r.Context(), id, updated)
 	if err != nil {
-		writeConfigError(w, r, err, id)
+		writeResourceError(w, r, err, "config", id, "CFG005")
 		return
 	}
 

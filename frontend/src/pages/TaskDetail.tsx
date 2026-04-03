@@ -24,7 +24,11 @@ import {
 } from "../components/ui/alert-dialog";
 import { Button } from "../components/ui/button";
 import { useAsyncAction } from "../hooks/useAsyncAction";
-import { isCadvisorReady, isPrometheusReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import {
+  isCadvisorReady,
+  isPrometheusReady,
+  useMonitoringStatus,
+} from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";

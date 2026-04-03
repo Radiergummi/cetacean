@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -29,9 +28,8 @@ func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	svc, ok := h.cache.GetService(id)
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 	if svc.Spec.Mode.Replicated == nil {
@@ -124,9 +122,7 @@ func (h *Handlers) HandleUpdateServiceMode(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
@@ -162,9 +158,7 @@ func (h *Handlers) HandleUpdateServiceEndpointMode(w http.ResponseWriter, r *htt
 		return
 	}
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
@@ -189,9 +183,7 @@ func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
@@ -205,9 +197,8 @@ func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Reque
 func (h *Handlers) HandleRollbackService(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	svc, ok := h.cache.GetService(id)
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 	if svc.PreviousSpec == nil {
@@ -225,9 +216,7 @@ func (h *Handlers) HandleRollbackService(w http.ResponseWriter, r *http.Request)
 func (h *Handlers) HandleRemoveService(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
@@ -249,9 +238,7 @@ func (h *Handlers) HandleRemoveService(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleRestartService(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
@@ -298,9 +285,8 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	svc, ok := h.cache.GetService(id)
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -318,7 +304,7 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 
 	result, err := h.serviceSpec.UpdateServiceEnv(r.Context(), id, updated)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -356,9 +342,8 @@ func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Reque
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	svc, ok := h.cache.GetService(id)
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -371,7 +356,7 @@ func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Reque
 
 	result, err := h.serviceSpec.UpdateServiceLabels(r.Context(), id, updated)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -409,9 +394,8 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	svc, ok := h.cache.GetService(id)
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -428,7 +412,7 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 	slog.Info("updating service resources", "service", id)
 	updated, err := h.serviceSpec.UpdateServiceResources(r.Context(), id, &result)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 	writeMutationResponse(w, r, NewDetailResponse(
@@ -489,9 +473,7 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
@@ -507,7 +489,7 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 
 	updated, err := h.serviceSpec.UpdateServicePorts(r.Context(), id, patch.Ports)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -556,9 +538,7 @@ func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Re
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
@@ -572,7 +552,7 @@ func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Re
 
 	updated, err := h.serviceSpec.UpdateServiceHealthcheck(r.Context(), id, &hc)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -620,9 +600,7 @@ func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Requ
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
@@ -636,7 +614,7 @@ func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Requ
 
 	updated, err := h.serviceSpec.UpdateServicePlacement(r.Context(), id, &placement)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -682,9 +660,8 @@ func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	svc, ok := h.cache.GetService(id)
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -709,7 +686,7 @@ func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http
 
 	updated, err := h.serviceSpec.UpdateServiceUpdatePolicy(r.Context(), id, &result)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -753,9 +730,8 @@ func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *ht
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	svc, ok := h.cache.GetService(id)
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -780,7 +756,7 @@ func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *ht
 
 	updated, err := h.serviceSpec.UpdateServiceRollbackPolicy(r.Context(), id, &result)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -820,9 +796,8 @@ func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Re
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	svc, ok := h.cache.GetService(id)
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -847,7 +822,7 @@ func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Re
 
 	updated, err := h.serviceSpec.UpdateServiceLogDriver(r.Context(), id, &result)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -865,9 +840,8 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	svc, ok := h.cache.GetService(id)
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -893,7 +867,7 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 
 	updated, err := h.serviceSpec.UpdateServiceHealthcheck(r.Context(), id, &result)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -983,9 +957,8 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	svc, ok := h.cache.GetService(id)
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -1033,7 +1006,7 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 		},
 	)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -1118,9 +1091,7 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
@@ -1163,7 +1134,7 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 
 	updated, err := h.serviceAttachment.UpdateServiceConfigs(r.Context(), id, configs)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -1204,9 +1175,7 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
@@ -1249,7 +1218,7 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 
 	updated, err := h.serviceAttachment.UpdateServiceSecrets(r.Context(), id, secrets)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -1290,9 +1259,7 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
@@ -1320,7 +1287,7 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 
 	updated, err := h.serviceAttachment.UpdateServiceNetworks(r.Context(), id, networks)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -1370,9 +1337,7 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
@@ -1388,7 +1353,7 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 
 	updated, err := h.serviceAttachment.UpdateServiceMounts(r.Context(), id, req.Mounts)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 

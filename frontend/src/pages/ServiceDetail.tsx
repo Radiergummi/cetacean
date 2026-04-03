@@ -52,7 +52,11 @@ import { TraefikPanel } from "../components/service-detail/TraefikPanel";
 import { SizingBanner } from "../components/SizingBanner";
 import TasksTable from "../components/TasksTable";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
-import { isCadvisorReady, isPrometheusReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import {
+  isCadvisorReady,
+  isPrometheusReady,
+  useMonitoringStatus,
+} from "../hooks/useMonitoringStatus";
 import { useRecommendations } from "../hooks/useRecommendations";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";

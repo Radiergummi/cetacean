@@ -2,12 +2,10 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/docker/docker/api/types/swarm"
 
-	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/filter"
@@ -22,11 +20,8 @@ func (h *Handlers) lookupServiceACL(
 	w http.ResponseWriter,
 	r *http.Request,
 ) (swarm.Service, bool) {
-	id := r.PathValue("id")
-	svc, ok := h.cache.GetService(id)
-
+	svc, ok := lookupOr404(w, r, "service", r.PathValue("id"), h.cache.GetService)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return swarm.Service{}, false
 	}
 
@@ -44,46 +39,27 @@ type ServiceListItem struct {
 }
 
 func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
-	h.setAllowList(w, r, "service")
-	services := h.cache.ListServices()
-	services = acl.Filter(
-		h.acl,
-		auth.IdentityFromContext(r.Context()),
-		"read",
-		services,
-		func(s swarm.Service) string {
-			return "service:" + s.Spec.Name
-		},
-	)
-	services = searchFilter(
-		services,
-		r.URL.Query().Get("search"),
-		func(s swarm.Service) string { return s.Spec.Name },
-	)
-	var ok bool
-	if services, ok = exprFilter(
-		services,
-		r.URL.Query().Get("filter"),
-		filter.ServiceEnv,
-		w,
-		r,
-	); !ok {
-		return
-	}
-	p, err := parsePagination(r)
-	if err != nil {
-		writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
-		return
-	}
-	services = sortItems(services, p.Sort, p.Dir, map[string]func(swarm.Service) string{
-		"name": func(s swarm.Service) string { return s.Spec.Name },
-		"mode": func(s swarm.Service) string {
-			if s.Spec.Mode.Global != nil {
-				return "Global"
-			}
-			return "Replicated"
+	services, p, ok := prepareList(h, w, r, listSpec[swarm.Service]{
+		resourceType: "service",
+		linkTemplate: "/services/{id}",
+		list:         h.cache.ListServices,
+		aclResource:  func(s swarm.Service) string { return "service:" + s.Spec.Name },
+		searchName:   func(s swarm.Service) string { return s.Spec.Name },
+		filterEnv:    filter.ServiceEnv,
+		sortKeys: map[string]func(swarm.Service) string{
+			"name": func(s swarm.Service) string { return s.Spec.Name },
+			"mode": func(s swarm.Service) string {
+				if s.Spec.Mode.Global != nil {
+					return "Global"
+				}
+				return "Replicated"
+			},
 		},
 	})
+	if !ok {
+		return
+	}
+
 	paged := applyPagination(r.Context(), services, p)
 
 	items := make([]ServiceListItem, len(paged.Items))

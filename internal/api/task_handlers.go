@@ -2,12 +2,10 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/docker/docker/api/types/swarm"
 
-	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/filter"
@@ -60,31 +58,22 @@ func taskStateSortKey(state swarm.TaskState) string {
 }
 
 func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
-	h.setAllowList(w, r, "task")
-	tasks := h.cache.ListTasks()
-	tasks = acl.Filter(
-		h.acl,
-		auth.IdentityFromContext(r.Context()),
-		"read",
-		tasks,
-		func(t swarm.Task) string {
-			return "task:" + t.ID
+	tasks, p, ok := prepareList(h, w, r, listSpec[swarm.Task]{
+		resourceType: "task",
+		linkTemplate: "/tasks/{id}",
+		list:         h.cache.ListTasks,
+		aclResource:  func(t swarm.Task) string { return "task:" + t.ID },
+		filterEnv:    filter.TaskEnv,
+		sortKeys: map[string]func(swarm.Task) string{
+			"state":   func(t swarm.Task) string { return taskStateSortKey(t.Status.State) },
+			"service": func(t swarm.Task) string { return t.ServiceID },
+			"node":    func(t swarm.Task) string { return t.NodeID },
 		},
-	)
-	var ok bool
-	if tasks, ok = exprFilter(tasks, r.URL.Query().Get("filter"), filter.TaskEnv, w, r); !ok {
-		return
-	}
-	p, err := parsePagination(r)
-	if err != nil {
-		writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
-		return
-	}
-	tasks = sortItems(tasks, p.Sort, p.Dir, map[string]func(swarm.Task) string{
-		"state":   func(t swarm.Task) string { return taskStateSortKey(t.Status.State) },
-		"service": func(t swarm.Task) string { return t.ServiceID },
-		"node":    func(t swarm.Task) string { return t.NodeID },
 	})
+	if !ok {
+		return
+	}
+
 	paged := applyPagination(r.Context(), tasks, p)
 	writeLinkTemplate(w, r, "/tasks/{id}")
 	writeCollectionResponse(
@@ -99,9 +88,8 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	task, ok := h.cache.GetTask(id)
+	task, ok := lookupOr404(w, r, "task", id, h.cache.GetTask)
 	if !ok {
-		writeErrorCode(w, r, "TSK002", fmt.Sprintf("task %q not found", id))
 		return
 	}
 	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "task:"+id) {
@@ -119,9 +107,7 @@ func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleTaskLogs(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	_, ok := h.cache.GetTask(id)
-	if !ok {
-		writeErrorCode(w, r, "TSK002", fmt.Sprintf("task %q not found", id))
+	if _, ok := lookupOr404(w, r, "task", id, h.cache.GetTask); !ok {
 		return
 	}
 	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "task:"+id) {

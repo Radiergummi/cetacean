@@ -13,6 +13,24 @@ import (
 	json "github.com/goccy/go-json"
 )
 
+// lookupOr404 resolves a resource from the cache by key. Returns false (and
+// writes a 404 error response) if the resource is not found. The error code
+// is looked up from notFoundCodes by resource name.
+func lookupOr404[T any](
+	w http.ResponseWriter,
+	r *http.Request,
+	resource string,
+	key string,
+	getter func(string) (T, bool),
+) (T, bool) {
+	item, ok := getter(key)
+	if !ok {
+		code := notFoundCodes[resource]
+		writeErrorCode(w, r, code, fmt.Sprintf("%s %q not found", resource, key))
+	}
+	return item, ok
+}
+
 // writeDockerError handles Docker API errors that don't have a domain-specific
 // error code. Handlers should check for IsConflict/IsFailedPrecondition
 // themselves and call writeErrorCode with the appropriate code before falling
@@ -26,6 +44,7 @@ var notFoundCodes = map[string]string{
 	"config":  "CFG002",
 	"secret":  "SEC002",
 	"plugin":  "PLG004",
+	"stack":   "STK001",
 }
 
 func writeDockerError(
@@ -56,66 +75,52 @@ func writeDockerError(
 	writeErrorCode(w, r, "ENG004", "failed to update "+resource)
 }
 
-// writeServiceError handles Docker API errors for service mutations,
-// mapping version conflicts to SVC001.
-func writeServiceError(w http.ResponseWriter, r *http.Request, err error, id string) {
+// writeResourceError handles Docker API errors for resource mutations,
+// mapping version conflicts to the given conflictCode.
+func writeResourceError(
+	w http.ResponseWriter,
+	r *http.Request,
+	err error,
+	resource, id, conflictCode string,
+) {
 	if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
-		writeErrorCode(w, r, "SVC001", err.Error())
+		writeErrorCode(w, r, conflictCode, err.Error())
 		return
 	}
-	writeDockerError(w, r, err, "service", id)
+	writeDockerError(w, r, err, resource, id)
 }
 
-// writeNodeError handles Docker API errors for node mutations,
-// mapping version conflicts to NOD002.
-func writeNodeError(w http.ResponseWriter, r *http.Request, err error, id string) {
-	if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
-		writeErrorCode(w, r, "NOD002", err.Error())
+// writeMutation calls a writer function and writes the standard detail
+// response. It handles error mapping via writeResourceError and JSON-LD
+// wrapping via the resp callback.
+func writeMutation[T any](
+	w http.ResponseWriter,
+	r *http.Request,
+	resource, id, conflictCode string,
+	resp func(T) DetailResponse,
+	fn func() (T, error),
+) {
+	updated, err := fn()
+	if err != nil {
+		writeResourceError(w, r, err, resource, id, conflictCode)
 		return
 	}
-	writeDockerError(w, r, err, "node", id)
-}
-
-// writeConfigError handles Docker API errors for config mutations,
-// mapping version conflicts to CFG005.
-func writeConfigError(w http.ResponseWriter, r *http.Request, err error, id string) {
-	if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
-		writeErrorCode(w, r, "CFG005", err.Error())
-		return
-	}
-	writeDockerError(w, r, err, "config", id)
-}
-
-// writeSecretError handles Docker API errors for secret mutations,
-// mapping version conflicts to SEC005.
-func writeSecretError(w http.ResponseWriter, r *http.Request, err error, id string) {
-	if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
-		writeErrorCode(w, r, "SEC005", err.Error())
-		return
-	}
-	writeDockerError(w, r, err, "secret", id)
+	writeMutationResponse(w, r, resp(updated))
 }
 
 // writeServiceMutation calls a service writer function and writes the standard
-// service detail response. It handles error mapping and JSON-LD wrapping.
+// service detail response.
 func writeServiceMutation(
 	w http.ResponseWriter,
 	r *http.Request,
 	id string,
 	fn func() (swarm.Service, error),
 ) {
-	updated, err := fn()
-	if err != nil {
-		writeServiceError(w, r, err, id)
-		return
-	}
-	writeMutationResponse(
-		w,
-		r,
-		NewDetailResponse(r.Context(), "/services/"+id, "Service", ServiceResponse{
-			Service: updated,
-		}),
-	)
+	writeMutation(w, r, "service", id, "SVC001", func(svc swarm.Service) DetailResponse {
+		return NewDetailResponse(r.Context(), "/services/"+id, "Service", ServiceResponse{
+			Service: svc,
+		})
+	}, fn)
 }
 
 // writeNodeMutation calls a node writer function and writes the standard
@@ -126,14 +131,11 @@ func writeNodeMutation(
 	id string,
 	fn func() (swarm.Node, error),
 ) {
-	updated, err := fn()
-	if err != nil {
-		writeNodeError(w, r, err, id)
-		return
-	}
-	writeMutationResponse(w, r, NewDetailResponse(r.Context(), "/nodes/"+id, "Node", NodeResponse{
-		Node: updated,
-	}))
+	writeMutation(w, r, "node", id, "NOD002", func(node swarm.Node) DetailResponse {
+		return NewDetailResponse(r.Context(), "/nodes/"+id, "Node", NodeResponse{
+			Node: node,
+		})
+	}, fn)
 }
 
 // applyStructMergePatch reads a merge-patch body, applies it to current (any

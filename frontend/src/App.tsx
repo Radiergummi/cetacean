@@ -1,5 +1,3 @@
-import { QueryClientProvider } from "@tanstack/react-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import AtomFeedLink from "./components/AtomFeedLink";
 import ConnectionStatus from "./components/ConnectionStatus";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -17,6 +15,8 @@ import { useRecommendations } from "./hooks/useRecommendations";
 import { ConnectionProvider, sseEventTypes } from "./hooks/useResourceStream";
 import { apiPath, basePath } from "./lib/basePath";
 import { queryClient } from "./lib/queryClient";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { Keyboard, Lightbulb, Menu, X } from "lucide-react";
 import type React from "react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
@@ -285,126 +285,126 @@ export default function App() {
               toastOptions={{ duration: 8000 }}
             />
             <Layout>
-            <Suspense fallback={<LoadingDetail />}>
-              <Routes>
-                <Route
-                  path="/"
-                  element={<ClusterOverview />}
-                />
-                <Route
-                  path="/nodes"
-                  element={<NodeList />}
-                />
-                <Route
-                  path="/nodes/:id"
-                  element={<NodeDetail />}
-                />
-                <Route
-                  path="/stacks"
-                  element={<StackList />}
-                />
-                <Route
-                  path="/stacks/:name"
-                  element={<StackDetail />}
-                />
-                <Route
-                  path="/services"
-                  element={<ServiceList />}
-                />
-                <Route
-                  path="/services/:id"
-                  element={<ServiceDetail />}
-                />
-                <Route
-                  path="/services/:id/:subResource"
-                  element={<ServiceSubResource />}
-                />
-                <Route
-                  path="/tasks"
-                  element={<TaskList />}
-                />
-                <Route
-                  path="/tasks/:id"
-                  element={<TaskDetail />}
-                />
-                <Route
-                  path="/configs"
-                  element={<ConfigList />}
-                />
-                <Route
-                  path="/configs/:id"
-                  element={<ConfigDetail />}
-                />
-                <Route
-                  path="/secrets"
-                  element={<SecretList />}
-                />
-                <Route
-                  path="/secrets/:id"
-                  element={<SecretDetail />}
-                />
-                <Route
-                  path="/networks"
-                  element={<NetworkList />}
-                />
-                <Route
-                  path="/networks/:id"
-                  element={<NetworkDetail />}
-                />
-                <Route
-                  path="/volumes"
-                  element={<VolumeList />}
-                />
-                <Route
-                  path="/volumes/:name"
-                  element={<VolumeDetail />}
-                />
-                <Route
-                  path="/plugins"
-                  element={<PluginList />}
-                />
-                <Route
-                  path="/plugins/:name"
-                  element={<PluginDetail />}
-                />
-                <Route
-                  path="/swarm"
-                  element={<SwarmPage />}
-                />
-                <Route
-                  path="/metrics"
-                  element={<MetricsConsole />}
-                />
-                <Route
-                  path="/topology"
-                  element={<Topology />}
-                />
-                <Route
-                  path="/recommendations"
-                  element={<RecommendationsPage />}
-                />
-                <Route
-                  path="/search"
-                  element={<SearchPage />}
-                />
-                <Route
-                  path="/api/errors"
-                  element={<ErrorIndex />}
-                />
-                <Route
-                  path="/api/errors/:code"
-                  element={<ErrorCodeDetail />}
-                />
-                <Route
-                  path="/profile"
-                  element={<ProfilePage />}
-                />
-                <Route
-                  path="*"
-                  element={<NotFound />}
-                />
-              </Routes>
-            </Suspense>
+              <Suspense fallback={<LoadingDetail />}>
+                <Routes>
+                  <Route
+                    path="/"
+                    element={<ClusterOverview />}
+                  />
+                  <Route
+                    path="/nodes"
+                    element={<NodeList />}
+                  />
+                  <Route
+                    path="/nodes/:id"
+                    element={<NodeDetail />}
+                  />
+                  <Route
+                    path="/stacks"
+                    element={<StackList />}
+                  />
+                  <Route
+                    path="/stacks/:name"
+                    element={<StackDetail />}
+                  />
+                  <Route
+                    path="/services"
+                    element={<ServiceList />}
+                  />
+                  <Route
+                    path="/services/:id"
+                    element={<ServiceDetail />}
+                  />
+                  <Route
+                    path="/services/:id/:subResource"
+                    element={<ServiceSubResource />}
+                  />
+                  <Route
+                    path="/tasks"
+                    element={<TaskList />}
+                  />
+                  <Route
+                    path="/tasks/:id"
+                    element={<TaskDetail />}
+                  />
+                  <Route
+                    path="/configs"
+                    element={<ConfigList />}
+                  />
+                  <Route
+                    path="/configs/:id"
+                    element={<ConfigDetail />}
+                  />
+                  <Route
+                    path="/secrets"
+                    element={<SecretList />}
+                  />
+                  <Route
+                    path="/secrets/:id"
+                    element={<SecretDetail />}
+                  />
+                  <Route
+                    path="/networks"
+                    element={<NetworkList />}
+                  />
+                  <Route
+                    path="/networks/:id"
+                    element={<NetworkDetail />}
+                  />
+                  <Route
+                    path="/volumes"
+                    element={<VolumeList />}
+                  />
+                  <Route
+                    path="/volumes/:name"
+                    element={<VolumeDetail />}
+                  />
+                  <Route
+                    path="/plugins"
+                    element={<PluginList />}
+                  />
+                  <Route
+                    path="/plugins/:name"
+                    element={<PluginDetail />}
+                  />
+                  <Route
+                    path="/swarm"
+                    element={<SwarmPage />}
+                  />
+                  <Route
+                    path="/metrics"
+                    element={<MetricsConsole />}
+                  />
+                  <Route
+                    path="/topology"
+                    element={<Topology />}
+                  />
+                  <Route
+                    path="/recommendations"
+                    element={<RecommendationsPage />}
+                  />
+                  <Route
+                    path="/search"
+                    element={<SearchPage />}
+                  />
+                  <Route
+                    path="/api/errors"
+                    element={<ErrorIndex />}
+                  />
+                  <Route
+                    path="/api/errors/:code"
+                    element={<ErrorCodeDetail />}
+                  />
+                  <Route
+                    path="/profile"
+                    element={<ProfilePage />}
+                  />
+                  <Route
+                    path="*"
+                    element={<NotFound />}
+                  />
+                </Routes>
+              </Suspense>
             </Layout>
           </ConnectionTracker>
         </AuthProvider>

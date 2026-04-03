@@ -1,8 +1,7 @@
-import { api } from "../api/client";
-import { parseInstant, parseRange } from "../lib/prometheusParser";
 import { useInstanceResolver } from "./useInstanceResolver";
+import { useMetricsMap } from "./useMetricsMap";
 import { isPrometheusReady, useMonitoringStatus } from "./useMonitoringStatus";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 
 export interface NodeMetrics {
   cpu: number | null;
@@ -18,88 +17,50 @@ const emptyMetrics: NodeMetrics = {
   cpuHistory: [],
 };
 
+const cpuQuery = `100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)`;
+const memQuery = `(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100`;
+const diskQuery = `max by (instance) ((1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs"}) * 100)`;
+
+const spec = {
+  labelKey: "instance",
+  empty: (): NodeMetrics => ({ ...emptyMetrics, cpuHistory: [] }),
+  instant: [
+    {
+      query: cpuQuery,
+      assign: (m: NodeMetrics, v: number) => {
+        m.cpu = v;
+      },
+    },
+    {
+      query: memQuery,
+      assign: (m: NodeMetrics, v: number) => {
+        m.memory = v;
+      },
+    },
+    {
+      query: diskQuery,
+      assign: (m: NodeMetrics, v: number) => {
+        m.disk = v;
+      },
+    },
+  ],
+  range: [
+    {
+      query: cpuQuery,
+      assign: (m: NodeMetrics, v: number[]) => {
+        m.cpuHistory = v;
+      },
+    },
+  ],
+} as const;
+
 // Fetches per-instance metrics from Prometheus and maps them by instance label.
 // Nodes are matched to instances via useInstanceResolver (hostname-based).
 export function useNodeMetrics() {
   const monitoring = useMonitoringStatus();
   const hasPrometheus = isPrometheusReady(monitoring);
   const { resolve } = useInstanceResolver();
-  const [byInstance, setByInstance] = useState<Record<string, NodeMetrics>>({});
-
-  useEffect(() => {
-    if (!hasPrometheus) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const doFetch = () => {
-      const cpuQuery = `100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)`;
-      const memQuery = `(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100`;
-      const diskQuery = `max by (instance) ((1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs"}) * 100)`;
-      const now = Math.floor(Date.now() / 1000);
-      const start = now - 3600;
-      const step = 120;
-
-      Promise.all([
-        api.metricsQuery(cpuQuery).catch((error) => {
-          console.warn(error);
-          return null;
-        }),
-        api.metricsQuery(memQuery).catch((error) => {
-          console.warn(error);
-          return null;
-        }),
-        api.metricsQuery(diskQuery).catch((error) => {
-          console.warn(error);
-          return null;
-        }),
-        api.metricsQueryRange(cpuQuery, String(start), String(now), String(step)).catch((error) => {
-          console.warn(error);
-          return null;
-        }),
-      ])
-        .then(([cpuResponse, memResponse, diskResponse, cpuRangeResponse]) => {
-          if (cancelled) {
-            return;
-          }
-
-          const map: Record<string, NodeMetrics> = {};
-
-          const ensure = (instance: string) => {
-            if (!map[instance]) {
-              map[instance] = { ...emptyMetrics, cpuHistory: [] };
-            }
-
-            return map[instance];
-          };
-
-          parseInstant(cpuResponse, "instance")?.forEach(([instance, value]) => {
-            ensure(instance).cpu = value;
-          });
-          parseInstant(memResponse, "instance")?.forEach(([instance, value]) => {
-            ensure(instance).memory = value;
-          });
-          parseInstant(diskResponse, "instance")?.forEach(([instance, value]) => {
-            ensure(instance).disk = value;
-          });
-          parseRange(cpuRangeResponse, "instance")?.forEach(([instance, values]) => {
-            ensure(instance).cpuHistory = values;
-          });
-
-          setByInstance(map);
-        })
-        .catch(console.warn);
-    };
-
-    doFetch();
-    const interval = setInterval(doFetch, 30000);
-    return () => {
-      cancelled = true;
-
-      clearInterval(interval);
-    };
-  }, [hasPrometheus]);
+  const byInstance = useMetricsMap(spec, hasPrometheus);
 
   const instanceEntries = useMemo(() => Object.entries(byInstance), [byInstance]);
 

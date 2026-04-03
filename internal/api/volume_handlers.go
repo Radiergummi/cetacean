@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
@@ -17,9 +16,8 @@ import (
 
 func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	vol, ok := h.cache.GetVolume(name)
+	vol, ok := lookupOr404(w, r, "volume", name, h.cache.GetVolume)
 	if !ok {
-		writeErrorCode(w, r, "VOL002", fmt.Sprintf("volume %q not found", name))
 		return
 	}
 	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "volume:"+vol.Name) {
@@ -48,37 +46,17 @@ func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
-	h.setAllowList(w, r, "volume")
-	volumes := h.cache.ListVolumes()
-	volumes = acl.Filter(
-		h.acl,
-		auth.IdentityFromContext(r.Context()),
-		"read",
-		volumes,
-		func(v volume.Volume) string {
-			return "volume:" + v.Name
+	handleList(h, w, r, listSpec[volume.Volume]{
+		resourceType: "volume",
+		linkTemplate: "/volumes/{name}",
+		list:         h.cache.ListVolumes,
+		aclResource:  func(v volume.Volume) string { return "volume:" + v.Name },
+		searchName:   func(v volume.Volume) string { return v.Name },
+		filterEnv:    filter.VolumeEnv,
+		sortKeys: map[string]func(volume.Volume) string{
+			"name":   func(v volume.Volume) string { return v.Name },
+			"driver": func(v volume.Volume) string { return v.Driver },
+			"scope":  func(v volume.Volume) string { return v.Scope },
 		},
-	)
-	volumes = searchFilter(
-		volumes,
-		r.URL.Query().Get("search"),
-		func(v volume.Volume) string { return v.Name },
-	)
-	var ok bool
-	if volumes, ok = exprFilter(volumes, r.URL.Query().Get("filter"), filter.VolumeEnv, w, r); !ok {
-		return
-	}
-	p, err := parsePagination(r)
-	if err != nil {
-		writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
-		return
-	}
-	volumes = sortItems(volumes, p.Sort, p.Dir, map[string]func(volume.Volume) string{
-		"name":   func(v volume.Volume) string { return v.Name },
-		"driver": func(v volume.Volume) string { return v.Driver },
-		"scope":  func(v volume.Volume) string { return v.Scope },
 	})
-	resp := applyPagination(r.Context(), volumes, p)
-	writeLinkTemplate(w, r, "/volumes/{name}")
-	writeCollectionResponse(w, r, resp, p)
 }

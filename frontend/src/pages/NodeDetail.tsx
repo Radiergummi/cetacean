@@ -22,7 +22,11 @@ import PageHeader from "../components/PageHeader";
 import TasksTable from "../components/TasksTable";
 import { useGaugeValue } from "../hooks/useGaugeValue";
 import { useInstanceResolver } from "../hooks/useInstanceResolver";
-import { isCadvisorReady, isPrometheusReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import {
+  isCadvisorReady,
+  isPrometheusReady,
+  useMonitoringStatus,
+} from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { formatBytes, formatNumber } from "../lib/format";
