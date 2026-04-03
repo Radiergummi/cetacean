@@ -159,7 +159,10 @@ func Render(g jgf.Graph) ([]byte, error) {
 			Target: e.Target,
 		}
 
-		if networks := extractNetworks(e.Metadata["networks"]); networks != "" {
+		if networks := strings.Join(
+			jgf.NetworkNames(e.Metadata["networks"]),
+			", ",
+		); networks != "" {
 			elem.Data = append(elem.Data, dataElem{Key: "networks", Value: networks})
 		}
 
@@ -206,7 +209,7 @@ func buildNodeElem(urn string, node jgf.Node) nodeElem {
 		elem.Data = append(elem.Data, dataElem{Key: "mode", Value: mode})
 	}
 
-	if ports := extractPorts(node.Metadata["ports"]); ports != "" {
+	if ports := jgf.PortsCSV(node.Metadata["ports"]); ports != "" {
 		elem.Data = append(elem.Data, dataElem{Key: "ports", Value: ports})
 	}
 
@@ -215,33 +218,4 @@ func buildNodeElem(urn string, node jgf.Node) nodeElem {
 	}
 
 	return elem
-}
-
-// extractPorts converts a ports metadata value to a comma-separated string.
-// Accepts []string or []any (after JSON round-trip).
-func extractPorts(v any) string {
-	if v == nil {
-		return ""
-	}
-
-	switch ports := v.(type) {
-	case []string:
-		return strings.Join(ports, ",")
-	case []any:
-		parts := make([]string, 0, len(ports))
-		for _, p := range ports {
-			if s, ok := p.(string); ok {
-				parts = append(parts, s)
-			}
-		}
-
-		return strings.Join(parts, ",")
-	}
-
-	return ""
-}
-
-// extractNetworks converts an edge networks metadata value to a comma-separated string.
-func extractNetworks(v any) string {
-	return strings.Join(jgf.NetworkNames(v), ",")
 }

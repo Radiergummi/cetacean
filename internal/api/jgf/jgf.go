@@ -1,7 +1,11 @@
 // Package jgf defines types for the JSON Graph Format (https://jsongraphformat.info/).
 package jgf
 
-import "sort"
+import (
+	"fmt"
+	"sort"
+	"strings"
+)
 
 // Document is a multi-graph JGF document.
 type Document struct {
@@ -85,6 +89,23 @@ func SortedStackNames(stacks map[string][]string) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// PortsCSV extracts a port list from node metadata and returns it as a
+// comma-separated string. Handles both []string (direct construction) and
+// []any (from JSON round-trip).
+func PortsCSV(v any) string {
+	switch ports := v.(type) {
+	case []string:
+		return strings.Join(ports, ", ")
+	case []any:
+		strs := make([]string, 0, len(ports))
+		for _, p := range ports {
+			strs = append(strs, fmt.Sprintf("%v", p))
+		}
+		return strings.Join(strs, ", ")
+	}
+	return ""
 }
 
 // NetworkNames extracts network name strings from an edge metadata "networks"

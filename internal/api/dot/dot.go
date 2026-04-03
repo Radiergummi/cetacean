@@ -59,7 +59,7 @@ func Render(g jgf.Graph) ([]byte, error) {
 
 	// Emit edges.
 	for _, edge := range g.Edges {
-		edgeLabel := extractNetworkNames(edge.Metadata)
+		edgeLabel := strings.Join(jgf.NetworkNames(edge.Metadata["networks"]), ", ")
 		if edgeLabel != "" {
 			fmt.Fprintf(&b, "\t%s -- %s [label=%s];\n",
 				dotQuote(edge.Source), dotQuote(edge.Target), dotQuote(edgeLabel))
@@ -89,28 +89,11 @@ func nodeStatement(urn string, node jgf.Node) string {
 		}
 	}
 
-	switch ports := node.Metadata["ports"].(type) {
-	case []string:
-		if len(ports) > 0 {
-			attrs = append(attrs, "ports="+dotQuote(strings.Join(ports, ",")))
-		}
-	case []any:
-		if len(ports) > 0 {
-			strs := make([]string, len(ports))
-			for i, p := range ports {
-				strs[i] = fmt.Sprintf("%v", p)
-			}
-
-			attrs = append(attrs, "ports="+dotQuote(strings.Join(strs, ",")))
-		}
+	if csv := jgf.PortsCSV(node.Metadata["ports"]); csv != "" {
+		attrs = append(attrs, "ports="+dotQuote(csv))
 	}
 
 	return fmt.Sprintf("%s [%s]", dotQuote(urn), strings.Join(attrs, " "))
-}
-
-// extractNetworkNames collects network names from edge metadata.
-func extractNetworkNames(meta jgf.Metadata) string {
-	return strings.Join(jgf.NetworkNames(meta["networks"]), ", ")
 }
 
 // dotQuote produces a DOT-safe quoted string. DOT strings are enclosed in

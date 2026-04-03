@@ -173,7 +173,7 @@ func TestRender_ServiceWithPorts(t *testing.T) {
 	s := string(out)
 
 	// Ports should be comma-separated in a single data element
-	if !strings.Contains(s, `<data key="ports">80:80/tcp,443:443/tcp</data>`) {
+	if !strings.Contains(s, `<data key="ports">80:80/tcp, 443:443/tcp</data>`) {
 		t.Errorf("expected comma-separated ports in data element, got:\n%s", s)
 	}
 }

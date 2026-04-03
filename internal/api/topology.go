@@ -346,18 +346,8 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	etag := computeETag(body)
-	w.Header().Set("ETag", etag)
 	w.Header().Set("Content-Type", "application/vnd.jgf+json")
-	w.Header().Set("Cache-Control", "no-cache")
-
-	if etagMatch(r.Header.Get("If-None-Match"), etag) {
-		w.WriteHeader(http.StatusNotModified)
-		return
-	}
-
-	w.Write(body)         //nolint:errcheck
-	w.Write([]byte{'\n'}) //nolint:errcheck
+	writeRawWithETag(w, r, body)
 }
 
 // buildACLFilteredNetworkGraph builds the network JGF graph for the requesting
