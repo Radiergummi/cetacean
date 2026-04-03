@@ -13,51 +13,20 @@ import (
 func Render(g jgf.Graph) ([]byte, error) {
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "graph %s {\n", dotQuote(g.Label))
-
-	// Collect nodes that belong to a stack hyperedge.
-	stackNodes := make(map[string]string) // nodeURN → stackName
-
-	// Sort stacks by name for deterministic output.
-	type stackEntry struct {
-		name  string
-		nodes []string
+	fmt.Fprintf(&b, "graph %s {\n", dotQuote(g.ID))
+	if g.Label != "" {
+		fmt.Fprintf(&b, "\tlabel=%s;\n", dotQuote(g.Label))
 	}
 
-	var stacks []stackEntry
-
-	for _, he := range g.Hyperedges {
-		kind, _ := he.Metadata["kind"].(string)
-		if kind != "stack" {
-			continue
-		}
-
-		name, _ := he.Metadata["name"].(string)
-		if name == "" {
-			continue
-		}
-
-		members := make([]string, len(he.Nodes))
-		copy(members, he.Nodes)
-		sort.Strings(members)
-
-		stacks = append(stacks, stackEntry{name: name, nodes: members})
-
-		for _, urn := range he.Nodes {
-			stackNodes[urn] = name
-		}
-	}
-
-	sort.Slice(stacks, func(i, j int) bool {
-		return stacks[i].name < stacks[j].name
-	})
+	// Extract stack membership from hyperedges.
+	stackGroups, stackMembership := jgf.StackGroups(g.Hyperedges)
 
 	// Emit stack subgraphs.
-	for _, stack := range stacks {
-		fmt.Fprintf(&b, "\tsubgraph %s {\n", dotQuote("cluster_"+stack.name))
-		fmt.Fprintf(&b, "\t\tlabel=%s;\n", dotQuote(stack.name))
+	for _, stackName := range jgf.SortedStackNames(stackGroups) {
+		fmt.Fprintf(&b, "\tsubgraph %s {\n", dotQuote("cluster_"+stackName))
+		fmt.Fprintf(&b, "\t\tlabel=%s;\n", dotQuote(stackName))
 
-		for _, urn := range stack.nodes {
+		for _, urn := range stackGroups[stackName] {
 			node, ok := g.Nodes[urn]
 			if !ok {
 				continue
@@ -73,7 +42,7 @@ func Render(g jgf.Graph) ([]byte, error) {
 	var topLevel []string
 
 	for urn := range g.Nodes {
-		if _, inStack := stackNodes[urn]; !inStack {
+		if _, inStack := stackMembership[urn]; !inStack {
 			topLevel = append(topLevel, urn)
 		}
 	}

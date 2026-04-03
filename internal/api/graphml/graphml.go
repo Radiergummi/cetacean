@@ -99,38 +99,14 @@ func Render(g jgf.Graph) ([]byte, error) {
 	}
 
 	if g.Label != "" {
-		doc.Graph.Data = append(doc.Graph.Data, dataElem{Key: "label", Value: g.Label})
+		doc.Graph.Data = append(doc.Graph.Data, dataElem{Key: "graph-label", Value: g.Label})
 	}
 
-	// Build stack membership from hyperedges where kind=stack.
-	stackNodes := make(map[string][]string) // stackName → []nodeURN
-	for _, he := range g.Hyperedges {
-		if kind, _ := he.Metadata["kind"].(string); kind == "stack" {
-			name, _ := he.Metadata["name"].(string)
-			if name != "" {
-				stackNodes[name] = he.Nodes
-			}
-		}
-	}
+	// Extract stack membership from hyperedges.
+	stackNodes, nodeStack := jgf.StackGroups(g.Hyperedges)
 
-	// Build reverse map: nodeURN → stackName for placement lookup.
-	nodeStack := make(map[string]string)
-	for stackName, urns := range stackNodes {
-		for _, urn := range urns {
-			nodeStack[urn] = stackName
-		}
-	}
-
-	// Build stack subgraphs in sorted order.
-	stackNames := make([]string, 0, len(stackNodes))
-	for name := range stackNodes {
-		stackNames = append(stackNames, name)
-	}
-	sort.Strings(stackNames)
-
-	for _, stackName := range stackNames {
+	for _, stackName := range jgf.SortedStackNames(stackNodes) {
 		members := stackNodes[stackName]
-		sort.Strings(members)
 
 		sg := subgraph{
 			ID:   "stack:" + stackName,

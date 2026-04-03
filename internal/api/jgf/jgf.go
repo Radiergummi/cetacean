@@ -1,6 +1,8 @@
 // Package jgf defines types for the JSON Graph Format (https://jsongraphformat.info/).
 package jgf
 
+import "sort"
+
 // Document is a multi-graph JGF document.
 type Document struct {
 	Graphs []Graph `json:"graphs"`
@@ -43,4 +45,44 @@ type Metadata map[string]any
 // URN returns a cetacean URN for the given entity type and ID.
 func URN(typ, id string) string {
 	return "urn:cetacean:" + typ + ":" + id
+}
+
+// StackGroups extracts stack membership from hyperedges with kind=stack.
+// Returns a map of stack name → sorted member URNs, and a reverse map of
+// member URN → stack name. Stack names are sorted for deterministic iteration.
+func StackGroups(
+	hyperedges []Hyperedge,
+) (stacks map[string][]string, membership map[string]string) {
+	membership = make(map[string]string)
+	stackMap := make(map[string][]string)
+
+	for _, he := range hyperedges {
+		kind, _ := he.Metadata["kind"].(string)
+		name, _ := he.Metadata["name"].(string)
+		if kind != "stack" || name == "" {
+			continue
+		}
+		for _, urn := range he.Nodes {
+			membership[urn] = name
+			stackMap[name] = append(stackMap[name], urn)
+		}
+	}
+
+	// Sort members within each stack.
+	for _, members := range stackMap {
+		sort.Strings(members)
+	}
+
+	stacks = stackMap
+	return
+}
+
+// SortedStackNames returns the stack names from a StackGroups result in sorted order.
+func SortedStackNames(stacks map[string][]string) []string {
+	names := make([]string, 0, len(stacks))
+	for name := range stacks {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
