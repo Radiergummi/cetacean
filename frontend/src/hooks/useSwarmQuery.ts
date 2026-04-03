@@ -2,6 +2,7 @@ import { emptyMethods, setsEqual } from "../api/client";
 import type { FetchResult } from "../api/client";
 import type { CollectionResponse } from "../api/types";
 import { useResourceStream } from "./useResourceStream";
+import type { InfiniteData } from "@tanstack/react-query";
 import { keepPreviousData, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
 
@@ -16,6 +17,9 @@ const ssePathMap: Record<string, string> = {
   stack: "/stacks",
 };
 
+type PageData<T> = CollectionResponse<T>;
+type InfinitePages<T> = InfiniteData<PageData<T>, number>;
+
 export function useSwarmQuery<T>(
   queryKey: readonly unknown[],
   fetchFn: (offset: number, signal: AbortSignal) => Promise<FetchResult<CollectionResponse<T>>>,
@@ -25,6 +29,8 @@ export function useSwarmQuery<T>(
   const queryClient = useQueryClient();
   const getIdRef = useRef(getId);
   getIdRef.current = getId;
+  const queryKeyRef = useRef(queryKey);
+  queryKeyRef.current = queryKey;
   const [allowedMethods, setAllowedMethods] = useState<Set<string>>(emptyMethods);
 
   const query = useInfiniteQuery({
@@ -32,7 +38,6 @@ export function useSwarmQuery<T>(
     queryFn: async ({ pageParam, signal }) => {
       const result = await fetchFn(pageParam, signal);
 
-      // Update allowedMethods from the latest response.
       setAllowedMethods((previous) =>
         setsEqual(previous, result.allowedMethods) ? previous : result.allowedMethods,
       );
@@ -42,37 +47,43 @@ export function useSwarmQuery<T>(
     placeholderData: keepPreviousData,
     initialPageParam: 0,
     getNextPageParam: (lastPage) => {
+      if (!lastPage.items.length) {
+        return undefined;
+      }
+
       const nextOffset = lastPage.offset + lastPage.items.length;
+
       return nextOffset < lastPage.total ? nextOffset : undefined;
     },
   });
 
-  // Flat data array from all pages.
   const data = query.data?.pages.flatMap((page) => page.items) ?? [];
 
-  // Total from the most recent page (freshest server value).
   const lastPage = query.data?.pages[query.data.pages.length - 1];
   const total = lastPage?.total ?? 0;
 
-  // SSE optimistic cache mutations.
   const ssePath = ssePathMap[sseType] ?? `/events?types=${sseType}`;
 
   useResourceStream(
     ssePath,
     useCallback(
       (event) => {
+        const key = [...queryKeyRef.current];
+
         if (event.type === "sync") {
-          queryClient.invalidateQueries({ queryKey: [...queryKey] });
+          queryClient.invalidateQueries({ queryKey: key });
+
           return;
         }
 
-        const currentPages = query.data?.pages;
-        if (!currentPages) {
+        const currentData = queryClient.getQueryData<InfinitePages<T>>(key);
+
+        if (!currentData?.pages) {
           return;
         }
 
         if (event.action === "remove") {
-          queryClient.setQueryData([...queryKey], (old: typeof query.data) => {
+          queryClient.setQueryData<InfinitePages<T>>(key, (old) => {
             if (!old) {
               return old;
             }
@@ -80,7 +91,9 @@ export function useSwarmQuery<T>(
             return {
               ...old,
               pages: old.pages.map((page) => {
-                const filtered = page.items.filter((item) => getIdRef.current(item) !== event.id);
+                const filtered = page.items.filter(
+                  (item) => getIdRef.current(item) !== event.id,
+                );
 
                 if (filtered.length === page.items.length) {
                   return page;
@@ -98,8 +111,7 @@ export function useSwarmQuery<T>(
           const resource = event.resource as T;
           let found = false;
 
-          // Check if item exists in any loaded page.
-          for (const page of currentPages) {
+          for (const page of currentData.pages) {
             if (page.items.some((item) => getIdRef.current(item) === event.id)) {
               found = true;
               break;
@@ -107,8 +119,7 @@ export function useSwarmQuery<T>(
           }
 
           if (found) {
-            // Update in-place.
-            queryClient.setQueryData([...queryKey], (old: typeof query.data) => {
+            queryClient.setQueryData<InfinitePages<T>>(key, (old) => {
               if (!old) {
                 return old;
               }
@@ -124,8 +135,7 @@ export function useSwarmQuery<T>(
               };
             });
           } else {
-            // Unknown item: bump total on all pages so hasMore updates.
-            queryClient.setQueryData([...queryKey], (old: typeof query.data) => {
+            queryClient.setQueryData<InfinitePages<T>>(key, (old) => {
               if (!old) {
                 return old;
               }
@@ -140,12 +150,10 @@ export function useSwarmQuery<T>(
             });
           }
         } else {
-          // Event without resource payload — invalidate.
-          queryClient.invalidateQueries({ queryKey: [...queryKey] });
+          queryClient.invalidateQueries({ queryKey: key });
         }
       },
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      [queryClient, query.data?.pages],
+      [queryClient],
     ),
   );
 
