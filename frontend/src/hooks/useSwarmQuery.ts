@@ -47,10 +47,6 @@ export function useSwarmQuery<T>(
     placeholderData: keepPreviousData,
     initialPageParam: 0,
     getNextPageParam: (lastPage) => {
-      if (!lastPage.items.length) {
-        return undefined;
-      }
-
       const nextOffset = lastPage.offset + lastPage.items.length;
 
       return nextOffset < lastPage.total ? nextOffset : undefined;
@@ -88,23 +84,29 @@ export function useSwarmQuery<T>(
               return old;
             }
 
+            let removed = false;
+            const pages = old.pages.map((page) => {
+              const filtered = page.items.filter(
+                (item) => getIdRef.current(item) !== event.id,
+              );
+
+              if (filtered.length < page.items.length) {
+                removed = true;
+                return { ...page, items: filtered };
+              }
+
+              return page;
+            });
+
+            if (!removed) {
+              return old;
+            }
+
+            // Decrement total on ALL pages so getNextPageParam
+            // and the displayed count stay consistent.
             return {
               ...old,
-              pages: old.pages.map((page) => {
-                const filtered = page.items.filter(
-                  (item) => getIdRef.current(item) !== event.id,
-                );
-
-                if (filtered.length === page.items.length) {
-                  return page;
-                }
-
-                return {
-                  ...page,
-                  items: filtered,
-                  total: page.total - 1,
-                };
-              }),
+              pages: pages.map((page) => ({ ...page, total: page.total - 1 })),
             };
           });
         } else if (event.resource) {
@@ -166,7 +168,7 @@ export function useSwarmQuery<T>(
     if (!query.isFetchingNextPage && query.hasNextPage) {
       query.fetchNextPage();
     }
-  }, [query]);
+  }, [query.isFetchingNextPage, query.hasNextPage, query.fetchNextPage]);
 
   const retry = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: [...queryKey] });
