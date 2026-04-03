@@ -1,5 +1,5 @@
-import { _resetMonitoringStatusCache } from "../hooks/useMonitoringStatus";
 import ClusterOverview from "./ClusterOverview";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
@@ -55,8 +55,12 @@ vi.mock("../components/ActivityFeed", () => ({
 import { api } from "../api/client";
 const mockCluster = vi.mocked(api.cluster);
 
+let testQueryClient: QueryClient;
+
 beforeEach(() => {
-  _resetMonitoringStatusCache();
+  testQueryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
   vi.stubGlobal("EventSource", MockEventSource);
   mockCluster.mockReset();
 });
@@ -67,9 +71,11 @@ afterEach(() => {
 
 function wrapper({ children }: { children: ReactNode }) {
   return (
-    <MemoryRouter>
-      <>{children}</>
-    </MemoryRouter>
+    <QueryClientProvider client={testQueryClient}>
+      <MemoryRouter>
+        <>{children}</>
+      </MemoryRouter>
+    </QueryClientProvider>
   );
 }
 

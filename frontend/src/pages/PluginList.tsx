@@ -1,47 +1,37 @@
 import { api, emptyMethods } from "../api/client";
-import type { Plugin } from "../api/types";
 import FetchError from "../components/FetchError";
 import InstallPluginDialog from "../components/InstallPluginDialog";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import PluginTable from "../components/PluginTable";
 import { Button } from "../components/ui/button";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 
 export default function PluginList() {
-  const [plugins, setPlugins] = useState<Plugin[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const queryClientInstance = useQueryClient();
   const [installOpen, setInstallOpen] = useState(false);
-  const [allowedMethods, setAllowedMethods] = useState(emptyMethods);
 
-  const fetchPlugins = useCallback(() => {
-    setError(null);
-    api
-      .plugins()
-      .then(({ data: pluginsData, allowedMethods: methods }) => {
-        setPlugins(pluginsData);
-        setAllowedMethods(methods);
-      })
-      .catch((thrown) => {
-        setError(thrown instanceof Error ? thrown.message : "Failed to load plugins");
-      });
-  }, []);
+  const { data: pluginResult, error: queryError, isLoading, refetch } = useQuery({
+    queryKey: ["plugins"],
+    queryFn: () => api.plugins(),
+  });
 
-  useEffect(() => {
-    fetchPlugins();
-  }, [fetchPlugins]);
+  const plugins = pluginResult?.data ?? null;
+  const allowedMethods = pluginResult?.allowedMethods ?? emptyMethods;
+  const error = queryError ? (queryError instanceof Error ? queryError.message : "Failed to load plugins") : null;
 
   if (error) {
     return (
       <FetchError
         message={error}
-        onRetry={fetchPlugins}
+        onRetry={() => refetch()}
       />
     );
   }
 
-  if (!plugins) {
+  if (isLoading || !plugins) {
     return <LoadingDetail />;
   }
 
@@ -69,7 +59,7 @@ export default function PluginList() {
       <InstallPluginDialog
         open={installOpen}
         onOpenChange={setInstallOpen}
-        onInstalled={fetchPlugins}
+        onInstalled={() => queryClientInstance.invalidateQueries({ queryKey: ["plugins"] })}
       />
     </div>
   );
