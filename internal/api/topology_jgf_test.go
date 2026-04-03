@@ -85,7 +85,17 @@ func TestBuildNetworkJGF(t *testing.T) {
 		t.Fatalf("edges=%d, want 1", len(g.Edges))
 	}
 
-	edge := g.Edges[0]
+	// Round-trip through JSON to test the actual wire format.
+	edgeBytes, err := json.Marshal(g.Edges[0])
+	if err != nil {
+		t.Fatalf("marshal edge: %v", err)
+	}
+
+	var edge jgf.Edge
+	if err := json.Unmarshal(edgeBytes, &edge); err != nil {
+		t.Fatalf("unmarshal edge: %v", err)
+	}
+
 	if edge.Source >= edge.Target {
 		t.Errorf("edge source %q should be < target %q", edge.Source, edge.Target)
 	}

@@ -66,22 +66,12 @@ export function networkGraphToReactFlow(graph: JGFGraph): { nodes: Node[]; edges
     stackColorMap.set(stack, hashColor(stack));
   }
 
-  // Normalize edge directions: smaller ID is always source
-  const normalizedEdges = (graph.edges ?? []).map((edge) =>
-    edge.source <= edge.target
-      ? edge
-      : {
-          ...edge,
-          source: edge.target,
-          target: edge.source,
-        },
-  );
-
-  // Build connected service set
+  // Build connected service set (backend guarantees canonical edge direction)
+  const graphEdges = graph.edges ?? [];
   const connectedSources = new Set<string>();
   const connectedTargets = new Set<string>();
 
-  for (const { source, target } of normalizedEdges) {
+  for (const { source, target } of graphEdges) {
     connectedSources.add(source);
     connectedTargets.add(target);
   }
@@ -133,24 +123,18 @@ export function networkGraphToReactFlow(graph: JGFGraph): { nodes: Node[]; edges
     nodes.push(node);
   }
 
-  // Deduplicate normalized edges: merge edges sharing the same source-target pair
-  const edgeMap = new Map<
-    string,
-    {
-      source: string;
-      target: string;
-      networks: {
-        id: string;
-        name: string;
-        driver: string;
-        scope: string;
-        aliases?: Record<string, string[]>;
-      }[];
-    }
-  >();
-
-  for (const edge of normalizedEdges) {
-    const key = `${edge.source}:${edge.target}`;
+  // Create ReactFlow edges (backend guarantees one canonical edge per service pair)
+  for (const edge of [...graphEdges].sort((a, b) =>
+    a.source < b.source
+      ? -1
+      : a.source > b.source
+        ? 1
+        : a.target < b.target
+          ? -1
+          : a.target > b.target
+            ? 1
+            : 0,
+  )) {
     const edgeNetworks = (edge.metadata.networks ?? []) as {
       id: string;
       name: string;
@@ -158,36 +142,10 @@ export function networkGraphToReactFlow(graph: JGFGraph): { nodes: Node[]; edges
       scope: string;
       aliases?: Record<string, string[]>;
     }[];
-    const existing = edgeMap.get(key);
 
-    if (existing) {
-      for (const net of edgeNetworks) {
-        if (!existing.networks.some(({ id }) => id === net.id)) {
-          existing.networks.push(net);
-        }
-      }
-    } else {
-      edgeMap.set(key, {
-        source: edge.source,
-        target: edge.target,
-        networks: [...edgeNetworks],
-      });
-    }
-  }
-
-  // Create one edge per unique source-target pair
-  const sortedEdgeKeys = [...edgeMap.keys()].sort();
-
-  for (const key of sortedEdgeKeys) {
-    const edge = edgeMap.get(key)!;
-    const networks = edge.networks
+    const networks = edgeNetworks
       .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-      .map((net) => ({
-        id: net.id,
-        name: net.name,
-        driver: net.driver,
-        scope: net.scope,
-      }));
+      .map(({ id, name, driver, scope }) => ({ id, name, driver, scope }));
 
     // Collect non-default aliases per endpoint
     const sourceAliases: string[] = [];
@@ -195,7 +153,7 @@ export function networkGraphToReactFlow(graph: JGFGraph): { nodes: Node[]; edges
     const sourceName = graph.nodes[edge.source]?.label;
     const targetName = graph.nodes[edge.target]?.label;
 
-    for (const net of edge.networks) {
+    for (const net of edgeNetworks) {
       if (net.aliases) {
         for (const alias of net.aliases[edge.source] ?? []) {
           if (alias !== sourceName && !sourceAliases.includes(alias)) {
