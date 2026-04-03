@@ -1,7 +1,8 @@
-import { api, type ClusterMetrics, type ClusterSnapshot } from "../../api/client";
+import { api, type ClusterSnapshot } from "../../api/client";
 import { formatBytes, formatNumber, formatPercentage } from "../../lib/format";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 
 function barColor(percent: number, isReservation: boolean): string {
   const high = isReservation ? 95 : 90;
@@ -63,33 +64,16 @@ export default function CapacitySection({
   snapshot: ClusterSnapshot;
 }) {
   const navigate = useNavigate();
-  const [metrics, setMetrics] = useState<ClusterMetrics | null>(null);
   const goToNodes = useCallback(() => navigate("/nodes"), [navigate]);
 
-  useEffect(() => {
-    if (!prometheusConfigured) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const load = () => {
-      api
-        .clusterMetrics()
-        .then((metrics) => {
-          if (!cancelled) {
-            setMetrics(metrics);
-          }
-        })
-        .catch(console.warn);
-    };
-    load();
-    const interval = setInterval(load, 30_000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [prometheusConfigured]);
+  const { data: metrics } = useQuery({
+    queryKey: ["cluster-metrics"],
+    queryFn: () => api.clusterMetrics(),
+    enabled: prometheusConfigured,
+    refetchInterval: 30_000,
+    staleTime: 30_000,
+    retry: false,
+  });
 
   if (prometheusConfigured && !metrics) {
     return (

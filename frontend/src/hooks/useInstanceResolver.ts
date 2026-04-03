@@ -1,13 +1,14 @@
 import { api } from "../api/client";
 import { isPrometheusReady, useMonitoringStatus } from "./useMonitoringStatus";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 /**
  * Resolves Docker Swarm node hostnames to Prometheus instance labels.
  *
  * In overlay-networked setups, the Prometheus `instance` label (overlay IP)
  * doesn't match the node's swarm address. This hook fetches `node_uname_info`
- * and builds a nodename→instance mapping so metrics can be queried per-node.
+ * and builds a nodename->instance mapping so metrics can be queried per-node.
  *
  * Requires node-exporter to run with `hostname: "{{.Node.Hostname}}"` so
  * that `node_uname_info.nodename` reports the Docker Swarm node hostname.
@@ -15,40 +16,29 @@ import { useCallback, useEffect, useState } from "react";
 export function useInstanceResolver() {
   const monitoring = useMonitoringStatus();
   const hasPrometheus = isPrometheusReady(monitoring);
-  // Map of nodename → instance (e.g. "app-prod-whale-1" → "10.100.9.27:9100")
-  const [byHostname, setByHostname] = useState<Record<string, string>>({});
 
-  const fetch_ = useCallback(() => {
-    api
-      .metricsQuery("node_uname_info")
-      .then((response) => {
-        const map: Record<string, string> = {};
+  const { data: byHostname = {} } = useQuery({
+    queryKey: ["instance-resolver"],
+    queryFn: async () => {
+      const response = await api.metricsQuery("node_uname_info");
+      const map: Record<string, string> = {};
 
-        for (const result of response.data.result) {
-          const nodename = result.metric.nodename;
-          const instance = result.metric.instance;
+      for (const result of response.data.result) {
+        const nodename = result.metric.nodename;
+        const instance = result.metric.instance;
 
-          if (nodename && instance) {
-            map[nodename] = instance;
-          }
+        if (nodename && instance) {
+          map[nodename] = instance;
         }
+      }
 
-        setByHostname(map);
-      })
-      .catch(console.warn);
-  }, []);
-
-  useEffect(() => {
-    if (!hasPrometheus) {
-      return;
-    }
-
-    fetch_();
-
-    const interval = setInterval(fetch_, 60_000);
-
-    return () => clearInterval(interval);
-  }, [fetch_, hasPrometheus]);
+      return map;
+    },
+    enabled: hasPrometheus,
+    refetchInterval: 60_000,
+    staleTime: 60_000,
+    retry: false,
+  });
 
   /**
    * Resolve a Docker Swarm hostname to a Prometheus instance label.
@@ -61,7 +51,7 @@ export function useInstanceResolver() {
         return byHostname[hostname];
       }
 
-      // Prefix match: "app-prod-whale-1.skate-forel.ts.net" → "app-prod-whale-1"
+      // Prefix match: "app-prod-whale-1.skate-forel.ts.net" -> "app-prod-whale-1"
       const short = hostname.split(".")[0];
 
       if (short && byHostname[short]) {

@@ -1,7 +1,7 @@
 import { api } from "../../api/client";
 import { escapePromQL } from "../../lib/utils";
 import ResourceGauge from "./ResourceGauge";
-import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 interface GaugeDef {
   label: string;
@@ -50,32 +50,25 @@ interface Props {
 }
 
 export default function NodeResourceGauges({ instance }: Props) {
-  const [values, setValues] = useState<(number | null)[]>(gauges.map(() => null));
+  const { data: values = gauges.map(() => null) } = useQuery({
+    queryKey: ["node-resource-gauges", instance],
+    queryFn: () =>
+      Promise.all(
+        gauges.map((gauge) =>
+          api
+            .metricsQuery(gauge.query(instance))
+            .then((response) => {
+              const value = response.data?.result?.[0]?.value?.[1];
 
-  const fetchAll = useCallback(() => {
-    Promise.all(
-      gauges.map((gauge) =>
-        api
-          .metricsQuery(gauge.query(instance))
-          .then((response) => {
-            const value = response.data?.result?.[0]?.value?.[1];
-
-            return value != null ? Number(value) : null;
-          })
-          .catch((error) => {
-            console.warn(error);
-            return null;
-          }),
+              return value != null ? Number(value) : null;
+            })
+            .catch(() => null),
+        ),
       ),
-    ).then(setValues);
-  }, [instance]);
-
-  useEffect(() => {
-    fetchAll();
-    const interval = setInterval(fetchAll, 30_000);
-
-    return () => clearInterval(interval);
-  }, [fetchAll]);
+    refetchInterval: 30_000,
+    staleTime: 30_000,
+    retry: false,
+  });
 
   return (
     <div className="flex flex-wrap items-center justify-center gap-8 py-2">
