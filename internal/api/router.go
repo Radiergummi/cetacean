@@ -476,7 +476,16 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	mux.HandleFunc("GET /profile", contentNegotiated(h.HandleProfile, nil, spa))
 
 	// Topology
-	mux.HandleFunc("GET /topology", contentNegotiated(h.HandleTopology, nil, spa))
+	mux.HandleFunc("GET /topology", func(w http.ResponseWriter, r *http.Request) {
+		switch ContentTypeFromContext(r.Context()) {
+		case ContentTypeHTML:
+			spa.ServeHTTP(w, r)
+		case ContentTypeJGF:
+			h.HandleTopology(w, r)
+		default:
+			writeErrorCode(w, r, "API003", "this endpoint only supports application/vnd.jgf+json")
+		}
+	})
 	mux.HandleFunc("GET /topology/networks", contentNegotiated(h.HandleNetworkTopology, nil, spa))
 	mux.HandleFunc(
 		"GET /topology/placement",
@@ -514,7 +523,7 @@ func requireReady(h *Handlers) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ct := ContentTypeFromContext(r.Context())
 			if !h.isReady() && isResourcePath(r.URL.Path) &&
-				(ct == ContentTypeJSON || ct == ContentTypeAtom) {
+				(ct == ContentTypeJSON || ct == ContentTypeAtom || ct == ContentTypeJGF) {
 				writeErrorCode(w, r, "ENG001", "Docker daemon is not reachable")
 				return
 			}

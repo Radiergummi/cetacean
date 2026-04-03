@@ -62,7 +62,7 @@ func TestBuildNetworkJGF(t *testing.T) {
 		{ID: "net1", Name: "mystack_default", Driver: "overlay", Scope: "swarm"},
 	}
 
-	g := buildNetworkJGF(services, networks)
+	g := buildNetworkJGF(services, networks, "/api/context.jsonld")
 
 	// 2 service nodes
 	if len(g.Nodes) != 2 {
@@ -180,7 +180,14 @@ func TestBuildPlacementJGF(t *testing.T) {
 	svcImages := map[string]string{"svc1": "nginx:1.25"}
 	readableServiceIDs := map[string]bool{"svc1": true}
 
-	g := buildPlacementJGF(clusterNodes, c, svcNames, svcImages, readableServiceIDs)
+	g := buildPlacementJGF(
+		clusterNodes,
+		c,
+		svcNames,
+		svcImages,
+		readableServiceIDs,
+		"/api/context.jsonld",
+	)
 
 	// 2 graph nodes: 1 cluster node + 1 service
 	if len(g.Nodes) != 2 {
@@ -209,6 +216,10 @@ func TestBuildPlacementJGF(t *testing.T) {
 	}
 
 	he := g.Hyperedges[0]
+
+	if he.Metadata["kind"] != "placement" {
+		t.Errorf("hyperedge kind=%v, want placement", he.Metadata["kind"])
+	}
 
 	// Service URN should be first
 	if he.Nodes[0] != svcURN {
@@ -287,11 +298,11 @@ func TestHandleTopology_JGF(t *testing.T) {
 		t.Fatalf("graphs=%d, want 2", len(doc.Graphs))
 	}
 
-	if doc.Graphs[0].ID != "network-topology" {
-		t.Errorf("graph[0].id=%q, want network-topology", doc.Graphs[0].ID)
+	if doc.Graphs[0].ID != "network" {
+		t.Errorf("graph[0].id=%q, want network", doc.Graphs[0].ID)
 	}
 
-	if doc.Graphs[1].ID != "placement-topology" {
-		t.Errorf("graph[1].id=%q, want placement-topology", doc.Graphs[1].ID)
+	if doc.Graphs[1].ID != "placement" {
+		t.Errorf("graph[1].id=%q, want placement", doc.Graphs[1].ID)
 	}
 }

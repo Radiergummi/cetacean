@@ -310,21 +310,18 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 		nodeResource,
 	)
 
-	networkGraph := buildNetworkJGF(services, networks)
+	contextURL := absPath(r.Context(), jsonLDContext)
+	networkGraph := buildNetworkJGF(services, networks, contextURL)
 
-	// Build service name and image lookup.
-	allServices := h.cache.ListServices()
-	svcNames := make(map[string]string, len(allServices))
-	svcImages := make(map[string]string, len(allServices))
-	for _, svc := range allServices {
+	// Build service name/image lookup and readable set from ACL-filtered services.
+	svcNames := make(map[string]string, len(services))
+	svcImages := make(map[string]string, len(services))
+	readableServiceIDs := make(map[string]bool, len(services))
+	for _, svc := range services {
 		svcNames[svc.ID] = svc.Spec.Name
 		if svc.Spec.TaskTemplate.ContainerSpec != nil {
 			svcImages[svc.ID] = stripImageDigest(svc.Spec.TaskTemplate.ContainerSpec.Image)
 		}
-	}
-
-	readableServiceIDs := make(map[string]bool, len(services))
-	for _, svc := range services {
 		readableServiceIDs[svc.ID] = true
 	}
 
@@ -334,6 +331,7 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 		svcNames,
 		svcImages,
 		readableServiceIDs,
+		contextURL,
 	)
 
 	doc := jgf.Document{
@@ -361,7 +359,11 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 }
 
 // buildNetworkJGF produces a JGF hypergraph of the network topology.
-func buildNetworkJGF(services []swarm.Service, networks []network.Summary) jgf.Graph {
+func buildNetworkJGF(
+	services []swarm.Service,
+	networks []network.Summary,
+	contextURL string,
+) jgf.Graph {
 	// Build overlay network lookup for fast filtering.
 	type overlayInfo struct {
 		name   string
@@ -389,7 +391,7 @@ func buildNetworkJGF(services []swarm.Service, networks []network.Summary) jgf.G
 		urn := jgf.URN("service", svc.ID)
 
 		meta := jgf.Metadata{
-			"@context": jsonLDContext,
+			"@context": contextURL,
 			"kind":     "service",
 			"replicas": replicaCount(svc),
 		}
@@ -496,7 +498,7 @@ func buildNetworkJGF(services []swarm.Service, networks []network.Summary) jgf.G
 			Source: sourceURN,
 			Target: targetURN,
 			Metadata: jgf.Metadata{
-				"@context": jsonLDContext,
+				"@context": contextURL,
 				"networks": netEntries,
 			},
 		})
@@ -509,7 +511,7 @@ func buildNetworkJGF(services []swarm.Service, networks []network.Summary) jgf.G
 		hyperedges = append(hyperedges, jgf.Hyperedge{
 			Nodes: members,
 			Metadata: jgf.Metadata{
-				"@context": jsonLDContext,
+				"@context": contextURL,
 				"kind":     "stack",
 				"name":     name,
 			},
@@ -517,11 +519,11 @@ func buildNetworkJGF(services []swarm.Service, networks []network.Summary) jgf.G
 	}
 
 	return jgf.Graph{
-		ID:         "network-topology",
-		Type:       "network",
+		ID:         "network",
+		Type:       "network-topology",
 		Label:      "Network Topology",
 		Directed:   false,
-		Metadata:   jgf.Metadata{"@context": jsonLDContext},
+		Metadata:   jgf.Metadata{"@context": contextURL},
 		Nodes:      nodes,
 		Edges:      edges,
 		Hyperedges: hyperedges,
@@ -534,6 +536,7 @@ func buildPlacementJGF(
 	c *cache.Cache,
 	svcNames, svcImages map[string]string,
 	readableServiceIDs map[string]bool,
+	contextURL string,
 ) jgf.Graph {
 	nodes := make(map[string]jgf.Node)
 	var hyperedges []jgf.Hyperedge
@@ -553,7 +556,7 @@ func buildPlacementJGF(
 		nodes[nodeURN] = jgf.Node{
 			Label: n.Description.Hostname,
 			Metadata: jgf.Metadata{
-				"@context":     jsonLDContext,
+				"@context":     contextURL,
 				"kind":         "node",
 				"role":         string(n.Spec.Role),
 				"state":        string(n.Status.State),
@@ -599,7 +602,7 @@ func buildPlacementJGF(
 		nodes[svcURN] = jgf.Node{
 			Label: svcNames[svcID],
 			Metadata: jgf.Metadata{
-				"@context": jsonLDContext,
+				"@context": contextURL,
 				"kind":     "service",
 				"image":    svcImages[svcID],
 			},
@@ -616,18 +619,19 @@ func buildPlacementJGF(
 		hyperedges = append(hyperedges, jgf.Hyperedge{
 			Nodes: heNodes,
 			Metadata: jgf.Metadata{
-				"@context": jsonLDContext,
+				"@context": contextURL,
+				"kind":     "placement",
 				"tasks":    sp.tasks,
 			},
 		})
 	}
 
 	return jgf.Graph{
-		ID:         "placement-topology",
-		Type:       "placement",
+		ID:         "placement",
+		Type:       "placement-topology",
 		Label:      "Placement Topology",
 		Directed:   false,
-		Metadata:   jgf.Metadata{"@context": jsonLDContext},
+		Metadata:   jgf.Metadata{"@context": contextURL},
 		Nodes:      nodes,
 		Hyperedges: hyperedges,
 	}
