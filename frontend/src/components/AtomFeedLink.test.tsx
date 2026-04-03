@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
 import { feedForPath } from "./AtomFeedLink";
+import { describe, it, expect } from "vitest";
 
 describe("feedForPath", () => {
   it("returns null for unsupported paths", () => {
@@ -25,9 +25,7 @@ describe("feedForPath", () => {
       const result = feedForPath(`/${resource}`, "");
       expect(result).not.toBeNull();
       expect(result!.href).toBe(`/${resource}`);
-      expect(result!.title).toBe(
-        resource.charAt(0).toUpperCase() + resource.slice(1),
-      );
+      expect(result!.title).toBe(resource.charAt(0).toUpperCase() + resource.slice(1));
     }
   });
 

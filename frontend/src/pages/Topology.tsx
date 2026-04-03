@@ -13,7 +13,11 @@ import ServiceCardNode from "../components/topology/ServiceCardNode";
 import { useMatchesBreakpoint } from "../hooks/useMatchesBreakpoint";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { computeLayout } from "../lib/layoutElk";
-import { networkGraphToReactFlow, placementGraphToReactFlow, hashColor } from "../lib/topologyTransform";
+import {
+  networkGraphToReactFlow,
+  placementGraphToReactFlow,
+  hashColor,
+} from "../lib/topologyTransform";
 import { getErrorMessage } from "../lib/utils";
 import { ReactFlow, ReactFlowProvider, Background, type Node, type Edge } from "@xyflow/react";
 import { Info, Network, Server, X } from "lucide-react";

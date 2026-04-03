@@ -47,9 +47,13 @@ var errorRegistry = map[string]ErrorDef{
 	"API002": {Code: "API002", Title: "SSE Required", Status: http.StatusNotAcceptable,
 		Description: "This endpoint only supports Server-Sent Events.",
 		Suggestion:  "Use Accept: text/event-stream."},
-	"API003": {Code: "API003", Title: "Not Acceptable", Status: http.StatusNotAcceptable,
+	"API003": {
+		Code:        "API003",
+		Title:       "Not Acceptable",
+		Status:      http.StatusNotAcceptable,
 		Description: "The Accept header does not match any media type this endpoint can produce.",
-		Suggestion:  "Use Accept: application/json, application/atom+xml, text/event-stream, or text/html."},
+		Suggestion:  "Use Accept: application/json, application/atom+xml, text/event-stream, or text/html.",
+	},
 	"API004": {
 		Code:        "API004",
 		Title:       "Invalid Patch Content-Type",

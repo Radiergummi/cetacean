@@ -4,9 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect } from "vitest";
 
 function renderWithRouter(ui: React.ReactElement, initialRoute = "/") {
-  return render(
-    <MemoryRouter initialEntries={[initialRoute]}>{ui}</MemoryRouter>,
-  );
+  return render(<MemoryRouter initialEntries={[initialRoute]}>{ui}</MemoryRouter>);
 }
 
 describe("PageHeader", () => {

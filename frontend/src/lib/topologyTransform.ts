@@ -139,7 +139,13 @@ export function networkGraphToReactFlow(graph: JGFGraph): { nodes: Node[]; edges
     {
       source: string;
       target: string;
-      networks: { id: string; name: string; driver: string; scope: string; aliases?: Record<string, string[]> }[];
+      networks: {
+        id: string;
+        name: string;
+        driver: string;
+        scope: string;
+        aliases?: Record<string, string[]>;
+      }[];
     }
   >();
 
@@ -242,7 +248,11 @@ export function placementGraphToReactFlow(graph: JGFGraph): { nodes: Node[] } {
   // Build tasks grouped by node URN from hyperedges
   const tasksByNode = new Map<
     string,
-    { serviceUrn: string; serviceName: string; tasks: { id: string; node: string; state: string; slot: number; image: string }[] }[]
+    {
+      serviceUrn: string;
+      serviceName: string;
+      tasks: { id: string; node: string; state: string; slot: number; image: string }[];
+    }[]
   >();
 
   for (const hyperedge of graph.hyperedges ?? []) {

@@ -80,9 +80,7 @@ describe("networkGraphToReactFlow", () => {
     expect(groups[0].data.label).toBe("app");
     expect(services.length).toBe(3);
     expect(services.filter(({ parentId }) => parentId === "stack:app").length).toBe(2);
-    expect(
-      services.find(({ id }) => id === "urn:cetacean:service:s3")?.parentId,
-    ).toBeUndefined();
+    expect(services.find(({ id }) => id === "urn:cetacean:service:s3")?.parentId).toBeUndefined();
 
     // One edge with all networks collapsed
     expect(edges.length).toBe(1);
@@ -96,11 +94,23 @@ describe("networkGraphToReactFlow", () => {
       nodes: {
         "urn:cetacean:service:s1": {
           label: "web",
-          metadata: { ...baseMetadata, kind: "service", replicas: 1, image: "nginx", mode: "replicated" },
+          metadata: {
+            ...baseMetadata,
+            kind: "service",
+            replicas: 1,
+            image: "nginx",
+            mode: "replicated",
+          },
         },
         "urn:cetacean:service:s2": {
           label: "api",
-          metadata: { ...baseMetadata, kind: "service", replicas: 1, image: "node", mode: "replicated" },
+          metadata: {
+            ...baseMetadata,
+            kind: "service",
+            replicas: 1,
+            image: "node",
+            mode: "replicated",
+          },
         },
       },
       edges: [
@@ -131,11 +141,23 @@ describe("networkGraphToReactFlow", () => {
       nodes: {
         "urn:cetacean:service:s1": {
           label: "web",
-          metadata: { ...baseMetadata, kind: "service", replicas: 1, image: "nginx", mode: "replicated" },
+          metadata: {
+            ...baseMetadata,
+            kind: "service",
+            replicas: 1,
+            image: "nginx",
+            mode: "replicated",
+          },
         },
         "urn:cetacean:service:s2": {
           label: "api",
-          metadata: { ...baseMetadata, kind: "service", replicas: 1, image: "node", mode: "replicated" },
+          metadata: {
+            ...baseMetadata,
+            kind: "service",
+            replicas: 1,
+            image: "node",
+            mode: "replicated",
+          },
         },
       },
       edges: [
@@ -167,11 +189,23 @@ describe("networkGraphToReactFlow", () => {
       nodes: {
         "urn:cetacean:service:s1": {
           label: "web",
-          metadata: { ...baseMetadata, kind: "service", replicas: 1, image: "nginx", mode: "replicated" },
+          metadata: {
+            ...baseMetadata,
+            kind: "service",
+            replicas: 1,
+            image: "nginx",
+            mode: "replicated",
+          },
         },
         "urn:cetacean:service:s2": {
           label: "api",
-          metadata: { ...baseMetadata, kind: "service", replicas: 1, image: "node", mode: "replicated" },
+          metadata: {
+            ...baseMetadata,
+            kind: "service",
+            replicas: 1,
+            image: "node",
+            mode: "replicated",
+          },
         },
       },
       edges: [
@@ -214,11 +248,23 @@ describe("placementGraphToReactFlow", () => {
       nodes: {
         "urn:cetacean:node:n1": {
           label: "worker-01",
-          metadata: { ...baseMetadata, kind: "node", role: "worker", state: "ready", availability: "active" },
+          metadata: {
+            ...baseMetadata,
+            kind: "node",
+            role: "worker",
+            state: "ready",
+            availability: "active",
+          },
         },
         "urn:cetacean:node:n2": {
           label: "worker-02",
-          metadata: { ...baseMetadata, kind: "node", role: "worker", state: "ready", availability: "active" },
+          metadata: {
+            ...baseMetadata,
+            kind: "node",
+            role: "worker",
+            state: "ready",
+            availability: "active",
+          },
         },
         "urn:cetacean:service:svc1": {
           label: "web",
@@ -236,9 +282,27 @@ describe("placementGraphToReactFlow", () => {
             ...baseMetadata,
             kind: "placement",
             tasks: [
-              { id: "t1", node: "urn:cetacean:node:n1", state: "running", slot: 1, image: "nginx:1.25" },
-              { id: "t2", node: "urn:cetacean:node:n1", state: "running", slot: 2, image: "nginx:1.25" },
-              { id: "t4", node: "urn:cetacean:node:n2", state: "running", slot: 3, image: "nginx:1.25" },
+              {
+                id: "t1",
+                node: "urn:cetacean:node:n1",
+                state: "running",
+                slot: 1,
+                image: "nginx:1.25",
+              },
+              {
+                id: "t2",
+                node: "urn:cetacean:node:n1",
+                state: "running",
+                slot: 2,
+                image: "nginx:1.25",
+              },
+              {
+                id: "t4",
+                node: "urn:cetacean:node:n2",
+                state: "running",
+                slot: 3,
+                image: "nginx:1.25",
+              },
             ],
           },
         },
@@ -248,7 +312,13 @@ describe("placementGraphToReactFlow", () => {
             ...baseMetadata,
             kind: "placement",
             tasks: [
-              { id: "t3", node: "urn:cetacean:node:n1", state: "running", slot: 1, image: "node:20" },
+              {
+                id: "t3",
+                node: "urn:cetacean:node:n1",
+                state: "running",
+                slot: 1,
+                image: "node:20",
+              },
             ],
           },
         },
@@ -264,7 +334,9 @@ describe("placementGraphToReactFlow", () => {
       services: { serviceId: string; running: number; total: number }[];
     };
     expect(n1Data.services.length).toBe(2);
-    const webSvc = n1Data.services.find(({ serviceId }) => serviceId === "urn:cetacean:service:svc1");
+    const webSvc = n1Data.services.find(
+      ({ serviceId }) => serviceId === "urn:cetacean:service:svc1",
+    );
     expect(webSvc!.running).toBe(2);
     expect(webSvc!.total).toBe(2);
 

@@ -328,7 +328,13 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 		readableServiceIDs[svc.ID] = true
 	}
 
-	placementGraph := buildPlacementJGF(clusterNodes, h.cache, svcNames, svcImages, readableServiceIDs)
+	placementGraph := buildPlacementJGF(
+		clusterNodes,
+		h.cache,
+		svcNames,
+		svcImages,
+		readableServiceIDs,
+	)
 
 	doc := jgf.Document{
 		Graphs: []jgf.Graph{networkGraph, placementGraph},

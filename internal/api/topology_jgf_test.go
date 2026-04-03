@@ -159,7 +159,9 @@ func TestBuildPlacementJGF(t *testing.T) {
 		NodeID:    "n1",
 		Slot:      1,
 		Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
-		Spec:      swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{Image: "nginx:1.25@sha256:abc"}},
+		Spec: swarm.TaskSpec{
+			ContainerSpec: &swarm.ContainerSpec{Image: "nginx:1.25@sha256:abc"},
+		},
 	})
 
 	clusterNodes := []swarm.Node{
@@ -238,7 +240,9 @@ func TestBuildPlacementJGF(t *testing.T) {
 
 func TestHandleTopology_JGF(t *testing.T) {
 	c := cache.New(nil)
-	c.SetNetwork(network.Summary{ID: "net1", Name: "web_default", Driver: "overlay", Scope: "swarm"})
+	c.SetNetwork(
+		network.Summary{ID: "net1", Name: "web_default", Driver: "overlay", Scope: "swarm"},
+	)
 	c.SetNode(swarm.Node{
 		ID:          "n1",
 		Description: swarm.NodeDescription{Hostname: "worker-01"},
