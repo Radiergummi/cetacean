@@ -15,6 +15,7 @@ const (
 	ContentTypeHTML
 	ContentTypeSSE
 	ContentTypeAtom
+	ContentTypeJGF
 
 	// ContentTypeUnsupported means the client explicitly asked for a type we
 	// cannot provide. Dispatch helpers should return 406 Not Acceptable.
@@ -31,6 +32,8 @@ func (ct ContentType) String() string {
 		return "SSE"
 	case ContentTypeAtom:
 		return "Atom"
+	case ContentTypeJGF:
+		return "JGF"
 	case ContentTypeUnsupported:
 		return "Unsupported"
 	default:
@@ -70,6 +73,10 @@ func negotiate(next http.Handler) http.Handler {
 			ct = ContentTypeAtom
 			path = strings.TrimSuffix(path, ".atom")
 			r.URL.Path = path
+		} else if strings.HasSuffix(path, ".jgf") {
+			ct = ContentTypeJGF
+			path = strings.TrimSuffix(path, ".jgf")
+			r.URL.Path = path
 		} else {
 			ct = parseAccept(r.Header.Get("Accept"))
 		}
@@ -97,6 +104,7 @@ var supportedTypes = []struct {
 	{"application", "xhtml+xml", ContentTypeHTML},
 	{"text", "event-stream", ContentTypeSSE},
 	{"application", "atom+xml", ContentTypeAtom},
+	{"application", "vnd.jgf+json", ContentTypeJGF},
 }
 
 // mediaRange is a parsed Accept header entry.

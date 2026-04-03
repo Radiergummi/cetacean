@@ -306,3 +306,10 @@ func TestNegotiate(t *testing.T) {
 		}
 	})
 }
+
+func TestParseAccept_JGF(t *testing.T) {
+	ct := parseAccept("application/vnd.jgf+json")
+	if ct != ContentTypeJGF {
+		t.Errorf("got %v, want ContentTypeJGF", ct)
+	}
+}
