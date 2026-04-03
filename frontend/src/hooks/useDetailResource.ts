@@ -1,4 +1,4 @@
-import { api, emptyMethods } from "../api/client";
+import { api, emptyMethods, setsEqual } from "../api/client";
 import type { FetchResult } from "../api/client";
 import { useResourceStream } from "./useResourceStream";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -51,9 +51,20 @@ export function useDetailResource<T>(
   }, []);
 
   const data = resourceQuery.data?.data ?? null;
-  const allowedMethods = resourceQuery.data?.allowedMethods ?? emptyMethods;
   const error = resourceQuery.error ?? null;
   const history = historyQuery.data ?? [];
+
+  // Stabilize allowedMethods by reference — the Set is recreated on every
+  // fetch response, but its contents rarely change. Without this, every SSE
+  // refetch would cause unnecessary re-renders in consumers.
+  const rawMethods = resourceQuery.data?.allowedMethods ?? emptyMethods;
+  const methodsRef = useRef<Set<string>>(emptyMethods);
+
+  if (!setsEqual(methodsRef.current, rawMethods)) {
+    methodsRef.current = rawMethods;
+  }
+
+  const allowedMethods = methodsRef.current;
 
   const retry = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["detail", ssePath, key] });
