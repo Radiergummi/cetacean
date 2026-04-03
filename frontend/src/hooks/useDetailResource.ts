@@ -1,66 +1,31 @@
-import { api, emptyMethods, setsEqual } from "../api/client";
+import { api, emptyMethods } from "../api/client";
 import type { FetchResult } from "../api/client";
-import type { HistoryEntry } from "../api/types";
 import { useResourceStream } from "./useResourceStream";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef } from "react";
 
 export function useDetailResource<T>(
   key: string | undefined,
   fetchFn: (key: string, signal?: AbortSignal) => Promise<FetchResult<T>>,
   ssePath: string,
 ) {
-  const [data, setData] = useState<T | null>(null);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [error, setError] = useState<Error | null>(null);
-  const [allowedMethods, setAllowedMethods] = useState<Set<string>>(emptyMethods);
-  const abortRef = useRef<AbortController | null>(null);
+  const queryClient = useQueryClient();
 
-  const fetchData = useCallback(() => {
-    if (!key) {
-      return;
-    }
+  const resourceQuery = useQuery({
+    queryKey: ["detail", ssePath],
+    queryFn: ({ signal }) => fetchFn(key!, signal),
+    enabled: !!key,
+    retry: 1,
+  });
 
-    abortRef.current?.abort();
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    setError(null);
-
-    fetchFn(key, controller.signal)
-      .then(({ data: d, allowedMethods: methods }) => {
-        if (!controller.signal.aborted) {
-          setData(d);
-          setAllowedMethods((previous) => (setsEqual(previous, methods) ? previous : methods));
-        }
-      })
-      .catch((thrown) => {
-        if (!controller.signal.aborted) {
-          setError(thrown instanceof Error ? thrown : new Error(String(thrown)));
-        }
-      });
-
-    api
-      .history({ resourceId: key, limit: 10 }, controller.signal)
-      .then((entry) => {
-        if (!controller.signal.aborted) {
-          setHistory(entry);
-        }
-      })
-      .catch(console.warn);
-  }, [key, fetchFn]);
-
-  useEffect(() => {
-    fetchData();
-
-    return () => {
-      abortRef.current?.abort();
-    };
-  }, [fetchData]);
+  const historyQuery = useQuery({
+    queryKey: ["history", { resourceId: key, limit: 10 }],
+    queryFn: ({ signal }) => api.history({ resourceId: key!, limit: 10 }, signal),
+    enabled: !!key,
+    retry: false,
+  });
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const fetchDataRef = useRef(fetchData);
-  fetchDataRef.current = fetchData;
 
   useResourceStream(
     ssePath,
@@ -71,9 +36,10 @@ export function useDetailResource<T>(
 
       debounceRef.current = setTimeout(() => {
         debounceRef.current = null;
-        fetchDataRef.current();
+        queryClient.invalidateQueries({ queryKey: ["detail", ssePath] });
+        queryClient.invalidateQueries({ queryKey: ["history", { resourceId: key }] });
       }, 500);
-    }, []),
+    }, [queryClient, ssePath, key]),
   );
 
   useEffect(() => {
@@ -84,5 +50,15 @@ export function useDetailResource<T>(
     };
   }, []);
 
-  return { data, history, error, retry: fetchData, allowedMethods };
+  const data = resourceQuery.data?.data ?? null;
+  const allowedMethods = resourceQuery.data?.allowedMethods ?? emptyMethods;
+  const error = resourceQuery.error ?? null;
+  const history = historyQuery.data ?? [];
+
+  const retry = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["detail", ssePath] });
+    queryClient.invalidateQueries({ queryKey: ["history", { resourceId: key }] });
+  }, [queryClient, ssePath, key]);
+
+  return { data, history, error, retry, allowedMethods };
 }
