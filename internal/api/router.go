@@ -476,6 +476,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	mux.HandleFunc("GET /profile", contentNegotiated(h.HandleProfile, nil, spa))
 
 	// Topology
+	mux.HandleFunc("GET /topology", contentNegotiated(h.HandleTopology, nil, spa))
 	mux.HandleFunc("GET /topology/networks", contentNegotiated(h.HandleNetworkTopology, nil, spa))
 	mux.HandleFunc(
 		"GET /topology/placement",
