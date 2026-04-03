@@ -86,7 +86,7 @@ func TestRender_BasicGraph(t *testing.T) {
 	if !strings.Contains(s, `<graph id="stack:mystack"`) {
 		t.Error("missing stack subgraph")
 	}
-	if !strings.Contains(s, `<data key="label">mystack</data>`) {
+	if !strings.Contains(s, `<data key="graph-label">mystack</data>`) {
 		t.Error("missing stack label data element")
 	}
 
@@ -165,5 +165,35 @@ func TestRender_ServiceWithPorts(t *testing.T) {
 	// Ports should be comma-separated in a single data element
 	if !strings.Contains(s, `<data key="ports">80:80/tcp,443:443/tcp</data>`) {
 		t.Errorf("expected comma-separated ports in data element, got:\n%s", s)
+	}
+}
+
+func TestRender_XMLInjectionInLabel(t *testing.T) {
+	g := jgf.Graph{
+		ID:    "network",
+		Label: "Network Topology",
+		Nodes: map[string]jgf.Node{
+			jgf.URN("service", "svc1"): {
+				Label: `</data><evil attr="injection"/>`,
+				Metadata: jgf.Metadata{
+					"kind": "service",
+				},
+			},
+		},
+	}
+
+	out, err := graphml.Render(g)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+
+	s := string(out)
+
+	// encoding/xml should escape the malicious content
+	if strings.Contains(s, "<evil") {
+		t.Error("XML injection: malicious element should be escaped, not rendered as XML")
+	}
+	if !strings.Contains(s, "&lt;evil") || !strings.Contains(s, "&lt;/data&gt;") {
+		t.Error("expected XML-escaped label content")
 	}
 }

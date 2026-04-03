@@ -142,3 +142,30 @@ func TestRender_ServiceOutsideStack(t *testing.T) {
 		t.Errorf("output should contain node label:\n%s", result)
 	}
 }
+
+func TestRender_DOTInjectionInLabel(t *testing.T) {
+	g := jgf.Graph{
+		ID:    "network",
+		Label: "Test",
+		Nodes: map[string]jgf.Node{
+			jgf.URN("service", "svc1"): {
+				Label:    `evil" ; "x`,
+				Metadata: jgf.Metadata{"kind": "service"},
+			},
+		},
+	}
+
+	data, err := dot.Render(g)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+
+	result := string(data)
+
+	// Inner double quotes must be escaped with backslash so the
+	// injected semicolon stays inside the label string value and
+	// is not parsed as a DOT statement terminator.
+	if !strings.Contains(result, `label="evil\" ; \"x"`) {
+		t.Errorf("expected escaped quotes in label, got:\n%s", result)
+	}
+}

@@ -80,7 +80,7 @@ type dataElem struct {
 // Output is deterministic: stacks sorted by name, nodes sorted by URN.
 func Render(g jgf.Graph) ([]byte, error) {
 	doc := graphmlDoc{
-		XMLNS: "http://graphml.graphstudio.org",
+		XMLNS: "http://graphml.graphdrawing.org/graphml",
 		Keys: []keyDef{
 			{ID: "label", For: attrForNode, AttrName: "label", AttrType: attrTypeStr},
 			{ID: "kind", For: attrForNode, AttrName: "kind", AttrType: attrTypeStr},
@@ -90,7 +90,7 @@ func Render(g jgf.Graph) ([]byte, error) {
 			{ID: "ports", For: attrForNode, AttrName: "ports", AttrType: attrTypeStr},
 			{ID: "updateStatus", For: attrForNode, AttrName: "updateStatus", AttrType: attrTypeStr},
 			{ID: "networks", For: attrForEdge, AttrName: "networks", AttrType: attrTypeStr},
-			{ID: "label", For: attrForGraph, AttrName: "label", AttrType: attrTypeStr},
+			{ID: "graph-label", For: attrForGraph, AttrName: "label", AttrType: attrTypeStr},
 		},
 		Graph: graphElem{
 			ID:          g.ID,
@@ -134,7 +134,7 @@ func Render(g jgf.Graph) ([]byte, error) {
 
 		sg := subgraph{
 			ID:   "stack:" + stackName,
-			Data: []dataElem{{Key: "label", Value: stackName}},
+			Data: []dataElem{{Key: "graph-label", Value: stackName}},
 		}
 
 		for _, urn := range members {

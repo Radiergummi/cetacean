@@ -13,7 +13,7 @@ import (
 func Render(g jgf.Graph) ([]byte, error) {
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "graph %q {\n", g.Label)
+	fmt.Fprintf(&b, "graph %s {\n", dotQuote(g.Label))
 
 	// Collect nodes that belong to a stack hyperedge.
 	stackNodes := make(map[string]string) // nodeURN → stackName
@@ -54,8 +54,8 @@ func Render(g jgf.Graph) ([]byte, error) {
 
 	// Emit stack subgraphs.
 	for _, stack := range stacks {
-		fmt.Fprintf(&b, "\tsubgraph %q {\n", "cluster_"+stack.name)
-		fmt.Fprintf(&b, "\t\tlabel=%q;\n", stack.name)
+		fmt.Fprintf(&b, "\tsubgraph %s {\n", dotQuote("cluster_"+stack.name))
+		fmt.Fprintf(&b, "\t\tlabel=%s;\n", dotQuote(stack.name))
 
 		for _, urn := range stack.nodes {
 			node, ok := g.Nodes[urn]
@@ -87,7 +87,13 @@ func Render(g jgf.Graph) ([]byte, error) {
 	// Emit edges.
 	for _, edge := range g.Edges {
 		edgeLabel := extractNetworkNames(edge.Metadata)
-		fmt.Fprintf(&b, "\t%q -- %q [label=%q];\n", edge.Source, edge.Target, edgeLabel)
+		fmt.Fprintf(
+			&b,
+			"\t%s -- %s [label=%s];\n",
+			dotQuote(edge.Source),
+			dotQuote(edge.Target),
+			dotQuote(edgeLabel),
+		)
 	}
 
 	fmt.Fprintf(&b, "}\n")
@@ -97,30 +103,67 @@ func Render(g jgf.Graph) ([]byte, error) {
 
 // nodeStatement builds the DOT node declaration for a single node.
 func nodeStatement(urn string, node jgf.Node) string {
-	replicas, _ := node.Metadata["replicas"].(int)
-	image, _ := node.Metadata["image"].(string)
-	mode, _ := node.Metadata["mode"].(string)
+	attrs := []string{
+		"label=" + dotQuote(node.Label),
+	}
 
-	return fmt.Sprintf("%q [label=%q replicas=%d image=%q mode=%q]",
-		urn, node.Label, replicas, image, mode)
+	if v, ok := node.Metadata["replicas"]; ok {
+		attrs = append(attrs, fmt.Sprintf("replicas=%v", v))
+	}
+
+	if image, ok := node.Metadata["image"].(string); ok && image != "" {
+		attrs = append(attrs, "image="+dotQuote(image))
+	}
+
+	if mode, ok := node.Metadata["mode"].(string); ok && mode != "" {
+		attrs = append(attrs, "mode="+dotQuote(mode))
+	}
+
+	return fmt.Sprintf("%s [%s]", dotQuote(urn), strings.Join(attrs, " "))
 }
 
 // extractNetworkNames collects network names from edge metadata.
 func extractNetworkNames(meta jgf.Metadata) string {
-	networks, _ := meta["networks"].([]any)
-	names := make([]string, 0, len(networks))
+	names := make([]string, 0)
 
-	for _, entry := range networks {
-		m, ok := entry.(map[string]any)
-		if !ok {
-			continue
+	switch v := meta["networks"].(type) {
+	case []any:
+		for _, entry := range v {
+			m, ok := entry.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			name, _ := m["name"].(string)
+			if name != "" {
+				names = append(names, name)
+			}
 		}
+	case []string:
+		names = v
+	}
 
-		name, _ := m["name"].(string)
-		if name != "" {
-			names = append(names, name)
+	return strings.Join(names, ", ")
+}
+
+// dotQuote produces a DOT-safe quoted string. DOT strings are enclosed in
+// double quotes with only `"` and `\` escaped (no \uXXXX sequences).
+func dotQuote(s string) string {
+	var b strings.Builder
+	b.WriteByte('"')
+
+	for _, r := range s {
+		switch r {
+		case '"':
+			b.WriteString(`\"`)
+		case '\\':
+			b.WriteString(`\\`)
+		default:
+			b.WriteRune(r)
 		}
 	}
 
-	return strings.Join(names, ",")
+	b.WriteByte('"')
+
+	return b.String()
 }
