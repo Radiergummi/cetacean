@@ -2,7 +2,6 @@ package api
 
 import (
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -299,26 +298,6 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	ct := r.Header.Get("Content-Type")
-	isJSONPatch := strings.HasPrefix(ct, "application/json-patch+json")
-	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")
-
-	if !isJSONPatch && !isMergePatch {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"Content-Type must be application/json-patch+json or application/merge-patch+json",
-		)
-		return
-	}
-
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		writeErrorCode(w, r, "API007", "failed to read request body")
-		return
-	}
-
 	svc, ok := h.cache.GetService(id)
 	if !ok {
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
@@ -329,22 +308,9 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 	if svc.Spec.TaskTemplate.ContainerSpec != nil {
 		env = svc.Spec.TaskTemplate.ContainerSpec.Env
 	}
-	current := envSliceToMap(env)
 
-	var updated map[string]string
-	if isJSONPatch {
-		var ops []PatchOp
-		if err := json.Unmarshal(body, &ops); err != nil {
-			writeErrorCode(w, r, "API006", "invalid request body")
-			return
-		}
-		updated, err = applyJSONPatch(current, ops)
-	} else {
-		updated, err = applyMergePatchStringMap(current, body)
-	}
-
-	if err != nil {
-		writePatchError(w, r, err)
+	updated, ok := patchStringMap(w, r, envSliceToMap(env))
+	if !ok {
 		return
 	}
 
@@ -388,27 +354,7 @@ func (h *Handlers) HandleGetServiceLabels(w http.ResponseWriter, r *http.Request
 
 func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
-
-	ct := r.Header.Get("Content-Type")
-	isJSONPatch := strings.HasPrefix(ct, "application/json-patch+json")
-	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")
-
-	if !isJSONPatch && !isMergePatch {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"Content-Type must be application/json-patch+json or application/merge-patch+json",
-		)
-		return
-	}
-
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		writeErrorCode(w, r, "API007", "failed to read request body")
-		return
-	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
@@ -416,25 +362,8 @@ func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	current := svc.Spec.Labels
-	if current == nil {
-		current = map[string]string{}
-	}
-
-	var updated map[string]string
-	if isJSONPatch {
-		var ops []PatchOp
-		if err := json.Unmarshal(body, &ops); err != nil {
-			writeErrorCode(w, r, "API006", "invalid request body")
-			return
-		}
-		updated, err = applyJSONPatch(current, ops)
-	} else {
-		updated, err = applyMergePatchStringMap(current, body)
-	}
-
-	if err != nil {
-		writePatchError(w, r, err)
+	updated, ok := patchStringMap(w, r, svc.Spec.Labels)
+	if !ok {
 		return
 	}
 
@@ -480,14 +409,7 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"expected Content-Type: application/merge-patch+json",
-		)
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -567,14 +489,7 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"expected Content-Type: application/merge-patch+json",
-		)
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -771,14 +686,7 @@ func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"expected Content-Type: application/merge-patch+json",
-		)
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -853,14 +761,7 @@ func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *ht
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"expected Content-Type: application/merge-patch+json",
-		)
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -931,14 +832,7 @@ func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Re
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"expected Content-Type: application/merge-patch+json",
-		)
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -987,14 +881,7 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"expected Content-Type: application/merge-patch+json",
-		)
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -1114,14 +1001,7 @@ func (h *Handlers) HandleGetServiceContainerConfig(w http.ResponseWriter, r *htt
 
 func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"expected Content-Type: application/merge-patch+json",
-		)
+	if !requireMergePatch(w, r) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
@@ -1257,14 +1137,7 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"expected Content-Type: application/merge-patch+json",
-		)
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -1350,14 +1223,7 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"expected Content-Type: application/merge-patch+json",
-		)
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -1443,14 +1309,7 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"expected Content-Type: application/merge-patch+json",
-		)
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -1530,14 +1389,7 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"Content-Type must be application/merge-patch+json",
-		)
+	if !requireMergePatch(w, r) {
 		return
 	}
 

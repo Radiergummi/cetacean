@@ -2,10 +2,8 @@ package api
 
 import (
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/swarm"
@@ -178,51 +176,14 @@ func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request)
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	ct := r.Header.Get("Content-Type")
-	isJSONPatch := strings.HasPrefix(ct, "application/json-patch+json")
-	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")
-
-	if !isJSONPatch && !isMergePatch {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"Content-Type must be application/json-patch+json or application/merge-patch+json",
-		)
-		return
-	}
-
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		writeErrorCode(w, r, "API007", "failed to read request body")
-		return
-	}
-
 	node, ok := h.cache.GetNode(id)
 	if !ok {
 		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
 
-	current := node.Spec.Labels
-	if current == nil {
-		current = map[string]string{}
-	}
-
-	var updated map[string]string
-	if isJSONPatch {
-		var ops []PatchOp
-		if err := json.Unmarshal(body, &ops); err != nil {
-			writeErrorCode(w, r, "API006", "invalid request body")
-			return
-		}
-		updated, err = applyJSONPatch(current, ops)
-	} else {
-		updated, err = applyMergePatchStringMap(current, body)
-	}
-
-	if err != nil {
-		writePatchError(w, r, err)
+	updated, ok := patchStringMap(w, r, node.Spec.Labels)
+	if !ok {
 		return
 	}
 

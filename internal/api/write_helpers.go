@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/swarm"
@@ -180,6 +181,68 @@ func applyStructMergePatch(
 		return false
 	}
 	return true
+}
+
+// requireMergePatch validates Content-Type is application/merge-patch+json.
+// Returns false and writes a 415 error response if not satisfied.
+func requireMergePatch(w http.ResponseWriter, r *http.Request) bool {
+	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/merge-patch+json") {
+		writeErrorCode(w, r, "API004", "expected Content-Type: application/merge-patch+json")
+		return false
+	}
+	return true
+}
+
+// patchStringMap reads a JSON Patch or Merge Patch body, applies it to
+// current, and returns the updated map. Returns nil and false (and writes
+// the error response) on any failure.
+func patchStringMap(
+	w http.ResponseWriter,
+	r *http.Request,
+	current map[string]string,
+) (map[string]string, bool) {
+	ct := r.Header.Get("Content-Type")
+	isJSONPatch := strings.HasPrefix(ct, "application/json-patch+json")
+	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")
+
+	if !isJSONPatch && !isMergePatch {
+		writeErrorCode(
+			w,
+			r,
+			"API004",
+			"Content-Type must be application/json-patch+json or application/merge-patch+json",
+		)
+		return nil, false
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeErrorCode(w, r, "API007", "failed to read request body")
+		return nil, false
+	}
+
+	if current == nil {
+		current = map[string]string{}
+	}
+
+	var updated map[string]string
+	if isJSONPatch {
+		var ops []PatchOp
+		if err := json.Unmarshal(body, &ops); err != nil {
+			writeErrorCode(w, r, "API006", "invalid request body")
+			return nil, false
+		}
+		updated, err = applyJSONPatch(current, ops)
+	} else {
+		updated, err = applyMergePatchStringMap(current, body)
+	}
+
+	if err != nil {
+		writePatchError(w, r, err)
+		return nil, false
+	}
+
+	return updated, true
 }
 
 // writePatchError maps JSON Patch application errors to error codes.
