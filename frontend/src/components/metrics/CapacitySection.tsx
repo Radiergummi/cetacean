@@ -71,6 +71,7 @@ export default function CapacitySection({
     queryFn: () => api.clusterMetrics(),
     enabled: prometheusConfigured,
     refetchInterval: 30_000,
+    refetchIntervalInBackground: true,
     staleTime: 30_000,
     retry: false,
   });

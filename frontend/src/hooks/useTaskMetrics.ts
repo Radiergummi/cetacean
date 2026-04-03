@@ -78,6 +78,7 @@ export function useTaskMetrics(
     },
     enabled: enabled && !!filter,
     refetchInterval: refreshInterval,
+    refetchIntervalInBackground: true,
     staleTime: refreshInterval,
     retry: false,
   });
