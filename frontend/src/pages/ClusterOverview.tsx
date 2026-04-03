@@ -10,7 +10,7 @@ import {
 } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import RecommendationSummary from "../components/RecommendationSummary";
-import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { isPrometheusReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { stackResourceCharts } from "../lib/stackQueries";
 import { TrendingDown, TrendingUp } from "lucide-react";
@@ -79,7 +79,7 @@ export default function ClusterOverview() {
   );
 
   const monitoring = useMonitoringStatus();
-  const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
+  const hasPrometheus = isPrometheusReady(monitoring);
 
   if (!snapshot) {
     return (

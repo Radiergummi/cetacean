@@ -409,10 +409,6 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	if !requireMergePatch(w, r) {
-		return
-	}
-
 	svc, ok := h.cache.GetService(id)
 	if !ok {
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
@@ -686,10 +682,6 @@ func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	if !requireMergePatch(w, r) {
-		return
-	}
-
 	svc, ok := h.cache.GetService(id)
 	if !ok {
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
@@ -761,10 +753,6 @@ func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *ht
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	if !requireMergePatch(w, r) {
-		return
-	}
-
 	svc, ok := h.cache.GetService(id)
 	if !ok {
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
@@ -832,10 +820,6 @@ func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Re
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	if !requireMergePatch(w, r) {
-		return
-	}
-
 	svc, ok := h.cache.GetService(id)
 	if !ok {
 		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
@@ -880,10 +864,6 @@ func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Re
 func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
-
-	if !requireMergePatch(w, r) {
-		return
-	}
 
 	svc, ok := h.cache.GetService(id)
 	if !ok {
@@ -1001,9 +981,6 @@ func (h *Handlers) HandleGetServiceContainerConfig(w http.ResponseWriter, r *htt
 
 func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if !requireMergePatch(w, r) {
-		return
-	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
 	svc, ok := h.cache.GetService(id)

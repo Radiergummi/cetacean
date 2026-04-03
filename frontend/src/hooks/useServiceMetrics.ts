@@ -1,6 +1,6 @@
 import { api } from "../api/client";
-import type { PrometheusResponse } from "../api/types";
-import { useMonitoringStatus } from "./useMonitoringStatus";
+import { parseInstant, parseRange } from "../lib/prometheusParser";
+import { isCadvisorReady, useMonitoringStatus } from "./useMonitoringStatus";
 import { useEffect, useState, useCallback } from "react";
 
 export interface ServiceMetrics {
@@ -21,10 +21,7 @@ const serviceLabel = "container_label_com_docker_swarm_service_name";
 
 export function useServiceMetrics() {
   const monitoring = useMonitoringStatus();
-  const hasCadvisor =
-    monitoring?.prometheusConfigured &&
-    monitoring?.prometheusReachable &&
-    !!monitoring?.cadvisor?.targets;
+  const hasCadvisor = isCadvisorReady(monitoring);
   const [byService, setByService] = useState<Record<string, ServiceMetrics>>({});
 
   useEffect(() => {
@@ -74,19 +71,19 @@ export function useServiceMetrics() {
             return map[name];
           };
 
-          parseInstant(cpuResponse)?.forEach(([name, value]) => {
+          parseInstant(cpuResponse, serviceLabel)?.forEach(([name, value]) => {
             ensure(name).cpu = value;
           });
 
-          parseInstant(memResponse)?.forEach(([name, value]) => {
+          parseInstant(memResponse, serviceLabel)?.forEach(([name, value]) => {
             ensure(name).memory = value;
           });
 
-          parseRange(cpuRangeResponse)?.forEach(([name, values]) => {
+          parseRange(cpuRangeResponse, serviceLabel)?.forEach(([name, values]) => {
             ensure(name).cpuHistory = values;
           });
 
-          parseRange(memRangeResponse)?.forEach(([name, values]) => {
+          parseRange(memRangeResponse, serviceLabel)?.forEach(([name, values]) => {
             ensure(name).memoryHistory = values;
           });
 
@@ -110,32 +107,4 @@ export function useServiceMetrics() {
   );
 
   return { getForService, hasData: Object.keys(byService).length > 0 };
-}
-
-function parseInstant(response: PrometheusResponse | null): [string, number][] | null {
-  const results = response?.data?.result;
-
-  if (!results?.length) {
-    return null;
-  }
-
-  return results.map(
-    ({ metric, value }) => [metric?.[serviceLabel] || "", Number(value?.[1])] as [string, number],
-  );
-}
-
-function parseRange(response: PrometheusResponse | null): [string, number[]][] | null {
-  const results = response?.data?.result;
-
-  if (!results?.length) {
-    return null;
-  }
-
-  return results.map(
-    ({ metric, values }) =>
-      [metric?.[serviceLabel] || "", (values || []).map((value) => Number(value[1]))] as [
-        string,
-        number[],
-      ],
-  );
 }

@@ -10,6 +10,7 @@ import { useResourceStream } from "../hooks/useResourceStream";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { useViewMode } from "../hooks/useViewMode";
 import { formatBytes, formatPercentage } from "../lib/format";
+import { cardGridClass } from "../lib/styles";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -151,7 +152,7 @@ export default function StackList() {
           onRowClick={({ name }) => navigate(`/stacks/${name}`)}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className={cardGridClass}>
           {filtered.map((stack) => (
             <StackCard
               key={stack.name}

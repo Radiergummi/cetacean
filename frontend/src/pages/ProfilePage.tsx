@@ -4,6 +4,7 @@ import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { apiPath } from "@/lib/basePath";
+import { cardGridClass } from "@/lib/styles";
 import { LogOut } from "lucide-react";
 import { Navigate } from "react-router-dom";
 
@@ -54,7 +55,7 @@ export default function ProfilePage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className={cardGridClass}>
         <InfoCard
           label="Subject"
           value={identity.subject}

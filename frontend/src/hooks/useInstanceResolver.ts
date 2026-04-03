@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import { useMonitoringStatus } from "./useMonitoringStatus";
+import { isPrometheusReady, useMonitoringStatus } from "./useMonitoringStatus";
 import { useCallback, useEffect, useState } from "react";
 
 /**
@@ -14,7 +14,7 @@ import { useCallback, useEffect, useState } from "react";
  */
 export function useInstanceResolver() {
   const monitoring = useMonitoringStatus();
-  const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
+  const hasPrometheus = isPrometheusReady(monitoring);
   // Map of nodename → instance (e.g. "app-prod-whale-1" → "10.100.9.27:9100")
   const [byHostname, setByHostname] = useState<Record<string, string>>({});
 

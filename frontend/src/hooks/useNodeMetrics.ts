@@ -1,7 +1,7 @@
 import { api } from "../api/client";
-import type { PrometheusResponse } from "../api/types";
+import { parseInstant, parseRange } from "../lib/prometheusParser";
 import { useInstanceResolver } from "./useInstanceResolver";
-import { useMonitoringStatus } from "./useMonitoringStatus";
+import { isPrometheusReady, useMonitoringStatus } from "./useMonitoringStatus";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 export interface NodeMetrics {
@@ -22,7 +22,7 @@ const emptyMetrics: NodeMetrics = {
 // Nodes are matched to instances via useInstanceResolver (hostname-based).
 export function useNodeMetrics() {
   const monitoring = useMonitoringStatus();
-  const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
+  const hasPrometheus = isPrometheusReady(monitoring);
   const { resolve } = useInstanceResolver();
   const [byInstance, setByInstance] = useState<Record<string, NodeMetrics>>({});
 
@@ -74,16 +74,16 @@ export function useNodeMetrics() {
             return map[instance];
           };
 
-          parseInstant(cpuResponse)?.forEach(([instance, value]) => {
+          parseInstant(cpuResponse, "instance")?.forEach(([instance, value]) => {
             ensure(instance).cpu = value;
           });
-          parseInstant(memResponse)?.forEach(([instance, value]) => {
+          parseInstant(memResponse, "instance")?.forEach(([instance, value]) => {
             ensure(instance).memory = value;
           });
-          parseInstant(diskResponse)?.forEach(([instance, value]) => {
+          parseInstant(diskResponse, "instance")?.forEach(([instance, value]) => {
             ensure(instance).disk = value;
           });
-          parseRange(cpuRangeResponse)?.forEach(([instance, values]) => {
+          parseRange(cpuRangeResponse, "instance")?.forEach(([instance, values]) => {
             ensure(instance).cpuHistory = values;
           });
 
@@ -133,32 +133,4 @@ export function useNodeMetrics() {
   );
 
   return { getForNode, hasData: instanceEntries.length > 0 };
-}
-
-function parseInstant(resp: PrometheusResponse | null): [string, number][] | null {
-  const results = resp?.data?.result;
-
-  if (!results?.length) {
-    return null;
-  }
-
-  return results.map(
-    ({ metric, value }) => [metric?.instance || "", Number(value?.[1])] as [string, number],
-  );
-}
-
-function parseRange(response: PrometheusResponse | null): [string, number[]][] | null {
-  const results = response?.data?.result;
-
-  if (!results?.length) {
-    return null;
-  }
-
-  return results.map(
-    ({ metric, values }) =>
-      [metric?.instance || "", (values || []).map((value) => Number(value[1]))] as [
-        string,
-        number[],
-      ],
-  );
 }

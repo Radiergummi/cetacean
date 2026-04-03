@@ -10,14 +10,15 @@ import { ResourceGauge, Sparkline, NodeResourceGauges, MetricsPanel } from "../c
 import PageHeader from "../components/PageHeader";
 import ResourceCard from "../components/ResourceCard";
 import TaskStatusBadge from "../components/TaskStatusBadge";
-import { sortColumn } from "../lib/sortColumn";
-import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { isNodeExporterReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useNodeMetrics } from "../hooks/useNodeMetrics";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useViewMode } from "../hooks/useViewMode";
 import { instanceToHostname } from "../lib/format";
+import { sortColumn } from "../lib/sortColumn";
+import { cardGridClass } from "../lib/styles";
 import { useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -43,8 +44,7 @@ export default function NodeList() {
   const [viewMode, setViewMode] = useViewMode("nodes");
   const navigate = useNavigate();
   const monitoring = useMonitoringStatus();
-  const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
-  const hasNodeExporter = hasPrometheus && !!monitoring?.nodeExporter?.targets;
+  const hasNodeExporter = isNodeExporterReady(monitoring);
   const { getForNode } = useNodeMetrics();
 
   const baseColumns: Column<Node>[] = useMemo(
@@ -215,7 +215,7 @@ export default function NodeList() {
           onLoadMore={loadMore}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className={cardGridClass}>
           {nodes.map((node) => {
             const metrics = getForNode(node.Description.Hostname, node.Status.Addr);
 

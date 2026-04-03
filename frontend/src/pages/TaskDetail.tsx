@@ -24,7 +24,7 @@ import {
 } from "../components/ui/alert-dialog";
 import { Button } from "../components/ui/button";
 import { useAsyncAction } from "../hooks/useAsyncAction";
-import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { isCadvisorReady, isPrometheusReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
@@ -86,8 +86,8 @@ export default function TaskDetail() {
   }
 
   const monitoring = useMonitoringStatus();
-  const hasCadvisor = !!monitoring?.cadvisor?.targets;
-  const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
+  const hasCadvisor = isCadvisorReady(monitoring);
+  const hasPrometheus = isPrometheusReady(monitoring);
   const taskMetrics = useTaskMetrics(
     id ? `container_label_com_docker_swarm_task_id="${escapePromQL(id)}"` : "",
     hasCadvisor && !!id && task?.Status.State === "running",

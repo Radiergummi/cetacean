@@ -22,7 +22,7 @@ import PageHeader from "../components/PageHeader";
 import TasksTable from "../components/TasksTable";
 import { useGaugeValue } from "../hooks/useGaugeValue";
 import { useInstanceResolver } from "../hooks/useInstanceResolver";
-import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { isCadvisorReady, isPrometheusReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { formatBytes, formatNumber } from "../lib/format";
@@ -58,8 +58,8 @@ export default function NodeDetail() {
 
   const monitoring = useMonitoringStatus();
   const [allowedMethods, setAllowedMethods] = useState(emptyMethods);
-  const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
-  const hasCadvisor = !!monitoring?.cadvisor?.targets;
+  const hasPrometheus = isPrometheusReady(monitoring);
+  const hasCadvisor = isCadvisorReady(monitoring);
   const { resolve } = useInstanceResolver();
   const [error, setError] = useState(false);
 

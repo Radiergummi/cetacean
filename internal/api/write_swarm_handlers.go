@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -14,10 +13,7 @@ import (
 func (h *Handlers) HandlePatchSwarmOrchestration(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(w, r, "API004",
-			"Content-Type must be application/merge-patch+json")
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -64,10 +60,7 @@ func (h *Handlers) HandlePatchSwarmOrchestration(w http.ResponseWriter, r *http.
 func (h *Handlers) HandlePatchSwarmRaft(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(w, r, "API004",
-			"Content-Type must be application/merge-patch+json")
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -120,10 +113,7 @@ func (h *Handlers) HandlePatchSwarmRaft(w http.ResponseWriter, r *http.Request) 
 func (h *Handlers) HandlePatchSwarmDispatcher(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(w, r, "API004",
-			"Content-Type must be application/merge-patch+json")
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -170,10 +160,7 @@ func (h *Handlers) HandlePatchSwarmDispatcher(w http.ResponseWriter, r *http.Req
 func (h *Handlers) HandlePatchSwarmCAConfig(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(w, r, "API004",
-			"Content-Type must be application/merge-patch+json")
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -220,10 +207,7 @@ func (h *Handlers) HandlePatchSwarmCAConfig(w http.ResponseWriter, r *http.Reque
 func (h *Handlers) HandlePatchSwarmEncryption(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(w, r, "API004",
-			"Content-Type must be application/merge-patch+json")
+	if !requireMergePatch(w, r) {
 		return
 	}
 

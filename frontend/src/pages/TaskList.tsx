@@ -11,7 +11,7 @@ import ResourceCard from "../components/ResourceCard";
 import ResourceName from "../components/ResourceName";
 import TaskStateFilter, { isActiveTask } from "../components/TaskStateFilter";
 import TaskStatusBadge from "../components/TaskStatusBadge";
-import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { isCadvisorReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
@@ -96,7 +96,7 @@ export default function TaskList() {
 
   const [viewMode, setViewMode] = useViewMode("tasks");
   const monitoring = useMonitoringStatus();
-  const hasCadvisor = !!monitoring?.cadvisor?.targets;
+  const hasCadvisor = isCadvisorReady(monitoring);
   const taskMetrics = useTaskMetrics(`container_label_com_docker_swarm_task_id!=""`, hasCadvisor);
 
   const columns: Column<Task>[] = useMemo(

@@ -1,6 +1,6 @@
-import type { ReactNode } from "react";
 import SortIndicator from "../components/SortIndicator";
 import type { SortDir } from "../hooks/useSort";
+import type { ReactNode } from "react";
 
 /**
  * Returns `header` and `onHeaderClick` props for a sortable DataTable column.

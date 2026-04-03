@@ -147,6 +147,9 @@ func applyStructMergePatch(
 	errCode string,
 	errMsg string,
 ) bool {
+	if !requireMergePatch(w, r) {
+		return false
+	}
 	base, err := json.Marshal(current)
 	if err != nil {
 		writeErrorCode(w, r, "API009", "failed to marshal current state")

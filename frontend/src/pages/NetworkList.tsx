@@ -9,10 +9,11 @@ import PageHeader from "../components/PageHeader";
 import ResourceCard from "../components/ResourceCard";
 import ResourceName from "../components/ResourceName";
 import { useSearchParam } from "../hooks/useSearchParam";
-import { sortColumn } from "../lib/sortColumn";
 import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useViewMode } from "../hooks/useViewMode";
+import { sortColumn } from "../lib/sortColumn";
+import { cardGridClass } from "../lib/styles";
 import { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -97,7 +98,7 @@ export default function NetworkList() {
           onLoadMore={loadMore}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className={cardGridClass}>
           {networks.map(({ Driver, Id, Name, Scope }) => (
             <ResourceCard
               key={Id}

@@ -11,7 +11,7 @@ import PageHeader from "../components/PageHeader";
 import ResourceCard from "../components/ResourceCard";
 import ResourceName from "../components/ResourceName";
 import { SizingBadge } from "../components/SizingBadge";
-import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { isCadvisorReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useRecommendations } from "../hooks/useRecommendations";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { useServiceMetrics } from "../hooks/useServiceMetrics";
@@ -20,6 +20,7 @@ import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useViewMode } from "../hooks/useViewMode";
 import { sizingCategories } from "../lib/sizingUtils";
 import { sortColumn } from "../lib/sortColumn";
+import { cardGridClass } from "../lib/styles";
 import { useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -70,10 +71,7 @@ export default function ServiceList() {
   const [viewMode, setViewMode] = useViewMode("services");
   const navigate = useNavigate();
   const monitoring = useMonitoringStatus();
-  const hasCadvisor =
-    monitoring?.prometheusConfigured &&
-    monitoring?.prometheusReachable &&
-    !!monitoring?.cadvisor?.targets;
+  const hasCadvisor = isCadvisorReady(monitoring);
   const { getForService } = useServiceMetrics();
   const { items: recommendations, hasData: hasRecommendations } = useRecommendations();
 
@@ -285,7 +283,7 @@ export default function ServiceList() {
           onLoadMore={loadMore}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className={cardGridClass}>
           {services.map((service) => {
             const desired = service.Spec.Mode.Replicated?.Replicas;
 

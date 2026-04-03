@@ -19,6 +19,7 @@ import ResourceName from "../components/ResourceName";
 import ServiceRefList from "../components/ServiceRefList";
 import { useDetailResource } from "../hooks/useDetailResource";
 import { parseStackLabels } from "../lib/parseStackLabels";
+import { cardGridClass } from "../lib/styles";
 import { useParams } from "react-router-dom";
 
 function NetworkFlags({ network }: { network: Network }) {
@@ -67,7 +68,7 @@ function IPAMPanel({ network }: { network: Network }) {
 
   return (
     <CollapsibleSection title="IPAM Configuration">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className={cardGridClass}>
         {ipam.Config.map(({ Gateway, IPRange, Subnet }, index) => (
           <div
             key={index}
