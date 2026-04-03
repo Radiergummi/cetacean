@@ -1,3 +1,5 @@
+import { QueryClientProvider } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import AtomFeedLink from "./components/AtomFeedLink";
 import ConnectionStatus from "./components/ConnectionStatus";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -14,6 +16,7 @@ import { useHotkeys } from "./hooks/useHotkeys";
 import { useRecommendations } from "./hooks/useRecommendations";
 import { ConnectionProvider, sseEventTypes } from "./hooks/useResourceStream";
 import { apiPath, basePath } from "./lib/basePath";
+import { queryClient } from "./lib/queryClient";
 import { Keyboard, Lightbulb, Menu, X } from "lucide-react";
 import type React from "react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
@@ -272,15 +275,16 @@ function ConnectionTracker({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <BrowserRouter basename={basePath}>
-      <AuthProvider>
-        <ConnectionTracker>
-          <Toaster
-            theme="system"
-            richColors
-            position="bottom-right"
-            toastOptions={{ duration: 8000 }}
-          />
-          <Layout>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <ConnectionTracker>
+            <Toaster
+              theme="system"
+              richColors
+              position="bottom-right"
+              toastOptions={{ duration: 8000 }}
+            />
+            <Layout>
             <Suspense fallback={<LoadingDetail />}>
               <Routes>
                 <Route
@@ -401,9 +405,11 @@ export default function App() {
                 />
               </Routes>
             </Suspense>
-          </Layout>
-        </ConnectionTracker>
-      </AuthProvider>
+            </Layout>
+          </ConnectionTracker>
+        </AuthProvider>
+        {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
+      </QueryClientProvider>
     </BrowserRouter>
   );
 }
