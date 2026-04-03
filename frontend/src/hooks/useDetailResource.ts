@@ -12,10 +12,10 @@ export function useDetailResource<T>(
   const queryClient = useQueryClient();
 
   const resourceQuery = useQuery({
-    queryKey: ["detail", ssePath, key],
+    queryKey: ["detail", ssePath],
     queryFn: ({ signal }) => fetchFn(key!, signal),
     enabled: !!key,
-    retry: 1,
+    retry: false,
   });
 
   const historyQuery = useQuery({
