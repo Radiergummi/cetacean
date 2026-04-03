@@ -18,6 +18,20 @@ function makeNetworkGraph(overrides: Partial<JGFGraph> = {}): JGFGraph {
   };
 }
 
+function makePlacementGraph(overrides: Partial<JGFGraph> = {}): JGFGraph {
+  return {
+    id: "placement",
+    type: "placement-topology",
+    label: "Placement Topology",
+    directed: false,
+    metadata: baseMetadata,
+    nodes: {},
+    edges: [],
+    hyperedges: [],
+    ...overrides,
+  };
+}
+
 describe("networkGraphToReactFlow", () => {
   it("creates group nodes for stacks and service nodes as children", () => {
     const graph = makeNetworkGraph({
@@ -247,5 +261,68 @@ describe("placementGraphToReactFlow", () => {
     const n2Data = nodes[1].data as { services: { total: number }[] };
     expect(n2Data.services.length).toBe(1);
     expect(n2Data.services[0].total).toBe(1);
+  });
+});
+
+describe("empty graph inputs", () => {
+  it("handles empty network graph", () => {
+    const graph = makeNetworkGraph({ nodes: {} });
+    const { nodes, edges } = networkGraphToReactFlow(graph);
+    expect(nodes).toEqual([]);
+    expect(edges).toEqual([]);
+  });
+
+  it("handles empty placement graph", () => {
+    const graph = makePlacementGraph({ nodes: {} });
+    const { nodes } = placementGraphToReactFlow(graph);
+    expect(nodes).toEqual([]);
+  });
+});
+
+describe("network alias extraction", () => {
+  it("extracts network aliases from edge metadata", () => {
+    const graph = makeNetworkGraph({
+      nodes: {
+        "urn:cetacean:service:s1": {
+          label: "webapp-api",
+          metadata: { ...baseMetadata, kind: "service", replicas: 1, image: "api:latest", mode: "replicated" },
+        },
+        "urn:cetacean:service:s2": {
+          label: "webapp-web",
+          metadata: { ...baseMetadata, kind: "service", replicas: 1, image: "web:latest", mode: "replicated" },
+        },
+      },
+      edges: [
+        {
+          source: "urn:cetacean:service:s1",
+          target: "urn:cetacean:service:s2",
+          metadata: {
+            ...baseMetadata,
+            networks: [{
+              id: "urn:cetacean:network:net1",
+              name: "frontend",
+              driver: "overlay",
+              scope: "swarm",
+              aliases: {
+                "urn:cetacean:service:s1": ["api", "backend"],
+                "urn:cetacean:service:s2": ["web"],
+              },
+            }],
+          },
+        },
+      ],
+    });
+
+    const { edges } = networkGraphToReactFlow(graph);
+    expect(edges.length).toBe(1);
+
+    const data = edges[0].data as {
+      sourceAliases?: string[];
+      targetAliases?: string[];
+    };
+
+    expect(data.sourceAliases).toContain("api");
+    expect(data.sourceAliases).toContain("backend");
+    expect(data.targetAliases).toContain("web");
   });
 });

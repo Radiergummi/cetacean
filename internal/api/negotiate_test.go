@@ -313,3 +313,25 @@ func TestParseAccept_JGF(t *testing.T) {
 		t.Errorf("got %v, want ContentTypeJGF", ct)
 	}
 }
+
+func TestNegotiate_JGFSuffix(t *testing.T) {
+	var captured ContentType
+	var capturedPath string
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captured = ContentTypeFromContext(r.Context())
+		capturedPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := negotiate(inner)
+	req := httptest.NewRequest("GET", "/topology.jgf", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if captured != ContentTypeJGF {
+		t.Errorf("expected ContentTypeJGF, got %v", captured)
+	}
+	if capturedPath != "/topology" {
+		t.Errorf("expected path /topology, got %s", capturedPath)
+	}
+}

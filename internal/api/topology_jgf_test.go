@@ -1,6 +1,7 @@
 package api
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -350,5 +351,147 @@ func TestBuildPlacementJGF_EmptyInput(t *testing.T) {
 	}
 	if len(g.Hyperedges) != 0 {
 		t.Errorf("hyperedges=%d, want 0", len(g.Hyperedges))
+	}
+}
+
+func TestHandleTopology_ETag304(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(
+		network.Summary{ID: "net1", Name: "web_default", Driver: "overlay", Scope: "swarm"},
+	)
+	c.SetNode(swarm.Node{
+		ID:          "n1",
+		Description: swarm.NodeDescription{Hostname: "worker-01"},
+		Spec:        swarm.NodeSpec{Role: swarm.NodeRoleWorker},
+		Status:      swarm.NodeStatus{State: swarm.NodeStateReady},
+	})
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "nginx"},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{Image: "nginx:latest"},
+			},
+		},
+		Endpoint: swarm.Endpoint{
+			VirtualIPs: []swarm.EndpointVirtualIP{{NetworkID: "net1"}},
+		},
+	})
+	c.SetTask(swarm.Task{
+		ID:        "t1",
+		ServiceID: "svc1",
+		NodeID:    "n1",
+		Slot:      1,
+		Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
+	})
+
+	h := newTestHandlers(t, withCache(c))
+
+	// First request — get ETag.
+	req1 := httptest.NewRequest("GET", "/topology", nil)
+	w1 := httptest.NewRecorder()
+	h.HandleTopology(w1, req1)
+
+	etag := w1.Header().Get("ETag")
+	if etag == "" {
+		t.Fatal("expected ETag header")
+	}
+	if w1.Header().Get("Cache-Control") != "no-cache" {
+		t.Errorf("expected Cache-Control: no-cache")
+	}
+
+	// Second request with If-None-Match.
+	req2 := httptest.NewRequest("GET", "/topology", nil)
+	req2.Header.Set("If-None-Match", etag)
+	w2 := httptest.NewRecorder()
+	h.HandleTopology(w2, req2)
+
+	if w2.Code != http.StatusNotModified {
+		t.Errorf("expected 304, got %d", w2.Code)
+	}
+	if w2.Body.Len() != 0 {
+		t.Errorf("expected empty body on 304, got %d bytes", w2.Body.Len())
+	}
+}
+
+func TestBuildNetworkJGF_IsolatedService(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "standalone"},
+			TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{Image: "app:latest"}},
+		},
+		// No VIPs.
+	})
+
+	g := buildNetworkJGF(c.ListServices(), c.ListNetworks(), jsonLDContext)
+
+	if len(g.Nodes) != 1 {
+		t.Fatalf("nodes=%d, want 1", len(g.Nodes))
+	}
+	if len(g.Edges) != 0 {
+		t.Errorf("edges=%d, want 0 (no overlay networks)", len(g.Edges))
+	}
+	if len(g.Hyperedges) != 0 {
+		t.Errorf("hyperedges=%d, want 0 (no stack)", len(g.Hyperedges))
+	}
+}
+
+func TestBuildPlacementJGF_TaskImageFallback(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{
+		ID:          "node1",
+		Description: swarm.NodeDescription{Hostname: "worker-1"},
+		Spec:        swarm.NodeSpec{Role: swarm.NodeRoleWorker, Availability: swarm.NodeAvailabilityActive},
+		Status:      swarm.NodeStatus{State: swarm.NodeStateReady},
+	})
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "webapp"},
+			TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{Image: "webapp:v2"}},
+		},
+	})
+	// Task with no ContainerSpec — should fall back to service image.
+	c.SetTask(swarm.Task{
+		ID:        "task1",
+		ServiceID: "svc1",
+		NodeID:    "node1",
+		Slot:      1,
+		Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
+		Spec:      swarm.TaskSpec{}, // No ContainerSpec.
+	})
+
+	svcNames := map[string]string{"svc1": "webapp"}
+	svcImages := map[string]string{"svc1": "webapp:v2"}
+	readable := map[string]bool{"svc1": true}
+
+	g := buildPlacementJGF(c.ListNodes(), c, svcNames, svcImages, readable, jsonLDContext)
+
+	if len(g.Hyperedges) != 1 {
+		t.Fatalf("hyperedges=%d, want 1", len(g.Hyperedges))
+	}
+
+	// Round-trip to check task image.
+	heBytes, err := json.Marshal(g.Hyperedges[0])
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var he jgf.Hyperedge
+	if err := json.Unmarshal(heBytes, &he); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	tasks, ok := he.Metadata["tasks"].([]any)
+	if !ok || len(tasks) != 1 {
+		t.Fatalf("expected 1 task in hyperedge metadata")
+	}
+	task, ok := tasks[0].(map[string]any)
+	if !ok {
+		t.Fatal("task is not a map")
+	}
+	if task["image"] != "webapp:v2" {
+		t.Errorf("expected task image fallback to 'webapp:v2', got %v", task["image"])
 	}
 }

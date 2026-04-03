@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/api/jgf"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
@@ -1683,5 +1684,56 @@ func TestHandleRecommendations_ACLFiltering(t *testing.T) {
 	}
 	if resp.Total != 1 {
 		t.Fatalf("expected 1 recommendation (webapp only), got %d", resp.Total)
+	}
+}
+
+func TestHandleTopology_ACLFiltering(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{ID: "net1", Name: "frontend", Driver: "overlay"})
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "webapp"}},
+		Endpoint: swarm.Endpoint{VirtualIPs: []swarm.EndpointVirtualIP{{NetworkID: "net1"}}},
+	})
+	c.SetService(swarm.Service{
+		ID:   "svc2",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "secret-service"}},
+		Endpoint: swarm.Endpoint{VirtualIPs: []swarm.EndpointVirtualIP{{NetworkID: "net1"}}},
+	})
+	c.SetNode(swarm.Node{
+		ID:          "node1",
+		Description: swarm.NodeDescription{Hostname: "worker-1"},
+		Spec:        swarm.NodeSpec{Role: swarm.NodeRoleWorker, Availability: swarm.NodeAvailabilityActive},
+		Status:      swarm.NodeStatus{State: swarm.NodeStateReady},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{Resources: []string{"service:webapp"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+		{Resources: []string{"node:*"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/topology", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleTopology(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	var doc jgf.Document
+	if err := json.NewDecoder(w.Body).Decode(&doc); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	// Network graph should only contain webapp, not secret-service.
+	networkGraph := doc.Graphs[0]
+	if len(networkGraph.Nodes) != 1 {
+		t.Errorf("network graph nodes=%d, want 1 (only webapp)", len(networkGraph.Nodes))
+	}
+	if _, ok := networkGraph.Nodes[jgf.URN("service", "svc1")]; !ok {
+		t.Error("expected webapp (svc1) in network graph")
 	}
 }

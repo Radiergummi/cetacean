@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/docker/docker/api/types/network"
@@ -226,5 +227,35 @@ func TestHandlePlacementTopology_EnrichedFields(t *testing.T) {
 	}
 	if resp.Nodes[0].Tasks[0].Image != "nginx:1.25" {
 		t.Errorf("image=%q, want nginx:1.25", resp.Nodes[0].Tasks[0].Image)
+	}
+}
+
+func TestHandleNetworkTopology_DeprecationHeaders(t *testing.T) {
+	h := newTestHandlers(t, withCache(cache.New(nil)))
+	req := httptest.NewRequest("GET", "/topology/networks", nil)
+	w := httptest.NewRecorder()
+	h.HandleNetworkTopology(w, req)
+
+	if w.Header().Get("Deprecation") != "true" {
+		t.Error("expected Deprecation: true header")
+	}
+	link := w.Header().Get("Link")
+	if !strings.Contains(link, `</topology>`) || !strings.Contains(link, `rel="successor-version"`) {
+		t.Errorf("expected Link successor-version header, got %q", link)
+	}
+}
+
+func TestHandlePlacementTopology_DeprecationHeaders(t *testing.T) {
+	h := newTestHandlers(t, withCache(cache.New(nil)))
+	req := httptest.NewRequest("GET", "/topology/placement", nil)
+	w := httptest.NewRecorder()
+	h.HandlePlacementTopology(w, req)
+
+	if w.Header().Get("Deprecation") != "true" {
+		t.Error("expected Deprecation: true header")
+	}
+	link := w.Header().Get("Link")
+	if !strings.Contains(link, `</topology>`) || !strings.Contains(link, `rel="successor-version"`) {
+		t.Errorf("expected Link successor-version header, got %q", link)
 	}
 }
