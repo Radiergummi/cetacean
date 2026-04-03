@@ -77,6 +77,9 @@ func (h *Handlers) taskServiceResource(r *http.Request) string {
 		if svc, ok := h.cache.GetService(t.ServiceID); ok {
 			return "service:" + svc.Spec.Name
 		}
+		// Task found but service missing (orphaned): preserve service type
+		// so service:* grants still match via the evaluator.
+		return "service:" + t.ServiceID
 	}
 	return "task:" + id
 }

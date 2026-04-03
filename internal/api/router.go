@@ -527,7 +527,8 @@ func requireReady(h *Handlers) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ct := ContentTypeFromContext(r.Context())
 			if !h.isReady() && isResourcePath(r.URL.Path) &&
-				(ct == ContentTypeJSON || ct == ContentTypeAtom || ct == ContentTypeJGF) {
+				(ct == ContentTypeJSON || ct == ContentTypeAtom || ct == ContentTypeJGF ||
+				ct == ContentTypeGraphML || ct == ContentTypeDOT) {
 				writeErrorCode(w, r, "ENG001", "Docker daemon is not reachable")
 				return
 			}

@@ -679,6 +679,13 @@ func buildPlacementJGF(
 
 		sort.Strings(heNodes[1:])
 
+		// Sort tasks by ID for deterministic output.
+		sort.Slice(sp.tasks, func(i, j int) bool {
+			idI, _ := sp.tasks[i]["id"].(string)
+			idJ, _ := sp.tasks[j]["id"].(string)
+			return idI < idJ
+		})
+
 		hyperedges = append(hyperedges, jgf.Hyperedge{
 			Nodes: heNodes,
 			Metadata: jgf.Metadata{
@@ -688,6 +695,11 @@ func buildPlacementJGF(
 			},
 		})
 	}
+
+	// Sort hyperedges by first node (service URN) for deterministic output.
+	sort.Slice(hyperedges, func(i, j int) bool {
+		return hyperedges[i].Nodes[0] < hyperedges[j].Nodes[0]
+	})
 
 	return jgf.Graph{
 		ID:         "placement",

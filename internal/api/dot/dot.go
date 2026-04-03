@@ -89,13 +89,20 @@ func nodeStatement(urn string, node jgf.Node) string {
 		}
 	}
 
-	if ports, ok := node.Metadata["ports"].([]any); ok && len(ports) > 0 {
-		strs := make([]string, len(ports))
-		for i, p := range ports {
-			strs[i] = fmt.Sprintf("%v", p)
+	switch ports := node.Metadata["ports"].(type) {
+	case []string:
+		if len(ports) > 0 {
+			attrs = append(attrs, "ports="+dotQuote(strings.Join(ports, ",")))
 		}
+	case []any:
+		if len(ports) > 0 {
+			strs := make([]string, len(ports))
+			for i, p := range ports {
+				strs[i] = fmt.Sprintf("%v", p)
+			}
 
-		attrs = append(attrs, "ports="+dotQuote(strings.Join(strs, ",")))
+			attrs = append(attrs, "ports="+dotQuote(strings.Join(strs, ",")))
+		}
 	}
 
 	return fmt.Sprintf("%s [%s]", dotQuote(urn), strings.Join(attrs, " "))
