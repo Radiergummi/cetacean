@@ -46,7 +46,8 @@ func etagMatch(header, etag string) bool {
 }
 
 // writeRawWithETag sets an ETag on pre-rendered bytes and returns 304 Not
-// Modified if the client's If-None-Match header matches.
+// Modified if the client's If-None-Match header matches. The caller must set
+// Content-Type before calling this function.
 func writeRawWithETag(w http.ResponseWriter, r *http.Request, data []byte) {
 	etag := computeETag(data)
 	w.Header().Set("ETag", etag)

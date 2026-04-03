@@ -83,12 +83,19 @@ func nodeStatement(urn string, node jgf.Node) string {
 		attrs = append(attrs, "replicas="+dotQuote(fmt.Sprintf("%v", v)))
 	}
 
-	if image, ok := node.Metadata["image"].(string); ok && image != "" {
-		attrs = append(attrs, "image="+dotQuote(image))
+	for _, key := range []string{"kind", "image", "mode", "updateStatus"} {
+		if v, ok := node.Metadata[key].(string); ok && v != "" {
+			attrs = append(attrs, key+"="+dotQuote(v))
+		}
 	}
 
-	if mode, ok := node.Metadata["mode"].(string); ok && mode != "" {
-		attrs = append(attrs, "mode="+dotQuote(mode))
+	if ports, ok := node.Metadata["ports"].([]any); ok && len(ports) > 0 {
+		strs := make([]string, len(ports))
+		for i, p := range ports {
+			strs[i] = fmt.Sprintf("%v", p)
+		}
+
+		attrs = append(attrs, "ports="+dotQuote(strings.Join(strs, ",")))
 	}
 
 	return fmt.Sprintf("%s [%s]", dotQuote(urn), strings.Join(attrs, " "))

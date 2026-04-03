@@ -552,6 +552,14 @@ func buildNetworkJGF(
 		})
 	}
 
+	// Sort edges for deterministic output (map iteration is non-deterministic).
+	sort.Slice(edges, func(i, j int) bool {
+		if edges[i].Source != edges[j].Source {
+			return edges[i].Source < edges[j].Source
+		}
+		return edges[i].Target < edges[j].Target
+	})
+
 	// Build stack hyperedges.
 	hyperedges := make([]jgf.Hyperedge, 0, len(stacks))
 	for name, members := range stacks {
@@ -565,6 +573,13 @@ func buildNetworkJGF(
 			},
 		})
 	}
+
+	// Sort hyperedges for deterministic output.
+	sort.Slice(hyperedges, func(i, j int) bool {
+		nameI, _ := hyperedges[i].Metadata["name"].(string)
+		nameJ, _ := hyperedges[j].Metadata["name"].(string)
+		return nameI < nameJ
+	})
 
 	return jgf.Graph{
 		ID:         "network",
