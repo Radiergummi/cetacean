@@ -419,7 +419,7 @@ func TestBuildNetworkJGF_IsolatedService(t *testing.T) {
 	c.SetService(swarm.Service{
 		ID: "svc1",
 		Spec: swarm.ServiceSpec{
-			Annotations: swarm.Annotations{Name: "standalone"},
+			Annotations:  swarm.Annotations{Name: "standalone"},
 			TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{Image: "app:latest"}},
 		},
 		// No VIPs.
@@ -443,13 +443,16 @@ func TestBuildPlacementJGF_TaskImageFallback(t *testing.T) {
 	c.SetNode(swarm.Node{
 		ID:          "node1",
 		Description: swarm.NodeDescription{Hostname: "worker-1"},
-		Spec:        swarm.NodeSpec{Role: swarm.NodeRoleWorker, Availability: swarm.NodeAvailabilityActive},
-		Status:      swarm.NodeStatus{State: swarm.NodeStateReady},
+		Spec: swarm.NodeSpec{
+			Role:         swarm.NodeRoleWorker,
+			Availability: swarm.NodeAvailabilityActive,
+		},
+		Status: swarm.NodeStatus{State: swarm.NodeStateReady},
 	})
 	c.SetService(swarm.Service{
 		ID: "svc1",
 		Spec: swarm.ServiceSpec{
-			Annotations: swarm.Annotations{Name: "webapp"},
+			Annotations:  swarm.Annotations{Name: "webapp"},
 			TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{Image: "webapp:v2"}},
 		},
 	})

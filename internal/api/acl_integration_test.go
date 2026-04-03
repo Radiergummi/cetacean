@@ -1691,25 +1691,32 @@ func TestHandleTopology_ACLFiltering(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNetwork(network.Summary{ID: "net1", Name: "frontend", Driver: "overlay"})
 	c.SetService(swarm.Service{
-		ID:   "svc1",
-		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "webapp"}},
+		ID:       "svc1",
+		Spec:     swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "webapp"}},
 		Endpoint: swarm.Endpoint{VirtualIPs: []swarm.EndpointVirtualIP{{NetworkID: "net1"}}},
 	})
 	c.SetService(swarm.Service{
-		ID:   "svc2",
-		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "secret-service"}},
+		ID:       "svc2",
+		Spec:     swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "secret-service"}},
 		Endpoint: swarm.Endpoint{VirtualIPs: []swarm.EndpointVirtualIP{{NetworkID: "net1"}}},
 	})
 	c.SetNode(swarm.Node{
 		ID:          "node1",
 		Description: swarm.NodeDescription{Hostname: "worker-1"},
-		Spec:        swarm.NodeSpec{Role: swarm.NodeRoleWorker, Availability: swarm.NodeAvailabilityActive},
-		Status:      swarm.NodeStatus{State: swarm.NodeStateReady},
+		Spec: swarm.NodeSpec{
+			Role:         swarm.NodeRoleWorker,
+			Availability: swarm.NodeAvailabilityActive,
+		},
+		Status: swarm.NodeStatus{State: swarm.NodeStateReady},
 	})
 
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
-		{Resources: []string{"service:webapp"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:webapp"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
 		{Resources: []string{"node:*"}, Audience: []string{"*"}, Permissions: []string{"read"}},
 	}})
 

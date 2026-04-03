@@ -240,7 +240,8 @@ func TestHandleNetworkTopology_DeprecationHeaders(t *testing.T) {
 		t.Error("expected Deprecation: true header")
 	}
 	link := w.Header().Get("Link")
-	if !strings.Contains(link, `</topology>`) || !strings.Contains(link, `rel="successor-version"`) {
+	if !strings.Contains(link, `</topology>`) ||
+		!strings.Contains(link, `rel="successor-version"`) {
 		t.Errorf("expected Link successor-version header, got %q", link)
 	}
 }
@@ -255,7 +256,8 @@ func TestHandlePlacementTopology_DeprecationHeaders(t *testing.T) {
 		t.Error("expected Deprecation: true header")
 	}
 	link := w.Header().Get("Link")
-	if !strings.Contains(link, `</topology>`) || !strings.Contains(link, `rel="successor-version"`) {
+	if !strings.Contains(link, `</topology>`) ||
+		!strings.Contains(link, `rel="successor-version"`) {
 		t.Errorf("expected Link successor-version header, got %q", link)
 	}
 }

@@ -285,11 +285,23 @@ describe("network alias extraction", () => {
       nodes: {
         "urn:cetacean:service:s1": {
           label: "webapp-api",
-          metadata: { ...baseMetadata, kind: "service", replicas: 1, image: "api:latest", mode: "replicated" },
+          metadata: {
+            ...baseMetadata,
+            kind: "service",
+            replicas: 1,
+            image: "api:latest",
+            mode: "replicated",
+          },
         },
         "urn:cetacean:service:s2": {
           label: "webapp-web",
-          metadata: { ...baseMetadata, kind: "service", replicas: 1, image: "web:latest", mode: "replicated" },
+          metadata: {
+            ...baseMetadata,
+            kind: "service",
+            replicas: 1,
+            image: "web:latest",
+            mode: "replicated",
+          },
         },
       },
       edges: [
@@ -298,16 +310,18 @@ describe("network alias extraction", () => {
           target: "urn:cetacean:service:s2",
           metadata: {
             ...baseMetadata,
-            networks: [{
-              id: "urn:cetacean:network:net1",
-              name: "frontend",
-              driver: "overlay",
-              scope: "swarm",
-              aliases: {
-                "urn:cetacean:service:s1": ["api", "backend"],
-                "urn:cetacean:service:s2": ["web"],
+            networks: [
+              {
+                id: "urn:cetacean:network:net1",
+                name: "frontend",
+                driver: "overlay",
+                scope: "swarm",
+                aliases: {
+                  "urn:cetacean:service:s1": ["api", "backend"],
+                  "urn:cetacean:service:s2": ["web"],
+                },
               },
-            }],
+            ],
           },
         },
       ],
