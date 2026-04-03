@@ -88,22 +88,39 @@ func TestDocument_MarshalJSON(t *testing.T) {
 }
 
 func TestGraph_WithEdgesAndHyperedges(t *testing.T) {
+	ctx := Metadata{"@context": "/api/context.jsonld"}
 	graph := Graph{
 		ID:       "g2",
 		Type:     "placement",
 		Label:    "Placement Graph",
 		Directed: false,
-		Metadata: Metadata{},
+		Metadata: ctx,
 		Nodes: map[string]Node{
-			"a": {Label: "alpha", Metadata: Metadata{}},
-			"b": {Label: "beta", Metadata: Metadata{}},
-			"c": {Label: "gamma", Metadata: Metadata{}},
+			"a": {
+				Label:    "alpha",
+				Metadata: Metadata{"@context": "/api/context.jsonld", "kind": "node"},
+			},
+			"b": {
+				Label:    "beta",
+				Metadata: Metadata{"@context": "/api/context.jsonld", "kind": "node"},
+			},
+			"c": {
+				Label:    "gamma",
+				Metadata: Metadata{"@context": "/api/context.jsonld", "kind": "service"},
+			},
 		},
 		Edges: []Edge{
-			{Source: "a", Target: "b", Metadata: Metadata{"type": "connects"}},
+			{
+				Source:   "a",
+				Target:   "b",
+				Metadata: Metadata{"@context": "/api/context.jsonld", "type": "connects"},
+			},
 		},
 		Hyperedges: []Hyperedge{
-			{Nodes: []string{"a", "b", "c"}, Metadata: Metadata{"group": "cluster-1"}},
+			{
+				Nodes:    []string{"a", "b", "c"},
+				Metadata: Metadata{"@context": "/api/context.jsonld", "group": "cluster-1"},
+			},
 		},
 	}
 

@@ -264,60 +264,6 @@ export interface StackDetail {
   volumes: Volume[];
 }
 
-export interface NetworkTopology {
-  nodes: TopoServiceNode[];
-  edges: TopoEdge[];
-  networks: TopoNetwork[];
-}
-
-export interface TopoServiceNode {
-  id: string;
-  name: string;
-  stack?: string;
-  replicas: number;
-  image: string;
-  ports?: string[];
-  mode: string;
-  updateStatus?: string;
-  networkAliases?: Record<string, string[]>;
-}
-
-export interface TopoEdge {
-  source: string;
-  target: string;
-  networks: string[];
-}
-
-export interface TopoNetwork {
-  id: string;
-  name: string;
-  driver: string;
-  scope: string;
-  stack?: string;
-}
-
-export interface PlacementTopology {
-  nodes: TopoClusterNode[];
-}
-
-export interface TopoClusterNode {
-  id: string;
-  hostname: string;
-  role: string;
-  state: string;
-  availability: string;
-  tasks: TopoTask[];
-}
-
-export interface TopoTask {
-  id: string;
-  serviceId: string;
-  serviceName: string;
-  state: string;
-  slot: number;
-  image: string;
-}
-
 export interface SpecChange {
   field: string;
   old?: string;

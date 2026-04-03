@@ -453,6 +453,8 @@ func buildNetworkJGF(
 		for i := range svcs {
 			for j := i + 1; j < len(svcs); j++ {
 				a, b := svcs[i], svcs[j]
+				// Sort by raw ID for stable edge direction. Equivalent to
+				// URN order because the shared prefix cancels out.
 				if a > b {
 					a, b = b, a
 				}

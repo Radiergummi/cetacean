@@ -480,10 +480,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		switch ContentTypeFromContext(r.Context()) {
 		case ContentTypeHTML:
 			spa.ServeHTTP(w, r)
-		case ContentTypeJGF:
-			h.HandleTopology(w, r)
 		default:
-			writeErrorCode(w, r, "API003", "this endpoint only supports application/vnd.jgf+json")
+			// JGF is the canonical JSON representation for topology.
+			h.HandleTopology(w, r)
 		}
 	})
 	mux.HandleFunc("GET /topology/networks", contentNegotiated(h.HandleNetworkTopology, nil, spa))

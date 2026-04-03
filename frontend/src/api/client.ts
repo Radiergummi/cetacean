@@ -15,8 +15,6 @@ import type {
   VolumeDetail,
   CollectionResponse,
   HistoryEntry,
-  NetworkTopology,
-  PlacementTopology,
   JGFDocument,
   StackSummary,
   SearchResponse,
@@ -470,11 +468,6 @@ export const api = {
     ).then(({ data }) => data.items);
   },
   topology: () => fetchJGF<JGFDocument>("/topology"),
-  /** @deprecated Use api.topology() instead. */
-  topologyNetworks: () => fetchJSON<NetworkTopology>("/topology/networks").then(({ data }) => data),
-  /** @deprecated Use api.topology() instead. */
-  topologyPlacement: () =>
-    fetchJSON<PlacementTopology>("/topology/placement").then(({ data }) => data),
   nodeTasks: (id: string, signal?: AbortSignal) =>
     fetchJSON<CollectionResponse<Task>>(`/nodes/${id}/tasks`, signal).then(
       ({ data }) => data.items,

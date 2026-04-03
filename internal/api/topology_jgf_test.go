@@ -230,9 +230,13 @@ func TestBuildPlacementJGF(t *testing.T) {
 		t.Errorf("hyperedge nodes[1]=%s, want %s", he.Nodes[1], nodeURN)
 	}
 
-	tasks, ok := he.Metadata["tasks"].([]map[string]any)
+	tasksRaw, ok := he.Metadata["tasks"]
 	if !ok {
-		t.Fatal("tasks missing or wrong type")
+		t.Fatal("tasks missing from hyperedge metadata")
+	}
+	tasks, ok := tasksRaw.([]map[string]any)
+	if !ok {
+		t.Fatalf("tasks type=%T, want []map[string]any", tasksRaw)
 	}
 
 	if len(tasks) != 1 {
@@ -304,5 +308,37 @@ func TestHandleTopology_JGF(t *testing.T) {
 
 	if doc.Graphs[1].ID != "placement" {
 		t.Errorf("graph[1].id=%q, want placement", doc.Graphs[1].ID)
+	}
+}
+
+func TestBuildNetworkJGF_EmptyInput(t *testing.T) {
+	g := buildNetworkJGF(nil, nil, "/api/context.jsonld")
+
+	if g.ID != "network" {
+		t.Errorf("id=%q, want network", g.ID)
+	}
+	if len(g.Nodes) != 0 {
+		t.Errorf("nodes=%d, want 0", len(g.Nodes))
+	}
+	if len(g.Edges) != 0 {
+		t.Errorf("edges=%d, want 0", len(g.Edges))
+	}
+	if len(g.Hyperedges) != 0 {
+		t.Errorf("hyperedges=%d, want 0", len(g.Hyperedges))
+	}
+}
+
+func TestBuildPlacementJGF_EmptyInput(t *testing.T) {
+	c := cache.New(nil)
+	g := buildPlacementJGF(nil, c, nil, nil, nil, "/api/context.jsonld")
+
+	if g.ID != "placement" {
+		t.Errorf("id=%q, want placement", g.ID)
+	}
+	if len(g.Nodes) != 0 {
+		t.Errorf("nodes=%d, want 0", len(g.Nodes))
+	}
+	if len(g.Hyperedges) != 0 {
+		t.Errorf("hyperedges=%d, want 0", len(g.Hyperedges))
 	}
 }

@@ -333,23 +333,33 @@ export default function Topology() {
       )}
 
       <div className="rounded-lg ring-1 ring-border">
-        {!loading && !error && view === "logical" && networkData && (
-          <ReactFlowProvider>
-            <LogicalView
-              data={networkData}
-              isMobile={isMobile}
-            />
-          </ReactFlowProvider>
-        )}
+        {!loading &&
+          !error &&
+          view === "logical" &&
+          (networkData ? (
+            <ReactFlowProvider>
+              <LogicalView
+                data={networkData}
+                isMobile={isMobile}
+              />
+            </ReactFlowProvider>
+          ) : (
+            <EmptyState message="Network topology unavailable" />
+          ))}
 
-        {!loading && !error && view === "physical" && placementData && (
-          <ReactFlowProvider>
-            <PhysicalView
-              data={placementData}
-              isMobile={isMobile}
-            />
-          </ReactFlowProvider>
-        )}
+        {!loading &&
+          !error &&
+          view === "physical" &&
+          (placementData ? (
+            <ReactFlowProvider>
+              <PhysicalView
+                data={placementData}
+                isMobile={isMobile}
+              />
+            </ReactFlowProvider>
+          ) : (
+            <EmptyState message="Placement topology unavailable" />
+          ))}
       </div>
     </div>
   );
