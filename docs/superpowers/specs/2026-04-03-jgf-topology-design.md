@@ -6,7 +6,7 @@ Replace the custom topology serialization format with JSON Graph Format (JGF, ht
 
 ## Motivation
 
-The current topology endpoints return custom structs that only the built-in frontend understands. JGF is a standard format supported by graph visualization tools (Cytoscape, Gephi, D3) and enables export/interop without custom adapters. The two topology views map naturally to JGF: network topology is a regular undirected graph, placement topology is a hypergraph — both are first-class JGF concepts.
+The current topology endpoints return custom structs that only the built-in frontend understands. JGF is a standard format supported by graph visualization tools (Cytoscape, Gephi, D3) and enables export/interop without custom adapters. Both topology views map naturally to JGF hypergraphs: edges represent pairwise relationships (network connectivity), hyperedges represent group relationships (stack membership, service placement).
 
 ## API Endpoints
 
@@ -18,13 +18,13 @@ The current topology endpoints return custom structs that only the built-in fron
 - `Accept: text/html` → SPA
 - No `application/json` on this endpoint — JGF is the JSON representation
 
-Response is a JGF document with a `graphs` array:
+Response is a JGF document with a `graphs` array (both are hypergraphs):
 
 ```json
 {
   "graphs": [
     { "id": "network", "type": "network-topology", ... },
-    { "id": "placement", "type": "placement-topology", "hyperedges": true, ... }
+    { "id": "placement", "type": "placement-topology", ... }
   ]
 }
 ```
@@ -42,7 +42,7 @@ Both add:
 
 These endpoints will be removed in a future major release.
 
-## JGF Schema — Network Topology Graph
+## JGF Schema — Network Topology Hypergraph
 
 ```json
 {
@@ -59,7 +59,6 @@ These endpoints will be removed in a future major release.
       "metadata": {
         "@context": "/api/context.jsonld",
         "kind": "service",
-        "stack": "webapp",
         "replicas": 3,
         "image": "webapp-api:latest",
         "mode": "replicated",
@@ -68,6 +67,26 @@ These endpoints will be removed in a future major release.
         "networkAliases": {
           "net1": ["api", "webapp-api"]
         }
+      }
+    },
+    "service:svc2": {
+      "label": "webapp-web",
+      "metadata": {
+        "@context": "/api/context.jsonld",
+        "kind": "service",
+        "replicas": 2,
+        "image": "webapp-web:latest",
+        "mode": "replicated"
+      }
+    },
+    "service:svc3": {
+      "label": "prometheus",
+      "metadata": {
+        "@context": "/api/context.jsonld",
+        "kind": "service",
+        "replicas": 1,
+        "image": "prom/prometheus:latest",
+        "mode": "replicated"
       }
     }
   },
@@ -78,8 +97,26 @@ These endpoints will be removed in a future major release.
       "metadata": {
         "@context": "/api/context.jsonld",
         "networks": [
-          { "id": "net1", "name": "frontend", "driver": "overlay", "scope": "swarm", "stack": "webapp" }
+          { "id": "net1", "name": "frontend", "driver": "overlay", "scope": "swarm" }
         ]
+      }
+    }
+  ],
+  "hyperedges": [
+    {
+      "nodes": ["service:svc1", "service:svc2"],
+      "metadata": {
+        "@context": "/api/context.jsonld",
+        "kind": "stack",
+        "name": "webapp"
+      }
+    },
+    {
+      "nodes": ["service:svc3"],
+      "metadata": {
+        "@context": "/api/context.jsonld",
+        "kind": "stack",
+        "name": "monitoring"
       }
     }
   ]
@@ -88,12 +125,20 @@ These endpoints will be removed in a future major release.
 
 Key decisions:
 - Node IDs prefixed with `service:` for global uniqueness across graphs
-- `kind` field in metadata distinguishes node types (only `"service"` in network graph)
-- Networks embedded in edge metadata — they describe why two services are connected
-- Undirected graph; source < target for stable serialization
+- `kind` field in metadata distinguishes node types (`"service"` for nodes, `"stack"` for hyperedges)
+- **Stack membership is a hyperedge**, not denormalized node metadata — structurally represents the group relationship
+- `stack` field removed from service node metadata (derivable from hyperedges)
+- Networks embedded in edge metadata — they describe pairwise connectivity
+- `stack` field also removed from network edge metadata (the network's stack is derivable from its member services' stack hyperedge)
+- **Edges** = pairwise relationships (network connectivity between services)
+- **Hyperedges** = group relationships (stack membership)
+- Undirected graph; source < target on edges for stable serialization
 - Every `metadata` object is an annotated JSON-LD document with `@context`
+- Services not belonging to any stack have no stack hyperedge
 
 ## JGF Schema — Placement Topology Hypergraph
+
+Both graphs are hypergraphs. The conceptual model is uniform: edges are pairwise relationships, hyperedges are group relationships.
 
 ```json
 {
@@ -101,7 +146,6 @@ Key decisions:
   "type": "placement-topology",
   "label": "Placement Topology",
   "directed": false,
-  "hyperedges": true,
   "metadata": {
     "@context": "/api/context.jsonld"
   },
@@ -173,10 +217,7 @@ interface JGFGraph {
   metadata: JGFMetadata;
   nodes: Record<string, JGFNode>;
   edges?: JGFEdge[];
-}
-
-interface JGFHypergraph extends JGFGraph {
-  hyperedges: JGFHyperedge[];
+  hyperedges?: JGFHyperedge[];
 }
 
 interface JGFNode {
@@ -196,12 +237,14 @@ interface JGFHyperedge {
 }
 ```
 
+Both graphs use `edges` and/or `hyperedges` as needed. The network graph has both (edges for network connectivity, hyperedges for stack membership). The placement graph has only hyperedges (service-to-nodes placement).
+
 ### Transform layer
 
 Replace `buildLogicalFlow` and `buildPhysicalFlow` with:
 
-- `networkGraphToReactFlow(graph: JGFGraph)` — extracts service nodes (by `kind === "service"`), builds ReactFlow nodes with stack grouping, creates edges from `graph.edges` with network metadata. Same ELK layout pipeline.
-- `placementGraphToReactFlow(graph: JGFGraph)` — extracts node and service entries, reconstructs per-node task lists from hyperedge metadata, builds the physical grid layout. Same positioning logic.
+- `networkGraphToReactFlow(graph: JGFGraph)` — extracts service nodes (by `kind === "service"`), extracts stack groups from hyperedges (by `kind === "stack"`), builds ReactFlow group nodes for stacks and child nodes for services, creates edges from `graph.edges` with network metadata. Same ELK layout pipeline.
+- `placementGraphToReactFlow(graph: JGFGraph)` — extracts cluster node and service entries from `graph.nodes`, reconstructs per-node task lists from hyperedge metadata, builds the physical grid layout. Same positioning logic.
 
 ### Topology page
 
@@ -218,7 +261,7 @@ Old types (`NetworkTopology`, `PlacementTopology`, `TopoServiceNode`, etc.) remo
 
 ## JSON-LD Context
 
-Extend `/api/context.jsonld` with topology vocabulary terms: `kind`, `replicas`, `mode`, `role`, `state`, `availability`, `ports`, `networkAliases`, `tasks`, `slot`, `image`, `stack`, `updateStatus`, `driver`, `scope`. Simple term definitions — no external ontology.
+Extend `/api/context.jsonld` with topology vocabulary terms: `kind`, `name`, `replicas`, `mode`, `role`, `state`, `availability`, `ports`, `networkAliases`, `tasks`, `slot`, `image`, `updateStatus`, `driver`, `scope`, `networks`. Simple term definitions — no external ontology.
 
 ## OpenAPI
 
