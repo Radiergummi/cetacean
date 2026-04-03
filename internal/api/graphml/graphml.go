@@ -35,23 +35,31 @@ type keyDef struct {
 	AttrType string `xml:"attr.type,attr"`
 }
 
-// graphElem represents a <graph> element. It can contain nested subgraphs
-// (for stack hyperedges), nodes, and edges.
+// graphElem represents a <graph> element. It can contain group nodes
+// (for stack hyperedges), regular nodes, and edges.
 type graphElem struct {
+	ID          string      `xml:"id,attr"`
+	EdgeDefault string      `xml:"edgedefault,attr"`
+	Data        []dataElem  `xml:"data,omitempty"`
+	GroupNodes  []groupNode `xml:",omitempty"`
+	Nodes       []nodeElem  `xml:",omitempty"`
+	Edges       []edgeElem  `xml:",omitempty"`
+}
+
+// groupNode is a <node> containing a nested <graph> for stack grouping.
+// Per the GraphML spec, nested graphs must be inside a <node> element.
+type groupNode struct {
+	XMLName xml.Name   `xml:"node"`
+	ID      string     `xml:"id,attr"`
+	Graph   groupGraph `xml:"graph"`
+}
+
+// groupGraph is the nested <graph> inside a groupNode.
+type groupGraph struct {
 	ID          string     `xml:"id,attr"`
 	EdgeDefault string     `xml:"edgedefault,attr"`
 	Data        []dataElem `xml:"data,omitempty"`
-	Subgraphs   []subgraph `xml:",omitempty"`
 	Nodes       []nodeElem `xml:",omitempty"`
-	Edges       []edgeElem `xml:",omitempty"`
-}
-
-// subgraph wraps a nested <graph> inside a parent graph.
-type subgraph struct {
-	XMLName xml.Name   `xml:"graph"`
-	ID      string     `xml:"id,attr"`
-	Data    []dataElem `xml:"data,omitempty"`
-	Nodes   []nodeElem `xml:",omitempty"`
 }
 
 type nodeElem struct {
@@ -108,10 +116,12 @@ func Render(g jgf.Graph) ([]byte, error) {
 
 	for _, stackName := range jgf.SortedStackNames(stackNodes) {
 		members := stackNodes[stackName]
+		stackID := "stack:" + stackName
 
-		sg := subgraph{
-			ID:   "stack:" + stackName,
-			Data: []dataElem{{Key: "graph-label", Value: stackName}},
+		gg := groupGraph{
+			ID:          stackID,
+			EdgeDefault: "undirected",
+			Data:        []dataElem{{Key: "graph-label", Value: stackName}},
 		}
 
 		for _, urn := range members {
@@ -119,10 +129,13 @@ func Render(g jgf.Graph) ([]byte, error) {
 			if !ok {
 				continue
 			}
-			sg.Nodes = append(sg.Nodes, buildNodeElem(urn, node))
+			gg.Nodes = append(gg.Nodes, buildNodeElem(urn, node))
 		}
 
-		doc.Graph.Subgraphs = append(doc.Graph.Subgraphs, sg)
+		doc.Graph.GroupNodes = append(doc.Graph.GroupNodes, groupNode{
+			ID:    stackID,
+			Graph: gg,
+		})
 	}
 
 	// Collect top-level nodes (those not in any stack), sorted by URN.

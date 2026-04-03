@@ -37,7 +37,14 @@ func TestRender_BasicGraph(t *testing.T) {
 				Source: jgf.URN("service", "svc1"),
 				Target: jgf.URN("service", "svc2"),
 				Metadata: jgf.Metadata{
-					"networks": []string{"myoverlay"},
+					"networks": []any{
+						map[string]any{
+							"id":     "net1",
+							"name":   "myoverlay",
+							"driver": "overlay",
+							"scope":  "swarm",
+						},
+					},
 				},
 			},
 		},
@@ -82,9 +89,12 @@ func TestRender_BasicGraph(t *testing.T) {
 		t.Error("missing root graph element")
 	}
 
-	// Stack subgraph
+	// Stack must be a <node> containing a nested <graph> (GraphML spec requirement)
+	if !strings.Contains(s, `<node id="stack:mystack">`) {
+		t.Error("missing stack container node")
+	}
 	if !strings.Contains(s, `<graph id="stack:mystack"`) {
-		t.Error("missing stack subgraph")
+		t.Error("missing stack nested graph")
 	}
 	if !strings.Contains(s, `<data key="graph-label">mystack</data>`) {
 		t.Error("missing stack label data element")

@@ -13,7 +13,11 @@ import (
 func Render(g jgf.Graph) ([]byte, error) {
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "graph %s {\n", dotQuote(g.ID))
+	if g.ID != "" {
+		fmt.Fprintf(&b, "graph %s {\n", dotQuote(g.ID))
+	} else {
+		b.WriteString("graph {\n")
+	}
 	if g.Label != "" {
 		fmt.Fprintf(&b, "\tlabel=%s;\n", dotQuote(g.Label))
 	}

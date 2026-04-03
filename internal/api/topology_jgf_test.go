@@ -631,3 +631,59 @@ func TestHandleTopologyDOT_WithEdges(t *testing.T) {
 		t.Error("expected network name 'frontend' in DOT edge label")
 	}
 }
+
+func TestHandleTopologyGraphML_ETag304(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "webapp"}},
+	})
+
+	h := newTestHandlers(t, withCache(c))
+
+	req1 := httptest.NewRequest("GET", "/topology", nil)
+	w1 := httptest.NewRecorder()
+	h.HandleTopologyGraphML(w1, req1)
+
+	etag := w1.Header().Get("ETag")
+	if etag == "" {
+		t.Fatal("expected ETag header on first request")
+	}
+
+	req2 := httptest.NewRequest("GET", "/topology", nil)
+	req2.Header.Set("If-None-Match", etag)
+	w2 := httptest.NewRecorder()
+	h.HandleTopologyGraphML(w2, req2)
+
+	if w2.Code != http.StatusNotModified {
+		t.Errorf("expected 304, got %d", w2.Code)
+	}
+}
+
+func TestHandleTopologyDOT_ETag304(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "webapp"}},
+	})
+
+	h := newTestHandlers(t, withCache(c))
+
+	req1 := httptest.NewRequest("GET", "/topology", nil)
+	w1 := httptest.NewRecorder()
+	h.HandleTopologyDOT(w1, req1)
+
+	etag := w1.Header().Get("ETag")
+	if etag == "" {
+		t.Fatal("expected ETag header on first request")
+	}
+
+	req2 := httptest.NewRequest("GET", "/topology", nil)
+	req2.Header.Set("If-None-Match", etag)
+	w2 := httptest.NewRecorder()
+	h.HandleTopologyDOT(w2, req2)
+
+	if w2.Code != http.StatusNotModified {
+		t.Errorf("expected 304, got %d", w2.Code)
+	}
+}
