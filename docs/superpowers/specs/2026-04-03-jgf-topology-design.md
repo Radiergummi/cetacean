@@ -54,7 +54,7 @@ These endpoints will be removed in a future major release.
     "@context": "/api/context.jsonld"
   },
   "nodes": {
-    "service:svc1": {
+    "urn:cetacean:service:svc1": {
       "label": "webapp-api",
       "metadata": {
         "@context": "/api/context.jsonld",
@@ -63,13 +63,10 @@ These endpoints will be removed in a future major release.
         "image": "webapp-api:latest",
         "mode": "replicated",
         "ports": ["80:8080/tcp"],
-        "updateStatus": "completed",
-        "networkAliases": {
-          "net1": ["api", "webapp-api"]
-        }
+        "updateStatus": "completed"
       }
     },
-    "service:svc2": {
+    "urn:cetacean:service:svc2": {
       "label": "webapp-web",
       "metadata": {
         "@context": "/api/context.jsonld",
@@ -79,7 +76,7 @@ These endpoints will be removed in a future major release.
         "mode": "replicated"
       }
     },
-    "service:svc3": {
+    "urn:cetacean:service:svc3": {
       "label": "prometheus",
       "metadata": {
         "@context": "/api/context.jsonld",
@@ -92,19 +89,28 @@ These endpoints will be removed in a future major release.
   },
   "edges": [
     {
-      "source": "service:svc1",
-      "target": "service:svc2",
+      "source": "urn:cetacean:service:svc1",
+      "target": "urn:cetacean:service:svc2",
       "metadata": {
         "@context": "/api/context.jsonld",
         "networks": [
-          { "id": "net1", "name": "frontend", "driver": "overlay", "scope": "swarm" }
+          {
+            "id": "urn:cetacean:network:net1",
+            "name": "frontend",
+            "driver": "overlay",
+            "scope": "swarm",
+            "aliases": {
+              "urn:cetacean:service:svc1": ["api"],
+              "urn:cetacean:service:svc2": ["web"]
+            }
+          }
         ]
       }
     }
   ],
   "hyperedges": [
     {
-      "nodes": ["service:svc1", "service:svc2"],
+      "nodes": ["urn:cetacean:service:svc1", "urn:cetacean:service:svc2"],
       "metadata": {
         "@context": "/api/context.jsonld",
         "kind": "stack",
@@ -112,7 +118,7 @@ These endpoints will be removed in a future major release.
       }
     },
     {
-      "nodes": ["service:svc3"],
+      "nodes": ["urn:cetacean:service:svc3"],
       "metadata": {
         "@context": "/api/context.jsonld",
         "kind": "stack",
@@ -124,12 +130,11 @@ These endpoints will be removed in a future major release.
 ```
 
 Key decisions:
-- Node IDs prefixed with `service:` for global uniqueness across graphs
-- `kind` field in metadata distinguishes node types (`"service"` for nodes, `"stack"` for hyperedges)
+- All entity IDs use `urn:cetacean:<type>:<id>` URNs (e.g., `urn:cetacean:service:svc1`, `urn:cetacean:node:node1`, `urn:cetacean:network:net1`) for globally unique, unambiguous identifiers
+- `kind` field in metadata distinguishes entity types (`"service"` for nodes, `"stack"` for hyperedges)
 - **Stack membership is a hyperedge**, not denormalized node metadata — structurally represents the group relationship
-- `stack` field removed from service node metadata (derivable from hyperedges)
+- **Network aliases are edge metadata**, keyed by endpoint URN — aliases are properties of a service's attachment to a network, not of the service itself
 - Networks embedded in edge metadata — they describe pairwise connectivity
-- `stack` field also removed from network edge metadata (the network's stack is derivable from its member services' stack hyperedge)
 - **Edges** = pairwise relationships (network connectivity between services)
 - **Hyperedges** = group relationships (stack membership)
 - Undirected graph; source < target on edges for stable serialization
@@ -150,7 +155,7 @@ Both graphs are hypergraphs. The conceptual model is uniform: edges are pairwise
     "@context": "/api/context.jsonld"
   },
   "nodes": {
-    "node:node1": {
+    "urn:cetacean:node:node1": {
       "label": "worker-1",
       "metadata": {
         "@context": "/api/context.jsonld",
@@ -160,7 +165,17 @@ Both graphs are hypergraphs. The conceptual model is uniform: edges are pairwise
         "availability": "active"
       }
     },
-    "service:svc1": {
+    "urn:cetacean:node:node2": {
+      "label": "worker-2",
+      "metadata": {
+        "@context": "/api/context.jsonld",
+        "kind": "node",
+        "role": "manager",
+        "state": "ready",
+        "availability": "active"
+      }
+    },
+    "urn:cetacean:service:svc1": {
       "label": "webapp-api",
       "metadata": {
         "@context": "/api/context.jsonld",
@@ -173,12 +188,12 @@ Both graphs are hypergraphs. The conceptual model is uniform: edges are pairwise
   },
   "hyperedges": [
     {
-      "nodes": ["service:svc1", "node:node1", "node:node2"],
+      "nodes": ["urn:cetacean:service:svc1", "urn:cetacean:node:node1", "urn:cetacean:node:node2"],
       "metadata": {
         "@context": "/api/context.jsonld",
         "tasks": [
-          { "id": "task1", "node": "node:node1", "state": "running", "slot": 1, "image": "webapp-api:latest" },
-          { "id": "task2", "node": "node:node2", "state": "running", "slot": 2, "image": "webapp-api:latest" }
+          { "id": "urn:cetacean:task:task1", "node": "urn:cetacean:node:node1", "state": "running", "slot": 1, "image": "webapp-api:latest" },
+          { "id": "urn:cetacean:task:task2", "node": "urn:cetacean:node:node2", "state": "running", "slot": 2, "image": "webapp-api:latest" }
         ]
       }
     }
@@ -187,12 +202,13 @@ Both graphs are hypergraphs. The conceptual model is uniform: edges are pairwise
 ```
 
 Key decisions:
+- All entity IDs use `urn:cetacean:<type>:<id>` URNs, consistent with the network graph
 - Each service produces one hyperedge connecting it to all nodes where it has tasks
-- Service node is first in the `nodes` array by convention
+- Service URN is first in the `nodes` array by convention
 - Tasks are metadata on the hyperedge, not graph nodes
-- Each task carries a `node` back-reference for per-node reconstruction
-- Service nodes share IDs across both graphs (`service:svc1`), enabling cross-graph correlation
-- Cluster nodes prefixed with `node:` to distinguish from services
+- Each task carries a `node` URN back-reference for per-node reconstruction
+- Task IDs are also URNs (`urn:cetacean:task:<id>`)
+- Service nodes share URNs across both graphs (`urn:cetacean:service:svc1`), enabling cross-graph correlation
 
 ## Frontend Changes
 
@@ -261,7 +277,20 @@ Old types (`NetworkTopology`, `PlacementTopology`, `TopoServiceNode`, etc.) remo
 
 ## JSON-LD Context
 
-Extend `/api/context.jsonld` with topology vocabulary terms: `kind`, `name`, `replicas`, `mode`, `role`, `state`, `availability`, `ports`, `networkAliases`, `tasks`, `slot`, `image`, `updateStatus`, `driver`, `scope`, `networks`. Simple term definitions — no external ontology.
+Extend `/api/context.jsonld` with topology vocabulary terms: `kind`, `name`, `replicas`, `mode`, `role`, `state`, `availability`, `ports`, `aliases`, `tasks`, `slot`, `image`, `updateStatus`, `driver`, `scope`, `networks`. Simple term definitions — no external ontology.
+
+## URN Scheme
+
+All entity identifiers use the `urn:cetacean:<type>:<id>` format:
+
+| Entity | URN pattern | Example |
+|--------|-------------|---------|
+| Service | `urn:cetacean:service:<docker-id>` | `urn:cetacean:service:abc123` |
+| Node | `urn:cetacean:node:<docker-id>` | `urn:cetacean:node:def456` |
+| Task | `urn:cetacean:task:<docker-id>` | `urn:cetacean:task:ghi789` |
+| Network | `urn:cetacean:network:<docker-id>` | `urn:cetacean:network:jkl012` |
+
+URNs are used as JGF node keys, edge source/target references, hyperedge node references, and task/network `id` fields within metadata. The `<id>` component is the Docker resource ID (or name for volumes). The URN scheme provides globally unique, type-safe identifiers that are consistent across both graphs and enable cross-graph correlation.
 
 ## OpenAPI
 
