@@ -14,7 +14,7 @@ import { isNodeExporterReady, useMonitoringStatus } from "../hooks/useMonitoring
 import { useNodeMetrics } from "../hooks/useNodeMetrics";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { useSortParams } from "../hooks/useSort";
-import { useSwarmResource } from "../hooks/useSwarmResource";
+import { useSwarmQuery } from "../hooks/useSwarmQuery";
 import { useViewMode } from "../hooks/useViewMode";
 import { instanceToHostname } from "../lib/format";
 import { sortColumn } from "../lib/sortColumn";
@@ -32,7 +32,8 @@ export default function NodeList() {
     retry,
     hasMore,
     loadMore,
-  } = useSwarmResource(
+  } = useSwarmQuery(
+    ["nodes", { search: debouncedSearch, sort: sortKey, dir: sortDir }],
     useCallback(
       (offset: number, signal: AbortSignal) =>
         api.nodes({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }, signal),

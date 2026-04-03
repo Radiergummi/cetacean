@@ -14,7 +14,7 @@ import TaskStatusBadge from "../components/TaskStatusBadge";
 import { isCadvisorReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { useSortParams } from "../hooks/useSort";
-import { useSwarmResource } from "../hooks/useSwarmResource";
+import { useSwarmQuery } from "../hooks/useSwarmQuery";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { useViewMode } from "../hooks/useViewMode";
 import { sortColumn } from "../lib/sortColumn";
@@ -34,7 +34,8 @@ export default function TaskList() {
     retry,
     hasMore,
     loadMore,
-  } = useSwarmResource(
+  } = useSwarmQuery(
+    ["tasks", { search: debouncedSearch, sort: sortKey, dir: sortDir }],
     useCallback(
       (offset: number, signal: AbortSignal) =>
         api.tasks({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }, signal),

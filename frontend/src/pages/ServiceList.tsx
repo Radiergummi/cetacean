@@ -16,7 +16,7 @@ import { useRecommendations } from "../hooks/useRecommendations";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { useServiceMetrics } from "../hooks/useServiceMetrics";
 import { useSortParams } from "../hooks/useSort";
-import { useSwarmResource } from "../hooks/useSwarmResource";
+import { useSwarmQuery } from "../hooks/useSwarmQuery";
 import { useViewMode } from "../hooks/useViewMode";
 import { sizingCategories } from "../lib/sizingUtils";
 import { sortColumn } from "../lib/sortColumn";
@@ -59,7 +59,8 @@ export default function ServiceList() {
     retry,
     hasMore,
     loadMore,
-  } = useSwarmResource(
+  } = useSwarmQuery(
+    ["services", { search: debouncedSearch, sort: sortKey, dir: sortDir }],
     useCallback(
       (offset: number, signal: AbortSignal) =>
         api.services({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }, signal),

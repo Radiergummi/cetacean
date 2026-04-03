@@ -2,7 +2,7 @@ import { emptyMethods, setsEqual } from "../api/client";
 import type { FetchResult } from "../api/client";
 import type { CollectionResponse } from "../api/types";
 import { useResourceStream } from "./useResourceStream";
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
 
 const ssePathMap: Record<string, string> = {
@@ -39,6 +39,7 @@ export function useSwarmQuery<T>(
 
       return result.data;
     },
+    placeholderData: keepPreviousData,
     initialPageParam: 0,
     getNextPageParam: (lastPage) => {
       const nextOffset = lastPage.offset + lastPage.items.length;
