@@ -25,7 +25,7 @@ func TestAtomListHandler_ReturnsValidAtom(t *testing.T) {
 	})
 
 	h := newTestHandlers(t, withCache(c))
-	handler := h.atomListHandler("Services", cache.EventService)
+	handler := h.feedListHandler("Services", cache.EventService, renderAtom)
 
 	req := httptest.NewRequest("GET", "/services", nil)
 	req = withContentType(req, ContentTypeAtom)
@@ -72,12 +72,12 @@ func TestAtomDetailHandler_ReturnsValidAtom(t *testing.T) {
 	})
 
 	h := newTestHandlers(t, withCache(c))
-	handler := h.atomDetailHandler(cache.EventNode, "id", func(id string) string {
+	handler := h.feedDetailHandler(cache.EventNode, "id", func(id string) string {
 		if n, ok := h.cache.GetNode(id); ok {
 			return n.Description.Hostname
 		}
 		return id
-	})
+	}, renderAtom)
 
 	req := httptest.NewRequest("GET", "/nodes/node1", nil)
 	req.SetPathValue("id", "node1")
@@ -107,7 +107,7 @@ func TestAtomNilHandler_Returns406(t *testing.T) {
 	})
 
 	// contentNegotiated with nil atom handler should return 406
-	handler := contentNegotiated(h.HandleCluster, nil, spa)
+	handler := contentNegotiated(h.HandleCluster, feedHandlers{}, spa)
 
 	req := httptest.NewRequest("GET", "/cluster", nil)
 	req = req.WithContext(context.WithValue(req.Context(), contentTypeKey{}, ContentTypeAtom))
@@ -137,7 +137,7 @@ func TestHandleAtomHistory_ReturnsGlobalFeed(t *testing.T) {
 	req = withContentType(req, ContentTypeAtom)
 	w := httptest.NewRecorder()
 
-	h.HandleAtomHistory(w, req)
+	h.handleFeedHistory(w, req, renderAtom)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
@@ -166,7 +166,7 @@ func TestAtomListHandler_ConditionalNotModified(t *testing.T) {
 	})
 
 	h := newTestHandlers(t, withCache(c))
-	handler := h.atomListHandler("Services", cache.EventService)
+	handler := h.feedListHandler("Services", cache.EventService, renderAtom)
 
 	// First request to get the ETag
 	req := httptest.NewRequest("GET", "/services", nil)
@@ -215,7 +215,7 @@ func TestHandleAtomSearch_FiltersEntriesByName(t *testing.T) {
 		req = withContentType(req, ContentTypeAtom)
 		w := httptest.NewRecorder()
 
-		h.HandleAtomSearch(w, req)
+		h.handleFeedSearch(w, req, renderAtom)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d: body = %s", w.Code, http.StatusOK, w.Body.String())
@@ -240,7 +240,7 @@ func TestHandleAtomSearch_FiltersEntriesByName(t *testing.T) {
 		req = withContentType(req, ContentTypeAtom)
 		w := httptest.NewRecorder()
 
-		h.HandleAtomSearch(w, req)
+		h.handleFeedSearch(w, req, renderAtom)
 
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
@@ -252,7 +252,7 @@ func TestHandleAtomSearch_FiltersEntriesByName(t *testing.T) {
 		req = withContentType(req, ContentTypeAtom)
 		w := httptest.NewRecorder()
 
-		h.HandleAtomSearch(w, req)
+		h.handleFeedSearch(w, req, renderAtom)
 
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
@@ -265,7 +265,7 @@ func TestHandleAtomSearch_FiltersEntriesByName(t *testing.T) {
 		req = withContentType(req, ContentTypeAtom)
 		w := httptest.NewRecorder()
 
-		h.HandleAtomSearch(w, req)
+		h.handleFeedSearch(w, req, renderAtom)
 
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)

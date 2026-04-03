@@ -112,7 +112,7 @@ func TestHistoryToEntries(t *testing.T) {
 			Summary:    "scaled from 3 to 5 replicas",
 		}}
 
-		result := historyToEntries(req, entries)
+		result := historyToFeedEntries(req, entries)
 
 		if len(result) != 1 {
 			t.Fatalf("got %d entries, want 1", len(result))
@@ -120,20 +120,20 @@ func TestHistoryToEntries(t *testing.T) {
 
 		e := result[0]
 
-		if e.Content.Value != "scaled from 3 to 5 replicas" {
-			t.Errorf("content = %q, want %q", e.Content.Value, "scaled from 3 to 5 replicas")
+		if !strings.Contains(e.ContentHTML, "scaled from 3 to 5 replicas") {
+			t.Errorf("content = %q, want it to contain the summary", e.ContentHTML)
 		}
 
-		if e.Content.Type != "text" {
-			t.Errorf("content type = %q, want text", e.Content.Type)
+		if !strings.Contains(e.ContentHTML, "View in Cetacean") {
+			t.Error("content should contain a link to Cetacean")
 		}
 
-		if e.Title != "scaled from 3 to 5 replicas" {
-			t.Errorf("title = %q, want %q", e.Title, "scaled from 3 to 5 replicas")
+		if e.Title != "Updated service: web" {
+			t.Errorf("title = %q, want %q", e.Title, "Updated service: web")
 		}
 
-		if len(e.Categories) != 1 || e.Categories[0].Term != "service" {
-			t.Errorf("categories = %v, want [{Term:service}]", e.Categories)
+		if len(e.Tags) != 1 || e.Tags[0] != "service" {
+			t.Errorf("tags = %v, want [service]", e.Tags)
 		}
 	})
 
@@ -147,14 +147,18 @@ func TestHistoryToEntries(t *testing.T) {
 			Name:       "worker-1",
 		}}
 
-		result := historyToEntries(req, entries)
+		result := historyToFeedEntries(req, entries)
 
 		if len(result) != 1 {
 			t.Fatalf("got %d entries, want 1", len(result))
 		}
 
-		if result[0].Content.Value != "create worker-1" {
-			t.Errorf("content = %q, want %q", result[0].Content.Value, "create worker-1")
+		if result[0].Title != "Create node: worker-1" {
+			t.Errorf("title = %q, want %q", result[0].Title, "Create node: worker-1")
+		}
+
+		if !strings.Contains(result[0].ContentHTML, "<strong>worker-1</strong>") {
+			t.Errorf("content = %q, want it to contain the resource name", result[0].ContentHTML)
 		}
 	})
 
@@ -169,14 +173,14 @@ func TestHistoryToEntries(t *testing.T) {
 			Summary:    "removed network",
 		}}
 
-		result := historyToEntries(req, entries)
+		result := historyToFeedEntries(req, entries)
 
 		if len(result) != 1 {
 			t.Fatalf("got %d entries, want 1", len(result))
 		}
 
-		if result[0].Categories[0].Term != "network" {
-			t.Errorf("category term = %q, want network", result[0].Categories[0].Term)
+		if len(result[0].Tags) != 1 || result[0].Tags[0] != "network" {
+			t.Errorf("tags = %v, want [network]", result[0].Tags)
 		}
 	})
 }
@@ -184,7 +188,7 @@ func TestHistoryToEntries(t *testing.T) {
 func TestParseAtomPagination(t *testing.T) {
 	t.Run("defaults", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/history", nil)
-		beforeID, limit := parseAtomPagination(req)
+		beforeID, limit := parseFeedPagination(req)
 
 		if beforeID != 0 {
 			t.Errorf("beforeID = %d, want 0", beforeID)
@@ -197,7 +201,7 @@ func TestParseAtomPagination(t *testing.T) {
 
 	t.Run("parses values", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/history?before=100&limit=25", nil)
-		beforeID, limit := parseAtomPagination(req)
+		beforeID, limit := parseFeedPagination(req)
 
 		if beforeID != 100 {
 			t.Errorf("beforeID = %d, want 100", beforeID)
@@ -210,7 +214,7 @@ func TestParseAtomPagination(t *testing.T) {
 
 	t.Run("caps limit at 200", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/history?limit=500", nil)
-		_, limit := parseAtomPagination(req)
+		_, limit := parseFeedPagination(req)
 
 		if limit != 200 {
 			t.Errorf("limit = %d, want 200", limit)
@@ -243,11 +247,21 @@ func TestResourcePath(t *testing.T) {
 	}
 }
 
+// testFeedData builds a feedData for pagination tests from cache history entries.
+func testFeedData(
+	r *http.Request,
+	entries []cache.HistoryEntry,
+	beforeID uint64,
+	limit int,
+) feedData {
+	return historyFeedData(r, "test", entries, beforeID, limit)
+}
+
 func TestPaginationLinks(t *testing.T) {
 	t.Run("self and alternate only when not full page", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/history", nil)
 		entries := make([]cache.HistoryEntry, 3)
-		links := paginationLinks(req, entries, 0, 50)
+		links := atomPaginationLinks(req, testFeedData(req, entries, 0, 50))
 
 		var hasNext, hasPrevious bool
 		for _, l := range links {
@@ -273,7 +287,7 @@ func TestPaginationLinks(t *testing.T) {
 		req := httptest.NewRequest("GET", "/history", nil)
 		entries := make([]cache.HistoryEntry, 50)
 		entries[49].ID = 42
-		links := paginationLinks(req, entries, 0, 50)
+		links := atomPaginationLinks(req, testFeedData(req, entries, 0, 50))
 
 		var hasNext bool
 		for _, l := range links {
@@ -290,7 +304,7 @@ func TestPaginationLinks(t *testing.T) {
 	t.Run("alternate link does not contain pagination params", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/history?before=100&limit=25", nil)
 		entries := make([]cache.HistoryEntry, 3)
-		links := paginationLinks(req, entries, 100, 25)
+		links := atomPaginationLinks(req, testFeedData(req, entries, 100, 25))
 
 		for _, l := range links {
 			if l.Rel != "alternate" {
@@ -309,7 +323,7 @@ func TestPaginationLinks(t *testing.T) {
 	t.Run("includes previous link on non-first page", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/history?before=100&limit=25", nil)
 		entries := make([]cache.HistoryEntry, 3)
-		links := paginationLinks(req, entries, 100, 25)
+		links := atomPaginationLinks(req, testFeedData(req, entries, 100, 25))
 
 		var previousHref string
 		for _, l := range links {
@@ -334,7 +348,7 @@ func TestPaginationLinks(t *testing.T) {
 		req := httptest.NewRequest("GET", "/search?q=myservice", nil)
 		entries := make([]cache.HistoryEntry, 50)
 		entries[49].ID = 42
-		links := paginationLinks(req, entries, 0, 50)
+		links := atomPaginationLinks(req, testFeedData(req, entries, 0, 50))
 
 		var nextHref string
 		for _, l := range links {
@@ -365,7 +379,7 @@ func TestPaginationLinks_StaleCursorIncludesCurrentLink(t *testing.T) {
 	req := httptest.NewRequest("GET", "/history?before=9999&limit=50", nil)
 	entries := []cache.HistoryEntry{} // empty — cursor was evicted
 
-	links := paginationLinks(req, entries, 9999, 50)
+	links := atomPaginationLinks(req, testFeedData(req, entries, 9999, 50))
 
 	var currentHref string
 	for _, l := range links {
@@ -390,7 +404,7 @@ func TestPaginationLinks_StaleCursorPreservesQueryParams(t *testing.T) {
 	req := httptest.NewRequest("GET", "/search?q=myservice&before=9999&limit=50", nil)
 	entries := []cache.HistoryEntry{} // empty — cursor was evicted
 
-	links := paginationLinks(req, entries, 9999, 50)
+	links := atomPaginationLinks(req, testFeedData(req, entries, 9999, 50))
 
 	var currentHref string
 	for _, l := range links {

@@ -8,6 +8,19 @@ import (
 	"strings"
 )
 
+// hasMidPathExtension reports whether the URL path contains a dot-extension
+// in a non-terminal segment, e.g. /foo.atom/feed or /data.json/bar.
+// Such paths are never valid client-side routes.
+func hasMidPathExtension(path string) bool {
+	segments := strings.Split(strings.Trim(path, "/"), "/")
+	for _, seg := range segments[:len(segments)-1] {
+		if strings.Contains(seg, ".") {
+			return true
+		}
+	}
+	return false
+}
+
 func NewSPAHandler(fsys fs.FS, basePath string) http.Handler {
 	fileServer := http.FileServer(http.FS(fsys))
 
@@ -38,6 +51,15 @@ func NewSPAHandler(fsys fs.FS, basePath string) http.Handler {
 
 		f, err := fsys.Open(path)
 		if err != nil {
+			// Reject paths that look like subpaths of an extension
+			// (e.g., /nodes.atom/feed/, /data.json/foo). These are feed
+			// reader discovery probes, not client-side routes. Returning
+			// 200 with HTML confuses feed autodiscovery.
+			if hasMidPathExtension(r.URL.Path) {
+				http.NotFound(w, r)
+				return
+			}
+
 			// Fall back to prepared index.html for client-side routing.
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			_, _ = w.Write(preparedIndex)

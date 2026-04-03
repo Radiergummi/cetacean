@@ -9,35 +9,84 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
+// feedHandlers groups the optional feed format handlers for an endpoint.
+type feedHandlers struct {
+	atom     http.HandlerFunc
+	jsonFeed http.HandlerFunc
+}
+
+// hasFeed reports whether any feed handler is configured.
+func (f feedHandlers) hasFeed() bool {
+	return f.atom != nil || f.jsonFeed != nil
+}
+
 // contentNegotiated wraps a JSON handler to dispatch based on content type.
 // HTML requests go to the SPA, SSE gets 406 (not supported here).
 // Unsupported types are already rejected by the negotiate middleware.
 func contentNegotiated(
-	jsonHandler, atomHandler http.HandlerFunc,
+	jsonHandler http.HandlerFunc,
+	feeds feedHandlers,
 	spa http.Handler,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch ContentTypeFromContext(r.Context()) {
 		case ContentTypeHTML:
+			addFeedLinks(w, r, feeds)
 			spa.ServeHTTP(w, r)
 		case ContentTypeSSE:
 			writeErrorCode(w, r, "API001", "this endpoint does not support text/event-stream")
 		case ContentTypeAtom:
-			if atomHandler == nil {
-				writeErrorCode(
-					w,
-					r,
-					"API003",
-					"this endpoint does not support application/atom+xml",
-				)
-				return
-			}
-			atomHandler(w, r)
+			dispatchFeed(w, r, feeds.atom, "application/atom+xml")
+		case ContentTypeJSONFeed:
+			dispatchFeed(w, r, feeds.jsonFeed, "application/feed+json")
 		default:
-			addAtomLink(w, r, atomHandler != nil)
+			addFeedLinks(w, r, feeds)
 			jsonHandler(w, r)
 		}
 	}
+}
+
+// contentNegotiatedWithSSE is like contentNegotiated but allows SSE.
+func contentNegotiatedWithSSE(
+	jsonHandler, sseHandler http.HandlerFunc,
+	feeds feedHandlers,
+	spa http.Handler,
+) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch ContentTypeFromContext(r.Context()) {
+		case ContentTypeHTML:
+			addFeedLinks(w, r, feeds)
+			spa.ServeHTTP(w, r)
+		case ContentTypeSSE:
+			sseHandler(w, r)
+		case ContentTypeAtom:
+			dispatchFeed(w, r, feeds.atom, "application/atom+xml")
+		case ContentTypeJSONFeed:
+			dispatchFeed(w, r, feeds.jsonFeed, "application/feed+json")
+		default:
+			addFeedLinks(w, r, feeds)
+			jsonHandler(w, r)
+		}
+	}
+}
+
+// dispatchFeed calls the given feed handler, or returns 406 if nil.
+func dispatchFeed(
+	w http.ResponseWriter,
+	r *http.Request,
+	handler http.HandlerFunc,
+	mediaType string,
+) {
+	if handler == nil {
+		writeErrorCode(
+			w,
+			r,
+			"API003",
+			"this endpoint does not support "+mediaType,
+		)
+		return
+	}
+	handler(w, r)
 }
 
 func (h *Handlers) streamList(w http.ResponseWriter, r *http.Request, typ cache.EventType) {
@@ -77,49 +126,34 @@ func (h *Handlers) aclMatchWrap(
 	}
 }
 
-// contentNegotiatedWithSSE is like contentNegotiated but allows SSE.
-func contentNegotiatedWithSSE(
-	jsonHandler, sseHandler, atomHandler http.HandlerFunc,
-	spa http.Handler,
-) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		switch ContentTypeFromContext(r.Context()) {
-		case ContentTypeHTML:
-			spa.ServeHTTP(w, r)
-		case ContentTypeSSE:
-			sseHandler(w, r)
-		case ContentTypeAtom:
-			if atomHandler == nil {
-				writeErrorCode(
-					w,
-					r,
-					"API003",
-					"this endpoint does not support application/atom+xml",
-				)
-				return
-			}
-			atomHandler(w, r)
-		default:
-			addAtomLink(w, r, atomHandler != nil)
-			jsonHandler(w, r)
-		}
-	}
-}
-
-// addAtomLink sets a Link header advertising the Atom feed alternate
-// (RFC 8288) when the endpoint supports Atom.
-func addAtomLink(w http.ResponseWriter, r *http.Request, hasAtom bool) {
-	if !hasAtom {
+// addFeedLinks sets Link headers advertising feed alternates (RFC 8288).
+func addFeedLinks(w http.ResponseWriter, r *http.Request, feeds feedHandlers) {
+	if !feeds.hasFeed() {
 		return
 	}
 
-	href := absPath(r.Context(), r.URL.Path) + ".atom"
-	if rq := r.URL.RawQuery; rq != "" {
-		href += "?" + rq
+	basePath := absPath(r.Context(), r.URL.Path)
+	rq := r.URL.RawQuery
+
+	if feeds.atom != nil {
+		href := basePath + ".atom"
+		if rq != "" {
+			href += "?" + rq
+		}
+		w.Header().Add("Link", fmt.Sprintf(
+			`<%s>; rel="alternate"; type="application/atom+xml"`,
+			href,
+		))
 	}
 
-	w.Header().Add("Link", fmt.Sprintf(
-		`<%s>; rel="alternate"; type="application/atom+xml"`,
-		href,
-	))
+	if feeds.jsonFeed != nil {
+		href := basePath + ".feed"
+		if rq != "" {
+			href += "?" + rq
+		}
+		w.Header().Add("Link", fmt.Sprintf(
+			`<%s>; rel="alternate"; type="application/feed+json"`,
+			href,
+		))
+	}
 }

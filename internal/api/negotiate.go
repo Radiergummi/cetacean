@@ -15,6 +15,7 @@ const (
 	ContentTypeHTML
 	ContentTypeSSE
 	ContentTypeAtom
+	ContentTypeJSONFeed
 	ContentTypeJGF
 	ContentTypeGraphML
 	ContentTypeDOT
@@ -34,6 +35,8 @@ func (ct ContentType) String() string {
 		return "SSE"
 	case ContentTypeAtom:
 		return "Atom"
+	case ContentTypeJSONFeed:
+		return "JSONFeed"
 	case ContentTypeJGF:
 		return "JGF"
 	case ContentTypeGraphML:
@@ -79,6 +82,10 @@ func negotiate(next http.Handler) http.Handler {
 			ct = ContentTypeAtom
 			path = strings.TrimSuffix(path, ".atom")
 			r.URL.Path = path
+		} else if strings.HasSuffix(path, ".feed") {
+			ct = ContentTypeJSONFeed
+			path = strings.TrimSuffix(path, ".feed")
+			r.URL.Path = path
 		} else if strings.HasSuffix(path, ".jgf") {
 			ct = ContentTypeJGF
 			path = strings.TrimSuffix(path, ".jgf")
@@ -118,6 +125,7 @@ var supportedTypes = []struct {
 	{"application", "xhtml+xml", ContentTypeHTML},
 	{"text", "event-stream", ContentTypeSSE},
 	{"application", "atom+xml", ContentTypeAtom},
+	{"application", "feed+json", ContentTypeJSONFeed},
 	{"application", "vnd.jgf+json", ContentTypeJGF},
 	{"application", "graphml+xml", ContentTypeGraphML},
 	{"text", "vnd.graphviz", ContentTypeDOT},
