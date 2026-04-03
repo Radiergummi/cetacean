@@ -1,7 +1,7 @@
 import { api } from "../api/client";
 import { isPrometheusReady, useMonitoringStatus } from "./useMonitoringStatus";
-import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useCallback } from "react";
 
 /**
  * Resolves Docker Swarm node hostnames to Prometheus instance labels.

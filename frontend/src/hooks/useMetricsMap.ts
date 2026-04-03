@@ -48,10 +48,12 @@ export function useMetricsMap<T>(
         ),
         Promise.all(
           (spec.range ?? []).map(({ query }) =>
-            api.metricsQueryRange(query, String(start), String(now), String(step)).catch((error) => {
-              console.warn(error);
-              return null;
-            }),
+            api
+              .metricsQueryRange(query, String(start), String(now), String(step))
+              .catch((error) => {
+                console.warn(error);
+                return null;
+              }),
           ),
         ),
       ]);

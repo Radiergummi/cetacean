@@ -1,8 +1,8 @@
 import { api, type ClusterSnapshot } from "../../api/client";
 import { formatBytes, formatNumber, formatPercentage } from "../../lib/format";
+import { useQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 
 function barColor(percent: number, isReservation: boolean): string {
   const high = isReservation ? 95 : 90;
