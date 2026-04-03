@@ -21,10 +21,10 @@ const (
 
 // graphmlDoc is the top-level GraphML document structure.
 type graphmlDoc struct {
-	XMLName xml.Name   `xml:"graphml"`
-	XMLNS   string     `xml:"xmlns,attr"`
-	Keys    []keyDef   `xml:"key"`
-	Graph   graphElem  `xml:"graph"`
+	XMLName xml.Name  `xml:"graphml"`
+	XMLNS   string    `xml:"xmlns,attr"`
+	Keys    []keyDef  `xml:"key"`
+	Graph   graphElem `xml:"graph"`
 }
 
 type keyDef struct {
@@ -37,12 +37,12 @@ type keyDef struct {
 // graphElem represents a <graph> element. It can contain nested subgraphs
 // (for stack hyperedges), nodes, and edges.
 type graphElem struct {
-	ID          string      `xml:"id,attr"`
-	EdgeDefault string      `xml:"edgedefault,attr"`
-	Data        []dataElem  `xml:"data,omitempty"`
-	Subgraphs   []subgraph  `xml:",omitempty"`
-	Nodes       []nodeElem  `xml:",omitempty"`
-	Edges       []edgeElem  `xml:",omitempty"`
+	ID          string     `xml:"id,attr"`
+	EdgeDefault string     `xml:"edgedefault,attr"`
+	Data        []dataElem `xml:"data,omitempty"`
+	Subgraphs   []subgraph `xml:",omitempty"`
+	Nodes       []nodeElem `xml:",omitempty"`
+	Edges       []edgeElem `xml:",omitempty"`
 }
 
 // subgraph wraps a nested <graph> inside a parent graph.

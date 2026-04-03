@@ -142,11 +142,3 @@ func TestRender_ServiceOutsideStack(t *testing.T) {
 		t.Errorf("output should contain node label:\n%s", result)
 	}
 }
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-
-	return b
-}
