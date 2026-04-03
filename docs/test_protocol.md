@@ -74,6 +74,22 @@ Prerequisites: a running Swarm cluster with at least 2 nodes, several stacks dep
 
 ---
 
+## List Page Pagination and Infinite Scroll
+
+All resource list pages (Nodes, Services, Tasks, Configs, Secrets, Networks, Volumes, Stacks) use HTTP Range Request pagination with infinite scroll.
+
+- [ ] API requests include `Range: items 0-49` header (verify in browser DevTools Network tab)
+- [ ] API responses include `Accept-Ranges: items` header
+- [ ] For partial responses: status is `206 Partial Content` with `Content-Range: items 0-49/N` header
+- [ ] For full responses (< 50 items): status is `200 OK`
+- [ ] **Infinite scroll**: scroll to the bottom of a list with more than 50 items — "Loading..." sentinel appears; new items load automatically
+- [ ] Infinite scroll works across multiple pages (scroll through 100+ items without gaps or duplicates)
+- [ ] Changing search query or sort resets to first page (no stale data from previous query)
+- [ ] SSE updates: add a resource externally — total count increments; existing items update in-place
+- [ ] SSE removes: remove a resource externally — item disappears from list; total count decrements
+
+---
+
 ## Node List (`/nodes`)
 
 - [ ] Table renders with columns: Hostname, Role, Availability, Status, Address, Engine
@@ -93,6 +109,7 @@ Prerequisites: a running Swarm cluster with at least 2 nodes, several stacks dep
 - [ ] **Labels editor**: click Edit → add a label → Save; edit an existing label → Save; delete a label → Save; reserved keys (e.g. `com.docker.stack.namespace`) are read-only
 - [ ] Tasks table shows tasks on this node with correct state indicators
 - [ ] **With Prometheus**: MetricsPanel with CPU, Memory, Disk I/O, Network I/O charts renders; range picker works (1H/6H/24H/7D)
+- [ ] **With cAdvisor**: "Resource Usage by Stack" section shows CPU and Memory drill-down charts per stack; double-click a stack to see per-service breakdown
 - [ ] **Docker Disk Usage section**: shows disk usage breakdown (images, containers, volumes, build cache) with doughnut chart when available
 - [ ] ActivitySection shows recent change events
 - [ ] **Remove button**: only enabled when node state is `down`; confirmation dialog requires typing hostname; removes node and navigates back
@@ -336,6 +353,18 @@ Prerequisites: a running Swarm cluster with at least 2 nodes, several stacks dep
 - [ ] Hover a task card — highlights the parent service
 - [ ] Nodes are draggable
 - [ ] Canvas fits to view
+
+### Export Formats (API)
+- [ ] `curl -H "Accept: application/vnd.jgf+json" /topology` — returns JGF document with two graphs (`network` and `placement`); Content-Type is `application/vnd.jgf+json`
+- [ ] `curl -H "Accept: application/graphml+xml" /topology` — returns valid GraphML XML (network graph only); Content-Type is `application/graphml+xml`
+- [ ] `curl -H "Accept: text/vnd.graphviz" /topology` — returns valid DOT format (network graph only); Content-Type is `text/vnd.graphviz`
+- [ ] Extension suffixes work: `/topology.jgf`, `/topology.graphml`, `/topology.dot`
+- [ ] GraphML contains service nodes with metadata (label, replicas, image, mode), edges with network names, and stack subgraphs
+- [ ] DOT contains service nodes with attributes, `subgraph cluster_<stack>` grouping, and `--` edges with network labels
+- [ ] JGF network graph uses `urn:cetacean:service:<id>` URNs for node keys and hyperedges for stack membership
+- [ ] JGF placement graph uses `urn:cetacean:node:<id>` and `urn:cetacean:service:<id>` URNs with task data in hyperedge metadata
+- [ ] Deprecated endpoints `/topology/networks` and `/topology/placement` return `Deprecation: true` and `Link: </topology>; rel="successor-version"` headers
+- [ ] ETag caching works on all topology export formats (same data → same ETag)
 
 ---
 
