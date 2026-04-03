@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/radiergummi/cetacean/internal/api/jgf"
@@ -174,7 +175,14 @@ func buildNodeElem(urn string, node jgf.Node) nodeElem {
 	}
 
 	if replicas, ok := node.Metadata["replicas"]; ok {
-		elem.Data = append(elem.Data, dataElem{Key: "replicas", Value: fmt.Sprintf("%v", replicas)})
+		switch r := replicas.(type) {
+		case int:
+			elem.Data = append(elem.Data, dataElem{Key: "replicas", Value: strconv.Itoa(r)})
+		case float64:
+			elem.Data = append(elem.Data, dataElem{Key: "replicas", Value: strconv.Itoa(int(r))})
+		default:
+			elem.Data = append(elem.Data, dataElem{Key: "replicas", Value: fmt.Sprintf("%v", r)})
+		}
 	}
 
 	if image, _ := node.Metadata["image"].(string); image != "" {

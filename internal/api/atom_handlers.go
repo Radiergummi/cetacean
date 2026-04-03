@@ -162,8 +162,8 @@ func (h *Handlers) HandleAtomRecommendations(w http.ResponseWriter, r *http.Requ
 		atomEntries = append(atomEntries, recommendationToEntry(r, rec, lastTick))
 	}
 
-	selfHref := absPath(r.Context(), r.URL.Path)
-	alternateHref := absPath(r.Context(), "/recommendations")
+	selfHref := absURL(r, r.URL.Path+".atom")
+	alternateHref := absURL(r, "/recommendations")
 	writeCachedAtom(w, r, atomxml.Feed{
 		Title:   "Recommendations",
 		Author:  &atomxml.Author{Name: "Cetacean"},
@@ -194,7 +194,7 @@ func recommendationToEntry(
 		if path != "" {
 			links = []atomxml.Link{{
 				Rel:  "alternate",
-				Href: absPath(r.Context(), path),
+				Href: absURL(r, path),
 				Type: "text/html",
 			}}
 		}
@@ -344,7 +344,7 @@ func historyToEntries(r *http.Request, entries []cache.HistoryEntry) []atomxml.E
 		if path := resourcePath(e.Type, e.ResourceID); path != "" {
 			links = []atomxml.Link{{
 				Rel:  "alternate",
-				Href: absPath(r.Context(), path),
+				Href: absURL(r, path),
 				Type: "text/html",
 			}}
 		}
@@ -401,12 +401,14 @@ func paginationLinks(
 	beforeID uint64,
 	limit int,
 ) []atomxml.Link {
-	selfHref := absPath(r.Context(), r.URL.Path)
+	atomPath := r.URL.Path + ".atom"
+
+	selfHref := absURL(r, atomPath)
 	if r.URL.RawQuery != "" {
 		selfHref += "?" + r.URL.RawQuery
 	}
 
-	alternateHref := absPath(r.Context(), r.URL.Path)
+	alternateHref := absURL(r, r.URL.Path)
 	if aq := r.URL.Query(); len(aq) > 0 {
 		aq.Del("before")
 		aq.Del("limit")
@@ -423,7 +425,7 @@ func paginationLinks(
 	// On non-first pages, link back to the subscription document (first page).
 	// Per RFC 5005, this should point to the feed document, not the HTML alternate.
 	if beforeID > 0 {
-		firstPageHref := absPath(r.Context(), r.URL.Path)
+		firstPageHref := absURL(r, atomPath)
 		if aq := r.URL.Query(); len(aq) > 0 {
 			aq.Del("before")
 			aq.Del("limit")
@@ -445,7 +447,7 @@ func paginationLinks(
 	// (RFC 5005 Section 2) so feed readers can recover by restarting from
 	// the subscription document.
 	if beforeID > 0 && len(entries) == 0 {
-		currentHref := absPath(r.Context(), r.URL.Path)
+		currentHref := absURL(r, atomPath)
 		if aq := r.URL.Query(); len(aq) > 0 {
 			aq.Del("before")
 			aq.Del("limit")
@@ -469,7 +471,7 @@ func paginationLinks(
 		q := r.URL.Query()
 		q.Set("before", strconv.FormatUint(lastID, 10))
 		q.Set("limit", strconv.Itoa(limit))
-		nextHref := absPath(r.Context(), r.URL.Path) + "?" + q.Encode()
+		nextHref := absURL(r, atomPath) + "?" + q.Encode()
 
 		links = append(links, atomxml.Link{
 			Rel:  "next",

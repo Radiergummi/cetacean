@@ -94,7 +94,7 @@ describe("networkGraphToReactFlow", () => {
     expect(groups[0].data.label).toBe("app");
     expect(services.length).toBe(3);
     expect(services.filter(({ parentId }) => parentId === "stack:app").length).toBe(2);
-    expect(services.find(({ id }) => id === "urn:cetacean:service:s3")?.parentId).toBeUndefined();
+    expect(services.find(({ id }) => id === "s3")?.parentId).toBeUndefined();
 
     // One edge with all networks collapsed
     expect(edges.length).toBe(1);
@@ -252,9 +252,7 @@ describe("placementGraphToReactFlow", () => {
       services: { serviceId: string; running: number; total: number }[];
     };
     expect(n1Data.services.length).toBe(2);
-    const webSvc = n1Data.services.find(
-      ({ serviceId }) => serviceId === "urn:cetacean:service:svc1",
-    );
+    const webSvc = n1Data.services.find(({ serviceId }) => serviceId === "svc1");
     expect(webSvc!.running).toBe(2);
     expect(webSvc!.total).toBe(2);
 

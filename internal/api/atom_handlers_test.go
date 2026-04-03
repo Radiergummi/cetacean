@@ -297,8 +297,11 @@ func TestPaginationLinks(t *testing.T) {
 				continue
 			}
 
-			if l.Href != "/history" {
-				t.Errorf("alternate href = %q, want /history (no query params)", l.Href)
+			if l.Href != "http://example.com/history" {
+				t.Errorf(
+					"alternate href = %q, want http://example.com/history (no query params)",
+					l.Href,
+				)
 			}
 		}
 	})
@@ -319,8 +322,11 @@ func TestPaginationLinks(t *testing.T) {
 			t.Fatal("expected previous link on non-first page (beforeID > 0)")
 		}
 
-		if previousHref != "/history" {
-			t.Errorf("previous href = %q, want /history (subscription document)", previousHref)
+		if previousHref != "http://example.com/history.atom" {
+			t.Errorf(
+				"previous href = %q, want http://example.com/history.atom (subscription document)",
+				previousHref,
+			)
 		}
 	})
 
@@ -372,8 +378,11 @@ func TestPaginationLinks_StaleCursorIncludesCurrentLink(t *testing.T) {
 		t.Fatal("expected current link when beforeID > 0 and entries are empty (stale cursor)")
 	}
 
-	if currentHref != "/history" {
-		t.Errorf("current href = %q, want /history (no pagination params)", currentHref)
+	if currentHref != "http://example.com/history.atom" {
+		t.Errorf(
+			"current href = %q, want http://example.com/history.atom (no pagination params)",
+			currentHref,
+		)
 	}
 }
 

@@ -12,6 +12,13 @@ export function hashColor(id: string): string {
   return getChartColor(Math.abs(hash));
 }
 
+/** Extract the bare resource ID from a URN like `urn:cetacean:service:abc123`. */
+function urnToId(urn: string): string {
+  const lastColon = urn.lastIndexOf(":");
+
+  return lastColon >= 0 ? urn.slice(lastColon + 1) : urn;
+}
+
 export function stripStackPrefix(name: string, stack?: string): string {
   if (stack && name.startsWith(stack + "_")) {
     return name.slice(stack.length + 1);
@@ -102,7 +109,7 @@ export function networkGraphToReactFlow(graph: JGFGraph): { nodes: Node[]; edges
       type: "serviceCard",
       position: { x: 0, y: 0 },
       data: {
-        id: urn,
+        id: urnToId(urn),
         name: stripStackPrefix(jgfNode.label, stack),
         mode: metadata.mode as string,
         image: metadata.image as string,
@@ -297,7 +304,7 @@ export function placementGraphToReactFlow(graph: JGFGraph): { nodes: Node[] } {
 
     const services = [...serviceMap.entries()]
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-      .map(([serviceId, service]) => ({ serviceId, ...service }));
+      .map(([serviceId, service]) => ({ serviceId: urnToId(serviceId), ...service }));
 
     const rows = Math.max(1, Math.ceil(services.length / columns));
     const nodeHeight = headerHeight + rows * cardHeight + Math.max(0, rows - 1) * cardGap + padding;

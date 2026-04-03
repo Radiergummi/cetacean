@@ -559,3 +559,75 @@ func TestHandleTopologyDOT(t *testing.T) {
 		t.Error("expected ETag header")
 	}
 }
+
+func TestHandleTopologyGraphML_WithEdges(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{ID: "net1", Name: "frontend", Driver: "overlay"})
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+		Endpoint: swarm.Endpoint{
+			VirtualIPs: []swarm.EndpointVirtualIP{{NetworkID: "net1"}},
+		},
+	})
+	c.SetService(swarm.Service{
+		ID:   "svc2",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "api"}},
+		Endpoint: swarm.Endpoint{
+			VirtualIPs: []swarm.EndpointVirtualIP{{NetworkID: "net1"}},
+		},
+	})
+
+	h := newTestHandlers(t, withCache(c))
+	req := httptest.NewRequest("GET", "/topology", nil)
+	w := httptest.NewRecorder()
+	h.HandleTopologyGraphML(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "<edge") {
+		t.Error("expected edge element in GraphML output")
+	}
+	if !strings.Contains(body, "frontend") {
+		t.Error("expected network name 'frontend' in GraphML edge data")
+	}
+}
+
+func TestHandleTopologyDOT_WithEdges(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{ID: "net1", Name: "frontend", Driver: "overlay"})
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+		Endpoint: swarm.Endpoint{
+			VirtualIPs: []swarm.EndpointVirtualIP{{NetworkID: "net1"}},
+		},
+	})
+	c.SetService(swarm.Service{
+		ID:   "svc2",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "api"}},
+		Endpoint: swarm.Endpoint{
+			VirtualIPs: []swarm.EndpointVirtualIP{{NetworkID: "net1"}},
+		},
+	})
+
+	h := newTestHandlers(t, withCache(c))
+	req := httptest.NewRequest("GET", "/topology", nil)
+	w := httptest.NewRecorder()
+	h.HandleTopologyDOT(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, " -- ") {
+		t.Error("expected edge in DOT output")
+	}
+	if !strings.Contains(body, "frontend") {
+		t.Error("expected network name 'frontend' in DOT edge label")
+	}
+}

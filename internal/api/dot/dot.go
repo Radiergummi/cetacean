@@ -56,13 +56,12 @@ func Render(g jgf.Graph) ([]byte, error) {
 	// Emit edges.
 	for _, edge := range g.Edges {
 		edgeLabel := extractNetworkNames(edge.Metadata)
-		fmt.Fprintf(
-			&b,
-			"\t%s -- %s [label=%s];\n",
-			dotQuote(edge.Source),
-			dotQuote(edge.Target),
-			dotQuote(edgeLabel),
-		)
+		if edgeLabel != "" {
+			fmt.Fprintf(&b, "\t%s -- %s [label=%s];\n",
+				dotQuote(edge.Source), dotQuote(edge.Target), dotQuote(edgeLabel))
+		} else {
+			fmt.Fprintf(&b, "\t%s -- %s;\n", dotQuote(edge.Source), dotQuote(edge.Target))
+		}
 	}
 
 	fmt.Fprintf(&b, "}\n")
@@ -77,7 +76,7 @@ func nodeStatement(urn string, node jgf.Node) string {
 	}
 
 	if v, ok := node.Metadata["replicas"]; ok {
-		attrs = append(attrs, fmt.Sprintf("replicas=%v", v))
+		attrs = append(attrs, "replicas="+dotQuote(fmt.Sprintf("%v", v)))
 	}
 
 	if image, ok := node.Metadata["image"].(string); ok && image != "" {

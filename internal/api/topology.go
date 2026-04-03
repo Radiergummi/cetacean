@@ -515,27 +515,19 @@ func buildNetworkJGF(
 		sourceURN := jgf.URN("service", k.a)
 		targetURN := jgf.URN("service", k.b)
 
-		type edgeNetwork struct {
-			ID      string              `json:"id"`
-			Name    string              `json:"name"`
-			Driver  string              `json:"driver"`
-			Scope   string              `json:"scope"`
-			Aliases map[string][]string `json:"aliases,omitempty"`
-		}
-
-		netEntries := make([]edgeNetwork, 0, len(netIDs))
+		netEntries := make([]any, 0, len(netIDs))
 		for _, netID := range netIDs {
 			info := overlaySet[netID]
-			entry := edgeNetwork{
-				ID:     jgf.URN("network", netID),
-				Name:   info.name,
-				Driver: info.driver,
-				Scope:  info.scope,
+			entry := map[string]any{
+				"id":     jgf.URN("network", netID),
+				"name":   info.name,
+				"driver": info.driver,
+				"scope":  info.scope,
 			}
 
 			// Collect aliases for this network that belong to either endpoint.
 			if aliasMap := svcAliases[netID]; len(aliasMap) > 0 {
-				aliases := make(map[string][]string)
+				aliases := make(map[string]any)
 				for svcURN, aliasList := range aliasMap {
 					if svcURN == sourceURN || svcURN == targetURN {
 						aliases[svcURN] = aliasList
@@ -543,7 +535,7 @@ func buildNetworkJGF(
 				}
 
 				if len(aliases) > 0 {
-					entry.Aliases = aliases
+					entry["aliases"] = aliases
 				}
 			}
 
