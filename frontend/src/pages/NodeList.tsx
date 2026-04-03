@@ -9,8 +9,8 @@ import { SkeletonTable } from "../components/LoadingSkeleton";
 import { ResourceGauge, Sparkline, NodeResourceGauges, MetricsPanel } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import ResourceCard from "../components/ResourceCard";
-import SortIndicator from "../components/SortIndicator";
 import TaskStatusBadge from "../components/TaskStatusBadge";
+import { sortColumn } from "../lib/sortColumn";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useNodeMetrics } from "../hooks/useNodeMetrics";
 import { useSearchParam } from "../hooks/useSearchParam";
@@ -50,13 +50,7 @@ export default function NodeList() {
   const baseColumns: Column<Node>[] = useMemo(
     () => [
       {
-        header: (
-          <SortIndicator
-            label="Hostname"
-            active={sortKey === "hostname"}
-            dir={sortDir}
-          />
-        ),
+        ...sortColumn("Hostname", "hostname", sortKey, sortDir, toggle),
         cell: ({ Description, ID }) => (
           <Link
             to={`/nodes/${ID}`}
@@ -66,16 +60,9 @@ export default function NodeList() {
             {Description.Hostname || ID}
           </Link>
         ),
-        onHeaderClick: () => toggle("hostname"),
       },
       {
-        header: (
-          <SortIndicator
-            label="Role"
-            active={sortKey === "role"}
-            dir={sortDir}
-          />
-        ),
+        ...sortColumn("Role", "role", sortKey, sortDir, toggle),
         cell: ({ ManagerStatus, Spec }) => (
           <span className="flex items-center gap-1.5">
             {Spec.Role}
@@ -86,29 +73,14 @@ export default function NodeList() {
             )}
           </span>
         ),
-        onHeaderClick: () => toggle("role"),
       },
       {
-        header: (
-          <SortIndicator
-            label="Availability"
-            active={sortKey === "availability"}
-            dir={sortDir}
-          />
-        ),
+        ...sortColumn("Availability", "availability", sortKey, sortDir, toggle),
         cell: ({ Spec }) => Spec.Availability,
-        onHeaderClick: () => toggle("availability"),
       },
       {
-        header: (
-          <SortIndicator
-            label="Status"
-            active={sortKey === "status"}
-            dir={sortDir}
-          />
-        ),
+        ...sortColumn("Status", "status", sortKey, sortDir, toggle),
         cell: ({ Status }) => <TaskStatusBadge state={Status.State} />,
-        onHeaderClick: () => toggle("status"),
       },
       {
         header: "Address",

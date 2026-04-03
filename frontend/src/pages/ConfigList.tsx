@@ -9,8 +9,8 @@ import { SkeletonTable } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import ResourceCard from "../components/ResourceCard";
 import ResourceName from "../components/ResourceName";
-import SortIndicator from "../components/SortIndicator";
 import TimeAgo from "../components/TimeAgo";
+import { sortColumn } from "../lib/sortColumn";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
@@ -43,37 +43,16 @@ export default function ConfigList() {
   const columns: Column<Config>[] = useMemo(
     () => [
       {
-        header: (
-          <SortIndicator
-            label="Name"
-            active={sortKey === "name"}
-            dir={sortDir}
-          />
-        ),
+        ...sortColumn("Name", "name", sortKey, sortDir, toggle),
         cell: ({ ID, Spec: { Name } }) => <ResourceName name={Name || ID} />,
-        onHeaderClick: () => toggle("name"),
       },
       {
-        header: (
-          <SortIndicator
-            label="Created"
-            active={sortKey === "created"}
-            dir={sortDir}
-          />
-        ),
+        ...sortColumn("Created", "created", sortKey, sortDir, toggle),
         cell: ({ CreatedAt }) => (CreatedAt ? <TimeAgo date={CreatedAt} /> : "\u2014"),
-        onHeaderClick: () => toggle("created"),
       },
       {
-        header: (
-          <SortIndicator
-            label="Updated"
-            active={sortKey === "updated"}
-            dir={sortDir}
-          />
-        ),
+        ...sortColumn("Updated", "updated", sortKey, sortDir, toggle),
         cell: ({ UpdatedAt }) => (UpdatedAt ? <TimeAgo date={UpdatedAt} /> : "\u2014"),
-        onHeaderClick: () => toggle("updated"),
       },
     ],
     [sortKey, sortDir, toggle],

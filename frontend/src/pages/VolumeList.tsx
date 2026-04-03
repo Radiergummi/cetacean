@@ -8,8 +8,8 @@ import { SkeletonTable } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import ResourceCard from "../components/ResourceCard";
 import ResourceName from "../components/ResourceName";
-import SortIndicator from "../components/SortIndicator";
 import { useSearchParam } from "../hooks/useSearchParam";
+import { sortColumn } from "../lib/sortColumn";
 import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useViewMode } from "../hooks/useViewMode";
@@ -40,37 +40,16 @@ export default function VolumeList() {
   const columns: Column<Volume>[] = useMemo(
     () => [
       {
-        header: (
-          <SortIndicator
-            label="Name"
-            active={sortKey === "name"}
-            dir={sortDir}
-          />
-        ),
+        ...sortColumn("Name", "name", sortKey, sortDir, toggle),
         cell: ({ Name }) => <ResourceName name={Name} />,
-        onHeaderClick: () => toggle("name"),
       },
       {
-        header: (
-          <SortIndicator
-            label="Driver"
-            active={sortKey === "driver"}
-            dir={sortDir}
-          />
-        ),
+        ...sortColumn("Driver", "driver", sortKey, sortDir, toggle),
         cell: ({ Driver }) => Driver,
-        onHeaderClick: () => toggle("driver"),
       },
       {
-        header: (
-          <SortIndicator
-            label="Scope"
-            active={sortKey === "scope"}
-            dir={sortDir}
-          />
-        ),
+        ...sortColumn("Scope", "scope", sortKey, sortDir, toggle),
         cell: ({ Scope }) => Scope,
-        onHeaderClick: () => toggle("scope"),
       },
     ],
     [sortKey, sortDir, toggle],

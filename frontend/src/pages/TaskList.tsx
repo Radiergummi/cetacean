@@ -9,7 +9,6 @@ import { TaskSparkline } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import ResourceCard from "../components/ResourceCard";
 import ResourceName from "../components/ResourceName";
-import SortIndicator from "../components/SortIndicator";
 import TaskStateFilter, { isActiveTask } from "../components/TaskStateFilter";
 import TaskStatusBadge from "../components/TaskStatusBadge";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
@@ -18,6 +17,7 @@ import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { useViewMode } from "../hooks/useViewMode";
+import { sortColumn } from "../lib/sortColumn";
 import { useCallback, useMemo } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
@@ -114,15 +114,8 @@ export default function TaskList() {
         ),
       },
       {
-        header: (
-          <SortIndicator
-            label="State"
-            active={sortKey === "state"}
-            dir={sortDir}
-          />
-        ),
+        ...sortColumn("State", "state", sortKey, sortDir, toggle),
         cell: ({ Status }) => <TaskStatusBadge state={Status.State} />,
-        onHeaderClick: () => toggle("state"),
       },
       ...(hasCadvisor
         ? [
@@ -159,13 +152,7 @@ export default function TaskList() {
         cell: ({ DesiredState }) => DesiredState,
       },
       {
-        header: (
-          <SortIndicator
-            label="Node"
-            active={sortKey === "node"}
-            dir={sortDir}
-          />
-        ),
+        ...sortColumn("Node", "node", sortKey, sortDir, toggle),
         cell: ({ NodeHostname, NodeID }) =>
           NodeID ? (
             <Link
@@ -178,7 +165,6 @@ export default function TaskList() {
           ) : (
             "\u2014"
           ),
-        onHeaderClick: () => toggle("node"),
       },
       {
         header: "Slot",

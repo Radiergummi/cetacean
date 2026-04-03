@@ -11,7 +11,6 @@ import PageHeader from "../components/PageHeader";
 import ResourceCard from "../components/ResourceCard";
 import ResourceName from "../components/ResourceName";
 import { SizingBadge } from "../components/SizingBadge";
-import SortIndicator from "../components/SortIndicator";
 import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useRecommendations } from "../hooks/useRecommendations";
 import { useSearchParam } from "../hooks/useSearchParam";
@@ -20,6 +19,7 @@ import { useSortParams } from "../hooks/useSort";
 import { useSwarmResource } from "../hooks/useSwarmResource";
 import { useViewMode } from "../hooks/useViewMode";
 import { sizingCategories } from "../lib/sizingUtils";
+import { sortColumn } from "../lib/sortColumn";
 import { useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -100,13 +100,7 @@ export default function ServiceList() {
   const baseColumns: Column<ServiceListItem>[] = useMemo(
     () => [
       {
-        header: (
-          <SortIndicator
-            label="Name"
-            active={sortKey === "name"}
-            dir={sortDir}
-          />
-        ),
+        ...sortColumn("Name", "name", sortKey, sortDir, toggle),
         cell: ({ ID, Spec }) => (
           <Link
             to={`/services/${ID}`}
@@ -116,7 +110,6 @@ export default function ServiceList() {
             <ResourceName name={Spec.Name} />
           </Link>
         ),
-        onHeaderClick: () => toggle("name"),
       },
       {
         header: "Image",
@@ -127,15 +120,8 @@ export default function ServiceList() {
         ),
       },
       {
-        header: (
-          <SortIndicator
-            label="Mode"
-            active={sortKey === "mode"}
-            dir={sortDir}
-          />
-        ),
+        ...sortColumn("Mode", "mode", sortKey, sortDir, toggle),
         cell: ({ Spec }) => (Spec.Mode.Replicated ? "replicated" : "global"),
-        onHeaderClick: () => toggle("mode"),
       },
       {
         header: "Ports",
