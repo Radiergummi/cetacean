@@ -72,7 +72,7 @@ export function useSwarmQuery<T>(
         const key = [...queryKeyRef.current];
 
         if (event.type === "sync") {
-          queryClient.invalidateQueries({ queryKey: key });
+          void queryClient.invalidateQueries({ queryKey: key });
 
           return;
         }
@@ -163,7 +163,7 @@ export function useSwarmQuery<T>(
             });
           }
         } else {
-          queryClient.invalidateQueries({ queryKey: key });
+          void queryClient.invalidateQueries({ queryKey: key });
         }
       },
       [queryClient],
@@ -182,7 +182,7 @@ export function useSwarmQuery<T>(
   }, [query.isFetchingNextPage, query.hasNextPage, query.fetchNextPage]);
 
   const retry = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: [...queryKey] });
+    void queryClient.invalidateQueries({ queryKey: [...queryKey] });
   }, [queryClient, queryKey]);
 
   return { data, total, loading, loadingMore, error, retry, hasMore, loadMore, allowedMethods };

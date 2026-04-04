@@ -64,6 +64,8 @@ export default function MetricsConsole() {
 
     setActiveQuery(query);
     setRefreshKey((key) => key + 1);
+
+    // Force refetch if the same query is re-run (key doesn't change).
     void queryClient.invalidateQueries({ queryKey: ["metrics-instant", query] });
   }, [input, setSearchParams, queryClient]);
 
