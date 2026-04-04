@@ -11,7 +11,7 @@ import NetworkEdge from "../components/topology/NetworkEdge";
 import PhysicalNodeCard from "../components/topology/PhysicalNodeCard";
 import ServiceCardNode from "../components/topology/ServiceCardNode";
 import { useMatchesBreakpoint } from "../hooks/useMatchesBreakpoint";
-import { useResourceStream } from "../hooks/useResourceStream";
+import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
 import { computeLayout } from "../lib/layoutElk";
 import {
   networkGraphToReactFlow,
@@ -22,7 +22,7 @@ import { getErrorMessage } from "../lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ReactFlow, ReactFlowProvider, Background, type Node, type Edge } from "@xyflow/react";
 import { Info, Network, Server, X } from "lucide-react";
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 
 const logicalNodeTypes = {
   stackGroup: GroupNode,
@@ -258,39 +258,14 @@ export default function Topology() {
   } = useQuery({
     queryKey: ["topology"],
     queryFn: () => api.topology(),
-    retry: 1,
+    retry: false,
   });
 
   const networkData = topologyData?.graphs.find((g) => g.id === "network") ?? null;
   const placementData = topologyData?.graphs.find((g) => g.id === "placement") ?? null;
   const error = queryError ? getErrorMessage(queryError, "Failed to load topology") : null;
 
-  const refetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const debouncedRefetch = useCallback(() => {
-    if (refetchTimerRef.current) {
-      clearTimeout(refetchTimerRef.current);
-    }
-
-    refetchTimerRef.current = setTimeout(() => {
-      refetchTimerRef.current = null;
-      void queryClient.invalidateQueries({ queryKey: ["topology"] });
-    }, 2000);
-  }, [queryClient]);
-
-  useEffect(() => {
-    return () => {
-      if (refetchTimerRef.current) {
-        clearTimeout(refetchTimerRef.current);
-      }
-    };
-  }, []);
-
-  useResourceStream(
-    "/events",
-    useCallback(() => {
-      debouncedRefetch();
-    }, [debouncedRefetch]),
-  );
+  useDebouncedInvalidation("/events", [["topology"]], 2_000);
 
   return (
     <div>

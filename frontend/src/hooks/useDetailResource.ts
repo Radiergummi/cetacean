@@ -1,8 +1,8 @@
 import { api, emptyMethods, setsEqual } from "../api/client";
 import type { FetchResult } from "../api/client";
-import { useResourceStream } from "./useResourceStream";
+import { useDebouncedInvalidation } from "./useDebouncedInvalidation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useRef } from "react";
 
 export function useDetailResource<T>(
   key: string | undefined,
@@ -25,30 +25,7 @@ export function useDetailResource<T>(
     retry: false,
   });
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useResourceStream(
-    ssePath,
-    useCallback(() => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-
-      debounceRef.current = setTimeout(() => {
-        debounceRef.current = null;
-        void queryClient.invalidateQueries({ queryKey: ["detail", ssePath] });
-        void queryClient.invalidateQueries({ queryKey: ["detail-history", ssePath] });
-      }, 500);
-    }, [queryClient, ssePath, key]),
-  );
-
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
-  }, []);
+  useDebouncedInvalidation(ssePath, [["detail", ssePath], ["detail-history", ssePath]]);
 
   const data = resourceQuery.data?.data ?? null;
   const error = resourceQuery.error ?? null;
@@ -69,7 +46,7 @@ export function useDetailResource<T>(
   const retry = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ["detail", ssePath] });
     void queryClient.invalidateQueries({ queryKey: ["detail-history", ssePath] });
-  }, [queryClient, ssePath, key]);
+  }, [queryClient, ssePath]);
 
   return { data, history, error, retry, allowedMethods };
 }

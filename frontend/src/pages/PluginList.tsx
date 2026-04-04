@@ -21,6 +21,7 @@ export default function PluginList() {
   } = useQuery({
     queryKey: ["plugins"],
     queryFn: () => api.plugins(),
+    retry: false,
   });
 
   const plugins = pluginResult?.data ?? null;
@@ -68,7 +69,7 @@ export default function PluginList() {
       <InstallPluginDialog
         open={installOpen}
         onOpenChange={setInstallOpen}
-        onInstalled={() => queryClientInstance.invalidateQueries({ queryKey: ["plugins"] })}
+        onInstalled={() => void queryClientInstance.invalidateQueries({ queryKey: ["plugins"] })}
       />
     </div>
   );

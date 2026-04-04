@@ -7,7 +7,7 @@ import CollapsibleSection from "./CollapsibleSection";
 import { useQuery } from "@tanstack/react-query";
 import { ArcElement, Chart as ChartJS, Tooltip } from "chart.js";
 import { Box, Container, Hammer, HardDrive, type LucideIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Doughnut } from "react-chartjs-2";
 
 ChartJS.register(ArcElement, Tooltip);
@@ -359,33 +359,24 @@ function DiskUsageLoading() {
  * Cetacean is connected to (disk usage data is local to that host).
  */
 export default function DiskUsageSection({ nodeId }: { nodeId?: string }) {
-  const [visible, setVisible] = useState(!nodeId);
-  const [loading, setLoading] = useState(!!nodeId);
+  const { data: localNodeID } = useQuery({
+    queryKey: ["cluster"],
+    queryFn: () => api.cluster(),
+    enabled: !!nodeId,
+    retry: false,
+    select: (snapshot) => snapshot.localNodeID,
+  });
 
-  useEffect(() => {
-    if (!nodeId) {
-      return;
-    }
-
-    api
-      .cluster()
-      .then(({ localNodeID }) => {
-        if (localNodeID && localNodeID === nodeId) {
-          setVisible(true);
-        } else {
-          setLoading(false);
-        }
-      })
-      .catch(() => setLoading(false));
-  }, [nodeId]);
+  const visible = !nodeId || (!!localNodeID && localNodeID === nodeId);
 
   const { data, isLoading: diskLoading } = useQuery({
     queryKey: ["disk-usage"],
     queryFn: () => api.diskUsage(),
     enabled: visible,
+    retry: false,
   });
 
-  const isLoading = loading || diskLoading;
+  const isLoading = (!!nodeId && !localNodeID) || diskLoading;
 
   if (!visible || (!isLoading && !data)) {
     return null;

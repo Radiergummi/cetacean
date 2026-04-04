@@ -10,28 +10,28 @@ import {
 import PageHeader from "../components/PageHeader";
 import RecommendationSummary from "../components/RecommendationSummary";
 import { isPrometheusReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
-import { useResourceStream } from "../hooks/useResourceStream";
+import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
 import { stackResourceCharts } from "../lib/stackQueries";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { TrendingDown, TrendingUp } from "lucide-react";
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 
 const clusterStackCharts = stackResourceCharts();
 
 export default function ClusterOverview() {
   const prevRef = useRef<ClusterSnapshot | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const queryClientInstance = useQueryClient();
 
   const { data: snapshot } = useQuery({
     queryKey: ["cluster"],
     queryFn: () => api.cluster(),
+    retry: false,
   });
 
   const { data: history = [], isLoading: historyLoading } = useQuery({
     queryKey: ["history", { limit: 25 }],
     queryFn: () => api.history({ limit: 25 }),
+    retry: false,
   });
 
   useEffect(() => {
@@ -42,27 +42,7 @@ export default function ClusterOverview() {
     };
   }, [snapshot]);
 
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
-  }, []);
-
-  useResourceStream(
-    "/events",
-    useCallback(() => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-
-      debounceRef.current = setTimeout(() => {
-        queryClientInstance.invalidateQueries({ queryKey: ["cluster"] });
-        queryClientInstance.invalidateQueries({ queryKey: ["history"] });
-      }, 2_000);
-    }, [queryClientInstance]),
-  );
+  useDebouncedInvalidation("/events", [["cluster"], ["history"]], 2_000);
 
   const monitoring = useMonitoringStatus();
   const hasPrometheus = isPrometheusReady(monitoring);
