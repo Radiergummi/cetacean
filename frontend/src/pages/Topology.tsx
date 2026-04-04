@@ -273,7 +273,7 @@ export default function Topology() {
 
     refetchTimerRef.current = setTimeout(() => {
       refetchTimerRef.current = null;
-      queryClient.invalidateQueries({ queryKey: ["topology"] });
+      void queryClient.invalidateQueries({ queryKey: ["topology"] });
     }, 2000);
   }, [queryClient]);
 
@@ -313,7 +313,7 @@ export default function Topology() {
           <p className="text-sm text-destructive">{error}</p>
           <button
             className="rounded-md bg-muted px-3 py-1.5 text-sm hover:bg-muted/80"
-            onClick={() => queryClient.invalidateQueries({ queryKey: ["topology"] })}
+            onClick={() => void queryClient.invalidateQueries({ queryKey: ["topology"] })}
           >
             Retry
           </button>
