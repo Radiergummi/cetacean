@@ -36,7 +36,7 @@ export function useDetailResource<T>(
 
       debounceRef.current = setTimeout(() => {
         debounceRef.current = null;
-        void queryClient.invalidateQueries({ queryKey: ["detail", ssePath, key] });
+        void queryClient.invalidateQueries({ queryKey: ["detail", ssePath] });
         void queryClient.invalidateQueries({ queryKey: ["detail-history", key] });
       }, 500);
     }, [queryClient, ssePath, key]),
@@ -67,7 +67,7 @@ export function useDetailResource<T>(
   const allowedMethods = methodsRef.current;
 
   const retry = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: ["detail", ssePath, key] });
+    void queryClient.invalidateQueries({ queryKey: ["detail", ssePath] });
     void queryClient.invalidateQueries({ queryKey: ["detail-history", key] });
   }, [queryClient, ssePath, key]);
 

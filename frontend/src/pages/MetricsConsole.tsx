@@ -65,7 +65,7 @@ export default function MetricsConsole() {
 
     setActiveQuery(query);
     setRefreshKey((key) => key + 1);
-    queryClient.invalidateQueries({ queryKey: ["metrics-instant", query] });
+    void queryClient.invalidateQueries({ queryKey: ["metrics-instant", query] });
   }, [input, setSearchParams, queryClient]);
 
   const setRange = (value: string) => {
