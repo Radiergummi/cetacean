@@ -36,8 +36,8 @@ export function useDetailResource<T>(
 
       debounceRef.current = setTimeout(() => {
         debounceRef.current = null;
-        queryClient.invalidateQueries({ queryKey: ["detail", ssePath, key] });
-        queryClient.invalidateQueries({ queryKey: ["detail-history", key] });
+        void queryClient.invalidateQueries({ queryKey: ["detail", ssePath, key] });
+        void queryClient.invalidateQueries({ queryKey: ["detail-history", key] });
       }, 500);
     }, [queryClient, ssePath, key]),
   );
@@ -56,7 +56,7 @@ export function useDetailResource<T>(
 
   // Stabilize allowedMethods by reference — the Set is recreated on every
   // fetch response, but its contents rarely change. Without this, every SSE
-  // refetch would cause unnecessary re-renders in consumers.
+  // Refetch would cause unnecessary re-renders in consumers.
   const rawMethods = resourceQuery.data?.allowedMethods ?? emptyMethods;
   const methodsRef = useRef<Set<string>>(emptyMethods);
 
@@ -67,8 +67,8 @@ export function useDetailResource<T>(
   const allowedMethods = methodsRef.current;
 
   const retry = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["detail", ssePath, key] });
-    queryClient.invalidateQueries({ queryKey: ["detail-history", key] });
+    void queryClient.invalidateQueries({ queryKey: ["detail", ssePath, key] });
+    void queryClient.invalidateQueries({ queryKey: ["detail-history", key] });
   }, [queryClient, ssePath, key]);
 
   return { data, history, error, retry, allowedMethods };

@@ -11,7 +11,8 @@ import type { Segment } from "@/components/SegmentedControl";
 import SegmentedControl from "@/components/SegmentedControl";
 import { useMonitoringStatus } from "@/hooks/useMonitoringStatus";
 import { getErrorMessage } from "@/lib/utils";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 const ranges = ["1h", "6h", "24h", "7d"] as const;
@@ -24,14 +25,27 @@ export default function MetricsConsole() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [input, setInput] = useState(searchParams.get("q") ?? "");
   const range = searchParams.get("range") ?? "1h";
-  const [result, setResult] = useState<PrometheusResponse["data"] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [activeQuery, setActiveQuery] = useState<string | null>(null);
+  const [activeQuery, setActiveQuery] = useState<string | null>(
+    searchParams.get("q")?.trim() || null,
+  );
   const monitoring = useMonitoringStatus();
   const completion = useQueryCompletion(!!monitoring?.prometheusReachable);
-  const hasAutoRun = useRef(false);
+  const queryClient = useQueryClient();
+
+  const {
+    data: result,
+    isLoading: loading,
+    error: queryError,
+  } = useQuery<PrometheusResponse["data"]>({
+    queryKey: ["metrics-instant", activeQuery],
+    queryFn: () => api.metricsQuery(activeQuery!).then((r) => r.data),
+    enabled: !!activeQuery,
+    retry: false,
+    staleTime: 0,
+  });
+
+  const error = queryError ? getErrorMessage(queryError, "Query failed") : null;
 
   const runQuery = useCallback(() => {
     const query = input.trim();
@@ -49,39 +63,10 @@ export default function MetricsConsole() {
       { replace: true },
     );
 
-    setLoading(true);
-    setError(null);
     setActiveQuery(query);
     setRefreshKey((key) => key + 1);
-
-    api
-      .metricsQuery(query)
-      .then((response) => {
-        setResult(response.data);
-      })
-      .catch((caught) => {
-        setError(getErrorMessage(caught, "Query failed"));
-        setResult(null);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [input, setSearchParams]);
-
-  // Auto-run on mount if the URL has ?q=. Intentionally mount-only:
-  // input is initialized from searchParams, so runQuery captures the
-  // correct value on first render. The ref guard prevents re-execution.
-  useEffect(() => {
-    if (hasAutoRun.current) {
-      return;
-    }
-
-    hasAutoRun.current = true;
-
-    if (searchParams.get("q")) {
-      runQuery();
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    queryClient.invalidateQueries({ queryKey: ["metrics-instant", query] });
+  }, [input, setSearchParams, queryClient]);
 
   const setRange = (value: string) => {
     setSearchParams(

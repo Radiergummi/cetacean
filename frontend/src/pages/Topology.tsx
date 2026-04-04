@@ -19,6 +19,7 @@ import {
   hashColor,
 } from "../lib/topologyTransform";
 import { getErrorMessage } from "../lib/utils";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ReactFlow, ReactFlowProvider, Background, type Node, type Edge } from "@xyflow/react";
 import { Info, Network, Server, X } from "lucide-react";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
@@ -248,34 +249,21 @@ function PhysicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean })
 export default function Topology() {
   const isMobile = useMatchesBreakpoint("md", "below");
   const [view, setView] = useState<View>("logical");
-  const [networkData, setNetworkData] = useState<JGFGraph | null>(null);
-  const [placementData, setPlacementData] = useState<JGFGraph | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const initialLoadRef = useRef(true);
+  const queryClient = useQueryClient();
 
-  const fetchData = useCallback(async () => {
-    if (initialLoadRef.current) {
-      setLoading(true);
-    }
-    setError(null);
-    try {
-      const document = await api.topology();
-      const networkGraph = document.graphs.find((g) => g.id === "network") ?? null;
-      const placementGraph = document.graphs.find((g) => g.id === "placement") ?? null;
-      setNetworkData(networkGraph);
-      setPlacementData(placementGraph);
-    } catch (error) {
-      setError(getErrorMessage(error, "Failed to load topology"));
-    } finally {
-      setLoading(false);
-      initialLoadRef.current = false;
-    }
-  }, []);
+  const {
+    data: topologyData,
+    isLoading: loading,
+    error: queryError,
+  } = useQuery({
+    queryKey: ["topology"],
+    queryFn: () => api.topology(),
+    retry: 1,
+  });
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const networkData = topologyData?.graphs.find((g) => g.id === "network") ?? null;
+  const placementData = topologyData?.graphs.find((g) => g.id === "placement") ?? null;
+  const error = queryError ? getErrorMessage(queryError, "Failed to load topology") : null;
 
   const refetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const debouncedRefetch = useCallback(() => {
@@ -285,9 +273,9 @@ export default function Topology() {
 
     refetchTimerRef.current = setTimeout(() => {
       refetchTimerRef.current = null;
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ["topology"] });
     }, 2000);
-  }, [fetchData]);
+  }, [queryClient]);
 
   useEffect(() => {
     return () => {
@@ -325,7 +313,7 @@ export default function Topology() {
           <p className="text-sm text-destructive">{error}</p>
           <button
             className="rounded-md bg-muted px-3 py-1.5 text-sm hover:bg-muted/80"
-            onClick={fetchData}
+            onClick={() => queryClient.invalidateQueries({ queryKey: ["topology"] })}
           >
             Retry
           </button>

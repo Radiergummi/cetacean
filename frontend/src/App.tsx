@@ -118,7 +118,7 @@ function Layout({ children }: { children: React.ReactNode }) {
 
             <GlobalSearch
               ref={searchRef}
-              className="order-last lg:order-none lg:mx-auto"
+              className="order-last lg:order-0 lg:mx-auto"
             />
 
             <div className="ml-auto flex items-center gap-3 lg:ml-0">
