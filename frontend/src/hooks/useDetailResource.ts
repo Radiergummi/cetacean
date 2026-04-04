@@ -25,7 +25,10 @@ export function useDetailResource<T>(
     retry: false,
   });
 
-  useDebouncedInvalidation(ssePath, [["detail", ssePath], ["detail-history", ssePath]]);
+  useDebouncedInvalidation(ssePath, [
+    ["detail", ssePath],
+    ["detail-history", ssePath],
+  ]);
 
   const data = resourceQuery.data?.data ?? null;
   const error = resourceQuery.error ?? null;

@@ -10,8 +10,8 @@ import { HighlightProvider } from "../components/topology/HighlightContext";
 import NetworkEdge from "../components/topology/NetworkEdge";
 import PhysicalNodeCard from "../components/topology/PhysicalNodeCard";
 import ServiceCardNode from "../components/topology/ServiceCardNode";
-import { useMatchesBreakpoint } from "../hooks/useMatchesBreakpoint";
 import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
+import { useMatchesBreakpoint } from "../hooks/useMatchesBreakpoint";
 import { computeLayout } from "../lib/layoutElk";
 import {
   networkGraphToReactFlow,

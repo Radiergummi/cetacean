@@ -9,8 +9,8 @@ import {
 } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import RecommendationSummary from "../components/RecommendationSummary";
-import { isPrometheusReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
+import { isPrometheusReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { stackResourceCharts } from "../lib/stackQueries";
 import { useQuery } from "@tanstack/react-query";
 import { TrendingDown, TrendingUp } from "lucide-react";
