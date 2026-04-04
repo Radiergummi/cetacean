@@ -86,9 +86,7 @@ export function useSwarmQuery<T>(
 
             let removed = false;
             const pages = old.pages.map((page) => {
-              const filtered = page.items.filter(
-                (item) => getIdRef.current(item) !== event.id,
-              );
+              const filtered = page.items.filter((item) => getIdRef.current(item) !== event.id);
 
               if (filtered.length < page.items.length) {
                 removed = true;
