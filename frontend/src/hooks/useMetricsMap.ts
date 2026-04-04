@@ -26,12 +26,13 @@ export interface MetricsMapSpec<T> {
  * Both useNodeMetrics and useServiceMetrics are thin wrappers around this.
  */
 export function useMetricsMap<T>(
+  cacheKey: string,
   spec: MetricsMapSpec<T>,
   enabled: boolean,
   refreshInterval = 30_000,
 ): Record<string, T> {
   const { data } = useQuery({
-    queryKey: ["metrics-map", spec.labelKey],
+    queryKey: ["metrics-map", cacheKey],
     queryFn: async () => {
       const now = Math.floor(Date.now() / 1000);
       const start = now - 3600;
@@ -88,7 +89,6 @@ export function useMetricsMap<T>(
     refetchInterval: refreshInterval,
     refetchIntervalInBackground: true,
     staleTime: refreshInterval,
-    retry: false,
   });
 
   return data ?? {};

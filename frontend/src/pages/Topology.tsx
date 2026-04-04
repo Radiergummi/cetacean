@@ -258,7 +258,6 @@ export default function Topology() {
   } = useQuery({
     queryKey: ["topology"],
     queryFn: () => api.topology(),
-    retry: false,
   });
 
   const networkData = topologyData?.graphs.find((g) => g.id === "network") ?? null;

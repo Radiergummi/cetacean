@@ -60,7 +60,7 @@ export function useNodeMetrics() {
   const monitoring = useMonitoringStatus();
   const hasPrometheus = isPrometheusReady(monitoring);
   const { resolve } = useInstanceResolver();
-  const byInstance = useMetricsMap(spec, hasPrometheus);
+  const byInstance = useMetricsMap("node-metrics", spec, hasPrometheus);
 
   const instanceEntries = useMemo(() => Object.entries(byInstance), [byInstance]);
 

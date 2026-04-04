@@ -73,7 +73,6 @@ export default function CapacitySection({
     refetchInterval: 30_000,
     refetchIntervalInBackground: true,
     staleTime: 30_000,
-    retry: false,
   });
 
   if (prometheusConfigured && !metrics) {

@@ -21,7 +21,6 @@ export default function PluginList() {
   } = useQuery({
     queryKey: ["plugins"],
     queryFn: () => api.plugins(),
-    retry: false,
   });
 
   const plugins = pluginResult?.data ?? null;

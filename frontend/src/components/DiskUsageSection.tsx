@@ -363,7 +363,6 @@ export default function DiskUsageSection({ nodeId }: { nodeId?: string }) {
     queryKey: ["cluster"],
     queryFn: () => api.cluster(),
     enabled: !!nodeId,
-    retry: false,
     select: (snapshot) => snapshot.localNodeID,
   });
 
@@ -373,7 +372,6 @@ export default function DiskUsageSection({ nodeId }: { nodeId?: string }) {
     queryKey: ["disk-usage"],
     queryFn: () => api.diskUsage(),
     enabled: visible,
-    retry: false,
   });
 
   const isLoading = (!!nodeId && !localNodeID) || diskLoading;

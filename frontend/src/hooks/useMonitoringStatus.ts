@@ -9,7 +9,6 @@ export function useMonitoringStatus(): MonitoringStatus | null {
     queryKey: monitoringStatusQueryKey,
     queryFn: () => api.monitoringStatus(),
     staleTime: 60_000,
-    retry: false,
   });
 
   return data ?? null;

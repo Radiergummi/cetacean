@@ -41,7 +41,6 @@ export default function SearchPage() {
     queryKey: ["search", query],
     queryFn: ({ signal }) => api.search(query!, 0, signal),
     enabled: !!query,
-    retry: false,
   });
 
   const error = queryError ? getErrorMessage(queryError, String(queryError)) : null;

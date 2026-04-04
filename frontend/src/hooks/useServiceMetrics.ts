@@ -56,7 +56,7 @@ const spec = {
 export function useServiceMetrics() {
   const monitoring = useMonitoringStatus();
   const hasCadvisor = isCadvisorReady(monitoring);
-  const byService = useMetricsMap(spec, hasCadvisor);
+  const byService = useMetricsMap("service-metrics", spec, hasCadvisor);
 
   const getForService = useCallback(
     (serviceName: string): ServiceMetrics => byService[serviceName] ?? emptyMetrics,

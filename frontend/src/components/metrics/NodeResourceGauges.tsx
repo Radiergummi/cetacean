@@ -68,7 +68,6 @@ export default function NodeResourceGauges({ instance }: Props) {
     refetchInterval: 30_000,
     refetchIntervalInBackground: true,
     staleTime: 30_000,
-    retry: false,
   });
 
   return (

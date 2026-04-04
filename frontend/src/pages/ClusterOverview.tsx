@@ -25,13 +25,11 @@ export default function ClusterOverview() {
   const { data: snapshot } = useQuery({
     queryKey: ["cluster"],
     queryFn: () => api.cluster(),
-    retry: false,
   });
 
   const { data: history = [], isLoading: historyLoading } = useQuery({
     queryKey: ["history", { limit: 25 }],
     queryFn: () => api.history({ limit: 25 }),
-    retry: false,
   });
 
   useEffect(() => {

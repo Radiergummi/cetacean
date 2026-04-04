@@ -38,7 +38,6 @@ export function useInstanceResolver() {
     refetchInterval: 60_000,
     refetchIntervalInBackground: true,
     staleTime: 60_000,
-    retry: false,
   });
 
   /**

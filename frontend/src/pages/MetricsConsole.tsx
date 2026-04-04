@@ -41,7 +41,6 @@ export default function MetricsConsole() {
     queryKey: ["metrics-instant", activeQuery],
     queryFn: () => api.metricsQuery(activeQuery!).then((r) => r.data),
     enabled: !!activeQuery,
-    retry: false,
     staleTime: 0,
   });
 

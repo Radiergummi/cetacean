@@ -15,14 +15,12 @@ export function useDetailResource<T>(
     queryKey: ["detail", ssePath],
     queryFn: ({ signal }) => fetchFn(key!, signal),
     enabled: !!key,
-    retry: false,
   });
 
   const historyQuery = useQuery({
     queryKey: ["detail-history", ssePath],
     queryFn: ({ signal }) => api.history({ resourceId: key!, limit: 10 }, signal),
     enabled: !!key,
-    retry: false,
   });
 
   useDebouncedInvalidation(ssePath, [

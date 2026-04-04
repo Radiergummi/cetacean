@@ -36,7 +36,6 @@ export function useRecommendations(): RecommendationsState {
       } satisfies RecommendationsState;
     },
     staleTime: 60_000,
-    retry: false,
   });
 
   return data ?? emptyState;

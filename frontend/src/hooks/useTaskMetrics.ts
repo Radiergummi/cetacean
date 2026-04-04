@@ -80,7 +80,6 @@ export function useTaskMetrics(
     refetchInterval: refreshInterval,
     refetchIntervalInBackground: true,
     staleTime: refreshInterval,
-    retry: false,
   });
 
   return data ?? emptyMap;

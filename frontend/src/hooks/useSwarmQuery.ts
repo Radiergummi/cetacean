@@ -4,7 +4,7 @@ import type { CollectionResponse } from "../api/types";
 import { useResourceStream } from "./useResourceStream";
 import type { InfiniteData } from "@tanstack/react-query";
 import { keepPreviousData, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef } from "react";
 
 const ssePathMap: Record<string, string> = {
   node: "/nodes",
@@ -17,7 +17,7 @@ const ssePathMap: Record<string, string> = {
   stack: "/stacks",
 };
 
-type PageData<T> = CollectionResponse<T>;
+type PageData<T> = FetchResult<CollectionResponse<T>>;
 type InfinitePages<T> = InfiniteData<PageData<T>, number>;
 
 export function useSwarmQuery<T>(
@@ -31,32 +31,37 @@ export function useSwarmQuery<T>(
   getIdRef.current = getId;
   const queryKeyRef = useRef(queryKey);
   queryKeyRef.current = queryKey;
-  const [allowedMethods, setAllowedMethods] = useState<Set<string>>(emptyMethods);
 
   const query = useInfiniteQuery({
     queryKey: [...queryKey],
     queryFn: async ({ pageParam, signal }) => {
       const result = await fetchFn(pageParam, signal);
 
-      setAllowedMethods((previous) =>
-        setsEqual(previous, result.allowedMethods) ? previous : result.allowedMethods,
-      );
-
-      return result.data;
+      return result;
     },
     placeholderData: keepPreviousData,
     initialPageParam: 0,
     getNextPageParam: (lastPage) => {
-      const nextOffset = lastPage.offset + lastPage.items.length;
+      const page = lastPage.data;
+      const nextOffset = page.offset + page.items.length;
 
-      return nextOffset < lastPage.total ? nextOffset : undefined;
+      return nextOffset < page.total ? nextOffset : undefined;
     },
   });
 
-  const data = query.data?.pages.flatMap((page) => page.items) ?? [];
+  const data = query.data?.pages.flatMap((page) => page.data.items) ?? [];
 
   const lastPage = query.data?.pages[query.data.pages.length - 1];
-  const total = lastPage?.total ?? 0;
+  const total = lastPage?.data.total ?? 0;
+
+  const rawMethods = lastPage?.allowedMethods ?? emptyMethods;
+  const methodsRef = useRef<Set<string>>(emptyMethods);
+
+  if (!setsEqual(methodsRef.current, rawMethods)) {
+    methodsRef.current = rawMethods;
+  }
+
+  const allowedMethods = methodsRef.current;
 
   const ssePath = ssePathMap[sseType] ?? `/events?types=${sseType}`;
 
@@ -86,11 +91,13 @@ export function useSwarmQuery<T>(
 
             let removed = false;
             const pages = old.pages.map((page) => {
-              const filtered = page.items.filter((item) => getIdRef.current(item) !== event.id);
+              const filtered = page.data.items.filter(
+                (item) => getIdRef.current(item) !== event.id,
+              );
 
-              if (filtered.length < page.items.length) {
+              if (filtered.length < page.data.items.length) {
                 removed = true;
-                return { ...page, items: filtered };
+                return { ...page, data: { ...page.data, items: filtered } };
               }
 
               return page;
@@ -104,7 +111,10 @@ export function useSwarmQuery<T>(
             // and the displayed count stay consistent.
             return {
               ...old,
-              pages: pages.map((page) => ({ ...page, total: page.total - 1 })),
+              pages: pages.map((page) => ({
+                ...page,
+                data: { ...page.data, total: page.data.total - 1 },
+              })),
             };
           });
         } else if (event.resource) {
@@ -112,7 +122,7 @@ export function useSwarmQuery<T>(
           let found = false;
 
           for (const page of currentData.pages) {
-            if (page.items.some((item) => getIdRef.current(item) === event.id)) {
+            if (page.data.items.some((item) => getIdRef.current(item) === event.id)) {
               found = true;
               break;
             }
@@ -128,9 +138,12 @@ export function useSwarmQuery<T>(
                 ...old,
                 pages: old.pages.map((page) => ({
                   ...page,
-                  items: page.items.map((item) =>
-                    getIdRef.current(item) === event.id ? resource : item,
-                  ),
+                  data: {
+                    ...page.data,
+                    items: page.data.items.map((item) =>
+                      getIdRef.current(item) === event.id ? resource : item,
+                    ),
+                  },
                 })),
               };
             });
@@ -144,7 +157,7 @@ export function useSwarmQuery<T>(
                 ...old,
                 pages: old.pages.map((page) => ({
                   ...page,
-                  total: page.total + 1,
+                  data: { ...page.data, total: page.data.total + 1 },
                 })),
               };
             });
