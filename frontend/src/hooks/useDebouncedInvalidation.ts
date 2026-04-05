@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef } from "react";
 
 /**
  * Subscribes to an SSE path and invalidates the given query keys
- * after a debounce period. Used by detail pages, cluster overview,
+ * after a Debounce period. Used by detail pages, cluster overview,
  * and topology to trigger background refetches on data changes.
  */
 export function useDebouncedInvalidation(

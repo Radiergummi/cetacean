@@ -71,7 +71,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
       })
       .catch((caught) => {
         if (controller.signal.aborted && !timedOut) {
-          // Aborted (e.g. by React StrictMode remount) — don't update state,
+          // Aborted (e.g., by React StrictMode remount) — don't update state,
           // the next fetch will handle it.
           return;
         }
@@ -92,7 +92,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
     };
   }, [fetchLogs]);
 
-  // Live streaming via SSE
+  // Live-streaming via SSE
   useEffect(() => {
     if (!live) return;
 
@@ -141,10 +141,10 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live, logId, isTask, streamParam]);
 
-  // Auto-scroll to bottom when following and lines change.
-  // On initial mount the virtualizer handles scrolling via initialOffset.
+  // Auto-scroll to the bottom when following and lines change.
+  // On the initial mount the virtualizer handles scrolling via initialOffset.
   // This effect covers the non-virtual case and subsequent updates.
-  // The rAF is stored in a ref so React's effect cleanup can't cancel it.
+  // The rAF is stored in a Ref so React's effect cleanup can't cancel it.
   useEffect(() => {
     if (!following || !containerRef.current) return;
     const node = containerRef.current;
@@ -207,7 +207,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
       .catch(() => setLoadingNewer(false));
   }, [loadingNewer, hasNewerLogs, limit, streamParam, isTask, logId]);
 
-  // When not live, check once for newer log availability after initial load.
+  // When not live, check once for newer log availability after the initial load.
   // Uses a generation counter to avoid racing with fetchLogs when streamParam changes.
   const newerCheckGenRef = useRef(0);
   useEffect(() => {

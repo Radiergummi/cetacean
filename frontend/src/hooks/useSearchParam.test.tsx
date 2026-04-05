@@ -30,7 +30,7 @@ describe("useSearchParam", () => {
     // URL param not yet updated
     expect(result.current[1]).toBe("");
 
-    // After debounce, URL param updates
+    // After Debounce, URL param updates
     act(() => vi.advanceTimersByTime(300));
     expect(result.current[1]).toBe("hello");
   });
@@ -57,7 +57,7 @@ describe("useSearchParam", () => {
 
     // Input reflects latest value
     expect(result.current[0]).toBe("abc");
-    // URL not yet updated
+    // URL isn't yet updated
     expect(result.current[1]).toBe("");
 
     act(() => vi.advanceTimersByTime(300));

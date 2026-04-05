@@ -42,7 +42,7 @@ export function useInstanceResolver() {
 
   /**
    * Resolve a Docker Swarm hostname to a Prometheus instance label.
-   * Tries exact match first, then prefix match (hostname without domain).
+   * Tries exact match first, then prefix match (hostname without a domain).
    */
   const resolve = useCallback(
     (hostname: string): string | null => {

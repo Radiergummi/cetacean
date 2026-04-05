@@ -1,7 +1,7 @@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Check, ChevronsUpDown, Search, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 
 interface MultiComboboxOption {
   value: string;
@@ -15,7 +15,7 @@ interface MultiComboboxProps {
   options: MultiComboboxOption[];
   placeholder?: string;
   className?: string;
-  /** Transform custom input before adding (e.g. toUpperCase for capabilities) */
+  /** Transform custom input before adding (e.g., toUpperCase for capabilities) */
   transformInput?: (value: string) => string;
 }
 
@@ -66,7 +66,7 @@ export function MultiCombobox({
     onChange(values.filter((v) => v !== value));
   }
 
-  function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Enter" && input.trim()) {
       event.preventDefault();
       add(transform(input.trim()));

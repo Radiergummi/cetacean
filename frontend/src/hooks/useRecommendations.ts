@@ -20,7 +20,7 @@ const emptyState: RecommendationsState = {
 export const recommendationsQueryKey = ["recommendations"] as const;
 
 export function invalidateRecommendations() {
-  queryClient.invalidateQueries({ queryKey: recommendationsQueryKey });
+  return queryClient.invalidateQueries({ queryKey: recommendationsQueryKey });
 }
 
 export function useRecommendations(): RecommendationsState {

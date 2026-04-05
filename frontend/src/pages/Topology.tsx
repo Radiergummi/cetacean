@@ -90,7 +90,7 @@ function StackLegend({
 }
 
 /**
- * Hook: run ELK layout async; only re-layout when graph structure changes.
+ * Hook: run ELK layout async; only re-layout when the graph structure changes.
  */
 function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
   const [nodes, setNodes] = useState<Node[]>([]);

@@ -117,7 +117,7 @@ export type CursorContext =
   | { type: "value"; metricName: string; labelName: string };
 
 /**
- * Determines what type of completion is needed based on cursor position.
+ * Determines what type of completion is needed based on the cursor position.
  * Detects whether the cursor is inside PromQL `{}` braces and whether
  * a label name or label value is being typed.
  */
@@ -258,7 +258,7 @@ export function getTokenBounds(text: string, cursor: number): { start: number; e
 
 /**
  * Extracts the prefix being typed inside a quoted label value.
- * Scans backward from cursor to the opening `"`.
+ * Scans backward from the cursor to the opening `"`.
  */
 function getValuePrefix(query: string, cursor: number): string {
   for (let i = cursor - 1; i >= 0; i--) {
@@ -290,7 +290,7 @@ export function useQueryCompletion(enabled: boolean): QueryCompletion {
   }, []);
 
   /**
-   * Fetches items from cache or API, then filters by prefix and sets suggestions.
+   * Fetches items from cache or API, then filters by prefix, and sets suggestions.
    */
   const completeCached = useCallback(
     async (
@@ -335,7 +335,7 @@ export function useQueryCompletion(enabled: boolean): QueryCompletion {
         const { start } = getTokenBounds(query, cursorPosition);
         const prefix = query.slice(start, cursorPosition);
 
-        completeCached(
+        void completeCached(
           labelCacheRef.current,
           cacheKey,
           () => api.metricsLabels(match),
@@ -343,19 +343,21 @@ export function useQueryCompletion(enabled: boolean): QueryCompletion {
           "label",
           "__name__",
         );
+
         return;
       }
 
       if (context.type === "value") {
         const prefix = getValuePrefix(query, cursorPosition);
 
-        completeCached(
+        void completeCached(
           valueCacheRef.current,
           context.labelName,
           () => api.metricsLabelValues(context.labelName),
           prefix,
           "value",
         );
+
         return;
       }
 

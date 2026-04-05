@@ -3,7 +3,7 @@ const service = "container_label_com_docker_swarm_service_name";
 
 /**
  * Returns StackDrillDownChart props for CPU and memory usage by stack.
- * Pass `extraFilter` to scope to a subset (e.g. a specific node).
+ * Pass `extraFilter` to scope to a subset (e.g., a specific node).
  */
 export function stackResourceCharts(extraFilter = "") {
   const filter = extraFilter ? `,${extraFilter}` : "";

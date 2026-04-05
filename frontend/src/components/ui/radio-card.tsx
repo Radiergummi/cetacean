@@ -1,6 +1,5 @@
 import { cn } from "@/lib/utils";
-import type { ReactNode } from "react";
-import { useCallback, useRef } from "react";
+import { type KeyboardEvent, type ReactNode, useCallback, useRef } from "react";
 
 interface RadioCardGroupProps {
   children: ReactNode;
@@ -14,7 +13,7 @@ interface RadioCardGroupProps {
 export function RadioCardGroup({ children, className }: RadioCardGroupProps) {
   const groupRef = useRef<HTMLDivElement>(null);
 
-  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
     const group = groupRef.current;
 
     if (!group) {

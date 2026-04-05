@@ -235,7 +235,7 @@ export default function ServiceDetail() {
     }
 
     // Refetch tasks and history — not in the service object.
-    // Abort previous SSE-triggered fetches so they don't outlive unmount.
+    // Abort previous SSE-triggered fetches so they don't outlive an Unmount.
     sseAbortRef.current?.abort();
     const controller = new AbortController();
     sseAbortRef.current = controller;

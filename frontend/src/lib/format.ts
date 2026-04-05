@@ -6,7 +6,7 @@ export function formatNumber(value: number, maximumFractionDigits = 0): string {
 }
 
 /**
- * Format a value as a percentage using locale-aware formatting. Input is 0–100 range.
+ * Format a value as a percentage using locale-aware formatting. Input is in the 0–100 range.
  */
 export function formatPercentage(value: number, maximumFractionDigits = 1): string {
   value = value / 100;

@@ -1,9 +1,10 @@
 import PageHeader from "./PageHeader";
 import { render, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect } from "vitest";
 
-function renderWithRouter(ui: React.ReactElement, initialRoute = "/") {
+function renderWithRouter(ui: ReactElement, initialRoute = "/") {
   return render(<MemoryRouter initialEntries={[initialRoute]}>{ui}</MemoryRouter>);
 }
 

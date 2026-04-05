@@ -49,7 +49,7 @@ function flattenResults(response: SearchResponse, filterType?: SearchResourceTyp
   return items;
 }
 
-/** Map singular resource type from action steps to plural SearchResourceType */
+/** Map a singular resource type from action steps to plural SearchResourceType */
 function toSearchType(resourceType: string): SearchResourceType {
   return (resourceType + "s") as SearchResourceType;
 }

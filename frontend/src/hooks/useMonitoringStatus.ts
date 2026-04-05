@@ -18,7 +18,7 @@ export function useMonitoringStatus(): MonitoringStatus | null {
  * Derives whether Prometheus is configured and reachable.
  */
 export function isPrometheusReady(status: MonitoringStatus | null): boolean {
-  return !!status?.prometheusConfigured && !!status?.prometheusReachable;
+  return !!status?.prometheusConfigured && status?.prometheusReachable;
 }
 
 /**

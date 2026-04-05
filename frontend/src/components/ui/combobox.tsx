@@ -15,7 +15,7 @@ interface ComboboxProps {
   options: ComboboxOption[];
   placeholder?: string;
   className?: string;
-  /** Allow typing custom values not in the options list (default true) */
+  /** Allow typing custom values not in the option list (default true) */
   allowCustom?: boolean;
 }
 

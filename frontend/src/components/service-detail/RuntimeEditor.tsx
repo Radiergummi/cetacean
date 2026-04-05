@@ -217,7 +217,7 @@ export function RuntimeEditor({
                 onChange={() => {
                   if (initValue === undefined) {
                     setInitValue(true);
-                  } else if (initValue === true) {
+                  } else if (initValue) {
                     setInitValue(false);
                   } else {
                     setInitValue(undefined);

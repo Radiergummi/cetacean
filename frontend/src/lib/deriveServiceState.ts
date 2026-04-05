@@ -12,7 +12,7 @@ export interface DerivedServiceState {
 }
 
 /**
- * Derives all sub-resource state from a Service object.
+ * Derives all sub-resource states from a Service object.
  * Replicates the server-side transformations that the sub-resource
  * GET endpoints perform (envSliceToMap, extractConfigRefs, etc.).
  */

@@ -16,9 +16,8 @@ function detectBasePath(): string {
     }
 
     const base = new URL(baseElement.href, window.location.origin);
-    const path = base.pathname.replace(/\/+$/, "");
 
-    return path;
+    return base.pathname.replace(/\/+$/, "");
   } catch {
     return "";
   }

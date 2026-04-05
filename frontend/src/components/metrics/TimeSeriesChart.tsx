@@ -49,7 +49,7 @@ interface Props {
   unit?: string;
   refreshKey?: number;
   thresholds?: Threshold[];
-  /** Force y-axis minimum value (e.g. 0 to always start at zero). */
+  /** Force y-axis minimum value (e.g., 0 to always start at zero). */
   yMin?: number;
   /** Override the default series color. */
   color?: string;
@@ -374,7 +374,7 @@ export default function TimeSeriesChart({
   fetchDataRef.current = fetchData;
   const dataSnapRef = useRef<typeof fetchedData>(null);
 
-  // Close the gate and snapshot current data when query/range changes.
+  // Close the gate and snapshot current data when the query/range changes.
   // The gate re-opens only when fetchedData becomes a new reference (new fetch completed).
   useEffect(() => {
     hasOpenedRef.current = false;
@@ -593,7 +593,7 @@ export default function TimeSeriesChart({
   const crosshairPlugin = useMemo<Plugin<"line">>(
     () => ({
       id: "crosshair",
-      afterEvent(chart, { event: { native, type, x, x: cx, y: cy } }) {
+      afterEvent(chart, { event: { native, type, x, y: cy } }) {
         if (type === "mouseout") {
           tooltipRef.current(null);
           sync.publish(chartId, -1);
@@ -634,7 +634,7 @@ export default function TimeSeriesChart({
             return;
           }
 
-          if (cx == null || cy == null) {
+          if (x == null || cy == null) {
             return;
           }
           const elements = chart.getElementsAtEventForMode(
@@ -842,7 +842,7 @@ export default function TimeSeriesChart({
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
-      // dblclick is not in Chart.js's type union but is dispatched by the browser canvas
+      // dblclick is not in Chart.js' type union but is dispatched by the browser canvas
       events: [
         "mousemove",
         "mouseout",
