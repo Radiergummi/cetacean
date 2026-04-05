@@ -1,4 +1,4 @@
-import { api, emptyMethods } from "../api/client";
+import { api } from "../api/client";
 import type { Service, Task } from "../api/types";
 import { ContainerImage, ResourceId, ResourceLink, Timestamp } from "../components/data";
 import ErrorBoundary from "../components/ErrorBoundary";
@@ -24,46 +24,33 @@ import {
 } from "../components/ui/alert-dialog";
 import { Button } from "../components/ui/button";
 import { useAsyncAction } from "../hooks/useAsyncAction";
+import { useDetailResource } from "../hooks/useDetailResource";
 import {
   isCadvisorReady,
   isPrometheusReady,
   useMonitoringStatus,
 } from "../hooks/useMonitoringStatus";
-import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
 import { formatBytes, formatPercentage } from "../lib/format";
 import { escapePromQL } from "../lib/utils";
 import { Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 export default function TaskDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [task, setTask] = useState<Task | null>(null);
+
+  const {
+    data: task,
+    error,
+    allowedMethods,
+  } = useDetailResource<Task>(id, api.task, `/tasks/${id}`, { history: false });
+
   const [service, setService] = useState<Service | null>(null);
-  const [error, setError] = useState(false);
-  const [allowedMethods, setAllowedMethods] = useState(emptyMethods);
   const canRemove = allowedMethods.has("DELETE");
   const removal = useAsyncAction({ toast: true });
-
-  const fetchTask = useCallback(() => {
-    if (!id) {
-      return;
-    }
-
-    api
-      .task(id)
-      .then(({ data: taskData, allowedMethods: methods }) => {
-        setTask(taskData);
-        setAllowedMethods(methods);
-      })
-      .catch(() => setError(true));
-  }, [id]);
-
-  useEffect(fetchTask, [fetchTask]);
-  useResourceStream(`/tasks/${id}`, fetchTask);
 
   // Fetch service data once when we learn the ServiceID (stable for a task's lifetime)
   const serviceId = task?.ServiceID;
@@ -303,7 +290,7 @@ function cpuGaugePercent(currentCpu: number | null, service: Service | null): nu
   if (!limitNano) {
     return null;
   }
-  // currentCpu is % of 1 vCPU (e.g. 150 = 1.5 cores). Convert limit from
+  // currentCpu is % of 1 vCPU (e.g., 150 = 1.5 cores). Convert limit from
   // nanoseconds to the same unit: 1e9 nano = 1 core = 100%.
   return currentCpu / (limitNano / 1e7);
 }

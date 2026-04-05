@@ -38,22 +38,23 @@ interface ResourceListConfig<T> {
 
 export default function ResourceListPage<T>(config: ResourceListConfig<T>) {
   const navigate = useNavigate();
+  const { fetchFn, columns: columnsFn, path, sseType, keyFn } = config;
   const [search, debouncedSearch, setSearch] = useSearchParam("q");
   const { sortKey, sortDir, toggle } = useSortParams(config.defaultSort);
   const { data, loading, error, retry, hasMore, loadMore, allowedMethods } = useSwarmQuery(
-    [config.path, { search: debouncedSearch, sort: sortKey, dir: sortDir }],
+    [path, { search: debouncedSearch, sort: sortKey, dir: sortDir }],
     useCallback(
       (offset: number, signal: AbortSignal) =>
-        config.fetchFn({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }, signal),
-      [debouncedSearch, sortKey, sortDir, config.fetchFn],
+        fetchFn({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }, signal),
+      [debouncedSearch, sortKey, sortDir, fetchFn],
     ),
-    config.sseType,
-    config.keyFn,
+    sseType,
+    keyFn,
   );
 
   const columns = useMemo(
-    () => config.columns(sortKey, sortDir, toggle),
-    [sortKey, sortDir, toggle, config.columns],
+    () => columnsFn(sortKey, sortDir, toggle),
+    [sortKey, sortDir, toggle, columnsFn],
   );
 
   const [viewMode, setViewMode] = useViewMode(config.viewModeKey);

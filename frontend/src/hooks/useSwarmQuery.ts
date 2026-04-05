@@ -1,5 +1,5 @@
-import { emptyMethods, setsEqual } from "../api/client";
 import type { FetchResult } from "../api/client";
+import { emptyMethods, setsEqual } from "../api/client";
 import type { CollectionResponse } from "../api/types";
 import { useResourceStream } from "./useResourceStream";
 import type { InfiniteData } from "@tanstack/react-query";
@@ -34,11 +34,7 @@ export function useSwarmQuery<T>(
 
   const query = useInfiniteQuery({
     queryKey: [...queryKey],
-    queryFn: async ({ pageParam, signal }) => {
-      const result = await fetchFn(pageParam, signal);
-
-      return result;
-    },
+    queryFn: async ({ pageParam, signal }) => await fetchFn(pageParam, signal),
     placeholderData: keepPreviousData,
     initialPageParam: 0,
     getNextPageParam: (lastPage) => {
@@ -175,11 +171,12 @@ export function useSwarmQuery<T>(
   const error = query.error ?? null;
   const hasMore = query.hasNextPage ?? false;
 
+  const { isFetchingNextPage, hasNextPage, fetchNextPage } = query;
   const loadMore = useCallback(() => {
-    if (!query.isFetchingNextPage && query.hasNextPage) {
-      query.fetchNextPage();
+    if (!isFetchingNextPage && hasNextPage) {
+      void fetchNextPage();
     }
-  }, [query.isFetchingNextPage, query.hasNextPage, query.fetchNextPage]);
+  }, [isFetchingNextPage, hasNextPage, fetchNextPage]);
 
   const retry = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: [...queryKey] });
