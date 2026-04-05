@@ -6,7 +6,6 @@ import (
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/swarm"
-	json "github.com/goccy/go-json"
 
 	"github.com/radiergummi/cetacean/internal/auth"
 )
@@ -17,11 +16,8 @@ type updateAvailabilityRequest struct {
 
 func (h *Handlers) HandleUpdateNodeAvailability(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
-
-	var req updateAvailabilityRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	req, ok := decodeJSON[updateAvailabilityRequest](w, r)
+	if !ok {
 		return
 	}
 
@@ -60,11 +56,8 @@ type updateRoleRequest struct {
 
 func (h *Handlers) HandleUpdateNodeRole(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-
-	var req updateRoleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	req, ok := decodeJSON[updateRoleRequest](w, r)
+	if !ok {
 		return
 	}
 

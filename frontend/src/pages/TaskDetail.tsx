@@ -83,7 +83,7 @@ export default function TaskDetail() {
     id ? `container_label_com_docker_swarm_task_id="${escapePromQL(id)}"` : "",
     hasCadvisor && !!id && task?.Status.State === "running",
   );
-  const myMetrics = id ? taskMetrics.get(id) : undefined;
+  const myMetrics = id ? taskMetrics[id] : undefined;
 
   if (error) {
     return <FetchError message="Failed to load task" />;

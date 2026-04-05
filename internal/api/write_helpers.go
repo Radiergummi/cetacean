@@ -47,6 +47,21 @@ var notFoundCodes = map[string]string{
 	"stack":   "STK001",
 }
 
+// decodeJSON reads and decodes a JSON request body into T, enforcing a 1MB
+// size limit. Returns the decoded value and true on success. On failure, it
+// writes an API006 error response and returns the zero value and false.
+func decodeJSON[T any](w http.ResponseWriter, r *http.Request) (T, bool) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	var v T
+	if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
+		writeErrorCode(w, r, "API006", "invalid request body")
+		return v, false
+	}
+
+	return v, true
+}
+
 func writeDockerError(
 	w http.ResponseWriter,
 	r *http.Request,

@@ -15,11 +15,8 @@ import (
 
 func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
-
-	var req scaleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	req, ok := decodeJSON[scaleRequest](w, r)
+	if !ok {
 		return
 	}
 	if req.Replicas == nil {
@@ -93,11 +90,8 @@ func (h *Handlers) HandleGetServiceEndpointMode(w http.ResponseWriter, r *http.R
 
 func (h *Handlers) HandleUpdateServiceMode(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
-
-	var req updateModeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	req, ok := decodeJSON[updateModeRequest](w, r)
+	if !ok {
 		return
 	}
 
@@ -138,11 +132,8 @@ type updateEndpointModeRequest struct {
 
 func (h *Handlers) HandleUpdateServiceEndpointMode(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-
-	var req updateEndpointModeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	req, ok := decodeJSON[updateEndpointModeRequest](w, r)
+	if !ok {
 		return
 	}
 
@@ -170,11 +161,8 @@ func (h *Handlers) HandleUpdateServiceEndpointMode(w http.ResponseWriter, r *htt
 
 func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
-
-	var req updateImageRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	req, ok := decodeJSON[updateImageRequest](w, r)
+	if !ok {
 		return
 	}
 	if req.Image == "" {
@@ -493,15 +481,13 @@ func (h *Handlers) HandleGetServiceHealthcheck(w http.ResponseWriter, r *http.Re
 
 func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
 	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
-	var hc container.HealthConfig
-	if err := json.NewDecoder(r.Body).Decode(&hc); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	hc, ok := decodeJSON[container.HealthConfig](w, r)
+	if !ok {
 		return
 	}
 
@@ -555,15 +541,13 @@ func (h *Handlers) HandleGetServicePlacement(w http.ResponseWriter, r *http.Requ
 
 func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
 	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
-	var placement swarm.Placement
-	if err := json.NewDecoder(r.Body).Decode(&placement); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	placement, ok := decodeJSON[swarm.Placement](w, r)
+	if !ok {
 		return
 	}
 
@@ -1288,7 +1272,6 @@ func (h *Handlers) HandleGetServiceMounts(w http.ResponseWriter, r *http.Request
 
 func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
 	if !requireMergePatch(w, r) {
 		return
@@ -1298,11 +1281,10 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var req struct {
+	req, ok := decodeJSON[struct {
 		Mounts []mount.Mount `json:"mounts"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	}](w, r)
+	if !ok {
 		return
 	}
 

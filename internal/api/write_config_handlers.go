@@ -8,7 +8,6 @@ import (
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/swarm"
-	json "github.com/goccy/go-json"
 
 	"github.com/radiergummi/cetacean/internal/cache"
 )
@@ -24,9 +23,8 @@ func (h *Handlers) HandleRemoveConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
-	var req createResourceRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	req, ok := decodeJSON[createResourceRequest](w, r)
+	if !ok {
 		return
 	}
 

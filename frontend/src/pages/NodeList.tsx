@@ -1,6 +1,7 @@
 import { api } from "../api/client";
 import type { Node } from "../api/types";
-import DataTable, { type Column } from "../components/DataTable";
+import type { Column } from "../components/DataTable";
+import DataTable from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
@@ -10,21 +11,17 @@ import { ResourceGauge, Sparkline, NodeResourceGauges, MetricsPanel } from "../c
 import PageHeader from "../components/PageHeader";
 import ResourceCard from "../components/ResourceCard";
 import TaskStatusBadge from "../components/TaskStatusBadge";
+import { useListPage } from "../hooks/useListPage";
 import { isNodeExporterReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useNodeMetrics } from "../hooks/useNodeMetrics";
-import { useSearchParam } from "../hooks/useSearchParam";
-import { useSortParams } from "../hooks/useSort";
-import { useSwarmQuery } from "../hooks/useSwarmQuery";
-import { useViewMode } from "../hooks/useViewMode";
 import { instanceToHostname } from "../lib/format";
 import { sortColumn } from "../lib/sortColumn";
 import { cardGridClass } from "../lib/styles";
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 export default function NodeList() {
-  const [search, debouncedSearch, setSearch] = useSearchParam("q");
-  const { sortKey, sortDir, toggle } = useSortParams("hostname");
+  const navigate = useNavigate();
   const {
     data: nodes,
     loading,
@@ -32,18 +29,22 @@ export default function NodeList() {
     retry,
     hasMore,
     loadMore,
-  } = useSwarmQuery(
-    ["nodes", { search: debouncedSearch, sort: sortKey, dir: sortDir }],
-    useCallback(
-      (offset: number, signal: AbortSignal) =>
-        api.nodes({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }, signal),
-      [debouncedSearch, sortKey, sortDir],
-    ),
-    "node",
-    ({ ID }: Node) => ID,
-  );
-  const [viewMode, setViewMode] = useViewMode("nodes");
-  const navigate = useNavigate();
+    search,
+    setSearch,
+    sortKey,
+    sortDir,
+    toggle,
+    viewMode,
+    setViewMode,
+  } = useListPage({
+    path: "/nodes",
+    sseType: "node",
+    defaultSort: "hostname",
+    viewModeKey: "nodes",
+    fetchFn: (params, signal) => api.nodes(params, signal),
+    keyFn: ({ ID }: Node) => ID,
+  });
+
   const monitoring = useMonitoringStatus();
   const hasNodeExporter = isNodeExporterReady(monitoring);
   const { getForNode } = useNodeMetrics();

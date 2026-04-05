@@ -11,22 +11,18 @@ import ResourceCard from "../components/ResourceCard";
 import ResourceName from "../components/ResourceName";
 import TaskStateFilter, { isActiveTask } from "../components/TaskStateFilter";
 import TaskStatusBadge from "../components/TaskStatusBadge";
+import { useListPage } from "../hooks/useListPage";
 import { isCadvisorReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
-import { useSearchParam } from "../hooks/useSearchParam";
-import { useSortParams } from "../hooks/useSort";
-import { useSwarmQuery } from "../hooks/useSwarmQuery";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
-import { useViewMode } from "../hooks/useViewMode";
 import { sortColumn } from "../lib/sortColumn";
 import { useCallback, useMemo } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 export default function TaskList() {
   const navigate = useNavigate();
-  const [search, debouncedSearch, setSearch] = useSearchParam("q");
   const [params, setParams] = useSearchParams();
   const stateFilter = params.get("state");
-  const { sortKey, sortDir, toggle } = useSortParams("state");
+
   const {
     data: tasks,
     loading,
@@ -34,16 +30,21 @@ export default function TaskList() {
     retry,
     hasMore,
     loadMore,
-  } = useSwarmQuery(
-    ["tasks", { search: debouncedSearch, sort: sortKey, dir: sortDir }],
-    useCallback(
-      (offset: number, signal: AbortSignal) =>
-        api.tasks({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }, signal),
-      [debouncedSearch, sortKey, sortDir],
-    ),
-    "task",
-    ({ ID }: Task) => ID,
-  );
+    search,
+    setSearch,
+    sortKey,
+    sortDir,
+    toggle,
+    viewMode,
+    setViewMode,
+  } = useListPage({
+    path: "/tasks",
+    sseType: "task",
+    defaultSort: "state",
+    viewModeKey: "tasks",
+    fetchFn: (params, signal) => api.tasks(params, signal),
+    keyFn: ({ ID }: Task) => ID,
+  });
 
   const filteredTasks = useMemo(() => {
     if (stateFilter === "__all__") {
@@ -95,7 +96,6 @@ export default function TaskList() {
     [setParams],
   );
 
-  const [viewMode, setViewMode] = useViewMode("tasks");
   const monitoring = useMonitoringStatus();
   const hasCadvisor = isCadvisorReady(monitoring);
   const taskMetrics = useTaskMetrics(`container_label_com_docker_swarm_task_id!=""`, hasCadvisor);
@@ -125,8 +125,8 @@ export default function TaskList() {
               cell: ({ ID, Status }: Task) =>
                 Status.State === "running" ? (
                   <TaskSparkline
-                    data={taskMetrics.get(ID)?.cpu}
-                    currentValue={taskMetrics.get(ID)?.currentCpu}
+                    data={taskMetrics[ID]?.cpu}
+                    currentValue={taskMetrics[ID]?.currentCpu}
                     type="cpu"
                   />
                 ) : (
@@ -138,8 +138,8 @@ export default function TaskList() {
               cell: ({ ID, Status }: Task) =>
                 Status.State === "running" ? (
                   <TaskSparkline
-                    data={taskMetrics.get(ID)?.memory}
-                    currentValue={taskMetrics.get(ID)?.currentMemory}
+                    data={taskMetrics[ID]?.memory}
+                    currentValue={taskMetrics[ID]?.currentMemory}
                     type="memory"
                   />
                 ) : (

@@ -87,28 +87,28 @@ func (c *Cache) rebuildStacks() {
 		}
 	}
 
-	for id, cfg := range c.configs {
+	for id, cfg := range c.configs.items {
 		if ns, ok := cfg.Spec.Labels[stackLabel]; ok {
 			s := ensure(ns)
 			s.Configs = append(s.Configs, id)
 		}
 	}
 
-	for id, sec := range c.secrets {
+	for id, sec := range c.secrets.items {
 		if ns, ok := sec.Spec.Labels[stackLabel]; ok {
 			s := ensure(ns)
 			s.Secrets = append(s.Secrets, id)
 		}
 	}
 
-	for id, net := range c.networks {
+	for id, net := range c.networks.items {
 		if ns, ok := net.Labels[stackLabel]; ok {
 			s := ensure(ns)
 			s.Networks = append(s.Networks, id)
 		}
 	}
 
-	for name, vol := range c.volumes {
+	for name, vol := range c.volumes.items {
 		if ns, ok := vol.Labels[stackLabel]; ok {
 			s := ensure(ns)
 			s.Volumes = append(s.Volumes, name)

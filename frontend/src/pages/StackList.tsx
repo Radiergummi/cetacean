@@ -3,6 +3,7 @@ import type { StackSummary } from "../api/types";
 import DataTable, { type Column } from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
+import { HealthDot, ReplicaHealth } from "../components/HealthIndicator";
 import ListToolbar from "../components/ListToolbar";
 import { SkeletonTable } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
@@ -13,32 +14,6 @@ import { formatBytes, formatPercentage } from "../lib/format";
 import { cardGridClass } from "../lib/styles";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-
-function HealthDot({ health }: { health: "healthy" | "warning" | "critical" }) {
-  return (
-    <span
-      role="img"
-      aria-label={health}
-      data-health={health}
-      className="inline-block size-2.5 shrink-0 rounded-full bg-yellow-500 data-[health=critical]:bg-red-500 data-[health=healthy]:bg-green-500"
-    />
-  );
-}
-
-function TaskHealth({ stack }: { stack: StackSummary }) {
-  const running = stack.tasksByState["running"] ?? 0;
-  const desired = stack.desiredTasks;
-  const healthy = running >= desired && desired > 0;
-
-  return (
-    <span
-      data-healthy={healthy || undefined}
-      className="font-medium text-red-600 tabular-nums data-healthy:text-green-600 dark:text-red-400 dark:data-healthy:text-green-400"
-    >
-      {running}/{desired}
-    </span>
-  );
-}
 
 export default function StackList() {
   const [search, , setSearch] = useSearchParam("q");
@@ -93,7 +68,9 @@ export default function StackList() {
       },
       {
         header: "Tasks",
-        cell: (stack) => <TaskHealth stack={stack} />,
+        cell: (stack) => (
+          <ReplicaHealth running={stack.tasksByState["running"] ?? 0} desired={stack.desiredTasks} />
+        ),
       },
       {
         header: "Services",
@@ -198,7 +175,7 @@ function StackCard({ stack }: { stack: StackSummary }) {
     >
       {/* Header */}
       <div className="mb-3 flex items-center gap-2">
-        <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-yellow-500 group-data-[health=critical]:bg-red-500 group-data-[health=healthy]:bg-green-500" />
+        <HealthDot health={health} />
         <span className="truncate font-medium">{stack.name}</span>
         {stack.updatingServices > 0 && (
           <span className="ms-auto rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">

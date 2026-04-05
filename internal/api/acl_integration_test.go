@@ -1048,7 +1048,7 @@ func TestServiceScaleACL_DeniedByResourceName(t *testing.T) {
 	wc := &mockWriteClient{}
 	h := newTestHandlers(t, withCache(c), withACL(e), withWriteClient(wc))
 
-	handler := h.requireWriteACL(h.serviceName)(
+	handler := h.requireWriteACL(resolveResource("service", h.cache.GetService, func(s swarm.Service) string { return s.Spec.Name }))(
 		requireLevel(config.OpsOperational, config.OpsImpactful)(h.HandleScaleService),
 	)
 
@@ -1096,7 +1096,7 @@ func TestServiceScaleACL_AllowedByResourceName(t *testing.T) {
 	}
 	h := newTestHandlers(t, withCache(c), withACL(e), withWriteClient(wc))
 
-	handler := h.requireWriteACL(h.serviceName)(
+	handler := h.requireWriteACL(resolveResource("service", h.cache.GetService, func(s swarm.Service) string { return s.Spec.Name }))(
 		requireLevel(config.OpsOperational, config.OpsImpactful)(h.HandleScaleService),
 	)
 

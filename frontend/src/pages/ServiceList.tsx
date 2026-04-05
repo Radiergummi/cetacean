@@ -4,6 +4,7 @@ import DataTable, { type Column } from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
+import { HealthDot, ReplicaHealth } from "../components/HealthIndicator";
 import ListToolbar from "../components/ListToolbar";
 import { SkeletonTable } from "../components/LoadingSkeleton";
 import { MetricsPanel, TaskSparkline } from "../components/metrics";
@@ -11,47 +12,18 @@ import PageHeader from "../components/PageHeader";
 import ResourceCard from "../components/ResourceCard";
 import ResourceName from "../components/ResourceName";
 import { SizingBadge } from "../components/SizingBadge";
+import { useListPage } from "../hooks/useListPage";
 import { isCadvisorReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useRecommendations } from "../hooks/useRecommendations";
-import { useSearchParam } from "../hooks/useSearchParam";
 import { useServiceMetrics } from "../hooks/useServiceMetrics";
-import { useSortParams } from "../hooks/useSort";
-import { useSwarmQuery } from "../hooks/useSwarmQuery";
-import { useViewMode } from "../hooks/useViewMode";
 import { sizingCategories } from "../lib/sizingUtils";
 import { sortColumn } from "../lib/sortColumn";
 import { cardGridClass } from "../lib/styles";
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-function ReplicaHealth({ running, desired }: { running: number; desired: number }) {
-  const healthy = running >= desired && desired > 0;
-
-  return (
-    <span
-      data-healthy={healthy || undefined}
-      className="font-medium text-red-600 tabular-nums data-healthy:text-green-600 dark:text-red-400 dark:data-healthy:text-green-400"
-    >
-      {running}/{desired}
-    </span>
-  );
-}
-
-function HealthDot({ running, desired }: { running: number; desired: number }) {
-  const healthy = running >= desired && desired > 0;
-
-  return (
-    <span
-      data-healthy={healthy || undefined}
-      className="inline-block size-2.5 shrink-0 rounded-full bg-red-500 data-healthy:bg-green-500"
-      aria-label={healthy ? "Healthy" : "Unhealthy"}
-    />
-  );
-}
-
 export default function ServiceList() {
-  const [search, debouncedSearch, setSearch] = useSearchParam("q");
-  const { sortKey, sortDir, toggle } = useSortParams("name");
+  const navigate = useNavigate();
   const {
     data: services,
     loading,
@@ -59,18 +31,22 @@ export default function ServiceList() {
     retry,
     hasMore,
     loadMore,
-  } = useSwarmQuery(
-    ["services", { search: debouncedSearch, sort: sortKey, dir: sortDir }],
-    useCallback(
-      (offset: number, signal: AbortSignal) =>
-        api.services({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }, signal),
-      [debouncedSearch, sortKey, sortDir],
-    ),
-    "service",
-    ({ ID }: ServiceListItem) => ID,
-  );
-  const [viewMode, setViewMode] = useViewMode("services");
-  const navigate = useNavigate();
+    search,
+    setSearch,
+    sortKey,
+    sortDir,
+    toggle,
+    viewMode,
+    setViewMode,
+  } = useListPage({
+    path: "/services",
+    sseType: "service",
+    defaultSort: "name",
+    viewModeKey: "services",
+    fetchFn: (params, signal) => api.services(params, signal),
+    keyFn: ({ ID }: ServiceListItem) => ID,
+  });
+
   const monitoring = useMonitoringStatus();
   const hasCadvisor = isCadvisorReady(monitoring);
   const { getForService } = useServiceMetrics();
@@ -293,10 +269,7 @@ export default function ServiceList() {
                 key={service.ID}
                 title={
                   <span className="flex items-center gap-2">
-                    <HealthDot
-                      running={service.RunningTasks}
-                      desired={desired ?? service.RunningTasks}
-                    />
+                    <HealthDot running={service.RunningTasks} desired={desired ?? service.RunningTasks} />
                     <ResourceName name={service.Spec.Name} />
                   </span>
                 }

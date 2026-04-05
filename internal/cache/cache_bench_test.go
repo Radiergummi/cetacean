@@ -17,7 +17,7 @@ func populateCache(c *Cache, n int) {
 		stack := fmt.Sprintf("stack-%d", i%5)
 		id := fmt.Sprintf("id-%d", i)
 
-		c.nodes[id] = swarm.Node{
+		c.nodes.items[id] = swarm.Node{
 			ID:     id,
 			Status: swarm.NodeStatus{State: swarm.NodeStateReady},
 			Description: swarm.NodeDescription{
@@ -42,7 +42,7 @@ func populateCache(c *Cache, n int) {
 			Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
 		}
 
-		c.configs[id] = swarm.Config{
+		c.configs.items[id] = swarm.Config{
 			ID: id,
 			Spec: swarm.ConfigSpec{
 				Annotations: swarm.Annotations{
@@ -52,7 +52,7 @@ func populateCache(c *Cache, n int) {
 			},
 		}
 
-		c.secrets[id] = swarm.Secret{
+		c.secrets.items[id] = swarm.Secret{
 			ID: id,
 			Spec: swarm.SecretSpec{
 				Annotations: swarm.Annotations{
@@ -62,13 +62,13 @@ func populateCache(c *Cache, n int) {
 			},
 		}
 
-		c.networks[id] = network.Summary{
+		c.networks.items[id] = network.Summary{
 			ID:     id,
 			Name:   fmt.Sprintf("net-%d", i),
 			Labels: map[string]string{"com.docker.stack.namespace": stack},
 		}
 
-		c.volumes[fmt.Sprintf("vol-%d", i)] = volume.Volume{
+		c.volumes.items[fmt.Sprintf("vol-%d", i)] = volume.Volume{
 			Name:   fmt.Sprintf("vol-%d", i),
 			Labels: map[string]string{"com.docker.stack.namespace": stack},
 		}

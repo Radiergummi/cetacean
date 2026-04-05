@@ -23,21 +23,20 @@ export interface MetricsMapSpec<T> {
  * Fetches instant and range Prometheus queries, parses results keyed by a
  * label, and returns a Record<string, T> that updates on an interval.
  *
- * Both useNodeMetrics and useServiceMetrics are thin wrappers around this.
+ * useNodeMetrics, useServiceMetrics, and useTaskMetrics are thin wrappers around this.
  */
 export function useMetricsMap<T>(
   cacheKey: string,
   spec: MetricsMapSpec<T>,
   enabled: boolean,
   refreshInterval = 30_000,
+  step = 120,
 ): Record<string, T> {
   const { data } = useQuery({
     queryKey: ["metrics-map", cacheKey],
     queryFn: async () => {
       const now = Math.floor(Date.now() / 1000);
       const start = now - 3600;
-      const step = 120;
-
       const [instantResponses, rangeResponses] = await Promise.all([
         Promise.all(
           (spec.instant ?? []).map(({ query }) =>
