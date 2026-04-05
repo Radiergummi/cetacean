@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
@@ -214,25 +213,13 @@ func (h *Handlers) HandleRollbackService(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *Handlers) HandleRemoveService(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-
-	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
-		return
-	}
-
-	slog.Info("removing service", "service", id)
-
-	err := h.serviceLifecycle.RemoveService(r.Context(), id)
-	if err != nil {
-		if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
-			writeErrorCode(w, r, "SVC002", err.Error())
-			return
-		}
-		writeDockerError(w, r, err, "service", id)
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
+	handleRemove(w, r, removeSpec[swarm.Service]{
+		resource:     "service",
+		pathKey:      "id",
+		getter:       h.cache.GetService,
+		remove:       h.serviceLifecycle.RemoveService,
+		conflictCode: "SVC002",
+	})
 }
 
 func (h *Handlers) HandleRestartService(w http.ResponseWriter, r *http.Request) {
@@ -316,55 +303,25 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *Handlers) HandleGetServiceLabels(w http.ResponseWriter, r *http.Request) {
-	svc, ok := h.lookupServiceACL(w, r)
-	if !ok {
-		return
-	}
-	labels := svc.Spec.Labels
-	if labels == nil {
-		labels = map[string]string{}
-	}
-	writeCachedJSON(
-		w,
-		r,
-		NewDetailResponse(
-			r.Context(),
-			"/services/"+svc.ID+"/labels",
-			"ServiceLabels",
-			LabelsResponse{
-				Labels: labels,
-			},
-		),
-	)
+	handleGetLabels(w, r, h.acl, getLabelsSpec[swarm.Service]{
+		resource:    "service",
+		pathKey:     "id",
+		typeName:    "ServiceLabels",
+		getter:      h.cache.GetService,
+		aclResource: func(s swarm.Service) string { return "service:" + s.Spec.Name },
+		getLabels:   func(s swarm.Service) map[string]string { return s.Spec.Labels },
+	})
 }
 
 func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-
-	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
-	if !ok {
-		return
-	}
-
-	updated, ok := patchStringMap(w, r, svc.Spec.Labels)
-	if !ok {
-		return
-	}
-
-	slog.Info("patching service labels", "service", id)
-
-	result, err := h.serviceSpec.UpdateServiceLabels(r.Context(), id, updated)
-	if err != nil {
-		writeResourceError(w, r, err, "service", id, "SVC001")
-		return
-	}
-
-	labels := result.Spec.Labels
-	if labels == nil {
-		labels = map[string]string{}
-	}
-	writeMutationResponse(w, r, labels)
+	handlePatchLabels(w, r, patchLabelsSpec[swarm.Service]{
+		resource:     "service",
+		pathKey:      "id",
+		getter:       h.cache.GetService,
+		getLabels:    func(s swarm.Service) map[string]string { return s.Spec.Labels },
+		update:       h.serviceSpec.UpdateServiceLabels,
+		conflictCode: "SVC001",
+	})
 }
 
 func (h *Handlers) HandleGetServiceResources(w http.ResponseWriter, r *http.Request) {

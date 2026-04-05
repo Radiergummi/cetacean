@@ -10,30 +10,17 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
 
-	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 func (h *Handlers) HandleRemoveConfig(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-
-	if _, ok := lookupOr404(w, r, "config", id, h.cache.GetConfig); !ok {
-		return
-	}
-
-	slog.Info("removing config", "config", id)
-
-	err := h.configWriter.RemoveConfig(r.Context(), id)
-	if err != nil {
-		if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
-			writeErrorCode(w, r, "CFG001", err.Error())
-			return
-		}
-		writeDockerError(w, r, err, "config", id)
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
+	handleRemove(w, r, removeSpec[swarm.Config]{
+		resource:     "config",
+		pathKey:      "id",
+		getter:       h.cache.GetConfig,
+		remove:       h.configWriter.RemoveConfig,
+		conflictCode: "CFG001",
+	})
 }
 
 func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
@@ -97,53 +84,23 @@ func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleGetConfigLabels(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	cfg, ok := lookupOr404(w, r, "config", id, h.cache.GetConfig)
-	if !ok {
-		return
-	}
-	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "config:"+cfg.Spec.Name) {
-		writeErrorCode(w, r, "ACL001", "access denied")
-		return
-	}
-	labels := cfg.Spec.Labels
-	if labels == nil {
-		labels = map[string]string{}
-	}
-	writeCachedJSON(
-		w,
-		r,
-		NewDetailResponse(r.Context(), "/configs/"+id+"/labels", "ConfigLabels", LabelsResponse{
-			Labels: labels,
-		}),
-	)
+	handleGetLabels(w, r, h.acl, getLabelsSpec[swarm.Config]{
+		resource:    "config",
+		pathKey:     "id",
+		typeName:    "ConfigLabels",
+		getter:      h.cache.GetConfig,
+		aclResource: func(c swarm.Config) string { return "config:" + c.Spec.Name },
+		getLabels:   func(c swarm.Config) map[string]string { return c.Spec.Labels },
+	})
 }
 
 func (h *Handlers) HandlePatchConfigLabels(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-
-	cfg, ok := lookupOr404(w, r, "config", id, h.cache.GetConfig)
-	if !ok {
-		return
-	}
-
-	updated, ok := patchStringMap(w, r, cfg.Spec.Labels)
-	if !ok {
-		return
-	}
-
-	slog.Info("patching config labels", "config", id)
-
-	result, err := h.configWriter.UpdateConfigLabels(r.Context(), id, updated)
-	if err != nil {
-		writeResourceError(w, r, err, "config", id, "CFG005")
-		return
-	}
-
-	labels := result.Spec.Labels
-	if labels == nil {
-		labels = map[string]string{}
-	}
-	writeMutationResponse(w, r, labels)
+	handlePatchLabels(w, r, patchLabelsSpec[swarm.Config]{
+		resource:     "config",
+		pathKey:      "id",
+		getter:       h.cache.GetConfig,
+		getLabels:    func(c swarm.Config) map[string]string { return c.Spec.Labels },
+		update:       h.configWriter.UpdateConfigLabels,
+		conflictCode: "CFG005",
+	})
 }

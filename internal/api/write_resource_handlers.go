@@ -5,50 +5,28 @@ import (
 	"net/http"
 
 	cerrdefs "github.com/containerd/errdefs"
+	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/api/types/swarm"
 )
 
 func (h *Handlers) HandleRemoveTask(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-
-	if _, ok := lookupOr404(w, r, "task", id, h.cache.GetTask); !ok {
-		return
-	}
-
-	slog.Info("removing task", "task", id)
-
-	err := h.resourceRemover.RemoveTask(r.Context(), id)
-	if err != nil {
-		if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
-			writeErrorCode(w, r, "TSK001", err.Error())
-			return
-		}
-		writeDockerError(w, r, err, "task", id)
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
+	handleRemove(w, r, removeSpec[swarm.Task]{
+		resource:     "task",
+		pathKey:      "id",
+		getter:       h.cache.GetTask,
+		remove:       h.resourceRemover.RemoveTask,
+		conflictCode: "TSK001",
+	})
 }
 
 func (h *Handlers) HandleRemoveNetwork(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-
-	if _, ok := lookupOr404(w, r, "network", id, h.cache.GetNetwork); !ok {
-		return
-	}
-
-	slog.Info("removing network", "network", id)
-
-	err := h.resourceRemover.RemoveNetwork(r.Context(), id)
-	if err != nil {
-		if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
-			writeErrorCode(w, r, "NET001", err.Error())
-			return
-		}
-		writeDockerError(w, r, err, "network", id)
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
+	handleRemove(w, r, removeSpec[network.Summary]{
+		resource:     "network",
+		pathKey:      "id",
+		getter:       h.cache.GetNetwork,
+		remove:       h.resourceRemover.RemoveNetwork,
+		conflictCode: "NET001",
+	})
 }
 
 func (h *Handlers) HandleRemoveVolume(w http.ResponseWriter, r *http.Request) {

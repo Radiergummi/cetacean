@@ -141,53 +141,23 @@ func (h *Handlers) HandleGetNodeRole(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleGetNodeLabels(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	node, ok := lookupOr404(w, r, "node", id, h.cache.GetNode)
-	if !ok {
-		return
-	}
-	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", nodeResource(node)) {
-		writeErrorCode(w, r, "ACL001", "access denied")
-		return
-	}
-	labels := node.Spec.Labels
-	if labels == nil {
-		labels = map[string]string{}
-	}
-	writeCachedJSON(
-		w,
-		r,
-		NewDetailResponse(r.Context(), "/nodes/"+id+"/labels", "NodeLabels", LabelsResponse{
-			Labels: labels,
-		}),
-	)
+	handleGetLabels(w, r, h.acl, getLabelsSpec[swarm.Node]{
+		resource:    "node",
+		pathKey:     "id",
+		typeName:    "NodeLabels",
+		getter:      h.cache.GetNode,
+		aclResource: nodeResource,
+		getLabels:   func(n swarm.Node) map[string]string { return n.Spec.Labels },
+	})
 }
 
 func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
-
-	node, ok := lookupOr404(w, r, "node", id, h.cache.GetNode)
-	if !ok {
-		return
-	}
-
-	updated, ok := patchStringMap(w, r, node.Spec.Labels)
-	if !ok {
-		return
-	}
-
-	slog.Info("patching node labels", "node", id)
-
-	result, err := h.nodeWriter.UpdateNodeLabels(r.Context(), id, updated)
-	if err != nil {
-		writeResourceError(w, r, err, "node", id, "NOD002")
-		return
-	}
-
-	labels := result.Spec.Labels
-	if labels == nil {
-		labels = map[string]string{}
-	}
-	writeMutationResponse(w, r, labels)
+	handlePatchLabels(w, r, patchLabelsSpec[swarm.Node]{
+		resource:     "node",
+		pathKey:      "id",
+		getter:       h.cache.GetNode,
+		getLabels:    func(n swarm.Node) map[string]string { return n.Spec.Labels },
+		update:       h.nodeWriter.UpdateNodeLabels,
+		conflictCode: "NOD002",
+	})
 }
