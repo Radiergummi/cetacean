@@ -1,8 +1,6 @@
 export type HealthStatus = "healthy" | "warning" | "critical";
 
-type HealthDotProps =
-  | { health: HealthStatus }
-  | { running: number; desired: number };
+type HealthDotProps = { health: HealthStatus } | { running: number; desired: number };
 
 /**
  * Colored dot indicating health state: green (healthy), yellow (warning), red (critical).

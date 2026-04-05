@@ -69,7 +69,10 @@ export default function StackList() {
       {
         header: "Tasks",
         cell: (stack) => (
-          <ReplicaHealth running={stack.tasksByState["running"] ?? 0} desired={stack.desiredTasks} />
+          <ReplicaHealth
+            running={stack.tasksByState["running"] ?? 0}
+            desired={stack.desiredTasks}
+          />
         ),
       },
       {

@@ -70,13 +70,37 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	tier3 := requireLevel(config.OpsImpactful, h.operationsLevel)
 
 	// ACL wrappers for write endpoints.
-	svcACL := h.requireWriteACL(resolveResource("service", h.cache.GetService, func(s swarm.Service) string { return s.Spec.Name }))
+	svcACL := h.requireWriteACL(
+		resolveResource(
+			"service",
+			h.cache.GetService,
+			func(s swarm.Service) string { return s.Spec.Name },
+		),
+	)
 	nodeACL := h.requireWriteACL(resolveResource("node", h.cache.GetNode, nodeHostnameOrID))
 	taskACL := h.requireWriteACL(h.taskServiceResource)
 	stackACL := h.requireWriteACL(pathResource("stack", "name"))
-	cfgACL := h.requireWriteACL(resolveResource("config", h.cache.GetConfig, func(c swarm.Config) string { return c.Spec.Name }))
-	secACL := h.requireWriteACL(resolveResource("secret", h.cache.GetSecret, func(s swarm.Secret) string { return s.Spec.Name }))
-	netACL := h.requireWriteACL(resolveResource("network", h.cache.GetNetwork, func(n network.Summary) string { return n.Name }))
+	cfgACL := h.requireWriteACL(
+		resolveResource(
+			"config",
+			h.cache.GetConfig,
+			func(c swarm.Config) string { return c.Spec.Name },
+		),
+	)
+	secACL := h.requireWriteACL(
+		resolveResource(
+			"secret",
+			h.cache.GetSecret,
+			func(s swarm.Secret) string { return s.Spec.Name },
+		),
+	)
+	netACL := h.requireWriteACL(
+		resolveResource(
+			"network",
+			h.cache.GetNetwork,
+			func(n network.Summary) string { return n.Name },
+		),
+	)
 	volACL := h.requireWriteACL(pathResource("volume", "name"))
 	pluginACL := h.requireWriteACL(pathResource("plugin", "name"))
 	pluginWildACL := h.requireWriteACL(wildcardResource("plugin"))

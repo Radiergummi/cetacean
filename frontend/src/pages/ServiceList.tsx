@@ -269,7 +269,10 @@ export default function ServiceList() {
                 key={service.ID}
                 title={
                   <span className="flex items-center gap-2">
-                    <HealthDot running={service.RunningTasks} desired={desired ?? service.RunningTasks} />
+                    <HealthDot
+                      running={service.RunningTasks}
+                      desired={desired ?? service.RunningTasks}
+                    />
                     <ResourceName name={service.Spec.Name} />
                   </span>
                 }
