@@ -63,12 +63,12 @@ const digestNodeExporter = digest();
 const digestTraefik = digest();
 const digestRegistry = digest();
 
-const now = new Date();
-const ago4d = new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000);
-const ago3d = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
-const ago2h = new Date(now.getTime() - 2 * 60 * 60 * 1000);
-const ago1h = new Date(now.getTime() - 1 * 60 * 60 * 1000);
-const ago30m = new Date(now.getTime() - 30 * 60 * 1000);
+const now = Date.now();
+const ago4d = new Date(now - 4 * 24 * 60 * 60 * 1000).toISOString();
+const ago3d = new Date(now - 3 * 24 * 60 * 60 * 1000).toISOString();
+const ago2h = new Date(now - 2 * 60 * 60 * 1000).toISOString();
+const ago1h = new Date(now - 1 * 60 * 60 * 1000).toISOString();
+const ago30m = new Date(now - 30 * 60 * 1000).toISOString();
 
 export interface SwarmData {
   ID: string;
@@ -179,7 +179,7 @@ function buildNetworks(): Network[] {
     {
       Id: idNetIngress,
       Name: "ingress",
-      Created: ago4d.toISOString(),
+      Created: ago4d,
       Driver: "overlay",
       Scope: "swarm",
       EnableIPv6: false,
@@ -193,7 +193,7 @@ function buildNetworks(): Network[] {
     {
       Id: idNetWebshop,
       Name: "webshop_default",
-      Created: ago4d.toISOString(),
+      Created: ago4d,
       Driver: "overlay",
       Scope: "swarm",
       EnableIPv6: false,
@@ -207,7 +207,7 @@ function buildNetworks(): Network[] {
     {
       Id: idNetMonitoring,
       Name: "monitoring_default",
-      Created: ago4d.toISOString(),
+      Created: ago4d,
       Driver: "overlay",
       Scope: "swarm",
       EnableIPv6: false,
@@ -221,7 +221,7 @@ function buildNetworks(): Network[] {
     {
       Id: idNetInfra,
       Name: "infra_default",
-      Created: ago4d.toISOString(),
+      Created: ago4d,
       Driver: "overlay",
       Scope: "swarm",
       EnableIPv6: false,
@@ -235,7 +235,7 @@ function buildNetworks(): Network[] {
     {
       Id: idNetGwbridge,
       Name: "docker_gwbridge",
-      Created: ago4d.toISOString(),
+      Created: ago4d,
       Driver: "bridge",
       Scope: "local",
       EnableIPv6: false,
@@ -258,7 +258,7 @@ function buildVolumes(): Volume[] {
       Mountpoint: "/var/lib/docker/volumes/webshop_db-data/_data",
       Labels: { "com.docker.stack.namespace": "webshop" },
       Options: {},
-      CreatedAt: ago4d.toISOString(),
+      CreatedAt: ago4d,
     },
     {
       Name: "monitoring_prometheus-data",
@@ -267,7 +267,7 @@ function buildVolumes(): Volume[] {
       Mountpoint: "/var/lib/docker/volumes/monitoring_prometheus-data/_data",
       Labels: { "com.docker.stack.namespace": "monitoring" },
       Options: {},
-      CreatedAt: ago4d.toISOString(),
+      CreatedAt: ago4d,
     },
   ];
 }
@@ -275,8 +275,8 @@ function buildVolumes(): Volume[] {
 function buildSwarm(): SwarmData {
   return {
     ID: idSwarm,
-    CreatedAt: ago4d.toISOString(),
-    UpdatedAt: ago3d.toISOString(),
+    CreatedAt: ago4d,
+    UpdatedAt: ago3d,
     Spec: {
       Annotations: { Name: "default", Labels: {} },
       Orchestration: { TaskHistoryRetentionLimit: 5 },
@@ -352,8 +352,8 @@ scrape_configs:
     {
       ID: idCfgDBInit,
       Version: { Index: 20 },
-      CreatedAt: ago4d.toISOString(),
-      UpdatedAt: ago4d.toISOString(),
+      CreatedAt: ago4d,
+      UpdatedAt: ago4d,
       Spec: {
         Name: "webshop_db-init",
         Labels: { "com.docker.stack.namespace": "webshop" },
@@ -363,8 +363,8 @@ scrape_configs:
     {
       ID: idCfgPromConfig,
       Version: { Index: 21 },
-      CreatedAt: ago4d.toISOString(),
-      UpdatedAt: ago3d.toISOString(),
+      CreatedAt: ago4d,
+      UpdatedAt: ago3d,
       Spec: {
         Name: "monitoring_prometheus-config",
         Labels: { "com.docker.stack.namespace": "monitoring" },
@@ -374,8 +374,8 @@ scrape_configs:
     {
       ID: idCfgProxyConf,
       Version: { Index: 22 },
-      CreatedAt: ago4d.toISOString(),
-      UpdatedAt: ago3d.toISOString(),
+      CreatedAt: ago4d,
+      UpdatedAt: ago3d,
       Spec: {
         Name: "infra_proxy-config",
         Labels: { "com.docker.stack.namespace": "infra" },
@@ -390,8 +390,8 @@ function buildSecrets(): Secret[] {
     {
       ID: idSecDBPassword,
       Version: { Index: 30 },
-      CreatedAt: ago4d.toISOString(),
-      UpdatedAt: ago4d.toISOString(),
+      CreatedAt: ago4d,
+      UpdatedAt: ago4d,
       Spec: {
         Name: "webshop_db-password",
         Labels: { "com.docker.stack.namespace": "webshop" },
@@ -400,8 +400,8 @@ function buildSecrets(): Secret[] {
     {
       ID: idSecAPIKey,
       Version: { Index: 31 },
-      CreatedAt: ago4d.toISOString(),
-      UpdatedAt: ago4d.toISOString(),
+      CreatedAt: ago4d,
+      UpdatedAt: ago4d,
       Spec: {
         Name: "webshop_api-key",
         Labels: { "com.docker.stack.namespace": "webshop" },
@@ -431,8 +431,8 @@ function buildServices(): Service[] {
     {
       ID: idSvcFrontend,
       Version: { Index: 100 },
-      CreatedAt: ago4d.toISOString(),
-      UpdatedAt: ago3d.toISOString(),
+      CreatedAt: ago4d,
+      UpdatedAt: ago3d,
       Spec: {
         Name: "webshop_frontend",
         Labels: webshopLabels("nginx:1.27-alpine"),
@@ -460,8 +460,8 @@ function buildServices(): Service[] {
     {
       ID: idSvcAPI,
       Version: { Index: 101 },
-      CreatedAt: ago4d.toISOString(),
-      UpdatedAt: ago3d.toISOString(),
+      CreatedAt: ago4d,
+      UpdatedAt: ago3d,
       Spec: {
         Name: "webshop_api",
         Labels: webshopLabels("registry.example.com/webshop/api:v2.4.1"),
@@ -501,8 +501,8 @@ function buildServices(): Service[] {
     {
       ID: idSvcWorker,
       Version: { Index: 102 },
-      CreatedAt: ago4d.toISOString(),
-      UpdatedAt: ago3d.toISOString(),
+      CreatedAt: ago4d,
+      UpdatedAt: ago3d,
       Spec: {
         Name: "webshop_worker",
         Labels: webshopLabels("registry.example.com/webshop/worker:v2.4.1"),
@@ -528,8 +528,8 @@ function buildServices(): Service[] {
     {
       ID: idSvcDB,
       Version: { Index: 103 },
-      CreatedAt: ago4d.toISOString(),
-      UpdatedAt: ago4d.toISOString(),
+      CreatedAt: ago4d,
+      UpdatedAt: ago4d,
       Spec: {
         Name: "webshop_db",
         Labels: webshopLabels("postgres:16-alpine"),
@@ -578,8 +578,8 @@ function buildServices(): Service[] {
     {
       ID: idSvcCache,
       Version: { Index: 104 },
-      CreatedAt: ago4d.toISOString(),
-      UpdatedAt: ago4d.toISOString(),
+      CreatedAt: ago4d,
+      UpdatedAt: ago4d,
       Spec: {
         Name: "webshop_cache",
         Labels: webshopLabels("redis:7-alpine"),
@@ -607,8 +607,8 @@ function buildServices(): Service[] {
     {
       ID: idSvcSearch,
       Version: { Index: 105 },
-      CreatedAt: ago4d.toISOString(),
-      UpdatedAt: ago3d.toISOString(),
+      CreatedAt: ago4d,
+      UpdatedAt: ago3d,
       Spec: {
         Name: "webshop_search",
         Labels: webshopLabels("elasticsearch:8.17.0"),
@@ -635,8 +635,8 @@ function buildServices(): Service[] {
     {
       ID: idSvcPrometheus,
       Version: { Index: 110 },
-      CreatedAt: ago4d.toISOString(),
-      UpdatedAt: ago3d.toISOString(),
+      CreatedAt: ago4d,
+      UpdatedAt: ago3d,
       Spec: {
         Name: "monitoring_prometheus",
         Labels: monitoringLabels("prom/prometheus:v3.2.1"),
@@ -677,8 +677,8 @@ function buildServices(): Service[] {
     {
       ID: idSvcGrafana,
       Version: { Index: 111 },
-      CreatedAt: ago4d.toISOString(),
-      UpdatedAt: ago3d.toISOString(),
+      CreatedAt: ago4d,
+      UpdatedAt: ago3d,
       Spec: {
         Name: "monitoring_grafana",
         Labels: monitoringLabels("grafana/grafana:11.5.2"),
@@ -701,8 +701,8 @@ function buildServices(): Service[] {
     {
       ID: idSvcNodeExporter,
       Version: { Index: 112 },
-      CreatedAt: ago4d.toISOString(),
-      UpdatedAt: ago4d.toISOString(),
+      CreatedAt: ago4d,
+      UpdatedAt: ago4d,
       Spec: {
         Name: "monitoring_node-exporter",
         Labels: monitoringLabels("prom/node-exporter:v1.9.0"),
@@ -724,8 +724,8 @@ function buildServices(): Service[] {
     {
       ID: idSvcProxy,
       Version: { Index: 120 },
-      CreatedAt: ago4d.toISOString(),
-      UpdatedAt: ago30m.toISOString(),
+      CreatedAt: ago4d,
+      UpdatedAt: ago30m,
       Spec: {
         Name: "infra_proxy",
         Labels: infraLabels("traefik:v3.3"),
@@ -762,8 +762,8 @@ function buildServices(): Service[] {
       },
       UpdateStatus: {
         State: "completed",
-        StartedAt: ago1h.toISOString(),
-        CompletedAt: ago30m.toISOString(),
+        StartedAt: ago1h,
+        CompletedAt: ago30m,
         Message: "update completed",
       },
     },
@@ -772,8 +772,8 @@ function buildServices(): Service[] {
     {
       ID: idSvcRegistry,
       Version: { Index: 121 },
-      CreatedAt: ago4d.toISOString(),
-      UpdatedAt: ago4d.toISOString(),
+      CreatedAt: ago4d,
+      UpdatedAt: ago4d,
       Spec: {
         Name: "infra_registry",
         Labels: infraLabels("registry:2"),
@@ -831,7 +831,7 @@ function buildTasks(services: Service[], nodesByID: Map<string, Node>): Task[] {
       NodeID: nodeID,
       Slot: slot,
       Status: {
-        Timestamp: ago2h.toISOString(),
+        Timestamp: ago2h,
         State: "running",
         Message: "started",
         ContainerStatus: {
@@ -871,7 +871,7 @@ function buildTasks(services: Service[], nodesByID: Map<string, Node>): Task[] {
     NodeID: idNodeWorker1,
     Slot: 2,
     Status: {
-      Timestamp: ago1h.toISOString(),
+      Timestamp: ago1h,
       State: "failed",
       Message: "started",
       Err: "task: non-zero exit (137): OOM killed",
@@ -937,7 +937,7 @@ function buildTasks(services: Service[], nodesByID: Map<string, Node>): Task[] {
       NodeID: workerNodes[(slot - 1) % workerNodes.length],
       Slot: slot,
       Status: {
-        Timestamp: ago1h.toISOString(),
+        Timestamp: ago1h,
         State: "shutdown",
         Message: "shutdown",
         ContainerStatus: {

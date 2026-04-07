@@ -1,7 +1,7 @@
 import { randomHex, type Dataset } from "./dataset";
 import type { SSEClients } from "./sseHandlers";
 import { broadcast } from "./sseHandlers";
-import type { Task } from "@/api/types";
+import type { Service, Task } from "@/api/types";
 
 function nextTaskID(): string {
   return randomHex(25);
@@ -60,6 +60,28 @@ function broadcastTask(clients: SSEClients, action: string, task: Task) {
   });
 }
 
+function makeTask(dataset: Dataset, service: Service, slot: number): Task {
+  const workers = getWorkerNodes(dataset);
+  const node = workers.length > 0 ? pickRandom(workers) : dataset.nodes[0];
+  return {
+    ID: nextTaskID(),
+    Version: { Index: Math.floor(Math.random() * 10000) },
+    ServiceID: service.ID,
+    NodeID: node.ID,
+    Slot: slot,
+    Status: {
+      Timestamp: new Date().toISOString(),
+      State: "running",
+      Message: "started",
+      ContainerStatus: { ContainerID: nextContainerID(), ExitCode: 0 },
+    },
+    DesiredState: "running",
+    Spec: { ContainerSpec: { Image: service.Spec.TaskTemplate.ContainerSpec?.Image ?? "" } },
+    ServiceName: service.Spec.Name,
+    NodeHostname: node.Description.Hostname,
+  };
+}
+
 function broadcastService(clients: SSEClients, action: string, service: { ID: string }) {
   broadcast(clients, "service", "services", service.ID, {
     type: "service",
@@ -112,28 +134,7 @@ function scenarioTaskRestart(dataset: Dataset, clients: SSEClients) {
 
   // After a delay, create a replacement
   setTimeout(() => {
-    const workers = getWorkerNodes(dataset);
-    const node = workers.length > 0 ? pickRandom(workers) : dataset.nodes[0];
-    const image = service.Spec.TaskTemplate.ContainerSpec?.Image ?? "";
-
-    const replacement: Task = {
-      ID: nextTaskID(),
-      Version: { Index: Math.floor(Math.random() * 10000) },
-      ServiceID: service.ID,
-      NodeID: node.ID,
-      Slot: task.Slot,
-      Status: {
-        Timestamp: new Date().toISOString(),
-        State: "running",
-        Message: "started",
-        ContainerStatus: { ContainerID: nextContainerID(), ExitCode: 0 },
-      },
-      DesiredState: "running",
-      Spec: { ContainerSpec: { Image: image } },
-      ServiceName: service.Spec.Name,
-      NodeHostname: node.Description.Hostname,
-    };
-
+    const replacement = makeTask(dataset, service, task.Slot ?? 0);
     addTask(dataset, replacement);
     broadcastTask(clients, "create", replacement);
   }, 500);
@@ -159,28 +160,7 @@ function scenarioServiceScale(dataset: Dataset, clients: SSEClients) {
   broadcastService(clients, "update", service);
 
   // Create the new task
-  const workers = getWorkerNodes(dataset);
-  const node = workers.length > 0 ? pickRandom(workers) : dataset.nodes[0];
-  const image = service.Spec.TaskTemplate.ContainerSpec?.Image ?? "";
-
-  const newTask: Task = {
-    ID: nextTaskID(),
-    Version: { Index: Math.floor(Math.random() * 10000) },
-    ServiceID: service.ID,
-    NodeID: node.ID,
-    Slot: originalReplicas + 1,
-    Status: {
-      Timestamp: new Date().toISOString(),
-      State: "running",
-      Message: "started",
-      ContainerStatus: { ContainerID: nextContainerID(), ExitCode: 0 },
-    },
-    DesiredState: "running",
-    Spec: { ContainerSpec: { Image: image } },
-    ServiceName: service.Spec.Name,
-    NodeHostname: node.Description.Hostname,
-  };
-
+  const newTask = makeTask(dataset, service, originalReplicas + 1);
   addTask(dataset, newTask);
   broadcastTask(clients, "create", newTask);
 
@@ -277,34 +257,11 @@ function scenarioTaskFail(dataset: Dataset, clients: SSEClients) {
   broadcastTask(clients, "update", task);
 
   // Recover: create a replacement
-  const delay = randomBetween(3000, 8000);
-
   setTimeout(() => {
-    const workers = getWorkerNodes(dataset);
-    const node = workers.length > 0 ? pickRandom(workers) : dataset.nodes[0];
-    const image = service.Spec.TaskTemplate.ContainerSpec?.Image ?? "";
-
-    const replacement: Task = {
-      ID: nextTaskID(),
-      Version: { Index: Math.floor(Math.random() * 10000) },
-      ServiceID: service.ID,
-      NodeID: node.ID,
-      Slot: task.Slot,
-      Status: {
-        Timestamp: new Date().toISOString(),
-        State: "running",
-        Message: "started",
-        ContainerStatus: { ContainerID: nextContainerID(), ExitCode: 0 },
-      },
-      DesiredState: "running",
-      Spec: { ContainerSpec: { Image: image } },
-      ServiceName: service.Spec.Name,
-      NodeHostname: node.Description.Hostname,
-    };
-
+    const replacement = makeTask(dataset, service, task.Slot ?? 0);
     addTask(dataset, replacement);
     broadcastTask(clients, "create", replacement);
-  }, delay);
+  }, randomBetween(3000, 8000));
 }
 
 /**
