@@ -108,9 +108,7 @@ describe("demo handler coverage", () => {
       headers: { Accept: "application/json", Range: "items 0-49" },
     });
 
-    if (response.status >= 500) {
-      throw new Error(`${path} returned ${response.status}`);
-    }
+    expect(response.status).toBeLessThan(500);
   });
 });
 
