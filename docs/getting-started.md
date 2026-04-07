@@ -79,6 +79,11 @@ Tailscale, mTLS certificates, or trusted proxy headers. See [Authentication](aut
 
 Once authenticated, you can optionally add per-resource access control with [Authorization](authorization.md).
 
+## Subscribing to Changes
+
+Every resource page provides an Atom feed — click the feed icon in the page header or append `.atom` to any resource
+URL. Subscribe in your feed reader to get notified when services, nodes, or other resources change.
+
 ## Configuration
 
 See [Configuration](configuration.md) for all settings. The highlights:
