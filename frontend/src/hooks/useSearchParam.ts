@@ -17,7 +17,7 @@ export function useSearchParam(key: string): [string, string, (value: string) =>
   const [inputValue, setInputValue] = useState(urlValue);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  // Sync input when URL changes externally (e.g. browser back/forward)
+  // Sync input when the URL changes externally (e.g., browser back/forward)
   useEffect(() => {
     setInputValue(urlValue);
   }, [urlValue]);
@@ -47,7 +47,7 @@ export function useSearchParam(key: string): [string, string, (value: string) =>
     [key, setParams],
   );
 
-  // Cleanup timer on unmount
+  // Cleanup timer on Unmount
   useEffect(() => () => clearTimeout(timerRef.current), []);
 
   return [inputValue, urlValue, setValue];

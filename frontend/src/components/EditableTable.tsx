@@ -14,7 +14,7 @@ interface EditableTableProps<T> {
   columns: [string, string];
   defaultOpen?: boolean;
   editDisabled?: boolean;
-  /** Render without CollapsibleSection wrapper (no title, no collapse toggle). */
+  /** Render without a CollapsibleSection wrapper (no title, no collapse toggle). */
   bare?: boolean;
   /** Start in edit mode. */
   defaultEditing?: boolean;

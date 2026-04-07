@@ -623,3 +623,32 @@ func TestRangeRequest_EndToEnd(t *testing.T) {
 		}
 	})
 }
+
+func TestWriteLinkTemplate(t *testing.T) {
+	t.Run("sets Link-Template header", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/services", nil)
+		w := httptest.NewRecorder()
+
+		writeLinkTemplate(w, r, "/services/{id}")
+
+		got := w.Header().Get("Link-Template")
+		want := `</services/{id}>; rel="item"`
+		if got != want {
+			t.Errorf("Link-Template = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("respects base path", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/services", nil)
+		r = r.WithContext(context.WithValue(r.Context(), basePathKey, "/cetacean"))
+		w := httptest.NewRecorder()
+
+		writeLinkTemplate(w, r, "/services/{id}")
+
+		got := w.Header().Get("Link-Template")
+		want := `</cetacean/services/{id}>; rel="item"`
+		if got != want {
+			t.Errorf("Link-Template = %q, want %q", got, want)
+		}
+	})
+}

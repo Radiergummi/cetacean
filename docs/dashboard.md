@@ -58,6 +58,13 @@ require [monitoring](monitoring.md).
 The log viewer on service and task detail pages supports live tailing, time range selection (presets or custom), stream
 and level filtering, substring/regex search with match navigation, JSON pretty-printing, and log download.
 
+## Atom Feeds
+
+Every resource list and detail page shows a feed icon in the page header. Click it to open the Atom feed for that page
+in a new tab, or copy the URL to subscribe in a feed reader. Feeds include history, search results, and
+recommendations pages. See the [API reference](api.md#atom-feeds) for the full list of supported endpoints and
+pagination details.
+
 ## Topology
 
 The topology page offers two views: **logical** (services grouped by stack, connected by networks) and **physical**

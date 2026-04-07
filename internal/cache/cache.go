@@ -93,15 +93,15 @@ type OnChangeFunc func(Event)
 
 type Cache struct {
 	mu             sync.RWMutex
-	nodes          map[string]swarm.Node
+	nodes          ResourceMap[swarm.Node]
 	services       map[string]swarm.Service
 	tasks          map[string]swarm.Task
 	tasksByService map[string]map[string]struct{} // serviceID -> set of taskIDs
 	tasksByNode    map[string]map[string]struct{} // nodeID -> set of taskIDs
-	configs        map[string]swarm.Config
-	secrets        map[string]swarm.Secret
-	networks       map[string]network.Summary
-	volumes        map[string]volume.Volume
+	configs        ResourceMap[swarm.Config]
+	secrets        ResourceMap[swarm.Secret]
+	networks       ResourceMap[network.Summary]
+	volumes        ResourceMap[volume.Volume]
 	stacks         map[string]Stack
 	lastSync       time.Time
 	onChange       OnChangeFunc
@@ -110,21 +110,85 @@ type Cache struct {
 }
 
 func New(onChange OnChangeFunc) *Cache {
-	return &Cache{
-		nodes:          make(map[string]swarm.Node),
+	c := &Cache{
 		services:       make(map[string]swarm.Service),
 		tasks:          make(map[string]swarm.Task),
 		tasksByService: make(map[string]map[string]struct{}),
 		tasksByNode:    make(map[string]map[string]struct{}),
-		configs:        make(map[string]swarm.Config),
-		secrets:        make(map[string]swarm.Secret),
-		networks:       make(map[string]network.Summary),
-		volumes:        make(map[string]volume.Volume),
 		stacks:         make(map[string]Stack),
 		serviceRef:     newServiceRefIndex(),
 		onChange:       onChange,
 		history:        NewHistory(10000),
 	}
+
+	c.nodes = ResourceMap[swarm.Node]{
+		mu:       &c.mu,
+		items:    make(map[string]swarm.Node),
+		nameFunc: func(n swarm.Node) string { return n.Description.Hostname },
+	}
+
+	c.configs = ResourceMap[swarm.Config]{
+		mu:       &c.mu,
+		items:    make(map[string]swarm.Config),
+		nameFunc: func(cfg swarm.Config) string { return cfg.Spec.Name },
+		onSet: func(_ string, old *swarm.Config, new_ *swarm.Config) {
+			if old != nil {
+				c.removeFromStack(EventConfig, old.ID, old.Spec.Labels)
+			}
+			c.addToStack(EventConfig, new_.ID, new_.Spec.Labels)
+		},
+		onDelete: func(_ string, old swarm.Config) {
+			c.removeFromStack(EventConfig, old.ID, old.Spec.Labels)
+		},
+	}
+
+	c.secrets = ResourceMap[swarm.Secret]{
+		mu:       &c.mu,
+		items:    make(map[string]swarm.Secret),
+		nameFunc: func(s swarm.Secret) string { return s.Spec.Name },
+		onSet: func(_ string, old *swarm.Secret, new_ *swarm.Secret) {
+			if old != nil {
+				c.removeFromStack(EventSecret, old.ID, old.Spec.Labels)
+			}
+			new_.Spec.Data = nil
+			c.addToStack(EventSecret, new_.ID, new_.Spec.Labels)
+		},
+		onDelete: func(_ string, old swarm.Secret) {
+			c.removeFromStack(EventSecret, old.ID, old.Spec.Labels)
+		},
+	}
+
+	c.networks = ResourceMap[network.Summary]{
+		mu:       &c.mu,
+		items:    make(map[string]network.Summary),
+		nameFunc: func(n network.Summary) string { return n.Name },
+		onSet: func(_ string, old *network.Summary, new_ *network.Summary) {
+			if old != nil {
+				c.removeFromStack(EventNetwork, old.ID, old.Labels)
+			}
+			c.addToStack(EventNetwork, new_.ID, new_.Labels)
+		},
+		onDelete: func(_ string, old network.Summary) {
+			c.removeFromStack(EventNetwork, old.ID, old.Labels)
+		},
+	}
+
+	c.volumes = ResourceMap[volume.Volume]{
+		mu:       &c.mu,
+		items:    make(map[string]volume.Volume),
+		nameFunc: func(v volume.Volume) string { return v.Name },
+		onSet: func(_ string, old *volume.Volume, new_ *volume.Volume) {
+			if old != nil {
+				c.removeFromStack(EventVolume, old.Name, old.Labels)
+			}
+			c.addToStack(EventVolume, new_.Name, new_.Labels)
+		},
+		onDelete: func(_ string, old volume.Volume) {
+			c.removeFromStack(EventVolume, old.Name, old.Labels)
+		},
+	}
+
+	return c
 }
 
 func (c *Cache) History() *History { return c.history }
@@ -235,39 +299,16 @@ func (c *Cache) notifyRefChanges(old, new refSet) {
 // --- Nodes ---
 
 func (c *Cache) SetNode(n swarm.Node) {
-	c.mu.Lock()
-	c.nodes[n.ID] = n
-	c.mu.Unlock()
-	c.notify(Event{Type: EventNode, Action: "update", ID: n.ID, Resource: n})
+	c.notify(c.nodes.Set(n.ID, n, EventNode))
 }
 
-func (c *Cache) GetNode(id string) (swarm.Node, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	n, ok := c.nodes[id]
-	return n, ok
-}
+func (c *Cache) GetNode(id string) (swarm.Node, bool) { return c.nodes.Get(id) }
 
 func (c *Cache) DeleteNode(id string) {
-	c.mu.Lock()
-	var name string
-	if old, ok := c.nodes[id]; ok {
-		name = old.Description.Hostname
-	}
-	delete(c.nodes, id)
-	c.mu.Unlock()
-	c.notify(Event{Type: EventNode, Action: "remove", ID: id, Name: name})
+	c.notify(c.nodes.Delete(id, EventNode))
 }
 
-func (c *Cache) ListNodes() []swarm.Node {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	out := make([]swarm.Node, 0, len(c.nodes))
-	for _, n := range c.nodes {
-		out = append(out, n)
-	}
-	return out
-}
+func (c *Cache) ListNodes() []swarm.Node { return c.nodes.List() }
 
 // --- Services ---
 
@@ -411,169 +452,58 @@ func (c *Cache) ListTasks() []swarm.Task {
 // --- Configs ---
 
 func (c *Cache) SetConfig(cfg swarm.Config) {
-	c.mu.Lock()
-	if old, ok := c.configs[cfg.ID]; ok {
-		c.removeFromStack(EventConfig, old.ID, old.Spec.Labels)
-	}
-	c.configs[cfg.ID] = cfg
-	c.addToStack(EventConfig, cfg.ID, cfg.Spec.Labels)
-	c.mu.Unlock()
-	c.notify(Event{Type: EventConfig, Action: "update", ID: cfg.ID, Resource: cfg})
+	c.notify(c.configs.Set(cfg.ID, cfg, EventConfig))
 }
 
-func (c *Cache) GetConfig(id string) (swarm.Config, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	cfg, ok := c.configs[id]
-	return cfg, ok
-}
+func (c *Cache) GetConfig(id string) (swarm.Config, bool) { return c.configs.Get(id) }
 
 func (c *Cache) DeleteConfig(id string) {
-	c.mu.Lock()
-	var name string
-	if old, ok := c.configs[id]; ok {
-		name = old.Spec.Name
-		c.removeFromStack(EventConfig, id, old.Spec.Labels)
-	}
-	delete(c.configs, id)
-	c.mu.Unlock()
-	c.notify(Event{Type: EventConfig, Action: "remove", ID: id, Name: name})
+	c.notify(c.configs.Delete(id, EventConfig))
 }
 
-func (c *Cache) ListConfigs() []swarm.Config {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	out := make([]swarm.Config, 0, len(c.configs))
-	for _, cfg := range c.configs {
-		out = append(out, cfg)
-	}
-	return out
-}
+func (c *Cache) ListConfigs() []swarm.Config { return c.configs.List() }
 
 // --- Secrets ---
 
 func (c *Cache) SetSecret(s swarm.Secret) {
-	c.mu.Lock()
-	if old, ok := c.secrets[s.ID]; ok {
-		c.removeFromStack(EventSecret, old.ID, old.Spec.Labels)
-	}
-	s.Spec.Data = nil
-	c.secrets[s.ID] = s
-	c.addToStack(EventSecret, s.ID, s.Spec.Labels)
-	c.mu.Unlock()
-	c.notify(Event{Type: EventSecret, Action: "update", ID: s.ID, Resource: s})
+	c.notify(c.secrets.Set(s.ID, s, EventSecret))
 }
 
-func (c *Cache) GetSecret(id string) (swarm.Secret, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	s, ok := c.secrets[id]
-	return s, ok
-}
+func (c *Cache) GetSecret(id string) (swarm.Secret, bool) { return c.secrets.Get(id) }
 
 func (c *Cache) DeleteSecret(id string) {
-	c.mu.Lock()
-	var name string
-	if old, ok := c.secrets[id]; ok {
-		name = old.Spec.Name
-		c.removeFromStack(EventSecret, id, old.Spec.Labels)
-	}
-	delete(c.secrets, id)
-	c.mu.Unlock()
-	c.notify(Event{Type: EventSecret, Action: "remove", ID: id, Name: name})
+	c.notify(c.secrets.Delete(id, EventSecret))
 }
 
-func (c *Cache) ListSecrets() []swarm.Secret {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	out := make([]swarm.Secret, 0, len(c.secrets))
-	for _, s := range c.secrets {
-		out = append(out, s)
-	}
-	return out
-}
+func (c *Cache) ListSecrets() []swarm.Secret { return c.secrets.List() }
 
 // --- Networks ---
 
 func (c *Cache) SetNetwork(n network.Summary) {
-	c.mu.Lock()
-	if old, ok := c.networks[n.ID]; ok {
-		c.removeFromStack(EventNetwork, old.ID, old.Labels)
-	}
-	c.networks[n.ID] = n
-	c.addToStack(EventNetwork, n.ID, n.Labels)
-	c.mu.Unlock()
-	c.notify(Event{Type: EventNetwork, Action: "update", ID: n.ID, Resource: n})
+	c.notify(c.networks.Set(n.ID, n, EventNetwork))
 }
 
-func (c *Cache) GetNetwork(id string) (network.Summary, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	n, ok := c.networks[id]
-	return n, ok
-}
+func (c *Cache) GetNetwork(id string) (network.Summary, bool) { return c.networks.Get(id) }
 
 func (c *Cache) DeleteNetwork(id string) {
-	c.mu.Lock()
-	var name string
-	if old, ok := c.networks[id]; ok {
-		name = old.Name
-		c.removeFromStack(EventNetwork, id, old.Labels)
-	}
-	delete(c.networks, id)
-	c.mu.Unlock()
-	c.notify(Event{Type: EventNetwork, Action: "remove", ID: id, Name: name})
+	c.notify(c.networks.Delete(id, EventNetwork))
 }
 
-func (c *Cache) ListNetworks() []network.Summary {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	out := make([]network.Summary, 0, len(c.networks))
-	for _, n := range c.networks {
-		out = append(out, n)
-	}
-	return out
-}
+func (c *Cache) ListNetworks() []network.Summary { return c.networks.List() }
 
 // --- Volumes ---
 
 func (c *Cache) SetVolume(v volume.Volume) {
-	c.mu.Lock()
-	if old, ok := c.volumes[v.Name]; ok {
-		c.removeFromStack(EventVolume, old.Name, old.Labels)
-	}
-	c.volumes[v.Name] = v
-	c.addToStack(EventVolume, v.Name, v.Labels)
-	c.mu.Unlock()
-	c.notify(Event{Type: EventVolume, Action: "update", ID: v.Name, Resource: v})
+	c.notify(c.volumes.Set(v.Name, v, EventVolume))
 }
 
-func (c *Cache) GetVolume(name string) (volume.Volume, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	v, ok := c.volumes[name]
-	return v, ok
-}
+func (c *Cache) GetVolume(name string) (volume.Volume, bool) { return c.volumes.Get(name) }
 
 func (c *Cache) DeleteVolume(name string) {
-	c.mu.Lock()
-	if old, ok := c.volumes[name]; ok {
-		c.removeFromStack(EventVolume, name, old.Labels)
-	}
-	delete(c.volumes, name)
-	c.mu.Unlock()
-	c.notify(Event{Type: EventVolume, Action: "remove", ID: name, Name: name})
+	c.notify(c.volumes.Delete(name, EventVolume))
 }
 
-func (c *Cache) ListVolumes() []volume.Volume {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	out := make([]volume.Volume, 0, len(c.volumes))
-	for _, v := range c.volumes {
-		out = append(out, v)
-	}
-	return out
-}
+func (c *Cache) ListVolumes() []volume.Volume { return c.volumes.List() }
 
 // --- Stacks (derived) ---
 
@@ -618,22 +548,22 @@ func (c *Cache) GetStackDetail(name string) (StackDetail, bool) {
 		}
 	}
 	for _, id := range s.Configs {
-		if cfg, ok := c.configs[id]; ok {
+		if cfg, ok := c.configs.items[id]; ok {
 			detail.Configs = append(detail.Configs, cfg)
 		}
 	}
 	for _, id := range s.Secrets {
-		if sec, ok := c.secrets[id]; ok {
+		if sec, ok := c.secrets.items[id]; ok {
 			detail.Secrets = append(detail.Secrets, sec)
 		}
 	}
 	for _, id := range s.Networks {
-		if net, ok := c.networks[id]; ok {
+		if net, ok := c.networks.items[id]; ok {
 			detail.Networks = append(detail.Networks, net)
 		}
 	}
 	for _, name := range s.Volumes {
-		if vol, ok := c.volumes[name]; ok {
+		if vol, ok := c.volumes.items[name]; ok {
 			detail.Volumes = append(detail.Volumes, vol)
 		}
 	}
@@ -670,7 +600,7 @@ func (c *Cache) ListStackSummaries() []StackSummary {
 			if svc.Spec.Mode.Replicated != nil && svc.Spec.Mode.Replicated.Replicas != nil {
 				replicas = int(*svc.Spec.Mode.Replicated.Replicas)
 			} else if svc.Spec.Mode.Global != nil {
-				replicas = len(c.nodes)
+				replicas = len(c.nodes.items)
 			}
 			s.DesiredTasks += replicas
 
@@ -785,7 +715,7 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 	var totalMemory int64
 	var maxNanoCPUs int64
 	var maxMemory int64
-	for _, n := range c.nodes {
+	for _, n := range c.nodes.items {
 		switch n.Status.State {
 		case swarm.NodeStateReady:
 			nodesReady++
@@ -836,7 +766,7 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 	}
 
 	return ClusterSnapshot{
-		NodeCount:         len(c.nodes),
+		NodeCount:         len(c.nodes.items),
 		ServiceCount:      len(c.services),
 		TaskCount:         len(c.tasks),
 		StackCount:        len(c.stacks),
@@ -864,7 +794,7 @@ func (c *Cache) replaceNodes(nodes []swarm.Node) {
 		m[n.ID] = n
 	}
 	c.mu.Lock()
-	c.nodes = m
+	c.nodes.Replace(m)
 	c.mu.Unlock()
 }
 
@@ -911,7 +841,7 @@ func (c *Cache) replaceConfigs(configs []swarm.Config) {
 		m[cfg.ID] = cfg
 	}
 	c.mu.Lock()
-	c.configs = m
+	c.configs.Replace(m)
 	c.mu.Unlock()
 }
 
@@ -922,7 +852,7 @@ func (c *Cache) replaceSecrets(secrets []swarm.Secret) {
 		m[s.ID] = s
 	}
 	c.mu.Lock()
-	c.secrets = m
+	c.secrets.Replace(m)
 	c.mu.Unlock()
 }
 
@@ -932,7 +862,7 @@ func (c *Cache) replaceNetworks(networks []network.Summary) {
 		m[n.ID] = n
 	}
 	c.mu.Lock()
-	c.networks = m
+	c.networks.Replace(m)
 	c.mu.Unlock()
 }
 
@@ -942,7 +872,7 @@ func (c *Cache) replaceVolumes(volumes []volume.Volume) {
 		m[v.Name] = v
 	}
 	c.mu.Lock()
-	c.volumes = m
+	c.volumes.Replace(m)
 	c.mu.Unlock()
 }
 
@@ -1050,7 +980,7 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 	// Single atomic swap under one lock — only replace types that succeeded.
 	c.mu.Lock()
 	if data.HasNodes {
-		c.nodes = nodes
+		c.nodes.Replace(nodes)
 	}
 	if data.HasServices {
 		c.services = services
@@ -1061,16 +991,16 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 		c.tasksByNode = byNode
 	}
 	if data.HasConfigs {
-		c.configs = configs
+		c.configs.Replace(configs)
 	}
 	if data.HasSecrets {
-		c.secrets = secrets
+		c.secrets.Replace(secrets)
 	}
 	if data.HasNetworks {
-		c.networks = networks
+		c.networks.Replace(networks)
 	}
 	if data.HasVolumes {
-		c.volumes = volumes
+		c.volumes.Replace(volumes)
 	}
 
 	// Rebuild derived indexes from the current (possibly partially updated) maps.

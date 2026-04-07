@@ -12,7 +12,7 @@ function sectionKey(scope: string, title: string) {
 /**
  * Derives a stable page scope from the current pathname.
  * Strips trailing ID/name segments so all detail pages of the same type
- * share collapse state (e.g. /services/abc and /services/def both → "services").
+ * share collapse state (e.g., /services/abc and /services/def both → "services").
  */
 function usePageScope(): string {
   const { pathname } = useLocation();
@@ -28,7 +28,7 @@ function usePageScope(): string {
 /**
  * localStorage-backed open/closed state for a named section.
  * Keys are scoped by page type to prevent collisions across same-named
- * sections on different pages (e.g. "Labels" on service vs node detail).
+ * sections on different pages (e.g. "Labels" on service vs. node detail).
  */
 export function useSectionCollapse(title: string, defaultOpen = true) {
   const scope = usePageScope();

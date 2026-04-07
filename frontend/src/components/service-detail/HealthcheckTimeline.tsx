@@ -308,7 +308,7 @@ export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck 
             );
           })}
 
-        {/* Failure check dots */}
+        {/* Failure Check dots */}
         {regularChecks.map((t, i) => {
           const failureNumber = i + 1;
           const isLast = failureNumber === retries;

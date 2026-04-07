@@ -70,7 +70,7 @@ export function renderSwarmTemplate(text: string): React.ReactNode {
 }
 
 /**
- * Copy event handler that replaces `[data-copytext]` badge labels with their
+ * Copy Event handler that replaces `[data-copytext]` badge labels with their
  * raw template strings in the clipboard. Attach this to any container element
  * that renders swarm template badges.
  */

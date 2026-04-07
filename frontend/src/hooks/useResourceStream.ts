@@ -24,7 +24,7 @@ export const sseEventTypes = [
 
 /**
  * Opens an EventSource to the given path and dispatches parsed events.
- * Returns connection status for use by ConnectionStatus component.
+ * Returns connection status for use by the ConnectionStatus component.
  */
 export function useResourceStream(path: string, listener: SSEListener) {
   const [connected, setConnected] = useState(true);

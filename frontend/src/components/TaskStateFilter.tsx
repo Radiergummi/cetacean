@@ -17,7 +17,7 @@ const terminalStates = new Set([
 
 /**
  * Returns true for tasks worth seeing by default: anything still in-flight or
- * abnormal. Hides only the normal completed lifecycle (desired=shutdown + terminal state).
+ * abnormal. Hides only the normal completed lifecycle (desired=shutdown and terminal state).
  */
 export function isActiveTask({
   DesiredState,

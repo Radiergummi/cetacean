@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -14,44 +13,26 @@ import (
 // --- Nodes ---
 
 func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {
-	h.setAllowList(w, r, "node")
-	nodes := h.cache.ListNodes()
-	nodes = acl.Filter(
-		h.acl,
-		auth.IdentityFromContext(r.Context()),
-		"read",
-		nodes,
-		nodeResource,
-	)
-	nodes = searchFilter(
-		nodes,
-		r.URL.Query().Get("search"),
-		func(n swarm.Node) string { return n.Description.Hostname },
-	)
-	var ok bool
-	if nodes, ok = exprFilter(nodes, r.URL.Query().Get("filter"), filter.NodeEnv, w, r); !ok {
-		return
-	}
-	p, err := parsePagination(r)
-	if err != nil {
-		writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
-		return
-	}
-	nodes = sortItems(nodes, p.Sort, p.Dir, map[string]func(swarm.Node) string{
-		"hostname":     func(n swarm.Node) string { return n.Description.Hostname },
-		"role":         func(n swarm.Node) string { return string(n.Spec.Role) },
-		"status":       func(n swarm.Node) string { return string(n.Status.State) },
-		"availability": func(n swarm.Node) string { return string(n.Spec.Availability) },
+	handleList(h, w, r, listSpec[swarm.Node]{
+		resourceType: "node",
+		linkTemplate: "/nodes/{id}",
+		list:         h.cache.ListNodes,
+		aclResource:  nodeResource,
+		searchName:   func(n swarm.Node) string { return n.Description.Hostname },
+		filterEnv:    filter.NodeEnv,
+		sortKeys: map[string]func(swarm.Node) string{
+			"hostname":     func(n swarm.Node) string { return n.Description.Hostname },
+			"role":         func(n swarm.Node) string { return string(n.Spec.Role) },
+			"status":       func(n swarm.Node) string { return string(n.Status.State) },
+			"availability": func(n swarm.Node) string { return string(n.Spec.Availability) },
+		},
 	})
-	resp := applyPagination(r.Context(), nodes, p)
-	writeCollectionResponse(w, r, resp, p)
 }
 
 func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	node, ok := h.cache.GetNode(id)
+	node, ok := lookupOr404(w, r, "node", id, h.cache.GetNode)
 	if !ok {
-		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
 	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", nodeResource(node)) {
@@ -66,9 +47,8 @@ func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	node, ok := h.cache.GetNode(id)
+	node, ok := lookupOr404(w, r, "node", id, h.cache.GetNode)
 	if !ok {
-		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
 	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", nodeResource(node)) {

@@ -2,7 +2,7 @@
 title: API Reference
 description: REST endpoints, SSE streaming, query parameters, write operations, and error codes.
 category: reference
-tags: [api, rest, sse, json-ld, openapi]
+tags: [ api, rest, sse, json-ld, openapi ]
 ---
 
 # Cetacean API Reference
@@ -23,18 +23,19 @@ prefix -- versioning lives in the media type.
 
 ### Resolution order
 
-1. **File extension:** `.json` or `.html` appended to any path (the highest priority)
+1. **File extension:** `.json`, `.html`, or `.atom` appended to any path (the highest priority)
 2. **`Accept` header:** standard content negotiation
 3. **Default:** `application/json` when `*/*` or no preference
 
 ### Supported types
 
-| Accept value                       | Result                                  |
-|------------------------------------|-----------------------------------------|
-| `application/json`                 | JSON (latest version)                   |
-| `application/vnd.cetacean.v1+json` | JSON pinned to v1                       |
-| `text/html`                        | SPA                                     |
-| `text/event-stream`                | SSE (only on endpoints that support it) |
+| Accept value                       | Result                                     |
+|------------------------------------|--------------------------------------------|
+| `application/json`                 | JSON (latest version)                      |
+| `application/vnd.cetacean.v1+json` | JSON pinned to v1                          |
+| `text/html`                        | SPA                                        |
+| `text/event-stream`                | SSE (only on endpoints that support it)    |
+| `application/atom+xml`             | Atom feed (resource and history endpoints) |
 
 All negotiated responses include `Vary: Accept`.
 
@@ -44,12 +45,70 @@ Requesting an unsupported type returns `406 Not Acceptable`.
 # Force JSON via extension
 curl http://localhost:9000/services.json
 
+# Force Atom feed via extension
+curl http://localhost:9000/services.atom
+
 # Force JSON via Accept header
 curl -H "Accept: application/json" http://localhost:9000/services
 
 # Pin to API v1
 curl -H "Accept: application/vnd.cetacean.v1+json" http://localhost:9000/services
 ```
+
+## Atom Feeds
+
+Resource list endpoints, resource detail endpoints, and the history, search, and recommendations endpoints all support
+Atom feeds. Request via `Accept: application/atom+xml` or append `.atom` to any supported path.
+
+### Supported endpoints
+
+All resource list and detail endpoints support Atom:
+
+- `/nodes`, `/nodes/{id}`
+- `/services`, `/services/{id}`
+- `/tasks`, `/tasks/{id}`
+- `/stacks`, `/stacks/{name}`
+- `/configs`, `/configs/{id}`
+- `/secrets`, `/secrets/{id}`
+- `/networks`, `/networks/{id}`
+- `/volumes`, `/volumes/{name}`
+- `/events`, `/history`, `/search`, `/recommendations`
+
+Endpoints that do not produce resource change data (write sub-resources, log streams, metrics, topology) return
+`406 Not Acceptable`.
+
+### Pagination
+
+Atom feeds use cursor-based pagination. The feed includes a `next` link when more entries are available:
+
+| Parameter | Description                                      |
+|-----------|--------------------------------------------------|
+| `before`  | Return entries older than this cursor ID         |
+| `limit`   | Number of entries per page (default 50, max 200) |
+
+```bash
+# Request an Atom feed
+curl -H "Accept: application/atom+xml" http://localhost:9000/services
+
+# Request via extension
+curl http://localhost:9000/services.atom
+
+# Page through history feed
+curl "http://localhost:9000/history.atom?limit=50"
+curl "http://localhost:9000/history.atom?before=<cursor-id>&limit=50"
+```
+
+### Caching
+
+Atom feeds support ETags and conditional requests. Pass `If-None-Match` with a previous ETag to receive `304 Not
+Modified` when the feed has not changed. Responses include `Vary: Accept, Authorization, Cookie` so caches
+differentiate by format and user.
+
+### Feed autodiscovery
+
+JSON responses on feed-capable endpoints include a `Link: <...>; rel="alternate"; type="application/atom+xml"` header.
+The SPA injects `<link rel="alternate" type="application/atom+xml">` in the HTML `<head>`, so feed readers that
+support browser-based autodiscovery can find feeds automatically.
 
 ## Pagination
 
@@ -734,11 +793,13 @@ Unlike `/auth/whoami`, this endpoint participates in content negotiation and inc
 
 ### Events
 
-| Method | Path      | Description                                 | Parameters                |
-|--------|-----------|---------------------------------------------|---------------------------|
-| GET    | `/events` | SSE-only. Real-time resource change stream. | `types` (comma-separated) |
+| Method | Path      | Description                                                                | Parameters                |
+|--------|-----------|----------------------------------------------------------------------------|---------------------------|
+| GET    | `/events` | Real-time resource change stream (SSE) or recent changes (Atom/JSON Feed). | `types` (comma-separated) |
 
-Returns `406` for non-SSE requests. See [Real-Time Events](#real-time-events-sse) for details.
+With `Accept: text/event-stream`, streams live events (see [Real-Time Events](#real-time-events-sse)). With
+`Accept: application/atom+xml` or `.atom`, returns recent history as a paginated feed (see [Atom Feeds](#atom-feeds)).
+Browsers receive the SPA.
 
 ### Authentication
 

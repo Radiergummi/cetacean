@@ -1,44 +1,43 @@
 import type {
-  Node,
-  ServiceDetail,
-  ServiceListItem,
-  Task,
-  Stack,
-  StackDetail,
-  Config,
-  Secret,
-  Network,
-  Volume,
-  ConfigDetail,
-  SecretDetail,
-  NetworkDetail,
-  VolumeDetail,
+  ClusterCapacity,
   CollectionResponse,
-  HistoryEntry,
-  NetworkTopology,
-  PlacementTopology,
-  StackSummary,
-  SearchResponse,
-  SwarmInfo,
+  Config,
+  ConfigDetail,
+  ContainerConfig,
   DiskUsageSummary,
+  Healthcheck,
+  HistoryEntry,
+  Identity,
+  JGFDocument,
+  LogDriver,
+  MonitoringStatus,
+  Network,
+  NetworkDetail,
+  Node,
+  PatchOp,
+  Placement,
   Plugin,
   PluginPrivilege,
-  Identity,
-  MonitoringStatus,
-  PrometheusResponse,
-  ClusterCapacity,
-  PatchOp,
-  Healthcheck,
-  Placement,
   PortConfig,
-  UpdateConfig,
-  LogDriver,
-  ContainerConfig,
-  ServiceConfigRef,
-  ServiceSecretRef,
-  ServiceNetworkRef,
-  ServiceMount,
+  PrometheusResponse,
   RecommendationsResponse,
+  SearchResponse,
+  Secret,
+  SecretDetail,
+  ServiceConfigRef,
+  ServiceDetail,
+  ServiceListItem,
+  ServiceMount,
+  ServiceNetworkRef,
+  ServiceSecretRef,
+  Stack,
+  StackDetail,
+  StackSummary,
+  SwarmInfo,
+  Task,
+  UpdateConfig,
+  Volume,
+  VolumeDetail,
 } from "./types";
 import { apiPath } from "@/lib/basePath";
 
@@ -97,9 +96,15 @@ async function throwResponseError(res: Response): Promise<never> {
 
   try {
     const body = await res.json();
-    if (body?.type) type = body.type;
-    if (body?.title) title = body.title;
-    if (body?.detail) detail = body.detail;
+    if (body?.type) {
+      type = body.type;
+    }
+    if (body?.title) {
+      title = body.title;
+    }
+    if (body?.detail) {
+      detail = body.detail;
+    }
   } catch {
     // response wasn't JSON
   }
@@ -142,6 +147,23 @@ async function fetchJSON<T>(path: string, signal?: AbortSignal): Promise<FetchRe
   return { data, allowedMethods };
 }
 
+async function fetchJGF<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const res = await fetch(apiPath(path), {
+    headers: { Accept: "application/vnd.jgf+json" },
+    signal: composeSignals(signal, AbortSignal.timeout(defaultTimeoutMilliseconds)),
+  });
+
+  if (!res.ok) {
+    if (res.status === 401 && res.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
+      redirectToLogin();
+    }
+
+    await throwResponseError(res);
+  }
+
+  return res.json();
+}
+
 async function mutationFetch<T>(
   path: string,
   method: string,
@@ -149,7 +171,9 @@ async function mutationFetch<T>(
   contentType?: string,
 ): Promise<T> {
   const h: Record<string, string> = { Accept: "application/json" };
-  if (contentType) h["Content-Type"] = contentType;
+  if (contentType) {
+    h["Content-Type"] = contentType;
+  }
   const res = await fetch(apiPath(path), {
     method,
     headers: h,
@@ -165,7 +189,9 @@ async function mutationFetch<T>(
     await throwResponseError(res);
   }
 
-  if (res.status === 204) return undefined as T;
+  if (res.status === 204) {
+    return undefined as T;
+  }
 
   return res.json();
 }
@@ -255,7 +281,7 @@ export interface ClusterMetrics {
   disk: { used: number; total: number; percent: number };
 }
 
-export interface LogOpts {
+export interface LogOptions {
   limit?: number;
   after?: string;
   before?: string;
@@ -263,20 +289,37 @@ export interface LogOpts {
   signal?: AbortSignal;
 }
 
-function buildLogParams(opts?: LogOpts): URLSearchParams {
-  const params = new URLSearchParams({ limit: String(opts?.limit || 500) });
-  if (opts?.after) params.set("after", opts.after);
-  if (opts?.before) params.set("before", opts.before);
-  if (opts?.stream) params.set("stream", opts.stream);
+function buildLogParams(options?: LogOptions): URLSearchParams {
+  const params = new URLSearchParams({ limit: String(options?.limit || 500) });
+  if (options?.after) {
+    params.set("after", options.after);
+  }
+
+  if (options?.before) {
+    params.set("before", options.before);
+  }
+
+  if (options?.stream) {
+    params.set("stream", options.stream);
+  }
+
   return params;
 }
 
-function buildLogStreamURL(path: string, opts?: { after?: string; stream?: string }): string {
+function buildLogStreamURL(path: string, options?: { after?: string; stream?: string }): string {
   const params = new URLSearchParams();
-  if (opts?.after) params.set("after", opts.after);
-  if (opts?.stream) params.set("stream", opts.stream);
-  const qs = params.toString();
-  return apiPath(`${path}${qs ? `?${qs}` : ""}`);
+
+  if (options?.after) {
+    params.set("after", options.after);
+  }
+
+  if (options?.stream) {
+    params.set("stream", options.stream);
+  }
+
+  const queryParams = params.toString();
+
+  return apiPath(`${path}${queryParams ? `?${queryParams}` : ""}`);
 }
 
 export interface ListParams {
@@ -287,16 +330,30 @@ export interface ListParams {
   filter?: string;
 }
 
-/** Items per Range request page. Backend default is also 50; max is 200. */
+/** Items per Range request page. Backend default is also 50; the max is 200. */
 export const pageSize = 50;
 
 function buildListQueryString(params?: ListParams): string {
-  const qs = new URLSearchParams();
-  if (params?.sort) qs.set("sort", params.sort);
-  if (params?.dir) qs.set("dir", params.dir);
-  if (params?.search) qs.set("search", params.search);
-  if (params?.filter) qs.set("filter", params.filter);
-  const query = qs.toString();
+  const queryParams = new URLSearchParams();
+
+  if (params?.sort) {
+    queryParams.set("sort", params.sort);
+  }
+
+  if (params?.dir) {
+    queryParams.set("dir", params.dir);
+  }
+
+  if (params?.search) {
+    queryParams.set("search", params.search);
+  }
+
+  if (params?.filter) {
+    queryParams.set("filter", params.filter);
+  }
+
+  const query = queryParams.toString();
+
   return query ? `?${query}` : "";
 }
 
@@ -309,7 +366,7 @@ async function fetchRange<T>(
   const end = offset + pageSize - 1;
   const url = `${path}${buildListQueryString(params)}`;
 
-  const res = await fetch(apiPath(url), {
+  const response = await fetch(apiPath(url), {
     headers: {
       Accept: "application/json",
       Range: `items ${offset}-${end}`,
@@ -317,16 +374,16 @@ async function fetchRange<T>(
     signal: composeSignals(signal, AbortSignal.timeout(defaultTimeoutMilliseconds)),
   });
 
-  if (!res.ok) {
-    if (res.status === 401 && res.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
+  if (!response.ok) {
+    if (response.status === 401 && response.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
       redirectToLogin();
     }
 
-    await throwResponseError(res);
+    await throwResponseError(response);
   }
 
-  const allowedMethods = parseAllowHeader(res);
-  const data = await res.json();
+  const allowedMethods = parseAllowHeader(response);
+  const data = await response.json();
 
   return { data, allowedMethods };
 }
@@ -397,11 +454,13 @@ export const api = {
     fetchRange<Stack>("/stacks", params, signal),
   stacksSummary: () =>
     fetchJSON<CollectionResponse<StackSummary>>("/stacks/summary").then(({ data }) => data.items),
-  stack: (name: string) =>
-    fetchJSON<{ stack: StackDetail }>(`/stacks/${name}`).then(({ data, allowedMethods }) => ({
-      data: data.stack,
-      allowedMethods,
-    })),
+  stack: (name: string, signal?: AbortSignal) =>
+    fetchJSON<{ stack: StackDetail }>(`/stacks/${name}`, signal).then(
+      ({ data, allowedMethods }) => ({
+        data: data.stack,
+        allowedMethods,
+      }),
+    ),
   configs: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<Config>("/configs", params, signal),
   config: (id: string, signal?: AbortSignal) => fetchJSON<ConfigDetail>(`/configs/${id}`, signal),
@@ -416,56 +475,74 @@ export const api = {
     fetchRange<Volume>("/volumes", params, signal),
   volume: (name: string, signal?: AbortSignal) =>
     fetchJSON<VolumeDetail>(`/volumes/${name}`, signal),
-  task: (id: string) =>
-    fetchJSON<{ task: Task }>(`/tasks/${id}`).then(({ data, allowedMethods }) => ({
+  task: (id: string, signal?: AbortSignal) =>
+    fetchJSON<{ task: Task }>(`/tasks/${id}`, signal).then(({ data, allowedMethods }) => ({
       data: data.task,
       allowedMethods,
     })),
-  taskLogs: (id: string, opts?: LogOpts) =>
-    fetchJSON<LogResponse>(`/tasks/${id}/logs?${buildLogParams(opts)}`, opts?.signal).then(
+  taskLogs: (id: string, options?: LogOptions) =>
+    fetchJSON<LogResponse>(`/tasks/${id}/logs?${buildLogParams(options)}`, options?.signal).then(
       ({ data }) => data,
     ),
   serviceTasks: (id: string, signal?: AbortSignal) =>
     fetchJSON<CollectionResponse<Task>>(`/services/${id}/tasks`, signal).then(
       ({ data }) => data.items,
     ),
-  serviceLogs: (id: string, opts?: LogOpts) =>
-    fetchJSON<LogResponse>(`/services/${id}/logs?${buildLogParams(opts)}`, opts?.signal).then(
+  serviceLogs: (id: string, options?: LogOptions) =>
+    fetchJSON<LogResponse>(`/services/${id}/logs?${buildLogParams(options)}`, options?.signal).then(
       ({ data }) => data,
     ),
-  serviceLogsStreamURL: (id: string, opts?: { after?: string; stream?: string }) =>
-    buildLogStreamURL(`/services/${id}/logs`, opts),
-  taskLogsStreamURL: (id: string, opts?: { after?: string; stream?: string }) =>
-    buildLogStreamURL(`/tasks/${id}/logs`, opts),
-  history: (
+  serviceLogsStreamURL: (id: string, options?: { after?: string; stream?: string }) =>
+    buildLogStreamURL(`/services/${id}/logs`, options),
+  taskLogsStreamURL: (id: string, options?: { after?: string; stream?: string }) =>
+    buildLogStreamURL(`/tasks/${id}/logs`, options),
+  history: async (
     params?: { type?: string; resourceId?: string; limit?: number },
     signal?: AbortSignal,
   ) => {
-    const qs = new URLSearchParams();
-    if (params?.type) qs.set("type", params.type);
-    if (params?.resourceId) qs.set("resourceId", params.resourceId);
-    if (params?.limit) qs.set("limit", String(params.limit));
-    const query = qs.toString();
-    return fetchJSON<CollectionResponse<HistoryEntry>>(
+    const queryParams = new URLSearchParams();
+
+    if (params?.type) {
+      queryParams.set("type", params.type);
+    }
+
+    if (params?.resourceId) {
+      queryParams.set("resourceId", params.resourceId);
+    }
+
+    if (params?.limit) {
+      queryParams.set("limit", String(params.limit));
+    }
+
+    const query = queryParams.toString();
+    const { data } = await fetchJSON<CollectionResponse<HistoryEntry>>(
       `/history${query ? `?${query}` : ""}`,
       signal,
-    ).then(({ data }) => data.items);
+    );
+
+    return data.items;
   },
-  topologyNetworks: () => fetchJSON<NetworkTopology>("/topology/networks").then(({ data }) => data),
-  topologyPlacement: () =>
-    fetchJSON<PlacementTopology>("/topology/placement").then(({ data }) => data),
+  topology: () => fetchJGF<JGFDocument>("/topology"),
   nodeTasks: (id: string, signal?: AbortSignal) =>
     fetchJSON<CollectionResponse<Task>>(`/nodes/${id}/tasks`, signal).then(
       ({ data }) => data.items,
     ),
-  metricsQuery: (query: string, time?: string) => {
+  metricsQuery: async (query: string, time?: string) => {
     const params = new URLSearchParams({ query });
-    if (time) params.set("time", time);
-    return fetchJSON<PrometheusResponse>(`/metrics?${params}`).then(({ data }) => data);
+
+    if (time) {
+      params.set("time", time);
+    }
+
+    const { data } = await fetchJSON<PrometheusResponse>(`/metrics?${params}`);
+
+    return data;
   },
-  metricsQueryRange: (query: string, start: string, end: string, step: string) => {
+  metricsQueryRange: async (query: string, start: string, end: string, step: string) => {
     const params = new URLSearchParams({ query, start, end, step });
-    return fetchJSON<PrometheusResponse>(`/metrics?${params}`).then(({ data }) => data);
+    const { data } = await fetchJSON<PrometheusResponse>(`/metrics?${params}`);
+
+    return data;
   },
   metricsStreamURL: (query: string, step: number, range: number): string => {
     const params = new URLSearchParams({ query, step: String(step), range: String(range) });
@@ -478,10 +555,16 @@ export const api = {
     fetchJSON<{ version: string; url: string }>("/-/docker-latest-version").then(
       ({ data }) => data,
     ),
-  metricsLabels: (match?: string) => {
+  metricsLabels: async (match?: string) => {
     const params = new URLSearchParams();
-    if (match) params.set("match[]", match);
-    return fetchJSON<{ data: string[] }>(`/metrics/labels?${params}`).then(({ data }) => data.data);
+
+    if (match) {
+      params.set("match[]", match);
+    }
+
+    const { data } = await fetchJSON<{ data: string[] }>(`/metrics/labels?${params}`);
+
+    return data.data;
   },
   metricsLabelValues: (name: string) =>
     fetchJSON<{ data: string[] }>(`/metrics/labels/${encodeURIComponent(name)}`).then(

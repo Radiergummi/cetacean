@@ -4,9 +4,10 @@ import { getChartColor } from "../lib/chartColors";
 import { chartTooltipClasses } from "../lib/chartTooltip";
 import { formatBytes } from "../lib/format";
 import CollapsibleSection from "./CollapsibleSection";
+import { useQuery } from "@tanstack/react-query";
 import { ArcElement, Chart as ChartJS, Tooltip } from "chart.js";
 import { Box, Container, Hammer, HardDrive, type LucideIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Doughnut } from "react-chartjs-2";
 
 ChartJS.register(ArcElement, Tooltip);
@@ -358,39 +359,24 @@ function DiskUsageLoading() {
  * Cetacean is connected to (disk usage data is local to that host).
  */
 export default function DiskUsageSection({ nodeId }: { nodeId?: string }) {
-  const [data, setData] = useState<DiskUsageSummary[] | null>(null);
-  const [visible, setVisible] = useState(!nodeId);
-  const [loading, setLoading] = useState(true);
+  const { data: localNodeID } = useQuery({
+    queryKey: ["cluster"],
+    queryFn: () => api.cluster(),
+    enabled: !!nodeId,
+    select: (snapshot) => snapshot.localNodeID,
+  });
 
-  useEffect(() => {
-    if (!nodeId) {
-      return;
-    }
-    api
-      .cluster()
-      .then(({ localNodeID }) => {
-        if (localNodeID && localNodeID === nodeId) {
-          setVisible(true);
-        } else {
-          setLoading(false);
-        }
-      })
-      .catch(() => setLoading(false));
-  }, [nodeId]);
+  const visible = !nodeId || (!!localNodeID && localNodeID === nodeId);
 
-  useEffect(() => {
-    if (!visible) {
-      return;
-    }
+  const { data, isLoading: diskLoading } = useQuery({
+    queryKey: ["disk-usage"],
+    queryFn: () => api.diskUsage(),
+    enabled: visible,
+  });
 
-    api
-      .diskUsage()
-      .then(setData)
-      .catch(console.warn)
-      .finally(() => setLoading(false));
-  }, [visible]);
+  const isLoading = (!!nodeId && !localNodeID) || diskLoading;
 
-  if (!visible || (!loading && !data)) {
+  if (!visible || (!isLoading && !data)) {
     return null;
   }
 

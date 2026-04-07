@@ -1,9 +1,10 @@
 import LogViewer from "./LogViewer";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// Mock scrollIntoView which jsdom doesn't support
+// Mock scrollIntoView, which jsdom doesn't support
 Element.prototype.scrollIntoView = vi.fn();
 
 // Mock the api module
@@ -19,7 +20,7 @@ import { api } from "../../api/client";
 const mockServiceLogs = vi.mocked(api.serviceLogs);
 const mockServiceLogsStreamURL = vi.mocked(api.serviceLogsStreamURL);
 
-function renderWithRouter(ui: React.ReactElement, initialEntries = ["/"]) {
+function renderWithRouter(ui: ReactElement, initialEntries = ["/"]) {
   return render(<MemoryRouter initialEntries={initialEntries}>{ui}</MemoryRouter>);
 }
 
@@ -373,7 +374,7 @@ describe("LogViewer", () => {
     await waitFor(() => expect(screen.getByText("line 2")).toBeInTheDocument());
 
     // "Load newer" appears when following=true (at bottom), not live, and hasNewerLogs=true.
-    // following starts true. Polling detects newer logs automatically after initial load.
+    // following starts true. Polling detects newer logs automatically after the initial load.
     await waitFor(() => expect(screen.getByText("Load newer")).toBeInTheDocument());
 
     fireEvent.click(screen.getByText("Load newer"));

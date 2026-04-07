@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -16,9 +15,8 @@ import (
 
 func (h *Handlers) HandleGetSecret(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	sec, ok := h.cache.GetSecret(id)
+	sec, ok := lookupOr404(w, r, "secret", id, h.cache.GetSecret)
 	if !ok {
-		writeErrorCode(w, r, "SEC002", fmt.Sprintf("secret %q not found", id))
 		return
 	}
 	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "secret:"+sec.Spec.Name) {
@@ -48,39 +46,23 @@ func (h *Handlers) HandleGetSecret(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
-	h.setAllowList(w, r, "secret")
-	secrets := h.cache.ListSecrets()
-	for i := range secrets {
-		secrets[i].Spec.Data = nil
-	}
-	secrets = acl.Filter(
-		h.acl,
-		auth.IdentityFromContext(r.Context()),
-		"read",
-		secrets,
-		func(s swarm.Secret) string {
-			return "secret:" + s.Spec.Name
+	handleList(h, w, r, listSpec[swarm.Secret]{
+		resourceType: "secret",
+		linkTemplate: "/secrets/{id}",
+		list:         h.cache.ListSecrets,
+		aclResource:  func(s swarm.Secret) string { return "secret:" + s.Spec.Name },
+		searchName:   func(s swarm.Secret) string { return s.Spec.Name },
+		filterEnv:    filter.SecretEnv,
+		prepare: func(secrets []swarm.Secret) []swarm.Secret {
+			for i := range secrets {
+				secrets[i].Spec.Data = nil
+			}
+			return secrets
 		},
-	)
-	secrets = searchFilter(
-		secrets,
-		r.URL.Query().Get("search"),
-		func(s swarm.Secret) string { return s.Spec.Name },
-	)
-	var ok bool
-	if secrets, ok = exprFilter(secrets, r.URL.Query().Get("filter"), filter.SecretEnv, w, r); !ok {
-		return
-	}
-	p, err := parsePagination(r)
-	if err != nil {
-		writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
-		return
-	}
-	secrets = sortItems(secrets, p.Sort, p.Dir, map[string]func(swarm.Secret) string{
-		"name":    func(s swarm.Secret) string { return s.Spec.Name },
-		"created": func(s swarm.Secret) string { return s.CreatedAt.String() },
-		"updated": func(s swarm.Secret) string { return s.UpdatedAt.String() },
+		sortKeys: map[string]func(swarm.Secret) string{
+			"name":    func(s swarm.Secret) string { return s.Spec.Name },
+			"created": func(s swarm.Secret) string { return s.CreatedAt.String() },
+			"updated": func(s swarm.Secret) string { return s.UpdatedAt.String() },
+		},
 	})
-	resp := applyPagination(r.Context(), secrets, p)
-	writeCollectionResponse(w, r, resp, p)
 }

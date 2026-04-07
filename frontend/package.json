@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -b && vite build",
+    "build:demo": "vite build --config vite.config.demo.ts && cp ../website/public/demo/demo.html ../website/public/demo/index.html && cp ../website/public/demo/demo.html ../website/public/demo/404.html",
     "dev": "vite",
     "fmt": "oxfmt --write .",
     "fmt:check": "oxfmt --check .",
@@ -18,6 +19,8 @@
   "dependencies": {
     "@base-ui/react": "^1.2.0",
     "@fontsource-variable/geist": "^5.2.8",
+    "@tanstack/react-query": "^5.96.2",
+    "@tanstack/react-query-devtools": "^5.96.2",
     "@tanstack/react-virtual": "^3.13.21",
     "@xyflow/react": "^12.10.1",
     "chart.js": "^4.5.1",
@@ -46,12 +49,18 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
     "jsdom": "^28.1.0",
+    "msw": "^2.12.14",
     "oxfmt": "latest",
     "oxlint": "latest",
     "shadcn": "^4.0.0",
     "tailwindcss": "^4.2.1",
     "typescript": "~5.9.3",
-    "vite": "^7.3.1",
+    "vite": "^7.3.2",
     "vitest": "^4.0.18"
+  },
+  "msw": {
+    "workerDirectory": [
+      "../website/public/demo"
+    ]
   }
 }

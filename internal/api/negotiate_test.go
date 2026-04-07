@@ -274,4 +274,122 @@ func TestNegotiate(t *testing.T) {
 			t.Errorf("got %q, want Unsupported", s)
 		}
 	})
+
+	t.Run("extension .atom strips suffix and returns Atom", func(t *testing.T) {
+		ct, path := run("/services.atom", "")
+		if ct != ContentTypeAtom {
+			t.Errorf("got %v, want Atom", ct)
+		}
+		if path != "/services" {
+			t.Errorf("got path %q, want /services", path)
+		}
+	})
+
+	t.Run("Accept application/atom+xml", func(t *testing.T) {
+		ct, _ := run("/services", "application/atom+xml")
+		if ct != ContentTypeAtom {
+			t.Errorf("got %v, want Atom", ct)
+		}
+	})
+
+	t.Run("Atom lower quality than JSON prefers JSON", func(t *testing.T) {
+		ct, _ := run("/services", "application/atom+xml;q=0.5, application/json;q=1.0")
+		if ct != ContentTypeJSON {
+			t.Errorf("got %v, want JSON", ct)
+		}
+	})
+
+	t.Run("Atom higher quality than JSON prefers Atom", func(t *testing.T) {
+		ct, _ := run("/services", "application/atom+xml;q=1.0, application/json;q=0.5")
+		if ct != ContentTypeAtom {
+			t.Errorf("got %v, want Atom", ct)
+		}
+	})
+}
+
+func TestParseAccept_JGF(t *testing.T) {
+	ct := parseAccept("application/vnd.jgf+json")
+	if ct != ContentTypeJGF {
+		t.Errorf("got %v, want ContentTypeJGF", ct)
+	}
+}
+
+func TestParseAccept_GraphML(t *testing.T) {
+	ct := parseAccept("application/graphml+xml")
+	if ct != ContentTypeGraphML {
+		t.Errorf("got %v, want ContentTypeGraphML", ct)
+	}
+}
+
+func TestParseAccept_DOT(t *testing.T) {
+	ct := parseAccept("text/vnd.graphviz")
+	if ct != ContentTypeDOT {
+		t.Errorf("got %v, want ContentTypeDOT", ct)
+	}
+}
+
+func TestNegotiate_GraphMLSuffix(t *testing.T) {
+	var captured ContentType
+	var capturedPath string
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captured = ContentTypeFromContext(r.Context())
+		capturedPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := negotiate(inner)
+	req := httptest.NewRequest("GET", "/topology.graphml", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if captured != ContentTypeGraphML {
+		t.Errorf("expected ContentTypeGraphML, got %v", captured)
+	}
+	if capturedPath != "/topology" {
+		t.Errorf("expected path /topology, got %s", capturedPath)
+	}
+}
+
+func TestNegotiate_DOTSuffix(t *testing.T) {
+	var captured ContentType
+	var capturedPath string
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captured = ContentTypeFromContext(r.Context())
+		capturedPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := negotiate(inner)
+	req := httptest.NewRequest("GET", "/topology.dot", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if captured != ContentTypeDOT {
+		t.Errorf("expected ContentTypeDOT, got %v", captured)
+	}
+	if capturedPath != "/topology" {
+		t.Errorf("expected path /topology, got %s", capturedPath)
+	}
+}
+
+func TestNegotiate_JGFSuffix(t *testing.T) {
+	var captured ContentType
+	var capturedPath string
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captured = ContentTypeFromContext(r.Context())
+		capturedPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := negotiate(inner)
+	req := httptest.NewRequest("GET", "/topology.jgf", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if captured != ContentTypeJGF {
+		t.Errorf("expected ContentTypeJGF, got %v", captured)
+	}
+	if capturedPath != "/topology" {
+		t.Errorf("expected path /topology, got %s", capturedPath)
+	}
 }

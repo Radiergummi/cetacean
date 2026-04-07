@@ -1,3 +1,4 @@
+import AtomFeedLink from "./components/AtomFeedLink";
 import ConnectionStatus from "./components/ConnectionStatus";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Footer from "./components/Footer";
@@ -13,6 +14,9 @@ import { useHotkeys } from "./hooks/useHotkeys";
 import { useRecommendations } from "./hooks/useRecommendations";
 import { ConnectionProvider, sseEventTypes } from "./hooks/useResourceStream";
 import { apiPath, basePath } from "./lib/basePath";
+import { queryClient } from "./lib/queryClient";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { Keyboard, Lightbulb, Menu, X } from "lucide-react";
 import type React from "react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
@@ -87,6 +91,7 @@ function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
+      <AtomFeedLink />
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:shadow-lg focus:ring-2 focus:ring-ring"
@@ -113,7 +118,7 @@ function Layout({ children }: { children: React.ReactNode }) {
 
             <GlobalSearch
               ref={searchRef}
-              className="order-last lg:order-none lg:mx-auto"
+              className="order-last lg:order-0 lg:mx-auto"
             />
 
             <div className="ml-auto flex items-center gap-3 lg:ml-0">
@@ -270,138 +275,141 @@ function ConnectionTracker({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <BrowserRouter basename={basePath}>
-      <AuthProvider>
-        <ConnectionTracker>
-          <Toaster
-            theme="system"
-            richColors
-            position="bottom-right"
-            toastOptions={{ duration: 8000 }}
-          />
-          <Layout>
-            <Suspense fallback={<LoadingDetail />}>
-              <Routes>
-                <Route
-                  path="/"
-                  element={<ClusterOverview />}
-                />
-                <Route
-                  path="/nodes"
-                  element={<NodeList />}
-                />
-                <Route
-                  path="/nodes/:id"
-                  element={<NodeDetail />}
-                />
-                <Route
-                  path="/stacks"
-                  element={<StackList />}
-                />
-                <Route
-                  path="/stacks/:name"
-                  element={<StackDetail />}
-                />
-                <Route
-                  path="/services"
-                  element={<ServiceList />}
-                />
-                <Route
-                  path="/services/:id"
-                  element={<ServiceDetail />}
-                />
-                <Route
-                  path="/services/:id/:subResource"
-                  element={<ServiceSubResource />}
-                />
-                <Route
-                  path="/tasks"
-                  element={<TaskList />}
-                />
-                <Route
-                  path="/tasks/:id"
-                  element={<TaskDetail />}
-                />
-                <Route
-                  path="/configs"
-                  element={<ConfigList />}
-                />
-                <Route
-                  path="/configs/:id"
-                  element={<ConfigDetail />}
-                />
-                <Route
-                  path="/secrets"
-                  element={<SecretList />}
-                />
-                <Route
-                  path="/secrets/:id"
-                  element={<SecretDetail />}
-                />
-                <Route
-                  path="/networks"
-                  element={<NetworkList />}
-                />
-                <Route
-                  path="/networks/:id"
-                  element={<NetworkDetail />}
-                />
-                <Route
-                  path="/volumes"
-                  element={<VolumeList />}
-                />
-                <Route
-                  path="/volumes/:name"
-                  element={<VolumeDetail />}
-                />
-                <Route
-                  path="/plugins"
-                  element={<PluginList />}
-                />
-                <Route
-                  path="/plugins/:name"
-                  element={<PluginDetail />}
-                />
-                <Route
-                  path="/swarm"
-                  element={<SwarmPage />}
-                />
-                <Route
-                  path="/metrics"
-                  element={<MetricsConsole />}
-                />
-                <Route
-                  path="/topology"
-                  element={<Topology />}
-                />
-                <Route
-                  path="/recommendations"
-                  element={<RecommendationsPage />}
-                />
-                <Route
-                  path="/search"
-                  element={<SearchPage />}
-                />
-                <Route
-                  path="/api/errors"
-                  element={<ErrorIndex />}
-                />
-                <Route
-                  path="/api/errors/:code"
-                  element={<ErrorCodeDetail />}
-                />
-                <Route
-                  path="/profile"
-                  element={<ProfilePage />}
-                />
-                <Route
-                  path="*"
-                  element={<NotFound />}
-                />
-              </Routes>
-            </Suspense>
-          </Layout>
-        </ConnectionTracker>
-      </AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <ConnectionTracker>
+            <Toaster
+              theme="system"
+              richColors
+              position="bottom-right"
+              toastOptions={{ duration: 8000 }}
+            />
+            <Layout>
+              <Suspense fallback={<LoadingDetail />}>
+                <Routes>
+                  <Route
+                    path="/"
+                    element={<ClusterOverview />}
+                  />
+                  <Route
+                    path="/nodes"
+                    element={<NodeList />}
+                  />
+                  <Route
+                    path="/nodes/:id"
+                    element={<NodeDetail />}
+                  />
+                  <Route
+                    path="/stacks"
+                    element={<StackList />}
+                  />
+                  <Route
+                    path="/stacks/:name"
+                    element={<StackDetail />}
+                  />
+                  <Route
+                    path="/services"
+                    element={<ServiceList />}
+                  />
+                  <Route
+                    path="/services/:id"
+                    element={<ServiceDetail />}
+                  />
+                  <Route
+                    path="/services/:id/:subResource"
+                    element={<ServiceSubResource />}
+                  />
+                  <Route
+                    path="/tasks"
+                    element={<TaskList />}
+                  />
+                  <Route
+                    path="/tasks/:id"
+                    element={<TaskDetail />}
+                  />
+                  <Route
+                    path="/configs"
+                    element={<ConfigList />}
+                  />
+                  <Route
+                    path="/configs/:id"
+                    element={<ConfigDetail />}
+                  />
+                  <Route
+                    path="/secrets"
+                    element={<SecretList />}
+                  />
+                  <Route
+                    path="/secrets/:id"
+                    element={<SecretDetail />}
+                  />
+                  <Route
+                    path="/networks"
+                    element={<NetworkList />}
+                  />
+                  <Route
+                    path="/networks/:id"
+                    element={<NetworkDetail />}
+                  />
+                  <Route
+                    path="/volumes"
+                    element={<VolumeList />}
+                  />
+                  <Route
+                    path="/volumes/:name"
+                    element={<VolumeDetail />}
+                  />
+                  <Route
+                    path="/plugins"
+                    element={<PluginList />}
+                  />
+                  <Route
+                    path="/plugins/:name"
+                    element={<PluginDetail />}
+                  />
+                  <Route
+                    path="/swarm"
+                    element={<SwarmPage />}
+                  />
+                  <Route
+                    path="/metrics"
+                    element={<MetricsConsole />}
+                  />
+                  <Route
+                    path="/topology"
+                    element={<Topology />}
+                  />
+                  <Route
+                    path="/recommendations"
+                    element={<RecommendationsPage />}
+                  />
+                  <Route
+                    path="/search"
+                    element={<SearchPage />}
+                  />
+                  <Route
+                    path="/api/errors"
+                    element={<ErrorIndex />}
+                  />
+                  <Route
+                    path="/api/errors/:code"
+                    element={<ErrorCodeDetail />}
+                  />
+                  <Route
+                    path="/profile"
+                    element={<ProfilePage />}
+                  />
+                  <Route
+                    path="*"
+                    element={<NotFound />}
+                  />
+                </Routes>
+              </Suspense>
+            </Layout>
+          </ConnectionTracker>
+        </AuthProvider>
+        {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
+      </QueryClientProvider>
     </BrowserRouter>
   );
 }

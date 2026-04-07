@@ -507,6 +507,9 @@ paths:
             text/event-stream:
               schema:
                 $ref: "#/components/schemas/SSEEvent"
+            application/atom+xml:
+              schema:
+                $ref: "#/components/schemas/AtomFeed"
         "406":
           $ref: "#/components/responses/NotAcceptable"
         "429":
@@ -918,6 +921,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/NodeCollection"
+            application/atom+xml:
+              schema:
+                $ref: "#/components/schemas/AtomFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -946,6 +952,9 @@ paths:
                       node:
                         type: object
                         description: Docker swarm.Node object
+            application/atom+xml:
+              schema:
+                $ref: "#/components/schemas/AtomFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -1159,6 +1168,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServiceCollection"
+            application/atom+xml:
+              schema:
+                $ref: "#/components/schemas/AtomFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -1192,6 +1204,9 @@ paths:
                         description: Detected third-party integrations (e.g. Traefik)
                         items:
                           $ref: "#/components/schemas/Integration"
+            application/atom+xml:
+              schema:
+                $ref: "#/components/schemas/AtomFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -2257,6 +2272,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TaskCollection"
+            application/atom+xml:
+              schema:
+                $ref: "#/components/schemas/AtomFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -2302,6 +2320,9 @@ paths:
                             type: string
                           hostname:
                             type: string
+            application/atom+xml:
+              schema:
+                $ref: "#/components/schemas/AtomFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -2393,6 +2414,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HistoryCollection"
+            application/atom+xml:
+              schema:
+                $ref: "#/components/schemas/AtomFeed"
         "304":
           $ref: "#/components/responses/NotModified"
 
@@ -2427,6 +2451,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StackCollection"
+            application/atom+xml:
+              schema:
+                $ref: "#/components/schemas/AtomFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -2481,6 +2508,9 @@ paths:
                     properties:
                       stack:
                         $ref: "#/components/schemas/StackDetail"
+            application/atom+xml:
+              schema:
+                $ref: "#/components/schemas/AtomFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -2550,6 +2580,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ConfigCollection"
+            application/atom+xml:
+              schema:
+                $ref: "#/components/schemas/AtomFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -2633,6 +2666,9 @@ paths:
                         type: array
                         items:
                           $ref: "#/components/schemas/ServiceRef"
+            application/atom+xml:
+              schema:
+                $ref: "#/components/schemas/AtomFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -2737,6 +2773,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SecretCollection"
+            application/atom+xml:
+              schema:
+                $ref: "#/components/schemas/AtomFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -2820,6 +2859,9 @@ paths:
                         type: array
                         items:
                           $ref: "#/components/schemas/ServiceRef"
+            application/atom+xml:
+              schema:
+                $ref: "#/components/schemas/AtomFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -2923,6 +2965,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/NetworkCollection"
+            application/atom+xml:
+              schema:
+                $ref: "#/components/schemas/AtomFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -2956,6 +3001,9 @@ paths:
                         type: array
                         items:
                           $ref: "#/components/schemas/ServiceRef"
+            application/atom+xml:
+              schema:
+                $ref: "#/components/schemas/AtomFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -3007,6 +3055,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VolumeCollection"
+            application/atom+xml:
+              schema:
+                $ref: "#/components/schemas/AtomFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -3047,6 +3098,9 @@ paths:
                         type: array
                         items:
                           $ref: "#/components/schemas/ServiceRef"
+            application/atom+xml:
+              schema:
+                $ref: "#/components/schemas/AtomFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -3109,6 +3163,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SearchResponse"
+            application/atom+xml:
+              schema:
+                $ref: "#/components/schemas/AtomFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -3191,6 +3248,9 @@ paths:
                       computedAt:
                         type: string
                         format: date-time
+            application/atom+xml:
+              schema:
+                $ref: "#/components/schemas/AtomFeed"
         "304":
           $ref: "#/components/responses/NotModified"
 
@@ -3380,6 +3440,17 @@ components:
   # ── Schemas ──────────────────────────────────────────────────────────
 
   schemas:
+
+    # ── Atom Feed ──────────────────────────────────────────────────
+
+    AtomFeed:
+      type: string
+      description: |
+        Atom 1.0 feed document (RFC 4287). Contains resource change history
+        entries with cursor-based pagination links (RFC 5005). Request via
+        `Accept: application/atom+xml` header or `.atom` URL suffix.
+
+        Pagination parameters: `?before=<cursor>&limit=<n>` (default 50, max 200).
 
     # ── Error ────────────────────────────────────────────────────────
 

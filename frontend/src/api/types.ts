@@ -264,60 +264,6 @@ export interface StackDetail {
   volumes: Volume[];
 }
 
-export interface NetworkTopology {
-  nodes: TopoServiceNode[];
-  edges: TopoEdge[];
-  networks: TopoNetwork[];
-}
-
-export interface TopoServiceNode {
-  id: string;
-  name: string;
-  stack?: string;
-  replicas: number;
-  image: string;
-  ports?: string[];
-  mode: string;
-  updateStatus?: string;
-  networkAliases?: Record<string, string[]>;
-}
-
-export interface TopoEdge {
-  source: string;
-  target: string;
-  networks: string[];
-}
-
-export interface TopoNetwork {
-  id: string;
-  name: string;
-  driver: string;
-  scope: string;
-  stack?: string;
-}
-
-export interface PlacementTopology {
-  nodes: TopoClusterNode[];
-}
-
-export interface TopoClusterNode {
-  id: string;
-  hostname: string;
-  role: string;
-  state: string;
-  availability: string;
-  tasks: TopoTask[];
-}
-
-export interface TopoTask {
-  id: string;
-  serviceId: string;
-  serviceName: string;
-  state: string;
-  slot: number;
-  image: string;
-}
-
 export interface SpecChange {
   field: string;
   old?: string;
@@ -759,4 +705,37 @@ export interface RecommendationsResponse {
   total: number;
   summary: RecommendationSummary;
   computedAt: string;
+}
+
+export interface JGFDocument {
+  graphs: JGFGraph[];
+}
+
+export interface JGFGraph {
+  id: string;
+  type: string;
+  label: string;
+  directed: boolean;
+  metadata: JGFMetadata;
+  nodes: Record<string, JGFNode>;
+  edges?: JGFEdge[];
+  hyperedges?: JGFHyperedge[];
+}
+
+export type JGFMetadata = Record<string, unknown> & { "@context": string };
+
+export interface JGFNode {
+  label: string;
+  metadata: JGFMetadata;
+}
+
+export interface JGFEdge {
+  source: string;
+  target: string;
+  metadata: JGFMetadata;
+}
+
+export interface JGFHyperedge {
+  nodes: string[];
+  metadata: JGFMetadata;
 }

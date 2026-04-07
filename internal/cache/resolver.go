@@ -18,25 +18,25 @@ func (c *Cache) StackOf(resourceType, name string) string {
 			}
 		}
 	case "config":
-		for _, cfg := range c.configs {
+		for _, cfg := range c.configs.items {
 			if cfg.Spec.Name == name {
 				return cfg.Spec.Labels[label]
 			}
 		}
 	case "secret":
-		for _, s := range c.secrets {
+		for _, s := range c.secrets.items {
 			if s.Spec.Name == name {
 				return s.Spec.Labels[label]
 			}
 		}
 	case "network":
-		for _, n := range c.networks {
+		for _, n := range c.networks.items {
 			if n.Name == name {
 				return n.Labels[label]
 			}
 		}
 	case "volume":
-		for _, v := range c.volumes {
+		for _, v := range c.volumes.items {
 			if v.Name == name {
 				return v.Labels[label]
 			}

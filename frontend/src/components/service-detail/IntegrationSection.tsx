@@ -7,7 +7,7 @@ import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { showErrorToast } from "@/lib/showErrorToast";
 import { getErrorMessage } from "@/lib/utils";
 import { Code, ExternalLink, Layers, Pencil } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 /**
  * Wrapper for integration panels that provides a toggle between
@@ -36,9 +36,9 @@ export function IntegrationSection({
   enabled: boolean;
   rawLabels: [string, string][];
   docsUrl: string;
-  children: React.ReactNode;
+  children: ReactNode;
   editable?: boolean;
-  editContent?: React.ReactNode;
+  editContent?: ReactNode;
   onEditStart?: () => void;
   onSave?: () => Promise<void>;
   serviceId: string;

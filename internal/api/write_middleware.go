@@ -44,85 +44,68 @@ func (h *Handlers) requireWriteACL(
 	}
 }
 
-// --- Name resolvers for ACL resource strings ---
+// --- ACL resource resolvers ---
 
-func (h *Handlers) serviceName(r *http.Request) string {
-	id := r.PathValue("id")
-	if svc, ok := h.cache.GetService(id); ok {
-		return "service:" + svc.Spec.Name
-	}
-	return "service:" + id
-}
-
-// nodeResource returns a consistent ACL resource string for a node.
-// Prefers "node:<hostname>", falls back to "node:<id>" if hostname is empty.
-func nodeResource(n swarm.Node) string {
-	if n.Description.Hostname != "" {
-		return "node:" + n.Description.Hostname
-	}
-	return "node:" + n.ID
-}
-
-func (h *Handlers) nodeName(r *http.Request) string {
-	id := r.PathValue("id")
-	if n, ok := h.cache.GetNode(id); ok {
-		return nodeResource(n)
-	}
-	return "node:" + id
-}
-
-func (h *Handlers) taskServiceResource(r *http.Request) string {
-	id := r.PathValue("id")
-	if t, ok := h.cache.GetTask(id); ok {
-		if svc, ok := h.cache.GetService(t.ServiceID); ok {
-			return "service:" + svc.Spec.Name
+// resolveResource returns a resolver that looks up a resource by the "id" path
+// value, extracts its name, and returns "type:name" (falling back to "type:id").
+func resolveResource[T any](
+	resourceType string,
+	get func(string) (T, bool),
+	name func(T) string,
+) func(*http.Request) string {
+	return func(r *http.Request) string {
+		id := r.PathValue("id")
+		if obj, ok := get(id); ok {
+			return resourceType + ":" + name(obj)
 		}
+
+		return resourceType + ":" + id
 	}
-	return "task:" + id
 }
 
-func (h *Handlers) configName(r *http.Request) string {
-	id := r.PathValue("id")
-	if cfg, ok := h.cache.GetConfig(id); ok {
-		return "config:" + cfg.Spec.Name
+// pathResource returns a resolver that reads the named path value directly.
+func pathResource(resourceType, pathKey string) func(*http.Request) string {
+	return func(r *http.Request) string {
+		return resourceType + ":" + r.PathValue(pathKey)
 	}
-	return "config:" + id
-}
-
-func (h *Handlers) secretName(r *http.Request) string {
-	id := r.PathValue("id")
-	if s, ok := h.cache.GetSecret(id); ok {
-		return "secret:" + s.Spec.Name
-	}
-	return "secret:" + id
-}
-
-func (h *Handlers) networkName(r *http.Request) string {
-	id := r.PathValue("id")
-	if n, ok := h.cache.GetNetwork(id); ok {
-		return "network:" + n.Name
-	}
-	return "network:" + id
-}
-
-func (h *Handlers) stackName(r *http.Request) string {
-	return "stack:" + r.PathValue("name")
-}
-
-func (h *Handlers) volumeName(r *http.Request) string {
-	return "volume:" + r.PathValue("name")
-}
-
-func (h *Handlers) pluginName(r *http.Request) string {
-	return "plugin:" + r.PathValue("name")
-}
-
-func swarmResource(_ *http.Request) string {
-	return "swarm:cluster"
 }
 
 func wildcardResource(resourceType string) func(*http.Request) string {
 	return func(_ *http.Request) string {
 		return resourceType + ":*"
 	}
+}
+
+func swarmResource(_ *http.Request) string {
+	return "swarm:cluster"
+}
+
+// nodeResource returns a consistent ACL resource string for a node.
+// Prefers "node:<hostname>", falls back to "node:<id>" if hostname is empty.
+func nodeResource(n swarm.Node) string {
+	return "node:" + nodeHostnameOrID(n)
+}
+
+// nodeHostnameOrID returns the hostname if set, otherwise the ID.
+func nodeHostnameOrID(n swarm.Node) string {
+	if n.Description.Hostname != "" {
+		return n.Description.Hostname
+	}
+
+	return n.ID
+}
+
+// taskServiceResource resolves a task to its parent service for ACL checks.
+func (h *Handlers) taskServiceResource(r *http.Request) string {
+	id := r.PathValue("id")
+	if t, ok := h.cache.GetTask(id); ok {
+		if svc, ok := h.cache.GetService(t.ServiceID); ok {
+			return "service:" + svc.Spec.Name
+		}
+		// Task found but service missing (orphaned): preserve service type
+		// so service:* grants still match via the evaluator.
+		return "service:" + t.ServiceID
+	}
+
+	return "task:" + id
 }

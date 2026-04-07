@@ -1,5 +1,4 @@
 import { api, type ClusterSnapshot } from "../api/client";
-import type { HistoryEntry } from "../api/types";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
 import {
@@ -10,76 +9,41 @@ import {
 } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import RecommendationSummary from "../components/RecommendationSummary";
-import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
-import { useResourceStream } from "../hooks/useResourceStream";
+import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
+import { isPrometheusReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { stackResourceCharts } from "../lib/stackQueries";
+import { useQuery } from "@tanstack/react-query";
 import { TrendingDown, TrendingUp } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 
 const clusterStackCharts = stackResourceCharts();
 
 export default function ClusterOverview() {
-  const [snapshot, setSnapshot] = useState<ClusterSnapshot | null>(null);
   const prevRef = useRef<ClusterSnapshot | null>(null);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(true);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchSnapshot = useCallback(() => {
-    api
-      .cluster()
-      .then((snapshot) => {
-        setSnapshot((previous) => {
-          if (previous) {
-            prevRef.current = previous;
-          }
+  const { data: snapshot } = useQuery({
+    queryKey: ["cluster"],
+    queryFn: () => api.cluster(),
+  });
 
-          return snapshot;
-        });
-      })
-      .catch(console.warn);
-  }, []);
-
-  const fetchHistory = useCallback(() => {
-    api
-      .history({ limit: 25 })
-      .then((entry) => {
-        setHistory(entry);
-        setHistoryLoading(false);
-      })
-      .catch(() => {
-        setHistoryLoading(false);
-      });
-  }, []);
+  const { data: history = [], isLoading: historyLoading } = useQuery({
+    queryKey: ["history", { limit: 25 }],
+    queryFn: () => api.history({ limit: 25 }),
+  });
 
   useEffect(() => {
-    fetchSnapshot();
-    fetchHistory();
-
     return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
+      if (snapshot) {
+        prevRef.current = snapshot;
       }
     };
-  }, [fetchSnapshot, fetchHistory]);
+  }, [snapshot]);
 
-  useResourceStream(
-    "/events",
-    useCallback(() => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-
-      debounceRef.current = setTimeout(() => {
-        fetchSnapshot();
-        fetchHistory();
-      }, 2_000);
-    }, [fetchSnapshot, fetchHistory]),
-  );
+  useDebouncedInvalidation("/events", [["cluster"], ["history"]], 2_000);
 
   const monitoring = useMonitoringStatus();
-  const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
+  const hasPrometheus = isPrometheusReady(monitoring);
 
   if (!snapshot) {
     return (

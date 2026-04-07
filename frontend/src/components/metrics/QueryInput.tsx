@@ -1,8 +1,15 @@
-import { getTokenBounds } from "./useQueryCompletion";
 import type { QueryCompletion, Suggestion } from "./useQueryCompletion";
+import { getTokenBounds } from "./useQueryCompletion";
 import { Spinner } from "@/components/Spinner";
 import { Play } from "lucide-react";
-import { useRef, useEffect, useState, useCallback } from "react";
+import {
+  type ChangeEvent,
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 interface Props {
   value: string;
@@ -110,7 +117,7 @@ export function QueryInput({ value, onChange, onRun, loading, completion }: Prop
     [value, onChange, completion],
   );
 
-  const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+  const handleChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = event.target.value;
     onChange(newValue);
 
@@ -120,7 +127,7 @@ export function QueryInput({ value, onChange, onRun, loading, completion }: Prop
     }
   };
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     const isModifier = event.metaKey || event.ctrlKey;
 
     if (isModifier && event.key === "Enter") {

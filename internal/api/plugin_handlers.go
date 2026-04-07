@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types"
-	json "github.com/goccy/go-json"
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
@@ -38,6 +37,7 @@ func (h *Handlers) HandleListPlugins(w http.ResponseWriter, r *http.Request) {
 		},
 	)
 
+	writeLinkTemplate(w, r, "/plugins/{name}")
 	writeCachedJSON(
 		w,
 		r,
@@ -119,11 +119,8 @@ type pluginConfigureRequest struct {
 }
 
 func (h *Handlers) HandlePluginPrivileges(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-
-	var req pluginRemoteRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	req, ok := decodeJSON[pluginRemoteRequest](w, r)
+	if !ok {
 		return
 	}
 	if req.Remote == "" {
@@ -145,11 +142,8 @@ func (h *Handlers) HandlePluginPrivileges(w http.ResponseWriter, r *http.Request
 }
 
 func (h *Handlers) HandleInstallPlugin(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-
-	var req pluginRemoteRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	req, ok := decodeJSON[pluginRemoteRequest](w, r)
+	if !ok {
 		return
 	}
 	if req.Remote == "" {
@@ -176,11 +170,9 @@ func (h *Handlers) HandleInstallPlugin(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleUpgradePlugin(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	var req pluginRemoteRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	req, ok := decodeJSON[pluginRemoteRequest](w, r)
+	if !ok {
 		return
 	}
 	if req.Remote == "" {
@@ -213,11 +205,9 @@ func (h *Handlers) HandleUpgradePlugin(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleConfigurePlugin(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	var req pluginConfigureRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	req, ok := decodeJSON[pluginConfigureRequest](w, r)
+	if !ok {
 		return
 	}
 

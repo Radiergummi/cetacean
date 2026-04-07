@@ -7,7 +7,7 @@ import { useMemo, useState } from "react";
 
 interface KeyValueEditorProps {
   title: string;
-  /** Optional extra element rendered inline after the section title (e.g. a help link). */
+  /** Optional extra element rendered inline after the section title (e.g., a help link). */
   titleExtra?: React.ReactNode;
   entries: Record<string, string>;
   keyLabel?: string;
@@ -23,7 +23,7 @@ interface KeyValueEditorProps {
   isKeyReadOnly?: (key: string) => boolean;
   /** Validate a new key. Return an error message, or null if valid. */
   validateKey?: (key: string) => string | null;
-  /** Render without CollapsibleSection wrapper. */
+  /** Render without a CollapsibleSection wrapper. */
   bare?: boolean;
   /** Start in edit mode. */
   defaultEditing?: boolean;

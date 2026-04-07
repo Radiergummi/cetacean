@@ -1,4 +1,4 @@
-import { api, emptyMethods } from "../api/client";
+import { api } from "../api/client";
 import type { StackDetail as StackDetailType, Task } from "../api/types";
 import CollapsibleSection from "../components/CollapsibleSection";
 import FetchError from "../components/FetchError";
@@ -7,34 +7,22 @@ import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
 import SimpleTable from "../components/SimpleTable";
 import { StackActions } from "../components/stack-detail/StackActions";
-import { useResourceStream } from "../hooks/useResourceStream";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useDetailResource } from "../hooks/useDetailResource";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 export default function StackDetail() {
   const { name } = useParams<{ name: string }>();
-  const [stack, setStack] = useState<StackDetailType | null>(null);
-  const [error, setError] = useState(false);
-  const [allowedMethods, setAllowedMethods] = useState(emptyMethods);
+
+  const {
+    data: stack,
+    error,
+    allowedMethods,
+  } = useDetailResource<StackDetailType>(name, api.stack, `/stacks/${name}`, { history: false });
+
   const [taskCounts, setTaskCounts] = useState<
     Record<string, { running: number; desired: number }>
   >({});
-
-  const fetchData = useCallback(() => {
-    if (name) {
-      api
-        .stack(name)
-        .then(({ data: stackData, allowedMethods: methods }) => {
-          setStack(stackData);
-          setAllowedMethods(methods);
-        })
-        .catch(() => setError(true));
-    }
-  }, [name]);
-
-  useEffect(fetchData, [fetchData]);
-
-  useResourceStream(`/stacks/${name}`, fetchData);
 
   const taskDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasInitialTaskFetchRef = useRef(false);

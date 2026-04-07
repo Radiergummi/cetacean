@@ -49,7 +49,7 @@ const semanticCache = new Map<string, string>();
 
 /**
  * Get a semantic chart color by name (e.g. "cpu", "memory", "critical").
- * Reads from CSS custom property `--chart-{name}`, caches after first call.
+ * Reads from CSS custom property `--chart-{name}`, caches after the first call.
  * For Chart.js contexts that need resolved hex/rgba values.
  */
 export function getSemanticChartColor(name: string): string {

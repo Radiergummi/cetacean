@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { NetworkTopology, PlacementTopology } from "../api/types";
+import type { JGFGraph } from "../api/types";
 import "@xyflow/react/dist/style.css";
 import EmptyState from "../components/EmptyState";
 import { LoadingPage } from "../components/LoadingSkeleton";
@@ -10,14 +10,19 @@ import { HighlightProvider } from "../components/topology/HighlightContext";
 import NetworkEdge from "../components/topology/NetworkEdge";
 import PhysicalNodeCard from "../components/topology/PhysicalNodeCard";
 import ServiceCardNode from "../components/topology/ServiceCardNode";
+import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
 import { useMatchesBreakpoint } from "../hooks/useMatchesBreakpoint";
-import { useResourceStream } from "../hooks/useResourceStream";
 import { computeLayout } from "../lib/layoutElk";
-import { buildLogicalFlow, buildPhysicalFlow, hashColor } from "../lib/topologyTransform";
+import {
+  networkGraphToReactFlow,
+  placementGraphToReactFlow,
+  hashColor,
+} from "../lib/topologyTransform";
 import { getErrorMessage } from "../lib/utils";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ReactFlow, ReactFlowProvider, Background, type Node, type Edge } from "@xyflow/react";
 import { Info, Network, Server, X } from "lucide-react";
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 
 const logicalNodeTypes = {
   stackGroup: GroupNode,
@@ -85,7 +90,7 @@ function StackLegend({
 }
 
 /**
- * Hook: run ELK layout async; only re-layout when graph structure changes.
+ * Hook: run ELK layout async; only re-layout when the graph structure changes.
  */
 function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -147,21 +152,24 @@ function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
   return { nodes, edges, ready };
 }
 
-function LogicalView({ data, isMobile }: { data: NetworkTopology; isMobile: boolean }) {
-  const { nodes: rawNodes, edges: rawEdges } = useMemo(() => buildLogicalFlow(data), [data]);
+function LogicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean }) {
+  const { nodes: rawNodes, edges: rawEdges } = useMemo(() => networkGraphToReactFlow(data), [data]);
   const { nodes, edges, ready } = useElkLayout(rawNodes, rawEdges);
 
   const stackColors = useMemo(() => {
     const map = new Map<string, string>();
-    for (const node of data.nodes) {
-      if (node.stack && !map.has(node.stack)) {
-        map.set(node.stack, hashColor(node.stack));
+    for (const hyperedge of data.hyperedges ?? []) {
+      if (hyperedge.metadata.kind === "stack") {
+        const name = hyperedge.metadata.name as string;
+        if (!map.has(name)) {
+          map.set(name, hashColor(name));
+        }
       }
     }
     return map;
   }, [data]);
 
-  if (data.nodes.length === 0) {
+  if (Object.keys(data.nodes).length === 0) {
     return (
       <EmptyState
         message="No overlay networks found"
@@ -204,10 +212,10 @@ function LogicalView({ data, isMobile }: { data: NetworkTopology; isMobile: bool
   );
 }
 
-function PhysicalView({ data, isMobile }: { data: PlacementTopology; isMobile: boolean }) {
-  const { nodes } = useMemo(() => buildPhysicalFlow(data), [data]);
+function PhysicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean }) {
+  const { nodes } = useMemo(() => placementGraphToReactFlow(data), [data]);
 
-  if (data.nodes.length === 0) {
+  if (Object.values(data.nodes).every(({ metadata }) => metadata.kind !== "node")) {
     return (
       <EmptyState
         message="No nodes found in the cluster"
@@ -241,62 +249,22 @@ function PhysicalView({ data, isMobile }: { data: PlacementTopology; isMobile: b
 export default function Topology() {
   const isMobile = useMatchesBreakpoint("md", "below");
   const [view, setView] = useState<View>("logical");
-  const [networkData, setNetworkData] = useState<NetworkTopology | null>(null);
-  const [placementData, setPlacementData] = useState<PlacementTopology | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const initialLoadRef = useRef(true);
+  const queryClient = useQueryClient();
 
-  const fetchData = useCallback(async () => {
-    if (initialLoadRef.current) {
-      setLoading(true);
-    }
-    setError(null);
-    try {
-      const [networkResult, placementResult] = await Promise.all([
-        api.topologyNetworks(),
-        api.topologyPlacement(),
-      ]);
-      setNetworkData(networkResult);
-      setPlacementData(placementResult);
-    } catch (error) {
-      setError(getErrorMessage(error, "Failed to load topology"));
-    } finally {
-      setLoading(false);
-      initialLoadRef.current = false;
-    }
-  }, []);
+  const {
+    data: topologyData,
+    isLoading: loading,
+    error: queryError,
+  } = useQuery({
+    queryKey: ["topology"],
+    queryFn: () => api.topology(),
+  });
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const networkData = topologyData?.graphs.find((g) => g.id === "network") ?? null;
+  const placementData = topologyData?.graphs.find((g) => g.id === "placement") ?? null;
+  const error = queryError ? getErrorMessage(queryError, "Failed to load topology") : null;
 
-  const refetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const debouncedRefetch = useCallback(() => {
-    if (refetchTimerRef.current) {
-      clearTimeout(refetchTimerRef.current);
-    }
-
-    refetchTimerRef.current = setTimeout(() => {
-      refetchTimerRef.current = null;
-      fetchData();
-    }, 2000);
-  }, [fetchData]);
-
-  useEffect(() => {
-    return () => {
-      if (refetchTimerRef.current) {
-        clearTimeout(refetchTimerRef.current);
-      }
-    };
-  }, []);
-
-  useResourceStream(
-    "/events",
-    useCallback(() => {
-      debouncedRefetch();
-    }, [debouncedRefetch]),
-  );
+  useDebouncedInvalidation("/events", [["topology"]], 2_000);
 
   return (
     <div>
@@ -319,7 +287,7 @@ export default function Topology() {
           <p className="text-sm text-destructive">{error}</p>
           <button
             className="rounded-md bg-muted px-3 py-1.5 text-sm hover:bg-muted/80"
-            onClick={fetchData}
+            onClick={() => void queryClient.invalidateQueries({ queryKey: ["topology"] })}
           >
             Retry
           </button>
@@ -327,23 +295,33 @@ export default function Topology() {
       )}
 
       <div className="rounded-lg ring-1 ring-border">
-        {!loading && !error && view === "logical" && networkData && (
-          <ReactFlowProvider>
-            <LogicalView
-              data={networkData}
-              isMobile={isMobile}
-            />
-          </ReactFlowProvider>
-        )}
+        {!loading &&
+          !error &&
+          view === "logical" &&
+          (networkData ? (
+            <ReactFlowProvider>
+              <LogicalView
+                data={networkData}
+                isMobile={isMobile}
+              />
+            </ReactFlowProvider>
+          ) : (
+            <EmptyState message="Network topology unavailable" />
+          ))}
 
-        {!loading && !error && view === "physical" && placementData && (
-          <ReactFlowProvider>
-            <PhysicalView
-              data={placementData}
-              isMobile={isMobile}
-            />
-          </ReactFlowProvider>
-        )}
+        {!loading &&
+          !error &&
+          view === "physical" &&
+          (placementData ? (
+            <ReactFlowProvider>
+              <PhysicalView
+                data={placementData}
+                isMobile={isMobile}
+              />
+            </ReactFlowProvider>
+          ) : (
+            <EmptyState message="Placement topology unavailable" />
+          ))}
       </div>
     </div>
   );

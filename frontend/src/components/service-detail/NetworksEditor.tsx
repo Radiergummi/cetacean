@@ -42,7 +42,7 @@ export function NetworksEditor({
   }, []);
 
   /**
-   * Build a merged name lookup from props + fetched networks,
+   * Build a merged name lookup from props and fetched networks,
    * so draft rows always have a displayable name.
    */
   const nameMap = useMemo(() => {

@@ -6,6 +6,9 @@ import (
 	"net/netip"
 	"strings"
 
+	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/api/types/swarm"
+
 	"github.com/radiergummi/cetacean/internal/api/prometheus"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
@@ -31,6 +34,26 @@ type RouterConfig struct {
 	TrustedProxies    []netip.Prefix
 }
 
+// listFeeds builds feedHandlers for a resource list endpoint.
+func (h *Handlers) listFeeds(title string, eventType cache.EventType) feedHandlers {
+	return feedHandlers{
+		atom:     h.feedListHandler(title, eventType, renderAtom),
+		jsonFeed: h.feedListHandler(title, eventType, renderJSONFeed),
+	}
+}
+
+// detailFeeds builds feedHandlers for a resource detail endpoint.
+func (h *Handlers) detailFeeds(
+	eventType cache.EventType,
+	idParam string,
+	nameFunc func(id string) string,
+) feedHandlers {
+	return feedHandlers{
+		atom:     h.feedDetailHandler(eventType, idParam, nameFunc, renderAtom),
+		jsonFeed: h.feedDetailHandler(eventType, idParam, nameFunc, renderJSONFeed),
+	}
+}
+
 func NewRouter(cfg RouterConfig) http.Handler {
 	auth.SetErrorWriter(WriteErrorCode)
 
@@ -47,15 +70,39 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	tier3 := requireLevel(config.OpsImpactful, h.operationsLevel)
 
 	// ACL wrappers for write endpoints.
-	svcACL := h.requireWriteACL(h.serviceName)
-	nodeACL := h.requireWriteACL(h.nodeName)
+	svcACL := h.requireWriteACL(
+		resolveResource(
+			"service",
+			h.cache.GetService,
+			func(s swarm.Service) string { return s.Spec.Name },
+		),
+	)
+	nodeACL := h.requireWriteACL(resolveResource("node", h.cache.GetNode, nodeHostnameOrID))
 	taskACL := h.requireWriteACL(h.taskServiceResource)
-	stackACL := h.requireWriteACL(h.stackName)
-	cfgACL := h.requireWriteACL(h.configName)
-	secACL := h.requireWriteACL(h.secretName)
-	netACL := h.requireWriteACL(h.networkName)
-	volACL := h.requireWriteACL(h.volumeName)
-	pluginACL := h.requireWriteACL(h.pluginName)
+	stackACL := h.requireWriteACL(pathResource("stack", "name"))
+	cfgACL := h.requireWriteACL(
+		resolveResource(
+			"config",
+			h.cache.GetConfig,
+			func(c swarm.Config) string { return c.Spec.Name },
+		),
+	)
+	secACL := h.requireWriteACL(
+		resolveResource(
+			"secret",
+			h.cache.GetSecret,
+			func(s swarm.Secret) string { return s.Spec.Name },
+		),
+	)
+	netACL := h.requireWriteACL(
+		resolveResource(
+			"network",
+			h.cache.GetNetwork,
+			func(n network.Summary) string { return n.Name },
+		),
+	)
+	volACL := h.requireWriteACL(pathResource("volume", "name"))
+	pluginACL := h.requireWriteACL(pathResource("plugin", "name"))
 	pluginWildACL := h.requireWriteACL(wildcardResource("plugin"))
 	cfgWildACL := h.requireWriteACL(wildcardResource("config"))
 	secWildACL := h.requireWriteACL(wildcardResource("secret"))
@@ -81,6 +128,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	mux.HandleFunc("GET /metrics", contentNegotiatedWithSSE(
 		h.withAnyGrant(metricsProxy.HandleMetrics),
 		h.HandleMetricsStream,
+		feedHandlers{},
 		spa,
 	))
 
@@ -88,24 +136,38 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	mux.HandleFunc("GET /api", HandleAPIDoc(cfg.OpenAPISpec))
 	mux.HandleFunc("GET /api/scalar.js", HandleScalarJS(cfg.ScalarJS))
 	mux.HandleFunc("GET /api/context.jsonld", HandleContext)
-	mux.HandleFunc("GET /api/errors", contentNegotiated(HandleErrorIndex, spa))
-	mux.HandleFunc("GET /api/errors/{code}", contentNegotiated(HandleErrorDetail, spa))
+	mux.HandleFunc("GET /api/errors", contentNegotiated(HandleErrorIndex, feedHandlers{}, spa))
+	mux.HandleFunc(
+		"GET /api/errors/{code}",
+		contentNegotiated(HandleErrorDetail, feedHandlers{}, spa),
+	)
 
 	// SSE events
 	mux.HandleFunc("GET /events", func(w http.ResponseWriter, r *http.Request) {
 		ct := ContentTypeFromContext(r.Context())
-		if ct != ContentTypeSSE {
+		switch ct {
+		case ContentTypeSSE:
+			b.ServeSSE(w, r, h.aclMatchWrap(r, nil), "")
+		case ContentTypeAtom:
+			h.handleFeedHistory(w, r, renderAtom)
+		case ContentTypeJSONFeed:
+			h.handleFeedHistory(w, r, renderJSONFeed)
+		default:
 			spa.ServeHTTP(w, r)
-			return
 		}
-		b.ServeSSE(w, r, h.aclMatchWrap(r, nil), "")
 	})
 
 	// Cluster
-	mux.HandleFunc("GET /cluster", contentNegotiated(h.HandleCluster, spa))
-	mux.HandleFunc("GET /cluster/metrics", contentNegotiated(h.HandleClusterMetrics, spa))
-	mux.HandleFunc("GET /cluster/capacity", contentNegotiated(h.HandleClusterCapacity, spa))
-	mux.HandleFunc("GET /swarm", contentNegotiated(h.HandleSwarm, spa))
+	mux.HandleFunc("GET /cluster", contentNegotiated(h.HandleCluster, feedHandlers{}, spa))
+	mux.HandleFunc(
+		"GET /cluster/metrics",
+		contentNegotiated(h.HandleClusterMetrics, feedHandlers{}, spa),
+	)
+	mux.HandleFunc(
+		"GET /cluster/capacity",
+		contentNegotiated(h.HandleClusterCapacity, feedHandlers{}, spa),
+	)
+	mux.HandleFunc("GET /swarm", contentNegotiated(h.HandleSwarm, feedHandlers{}, spa))
 	mux.Handle("PATCH /swarm/orchestration", swarmACL(tier2(h.HandlePatchSwarmOrchestration)))
 	mux.Handle("PATCH /swarm/raft", swarmACL(tier2(h.HandlePatchSwarmRaft)))
 	mux.Handle("PATCH /swarm/dispatcher", swarmACL(tier2(h.HandlePatchSwarmDispatcher)))
@@ -116,11 +178,14 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	mux.Handle("POST /swarm/force-rotate-ca", swarmACL(tier3(h.HandlePostForceRotateCA)))
 	mux.Handle("GET /swarm/unlock-key", swarmACL(tier3(h.HandleGetUnlockKey)))
 	mux.Handle("POST /swarm/unlock", swarmACL(tier3(h.HandlePostUnlockSwarm)))
-	mux.HandleFunc("GET /disk-usage", contentNegotiated(h.HandleDiskUsage, spa))
+	mux.HandleFunc("GET /disk-usage", contentNegotiated(h.HandleDiskUsage, feedHandlers{}, spa))
 	// Plugins
-	mux.HandleFunc("GET /plugins", contentNegotiated(h.HandleListPlugins, spa))
-	mux.HandleFunc("GET /plugins/{name}", contentNegotiated(h.HandleGetPlugin, spa))
-	mux.HandleFunc("GET /swarm/plugins", contentNegotiated(h.HandleListPlugins, spa))
+	mux.HandleFunc("GET /plugins", contentNegotiated(h.HandleListPlugins, feedHandlers{}, spa))
+	mux.HandleFunc("GET /plugins/{name}", contentNegotiated(h.HandleGetPlugin, feedHandlers{}, spa))
+	mux.HandleFunc(
+		"GET /swarm/plugins",
+		contentNegotiated(h.HandleListPlugins, feedHandlers{}, spa),
+	)
 	mux.Handle("POST /plugins/privileges", pluginWildACL(tier3(h.HandlePluginPrivileges)))
 	mux.Handle("POST /plugins", pluginWildACL(tier3(h.HandleInstallPlugin)))
 	mux.Handle("POST /plugins/{name}/enable", pluginACL(tier2(h.HandleEnablePlugin)))
@@ -135,6 +200,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		contentNegotiatedWithSSE(
 			h.HandleListNodes,
 			func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, cache.EventNode) },
+			h.listFeeds("Nodes", cache.EventNode),
 			spa,
 		),
 	)
@@ -145,13 +211,28 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			func(w http.ResponseWriter, r *http.Request) {
 				h.streamResource(w, r, cache.EventNode, r.PathValue("id"))
 			},
+			h.detailFeeds(cache.EventNode, "id", func(id string) string {
+				if n, ok := h.cache.GetNode(id); ok {
+					return n.Description.Hostname
+				}
+				return id
+			}),
 			spa,
 		),
 	)
-	mux.HandleFunc("GET /nodes/{id}/tasks", contentNegotiated(h.HandleNodeTasks, spa))
+	mux.HandleFunc(
+		"GET /nodes/{id}/tasks",
+		contentNegotiated(h.HandleNodeTasks, feedHandlers{}, spa),
+	)
 
 	// Recommendations
-	mux.HandleFunc("GET /recommendations", contentNegotiated(h.HandleRecommendations, spa))
+	mux.HandleFunc(
+		"GET /recommendations",
+		contentNegotiated(h.HandleRecommendations, feedHandlers{
+			atom:     h.feedRecommendationsHandler(renderAtom),
+			jsonFeed: h.feedRecommendationsHandler(renderJSONFeed),
+		}, spa),
+	)
 
 	// Services
 	mux.HandleFunc(
@@ -159,6 +240,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		contentNegotiatedWithSSE(
 			h.HandleListServices,
 			func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, cache.EventService) },
+			h.listFeeds("Services", cache.EventService),
 			spa,
 		),
 	)
@@ -169,20 +251,35 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			func(w http.ResponseWriter, r *http.Request) {
 				h.streamResource(w, r, cache.EventService, r.PathValue("id"))
 			},
+			h.detailFeeds(cache.EventService, "id", func(id string) string {
+				if s, ok := h.cache.GetService(id); ok {
+					return s.Spec.Name
+				}
+				return id
+			}),
 			spa,
 		),
 	)
-	mux.HandleFunc("GET /services/{id}/tasks", contentNegotiated(h.HandleServiceTasks, spa))
+	mux.HandleFunc(
+		"GET /services/{id}/tasks",
+		contentNegotiated(h.HandleServiceTasks, feedHandlers{}, spa),
+	)
 	mux.HandleFunc(
 		"GET /services/{id}/logs",
-		contentNegotiatedWithSSE(h.HandleServiceLogs, h.HandleServiceLogs, spa),
+		contentNegotiatedWithSSE(h.HandleServiceLogs, h.HandleServiceLogs, feedHandlers{}, spa),
 	)
 
 	// Node write operations
 	mux.Handle("PUT /nodes/{id}/availability", nodeACL(tier3(h.HandleUpdateNodeAvailability)))
-	mux.HandleFunc("GET /nodes/{id}/labels", contentNegotiated(h.HandleGetNodeLabels, spa))
+	mux.HandleFunc(
+		"GET /nodes/{id}/labels",
+		contentNegotiated(h.HandleGetNodeLabels, feedHandlers{}, spa),
+	)
 	mux.Handle("PATCH /nodes/{id}/labels", nodeACL(tier3(h.HandlePatchNodeLabels)))
-	mux.HandleFunc("GET /nodes/{id}/role", contentNegotiated(h.HandleGetNodeRole, spa))
+	mux.HandleFunc(
+		"GET /nodes/{id}/role",
+		contentNegotiated(h.HandleGetNodeRole, feedHandlers{}, spa),
+	)
 	mux.Handle("PUT /nodes/{id}/role", nodeACL(tier3(h.HandleUpdateNodeRole)))
 	mux.Handle("DELETE /nodes/{id}", nodeACL(tier3(h.HandleRemoveNode)))
 
@@ -193,31 +290,40 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	mux.Handle("POST /services/{id}/restart", svcACL(tier1(h.HandleRestartService)))
 
 	// Service write operations — tier 2 (configuration)
-	mux.HandleFunc("GET /services/{id}/env", contentNegotiated(h.HandleGetServiceEnv, spa))
+	mux.HandleFunc(
+		"GET /services/{id}/env",
+		contentNegotiated(h.HandleGetServiceEnv, feedHandlers{}, spa),
+	)
 	mux.Handle("PATCH /services/{id}/env", svcACL(tier2(h.HandlePatchServiceEnv)))
-	mux.HandleFunc("GET /services/{id}/labels", contentNegotiated(h.HandleGetServiceLabels, spa))
+	mux.HandleFunc(
+		"GET /services/{id}/labels",
+		contentNegotiated(h.HandleGetServiceLabels, feedHandlers{}, spa),
+	)
 	mux.Handle("PATCH /services/{id}/labels", svcACL(tier2(h.HandlePatchServiceLabels)))
 	mux.HandleFunc(
 		"GET /services/{id}/resources",
-		contentNegotiated(h.HandleGetServiceResources, spa),
+		contentNegotiated(h.HandleGetServiceResources, feedHandlers{}, spa),
 	)
 	mux.Handle("PATCH /services/{id}/resources", svcACL(tier2(h.HandlePatchServiceResources)))
 	mux.HandleFunc(
 		"GET /services/{id}/healthcheck",
-		contentNegotiated(h.HandleGetServiceHealthcheck, spa),
+		contentNegotiated(h.HandleGetServiceHealthcheck, feedHandlers{}, spa),
 	)
 	mux.Handle("PUT /services/{id}/healthcheck", svcACL(tier2(h.HandlePutServiceHealthcheck)))
 	mux.Handle("PATCH /services/{id}/healthcheck", svcACL(tier2(h.HandlePatchServiceHealthcheck)))
 	mux.HandleFunc(
 		"GET /services/{id}/placement",
-		contentNegotiated(h.HandleGetServicePlacement, spa),
+		contentNegotiated(h.HandleGetServicePlacement, feedHandlers{}, spa),
 	)
 	mux.Handle("PUT /services/{id}/placement", svcACL(tier2(h.HandlePutServicePlacement)))
-	mux.HandleFunc("GET /services/{id}/ports", contentNegotiated(h.HandleGetServicePorts, spa))
+	mux.HandleFunc(
+		"GET /services/{id}/ports",
+		contentNegotiated(h.HandleGetServicePorts, feedHandlers{}, spa),
+	)
 	mux.Handle("PATCH /services/{id}/ports", svcACL(tier2(h.HandlePatchServicePorts)))
 	mux.HandleFunc(
 		"GET /services/{id}/update-policy",
-		contentNegotiated(h.HandleGetServiceUpdatePolicy, spa),
+		contentNegotiated(h.HandleGetServiceUpdatePolicy, feedHandlers{}, spa),
 	)
 	mux.Handle(
 		"PATCH /services/{id}/update-policy",
@@ -225,7 +331,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	)
 	mux.HandleFunc(
 		"GET /services/{id}/rollback-policy",
-		contentNegotiated(h.HandleGetServiceRollbackPolicy, spa),
+		contentNegotiated(h.HandleGetServiceRollbackPolicy, feedHandlers{}, spa),
 	)
 	mux.Handle(
 		"PATCH /services/{id}/rollback-policy",
@@ -233,24 +339,33 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	)
 	mux.HandleFunc(
 		"GET /services/{id}/log-driver",
-		contentNegotiated(h.HandleGetServiceLogDriver, spa),
+		contentNegotiated(h.HandleGetServiceLogDriver, feedHandlers{}, spa),
 	)
 	mux.Handle("PATCH /services/{id}/log-driver", svcACL(tier2(h.HandlePatchServiceLogDriver)))
-	mux.HandleFunc("GET /services/{id}/configs", contentNegotiated(h.HandleGetServiceConfigs, spa))
+	mux.HandleFunc(
+		"GET /services/{id}/configs",
+		contentNegotiated(h.HandleGetServiceConfigs, feedHandlers{}, spa),
+	)
 	mux.Handle("PATCH /services/{id}/configs", svcACL(tier2(h.HandlePatchServiceConfigs)))
-	mux.HandleFunc("GET /services/{id}/secrets", contentNegotiated(h.HandleGetServiceSecrets, spa))
+	mux.HandleFunc(
+		"GET /services/{id}/secrets",
+		contentNegotiated(h.HandleGetServiceSecrets, feedHandlers{}, spa),
+	)
 	mux.Handle("PATCH /services/{id}/secrets", svcACL(tier2(h.HandlePatchServiceSecrets)))
 	mux.HandleFunc(
 		"GET /services/{id}/networks",
-		contentNegotiated(h.HandleGetServiceNetworks, spa),
+		contentNegotiated(h.HandleGetServiceNetworks, feedHandlers{}, spa),
 	)
 	mux.Handle("PATCH /services/{id}/networks", svcACL(tier2(h.HandlePatchServiceNetworks)))
-	mux.HandleFunc("GET /services/{id}/mounts", contentNegotiated(h.HandleGetServiceMounts, spa))
+	mux.HandleFunc(
+		"GET /services/{id}/mounts",
+		contentNegotiated(h.HandleGetServiceMounts, feedHandlers{}, spa),
+	)
 	mux.Handle("PATCH /services/{id}/mounts", svcACL(tier2(h.HandlePatchServiceMounts)))
 
 	mux.HandleFunc(
 		"GET /services/{id}/container-config",
-		contentNegotiated(h.HandleGetServiceContainerConfig, spa),
+		contentNegotiated(h.HandleGetServiceContainerConfig, feedHandlers{}, spa),
 	)
 	mux.Handle(
 		"PATCH /services/{id}/container-config",
@@ -258,11 +373,14 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	)
 
 	// Service write operations — tier 3 (impactful)
-	mux.HandleFunc("GET /services/{id}/mode", contentNegotiated(h.HandleGetServiceMode, spa))
+	mux.HandleFunc(
+		"GET /services/{id}/mode",
+		contentNegotiated(h.HandleGetServiceMode, feedHandlers{}, spa),
+	)
 	mux.Handle("PUT /services/{id}/mode", svcACL(tier3(h.HandleUpdateServiceMode)))
 	mux.HandleFunc(
 		"GET /services/{id}/endpoint-mode",
-		contentNegotiated(h.HandleGetServiceEndpointMode, spa),
+		contentNegotiated(h.HandleGetServiceEndpointMode, feedHandlers{}, spa),
 	)
 	mux.Handle("PUT /services/{id}/endpoint-mode", svcACL(tier3(h.HandleUpdateServiceEndpointMode)))
 	mux.Handle("DELETE /services/{id}", svcACL(tier3(h.HandleRemoveService)))
@@ -273,6 +391,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		contentNegotiatedWithSSE(
 			h.HandleListTasks,
 			func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, cache.EventTask) },
+			h.listFeeds("Tasks", cache.EventTask),
 			spa,
 		),
 	)
@@ -283,17 +402,23 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			func(w http.ResponseWriter, r *http.Request) {
 				h.streamResource(w, r, cache.EventTask, r.PathValue("id"))
 			},
+			h.detailFeeds(cache.EventTask, "id", func(id string) string {
+				return id
+			}),
 			spa,
 		),
 	)
 	mux.HandleFunc(
 		"GET /tasks/{id}/logs",
-		contentNegotiatedWithSSE(h.HandleTaskLogs, h.HandleTaskLogs, spa),
+		contentNegotiatedWithSSE(h.HandleTaskLogs, h.HandleTaskLogs, feedHandlers{}, spa),
 	)
 	mux.Handle("DELETE /tasks/{id}", taskACL(tier3(h.HandleRemoveTask)))
 
 	// History
-	mux.HandleFunc("GET /history", contentNegotiated(h.HandleHistory, spa))
+	mux.HandleFunc("GET /history", contentNegotiated(h.HandleHistory, feedHandlers{
+		atom:     h.feedHistoryHandler(renderAtom),
+		jsonFeed: h.feedHistoryHandler(renderJSONFeed),
+	}, spa))
 
 	// Stacks
 	mux.HandleFunc(
@@ -301,16 +426,22 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		contentNegotiatedWithSSE(
 			h.HandleListStacks,
 			func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, cache.EventStack) },
+			h.listFeeds("Stacks", cache.EventStack),
 			spa,
 		),
 	)
-	mux.HandleFunc("GET /stacks/summary", contentNegotiated(h.HandleStackSummary, spa))
+	mux.HandleFunc(
+		"GET /stacks/summary",
+		contentNegotiated(h.HandleStackSummary, feedHandlers{}, spa),
+	)
 	mux.HandleFunc(
 		"GET /stacks/{name}",
 		contentNegotiatedWithSSE(h.HandleGetStack, func(w http.ResponseWriter, r *http.Request) {
 			stackMatch := sse.StackMatcher(h.cache, r.PathValue("name"))
 			h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, stackMatch), "")
-		}, spa),
+		}, h.detailFeeds(cache.EventStack, "name", func(name string) string {
+			return name
+		}), spa),
 	)
 	mux.Handle("DELETE /stacks/{name}", stackACL(tier3(h.HandleRemoveStack)))
 
@@ -320,6 +451,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		contentNegotiatedWithSSE(
 			h.HandleListConfigs,
 			func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, cache.EventConfig) },
+			h.listFeeds("Configs", cache.EventConfig),
 			spa,
 		),
 	)
@@ -330,12 +462,21 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			func(w http.ResponseWriter, r *http.Request) {
 				h.streamResource(w, r, cache.EventConfig, r.PathValue("id"))
 			},
+			h.detailFeeds(cache.EventConfig, "id", func(id string) string {
+				if c, ok := h.cache.GetConfig(id); ok {
+					return c.Spec.Name
+				}
+				return id
+			}),
 			spa,
 		),
 	)
 	mux.Handle("DELETE /configs/{id}", cfgACL(tier3(h.HandleRemoveConfig)))
 	mux.Handle("POST /configs", cfgWildACL(tier2(h.HandleCreateConfig)))
-	mux.HandleFunc("GET /configs/{id}/labels", contentNegotiated(h.HandleGetConfigLabels, spa))
+	mux.HandleFunc(
+		"GET /configs/{id}/labels",
+		contentNegotiated(h.HandleGetConfigLabels, feedHandlers{}, spa),
+	)
 	mux.Handle("PATCH /configs/{id}/labels", cfgACL(tier2(h.HandlePatchConfigLabels)))
 
 	// Secrets
@@ -344,6 +485,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		contentNegotiatedWithSSE(
 			h.HandleListSecrets,
 			func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, cache.EventSecret) },
+			h.listFeeds("Secrets", cache.EventSecret),
 			spa,
 		),
 	)
@@ -354,12 +496,21 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			func(w http.ResponseWriter, r *http.Request) {
 				h.streamResource(w, r, cache.EventSecret, r.PathValue("id"))
 			},
+			h.detailFeeds(cache.EventSecret, "id", func(id string) string {
+				if s, ok := h.cache.GetSecret(id); ok {
+					return s.Spec.Name
+				}
+				return id
+			}),
 			spa,
 		),
 	)
 	mux.Handle("DELETE /secrets/{id}", secACL(tier3(h.HandleRemoveSecret)))
 	mux.Handle("POST /secrets", secWildACL(tier2(h.HandleCreateSecret)))
-	mux.HandleFunc("GET /secrets/{id}/labels", contentNegotiated(h.HandleGetSecretLabels, spa))
+	mux.HandleFunc(
+		"GET /secrets/{id}/labels",
+		contentNegotiated(h.HandleGetSecretLabels, feedHandlers{}, spa),
+	)
 	mux.Handle("PATCH /secrets/{id}/labels", secACL(tier2(h.HandlePatchSecretLabels)))
 
 	// Networks
@@ -368,6 +519,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		contentNegotiatedWithSSE(
 			h.HandleListNetworks,
 			func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, cache.EventNetwork) },
+			h.listFeeds("Networks", cache.EventNetwork),
 			spa,
 		),
 	)
@@ -378,6 +530,12 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			func(w http.ResponseWriter, r *http.Request) {
 				h.streamResource(w, r, cache.EventNetwork, r.PathValue("id"))
 			},
+			h.detailFeeds(cache.EventNetwork, "id", func(id string) string {
+				if n, ok := h.cache.GetNetwork(id); ok {
+					return n.Name
+				}
+				return id
+			}),
 			spa,
 		),
 	)
@@ -389,6 +547,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		contentNegotiatedWithSSE(
 			h.HandleListVolumes,
 			func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, cache.EventVolume) },
+			h.listFeeds("Volumes", cache.EventVolume),
 			spa,
 		),
 	)
@@ -399,20 +558,51 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			func(w http.ResponseWriter, r *http.Request) {
 				h.streamResource(w, r, cache.EventVolume, r.PathValue("name"))
 			},
+			h.detailFeeds(cache.EventVolume, "name", func(name string) string {
+				return name
+			}),
 			spa,
 		),
 	)
 	mux.Handle("DELETE /volumes/{name}", volACL(tier3(h.HandleRemoveVolume)))
 
 	// Search
-	mux.HandleFunc("GET /search", contentNegotiated(h.HandleSearch, spa))
+	mux.HandleFunc("GET /search", contentNegotiated(h.HandleSearch, feedHandlers{
+		atom:     h.feedSearchHandler(renderAtom),
+		jsonFeed: h.feedSearchHandler(renderJSONFeed),
+	}, spa))
 
 	// Profile
-	mux.HandleFunc("GET /profile", contentNegotiated(h.HandleProfile, spa))
+	mux.HandleFunc("GET /profile", contentNegotiated(h.HandleProfile, feedHandlers{}, spa))
 
 	// Topology
-	mux.HandleFunc("GET /topology/networks", contentNegotiated(h.HandleNetworkTopology, spa))
-	mux.HandleFunc("GET /topology/placement", contentNegotiated(h.HandlePlacementTopology, spa))
+	mux.HandleFunc("GET /topology", func(w http.ResponseWriter, r *http.Request) {
+		switch ContentTypeFromContext(r.Context()) {
+		case ContentTypeHTML:
+			spa.ServeHTTP(w, r)
+		case ContentTypeJGF, ContentTypeJSON:
+			h.HandleTopology(w, r)
+		case ContentTypeGraphML:
+			h.HandleTopologyGraphML(w, r)
+		case ContentTypeDOT:
+			h.HandleTopologyDOT(w, r)
+		default:
+			writeErrorCode(
+				w,
+				r,
+				"API003",
+				"this endpoint supports application/vnd.jgf+json, application/graphml+xml, and text/vnd.graphviz",
+			)
+		}
+	})
+	mux.HandleFunc(
+		"GET /topology/networks",
+		contentNegotiated(h.HandleNetworkTopology, feedHandlers{}, spa),
+	)
+	mux.HandleFunc(
+		"GET /topology/placement",
+		contentNegotiated(h.HandlePlacementTopology, feedHandlers{}, spa),
+	)
 
 	// Profiling (opt-in via CETACEAN_PPROF=true)
 	if cfg.EnablePprof {
@@ -443,8 +633,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 func requireReady(h *Handlers) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ct := ContentTypeFromContext(r.Context())
 			if !h.isReady() && isResourcePath(r.URL.Path) &&
-				ContentTypeFromContext(r.Context()) == ContentTypeJSON {
+				(ct == ContentTypeJSON || ct == ContentTypeAtom || ct == ContentTypeJSONFeed ||
+					ct == ContentTypeJGF || ct == ContentTypeGraphML || ct == ContentTypeDOT) {
 				writeErrorCode(w, r, "ENG001", "Docker daemon is not reachable")
 				return
 			}

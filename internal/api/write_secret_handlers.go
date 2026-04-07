@@ -2,48 +2,29 @@ package api
 
 import (
 	"encoding/base64"
-	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/swarm"
-	json "github.com/goccy/go-json"
 
-	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 func (h *Handlers) HandleRemoveSecret(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-
-	_, ok := h.cache.GetSecret(id)
-	if !ok {
-		writeErrorCode(w, r, "SEC002", fmt.Sprintf("secret %q not found", id))
-		return
-	}
-
-	slog.Info("removing secret", "secret", id)
-
-	err := h.secretWriter.RemoveSecret(r.Context(), id)
-	if err != nil {
-		if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
-			writeErrorCode(w, r, "SEC001", err.Error())
-			return
-		}
-		writeDockerError(w, r, err, "secret", id)
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
+	handleRemove(w, r, removeSpec[swarm.Secret]{
+		resource:     "secret",
+		pathKey:      "id",
+		getter:       h.cache.GetSecret,
+		remove:       h.secretWriter.RemoveSecret,
+		conflictCode: "SEC001",
+	})
 }
 
 func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
-	var req createResourceRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	req, ok := decodeJSON[createResourceRequest](w, r)
+	if !ok {
 		return
 	}
 
@@ -102,92 +83,23 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleGetSecretLabels(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	sec, ok := h.cache.GetSecret(id)
-	if !ok {
-		writeErrorCode(w, r, "SEC002", fmt.Sprintf("secret %q not found", id))
-		return
-	}
-	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "secret:"+sec.Spec.Name) {
-		writeErrorCode(w, r, "ACL001", "access denied")
-		return
-	}
-	labels := sec.Spec.Labels
-	if labels == nil {
-		labels = map[string]string{}
-	}
-	writeCachedJSON(
-		w,
-		r,
-		NewDetailResponse(r.Context(), "/secrets/"+id+"/labels", "SecretLabels", LabelsResponse{
-			Labels: labels,
-		}),
-	)
+	handleGetLabels(w, r, h.acl, getLabelsSpec[swarm.Secret]{
+		resource:    "secret",
+		pathKey:     "id",
+		typeName:    "SecretLabels",
+		getter:      h.cache.GetSecret,
+		aclResource: func(s swarm.Secret) string { return "secret:" + s.Spec.Name },
+		getLabels:   func(s swarm.Secret) map[string]string { return s.Spec.Labels },
+	})
 }
 
 func (h *Handlers) HandlePatchSecretLabels(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-
-	ct := r.Header.Get("Content-Type")
-	isJSONPatch := strings.HasPrefix(ct, "application/json-patch+json")
-	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")
-
-	if !isJSONPatch && !isMergePatch {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"Content-Type must be application/json-patch+json or application/merge-patch+json",
-		)
-		return
-	}
-
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		writeErrorCode(w, r, "API007", "failed to read request body")
-		return
-	}
-
-	sec, ok := h.cache.GetSecret(id)
-	if !ok {
-		writeErrorCode(w, r, "SEC002", fmt.Sprintf("secret %q not found", id))
-		return
-	}
-
-	current := sec.Spec.Labels
-	if current == nil {
-		current = map[string]string{}
-	}
-
-	var updated map[string]string
-	if isJSONPatch {
-		var ops []PatchOp
-		if err := json.Unmarshal(body, &ops); err != nil {
-			writeErrorCode(w, r, "API006", "invalid request body")
-			return
-		}
-		updated, err = applyJSONPatch(current, ops)
-	} else {
-		updated, err = applyMergePatchStringMap(current, body)
-	}
-
-	if err != nil {
-		writePatchError(w, r, err)
-		return
-	}
-
-	slog.Info("patching secret labels", "secret", id)
-
-	result, err := h.secretWriter.UpdateSecretLabels(r.Context(), id, updated)
-	if err != nil {
-		writeSecretError(w, r, err, id)
-		return
-	}
-
-	labels := result.Spec.Labels
-	if labels == nil {
-		labels = map[string]string{}
-	}
-	writeMutationResponse(w, r, labels)
+	handlePatchLabels(w, r, patchLabelsSpec[swarm.Secret]{
+		resource:     "secret",
+		pathKey:      "id",
+		getter:       h.cache.GetSecret,
+		getLabels:    func(s swarm.Secret) map[string]string { return s.Spec.Labels },
+		update:       h.secretWriter.UpdateSecretLabels,
+		conflictCode: "SEC005",
+	})
 }

@@ -1,5 +1,6 @@
 import type { ServiceListItem } from "../api/types";
 import ServiceList from "./ServiceList";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
@@ -49,7 +50,12 @@ const fakeService = (id: string, name: string, replicas = 3, running = 3): Servi
   RunningTasks: running,
 });
 
+let testQueryClient: QueryClient;
+
 beforeEach(() => {
+  testQueryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
   vi.stubGlobal("EventSource", MockEventSource);
   vi.stubGlobal("localStorage", {
     getItem: () => null,
@@ -65,9 +71,11 @@ afterEach(() => {
 
 function wrapper({ children }: { children: ReactNode }) {
   return (
-    <MemoryRouter>
-      <>{children}</>
-    </MemoryRouter>
+    <QueryClientProvider client={testQueryClient}>
+      <MemoryRouter>
+        <>{children}</>
+      </MemoryRouter>
+    </QueryClientProvider>
   );
 }
 

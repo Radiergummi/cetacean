@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { getErrorMessage } from "@/lib/utils";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useState, type MouseEvent } from "react";
 
 interface PortsEditorProps {
   serviceId: string;
@@ -80,7 +80,7 @@ export function PortsEditor({
       <Button
         variant="outline"
         size="xs"
-        onClick={(event: React.MouseEvent) => {
+        onClick={(event: MouseEvent) => {
           event.stopPropagation();
           openEdit();
         }}

@@ -15,7 +15,7 @@ type Variant = "node" | "service";
 interface TasksTableProps {
   tasks: Task[];
   variant: Variant;
-  metrics?: Map<string, TaskMetricsData>;
+  metrics?: Record<string, TaskMetricsData>;
 }
 
 export default function TasksTable({ tasks, variant, metrics }: TasksTableProps) {
@@ -144,8 +144,8 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
                       <td className="p-3 text-sm">
                         {State === "running" ? (
                           <TaskSparkline
-                            data={metrics.get(ID)?.cpu}
-                            currentValue={metrics.get(ID)?.currentCpu}
+                            data={metrics[ID]?.cpu}
+                            currentValue={metrics[ID]?.currentCpu}
                             type="cpu"
                           />
                         ) : (
@@ -158,8 +158,8 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
                       <td className="p-3 text-sm">
                         {State === "running" ? (
                           <TaskSparkline
-                            data={metrics.get(ID)?.memory}
-                            currentValue={metrics.get(ID)?.currentMemory}
+                            data={metrics[ID]?.memory}
+                            currentValue={metrics[ID]?.currentMemory}
                             type="memory"
                           />
                         ) : (

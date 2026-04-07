@@ -1,5 +1,4 @@
 import { api } from "../api/client";
-import type { SearchResponse } from "../api/types";
 import EmptyState from "../components/EmptyState";
 import { SkeletonTable } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
@@ -8,8 +7,8 @@ import { SearchInput } from "../components/search";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { resourcePath, statusColor, typeLabels, typeOrder } from "../lib/searchConstants";
 import { getErrorMessage } from "../lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 function StateOrb({ state }: { state: string }) {
@@ -33,42 +32,18 @@ function StateOrb({ state }: { state: string }) {
 
 export default function SearchPage() {
   const [input, query, setInput] = useSearchParam("q");
-  const [data, setData] = useState<SearchResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // Fetch results when debounced q changes
-  useEffect(() => {
-    if (!query) {
-      setData(null);
-      setLoading(false);
+  const {
+    data,
+    isLoading: loading,
+    error: queryError,
+  } = useQuery({
+    queryKey: ["search", query],
+    queryFn: ({ signal }) => api.search(query!, 0, signal),
+    enabled: !!query,
+  });
 
-      return;
-    }
-
-    const controller = new AbortController();
-    setLoading(true);
-    setError(null);
-
-    api.search(query, 0, controller.signal).then(
-      (response) => {
-        if (!controller.signal.aborted) {
-          setData(response);
-          setLoading(false);
-        }
-      },
-      (error) => {
-        if (!controller.signal.aborted) {
-          setError(getErrorMessage(error, String(error)));
-          setLoading(false);
-        }
-      },
-    );
-
-    return () => {
-      controller.abort();
-    };
-  }, [query]);
+  const error = queryError ? getErrorMessage(queryError, String(queryError)) : null;
 
   return (
     <>

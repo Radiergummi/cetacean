@@ -112,7 +112,7 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 - **`acl/`** — Grant-based RBAC authorization. Resources are `type:pattern` expressions (service, stack, node, task, config, secret, network, volume, plugin, swarm) with glob wildcards. Audience is `user:pattern` (matches Subject + Email) or `group:pattern`. Permissions: `read` (view) and `write` (mutate, implies read). Additive-only (no deny rules). Policy from file or inline env var, with `fsnotify` hot reload on file changes. Provider grant sources: Tailscale CapMap, OIDC token claim, proxy header. `Evaluator.Can()` checks permission, `acl.Filter()` filters lists. Stack grants cover member resources; tasks inherit from parent service. Default: no policy = full access for authenticated users; with policy = default-deny.
 - **`config/`** — Env var parsing. All config is optional; Prometheus metrics disabled if URL unset. Auth config via `LoadAuth()`, TLS config via `LoadTLS()`, ACL config via `LoadACL()`.
 - **`cache/`** — Thread-safe in-memory store using `sync.RWMutex`. Holds nodes, services, tasks, configs, secrets, networks, volumes. Stacks are derived from `com.docker.stack.namespace` labels and rebuilt on every mutation. Cross-reference methods (`ServicesUsingConfig`, `ServicesUsingSecret`, `ServicesUsingNetwork`, `ServicesUsingVolume`) scan services to find which ones use a given resource. Every Set/Delete fires an `OnChangeFunc` callback that feeds the SSE broadcaster.
-- **`cache/history.go`** — Ring buffer (10,000 entries) of resource change events, queryable by type/resourceId.
+- **`cache/history.go`** — Ring buffer (10,000 entries) of resource change events, queryable by type/resourceId. Supports cursor-based pagination via `BeforeID` and name substring search via `NameContains` (used by Atom feeds).
 - **`cache/snapshot.go`** — Atomic disk persistence with versioned JSON format.
 - **`docker/client.go`** — Thin wrapper over the Docker Engine API. List, Inspect, and Events methods for all resource types. Also implements `DockerWriteClient` (see `api/write_handlers.go`) with: `ScaleService`, `UpdateServiceImage`, `RollbackService`, `RestartService`, `UpdateNodeAvailability`, `RemoveTask`, `InspectServiceSpec`, `UpdateServiceEnv`, `InspectNodeSpec`, `UpdateNodeLabels`, `UpdateServiceResources`, `UpdateServicePlacement`, `UpdateServicePorts`, `UpdateServiceUpdatePolicy`, `UpdateServiceRollbackPolicy`, `UpdateServiceLogDriver`.
 - **`docker/watcher.go`** — Full sync on startup (7 parallel goroutines), then subscribes to Docker event stream. Re-syncs every 5 minutes and on reconnect. Container events are mapped to task updates via `com.docker.swarm.task.id` attribute. 50ms debounce with 4-worker inspect pool.
@@ -127,8 +127,10 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 - **`api/metricsstream.go`** — SSE streaming handler for Prometheus queries. Registered at `GET /metrics` via content negotiation (JSON → proxy, SSE → stream handler, HTML → SPA). Periodically runs instant queries and pushes `point` events; sends full `initial` event on connect. 64-connection limit, 15s keepalive, skips ticks if previous query is in-flight.
 - **`api/promquery.go`** — `PromClient` for direct Prometheus instant queries. Used by `HandleClusterMetrics` and `HandleMonitoringStatus` (`GET /metrics/status` — probes for node-exporter/cAdvisor targets, returns detection status for guided setup UI). Also provides `RangeQueryRaw` and `InstantQueryRaw` for raw JSON byte responses (used by metrics stream handler).
 - **`api/spa.go`** — Serves the embedded `frontend/dist/` filesystem with index.html fallback for client-side routing.
-- **`api/negotiate.go`** — Content negotiation middleware. Resolves `Accept` header or `.json`/`.html` extension suffix to `ContentType` enum stored in context. `ContentTypeFromContext` used by handlers.
-- **`api/dispatch.go`** — `contentNegotiated`, `contentNegotiatedWithSSE`, and `sseOnly` dispatch helpers that route requests to JSON handler, SSE handler, or SPA based on negotiated content type.
+- **`api/negotiate.go`** — Content negotiation middleware. Resolves `Accept` header or `.json`/`.html`/`.atom` extension suffix to `ContentType` enum stored in context. Supports `application/atom+xml` for Atom feeds. `ContentTypeFromContext` used by handlers.
+- **`api/dispatch.go`** — `contentNegotiated`, `contentNegotiatedWithSSE`, and `sseOnly` dispatch helpers that route requests to JSON handler, SSE handler, Atom handler, or SPA based on negotiated content type. Atom handler is optional (nil → 406).
+- **`api/atom/atom.go`** — Atom 1.0 XML types and `Render` function (RFC 4287). Pure serialization with no HTTP dependencies.
+- **`api/atom_handlers.go`** — Atom feed handlers for all resource list/detail endpoints, history, search, and recommendations. Converts cache history entries to Atom entries with pagination (RFC 5005), ETag caching, and ACL filtering. `paginationLinks` builds self/alternate/next/previous links with cursor-based pagination via `?before=&limit=`.
 - **`api/problem.go`** — RFC 9457 problem details (`application/problem+json`). `writeProblem` and `writeProblemTyped` produce structured error responses with JSON-LD `@context`.
 - **`api/jsonld.go`** — JSON-LD response helpers. `DetailResponse` uses custom `MarshalJSON` with deterministic key ordering (`@context`, `@id`, `@type` first, then extras sorted) for stable ETags. `CollectionResponse` generic struct wraps list endpoints with pagination metadata.
 - **`api/etag.go`** — `writeJSONWithETag` computes SHA-256 ETag (truncated to 16 bytes) and returns 304 Not Modified on `If-None-Match` match. `etagMatch` supports multiple comma-separated ETags, weak ETags (`W/"..."`), and wildcard `*` per RFC 9110 weak comparison.
@@ -155,6 +157,7 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
   - `CollapsibleSection` — collapsible wrapper with localStorage-persisted open/closed state
   - `SimpleTable` — lightweight generic table (used where `DataTable` is overkill)
   - `data/LabelSection` — key-value label display section
+  - `AtomFeedLink` — renders `<link rel="alternate" type="application/atom+xml">` in `<head>` for feed autodiscovery on resource list/detail, history, search, and recommendations pages
   - `InfoCard`, `ResourceCard`, `PageHeader`, `FetchError`, `EmptyState`, `LoadingSkeleton`
 - **`lib/chartColors.ts`** — Shared IBM Carbon/Wong CVD-safe chart color palette (10 colors). `getChartColor(index)` reads from CSS custom properties (`--chart-1` through `--chart-10`) with hex fallbacks, cached after first call.
 - **`lib/chartTooltip.ts`** — Shared `CHART_TOOLTIP_CLASS` constant for chart tooltip styling (used by both React and imperative tooltip renderers)
@@ -183,8 +186,8 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 - List responses return `CollectionResponse` with `items`, `total`, `limit`, `offset` + pagination Link headers (RFC 8288)
 - Self-discovery Link headers (RFC 8631) on all non-meta responses: `</api>; rel="service-desc"` and `</api/context.jsonld>; rel="describedby"`
 - Error responses use RFC 9457 (`application/problem+json`) with `@context`, `type`, `title`, `status`, `detail`, `instance`, `requestId`
-- Content negotiation: `Accept` header or `.json`/`.html` extension suffix; resource URLs serve SPA for HTML, JSON for `application/json`
-- ETag + conditional 304 responses on all JSON endpoints
+- Content negotiation: `Accept` header or `.json`/`.html`/`.atom` extension suffix; resource URLs serve SPA for HTML, JSON for `application/json`, Atom XML for `application/atom+xml`
+- ETag + conditional 304 responses on all JSON and Atom endpoints
 - Stacks are a derived concept from `com.docker.stack.namespace` labels, not a Docker primitive
 - Volumes are keyed by Name, everything else by ID — volume detail route uses `{name}` not `{id}`
 - Networks use `network.Summary` (which aliases `network.Inspect`) — the list and inspect types are identical in the Docker SDK

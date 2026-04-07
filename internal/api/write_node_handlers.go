@@ -1,15 +1,11 @@
 package api
 
 import (
-	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/swarm"
-	json "github.com/goccy/go-json"
 
 	"github.com/radiergummi/cetacean/internal/auth"
 )
@@ -20,11 +16,8 @@ type updateAvailabilityRequest struct {
 
 func (h *Handlers) HandleUpdateNodeAvailability(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
-
-	var req updateAvailabilityRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	req, ok := decodeJSON[updateAvailabilityRequest](w, r)
+	if !ok {
 		return
 	}
 
@@ -46,9 +39,7 @@ func (h *Handlers) HandleUpdateNodeAvailability(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	_, ok := h.cache.GetNode(id)
-	if !ok {
-		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
+	if _, ok := lookupOr404(w, r, "node", id, h.cache.GetNode); !ok {
 		return
 	}
 
@@ -65,11 +56,8 @@ type updateRoleRequest struct {
 
 func (h *Handlers) HandleUpdateNodeRole(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-
-	var req updateRoleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	req, ok := decodeJSON[updateRoleRequest](w, r)
+	if !ok {
 		return
 	}
 
@@ -84,9 +72,7 @@ func (h *Handlers) HandleUpdateNodeRole(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	_, ok := h.cache.GetNode(id)
-	if !ok {
-		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
+	if _, ok := lookupOr404(w, r, "node", id, h.cache.GetNode); !ok {
 		return
 	}
 
@@ -100,9 +86,7 @@ func (h *Handlers) HandleUpdateNodeRole(w http.ResponseWriter, r *http.Request) 
 func (h *Handlers) HandleRemoveNode(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	_, ok := h.cache.GetNode(id)
-	if !ok {
-		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
+	if _, ok := lookupOr404(w, r, "node", id, h.cache.GetNode); !ok {
 		return
 	}
 
@@ -126,9 +110,8 @@ func (h *Handlers) HandleRemoveNode(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleGetNodeRole(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	node, ok := h.cache.GetNode(id)
+	node, ok := lookupOr404(w, r, "node", id, h.cache.GetNode)
 	if !ok {
-		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
 		return
 	}
 	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", nodeResource(node)) {
@@ -151,92 +134,23 @@ func (h *Handlers) HandleGetNodeRole(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleGetNodeLabels(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	node, ok := h.cache.GetNode(id)
-	if !ok {
-		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
-		return
-	}
-	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", nodeResource(node)) {
-		writeErrorCode(w, r, "ACL001", "access denied")
-		return
-	}
-	labels := node.Spec.Labels
-	if labels == nil {
-		labels = map[string]string{}
-	}
-	writeCachedJSON(
-		w,
-		r,
-		NewDetailResponse(r.Context(), "/nodes/"+id+"/labels", "NodeLabels", LabelsResponse{
-			Labels: labels,
-		}),
-	)
+	handleGetLabels(w, r, h.acl, getLabelsSpec[swarm.Node]{
+		resource:    "node",
+		pathKey:     "id",
+		typeName:    "NodeLabels",
+		getter:      h.cache.GetNode,
+		aclResource: nodeResource,
+		getLabels:   func(n swarm.Node) map[string]string { return n.Spec.Labels },
+	})
 }
 
 func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
-
-	ct := r.Header.Get("Content-Type")
-	isJSONPatch := strings.HasPrefix(ct, "application/json-patch+json")
-	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")
-
-	if !isJSONPatch && !isMergePatch {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"Content-Type must be application/json-patch+json or application/merge-patch+json",
-		)
-		return
-	}
-
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		writeErrorCode(w, r, "API007", "failed to read request body")
-		return
-	}
-
-	node, ok := h.cache.GetNode(id)
-	if !ok {
-		writeErrorCode(w, r, "NOD003", fmt.Sprintf("node %q not found", id))
-		return
-	}
-
-	current := node.Spec.Labels
-	if current == nil {
-		current = map[string]string{}
-	}
-
-	var updated map[string]string
-	if isJSONPatch {
-		var ops []PatchOp
-		if err := json.Unmarshal(body, &ops); err != nil {
-			writeErrorCode(w, r, "API006", "invalid request body")
-			return
-		}
-		updated, err = applyJSONPatch(current, ops)
-	} else {
-		updated, err = applyMergePatchStringMap(current, body)
-	}
-
-	if err != nil {
-		writePatchError(w, r, err)
-		return
-	}
-
-	slog.Info("patching node labels", "node", id)
-
-	result, err := h.nodeWriter.UpdateNodeLabels(r.Context(), id, updated)
-	if err != nil {
-		writeNodeError(w, r, err, id)
-		return
-	}
-
-	labels := result.Spec.Labels
-	if labels == nil {
-		labels = map[string]string{}
-	}
-	writeMutationResponse(w, r, labels)
+	handlePatchLabels(w, r, patchLabelsSpec[swarm.Node]{
+		resource:     "node",
+		pathKey:      "id",
+		getter:       h.cache.GetNode,
+		getLabels:    func(n swarm.Node) map[string]string { return n.Spec.Labels },
+		update:       h.nodeWriter.UpdateNodeLabels,
+		conflictCode: "NOD002",
+	})
 }

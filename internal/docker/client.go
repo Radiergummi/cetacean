@@ -39,7 +39,7 @@ type Client struct {
 
 func NewClient(host string) (*Client, error) {
 	opts := []client.Opt{
-		client.WithAPIVersionNegotiation(),
+		client.WithVersion("1.46"),
 	}
 	if host != "" {
 		opts = append(opts, client.WithHost(host))

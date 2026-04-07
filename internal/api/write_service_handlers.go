@@ -1,14 +1,11 @@
 package api
 
 import (
-	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
-	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
@@ -18,11 +15,8 @@ import (
 
 func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
-
-	var req scaleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	req, ok := decodeJSON[scaleRequest](w, r)
+	if !ok {
 		return
 	}
 	if req.Replicas == nil {
@@ -30,9 +24,8 @@ func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	svc, ok := h.cache.GetService(id)
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 	if svc.Spec.Mode.Replicated == nil {
@@ -97,11 +90,8 @@ func (h *Handlers) HandleGetServiceEndpointMode(w http.ResponseWriter, r *http.R
 
 func (h *Handlers) HandleUpdateServiceMode(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
-
-	var req updateModeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	req, ok := decodeJSON[updateModeRequest](w, r)
+	if !ok {
 		return
 	}
 
@@ -125,9 +115,7 @@ func (h *Handlers) HandleUpdateServiceMode(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
@@ -144,11 +132,8 @@ type updateEndpointModeRequest struct {
 
 func (h *Handlers) HandleUpdateServiceEndpointMode(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-
-	var req updateEndpointModeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	req, ok := decodeJSON[updateEndpointModeRequest](w, r)
+	if !ok {
 		return
 	}
 
@@ -163,9 +148,7 @@ func (h *Handlers) HandleUpdateServiceEndpointMode(w http.ResponseWriter, r *htt
 		return
 	}
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
@@ -178,11 +161,8 @@ func (h *Handlers) HandleUpdateServiceEndpointMode(w http.ResponseWriter, r *htt
 
 func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
-
-	var req updateImageRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	req, ok := decodeJSON[updateImageRequest](w, r)
+	if !ok {
 		return
 	}
 	if req.Image == "" {
@@ -190,9 +170,7 @@ func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
@@ -206,9 +184,8 @@ func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Reque
 func (h *Handlers) HandleRollbackService(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	svc, ok := h.cache.GetService(id)
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 	if svc.PreviousSpec == nil {
@@ -224,35 +201,19 @@ func (h *Handlers) HandleRollbackService(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *Handlers) HandleRemoveService(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
-		return
-	}
-
-	slog.Info("removing service", "service", id)
-
-	err := h.serviceLifecycle.RemoveService(r.Context(), id)
-	if err != nil {
-		if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
-			writeErrorCode(w, r, "SVC002", err.Error())
-			return
-		}
-		writeDockerError(w, r, err, "service", id)
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
+	handleRemove(w, r, removeSpec[swarm.Service]{
+		resource:     "service",
+		pathKey:      "id",
+		getter:       h.cache.GetService,
+		remove:       h.serviceLifecycle.RemoveService,
+		conflictCode: "SVC002",
+	})
 }
 
 func (h *Handlers) HandleRestartService(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
@@ -299,29 +260,8 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	ct := r.Header.Get("Content-Type")
-	isJSONPatch := strings.HasPrefix(ct, "application/json-patch+json")
-	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")
-
-	if !isJSONPatch && !isMergePatch {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"Content-Type must be application/json-patch+json or application/merge-patch+json",
-		)
-		return
-	}
-
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		writeErrorCode(w, r, "API007", "failed to read request body")
-		return
-	}
-
-	svc, ok := h.cache.GetService(id)
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -329,22 +269,9 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 	if svc.Spec.TaskTemplate.ContainerSpec != nil {
 		env = svc.Spec.TaskTemplate.ContainerSpec.Env
 	}
-	current := envSliceToMap(env)
 
-	var updated map[string]string
-	if isJSONPatch {
-		var ops []PatchOp
-		if err := json.Unmarshal(body, &ops); err != nil {
-			writeErrorCode(w, r, "API006", "invalid request body")
-			return
-		}
-		updated, err = applyJSONPatch(current, ops)
-	} else {
-		updated, err = applyMergePatchStringMap(current, body)
-	}
-
-	if err != nil {
-		writePatchError(w, r, err)
+	updated, ok := patchStringMap(w, r, envSliceToMap(env))
+	if !ok {
 		return
 	}
 
@@ -352,7 +279,7 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 
 	result, err := h.serviceSpec.UpdateServiceEnv(r.Context(), id, updated)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -364,93 +291,25 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *Handlers) HandleGetServiceLabels(w http.ResponseWriter, r *http.Request) {
-	svc, ok := h.lookupServiceACL(w, r)
-	if !ok {
-		return
-	}
-	labels := svc.Spec.Labels
-	if labels == nil {
-		labels = map[string]string{}
-	}
-	writeCachedJSON(
-		w,
-		r,
-		NewDetailResponse(
-			r.Context(),
-			"/services/"+svc.ID+"/labels",
-			"ServiceLabels",
-			LabelsResponse{
-				Labels: labels,
-			},
-		),
-	)
+	handleGetLabels(w, r, h.acl, getLabelsSpec[swarm.Service]{
+		resource:    "service",
+		pathKey:     "id",
+		typeName:    "ServiceLabels",
+		getter:      h.cache.GetService,
+		aclResource: func(s swarm.Service) string { return "service:" + s.Spec.Name },
+		getLabels:   func(s swarm.Service) map[string]string { return s.Spec.Labels },
+	})
 }
 
 func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
-
-	ct := r.Header.Get("Content-Type")
-	isJSONPatch := strings.HasPrefix(ct, "application/json-patch+json")
-	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")
-
-	if !isJSONPatch && !isMergePatch {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"Content-Type must be application/json-patch+json or application/merge-patch+json",
-		)
-		return
-	}
-
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		writeErrorCode(w, r, "API007", "failed to read request body")
-		return
-	}
-
-	svc, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
-		return
-	}
-
-	current := svc.Spec.Labels
-	if current == nil {
-		current = map[string]string{}
-	}
-
-	var updated map[string]string
-	if isJSONPatch {
-		var ops []PatchOp
-		if err := json.Unmarshal(body, &ops); err != nil {
-			writeErrorCode(w, r, "API006", "invalid request body")
-			return
-		}
-		updated, err = applyJSONPatch(current, ops)
-	} else {
-		updated, err = applyMergePatchStringMap(current, body)
-	}
-
-	if err != nil {
-		writePatchError(w, r, err)
-		return
-	}
-
-	slog.Info("patching service labels", "service", id)
-
-	result, err := h.serviceSpec.UpdateServiceLabels(r.Context(), id, updated)
-	if err != nil {
-		writeServiceError(w, r, err, id)
-		return
-	}
-
-	labels := result.Spec.Labels
-	if labels == nil {
-		labels = map[string]string{}
-	}
-	writeMutationResponse(w, r, labels)
+	handlePatchLabels(w, r, patchLabelsSpec[swarm.Service]{
+		resource:     "service",
+		pathKey:      "id",
+		getter:       h.cache.GetService,
+		getLabels:    func(s swarm.Service) map[string]string { return s.Spec.Labels },
+		update:       h.serviceSpec.UpdateServiceLabels,
+		conflictCode: "SVC001",
+	})
 }
 
 func (h *Handlers) HandleGetServiceResources(w http.ResponseWriter, r *http.Request) {
@@ -480,20 +339,8 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"expected Content-Type: application/merge-patch+json",
-		)
-		return
-	}
-
-	svc, ok := h.cache.GetService(id)
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -510,7 +357,7 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 	slog.Info("updating service resources", "service", id)
 	updated, err := h.serviceSpec.UpdateServiceResources(r.Context(), id, &result)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 	writeMutationResponse(w, r, NewDetailResponse(
@@ -567,20 +414,11 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"expected Content-Type: application/merge-patch+json",
-		)
+	if !requireMergePatch(w, r) {
 		return
 	}
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
@@ -596,7 +434,7 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 
 	updated, err := h.serviceSpec.UpdateServicePorts(r.Context(), id, patch.Ports)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -643,17 +481,13 @@ func (h *Handlers) HandleGetServiceHealthcheck(w http.ResponseWriter, r *http.Re
 
 func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
-	var hc container.HealthConfig
-	if err := json.NewDecoder(r.Body).Decode(&hc); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	hc, ok := decodeJSON[container.HealthConfig](w, r)
+	if !ok {
 		return
 	}
 
@@ -661,7 +495,7 @@ func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Re
 
 	updated, err := h.serviceSpec.UpdateServiceHealthcheck(r.Context(), id, &hc)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -707,17 +541,13 @@ func (h *Handlers) HandleGetServicePlacement(w http.ResponseWriter, r *http.Requ
 
 func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
-	var placement swarm.Placement
-	if err := json.NewDecoder(r.Body).Decode(&placement); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	placement, ok := decodeJSON[swarm.Placement](w, r)
+	if !ok {
 		return
 	}
 
@@ -725,7 +555,7 @@ func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Requ
 
 	updated, err := h.serviceSpec.UpdateServicePlacement(r.Context(), id, &placement)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -771,20 +601,8 @@ func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"expected Content-Type: application/merge-patch+json",
-		)
-		return
-	}
-
-	svc, ok := h.cache.GetService(id)
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -809,7 +627,7 @@ func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http
 
 	updated, err := h.serviceSpec.UpdateServiceUpdatePolicy(r.Context(), id, &result)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -853,20 +671,8 @@ func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *ht
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"expected Content-Type: application/merge-patch+json",
-		)
-		return
-	}
-
-	svc, ok := h.cache.GetService(id)
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -891,7 +697,7 @@ func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *ht
 
 	updated, err := h.serviceSpec.UpdateServiceRollbackPolicy(r.Context(), id, &result)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -931,20 +737,8 @@ func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Re
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"expected Content-Type: application/merge-patch+json",
-		)
-		return
-	}
-
-	svc, ok := h.cache.GetService(id)
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -969,7 +763,7 @@ func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Re
 
 	updated, err := h.serviceSpec.UpdateServiceLogDriver(r.Context(), id, &result)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -987,20 +781,8 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"expected Content-Type: application/merge-patch+json",
-		)
-		return
-	}
-
-	svc, ok := h.cache.GetService(id)
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -1026,7 +808,7 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 
 	updated, err := h.serviceSpec.UpdateServiceHealthcheck(r.Context(), id, &result)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -1114,21 +896,10 @@ func (h *Handlers) HandleGetServiceContainerConfig(w http.ResponseWriter, r *htt
 
 func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"expected Content-Type: application/merge-patch+json",
-		)
-		return
-	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	svc, ok := h.cache.GetService(id)
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
 	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
 		return
 	}
 
@@ -1176,7 +947,7 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 		},
 	)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -1257,20 +1028,11 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"expected Content-Type: application/merge-patch+json",
-		)
+	if !requireMergePatch(w, r) {
 		return
 	}
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
@@ -1313,7 +1075,7 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 
 	updated, err := h.serviceAttachment.UpdateServiceConfigs(r.Context(), id, configs)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -1350,20 +1112,11 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"expected Content-Type: application/merge-patch+json",
-		)
+	if !requireMergePatch(w, r) {
 		return
 	}
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
@@ -1406,7 +1159,7 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 
 	updated, err := h.serviceAttachment.UpdateServiceSecrets(r.Context(), id, secrets)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -1443,20 +1196,11 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"expected Content-Type: application/merge-patch+json",
-		)
+	if !requireMergePatch(w, r) {
 		return
 	}
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
@@ -1484,7 +1228,7 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 
 	updated, err := h.serviceAttachment.UpdateServiceNetworks(r.Context(), id, networks)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 
@@ -1528,30 +1272,19 @@ func (h *Handlers) HandleGetServiceMounts(w http.ResponseWriter, r *http.Request
 
 func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(
-			w,
-			r,
-			"API004",
-			"Content-Type must be application/merge-patch+json",
-		)
+	if !requireMergePatch(w, r) {
 		return
 	}
 
-	_, ok := h.cache.GetService(id)
-	if !ok {
-		writeErrorCode(w, r, "SVC003", fmt.Sprintf("service %q not found", id))
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
-	var req struct {
+	req, ok := decodeJSON[struct {
 		Mounts []mount.Mount `json:"mounts"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	}](w, r)
+	if !ok {
 		return
 	}
 
@@ -1559,7 +1292,7 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 
 	updated, err := h.serviceAttachment.UpdateServiceMounts(r.Context(), id, req.Mounts)
 	if err != nil {
-		writeServiceError(w, r, err, id)
+		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}
 

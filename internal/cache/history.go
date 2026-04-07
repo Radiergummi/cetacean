@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"strings"
 	"sync"
 	"time"
 )
@@ -16,9 +17,11 @@ type HistoryEntry struct {
 }
 
 type HistoryQuery struct {
-	Type       EventType
-	ResourceID string
-	Limit      int
+	Type         EventType
+	ResourceID   string
+	BeforeID     uint64
+	NameContains string // case-insensitive substring match on Name
+	Limit        int
 }
 
 type History struct {
@@ -183,7 +186,7 @@ func (h *History) List(q HistoryQuery) []HistoryEntry {
 	// Fast path: when filtering by resource ID, use the per-resource index
 	// instead of scanning the entire ring buffer.
 	if q.ResourceID != "" {
-		return h.listByResource(q.ResourceID, q.Type, limit)
+		return h.listByResource(q.ResourceID, q.Type, q.BeforeID, q.NameContains, limit)
 	}
 
 	var result []HistoryEntry
@@ -194,6 +197,8 @@ func (h *History) List(q HistoryQuery) []HistoryEntry {
 		total = h.cursor
 	}
 
+	pastCursor := q.BeforeID == 0
+
 	for i := 0; i < total && len(result) < limit; i++ {
 		idx := h.cursor - 1 - i
 		if idx < 0 {
@@ -201,7 +206,20 @@ func (h *History) List(q HistoryQuery) []HistoryEntry {
 		}
 
 		e := h.entries[idx]
+		if !pastCursor {
+			if e.ID == q.BeforeID {
+				pastCursor = true
+			}
+			continue
+		}
+
 		if q.Type != "" && e.Type != q.Type {
+			continue
+		}
+
+		if q.NameContains != "" && !strings.Contains(
+			strings.ToLower(e.Name), strings.ToLower(q.NameContains),
+		) {
 			continue
 		}
 
@@ -214,6 +232,8 @@ func (h *History) List(q HistoryQuery) []HistoryEntry {
 func (h *History) listByResource(
 	resourceID string,
 	typeFilter EventType,
+	beforeID uint64,
+	nameContains string,
 	limit int,
 ) []HistoryEntry {
 	ring := h.byResource[resourceID]
@@ -222,6 +242,7 @@ func (h *History) listByResource(
 	}
 
 	var result []HistoryEntry
+	pastCursor := beforeID == 0
 
 	ring.iterNewest(func(idx int) bool {
 		e := h.entries[idx]
@@ -232,7 +253,20 @@ func (h *History) listByResource(
 			return true
 		}
 
+		if !pastCursor {
+			if e.ID == beforeID {
+				pastCursor = true
+			}
+			return true
+		}
+
 		if typeFilter != "" && e.Type != typeFilter {
+			return true
+		}
+
+		if nameContains != "" && !strings.Contains(
+			strings.ToLower(e.Name), strings.ToLower(nameContains),
+		) {
 			return true
 		}
 

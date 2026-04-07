@@ -4,20 +4,13 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types/swarm"
-	json "github.com/goccy/go-json"
 )
 
 func (h *Handlers) HandlePatchSwarmOrchestration(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(w, r, "API004",
-			"Content-Type must be application/merge-patch+json")
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -35,9 +28,8 @@ func (h *Handlers) HandlePatchSwarmOrchestration(w http.ResponseWriter, r *http.
 		return
 	}
 
-	var patch swarm.OrchestrationConfig
-	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	patch, ok := decodeJSON[swarm.OrchestrationConfig](w, r)
+	if !ok {
 		return
 	}
 
@@ -62,12 +54,7 @@ func (h *Handlers) HandlePatchSwarmOrchestration(w http.ResponseWriter, r *http.
 }
 
 func (h *Handlers) HandlePatchSwarmRaft(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(w, r, "API004",
-			"Content-Type must be application/merge-patch+json")
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -85,9 +72,8 @@ func (h *Handlers) HandlePatchSwarmRaft(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var patch swarm.RaftConfig
-	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	patch, ok := decodeJSON[swarm.RaftConfig](w, r)
+	if !ok {
 		return
 	}
 
@@ -118,12 +104,7 @@ func (h *Handlers) HandlePatchSwarmRaft(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *Handlers) HandlePatchSwarmDispatcher(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(w, r, "API004",
-			"Content-Type must be application/merge-patch+json")
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -141,9 +122,8 @@ func (h *Handlers) HandlePatchSwarmDispatcher(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	var patch swarm.DispatcherConfig
-	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	patch, ok := decodeJSON[swarm.DispatcherConfig](w, r)
+	if !ok {
 		return
 	}
 
@@ -168,12 +148,7 @@ func (h *Handlers) HandlePatchSwarmDispatcher(w http.ResponseWriter, r *http.Req
 }
 
 func (h *Handlers) HandlePatchSwarmCAConfig(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(w, r, "API004",
-			"Content-Type must be application/merge-patch+json")
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -191,9 +166,8 @@ func (h *Handlers) HandlePatchSwarmCAConfig(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var patch swarm.CAConfig
-	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	patch, ok := decodeJSON[swarm.CAConfig](w, r)
+	if !ok {
 		return
 	}
 
@@ -218,12 +192,7 @@ func (h *Handlers) HandlePatchSwarmCAConfig(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *Handlers) HandlePatchSwarmEncryption(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "application/merge-patch+json") {
-		writeErrorCode(w, r, "API004",
-			"Content-Type must be application/merge-patch+json")
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -241,11 +210,10 @@ func (h *Handlers) HandlePatchSwarmEncryption(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	var patch struct {
+	patch, ok := decodeJSON[struct {
 		AutoLockManagers *bool `json:"AutoLockManagers"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	}](w, r)
+	if !ok {
 		return
 	}
 
@@ -270,18 +238,15 @@ func (h *Handlers) HandlePatchSwarmEncryption(w http.ResponseWriter, r *http.Req
 }
 
 func (h *Handlers) HandlePostRotateToken(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-
 	if h.systemClient == nil {
 		writeErrorCode(w, r, "SWM001", "swarm API not available")
 		return
 	}
 
-	var req struct {
+	req, ok := decodeJSON[struct {
 		Target string `json:"target"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+	}](w, r)
+	if !ok {
 		return
 	}
 
@@ -409,11 +374,10 @@ func (h *Handlers) HandlePostUnlockSwarm(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var body struct {
+	body, ok := decodeJSON[struct {
 		UnlockKey string `json:"unlockKey"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body: "+err.Error())
+	}](w, r)
+	if !ok {
 		return
 	}
 

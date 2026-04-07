@@ -12,8 +12,14 @@ const { title, description } = Astro.props;
   <p class="text-base text-muted-foreground max-w-sm mb-10 leading-relaxed">{description}</p>
   <div class="flex gap-3">
     <a
-      href="/getting-started"
+      href="/demo"
       class="inline-flex items-center rounded-lg bg-foreground px-5 py-2.5 text-sm font-medium text-background hover:opacity-90 transition-opacity"
+    >
+      Try Demo
+    </a>
+    <a
+      href="/getting-started"
+      class="inline-flex items-center rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors"
     >
       Get Started
     </a>

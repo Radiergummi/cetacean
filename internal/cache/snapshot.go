@@ -31,13 +31,13 @@ func (c *Cache) WriteToDisk(path string) error {
 	snap := DiskSnapshot{
 		Version:   snapshotVersion,
 		Timestamp: time.Now(),
-		Nodes:     mapValues(c.nodes),
+		Nodes:     c.nodes.list(),
 		Services:  mapValues(c.services),
 		Tasks:     mapValues(c.tasks),
-		Configs:   mapValues(c.configs),
-		Secrets:   mapValues(c.secrets),
-		Networks:  mapValues(c.networks),
-		Volumes:   mapValues(c.volumes),
+		Configs:   c.configs.list(),
+		Secrets:   c.secrets.list(),
+		Networks:  c.networks.list(),
+		Volumes:   c.volumes.list(),
 	}
 	c.mu.RUnlock()
 

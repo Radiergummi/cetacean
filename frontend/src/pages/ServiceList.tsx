@@ -4,6 +4,7 @@ import DataTable, { type Column } from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
+import { HealthDot, ReplicaHealth } from "../components/HealthIndicator";
 import ListToolbar from "../components/ListToolbar";
 import { SkeletonTable } from "../components/LoadingSkeleton";
 import { MetricsPanel, TaskSparkline } from "../components/metrics";
@@ -11,46 +12,18 @@ import PageHeader from "../components/PageHeader";
 import ResourceCard from "../components/ResourceCard";
 import ResourceName from "../components/ResourceName";
 import { SizingBadge } from "../components/SizingBadge";
-import SortIndicator from "../components/SortIndicator";
-import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { useListPage } from "../hooks/useListPage";
+import { isCadvisorReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useRecommendations } from "../hooks/useRecommendations";
-import { useSearchParam } from "../hooks/useSearchParam";
 import { useServiceMetrics } from "../hooks/useServiceMetrics";
-import { useSortParams } from "../hooks/useSort";
-import { useSwarmResource } from "../hooks/useSwarmResource";
-import { useViewMode } from "../hooks/useViewMode";
 import { sizingCategories } from "../lib/sizingUtils";
-import { useCallback, useMemo } from "react";
+import { sortColumn } from "../lib/sortColumn";
+import { cardGridClass } from "../lib/styles";
+import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-function ReplicaHealth({ running, desired }: { running: number; desired: number }) {
-  const healthy = running >= desired && desired > 0;
-
-  return (
-    <span
-      data-healthy={healthy || undefined}
-      className="font-medium text-red-600 tabular-nums data-healthy:text-green-600 dark:text-red-400 dark:data-healthy:text-green-400"
-    >
-      {running}/{desired}
-    </span>
-  );
-}
-
-function HealthDot({ running, desired }: { running: number; desired: number }) {
-  const healthy = running >= desired && desired > 0;
-
-  return (
-    <span
-      data-healthy={healthy || undefined}
-      className="inline-block size-2.5 shrink-0 rounded-full bg-red-500 data-healthy:bg-green-500"
-      aria-label={healthy ? "Healthy" : "Unhealthy"}
-    />
-  );
-}
-
 export default function ServiceList() {
-  const [search, debouncedSearch, setSearch] = useSearchParam("q");
-  const { sortKey, sortDir, toggle } = useSortParams("name");
+  const navigate = useNavigate();
   const {
     data: services,
     loading,
@@ -58,22 +31,24 @@ export default function ServiceList() {
     retry,
     hasMore,
     loadMore,
-  } = useSwarmResource(
-    useCallback(
-      (offset: number, signal: AbortSignal) =>
-        api.services({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }, signal),
-      [debouncedSearch, sortKey, sortDir],
-    ),
-    "service",
-    ({ ID }: ServiceListItem) => ID,
-  );
-  const [viewMode, setViewMode] = useViewMode("services");
-  const navigate = useNavigate();
+    search,
+    setSearch,
+    sortKey,
+    sortDir,
+    toggle,
+    viewMode,
+    setViewMode,
+  } = useListPage({
+    path: "/services",
+    sseType: "service",
+    defaultSort: "name",
+    viewModeKey: "services",
+    fetchFn: (params, signal) => api.services(params, signal),
+    keyFn: ({ ID }: ServiceListItem) => ID,
+  });
+
   const monitoring = useMonitoringStatus();
-  const hasCadvisor =
-    monitoring?.prometheusConfigured &&
-    monitoring?.prometheusReachable &&
-    !!monitoring?.cadvisor?.targets;
+  const hasCadvisor = isCadvisorReady(monitoring);
   const { getForService } = useServiceMetrics();
   const { items: recommendations, hasData: hasRecommendations } = useRecommendations();
 
@@ -100,13 +75,7 @@ export default function ServiceList() {
   const baseColumns: Column<ServiceListItem>[] = useMemo(
     () => [
       {
-        header: (
-          <SortIndicator
-            label="Name"
-            active={sortKey === "name"}
-            dir={sortDir}
-          />
-        ),
+        ...sortColumn("Name", "name", sortKey, sortDir, toggle),
         cell: ({ ID, Spec }) => (
           <Link
             to={`/services/${ID}`}
@@ -116,7 +85,6 @@ export default function ServiceList() {
             <ResourceName name={Spec.Name} />
           </Link>
         ),
-        onHeaderClick: () => toggle("name"),
       },
       {
         header: "Image",
@@ -127,15 +95,8 @@ export default function ServiceList() {
         ),
       },
       {
-        header: (
-          <SortIndicator
-            label="Mode"
-            active={sortKey === "mode"}
-            dir={sortDir}
-          />
-        ),
+        ...sortColumn("Mode", "mode", sortKey, sortDir, toggle),
         cell: ({ Spec }) => (Spec.Mode.Replicated ? "replicated" : "global"),
-        onHeaderClick: () => toggle("mode"),
       },
       {
         header: "Ports",
@@ -299,7 +260,7 @@ export default function ServiceList() {
           onLoadMore={loadMore}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className={cardGridClass}>
           {services.map((service) => {
             const desired = service.Spec.Mode.Replicated?.Replicas;
 

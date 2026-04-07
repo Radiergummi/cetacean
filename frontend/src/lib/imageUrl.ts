@@ -1,10 +1,10 @@
 /**
  * Parse a Docker image reference and return a URL to its registry page.
- * Handles Docker Hub (official + user), ghcr.io, quay.io, and gcr.io.
+ * Handles Docker Hub (official and user), ghcr.io, quay.io, and gcr.io.
  * Returns null for unknown/private registries.
  */
 export function imageRegistryUrl(image: string): string | null {
-  // Strip digest (@sha256:...) and tag (:tag)
+  // Strip digest (`@sha256:...`) and tag (`:tag`)
   const withoutDigest = image.split("@")[0];
   const [namePart] = withoutDigest.split(":");
 

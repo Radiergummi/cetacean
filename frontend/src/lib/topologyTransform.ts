@@ -1,4 +1,4 @@
-import type { NetworkTopology, PlacementTopology } from "../api/types";
+import type { JGFGraph } from "../api/types";
 import { getChartColor } from "./chartColors";
 import type { Edge, Node } from "@xyflow/react";
 
@@ -12,7 +12,14 @@ export function hashColor(id: string): string {
   return getChartColor(Math.abs(hash));
 }
 
-function stripStackPrefix(name: string, stack?: string): string {
+/** Extract the bare resource ID from a URN like `urn:cetacean:service:abc123`. */
+function urnToId(urn: string): string {
+  const lastColon = urn.lastIndexOf(":");
+
+  return lastColon >= 0 ? urn.slice(lastColon + 1) : urn;
+}
+
+export function stripStackPrefix(name: string, stack?: string): string {
   if (stack && name.startsWith(stack + "_")) {
     return name.slice(stack.length + 1);
   }
@@ -36,57 +43,48 @@ function estimateCardHeight(ports?: string[], updateStatus?: string): number {
   return height;
 }
 
-function byId(a: { id: string }, b: { id: string }): number {
-  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-}
-
-export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges: Edge[] } {
+export function networkGraphToReactFlow(graph: JGFGraph): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
 
-  const networkMap = new Map(data.networks.map((node) => [node.id, node]));
-  const serviceMap = new Map(data.nodes.map((service) => [service.id, service]));
+  // Build stack membership from hyperedges
+  const stackMembers = new Map<string, Set<string>>();
 
-  // Collect unique stacks and assign colors
-  const stacks = new Set<string>();
-
-  for (const { stack } of data.nodes) {
-    if (stack) {
-      stacks.add(stack);
+  for (const hyperedge of graph.hyperedges ?? []) {
+    if (hyperedge.metadata.kind === "stack") {
+      const stackName = hyperedge.metadata.name as string;
+      stackMembers.set(stackName, new Set(hyperedge.nodes));
     }
   }
 
+  // Map service URN → stack name
+  const serviceStack = new Map<string, string>();
+
+  for (const [stackName, members] of stackMembers) {
+    for (const urn of members) {
+      serviceStack.set(urn, stackName);
+    }
+  }
+
+  // Assign stack colors
   const stackColorMap = new Map<string, string>();
 
-  for (const stack of stacks) {
+  for (const stack of [...stackMembers.keys()].sort()) {
     stackColorMap.set(stack, hashColor(stack));
   }
 
-  // Normalize edge directions: smaller ID is always source (edges are symmetric
-  // network connections, but stable direction is needed for deterministic layout).
-  const normalizedEdges = data.edges.map((edge) =>
-    edge.source <= edge.target
-      ? edge
-      : {
-          ...edge,
-          source: edge.target,
-          target: edge.source,
-        },
-  );
-
-  // Build connected service set (services that have at least one edge)
+  // Build connected service set (backend guarantees canonical edge direction)
+  const graphEdges = graph.edges ?? [];
   const connectedSources = new Set<string>();
   const connectedTargets = new Set<string>();
 
-  for (const { source, target } of normalizedEdges) {
+  for (const { source, target } of graphEdges) {
     connectedSources.add(source);
     connectedTargets.add(target);
   }
 
-  // Create stack group nodes (sorted for deterministic layout)
-  const sortedStacks = [...stacks].sort();
-
-  for (const stack of sortedStacks) {
+  // Create stack group nodes
+  for (const stack of [...stackMembers.keys()].sort()) {
     nodes.push({
       id: `stack:${stack}`,
       type: "stackGroup",
@@ -95,25 +93,32 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
     });
   }
 
-  // Create service nodes (sorted by ID for deterministic layout)
-  const sortedServices = [...data.nodes].sort(byId);
+  // Create service nodes sorted by URN
+  const sortedEntries = Object.entries(graph.nodes)
+    .map(([urn, jgfNode]) => ({ urn, jgfNode }))
+    .sort((a, b) => (a.urn < b.urn ? -1 : a.urn > b.urn ? 1 : 0));
 
-  for (const { id, image, mode, name, ports, replicas, stack, updateStatus } of sortedServices) {
+  for (const { urn, jgfNode } of sortedEntries) {
+    const metadata = jgfNode.metadata;
+    const stack = serviceStack.get(urn);
+    const ports = metadata.ports as string[] | undefined;
+    const updateStatus = metadata.updateStatus as string | undefined;
+
     const node: Node = {
-      id,
+      id: urn,
       type: "serviceCard",
       position: { x: 0, y: 0 },
       data: {
-        id,
-        name: stripStackPrefix(name, stack),
-        mode,
-        image,
-        replicas,
+        id: urnToId(urn),
+        name: stripStackPrefix(jgfNode.label, stack),
+        mode: metadata.mode as string,
+        image: metadata.image as string,
+        replicas: metadata.replicas as number,
         ports,
         updateStatus,
         stackColor: stack ? stackColorMap.get(stack) : undefined,
-        hasSourceEdge: connectedSources.has(id),
-        hasTargetEdge: connectedTargets.has(id),
+        hasSourceEdge: connectedSources.has(urn),
+        hasTargetEdge: connectedTargets.has(urn),
         _elkHeight: estimateCardHeight(ports, updateStatus),
       },
     };
@@ -125,60 +130,48 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
     nodes.push(node);
   }
 
-  // Deduplicate normalized edges: merge edges sharing the same source-target pair,
-  // combining their network sets (the API may return both A→B and B→A).
-  const edgeMap = new Map<string, { source: string; target: string; networks: Set<string> }>();
+  // Create ReactFlow edges (backend guarantees one canonical edge per service pair)
+  for (const edge of [...graphEdges].sort((a, b) =>
+    a.source < b.source
+      ? -1
+      : a.source > b.source
+        ? 1
+        : a.target < b.target
+          ? -1
+          : a.target > b.target
+            ? 1
+            : 0,
+  )) {
+    const edgeNetworks = (edge.metadata.networks ?? []) as {
+      id: string;
+      name: string;
+      driver: string;
+      scope: string;
+      aliases?: Record<string, string[]>;
+    }[];
 
-  for (const edge of normalizedEdges) {
-    const key = `${edge.source}:${edge.target}`;
-    const existing = edgeMap.get(key);
+    const networks = edgeNetworks
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .map(({ id, name, driver, scope }) => ({ id, name, driver, scope }));
 
-    if (existing) {
-      for (const netId of edge.networks) {
-        existing.networks.add(netId);
-      }
-    } else {
-      edgeMap.set(key, {
-        source: edge.source,
-        target: edge.target,
-        networks: new Set(edge.networks),
-      });
-    }
-  }
-
-  // Create one edge per unique source-target pair
-  const sortedEdgeKeys = [...edgeMap.keys()].sort();
-  for (const key of sortedEdgeKeys) {
-    const edge = edgeMap.get(key)!;
-    const srcSvc = serviceMap.get(edge.source);
-    const tgtSvc = serviceMap.get(edge.target);
-    const networks = [...edge.networks].sort().map((netId) => {
-      const net = networkMap.get(netId);
-
-      return {
-        id: netId,
-        name: net?.name ?? netId,
-        driver: net?.driver ?? "unknown",
-        scope: net?.scope ?? "swarm",
-        stack: net?.stack,
-        color: net?.stack ? (stackColorMap.get(net.stack) ?? hashColor(netId)) : undefined,
-      };
-    });
-
-    // Collect non-default aliases per endpoint (exclude aliases matching the service name)
+    // Collect non-default aliases per endpoint
     const sourceAliases: string[] = [];
     const targetAliases: string[] = [];
+    const sourceName = graph.nodes[edge.source]?.label;
+    const targetName = graph.nodes[edge.target]?.label;
 
-    for (const netId of edge.networks) {
-      for (const alias of srcSvc?.networkAliases?.[netId] ?? []) {
-        if (alias !== srcSvc?.name && !sourceAliases.includes(alias)) {
-          sourceAliases.push(alias);
+    for (const net of edgeNetworks) {
+      if (net.aliases) {
+        for (const alias of net.aliases[edge.source] ?? []) {
+          if (alias !== sourceName && !sourceAliases.includes(alias)) {
+            sourceAliases.push(alias);
+          }
         }
-      }
 
-      for (const alias of tgtSvc?.networkAliases?.[netId] ?? []) {
-        if (alias !== tgtSvc?.name && !targetAliases.includes(alias)) {
-          targetAliases.push(alias);
+        for (const alias of net.aliases[edge.target] ?? []) {
+          if (alias !== targetName && !targetAliases.includes(alias)) {
+            targetAliases.push(alias);
+          }
         }
       }
     }
@@ -199,65 +192,132 @@ export function buildLogicalFlow(data: NetworkTopology): { nodes: Node[]; edges:
   return { nodes, edges };
 }
 
-export function buildPhysicalFlow(data: PlacementTopology): { nodes: Node[] } {
+export function placementGraphToReactFlow(graph: JGFGraph): { nodes: Node[] } {
   const nodes: Node[] = [];
   const columns = 3;
-  const cardHeight = 80; // card: p-2.5(20) + name(18) + mb-0.5(2) + image(16) + mb-1(4) + tasks(18) + border(2)
-  const cardGap = 8; // gap-2 between grid items
-  const headerHeight = 44; // header line(20) + mb-3(12) + container p-4 top(16) - overlap adjustment
-  const padding = 24; // container p-4 bottom(16) + extra breathing room
+  const cardHeight = 80;
+  const cardGap = 8;
+  const headerHeight = 44;
+  const padding = 24;
   const gap = 24;
 
-  const sortedClusterNodes = [...data.nodes].sort(byId);
+  // Separate cluster nodes from service nodes
+  const clusterNodes: { urn: string; label: string; metadata: Record<string, unknown> }[] = [];
+
+  for (const [urn, jgfNode] of Object.entries(graph.nodes)) {
+    if (jgfNode.metadata.kind === "node") {
+      clusterNodes.push({ urn, label: jgfNode.label, metadata: jgfNode.metadata });
+    }
+  }
+
+  // Build tasks grouped by node URN from hyperedges
+  const tasksByNode = new Map<
+    string,
+    {
+      serviceUrn: string;
+      serviceName: string;
+      tasks: { id: string; node: string; state: string; slot: number; image: string }[];
+    }[]
+  >();
+
+  for (const hyperedge of graph.hyperedges ?? []) {
+    if (hyperedge.metadata.kind !== "placement") {
+      continue;
+    }
+
+    const serviceUrn = hyperedge.nodes[0];
+    const serviceName = graph.nodes[serviceUrn]?.label ?? serviceUrn;
+    const tasks = (hyperedge.metadata.tasks ?? []) as {
+      id: string;
+      node: string;
+      state: string;
+      slot: number;
+      image: string;
+    }[];
+
+    // Group tasks by node URN
+    const byNode = new Map<string, typeof tasks>();
+
+    for (const task of tasks) {
+      const nodeUrn = task.node;
+      let list = byNode.get(nodeUrn);
+
+      if (!list) {
+        list = [];
+        byNode.set(nodeUrn, list);
+      }
+
+      list.push(task);
+    }
+
+    for (const [nodeUrn, nodeTasks] of byNode) {
+      let entries = tasksByNode.get(nodeUrn);
+
+      if (!entries) {
+        entries = [];
+        tasksByNode.set(nodeUrn, entries);
+      }
+
+      entries.push({ serviceUrn, serviceName, tasks: nodeTasks });
+    }
+  }
+
+  const sortedClusterNodes = [...clusterNodes].sort((a, b) =>
+    a.urn < b.urn ? -1 : a.urn > b.urn ? 1 : 0,
+  );
+
   let y = 0;
 
-  for (const { availability, hostname, id, role, state, tasks } of sortedClusterNodes) {
-    // Aggregate tasks by service
+  for (const { urn, label, metadata } of sortedClusterNodes) {
+    // Aggregate tasks by service for this node
+    const serviceEntries = tasksByNode.get(urn) ?? [];
     const serviceMap = new Map<
       string,
       { serviceName: string; image: string; running: number; total: number; states: string[] }
     >();
 
-    for (const task of tasks) {
-      let entry = serviceMap.get(task.serviceId);
+    for (const { serviceUrn, serviceName, tasks } of serviceEntries) {
+      let entry = serviceMap.get(serviceUrn);
 
       if (!entry) {
         entry = {
-          serviceName: task.serviceName,
-          image: task.image,
+          serviceName,
+          image: tasks[0]?.image ?? "",
           running: 0,
           total: 0,
           states: [],
         };
 
-        serviceMap.set(task.serviceId, entry);
+        serviceMap.set(serviceUrn, entry);
       }
 
-      entry.total++;
+      for (const task of tasks) {
+        entry.total++;
 
-      if (task.state === "running" || task.state === "complete") {
-        entry.running++;
+        if (task.state === "running" || task.state === "complete") {
+          entry.running++;
+        }
+
+        entry.states.push(task.state);
       }
-
-      entry.states.push(task.state);
     }
 
     const services = [...serviceMap.entries()]
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-      .map(([serviceId, service]) => ({ serviceId, ...service }));
+      .map(([serviceId, service]) => ({ serviceId: urnToId(serviceId), ...service }));
 
     const rows = Math.max(1, Math.ceil(services.length / columns));
     const nodeHeight = headerHeight + rows * cardHeight + Math.max(0, rows - 1) * cardGap + padding;
 
     nodes.push({
-      id,
+      id: urn,
       type: "physicalNode",
       position: { x: 0, y },
       data: {
-        label: hostname,
-        role,
-        state,
-        availability,
+        label,
+        role: metadata.role as string,
+        state: metadata.state as string,
+        availability: metadata.availability as string,
         services,
       },
     });

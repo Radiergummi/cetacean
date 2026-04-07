@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi } from "vitest";
 
-// Mock TimeSeriesChart since it uses Chart.js which needs a real DOM
+// Mock TimeSeriesChart since it uses Chart.js, which needs a real DOM
 vi.mock("./TimeSeriesChart", () => ({
   default: ({ title, range }: { title: string; range: string }) => (
     <div data-testid={`chart-${title}`}>

@@ -1,6 +1,8 @@
 package cache
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -217,5 +219,119 @@ func TestHistory_Since_WrappedRing(t *testing.T) {
 
 	if entries[0].Name != "d" || entries[1].Name != "e" {
 		t.Errorf("unexpected entries: %v", entries)
+	}
+}
+
+func TestHistoryListBeforeID(t *testing.T) {
+	h := NewHistory(100)
+
+	for i := range 10 {
+		h.Append(HistoryEntry{
+			Type:       EventService,
+			Action:     "update",
+			ResourceID: "svc1",
+			Name:       fmt.Sprintf("entry-%d", i),
+		})
+	}
+
+	all := h.List(HistoryQuery{Limit: 10})
+	if len(all) != 10 {
+		t.Fatalf("got %d entries, want 10", len(all))
+	}
+
+	cursor := all[2].ID // 3rd newest
+	result := h.List(HistoryQuery{BeforeID: cursor, Limit: 5})
+
+	if len(result) != 5 {
+		t.Fatalf("got %d entries, want 5", len(result))
+	}
+
+	if result[0].ID != all[3].ID {
+		t.Errorf("first result ID = %d, want %d", result[0].ID, all[3].ID)
+	}
+}
+
+func TestHistoryListBeforeIDWithTypeFilter(t *testing.T) {
+	h := NewHistory(100)
+
+	for i := range 10 {
+		typ := EventService
+		if i%2 == 0 {
+			typ = EventNode
+		}
+		h.Append(HistoryEntry{
+			Type:       typ,
+			Action:     "update",
+			ResourceID: fmt.Sprintf("r%d", i),
+			Name:       fmt.Sprintf("entry-%d", i),
+		})
+	}
+
+	all := h.List(HistoryQuery{Limit: 10})
+	cursor := all[1].ID
+
+	result := h.List(HistoryQuery{BeforeID: cursor, Type: EventService, Limit: 10})
+
+	for _, e := range result {
+		if e.Type != EventService {
+			t.Errorf("got type %q, want service", e.Type)
+		}
+		if e.ID >= cursor {
+			t.Errorf("entry ID %d should be < cursor %d", e.ID, cursor)
+		}
+	}
+}
+
+func TestHistoryListNameContains(t *testing.T) {
+	h := NewHistory(10)
+	h.Append(HistoryEntry{Type: EventService, Name: "web-frontend"})
+	h.Append(HistoryEntry{Type: EventService, Name: "api-backend"})
+	h.Append(HistoryEntry{Type: EventService, Name: "WEB-PROXY"})
+
+	result := h.List(HistoryQuery{NameContains: "web", Limit: 10})
+	if len(result) != 2 {
+		t.Fatalf("got %d entries, want 2", len(result))
+	}
+
+	for _, e := range result {
+		lower := strings.ToLower(e.Name)
+		if !strings.Contains(lower, "web") {
+			t.Errorf("entry name %q does not contain 'web'", e.Name)
+		}
+	}
+}
+
+func TestHistoryListBeforeIDByResource(t *testing.T) {
+	h := NewHistory(100)
+
+	for i := range 6 {
+		h.Append(HistoryEntry{
+			Type:       EventService,
+			Action:     "update",
+			ResourceID: "svc1",
+			Name:       fmt.Sprintf("entry-%d", i),
+		})
+	}
+
+	all := h.List(HistoryQuery{ResourceID: "svc1", Limit: 10})
+	if len(all) != 6 {
+		t.Fatalf("got %d entries, want 6", len(all))
+	}
+
+	// all is newest-first; cursor is the 2nd newest entry
+	cursor := all[1].ID
+	result := h.List(HistoryQuery{ResourceID: "svc1", BeforeID: cursor, Limit: 10})
+
+	for _, e := range result {
+		if e.ID >= cursor {
+			t.Errorf("entry ID %d should be < cursor %d", e.ID, cursor)
+		}
+		if e.ResourceID != "svc1" {
+			t.Errorf("got resourceID %q, want svc1", e.ResourceID)
+		}
+	}
+
+	if len(result) != 4 {
+		t.Fatalf("got %d entries, want 4", len(result))
 	}
 }

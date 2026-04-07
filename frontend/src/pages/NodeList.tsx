@@ -1,6 +1,7 @@
 import { api } from "../api/client";
 import type { Node } from "../api/types";
-import DataTable, { type Column } from "../components/DataTable";
+import type { Column } from "../components/DataTable";
+import DataTable from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
@@ -9,21 +10,18 @@ import { SkeletonTable } from "../components/LoadingSkeleton";
 import { ResourceGauge, Sparkline, NodeResourceGauges, MetricsPanel } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import ResourceCard from "../components/ResourceCard";
-import SortIndicator from "../components/SortIndicator";
 import TaskStatusBadge from "../components/TaskStatusBadge";
-import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { useListPage } from "../hooks/useListPage";
+import { isNodeExporterReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useNodeMetrics } from "../hooks/useNodeMetrics";
-import { useSearchParam } from "../hooks/useSearchParam";
-import { useSortParams } from "../hooks/useSort";
-import { useSwarmResource } from "../hooks/useSwarmResource";
-import { useViewMode } from "../hooks/useViewMode";
 import { instanceToHostname } from "../lib/format";
-import { useCallback, useMemo } from "react";
+import { sortColumn } from "../lib/sortColumn";
+import { cardGridClass } from "../lib/styles";
+import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 export default function NodeList() {
-  const [search, debouncedSearch, setSearch] = useSearchParam("q");
-  const { sortKey, sortDir, toggle } = useSortParams("hostname");
+  const navigate = useNavigate();
   const {
     data: nodes,
     loading,
@@ -31,32 +29,30 @@ export default function NodeList() {
     retry,
     hasMore,
     loadMore,
-  } = useSwarmResource(
-    useCallback(
-      (offset: number, signal: AbortSignal) =>
-        api.nodes({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }, signal),
-      [debouncedSearch, sortKey, sortDir],
-    ),
-    "node",
-    ({ ID }: Node) => ID,
-  );
-  const [viewMode, setViewMode] = useViewMode("nodes");
-  const navigate = useNavigate();
+    search,
+    setSearch,
+    sortKey,
+    sortDir,
+    toggle,
+    viewMode,
+    setViewMode,
+  } = useListPage({
+    path: "/nodes",
+    sseType: "node",
+    defaultSort: "hostname",
+    viewModeKey: "nodes",
+    fetchFn: (params, signal) => api.nodes(params, signal),
+    keyFn: ({ ID }: Node) => ID,
+  });
+
   const monitoring = useMonitoringStatus();
-  const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
-  const hasNodeExporter = hasPrometheus && !!monitoring?.nodeExporter?.targets;
+  const hasNodeExporter = isNodeExporterReady(monitoring);
   const { getForNode } = useNodeMetrics();
 
   const baseColumns: Column<Node>[] = useMemo(
     () => [
       {
-        header: (
-          <SortIndicator
-            label="Hostname"
-            active={sortKey === "hostname"}
-            dir={sortDir}
-          />
-        ),
+        ...sortColumn("Hostname", "hostname", sortKey, sortDir, toggle),
         cell: ({ Description, ID }) => (
           <Link
             to={`/nodes/${ID}`}
@@ -66,16 +62,9 @@ export default function NodeList() {
             {Description.Hostname || ID}
           </Link>
         ),
-        onHeaderClick: () => toggle("hostname"),
       },
       {
-        header: (
-          <SortIndicator
-            label="Role"
-            active={sortKey === "role"}
-            dir={sortDir}
-          />
-        ),
+        ...sortColumn("Role", "role", sortKey, sortDir, toggle),
         cell: ({ ManagerStatus, Spec }) => (
           <span className="flex items-center gap-1.5">
             {Spec.Role}
@@ -86,29 +75,14 @@ export default function NodeList() {
             )}
           </span>
         ),
-        onHeaderClick: () => toggle("role"),
       },
       {
-        header: (
-          <SortIndicator
-            label="Availability"
-            active={sortKey === "availability"}
-            dir={sortDir}
-          />
-        ),
+        ...sortColumn("Availability", "availability", sortKey, sortDir, toggle),
         cell: ({ Spec }) => Spec.Availability,
-        onHeaderClick: () => toggle("availability"),
       },
       {
-        header: (
-          <SortIndicator
-            label="Status"
-            active={sortKey === "status"}
-            dir={sortDir}
-          />
-        ),
+        ...sortColumn("Status", "status", sortKey, sortDir, toggle),
         cell: ({ Status }) => <TaskStatusBadge state={Status.State} />,
-        onHeaderClick: () => toggle("status"),
       },
       {
         header: "Address",
@@ -243,7 +217,7 @@ export default function NodeList() {
           onLoadMore={loadMore}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className={cardGridClass}>
           {nodes.map((node) => {
             const metrics = getForNode(node.Description.Hostname, node.Status.Addr);
 

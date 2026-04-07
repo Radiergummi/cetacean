@@ -1,5 +1,5 @@
-import { api, emptyMethods } from "../api/client";
-import type { HistoryEntry, Node, Task } from "../api/types";
+import { api } from "../api/client";
+import type { Node } from "../api/types";
 import ActivitySection from "../components/ActivitySection";
 import { MetadataGrid } from "../components/data";
 import DiskUsageSection from "../components/DiskUsageSection";
@@ -20,16 +20,21 @@ import {
 } from "../components/node-detail";
 import PageHeader from "../components/PageHeader";
 import TasksTable from "../components/TasksTable";
+import { useDetailResource } from "../hooks/useDetailResource";
 import { useGaugeValue } from "../hooks/useGaugeValue";
 import { useInstanceResolver } from "../hooks/useInstanceResolver";
-import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
-import { useResourceStream } from "../hooks/useResourceStream";
+import {
+  isCadvisorReady,
+  isPrometheusReady,
+  useMonitoringStatus,
+} from "../hooks/useMonitoringStatus";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { formatBytes, formatNumber } from "../lib/format";
 import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
 import { stackResourceCharts } from "../lib/stackQueries";
 import { escapePromQL } from "../lib/utils";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 
 function buildInstanceFilter(instance: string, address: string, hostname: string): string {
@@ -50,107 +55,49 @@ function buildInstanceFilter(instance: string, address: string, hostname: string
 
 export default function NodeDetail() {
   const { id } = useParams<{ id: string }>();
-  const [node, setNode] = useState<Node | null>(null);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [nodeLabels, setNodeLabels] = useState<Record<string, string> | null>(null);
-  const [managerCount, setManagerCount] = useState<number | null>(null);
 
-  const monitoring = useMonitoringStatus();
-  const [allowedMethods, setAllowedMethods] = useState(emptyMethods);
-  const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
-  const hasCadvisor = !!monitoring?.cadvisor?.targets;
-  const { resolve } = useInstanceResolver();
-  const [error, setError] = useState(false);
-
-  const abortRef = useRef<AbortController | null>(null);
-  const sseAbortRef = useRef<AbortController | null>(null);
-
-  const fetchNode = useCallback(
-    (signal: AbortSignal) => {
-      if (!id) {
-        return;
-      }
-
-      api
-        .node(id, signal)
-        .then(({ data: node, allowedMethods: methods }) => {
-          setNode(node);
-          setNodeLabels(node.Spec.Labels ?? {});
-          setAllowedMethods(methods);
-        })
-        .catch(() => {
-          if (!signal.aborted) {
-            setError(true);
-          }
-        });
-    },
+  const extraQueryKeys = useMemo(
+    () =>
+      [
+        ["node-tasks", id],
+        ["node-role", id],
+      ] as const,
     [id],
   );
 
-  const fetchSideData = useCallback(
-    (signal: AbortSignal) => {
-      if (!id) {
-        return;
-      }
+  const {
+    data: node,
+    history,
+    error,
+    allowedMethods,
+  } = useDetailResource<Node>(id, api.node, `/nodes/${id}`, { extraQueryKeys });
 
-      const ignore = (error: unknown) => {
-        if (!signal.aborted) {
-          console.warn(error);
-        }
-      };
-
-      api.nodeTasks(id, signal).then(setTasks).catch(ignore);
-      api.history({ resourceId: id, limit: 10 }, signal).then(setHistory).catch(ignore);
-      api
-        .nodeRole(id, signal)
-        .then(({ managerCount: count }) => setManagerCount(count))
-        .catch(ignore);
-    },
-    [id],
-  );
-
-  useEffect(() => {
-    if (!id) {
-      return;
-    }
-
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    fetchNode(controller.signal);
-    fetchSideData(controller.signal);
-
-    return () => controller.abort();
-  }, [id, fetchNode, fetchSideData]);
-
-  useResourceStream(`/nodes/${id}`, (event) => {
-    if (!id) {
-      return;
-    }
-
-    if (event.resource) {
-      const updatedNode = event.resource as Node;
-      setNode(updatedNode);
-      setNodeLabels(updatedNode.Spec.Labels ?? {});
-    }
-
-    // Refetch tasks, history, and role — not in the node object.
-    // Abort previous SSE-triggered fetches so they don't outlive unmount.
-    sseAbortRef.current?.abort();
-    const controller = new AbortController();
-    sseAbortRef.current = controller;
-    fetchSideData(controller.signal);
-
-    if (!event.resource) {
-      fetchNode(controller.signal);
-    }
+  const { data: tasks } = useQuery({
+    queryKey: ["node-tasks", id],
+    queryFn: ({ signal }) => api.nodeTasks(id!, signal),
+    enabled: !!id,
   });
 
+  const { data: roleData } = useQuery({
+    queryKey: ["node-role", id],
+    queryFn: ({ signal }) => api.nodeRole(id!, signal),
+    enabled: !!id,
+  });
+
+  // Local labels state, synced from server on every re-fetch and updated
+  // optimistically after a successful patch.
+  const [nodeLabels, setNodeLabels] = useState<Record<string, string>>({});
+
   useEffect(() => {
-    return () => sseAbortRef.current?.abort();
-  }, []);
+    if (node) {
+      setNodeLabels(node.Spec.Labels ?? {});
+    }
+  }, [node]);
+
+  const monitoring = useMonitoringStatus();
+  const hasPrometheus = isPrometheusReady(monitoring);
+  const hasCadvisor = isCadvisorReady(monitoring);
+  const { resolve } = useInstanceResolver();
 
   const nodeId = node?.ID || "";
   const hostname = node?.Description?.Hostname || "";
@@ -166,7 +113,7 @@ export default function NodeDetail() {
     hasCadvisor && !!nodeId,
   );
 
-  const gaugeEnabled = !!hasPrometheus && !!instanceFilter;
+  const gaugeEnabled = hasPrometheus && !!instanceFilter;
   const cpuGauge = useGaugeValue(
     `100 - (avg(rate(node_cpu_seconds_total{mode="idle",${instanceFilter}}[5m])) * 100)`,
     gaugeEnabled,
@@ -208,7 +155,7 @@ export default function NodeDetail() {
           nodeId={node.ID}
           currentRole={node.Spec.Role}
           isLeader={node.ManagerStatus?.Leader ?? false}
-          managerCount={managerCount}
+          managerCount={roleData?.managerCount ?? null}
           canEdit={allowedMethods.has("PUT")}
         />
         <StatusCard state={node.Status.State} />
@@ -276,7 +223,7 @@ export default function NodeDetail() {
         )}
       </MetadataGrid>
 
-      {nodeLabels !== null && (
+      {node && (
         <KeyValueEditor
           title="Labels"
           entries={nodeLabels}
@@ -295,7 +242,7 @@ export default function NodeDetail() {
       )}
 
       <TasksTable
-        tasks={tasks}
+        tasks={tasks ?? []}
         variant="node"
         metrics={hasCadvisor ? taskMetrics : undefined}
       />

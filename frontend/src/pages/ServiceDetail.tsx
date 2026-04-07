@@ -52,7 +52,11 @@ import { TraefikPanel } from "../components/service-detail/TraefikPanel";
 import { SizingBanner } from "../components/SizingBanner";
 import TasksTable from "../components/TasksTable";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
-import { useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import {
+  isCadvisorReady,
+  isPrometheusReady,
+  useMonitoringStatus,
+} from "../hooks/useMonitoringStatus";
 import { useRecommendations } from "../hooks/useRecommendations";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
@@ -105,8 +109,8 @@ export default function ServiceDetail() {
   const monitoring = useMonitoringStatus();
   const [allowedMethods, setAllowedMethods] = useState(emptyMethods);
   const [canChangeEndpointMode, setCanChangeEndpointMode] = useState(false);
-  const hasPrometheus = monitoring?.prometheusConfigured && monitoring?.prometheusReachable;
-  const hasCadvisor = !!monitoring?.cadvisor?.targets;
+  const hasPrometheus = isPrometheusReady(monitoring);
+  const hasCadvisor = isCadvisorReady(monitoring);
   const [error, setError] = useState(false);
   const [networkNames, setNetworkNames] = useState<Record<string, string>>({});
   const [cpuActual, setCpuActual] = useState<number | undefined>();
@@ -231,7 +235,7 @@ export default function ServiceDetail() {
     }
 
     // Refetch tasks and history — not in the service object.
-    // Abort previous SSE-triggered fetches so they don't outlive unmount.
+    // Abort previous SSE-triggered fetches so they don't outlive an Unmount.
     sseAbortRef.current?.abort();
     const controller = new AbortController();
     sseAbortRef.current = controller;

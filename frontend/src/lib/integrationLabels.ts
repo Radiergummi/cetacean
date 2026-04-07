@@ -6,9 +6,9 @@ import type { PatchOp } from "@/api/types";
  *
  * Compares `newLabels` against the original raw label entries for an integration.
  * Keys present in `originalEntries` but absent from `newLabels` are removed.
- * Keys not in either set (passthrough labels from other integrations) are untouched.
+ * Keys not in either set (pass-through labels from other integrations) are untouched.
  *
- * Note: paths use simple `/{key}` format — the backend's normalizePath strips the
+ * Note: paths use a simple `/{key}` format — the backend's normalizePath strips the
  * leading `/` and uses the remainder as a flat map key (no RFC 6901 unescaping).
  */
 export function diffLabels(

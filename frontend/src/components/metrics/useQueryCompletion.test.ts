@@ -58,7 +58,7 @@ describe("getCursorContext", () => {
   });
 
   it("handles nested braces in subqueries", () => {
-    // After the outer } we're in metric context, not label context
+    // After the outer `}` we're in metric context, not label context
     expect(getCursorContext('rate(up{job="x"}[5m]) + ra', 26)).toEqual({ type: "metric" });
   });
 
