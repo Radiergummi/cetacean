@@ -81,60 +81,13 @@ function getStackName(labels: Record<string, string> | null): string | undefined
   return labels?.[stackLabel];
 }
 
-function findServicesUsingConfig(dataset: Dataset, configID: string): ServiceRef[] {
-  const refs: ServiceRef[] = [];
-
-  for (const service of dataset.services) {
-    const configs = service.Spec.TaskTemplate.ContainerSpec?.Configs;
-
-    if (configs?.some((c) => c.ConfigID === configID)) {
-      refs.push({ id: service.ID, name: service.Spec.Name });
-    }
-  }
-
-  return refs;
-}
-
-function findServicesUsingSecret(dataset: Dataset, secretID: string): ServiceRef[] {
-  const refs: ServiceRef[] = [];
-
-  for (const service of dataset.services) {
-    const secrets = service.Spec.TaskTemplate.ContainerSpec?.Secrets;
-
-    if (secrets?.some((s) => s.SecretID === secretID)) {
-      refs.push({ id: service.ID, name: service.Spec.Name });
-    }
-  }
-
-  return refs;
-}
-
-function findServicesUsingNetwork(dataset: Dataset, networkID: string): ServiceRef[] {
-  const refs: ServiceRef[] = [];
-
-  for (const service of dataset.services) {
-    const networks = service.Spec.TaskTemplate.Networks;
-
-    if (networks?.some((n) => n.Target === networkID)) {
-      refs.push({ id: service.ID, name: service.Spec.Name });
-    }
-  }
-
-  return refs;
-}
-
-function findServicesUsingVolume(dataset: Dataset, volumeName: string): ServiceRef[] {
-  const refs: ServiceRef[] = [];
-
-  for (const service of dataset.services) {
-    const mounts = service.Spec.TaskTemplate.ContainerSpec?.Mounts;
-
-    if (mounts?.some((m) => m.Source === volumeName)) {
-      refs.push({ id: service.ID, name: service.Spec.Name });
-    }
-  }
-
-  return refs;
+function findServicesUsing(
+  dataset: Dataset,
+  predicate: (service: Service) => boolean,
+): ServiceRef[] {
+  return dataset.services
+    .filter(predicate)
+    .map((service) => ({ id: service.ID, name: service.Spec.Name }));
 }
 
 function deriveStacks(dataset: Dataset) {
@@ -372,154 +325,92 @@ function searchDataset(
   total: number;
 } {
   const lowerQuery = query.toLowerCase();
-
-  const match = (name: string): boolean => name.toLowerCase().includes(lowerQuery);
+  const matches = (name: string): boolean => name.toLowerCase().includes(lowerQuery);
 
   const results: Partial<Record<SearchResourceType, SearchResult[]>> = {};
   const counts: Partial<Record<SearchResourceType, number>> = {};
   let total = 0;
 
-  // Services
-  const serviceResults: SearchResult[] = [];
+  function collect(type: SearchResourceType, items: SearchResult[]) {
+    if (items.length === 0) return;
+    results[type] = limit > 0 ? items.slice(0, limit) : items;
+    counts[type] = items.length;
+    total += items.length;
+  }
 
-  for (const service of dataset.services) {
-    const image = service.Spec.TaskTemplate.ContainerSpec?.Image ?? "";
-
-    if (match(service.Spec.Name) || match(image)) {
-      serviceResults.push({
+  collect(
+    "services",
+    dataset.services
+      .filter((service) => {
+        const image = service.Spec.TaskTemplate.ContainerSpec?.Image ?? "";
+        return matches(service.Spec.Name) || matches(image);
+      })
+      .map((service) => ({
         id: service.ID,
         name: service.Spec.Name,
-        detail: image.split("@")[0],
-      });
-    }
-  }
+        detail: (service.Spec.TaskTemplate.ContainerSpec?.Image ?? "").split("@")[0],
+      })),
+  );
 
-  if (serviceResults.length > 0) {
-    results.services = limit > 0 ? serviceResults.slice(0, limit) : serviceResults;
-    counts.services = serviceResults.length;
-    total += serviceResults.length;
-  }
+  collect(
+    "stacks",
+    [...deriveStacks(dataset).entries()]
+      .filter(([name]) => matches(name))
+      .map(([name, stack]) => ({ id: name, name, detail: `${stack.services.length} services` })),
+  );
 
-  // Stacks
-  const stacks = deriveStacks(dataset);
-  const stackResults: SearchResult[] = [];
-
-  for (const [name, stack] of stacks) {
-    if (match(name)) {
-      stackResults.push({
-        id: name,
-        name,
-        detail: `${stack.services.length} services`,
-      });
-    }
-  }
-
-  if (stackResults.length > 0) {
-    results.stacks = limit > 0 ? stackResults.slice(0, limit) : stackResults;
-    counts.stacks = stackResults.length;
-    total += stackResults.length;
-  }
-
-  // Nodes
-  const nodeResults: SearchResult[] = [];
-
-  for (const node of dataset.nodes) {
-    if (match(node.Description.Hostname)) {
-      nodeResults.push({
+  collect(
+    "nodes",
+    dataset.nodes
+      .filter((node) => matches(node.Description.Hostname))
+      .map((node) => ({
         id: node.ID,
         name: node.Description.Hostname,
         detail: `${node.Spec.Role} (${node.Status.State})`,
-      });
-    }
-  }
+      })),
+  );
 
-  if (nodeResults.length > 0) {
-    results.nodes = limit > 0 ? nodeResults.slice(0, limit) : nodeResults;
-    counts.nodes = nodeResults.length;
-    total += nodeResults.length;
-  }
+  collect(
+    "configs",
+    dataset.configs
+      .filter((config) => matches(config.Spec.Name))
+      .map((config) => ({ id: config.ID, name: config.Spec.Name, detail: "" })),
+  );
 
-  // Configs
-  const configResults: SearchResult[] = [];
+  collect(
+    "secrets",
+    dataset.secrets
+      .filter((secret) => matches(secret.Spec.Name))
+      .map((secret) => ({ id: secret.ID, name: secret.Spec.Name, detail: "" })),
+  );
 
-  for (const config of dataset.configs) {
-    if (match(config.Spec.Name)) {
-      configResults.push({
-        id: config.ID,
-        name: config.Spec.Name,
-        detail: "",
-      });
-    }
-  }
-
-  if (configResults.length > 0) {
-    results.configs = limit > 0 ? configResults.slice(0, limit) : configResults;
-    counts.configs = configResults.length;
-    total += configResults.length;
-  }
-
-  // Secrets
-  const secretResults: SearchResult[] = [];
-
-  for (const secret of dataset.secrets) {
-    if (match(secret.Spec.Name)) {
-      secretResults.push({
-        id: secret.ID,
-        name: secret.Spec.Name,
-        detail: "",
-      });
-    }
-  }
-
-  if (secretResults.length > 0) {
-    results.secrets = limit > 0 ? secretResults.slice(0, limit) : secretResults;
-    counts.secrets = secretResults.length;
-    total += secretResults.length;
-  }
-
-  // Networks
-  const networkResults: SearchResult[] = [];
-
-  for (const network of dataset.networks) {
-    if (match(network.Name)) {
-      networkResults.push({
+  collect(
+    "networks",
+    dataset.networks
+      .filter((network) => matches(network.Name))
+      .map((network) => ({
         id: network.Id,
         name: network.Name,
         detail: `${network.Driver} (${network.Scope})`,
-      });
-    }
-  }
+      })),
+  );
 
-  if (networkResults.length > 0) {
-    results.networks = limit > 0 ? networkResults.slice(0, limit) : networkResults;
-    counts.networks = networkResults.length;
-    total += networkResults.length;
-  }
-
-  // Volumes
-  const volumeResults: SearchResult[] = [];
-
-  for (const volume of dataset.volumes) {
-    if (match(volume.Name)) {
-      volumeResults.push({
+  collect(
+    "volumes",
+    dataset.volumes
+      .filter((volume) => matches(volume.Name))
+      .map((volume) => ({
         id: volume.Name,
         name: volume.Name,
         detail: `${volume.Driver} (${volume.Scope})`,
-      });
-    }
-  }
-
-  if (volumeResults.length > 0) {
-    results.volumes = limit > 0 ? volumeResults.slice(0, limit) : volumeResults;
-    counts.volumes = volumeResults.length;
-    total += volumeResults.length;
-  }
+      })),
+  );
 
   return { results, counts, total };
 }
 
 function countRunningTasks(dataset: Dataset, serviceID: string): number {
-  return dataset.tasks.filter((t) => t.ServiceID === serviceID && t.Status.State === "running")
+  return dataset.tasks.filter((task) => task.ServiceID === serviceID && task.Status.State === "running")
     .length;
 }
 
@@ -593,90 +484,90 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
     // ---- Topology (must be before */networks and */nodes to avoid glob conflicts) ----
     http.get("*/topology/networks", () => {
-      const sLabel = "com.docker.stack.namespace";
-
-      const nodes = dataset.services.map((svc) => ({
-        id: svc.ID,
-        name: svc.Spec.Name,
-        stack: svc.Spec.Labels?.[sLabel],
+      const nodes = dataset.services.map((service) => ({
+        id: service.ID,
+        name: service.Spec.Name,
+        stack: service.Spec.Labels?.[stackLabel],
         replicas:
-          svc.Spec.Mode.Replicated?.Replicas ?? (svc.Spec.Mode.Global ? dataset.nodes.length : 1),
-        image: (svc.Spec.TaskTemplate.ContainerSpec?.Image ?? "").split("@")[0],
-        ports: (svc.Spec.EndpointSpec?.Ports ?? []).map(
-          (p) => `${p.PublishedPort}:${p.TargetPort}/${p.Protocol}`,
+          service.Spec.Mode.Replicated?.Replicas ??
+          (service.Spec.Mode.Global ? dataset.nodes.length : 1),
+        image: (service.Spec.TaskTemplate.ContainerSpec?.Image ?? "").split("@")[0],
+        ports: (service.Spec.EndpointSpec?.Ports ?? []).map(
+          ({ PublishedPort, TargetPort, Protocol }) =>
+            `${PublishedPort}:${TargetPort}/${Protocol}`,
         ),
-        mode: svc.Spec.Mode.Replicated ? "replicated" : "global",
-        updateStatus: svc.UpdateStatus?.State,
+        mode: service.Spec.Mode.Replicated ? "replicated" : "global",
+        updateStatus: service.UpdateStatus?.State,
         networkAliases: {},
       }));
 
       const edges: { source: string; target: string; networks: string[] }[] = [];
       const serviceNetworks = new Map<string, string[]>();
 
-      for (const svc of dataset.services) {
-        const nets = (svc.Spec.TaskTemplate.Networks ?? []).map((n) => n.Target);
-        serviceNetworks.set(svc.ID, nets);
+      for (const service of dataset.services) {
+        const targets = (service.Spec.TaskTemplate.Networks ?? []).map(
+          ({ Target }) => Target,
+        );
+        serviceNetworks.set(service.ID, targets);
       }
 
       const seen = new Set<string>();
 
-      for (const [svcA, netsA] of serviceNetworks) {
-        for (const [svcB, netsB] of serviceNetworks) {
-          if (svcA >= svcB) continue;
-          const shared = netsA.filter((n) => netsB.includes(n));
+      for (const [serviceA, networksA] of serviceNetworks) {
+        for (const [serviceB, networksB] of serviceNetworks) {
+          if (serviceA >= serviceB) continue;
 
-          if (shared.length > 0) {
-            const key = `${svcA}-${svcB}`;
+          const shared = networksA.filter((id) => networksB.includes(id));
+          const key = `${serviceA}-${serviceB}`;
 
-            if (!seen.has(key)) {
-              seen.add(key);
-              edges.push({ source: svcA, target: svcB, networks: shared });
-            }
+          if (shared.length > 0 && !seen.has(key)) {
+            seen.add(key);
+            edges.push({ source: serviceA, target: serviceB, networks: shared });
           }
         }
       }
 
-      const networks = dataset.networks.map((net) => ({
-        id: net.Id,
-        name: net.Name,
-        driver: net.Driver,
-        scope: net.Scope,
-        stack: net.Labels?.[sLabel],
+      const networks = dataset.networks.map((network) => ({
+        id: network.Id,
+        name: network.Name,
+        driver: network.Driver,
+        scope: network.Scope,
+        stack: network.Labels?.[stackLabel],
       }));
 
       return jsonResponse({ nodes, edges, networks });
     }),
 
     http.get("*/topology/placement", () => {
-      const topoNodes = dataset.nodes.map((node) => ({
+      const placementNodes = dataset.nodes.map((node) => ({
         id: node.ID,
         hostname: node.Description.Hostname,
         role: node.Spec.Role,
         state: node.Status.State,
         availability: node.Spec.Availability,
         tasks: dataset.tasks
-          .filter((t) => t.NodeID === node.ID && t.Status.State === "running")
-          .map((t) => {
-            const svc = dataset.servicesByID.get(t.ServiceID);
+          .filter((task) => task.NodeID === node.ID && task.Status.State === "running")
+          .map((task) => {
+            const service = dataset.servicesByID.get(task.ServiceID);
 
             return {
-              id: t.ID,
-              serviceId: t.ServiceID,
-              serviceName: svc?.Spec.Name ?? "",
-              state: t.Status.State,
-              slot: t.Slot ?? 0,
-              image: (t.Spec.ContainerSpec?.Image ?? "").split("@")[0],
+              id: task.ID,
+              serviceId: task.ServiceID,
+              serviceName: service?.Spec.Name ?? "",
+              state: task.Status.State,
+              slot: task.Slot ?? 0,
+              image: (task.Spec.ContainerSpec?.Image ?? "").split("@")[0],
             };
           }),
       }));
 
-      return jsonResponse({ nodes: topoNodes });
+      return jsonResponse({ nodes: placementNodes });
     }),
 
     // ---- Nodes ----
     http.get("*/nodes/:id/tasks", ({ params, request }) => {
       const nodeID = params.id as string;
-      const nodeTasks = dataset.tasks.filter((t) => t.NodeID === nodeID);
+      const nodeTasks = dataset.tasks.filter((task) => task.NodeID === nodeID);
       return jsonResponse(paginate(nodeTasks, request));
     }),
 
@@ -697,7 +588,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      const managerCount = dataset.nodes.filter((n) => n.Spec.Role === "manager").length;
+      const managerCount = dataset.nodes.filter((node) => node.Spec.Role === "manager").length;
       return jsonResponse({
         role: node.Spec.Role,
         isLeader: node.ManagerStatus?.Leader ?? false,
@@ -722,7 +613,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     // ---- Services ----
     http.get("*/services/:id/tasks", ({ params, request }) => {
       const serviceID = params.id as string;
-      const serviceTasks = dataset.tasks.filter((t) => t.ServiceID === serviceID);
+      const serviceTasks = dataset.tasks.filter((task) => task.ServiceID === serviceID);
       return jsonResponse(paginate(serviceTasks, request));
     }),
 
@@ -786,11 +677,13 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      const configs = (service.Spec.TaskTemplate.ContainerSpec?.Configs ?? []).map((c) => ({
-        configID: c.ConfigID,
-        configName: c.ConfigName,
-        fileName: c.File?.Name ?? "",
-      }));
+      const configs = (service.Spec.TaskTemplate.ContainerSpec?.Configs ?? []).map(
+        ({ ConfigID, ConfigName, File }) => ({
+          configID: ConfigID,
+          configName: ConfigName,
+          fileName: File?.Name ?? "",
+        }),
+      );
       return jsonResponse({ configs });
     }),
 
@@ -801,11 +694,13 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      const secrets = (service.Spec.TaskTemplate.ContainerSpec?.Secrets ?? []).map((s) => ({
-        secretID: s.SecretID,
-        secretName: s.SecretName,
-        fileName: s.File?.Name ?? "",
-      }));
+      const secrets = (service.Spec.TaskTemplate.ContainerSpec?.Secrets ?? []).map(
+        ({ SecretID, SecretName, File }) => ({
+          secretID: SecretID,
+          secretName: SecretName,
+          fileName: File?.Name ?? "",
+        }),
+      );
       return jsonResponse({ secrets });
     }),
 
@@ -816,10 +711,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      const networks = (service.Spec.TaskTemplate.Networks ?? []).map((n) => ({
-        target: n.Target,
-        aliases: n.Aliases,
-      }));
+      const networks = (service.Spec.TaskTemplate.Networks ?? []).map(
+        ({ Target, Aliases }) => ({ target: Target, aliases: Aliases }),
+      );
       return jsonResponse({ networks });
     }),
 
@@ -1001,7 +895,11 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
       return jsonResponse({
         config,
-        services: findServicesUsingConfig(dataset, config.ID),
+        services: findServicesUsing(dataset, (service) =>
+            service.Spec.TaskTemplate.ContainerSpec?.Configs?.some(
+              ({ ConfigID }) => ConfigID === config.ID,
+            ) ?? false,
+          ),
       });
     }),
 
@@ -1019,7 +917,11 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
       return jsonResponse({
         secret,
-        services: findServicesUsingSecret(dataset, secret.ID),
+        services: findServicesUsing(dataset, (service) =>
+            service.Spec.TaskTemplate.ContainerSpec?.Secrets?.some(
+              ({ SecretID }) => SecretID === secret.ID,
+            ) ?? false,
+          ),
       });
     }),
 
@@ -1037,7 +939,10 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
       return jsonResponse({
         network,
-        services: findServicesUsingNetwork(dataset, network.Id),
+        services: findServicesUsing(dataset, (service) =>
+            service.Spec.TaskTemplate.Networks?.some(({ Target }) => Target === network.Id) ??
+            false,
+          ),
       });
     }),
 
@@ -1055,7 +960,11 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
       return jsonResponse({
         volume,
-        services: findServicesUsingVolume(dataset, volume.Name),
+        services: findServicesUsing(dataset, (service) =>
+            service.Spec.TaskTemplate.ContainerSpec?.Mounts?.some(
+              ({ Source }) => Source === volume.Name,
+            ) ?? false,
+          ),
       });
     }),
 
@@ -1149,10 +1058,10 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
           "node_memory_MemAvailable_bytes",
           "up",
         ],
-        name: dataset.services.map((s) => s.Spec.Name),
-        instance: dataset.nodes.map((n) => `${n.Description.Hostname}:9100`),
+        name: dataset.services.map((service) => service.Spec.Name),
+        instance: dataset.nodes.map((node) => `${node.Description.Hostname}:9100`),
         job: ["cadvisor", "node-exporter", "prometheus"],
-        nodename: dataset.nodes.map((n) => n.Description.Hostname),
+        nodename: dataset.nodes.map((node) => node.Description.Hostname),
       };
       return jsonResponse({ data: valueMap[name] ?? [] });
     }),
@@ -1227,7 +1136,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
       if (body.replicas > oldReplicas) {
         for (let slot = oldReplicas + 1; slot <= body.replicas; slot++) {
-          const workers = dataset.nodes.filter((n) => n.Spec.Role === "worker");
+          const workers = dataset.nodes.filter((node) => node.Spec.Role === "worker");
           const node = workers[slot % workers.length] ?? dataset.nodes[0];
           const task = createTask(service, slot, node);
           dataset.tasks.push(task);
@@ -1489,126 +1398,44 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       return jsonResponse({ labels: service.Spec.Labels });
     }),
 
-    http.patch("*/services/:id/resources", async ({ params, request }) => {
-      const service = dataset.servicesByID.get(params.id as string);
-
-      if (!service) {
-        return notFound();
-      }
-
-      const body = (await request.json()) as Record<string, unknown>;
-      service.Spec.TaskTemplate.Resources = {
-        ...service.Spec.TaskTemplate.Resources,
-        ...body,
-      };
-      service.Version.Index++;
-      service.UpdatedAt = new Date().toISOString();
-      broadcastServiceUpdate(service);
-      return jsonResponse({ resources: service.Spec.TaskTemplate.Resources });
-    }),
-
-    http.patch("*/services/:id/ports", async ({ params, request }) => {
-      const service = dataset.servicesByID.get(params.id as string);
-
-      if (!service) {
-        return notFound();
-      }
-
-      const body = (await request.json()) as { ports: unknown[] };
-
-      if (!service.Spec.EndpointSpec) {
-        service.Spec.EndpointSpec = {};
-      }
-
-      service.Spec.EndpointSpec.Ports = body.ports as any;
-      service.Version.Index++;
-      service.UpdatedAt = new Date().toISOString();
-      broadcastServiceUpdate(service);
-      return jsonResponse({ ports: service.Spec.EndpointSpec.Ports });
-    }),
+    // Service spec field updates — each entry maps a sub-resource path to
+    // a getter/setter pair on the service spec. All share the same handler
+    // logic: look up the service, merge the request body, bump version, broadcast.
+    ...([
+      ["resources", (service: Service) => service.Spec.TaskTemplate.Resources ?? {},
+        (service: Service, body: any) => { service.Spec.TaskTemplate.Resources = { ...service.Spec.TaskTemplate.Resources, ...body }; }],
+      ["ports", (service: Service) => service.Spec.EndpointSpec?.Ports ?? [],
+        (service: Service, body: any) => { if (!service.Spec.EndpointSpec) service.Spec.EndpointSpec = {}; service.Spec.EndpointSpec.Ports = body.ports ?? body; }],
+      ["update-policy", (service: Service) => service.Spec.UpdateConfig ?? {},
+        (service: Service, body: any) => { service.Spec.UpdateConfig = { ...service.Spec.UpdateConfig, ...body }; }],
+      ["rollback-policy", (service: Service) => service.Spec.RollbackConfig ?? {},
+        (service: Service, body: any) => { service.Spec.RollbackConfig = { ...service.Spec.RollbackConfig, ...body }; }],
+      ["log-driver", (service: Service) => service.Spec.TaskTemplate.LogDriver ?? {},
+        (service: Service, body: any) => { service.Spec.TaskTemplate.LogDriver = { ...service.Spec.TaskTemplate.LogDriver, ...body }; }],
+      ["healthcheck", (service: Service) => service.Spec.TaskTemplate.ContainerSpec?.Healthcheck ?? null,
+        (service: Service, body: any) => { if (service.Spec.TaskTemplate.ContainerSpec) service.Spec.TaskTemplate.ContainerSpec.Healthcheck = body; }],
+    ] as [string, (service: Service) => unknown, (service: Service, body: any) => void][]).map(
+      ([field, getter, setter]) =>
+        http.patch(`*/services/:id/${field}`, async ({ params, request }) => {
+          const service = dataset.servicesByID.get(params.id as string);
+          if (!service) return notFound();
+          setter(service, await request.json());
+          service.Version.Index++;
+          service.UpdatedAt = new Date().toISOString();
+          broadcastServiceUpdate(service);
+          const responseKey = field.replace(/-([a-z])/g, (_, character: string) => character.toUpperCase());
+          return jsonResponse({ [responseKey]: getter(service) });
+        }),
+    ),
 
     http.put("*/services/:id/placement", async ({ params, request }) => {
       const service = dataset.servicesByID.get(params.id as string);
-
-      if (!service) {
-        return notFound();
-      }
-
-      const body = await request.json();
-      service.Spec.TaskTemplate.Placement = body as any;
+      if (!service) return notFound();
+      service.Spec.TaskTemplate.Placement = (await request.json()) as any;
       service.Version.Index++;
       service.UpdatedAt = new Date().toISOString();
       broadcastServiceUpdate(service);
       return jsonResponse({ placement: service.Spec.TaskTemplate.Placement });
-    }),
-
-    http.patch("*/services/:id/update-policy", async ({ params, request }) => {
-      const service = dataset.servicesByID.get(params.id as string);
-
-      if (!service) {
-        return notFound();
-      }
-
-      const body = (await request.json()) as Record<string, unknown>;
-      service.Spec.UpdateConfig = { ...service.Spec.UpdateConfig, ...body } as any;
-      service.Version.Index++;
-      service.UpdatedAt = new Date().toISOString();
-      broadcastServiceUpdate(service);
-      return jsonResponse({ updatePolicy: service.Spec.UpdateConfig });
-    }),
-
-    http.patch("*/services/:id/rollback-policy", async ({ params, request }) => {
-      const service = dataset.servicesByID.get(params.id as string);
-
-      if (!service) {
-        return notFound();
-      }
-
-      const body = (await request.json()) as Record<string, unknown>;
-      service.Spec.RollbackConfig = { ...service.Spec.RollbackConfig, ...body } as any;
-      service.Version.Index++;
-      service.UpdatedAt = new Date().toISOString();
-      broadcastServiceUpdate(service);
-      return jsonResponse({ rollbackPolicy: service.Spec.RollbackConfig });
-    }),
-
-    http.patch("*/services/:id/log-driver", async ({ params, request }) => {
-      const service = dataset.servicesByID.get(params.id as string);
-
-      if (!service) {
-        return notFound();
-      }
-
-      const body = (await request.json()) as Record<string, unknown>;
-      service.Spec.TaskTemplate.LogDriver = {
-        ...service.Spec.TaskTemplate.LogDriver,
-        ...body,
-      } as any;
-      service.Version.Index++;
-      service.UpdatedAt = new Date().toISOString();
-      broadcastServiceUpdate(service);
-      return jsonResponse({ logDriver: service.Spec.TaskTemplate.LogDriver });
-    }),
-
-    http.patch("*/services/:id/healthcheck", async ({ params, request }) => {
-      const service = dataset.servicesByID.get(params.id as string);
-
-      if (!service) {
-        return notFound();
-      }
-
-      const body = await request.json();
-
-      if (service.Spec.TaskTemplate.ContainerSpec) {
-        service.Spec.TaskTemplate.ContainerSpec.Healthcheck = body as any;
-      }
-
-      service.Version.Index++;
-      service.UpdatedAt = new Date().toISOString();
-      broadcastServiceUpdate(service);
-      return jsonResponse({
-        healthcheck: service.Spec.TaskTemplate.ContainerSpec?.Healthcheck,
-      });
     }),
 
     // ---- Catch-all for HEAD requests (for Allow header checks) ----
