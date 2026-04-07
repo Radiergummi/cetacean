@@ -257,11 +257,14 @@ function scenarioTaskFail(dataset: Dataset, clients: SSEClients) {
   broadcastTask(clients, "update", task);
 
   // Recover: create a replacement
-  setTimeout(() => {
-    const replacement = makeTask(dataset, service, task.Slot ?? 0);
-    addTask(dataset, replacement);
-    broadcastTask(clients, "create", replacement);
-  }, randomBetween(3000, 8000));
+  setTimeout(
+    () => {
+      const replacement = makeTask(dataset, service, task.Slot ?? 0);
+      addTask(dataset, replacement);
+      broadcastTask(clients, "create", replacement);
+    },
+    randomBetween(3000, 8000),
+  );
 }
 
 /**

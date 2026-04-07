@@ -2,10 +2,10 @@ import { defineMiddleware } from "astro:middleware";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-const spaPath = [
-  resolve("public/demo/index.html"),
-  resolve("../website/public/demo/index.html"),
-].find(existsSync) ?? "";
+const spaPath =
+  [resolve("public/demo/index.html"), resolve("../website/public/demo/index.html")].find(
+    existsSync,
+  ) ?? "";
 
 function readSpaHTML(): string {
   if (!spaPath) return "";

@@ -1,13 +1,16 @@
 {
   "name": "website",
   "version": "1.0.0",
-  "description": "",
   "private": true,
+  "description": "",
   "type": "module",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "preview": "astro preview"
+    "preview": "astro preview",
+    "fmt": "oxfmt --write .",
+    "fmt:check": "oxfmt --check .",
+    "lint": "oxlint"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.8",

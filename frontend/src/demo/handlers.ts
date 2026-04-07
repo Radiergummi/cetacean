@@ -440,8 +440,9 @@ function searchDataset(
 }
 
 function countRunningTasks(dataset: Dataset, serviceID: string): number {
-  return dataset.tasks.filter((task) => task.ServiceID === serviceID && task.Status.State === "running")
-    .length;
+  return dataset.tasks.filter(
+    (task) => task.ServiceID === serviceID && task.Status.State === "running",
+  ).length;
 }
 
 export function createHandlers(dataset: Dataset, clients: SSEClients) {
@@ -473,11 +474,19 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
     // The frontend calls /profile for whoami
     http.get("*/profile", () => {
-      return jsonResponse<Identity>({ subject: "demo", displayName: "Demo User", provider: "none" });
+      return jsonResponse<Identity>({
+        subject: "demo",
+        displayName: "Demo User",
+        provider: "none",
+      });
     }),
 
     http.get("*/auth/whoami", () => {
-      return jsonResponse<Identity>({ subject: "demo", displayName: "Demo User", provider: "none" });
+      return jsonResponse<Identity>({
+        subject: "demo",
+        displayName: "Demo User",
+        provider: "none",
+      });
     }),
 
     // ---- Cluster ----
@@ -523,8 +532,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
           (service.Spec.Mode.Global ? dataset.nodes.length : 1),
         image: (service.Spec.TaskTemplate.ContainerSpec?.Image ?? "").split("@")[0],
         ports: (service.Spec.EndpointSpec?.Ports ?? []).map(
-          ({ PublishedPort, TargetPort, Protocol }) =>
-            `${PublishedPort}:${TargetPort}/${Protocol}`,
+          ({ PublishedPort, TargetPort, Protocol }) => `${PublishedPort}:${TargetPort}/${Protocol}`,
         ),
         mode: service.Spec.Mode.Replicated ? "replicated" : "global",
         updateStatus: service.UpdateStatus?.State,
@@ -535,9 +543,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       const serviceNetworks = new Map<string, string[]>();
 
       for (const service of dataset.services) {
-        const targets = (service.Spec.TaskTemplate.Networks ?? []).map(
-          ({ Target }) => Target,
-        );
+        const targets = (service.Spec.TaskTemplate.Networks ?? []).map(({ Target }) => Target);
         serviceNetworks.set(service.ID, targets);
       }
 
@@ -675,7 +681,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse<{ labels: Record<string, string> }>({ labels: service.Spec.Labels ?? {} });
+      return jsonResponse<{ labels: Record<string, string> }>({
+        labels: service.Spec.Labels ?? {},
+      });
     }),
 
     http.get("*/services/:id/resources", ({ params }) => {
@@ -685,7 +693,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse<{ resources: Record<string, unknown> }>({ resources: service.Spec.TaskTemplate.Resources ?? {} });
+      return jsonResponse<{ resources: Record<string, unknown> }>({
+        resources: service.Spec.TaskTemplate.Resources ?? {},
+      });
     }),
 
     http.get("*/services/:id/healthcheck", ({ params }) => {
@@ -741,9 +751,10 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      const networks = (service.Spec.TaskTemplate.Networks ?? []).map(
-        ({ Target, Aliases }) => ({ target: Target, aliases: Aliases ?? undefined }),
-      );
+      const networks = (service.Spec.TaskTemplate.Networks ?? []).map(({ Target, Aliases }) => ({
+        target: Target,
+        aliases: Aliases ?? undefined,
+      }));
       return jsonResponse<{ networks: ServiceNetworkRef[] }>({ networks });
     }),
 
@@ -754,7 +765,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse<{ mounts: ServiceMount[] }>({ mounts: service.Spec.TaskTemplate.ContainerSpec?.Mounts ?? [] });
+      return jsonResponse<{ mounts: ServiceMount[] }>({
+        mounts: service.Spec.TaskTemplate.ContainerSpec?.Mounts ?? [],
+      });
     }),
 
     http.get("*/services/:id/ports", ({ params }) => {
@@ -764,7 +777,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse<{ ports: PortConfig[] }>({ ports: service.Spec.EndpointSpec?.Ports ?? [] });
+      return jsonResponse<{ ports: PortConfig[] }>({
+        ports: service.Spec.EndpointSpec?.Ports ?? [],
+      });
     }),
 
     http.get("*/services/:id/placement", ({ params }) => {
@@ -774,7 +789,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse<{ placement: Placement }>({ placement: service.Spec.TaskTemplate.Placement ?? {} });
+      return jsonResponse<{ placement: Placement }>({
+        placement: service.Spec.TaskTemplate.Placement ?? {},
+      });
     }),
 
     http.get("*/services/:id/update-policy", ({ params }) => {
@@ -784,7 +801,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse<{ updatePolicy: Partial<UpdateConfig> }>({ updatePolicy: service.Spec.UpdateConfig ?? {} });
+      return jsonResponse<{ updatePolicy: Partial<UpdateConfig> }>({
+        updatePolicy: service.Spec.UpdateConfig ?? {},
+      });
     }),
 
     http.get("*/services/:id/rollback-policy", ({ params }) => {
@@ -794,7 +813,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse<{ rollbackPolicy: Partial<UpdateConfig> }>({ rollbackPolicy: service.Spec.RollbackConfig ?? {} });
+      return jsonResponse<{ rollbackPolicy: Partial<UpdateConfig> }>({
+        rollbackPolicy: service.Spec.RollbackConfig ?? {},
+      });
     }),
 
     http.get("*/services/:id/log-driver", ({ params }) => {
@@ -804,7 +825,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse<{ logDriver: Partial<LogDriver> }>({ logDriver: service.Spec.TaskTemplate.LogDriver ?? {} });
+      return jsonResponse<{ logDriver: Partial<LogDriver> }>({
+        logDriver: service.Spec.TaskTemplate.LogDriver ?? {},
+      });
     }),
 
     http.get("*/services/:id/container-config", ({ params }) => {
@@ -830,11 +853,13 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         capabilityDrop: container?.CapabilityDrop ?? [],
         groups: container?.Groups ?? [],
         hosts: container?.Hosts ?? [],
-        dnsConfig: container?.DNSConfig ? {
-          nameservers: container.DNSConfig.Nameservers ?? undefined,
-          search: container.DNSConfig.Search ?? undefined,
-          options: container.DNSConfig.Options ?? undefined,
-        } : undefined,
+        dnsConfig: container?.DNSConfig
+          ? {
+              nameservers: container.DNSConfig.Nameservers ?? undefined,
+              search: container.DNSConfig.Search ?? undefined,
+              options: container.DNSConfig.Options ?? undefined,
+            }
+          : undefined,
       });
     }),
 
@@ -882,7 +907,12 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     // ---- Stacks ----
     http.get("*/stacks/summary", () => {
       const items = buildStackSummaries(dataset);
-      return jsonResponse<CollectionResponse<StackSummary>>({ items, total: items.length, limit: 50, offset: 0 });
+      return jsonResponse<CollectionResponse<StackSummary>>({
+        items,
+        total: items.length,
+        limit: 50,
+        offset: 0,
+      });
     }),
 
     http.get("*/stacks/:name", ({ params }) => {
@@ -897,11 +927,21 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       return jsonResponse<{ stack: StackDetail }>({
         stack: {
           name: stackName,
-          services: stack.services.map((id) => dataset.servicesByID.get(id)).filter(Boolean) as Service[],
-          configs: stack.configs.map((id) => dataset.configsByID.get(id)).filter(Boolean) as Config[],
-          secrets: stack.secrets.map((id) => dataset.secretsByID.get(id)).filter(Boolean) as Secret[],
-          networks: stack.networks.map((id) => dataset.networksByID.get(id)).filter(Boolean) as Network[],
-          volumes: stack.volumes.map((name) => dataset.volumesByName.get(name)).filter(Boolean) as Volume[],
+          services: stack.services
+            .map((id) => dataset.servicesByID.get(id))
+            .filter(Boolean) as Service[],
+          configs: stack.configs
+            .map((id) => dataset.configsByID.get(id))
+            .filter(Boolean) as Config[],
+          secrets: stack.secrets
+            .map((id) => dataset.secretsByID.get(id))
+            .filter(Boolean) as Secret[],
+          networks: stack.networks
+            .map((id) => dataset.networksByID.get(id))
+            .filter(Boolean) as Network[],
+          volumes: stack.volumes
+            .map((name) => dataset.volumesByName.get(name))
+            .filter(Boolean) as Volume[],
         },
       });
     }),
@@ -929,11 +969,13 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
       return jsonResponse<ConfigDetail>({
         config,
-        services: findServicesUsing(dataset, (service) =>
+        services: findServicesUsing(
+          dataset,
+          (service) =>
             service.Spec.TaskTemplate.ContainerSpec?.Configs?.some(
               ({ ConfigID }) => ConfigID === config.ID,
             ) ?? false,
-          ),
+        ),
       });
     }),
 
@@ -951,11 +993,13 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
       return jsonResponse<SecretDetail>({
         secret,
-        services: findServicesUsing(dataset, (service) =>
+        services: findServicesUsing(
+          dataset,
+          (service) =>
             service.Spec.TaskTemplate.ContainerSpec?.Secrets?.some(
               ({ SecretID }) => SecretID === secret.ID,
             ) ?? false,
-          ),
+        ),
       });
     }),
 
@@ -973,10 +1017,12 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
       return jsonResponse<NetworkDetail>({
         network,
-        services: findServicesUsing(dataset, (service) =>
+        services: findServicesUsing(
+          dataset,
+          (service) =>
             service.Spec.TaskTemplate.Networks?.some(({ Target }) => Target === network.Id) ??
             false,
-          ),
+        ),
       });
     }),
 
@@ -994,11 +1040,13 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
       return jsonResponse<VolumeDetail>({
         volume,
-        services: findServicesUsing(dataset, (service) =>
+        services: findServicesUsing(
+          dataset,
+          (service) =>
             service.Spec.TaskTemplate.ContainerSpec?.Mounts?.some(
               ({ Source }) => Source === volume.Name,
             ) ?? false,
-          ),
+        ),
       });
     }),
 
@@ -1020,7 +1068,12 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     // ---- History ----
     http.get("*/history", () => {
       const items: HistoryEntry[] = [];
-      return jsonResponse<CollectionResponse<HistoryEntry>>({ items, total: 0, limit: 50, offset: 0 });
+      return jsonResponse<CollectionResponse<HistoryEntry>>({
+        items,
+        total: 0,
+        limit: 50,
+        offset: 0,
+      });
     }),
 
     // ---- Recommendations ----
@@ -1068,7 +1121,12 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
     // ---- Plugins ----
     http.get("*/plugins", () => {
-      return jsonResponse<CollectionResponse<Plugin>>({ items: [], total: 0, limit: 50, offset: 0 });
+      return jsonResponse<CollectionResponse<Plugin>>({
+        items: [],
+        total: 0,
+        limit: 50,
+        offset: 0,
+      });
     }),
 
     // ---- Monitoring status ----
@@ -1435,31 +1493,72 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     // Service spec field updates — each entry maps a sub-resource path to
     // a getter/setter pair on the service spec. All share the same handler
     // logic: look up the service, merge the request body, bump version, broadcast.
-    ...([
-      ["resources", (service: Service) => service.Spec.TaskTemplate.Resources ?? {},
-        (service: Service, body: any) => { service.Spec.TaskTemplate.Resources = { ...service.Spec.TaskTemplate.Resources, ...body }; }],
-      ["ports", (service: Service) => service.Spec.EndpointSpec?.Ports ?? [],
-        (service: Service, body: any) => { if (!service.Spec.EndpointSpec) service.Spec.EndpointSpec = {}; service.Spec.EndpointSpec.Ports = body.ports ?? body; }],
-      ["update-policy", (service: Service) => service.Spec.UpdateConfig ?? {},
-        (service: Service, body: any) => { service.Spec.UpdateConfig = { ...service.Spec.UpdateConfig, ...body }; }],
-      ["rollback-policy", (service: Service) => service.Spec.RollbackConfig ?? {},
-        (service: Service, body: any) => { service.Spec.RollbackConfig = { ...service.Spec.RollbackConfig, ...body }; }],
-      ["log-driver", (service: Service) => service.Spec.TaskTemplate.LogDriver ?? {},
-        (service: Service, body: any) => { service.Spec.TaskTemplate.LogDriver = { ...service.Spec.TaskTemplate.LogDriver, ...body }; }],
-      ["healthcheck", (service: Service) => service.Spec.TaskTemplate.ContainerSpec?.Healthcheck ?? null,
-        (service: Service, body: any) => { if (service.Spec.TaskTemplate.ContainerSpec) service.Spec.TaskTemplate.ContainerSpec.Healthcheck = body; }],
-    ] as [string, (service: Service) => unknown, (service: Service, body: any) => void][]).map(
-      ([field, getter, setter]) =>
-        http.patch(`*/services/:id/${field}`, async ({ params, request }) => {
-          const service = dataset.servicesByID.get(params.id as string);
-          if (!service) return notFound();
-          setter(service, await request.json());
-          service.Version.Index++;
-          service.UpdatedAt = new Date().toISOString();
-          broadcastServiceUpdate(service);
-          const responseKey = field.replace(/-([a-z])/g, (_, character: string) => character.toUpperCase());
-          return jsonResponse({ [responseKey]: getter(service) });
-        }),
+    ...(
+      [
+        [
+          "resources",
+          (service: Service) => service.Spec.TaskTemplate.Resources ?? {},
+          (service: Service, body: any) => {
+            service.Spec.TaskTemplate.Resources = {
+              ...service.Spec.TaskTemplate.Resources,
+              ...body,
+            };
+          },
+        ],
+        [
+          "ports",
+          (service: Service) => service.Spec.EndpointSpec?.Ports ?? [],
+          (service: Service, body: any) => {
+            if (!service.Spec.EndpointSpec) service.Spec.EndpointSpec = {};
+            service.Spec.EndpointSpec.Ports = body.ports ?? body;
+          },
+        ],
+        [
+          "update-policy",
+          (service: Service) => service.Spec.UpdateConfig ?? {},
+          (service: Service, body: any) => {
+            service.Spec.UpdateConfig = { ...service.Spec.UpdateConfig, ...body };
+          },
+        ],
+        [
+          "rollback-policy",
+          (service: Service) => service.Spec.RollbackConfig ?? {},
+          (service: Service, body: any) => {
+            service.Spec.RollbackConfig = { ...service.Spec.RollbackConfig, ...body };
+          },
+        ],
+        [
+          "log-driver",
+          (service: Service) => service.Spec.TaskTemplate.LogDriver ?? {},
+          (service: Service, body: any) => {
+            service.Spec.TaskTemplate.LogDriver = {
+              ...service.Spec.TaskTemplate.LogDriver,
+              ...body,
+            };
+          },
+        ],
+        [
+          "healthcheck",
+          (service: Service) => service.Spec.TaskTemplate.ContainerSpec?.Healthcheck ?? null,
+          (service: Service, body: any) => {
+            if (service.Spec.TaskTemplate.ContainerSpec)
+              service.Spec.TaskTemplate.ContainerSpec.Healthcheck = body;
+          },
+        ],
+      ] as [string, (service: Service) => unknown, (service: Service, body: any) => void][]
+    ).map(([field, getter, setter]) =>
+      http.patch(`*/services/:id/${field}`, async ({ params, request }) => {
+        const service = dataset.servicesByID.get(params.id as string);
+        if (!service) return notFound();
+        setter(service, await request.json());
+        service.Version.Index++;
+        service.UpdatedAt = new Date().toISOString();
+        broadcastServiceUpdate(service);
+        const responseKey = field.replace(/-([a-z])/g, (_, character: string) =>
+          character.toUpperCase(),
+        );
+        return jsonResponse({ [responseKey]: getter(service) });
+      }),
     ),
 
     http.put("*/services/:id/placement", async ({ params, request }) => {
@@ -1469,7 +1568,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       service.Version.Index++;
       service.UpdatedAt = new Date().toISOString();
       broadcastServiceUpdate(service);
-      return jsonResponse<{ placement: Placement | undefined }>({ placement: service.Spec.TaskTemplate.Placement });
+      return jsonResponse<{ placement: Placement | undefined }>({
+        placement: service.Spec.TaskTemplate.Placement,
+      });
     }),
 
     // ---- Catch-all for HEAD requests (for Allow header checks) ----
