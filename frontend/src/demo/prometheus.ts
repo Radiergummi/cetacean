@@ -13,7 +13,7 @@ interface MetricResult {
 export function handleInstantQuery(
   query: string,
   dataset: Dataset,
-): { resultType: string; result: MetricResult[] } {
+): { resultType: "vector" | "matrix" | "scalar" | "string"; result: MetricResult[] } {
   const now = Date.now() / 1000;
   const result = matchQuery(query, dataset, (profile, labels) => ({
     metric: labels,
@@ -32,7 +32,7 @@ export function handleRangeQuery(
   end: number,
   step: number,
   dataset: Dataset,
-): { resultType: string; result: MetricResult[] } {
+): { resultType: "vector" | "matrix" | "scalar" | "string"; result: MetricResult[] } {
   const result = matchQuery(query, dataset, (profile, labels) => ({
     metric: labels,
     values: generateTimeSeries(

@@ -1,24 +1,54 @@
 import { randomHex, type Dataset } from "./dataset";
 import { handleInstantQuery, handleRangeQuery } from "./prometheus";
 import { broadcast, type SSEClients } from "./sseHandlers";
-import type { ClusterSnapshot, ClusterMetrics, HealthInfo } from "@/api/client";
+import type { ClusterSnapshot, ClusterMetrics, HealthInfo, LogResponse } from "@/api/client";
 import type {
+  ClusterCapacity,
   CollectionResponse,
+  Config,
+  ConfigDetail,
+  ContainerConfig,
+  DiskUsageSummary,
+  Healthcheck,
   HistoryEntry,
+  Identity,
+  LogDriver,
+  MonitoringStatus,
+  Network,
+  NetworkDetail,
   Node,
+  Placement,
+  Plugin,
+  PortConfig,
+  PrometheusResponse,
+  RecommendationsResponse,
   SearchResourceType,
+  SearchResponse,
   SearchResult,
+  Secret,
+  SecretDetail,
   Service,
+  ServiceConfigRef,
+  ServiceDetail,
+  ServiceListItem,
+  ServiceMount,
+  ServiceNetworkRef,
   ServiceRef,
+  ServiceSecretRef,
+  Stack,
+  StackDetail,
   StackSummary,
+  SwarmInfo,
   Task,
+  UpdateConfig,
+  Volume,
+  VolumeDetail,
 } from "@/api/types";
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse, type JsonBodyType } from "msw";
 
 const stackLabel = "com.docker.stack.namespace";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function jsonResponse(data: any, status = 200) {
+function jsonResponse<T extends JsonBodyType>(data: T, status = 200) {
   return HttpResponse.json(data, {
     status,
     headers: { Allow: "GET, HEAD, PUT, POST, PATCH, DELETE" },
@@ -434,20 +464,20 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         buildDate: new Date().toISOString(),
         operationsLevel: 3,
       };
-      return jsonResponse(data);
+      return jsonResponse<HealthInfo>(data);
     }),
 
     http.get("*/-/ready", () => {
-      return jsonResponse({ status: "ready" });
+      return jsonResponse<{ status: string }>({ status: "ready" });
     }),
 
     // The frontend calls /profile for whoami
     http.get("*/profile", () => {
-      return jsonResponse({ subject: "demo", displayName: "Demo User", provider: "none" });
+      return jsonResponse<Identity>({ subject: "demo", displayName: "Demo User", provider: "none" });
     }),
 
     http.get("*/auth/whoami", () => {
-      return jsonResponse({ subject: "demo", displayName: "Demo User", provider: "none" });
+      return jsonResponse<Identity>({ subject: "demo", displayName: "Demo User", provider: "none" });
     }),
 
     // ---- Cluster ----
@@ -457,11 +487,11 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         memory: { used: 12_884_901_888, total: 34_359_738_368, percent: 37.5 },
         disk: { used: 53_687_091_200, total: 214_748_364_800, percent: 25.0 },
       };
-      return jsonResponse(data);
+      return jsonResponse<ClusterMetrics>(data);
     }),
 
     http.get("*/cluster/capacity", () => {
-      return jsonResponse({
+      return jsonResponse<ClusterCapacity>({
         maxNodeCPU: 8_000_000_000,
         maxNodeMemory: 16 * 1024 * 1024 * 1024,
         totalCPU: 16_000_000_000,
@@ -471,12 +501,12 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     http.get("*/cluster", () => {
-      return jsonResponse(buildClusterSnapshot(dataset));
+      return jsonResponse<ClusterSnapshot>(buildClusterSnapshot(dataset));
     }),
 
     // ---- Swarm ----
     http.get("*/swarm", () => {
-      return jsonResponse({
+      return jsonResponse<SwarmInfo>({
         swarm: dataset.swarm,
         managerAddr: "10.0.0.1:2377",
       });
@@ -568,7 +598,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     http.get("*/nodes/:id/tasks", ({ params, request }) => {
       const nodeID = params.id as string;
       const nodeTasks = dataset.tasks.filter((task) => task.NodeID === nodeID);
-      return jsonResponse(paginate(nodeTasks, request));
+      return jsonResponse<CollectionResponse<Task>>(paginate(nodeTasks, request));
     }),
 
     http.get("*/nodes/:id/labels", ({ params }) => {
@@ -578,7 +608,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse({ labels: node.Spec.Labels ?? {} });
+      return jsonResponse<{ labels: Record<string, string> }>({ labels: node.Spec.Labels ?? {} });
     }),
 
     http.get("*/nodes/:id/role", ({ params }) => {
@@ -589,7 +619,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       }
 
       const managerCount = dataset.nodes.filter((node) => node.Spec.Role === "manager").length;
-      return jsonResponse({
+      return jsonResponse<{ role: string; isLeader: boolean; managerCount: number }>({
         role: node.Spec.Role,
         isLeader: node.ManagerStatus?.Leader ?? false,
         managerCount,
@@ -603,18 +633,18 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse({ node });
+      return jsonResponse<{ node: Node }>({ node });
     }),
 
     http.get("*/nodes", ({ request }) => {
-      return jsonResponse(paginate(dataset.nodes, request));
+      return jsonResponse<CollectionResponse<Node>>(paginate(dataset.nodes, request));
     }),
 
     // ---- Services ----
     http.get("*/services/:id/tasks", ({ params, request }) => {
       const serviceID = params.id as string;
       const serviceTasks = dataset.tasks.filter((task) => task.ServiceID === serviceID);
-      return jsonResponse(paginate(serviceTasks, request));
+      return jsonResponse<CollectionResponse<Task>>(paginate(serviceTasks, request));
     }),
 
     http.get("*/services/:id/env", ({ params }) => {
@@ -635,7 +665,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         }
       }
 
-      return jsonResponse({ env });
+      return jsonResponse<{ env: Record<string, string> }>({ env });
     }),
 
     http.get("*/services/:id/labels", ({ params }) => {
@@ -645,7 +675,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse({ labels: service.Spec.Labels ?? {} });
+      return jsonResponse<{ labels: Record<string, string> }>({ labels: service.Spec.Labels ?? {} });
     }),
 
     http.get("*/services/:id/resources", ({ params }) => {
@@ -655,7 +685,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse({ resources: service.Spec.TaskTemplate.Resources ?? {} });
+      return jsonResponse<{ resources: Record<string, unknown> }>({ resources: service.Spec.TaskTemplate.Resources ?? {} });
     }),
 
     http.get("*/services/:id/healthcheck", ({ params }) => {
@@ -665,7 +695,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse({
+      return jsonResponse<{ healthcheck: Healthcheck | null }>({
         healthcheck: service.Spec.TaskTemplate.ContainerSpec?.Healthcheck ?? null,
       });
     }),
@@ -684,7 +714,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
           fileName: File?.Name ?? "",
         }),
       );
-      return jsonResponse({ configs });
+      return jsonResponse<{ configs: ServiceConfigRef[] }>({ configs });
     }),
 
     http.get("*/services/:id/secrets", ({ params }) => {
@@ -701,7 +731,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
           fileName: File?.Name ?? "",
         }),
       );
-      return jsonResponse({ secrets });
+      return jsonResponse<{ secrets: ServiceSecretRef[] }>({ secrets });
     }),
 
     http.get("*/services/:id/networks", ({ params }) => {
@@ -712,9 +742,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       }
 
       const networks = (service.Spec.TaskTemplate.Networks ?? []).map(
-        ({ Target, Aliases }) => ({ target: Target, aliases: Aliases }),
+        ({ Target, Aliases }) => ({ target: Target, aliases: Aliases ?? undefined }),
       );
-      return jsonResponse({ networks });
+      return jsonResponse<{ networks: ServiceNetworkRef[] }>({ networks });
     }),
 
     http.get("*/services/:id/mounts", ({ params }) => {
@@ -724,7 +754,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse({ mounts: service.Spec.TaskTemplate.ContainerSpec?.Mounts ?? [] });
+      return jsonResponse<{ mounts: ServiceMount[] }>({ mounts: service.Spec.TaskTemplate.ContainerSpec?.Mounts ?? [] });
     }),
 
     http.get("*/services/:id/ports", ({ params }) => {
@@ -734,7 +764,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse({ ports: service.Spec.EndpointSpec?.Ports ?? [] });
+      return jsonResponse<{ ports: PortConfig[] }>({ ports: service.Spec.EndpointSpec?.Ports ?? [] });
     }),
 
     http.get("*/services/:id/placement", ({ params }) => {
@@ -744,7 +774,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse({ placement: service.Spec.TaskTemplate.Placement ?? {} });
+      return jsonResponse<{ placement: Placement }>({ placement: service.Spec.TaskTemplate.Placement ?? {} });
     }),
 
     http.get("*/services/:id/update-policy", ({ params }) => {
@@ -754,7 +784,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse({ updatePolicy: service.Spec.UpdateConfig ?? {} });
+      return jsonResponse<{ updatePolicy: Partial<UpdateConfig> }>({ updatePolicy: service.Spec.UpdateConfig ?? {} });
     }),
 
     http.get("*/services/:id/rollback-policy", ({ params }) => {
@@ -764,7 +794,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse({ rollbackPolicy: service.Spec.RollbackConfig ?? {} });
+      return jsonResponse<{ rollbackPolicy: Partial<UpdateConfig> }>({ rollbackPolicy: service.Spec.RollbackConfig ?? {} });
     }),
 
     http.get("*/services/:id/log-driver", ({ params }) => {
@@ -774,7 +804,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse({ logDriver: service.Spec.TaskTemplate.LogDriver ?? {} });
+      return jsonResponse<{ logDriver: Partial<LogDriver> }>({ logDriver: service.Spec.TaskTemplate.LogDriver ?? {} });
     }),
 
     http.get("*/services/:id/container-config", ({ params }) => {
@@ -785,7 +815,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       }
 
       const container = service.Spec.TaskTemplate.ContainerSpec;
-      return jsonResponse({
+      return jsonResponse<ContainerConfig>({
         command: container?.Command ?? [],
         args: container?.Args ?? [],
         dir: container?.Dir ?? "",
@@ -800,12 +830,16 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         capabilityDrop: container?.CapabilityDrop ?? [],
         groups: container?.Groups ?? [],
         hosts: container?.Hosts ?? [],
-        dnsConfig: container?.DNSConfig ?? {},
+        dnsConfig: container?.DNSConfig ? {
+          nameservers: container.DNSConfig.Nameservers ?? undefined,
+          search: container.DNSConfig.Search ?? undefined,
+          options: container.DNSConfig.Options ?? undefined,
+        } : undefined,
       });
     }),
 
     http.get("*/services/:id/logs", () => {
-      return jsonResponse({ lines: [], oldest: "", newest: "", hasMore: false });
+      return jsonResponse<LogResponse>({ lines: [], oldest: "", newest: "", hasMore: false });
     }),
 
     http.get("*/services/:id", ({ params }) => {
@@ -815,7 +849,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse({ service, changes: [], integrations: [] });
+      return jsonResponse<ServiceDetail>({ service, changes: [], integrations: [] });
     }),
 
     http.get("*/services", ({ request }) => {
@@ -823,12 +857,12 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         ...service,
         RunningTasks: countRunningTasks(dataset, service.ID),
       }));
-      return jsonResponse(paginate(items, request));
+      return jsonResponse<CollectionResponse<ServiceListItem>>(paginate(items, request));
     }),
 
     // ---- Tasks ----
     http.get("*/tasks/:id/logs", () => {
-      return jsonResponse({ lines: [], oldest: "", newest: "", hasMore: false });
+      return jsonResponse<LogResponse>({ lines: [], oldest: "", newest: "", hasMore: false });
     }),
 
     http.get("*/tasks/:id", ({ params }) => {
@@ -838,17 +872,17 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse({ task });
+      return jsonResponse<{ task: Task }>({ task });
     }),
 
     http.get("*/tasks", ({ request }) => {
-      return jsonResponse(paginate(dataset.tasks, request));
+      return jsonResponse<CollectionResponse<Task>>(paginate(dataset.tasks, request));
     }),
 
     // ---- Stacks ----
     http.get("*/stacks/summary", () => {
       const items = buildStackSummaries(dataset);
-      return jsonResponse({ items, total: items.length, limit: 50, offset: 0 });
+      return jsonResponse<CollectionResponse<StackSummary>>({ items, total: items.length, limit: 50, offset: 0 });
     }),
 
     http.get("*/stacks/:name", ({ params }) => {
@@ -860,14 +894,14 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse({
+      return jsonResponse<{ stack: StackDetail }>({
         stack: {
           name: stackName,
-          services: stack.services.map((id) => dataset.servicesByID.get(id)).filter(Boolean),
-          configs: stack.configs.map((id) => dataset.configsByID.get(id)).filter(Boolean),
-          secrets: stack.secrets.map((id) => dataset.secretsByID.get(id)).filter(Boolean),
-          networks: stack.networks.map((id) => dataset.networksByID.get(id)).filter(Boolean),
-          volumes: stack.volumes.map((name) => dataset.volumesByName.get(name)).filter(Boolean),
+          services: stack.services.map((id) => dataset.servicesByID.get(id)).filter(Boolean) as Service[],
+          configs: stack.configs.map((id) => dataset.configsByID.get(id)).filter(Boolean) as Config[],
+          secrets: stack.secrets.map((id) => dataset.secretsByID.get(id)).filter(Boolean) as Secret[],
+          networks: stack.networks.map((id) => dataset.networksByID.get(id)).filter(Boolean) as Network[],
+          volumes: stack.volumes.map((name) => dataset.volumesByName.get(name)).filter(Boolean) as Volume[],
         },
       });
     }),
@@ -882,7 +916,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         networks: stack.networks,
         volumes: stack.volumes,
       }));
-      return jsonResponse(paginate(items, request));
+      return jsonResponse<CollectionResponse<Stack>>(paginate(items, request));
     }),
 
     // ---- Configs ----
@@ -893,7 +927,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse({
+      return jsonResponse<ConfigDetail>({
         config,
         services: findServicesUsing(dataset, (service) =>
             service.Spec.TaskTemplate.ContainerSpec?.Configs?.some(
@@ -904,7 +938,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     http.get("*/configs", ({ request }) => {
-      return jsonResponse(paginate(dataset.configs, request));
+      return jsonResponse<CollectionResponse<Config>>(paginate(dataset.configs, request));
     }),
 
     // ---- Secrets ----
@@ -915,7 +949,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse({
+      return jsonResponse<SecretDetail>({
         secret,
         services: findServicesUsing(dataset, (service) =>
             service.Spec.TaskTemplate.ContainerSpec?.Secrets?.some(
@@ -926,7 +960,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     http.get("*/secrets", ({ request }) => {
-      return jsonResponse(paginate(dataset.secrets, request));
+      return jsonResponse<CollectionResponse<Secret>>(paginate(dataset.secrets, request));
     }),
 
     // ---- Networks ----
@@ -937,7 +971,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse({
+      return jsonResponse<NetworkDetail>({
         network,
         services: findServicesUsing(dataset, (service) =>
             service.Spec.TaskTemplate.Networks?.some(({ Target }) => Target === network.Id) ??
@@ -947,7 +981,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     http.get("*/networks", ({ request }) => {
-      return jsonResponse(paginate(dataset.networks, request));
+      return jsonResponse<CollectionResponse<Network>>(paginate(dataset.networks, request));
     }),
 
     // ---- Volumes ----
@@ -958,7 +992,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      return jsonResponse({
+      return jsonResponse<VolumeDetail>({
         volume,
         services: findServicesUsing(dataset, (service) =>
             service.Spec.TaskTemplate.ContainerSpec?.Mounts?.some(
@@ -969,7 +1003,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     http.get("*/volumes", ({ request }) => {
-      return jsonResponse(paginate(dataset.volumes, request));
+      return jsonResponse<CollectionResponse<Volume>>(paginate(dataset.volumes, request));
     }),
 
     // ---- Search ----
@@ -980,18 +1014,18 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       const limit = limitParam !== null ? parseInt(limitParam, 10) : 3;
 
       const { results, counts, total } = searchDataset(dataset, query, limit);
-      return jsonResponse({ query, results, counts, total });
+      return jsonResponse<SearchResponse>({ query, results, counts, total });
     }),
 
     // ---- History ----
     http.get("*/history", () => {
       const items: HistoryEntry[] = [];
-      return jsonResponse({ items, total: 0, limit: 50, offset: 0 });
+      return jsonResponse<CollectionResponse<HistoryEntry>>({ items, total: 0, limit: 50, offset: 0 });
     }),
 
     // ---- Recommendations ----
     http.get("*/recommendations", () => {
-      return jsonResponse({
+      return jsonResponse<RecommendationsResponse>({
         items: [],
         total: 0,
         summary: { critical: 0, warning: 0, info: 0 },
@@ -1001,7 +1035,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
     // ---- Disk usage ----
     http.get("*/disk-usage", () => {
-      return jsonResponse({
+      return jsonResponse<CollectionResponse<DiskUsageSummary>>({
         items: [
           { type: "images", count: 11, active: 11, totalSize: 3_221_225_472, reclaimable: 0 },
           {
@@ -1034,12 +1068,12 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
     // ---- Plugins ----
     http.get("*/plugins", () => {
-      return jsonResponse({ items: [], total: 0, limit: 50, offset: 0 });
+      return jsonResponse<CollectionResponse<Plugin>>({ items: [], total: 0, limit: 50, offset: 0 });
     }),
 
     // ---- Monitoring status ----
     http.get("*/metrics/status", () => {
-      return jsonResponse({
+      return jsonResponse<MonitoringStatus>({
         prometheusConfigured: true,
         prometheusReachable: true,
         nodeExporter: { targets: 3, nodes: 3 },
@@ -1063,11 +1097,11 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         job: ["cadvisor", "node-exporter", "prometheus"],
         nodename: dataset.nodes.map((node) => node.Description.Hostname),
       };
-      return jsonResponse({ data: valueMap[name] ?? [] });
+      return jsonResponse<{ data: string[] }>({ data: valueMap[name] ?? [] });
     }),
 
     http.get("*/metrics/labels", () => {
-      return jsonResponse({
+      return jsonResponse<{ data: string[] }>({
         data: [
           "__name__",
           "container_label_com_docker_swarm_service_name",
@@ -1096,16 +1130,16 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
           parseFloat(step),
           dataset,
         );
-        return jsonResponse({ data });
+        return jsonResponse<PrometheusResponse>({ data });
       }
 
       const data = handleInstantQuery(query, dataset);
-      return jsonResponse({ data });
+      return jsonResponse<PrometheusResponse>({ data });
     }),
 
     // ---- Docker latest version ----
     http.get("*/-/docker-latest-version", () => {
-      return jsonResponse({
+      return jsonResponse<{ version: string; url: string }>({
         version: "27.5.1",
         url: "https://docs.docker.com/engine/release-notes/",
       });
@@ -1169,7 +1203,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       }
 
       broadcastServiceUpdate(service);
-      return jsonResponse(service);
+      return jsonResponse<Service>(service);
     }),
 
     http.put("*/services/:id/image", async ({ params, request }) => {
@@ -1196,7 +1230,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       };
 
       broadcastServiceUpdate(service);
-      return jsonResponse(service);
+      return jsonResponse<Service>(service);
     }),
 
     http.post("*/services/:id/rollback", async ({ params }) => {
@@ -1221,7 +1255,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       };
 
       broadcastServiceUpdate(service);
-      return jsonResponse(service);
+      return jsonResponse<Service>(service);
     }),
 
     http.post("*/services/:id/restart", async ({ params }) => {
@@ -1234,7 +1268,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       service.Version.Index++;
       service.UpdatedAt = new Date().toISOString();
       broadcastServiceUpdate(service);
-      return jsonResponse(service);
+      return jsonResponse<Service>(service);
     }),
 
     http.delete("*/services/:id", async ({ params }) => {
@@ -1276,7 +1310,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         id: node.ID,
         resource: node,
       });
-      return jsonResponse(node);
+      return jsonResponse<Node>(node);
     }),
 
     http.patch("*/nodes/:id/labels", async ({ params, request }) => {
@@ -1307,7 +1341,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         id: node.ID,
         resource: node,
       });
-      return jsonResponse({ labels: node.Spec.Labels });
+      return jsonResponse<{ labels: Record<string, string> }>({ labels: node.Spec.Labels });
     }),
 
     // ---- Write: Task operations ----
@@ -1368,7 +1402,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       service.Version.Index++;
       service.UpdatedAt = new Date().toISOString();
       broadcastServiceUpdate(service);
-      return jsonResponse({ env: Object.fromEntries(envMap) });
+      return jsonResponse<{ env: Record<string, string> }>({ env: Object.fromEntries(envMap) });
     }),
 
     http.patch("*/services/:id/labels", async ({ params, request }) => {
@@ -1395,7 +1429,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       service.Version.Index++;
       service.UpdatedAt = new Date().toISOString();
       broadcastServiceUpdate(service);
-      return jsonResponse({ labels: service.Spec.Labels });
+      return jsonResponse<{ labels: Record<string, string> }>({ labels: service.Spec.Labels });
     }),
 
     // Service spec field updates — each entry maps a sub-resource path to
@@ -1435,7 +1469,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       service.Version.Index++;
       service.UpdatedAt = new Date().toISOString();
       broadcastServiceUpdate(service);
-      return jsonResponse({ placement: service.Spec.TaskTemplate.Placement });
+      return jsonResponse<{ placement: Placement | undefined }>({ placement: service.Spec.TaskTemplate.Placement });
     }),
 
     // ---- Catch-all for HEAD requests (for Allow header checks) ----
