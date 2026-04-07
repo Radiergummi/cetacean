@@ -108,7 +108,9 @@ describe("demo handler coverage", () => {
       headers: { Accept: "application/json", Range: "items 0-49" },
     });
 
-    expect(response.status, `${path} returned ${response.status}`).toBeLessThan(500);
+    if (response.status >= 500) {
+      throw new Error(`${path} returned ${response.status}`);
+    }
   });
 });
 
@@ -116,7 +118,9 @@ async function fetchJSON(path: string) {
   const response = await fetch(`http://localhost${path}`, {
     headers: { Accept: "application/json", Range: "items 0-49" },
   });
-  expect(response.ok, `${path} returned ${response.status}`).toBe(true);
+  if (!response.ok) {
+    throw new Error(`${path} returned ${response.status}`);
+  }
   return response.json();
 }
 
