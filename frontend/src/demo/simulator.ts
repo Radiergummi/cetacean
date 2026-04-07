@@ -1,19 +1,14 @@
-import type { Dataset } from "./dataset";
+import { randomHex, type Dataset } from "./dataset";
 import type { SSEClients } from "./sseHandlers";
 import { broadcast } from "./sseHandlers";
 import type { Task } from "@/api/types";
 
-let taskCounter = 1000;
-
 function nextTaskID(): string {
-  taskCounter++;
-  return `tk${String(taskCounter).padStart(23, "0")}`;
+  return randomHex(25);
 }
 
 function nextContainerID(): string {
-  return crypto
-    .getRandomValues(new Uint8Array(32))
-    .reduce((s, b) => s + b.toString(16).padStart(2, "0"), "");
+  return randomHex(64);
 }
 
 function pickRandom<T>(array: T[]): T {

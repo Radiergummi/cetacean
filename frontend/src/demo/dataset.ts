@@ -1,51 +1,67 @@
 import type { Config, Network, Node, Secret, Service, Task, Volume } from "@/api/types";
 
-// Object IDs — 25-char hex strings matching Docker's format.
-const idNodeManager1 = "e75ddf4dc6ec154106fd4a313";
-const idNodeWorker1 = "cda13933d6f1050f77e9597b4";
-const idNodeWorker2 = "940d7372c887e1e633cc88b58";
+/** Generate a random hex string of the given length using WebCrypto. */
+export function randomHex(length: number): string {
+  const bytes = new Uint8Array(Math.ceil(length / 2));
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, length);
+}
 
-const idNetIngress = "8f06aabea7e445e5559d534ea";
-const idNetWebshop = "b8c221ffaaf4e894d26b2de27";
-const idNetMonitoring = "70f83ede9b35ce04785f91c55";
-const idNetInfra = "6ff411ff9b9e506b2a0bcea53";
-const idNetGwbridge = "53699df749a632ed1271418bb";
+/** Generate a Docker-style 25-char hex ID. */
+function objectId(): string {
+  return randomHex(25);
+}
 
-const idSvcFrontend = "3b8528a77abd8db4aba61847d";
-const idSvcAPI = "21d84f504ed921fc6a8a59cf2";
-const idSvcWorker = "7a1b408798de674daacfc3019";
-const idSvcDB = "6b1dc7141258bcdbab88eaf99";
-const idSvcCache = "b7228fb632f76183dde44b3e3";
-const idSvcSearch = "3b5c112667ae30503120919a1";
-const idSvcPrometheus = "9bbeee3828003d356f192c2a2";
-const idSvcGrafana = "b638ce33acb6d622b3b1616e9";
-const idSvcNodeExporter = "2117d97bea10551cfd739740a";
-const idSvcProxy = "ee4ec09a6befe327ed9475733";
-const idSvcRegistry = "6f0aaf260e5814212041e2dc2";
+/** Generate a fake sha256 digest string. */
+function digest(): string {
+  return `sha256:${randomHex(64)}`;
+}
 
-const idCfgDBInit = "f7a9daa1067b5ff691de451a9";
-const idCfgPromConfig = "fea23f1dd15e59fccfec21a4a";
-const idCfgProxyConf = "acd87c5573681ea3283f22885";
+// Pre-generate all IDs so they can be cross-referenced within buildDataset.
+const idNodeManager1 = objectId();
+const idNodeWorker1 = objectId();
+const idNodeWorker2 = objectId();
 
-const idSecDBPassword = "d50d95742b9a2cdcc913b5a72";
-const idSecAPIKey = "a9688d6e8a5fc08659708e6f0";
+const idNetIngress = objectId();
+const idNetWebshop = objectId();
+const idNetMonitoring = objectId();
+const idNetInfra = objectId();
+const idNetGwbridge = objectId();
 
-const idSwarm = "521bb79758f0e209fba51c775";
+const idSvcFrontend = objectId();
+const idSvcAPI = objectId();
+const idSvcWorker = objectId();
+const idSvcDB = objectId();
+const idSvcCache = objectId();
+const idSvcSearch = objectId();
+const idSvcPrometheus = objectId();
+const idSvcGrafana = objectId();
+const idSvcNodeExporter = objectId();
+const idSvcProxy = objectId();
+const idSvcRegistry = objectId();
 
-// Image digests.
-const digestNginx = "sha256:c12623164b8bd229b3ccea41cc8dab591569b681157b598cf16cb742dea3a32e";
-const digestWebshopAPI = "sha256:2ff9a84c8d762f302022090147cdc04374aa3adff1e244cc8ffa50391496b8ee";
-const digestWebshopWorker =
-  "sha256:9468e9be53873fbf5b6871c060b2bdd354b14897887ed8ea1f4d69a9ef0f8df5";
-const digestPostgres = "sha256:10ba9412b90e1f5ccd1a340a5199c61f56fa05cc5b803aa58c20a2def92caa64";
-const digestRedis = "sha256:6b8aa430c358736426a31de605f28bf2abdce848f6cc453ed009e1c620255eff";
-const digestElastic = "sha256:68db44c1d00f133b6e19e4c969284e68f6584f3b724bfb005e18b7e7a7cf0d82";
-const digestPrometheus = "sha256:0f7683f7e8bca879cf8967dab246204355194007f14b1c7b0332a70c3249592c";
-const digestGrafana = "sha256:d8bf37f634da1ea4883fb3e219ffeead203ca8733ee10c3eb8582e6bb04d3d75";
-const digestNodeExporter =
-  "sha256:1046a6cf60cd119ebdb992b87c5b59ebf0643fe0a81080c612435d05476a77fe";
-const digestTraefik = "sha256:b13aa4bf4e0cd52de7ebe92a30e5537b0ee6406a1451b314047e27c99942e472";
-const digestRegistry = "sha256:38dffaed02256502ace095c85f6ed8b9c5a637769af8102ab2901c90d5b66fbf";
+const idCfgDBInit = objectId();
+const idCfgPromConfig = objectId();
+const idCfgProxyConf = objectId();
+
+const idSecDBPassword = objectId();
+const idSecAPIKey = objectId();
+
+const idSwarm = objectId();
+
+const digestNginx = digest();
+const digestWebshopAPI = digest();
+const digestWebshopWorker = digest();
+const digestPostgres = digest();
+const digestRedis = digest();
+const digestElastic = digest();
+const digestPrometheus = digest();
+const digestGrafana = digest();
+const digestNodeExporter = digest();
+const digestTraefik = digest();
+const digestRegistry = digest();
 
 const now = new Date();
 const ago4d = new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000);
@@ -786,18 +802,8 @@ function buildServices(): Service[] {
 }
 
 function buildTasks(services: Service[], nodesByID: Map<string, Node>): Task[] {
-  let taskNum = 0;
-  let containerNum = 0;
-
-  const nextTaskID = (): string => {
-    taskNum++;
-    return `tk${String(taskNum).padStart(23, "0")}`;
-  };
-
-  const nextContainerID = (): string => {
-    containerNum++;
-    return String(containerNum).padStart(64, "0");
-  };
+  const nextTaskID = (): string => objectId();
+  const nextContainerID = (): string => randomHex(64);
 
   const workerNodes = [idNodeWorker1, idNodeWorker2];
   let workerIndex = 0;
@@ -870,7 +876,7 @@ function buildTasks(services: Service[], nodesByID: Map<string, Node>): Task[] {
       Message: "started",
       Err: "task: non-zero exit (137): OOM killed",
       ContainerStatus: {
-        ContainerID: String(containerNum).padStart(64, "0"),
+        ContainerID: nextContainerID(),
         ExitCode: 137,
       },
     },
@@ -935,7 +941,7 @@ function buildTasks(services: Service[], nodesByID: Map<string, Node>): Task[] {
         State: "shutdown",
         Message: "shutdown",
         ContainerStatus: {
-          ContainerID: String(containerNum).padStart(64, "0"),
+          ContainerID: nextContainerID(),
           ExitCode: 0,
         },
       },

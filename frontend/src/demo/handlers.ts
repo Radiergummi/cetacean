@@ -1,4 +1,4 @@
-import type { Dataset } from "./dataset";
+import { randomHex, type Dataset } from "./dataset";
 import { handleInstantQuery, handleRangeQuery } from "./prometheus";
 import { broadcast, type SSEClients } from "./sseHandlers";
 import type { ClusterSnapshot, ClusterMetrics, HealthInfo } from "@/api/client";
@@ -29,13 +29,10 @@ function notFound() {
   return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
 }
 
-let taskIdCounter = 2000;
-
 function createTask(service: Service, slot: number, node: Node): Task {
-  taskIdCounter++;
   return {
-    ID: `tk${String(taskIdCounter).padStart(23, "0")}`,
-    Version: { Index: 300 + taskIdCounter },
+    ID: randomHex(25),
+    Version: { Index: Math.floor(Math.random() * 10000) },
     ServiceID: service.ID,
     NodeID: node.ID,
     Slot: slot,
@@ -44,7 +41,7 @@ function createTask(service: Service, slot: number, node: Node): Task {
       State: "running",
       Message: "started",
       ContainerStatus: {
-        ContainerID: crypto.randomUUID().replace(/-/g, "").padEnd(64, "0"),
+        ContainerID: randomHex(64),
         ExitCode: 0,
       },
     },
