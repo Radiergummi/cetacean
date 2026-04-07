@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -b && vite build",
+    "build:demo": "vite build --config vite.config.demo.ts && cp ../website/public/demo/demo.html ../website/public/demo/index.html && cp ../website/public/demo/demo.html ../website/public/demo/404.html",
     "dev": "vite",
     "fmt": "oxfmt --write .",
     "fmt:check": "oxfmt --check .",
@@ -48,6 +49,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
     "jsdom": "^28.1.0",
+    "msw": "^2.12.14",
     "oxfmt": "latest",
     "oxlint": "latest",
     "shadcn": "^4.0.0",
@@ -55,5 +57,10 @@
     "typescript": "~5.9.3",
     "vite": "^7.3.1",
     "vitest": "^4.0.18"
+  },
+  "msw": {
+    "workerDirectory": [
+      "../website/public/demo"
+    ]
   }
 }
