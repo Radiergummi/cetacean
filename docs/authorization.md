@@ -216,10 +216,18 @@ cannot affect other resources: they are strictly scoped to the resource they are
 If this self-service model is too permissive, use a config policy file to set the access boundaries and leave labels
 disabled.
 
-### Limitations
+### Verifying Effective Permissions
 
-`GET /auth/whoami` shows permissions from config and provider grants only. Label-based permissions are per-resource and
-cannot be projected into a global permissions map — they take effect at access time.
+`GET /auth/whoami` shows permissions from config and provider grants only — it cannot reflect label-based permissions
+because those depend on which resource is being accessed.
+
+To check label-based permissions for a specific resource, inspect the `Allow` header on a detail endpoint:
+
+```bash
+curl -s -I localhost:9000/services/abc123 | grep Allow
+# Allow: GET, HEAD                          → read-only (labels restrict write)
+# Allow: GET, HEAD, PUT, POST, PATCH        → read + write
+```
 
 ## Interaction with Operations Level
 
