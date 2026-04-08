@@ -648,6 +648,173 @@ func TestEvaluator_OverlappingGrantsUnion(t *testing.T) {
 	}
 }
 
+func TestEvaluator_LabelGrant_ReadOnly(t *testing.T) {
+	e := NewEvaluator()
+	e.SetLabelsEnabled(true)
+	e.SetPolicy(&Policy{Grants: []Grant{}})
+	e.SetResolver(&stubResolver{
+		labels: map[string]map[string]string{
+			"service:webapp": {"cetacean.acl.read": "group:dev"},
+		},
+	})
+	dev := &auth.Identity{Subject: "alice", Groups: []string{"dev"}}
+	ops := &auth.Identity{Subject: "bob", Groups: []string{"ops"}}
+	if !e.Can(dev, "read", "service:webapp") {
+		t.Fatal("dev should be able to read via label")
+	}
+	if e.Can(dev, "write", "service:webapp") {
+		t.Fatal("dev should NOT be able to write (label only grants read)")
+	}
+	if e.Can(ops, "read", "service:webapp") {
+		t.Fatal("ops should NOT be able to read (not in label audience)")
+	}
+}
+
+func TestEvaluator_LabelGrant_WriteImpliesRead(t *testing.T) {
+	e := NewEvaluator()
+	e.SetLabelsEnabled(true)
+	e.SetPolicy(&Policy{Grants: []Grant{}})
+	e.SetResolver(&stubResolver{
+		labels: map[string]map[string]string{
+			"service:webapp": {"cetacean.acl.write": "group:ops"},
+		},
+	})
+	ops := &auth.Identity{Subject: "alice", Groups: []string{"ops"}}
+	if !e.Can(ops, "read", "service:webapp") {
+		t.Fatal("write label should imply read")
+	}
+	if !e.Can(ops, "write", "service:webapp") {
+		t.Fatal("ops should be able to write via label")
+	}
+}
+
+func TestEvaluator_LabelWinsOverConfig(t *testing.T) {
+	e := NewEvaluator()
+	e.SetLabelsEnabled(true)
+	e.SetPolicy(&Policy{Grants: []Grant{
+		{Resources: []string{"service:*"}, Audience: []string{"group:dev"}, Permissions: []string{"write"}},
+	}})
+	e.SetResolver(&stubResolver{
+		labels: map[string]map[string]string{
+			"service:webapp": {"cetacean.acl.read": "group:*", "cetacean.acl.write": "group:ops"},
+		},
+	})
+	dev := &auth.Identity{Subject: "alice", Groups: []string{"dev"}}
+	ops := &auth.Identity{Subject: "bob", Groups: []string{"ops"}}
+	if !e.Can(dev, "read", "service:webapp") {
+		t.Fatal("dev should be able to read via label group:*")
+	}
+	if e.Can(dev, "write", "service:webapp") {
+		t.Fatal("dev should NOT be able to write (label narrows config)")
+	}
+	if !e.Can(ops, "write", "service:webapp") {
+		t.Fatal("ops should be able to write via label")
+	}
+	if !e.Can(dev, "write", "service:other") {
+		t.Fatal("dev should still have config write on non-labeled services")
+	}
+}
+
+func TestEvaluator_LabelSuppressesAllowAll(t *testing.T) {
+	e := NewEvaluator()
+	e.SetLabelsEnabled(true)
+	e.SetPolicy(&Policy{Grants: []Grant{}})
+	e.SetResolver(&stubResolver{
+		labels: map[string]map[string]string{
+			"service:sensitive": {"cetacean.acl.read": "group:ops"},
+		},
+	})
+	ops := &auth.Identity{Subject: "alice", Groups: []string{"ops"}}
+	dev := &auth.Identity{Subject: "bob", Groups: []string{"dev"}}
+	if !e.Can(ops, "read", "service:sensitive") {
+		t.Fatal("ops should be able to read via label")
+	}
+	if e.Can(dev, "read", "service:sensitive") {
+		t.Fatal("dev should be denied (labels suppress default, no config grant)")
+	}
+}
+
+func TestEvaluator_LabelConfigFillsGaps(t *testing.T) {
+	e := NewEvaluator()
+	e.SetLabelsEnabled(true)
+	e.SetPolicy(&Policy{Grants: []Grant{
+		{Resources: []string{"service:webapp"}, Audience: []string{"user:bot"}, Permissions: []string{"write"}},
+	}})
+	e.SetResolver(&stubResolver{
+		labels: map[string]map[string]string{
+			"service:webapp": {"cetacean.acl.read": "group:dev"},
+		},
+	})
+	bot := &auth.Identity{Subject: "bot"}
+	if !e.Can(bot, "write", "service:webapp") {
+		t.Fatal("bot should have write via explicit config grant")
+	}
+}
+
+func TestEvaluator_LabelDisabled(t *testing.T) {
+	e := NewEvaluator()
+	e.SetPolicy(&Policy{Grants: []Grant{}})
+	e.SetResolver(&stubResolver{
+		labels: map[string]map[string]string{
+			"service:webapp": {"cetacean.acl.read": "group:dev"},
+		},
+	})
+	dev := &auth.Identity{Subject: "alice", Groups: []string{"dev"}}
+	if e.Can(dev, "read", "service:webapp") {
+		t.Fatal("labels should be ignored when disabled")
+	}
+}
+
+func TestEvaluator_LabelTaskInheritsFromService(t *testing.T) {
+	e := NewEvaluator()
+	e.SetLabelsEnabled(true)
+	e.SetPolicy(&Policy{Grants: []Grant{}})
+	e.SetResolver(&stubResolver{
+		services: map[string]string{"task-1": "webapp"},
+		labels: map[string]map[string]string{
+			"service:webapp": {"cetacean.acl.read": "group:dev"},
+		},
+	})
+	dev := &auth.Identity{Subject: "alice", Groups: []string{"dev"}}
+	if !e.Can(dev, "read", "task:task-1") {
+		t.Fatal("task should inherit label grants from parent service")
+	}
+}
+
+func TestEvaluator_LabelAdditiveMostPermissiveWins(t *testing.T) {
+	e := NewEvaluator()
+	e.SetLabelsEnabled(true)
+	e.SetPolicy(&Policy{Grants: []Grant{}})
+	e.SetResolver(&stubResolver{
+		labels: map[string]map[string]string{
+			"service:webapp": {"cetacean.acl.read": "group:dev", "cetacean.acl.write": "group:dev"},
+		},
+	})
+	dev := &auth.Identity{Subject: "alice", Groups: []string{"dev"}}
+	if !e.Can(dev, "write", "service:webapp") {
+		t.Fatal("dev matches both read and write labels, most permissive should win")
+	}
+}
+
+func TestFilter_WithLabels(t *testing.T) {
+	e := NewEvaluator()
+	e.SetLabelsEnabled(true)
+	e.SetPolicy(&Policy{Grants: []Grant{}})
+	e.SetResolver(&stubResolver{
+		labels: map[string]map[string]string{
+			"service:visible": {"cetacean.acl.read": "group:dev"},
+			"service:hidden":  {"cetacean.acl.read": "group:ops"},
+		},
+	})
+	type svc struct{ name string }
+	items := []svc{{name: "visible"}, {name: "hidden"}, {name: "unlabeled"}}
+	dev := &auth.Identity{Subject: "alice", Groups: []string{"dev"}}
+	filtered := Filter(e, dev, "read", items, func(s svc) string { return "service:" + s.name })
+	if len(filtered) != 1 || filtered[0].name != "visible" {
+		t.Fatalf("expected [visible], got %v", filtered)
+	}
+}
+
 func TestEvaluator_NilIdentityWithActivePolicy(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
