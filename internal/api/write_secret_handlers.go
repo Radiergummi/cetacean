@@ -1,12 +1,9 @@
 package api
 
 import (
-	"encoding/base64"
-	"log/slog"
+	"context"
 	"net/http"
-	"strings"
 
-	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -23,63 +20,41 @@ func (h *Handlers) HandleRemoveSecret(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
-	req, ok := decodeJSON[createResourceRequest](w, r)
-	if !ok {
-		return
-	}
+	handleCreateDataResource(w, r, createDataResourceSpec{
+		resource:     "secret",
+		nameErrCode:  "SEC004",
+		conflictCode: "SEC003",
+		basePath:     "/secrets/",
+		typeName:     "Secret",
+		create: func(ctx context.Context, name string, data []byte) (string, error) {
+			return h.secretWriter.CreateSecret(ctx, swarm.SecretSpec{
+				Annotations: swarm.Annotations{Name: name},
+				Data:        data,
+			})
+		},
+		buildFallback: func(id string, name string) any {
+			return SecretResponse{
+				Secret: swarm.Secret{
+					ID:   id,
+					Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: name}},
+				},
+				Services: []cache.ServiceRef{},
+			}
+		},
+		buildResponse: func(id string) (any, bool) {
+			sec, ok := h.cache.GetSecret(id)
+			if !ok {
+				return nil, false
+			}
 
-	if strings.TrimSpace(req.Name) == "" {
-		writeErrorCode(w, r, "SEC004", "name is required")
-		return
-	}
+			sec.Spec.Data = nil
 
-	data, err := base64.StdEncoding.DecodeString(req.Data)
-	if err != nil {
-		writeErrorCode(w, r, "SEC004", "data must be valid base64")
-		return
-	}
-
-	slog.Info("creating secret", "name", req.Name)
-
-	id, err := h.secretWriter.CreateSecret(r.Context(), swarm.SecretSpec{
-		Annotations: swarm.Annotations{Name: req.Name},
-		Data:        data,
+			return SecretResponse{
+				Secret:   sec,
+				Services: h.cache.ServicesUsingSecret(id),
+			}, true
+		},
 	})
-	if err != nil {
-		if cerrdefs.IsConflict(err) {
-			writeErrorCode(w, r, "SEC003", err.Error())
-			return
-		}
-		writeDockerError(w, r, err, "secret", req.Name)
-		return
-	}
-
-	w.Header().Set("Location", absPath(r.Context(), "/secrets/"+id))
-
-	if preferMinimal(r) {
-		writePreferCreated(w)
-		return
-	}
-
-	sec, ok := h.cache.GetSecret(id)
-	if !ok {
-		w.WriteHeader(http.StatusCreated)
-		writeJSON(w, NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", SecretResponse{
-			Secret: swarm.Secret{
-				ID:   id,
-				Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: req.Name}},
-			},
-			Services: []cache.ServiceRef{},
-		}))
-		return
-	}
-
-	sec.Spec.Data = nil
-	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", SecretResponse{
-		Secret:   sec,
-		Services: h.cache.ServicesUsingSecret(id),
-	}))
 }
 
 func (h *Handlers) HandleGetSecretLabels(w http.ResponseWriter, r *http.Request) {

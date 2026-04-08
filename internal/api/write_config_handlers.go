@@ -1,12 +1,9 @@
 package api
 
 import (
-	"encoding/base64"
-	"log/slog"
+	"context"
 	"net/http"
-	"strings"
 
-	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -23,62 +20,39 @@ func (h *Handlers) HandleRemoveConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
-	req, ok := decodeJSON[createResourceRequest](w, r)
-	if !ok {
-		return
-	}
+	handleCreateDataResource(w, r, createDataResourceSpec{
+		resource:     "config",
+		nameErrCode:  "CFG004",
+		conflictCode: "CFG003",
+		basePath:     "/configs/",
+		typeName:     "Config",
+		create: func(ctx context.Context, name string, data []byte) (string, error) {
+			return h.configWriter.CreateConfig(ctx, swarm.ConfigSpec{
+				Annotations: swarm.Annotations{Name: name},
+				Data:        data,
+			})
+		},
+		buildFallback: func(id string, name string) any {
+			return ConfigResponse{
+				Config: swarm.Config{
+					ID:   id,
+					Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: name}},
+				},
+				Services: []cache.ServiceRef{},
+			}
+		},
+		buildResponse: func(id string) (any, bool) {
+			cfg, ok := h.cache.GetConfig(id)
+			if !ok {
+				return nil, false
+			}
 
-	if strings.TrimSpace(req.Name) == "" {
-		writeErrorCode(w, r, "CFG004", "name is required")
-		return
-	}
-
-	data, err := base64.StdEncoding.DecodeString(req.Data)
-	if err != nil {
-		writeErrorCode(w, r, "CFG004", "data must be valid base64")
-		return
-	}
-
-	slog.Info("creating config", "name", req.Name)
-
-	id, err := h.configWriter.CreateConfig(r.Context(), swarm.ConfigSpec{
-		Annotations: swarm.Annotations{Name: req.Name},
-		Data:        data,
+			return ConfigResponse{
+				Config:   cfg,
+				Services: h.cache.ServicesUsingConfig(id),
+			}, true
+		},
 	})
-	if err != nil {
-		if cerrdefs.IsConflict(err) {
-			writeErrorCode(w, r, "CFG003", err.Error())
-			return
-		}
-		writeDockerError(w, r, err, "config", req.Name)
-		return
-	}
-
-	w.Header().Set("Location", absPath(r.Context(), "/configs/"+id))
-
-	if preferMinimal(r) {
-		writePreferCreated(w)
-		return
-	}
-
-	cfg, ok := h.cache.GetConfig(id)
-	if !ok {
-		w.WriteHeader(http.StatusCreated)
-		writeJSON(w, NewDetailResponse(r.Context(), "/configs/"+id, "Config", ConfigResponse{
-			Config: swarm.Config{
-				ID:   id,
-				Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: req.Name}},
-			},
-			Services: []cache.ServiceRef{},
-		}))
-		return
-	}
-
-	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, NewDetailResponse(r.Context(), "/configs/"+id, "Config", ConfigResponse{
-		Config:   cfg,
-		Services: h.cache.ServicesUsingConfig(id),
-	}))
 }
 
 func (h *Handlers) HandleGetConfigLabels(w http.ResponseWriter, r *http.Request) {
