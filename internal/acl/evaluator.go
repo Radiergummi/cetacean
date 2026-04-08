@@ -1,6 +1,7 @@
 package acl
 
 import (
+	"log/slog"
 	"slices"
 	"sync/atomic"
 
@@ -200,6 +201,12 @@ func (e *Evaluator) checkLabels(id *auth.Identity, permission string, resource s
 	matchesRead := matchLabelAudience(readAudiences, id)
 
 	if matchesWrite || matchesRead {
+		slog.Debug("ACL label grant matched",
+			"resource", resource,
+			"permission", permission,
+			"matchedWrite", matchesWrite,
+			"matchedRead", matchesRead,
+		)
 		effectiveWrite := matchesWrite
 		effectiveRead := matchesRead || matchesWrite // write implies read
 		switch permission {
@@ -214,6 +221,14 @@ func (e *Evaluator) checkLabels(id *auth.Identity, permission string, resource s
 
 	// Identity doesn't match any label audience. Labels are present, so they
 	// suppress implicit access — but don't block explicit config grants.
+	subject := ""
+	if id != nil {
+		subject = id.Subject
+	}
+	slog.Debug("ACL labels present but no audience match",
+		"resource", resource,
+		"subject", subject,
+	)
 	return false, false
 }
 
