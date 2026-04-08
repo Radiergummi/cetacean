@@ -124,51 +124,102 @@ After applying a policy, verify effective permissions with `curl -s localhost:90
 ## Label-Based Access Control
 
 In addition to policy files and provider grants, Cetacean can read access control directly from Docker resource labels.
-Teams place `cetacean.acl.read` and `cetacean.acl.write` labels on their resources, and Cetacean enforces them without
-requiring a central policy file.
+Teams place `cetacean.acl.read` and `cetacean.acl.write` labels on their resources to control who can see and modify
+them — no central policy file required.
 
-### Enabling
-
-| Setting      | Env var                | Config file key | Default | Description                       |
-|--------------|------------------------|-----------------|---------|-----------------------------------|
-| ACL labels   | `CETACEAN_ACL_LABELS`  | `acl.labels`    | `false` | Enable label-based ACL evaluation |
+| Setting    | Env var               | Config file key | Default | Description                       |
+|------------|-----------------------|-----------------|---------|-----------------------------------|
+| ACL labels | `CETACEAN_ACL_LABELS` | `acl.labels`    | `false` | Enable label-based ACL evaluation |
 
 ### Label Format
 
-Labels use comma-separated audience expressions — the same `user:pattern` and `group:pattern` syntax as policy grants.
+Labels use the same `user:pattern` and `group:pattern` audience syntax as policy grants, comma-separated.
+`cetacean.acl.write` implies `cetacean.acl.read`.
 
 ```yaml
 services:
   myapp:
     deploy:
       labels:
+        cetacean.acl.read: "group:frontend,user:alice@example.com"
+        cetacean.acl.write: "group:ops"
+```
+
+Labels are evaluated on `service`, `config`, `secret`, `network`, `volume`, and `node` resources. Tasks inherit from
+their parent service. Stacks have no labels of their own — use a config policy for stack-wide grants.
+
+### How Labels Interact with Policy
+
+Labels and config policy are two independent layers. When both exist, labels take priority for identities they mention;
+config policy fills in the rest:
+
+1. **Identity matches a label audience** → label determines the permission. Even if the config policy grants more, the
+   label result wins for that identity on that resource.
+2. **Identity does not match any label audience, but has an explicit config/provider grant** → the config grant applies.
+3. **Identity does not match any label audience, and has no config grant** → denied. The presence of labels on a
+   resource disables the implicit allow-all default for that resource, even when no policy file is configured.
+4. **No labels on the resource** → normal policy evaluation (config grants or allow-all default).
+
+Within labels, the most permissive match wins (additive, same as policy grants).
+
+### Examples
+
+**Restrict a sensitive service without a policy file.** No policy is configured (allow-all by default). Adding a label
+limits who can see one specific service while everything else remains open:
+
+```yaml
+services:
+  admin-dashboard:
+    deploy:
+      labels:
+        cetacean.acl.read: "group:ops"
+        cetacean.acl.write: "group:ops"
+```
+
+All other services remain visible to everyone. Only `admin-dashboard` requires the `ops` group.
+
+**Team-owned services with broad read access.** Everyone can view; only the owning team can modify:
+
+```yaml
+services:
+  checkout:
+    deploy:
+      labels:
+        cetacean.acl.read: "group:*"
+        cetacean.acl.write: "group:commerce"
+```
+
+**Labels combined with a policy file.** A config policy grants `write` on `service:*` to `group:dev`. A control-plane
+service narrows that down:
+
+```yaml
+# In the compose file
+services:
+  cetacean:
+    deploy:
+      labels:
         cetacean.acl.read: "group:*"
         cetacean.acl.write: "group:ops"
 ```
 
-`cetacean.acl.read` grants read access; `cetacean.acl.write` grants write (and implies read). Multiple audiences are
-comma-separated: `"group:frontend,user:alice@example.com"`.
+Result: `dev` users can read `cetacean` (they match the `group:*` label audience) but cannot write it (the label
+overrides their config grant). They can still write all other services via their config policy. An `ops` user can write
+`cetacean` via the label grant. A CI bot with an explicit config grant for `service:cetacean` can still write it because
+explicit config grants apply when the identity is not mentioned in the labels.
 
-### Supported Resources
+### Security Consideration
 
-Labels are evaluated on: `service`, `config`, `secret`, `network`, `volume`, `node`. Tasks inherit from their parent
-service. Stacks have no labels of their own — use a config policy for stack-wide grants.
+Anyone who can deploy a stack can set labels on their services. With label-based ACL enabled, this means stack deployers
+can broaden access to their own resources — for example, `cetacean.acl.write: "*"` would grant write to everyone. Labels
+cannot affect other resources: they are strictly scoped to the resource they are set on.
 
-### Precedence Rules
+If this self-service model is too permissive, use a config policy file to set the access boundaries and leave labels
+disabled.
 
-Labels are checked before config grants. The outcome depends on whether the identity matches any label audience:
+### Limitations
 
-| Scenario | Result |
-|---|---|
-| Identity matches label audience, label grants `write` | Allowed (`write`) |
-| Identity matches label audience, label grants `read` only | Allowed (`read`), write denied |
-| Identity does not match label audience, has explicit config/provider grant | Config/provider grant applies |
-| Identity does not match label audience, no explicit config grant | Denied (labels suppress implicit allow-all) |
-| Labels are absent | Normal policy evaluation (config grants or allow-all default) |
-
-Within the label layer, the most permissive match wins (additive). Presence of any `cetacean.acl.*` label on a resource
-suppresses the implicit allow-all for that resource — unauthenticated-equivalent access no longer applies, even when no
-policy file is configured.
+`GET /auth/whoami` shows permissions from config and provider grants only. Label-based permissions are per-resource and
+cannot be projected into a global permissions map — they take effect at access time.
 
 ## Interaction with Operations Level
 
