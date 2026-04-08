@@ -692,7 +692,11 @@ func TestEvaluator_LabelWinsOverConfig(t *testing.T) {
 	e := NewEvaluator()
 	e.SetLabelsEnabled(true)
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:*"}, Audience: []string{"group:dev"}, Permissions: []string{"write"}},
+		{
+			Resources:   []string{"service:*"},
+			Audience:    []string{"group:dev"},
+			Permissions: []string{"write"},
+		},
 	}})
 	e.SetResolver(&stubResolver{
 		labels: map[string]map[string]string{
@@ -738,7 +742,11 @@ func TestEvaluator_LabelConfigFillsGaps(t *testing.T) {
 	e := NewEvaluator()
 	e.SetLabelsEnabled(true)
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:webapp"}, Audience: []string{"user:bot"}, Permissions: []string{"write"}},
+		{
+			Resources:   []string{"service:webapp"},
+			Audience:    []string{"user:bot"},
+			Permissions: []string{"write"},
+		},
 	}})
 	e.SetResolver(&stubResolver{
 		labels: map[string]map[string]string{
@@ -834,7 +842,11 @@ func TestEvaluator_UnlabeledResourceWithConfigGrant(t *testing.T) {
 	e := NewEvaluator()
 	e.SetLabelsEnabled(true)
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:*"}, Audience: []string{"group:ops"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:*"},
+			Audience:    []string{"group:ops"},
+			Permissions: []string{"read"},
+		},
 	}})
 	e.SetResolver(&stubResolver{labels: map[string]map[string]string{}})
 
@@ -896,7 +908,11 @@ func TestEvaluator_LabelCanEscalateAccessBeyondConfigPolicy(t *testing.T) {
 	e := NewEvaluator()
 	e.SetLabelsEnabled(true)
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:*"}, Audience: []string{"group:ops"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:*"},
+			Audience:    []string{"group:ops"},
+			Permissions: []string{"read"},
+		},
 	}})
 	e.SetResolver(&stubResolver{
 		labels: map[string]map[string]string{
@@ -970,11 +986,17 @@ func TestEvaluator_LabelsEnabledNilResolver(t *testing.T) {
 	e.SetLabelsEnabled(true)
 	// No SetResolver — resolver is nil
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:webapp"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:webapp"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read"},
+		},
 	}})
 	alice := &auth.Identity{Subject: "alice"}
 	if !e.Can(alice, "read", "service:webapp") {
-		t.Fatal("nil resolver with labels enabled should fall through to config grant without panic")
+		t.Fatal(
+			"nil resolver with labels enabled should fall through to config grant without panic",
+		)
 	}
 }
 
@@ -1020,7 +1042,11 @@ func TestEvaluator_LabelWhitespaceOnlyFallsThrough(t *testing.T) {
 	e := NewEvaluator()
 	e.SetLabelsEnabled(true)
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:webapp"}, Audience: []string{"user:bot"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:webapp"},
+			Audience:    []string{"user:bot"},
+			Permissions: []string{"read"},
+		},
 	}})
 	e.SetResolver(&stubResolver{
 		labels: map[string]map[string]string{
@@ -1041,7 +1067,11 @@ func TestEvaluator_LabelTaskParentServiceNoACLLabels(t *testing.T) {
 	e := NewEvaluator()
 	e.SetLabelsEnabled(true)
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:webapp"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:webapp"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read"},
+		},
 	}})
 	e.SetResolver(&stubResolver{
 		services: map[string]string{"task-1": "webapp"},
@@ -1059,7 +1089,11 @@ func TestEvaluator_LabelUnsupportedResourceType(t *testing.T) {
 	e := NewEvaluator()
 	e.SetLabelsEnabled(true)
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"plugin:*"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"plugin:*"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read"},
+		},
 	}})
 	e.SetResolver(&stubResolver{labels: map[string]map[string]string{}})
 	alice := &auth.Identity{Subject: "alice"}

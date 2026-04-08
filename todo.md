@@ -1,11 +1,9 @@
 # TODOs for Docker Swarm UI project
 
 ## Operational gaps
-- RBAC / authorization — auth is in, but everyone sees everything. Role-based access (read-only vs. admin, per-stack scoping)
-  would be the natural follow-up.
+- ~~RBAC / authorization — auth is in, but everyone sees everything. Role-based access (read-only vs. admin, per-stack scoping) would be the natural follow-up.~~
 - ~~Write operations — service scaling, rolling restarts, force-removing tasks, env/labels/resources/placement/ports/policy/log-driver editors all implemented with operations level gating.~~
-- Alerting / notifications — threshold-based alerts on resource usage, unhealthy services, or task failure spikes (webhook,
-  email, Slack).
+- ~~Alerting / notifications — threshold-based alerts on resource usage, unhealthy services, or task failure spikes (webhook, email, Slack).~~
 
 ## Visibility improvements
 - Container exec / shell — interactive terminal into running containers (WebSocket-based). -> problematic without sidecar

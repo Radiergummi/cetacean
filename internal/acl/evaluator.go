@@ -189,7 +189,11 @@ func (e *Evaluator) PermissionsFor(id *auth.Identity) map[string][]string {
 // checkLabels evaluates label-based ACL for a resource. Returns (allowed, handled).
 // If handled is true, the label result is authoritative for this resource+identity.
 // If handled is false, the caller should fall through to config grants.
-func (e *Evaluator) checkLabels(id *auth.Identity, permission string, resource string) (bool, bool) {
+func (e *Evaluator) checkLabels(
+	id *auth.Identity,
+	permission string,
+	resource string,
+) (bool, bool) {
 	labels := e.resolveLabels(resource)
 	if labels == nil || !hasACLLabels(labels) {
 		return false, false

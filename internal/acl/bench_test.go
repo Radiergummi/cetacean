@@ -13,7 +13,11 @@ import (
 func BenchmarkCan_NoLabels(b *testing.B) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:webapp-*"}, Audience: []string{"group:ops"}, Permissions: []string{"write"}},
+		{
+			Resources:   []string{"service:webapp-*"},
+			Audience:    []string{"group:ops"},
+			Permissions: []string{"write"},
+		},
 	}})
 	id := &auth.Identity{Subject: "alice", Groups: []string{"ops"}}
 
@@ -29,7 +33,10 @@ func BenchmarkCan_LabelsMatch(b *testing.B) {
 	e.SetPolicy(&Policy{Grants: []Grant{}})
 	e.SetResolver(&stubResolver{
 		labels: map[string]map[string]string{
-			"service:webapp": {"cetacean.acl.read": "group:dev,group:ops", "cetacean.acl.write": "group:ops"},
+			"service:webapp": {
+				"cetacean.acl.read":  "group:dev,group:ops",
+				"cetacean.acl.write": "group:ops",
+			},
 		},
 	})
 	id := &auth.Identity{Subject: "alice", Groups: []string{"ops"}}
@@ -44,7 +51,11 @@ func BenchmarkCan_LabelsNoMatch_FallThrough(b *testing.B) {
 	e := NewEvaluator()
 	e.SetLabelsEnabled(true)
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:*"}, Audience: []string{"group:dev"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:*"},
+			Audience:    []string{"group:dev"},
+			Permissions: []string{"read"},
+		},
 	}})
 	e.SetResolver(&stubResolver{
 		labels: map[string]map[string]string{
@@ -63,7 +74,11 @@ func BenchmarkCan_LabelsNoLabelsOnResource(b *testing.B) {
 	e := NewEvaluator()
 	e.SetLabelsEnabled(true)
 	e.SetPolicy(&Policy{Grants: []Grant{
-		{Resources: []string{"service:*"}, Audience: []string{"group:ops"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:*"},
+			Audience:    []string{"group:ops"},
+			Permissions: []string{"read"},
+		},
 	}})
 	e.SetResolver(&stubResolver{
 		labels: map[string]map[string]string{},
@@ -123,7 +138,11 @@ func BenchmarkFilter_WithLabels(b *testing.B) {
 			e := NewEvaluator()
 			e.SetLabelsEnabled(true)
 			e.SetPolicy(&Policy{Grants: []Grant{
-				{Resources: []string{"service:*"}, Audience: []string{"group:dev"}, Permissions: []string{"read"}},
+				{
+					Resources:   []string{"service:*"},
+					Audience:    []string{"group:dev"},
+					Permissions: []string{"read"},
+				},
 			}})
 			e.SetResolver(resolver)
 			id := &auth.Identity{Subject: "alice", Groups: []string{"dev"}}
@@ -146,7 +165,11 @@ func BenchmarkFilter_NoLabels(b *testing.B) {
 			}
 			e := NewEvaluator()
 			e.SetPolicy(&Policy{Grants: []Grant{
-				{Resources: []string{"service:*"}, Audience: []string{"group:dev"}, Permissions: []string{"read"}},
+				{
+					Resources:   []string{"service:*"},
+					Audience:    []string{"group:dev"},
+					Permissions: []string{"read"},
+				},
 			}})
 			id := &auth.Identity{Subject: "alice", Groups: []string{"dev"}}
 			resourceFunc := func(s benchSvc) string { return "service:" + s.name }
@@ -163,8 +186,8 @@ func BenchmarkFilter_NoLabels(b *testing.B) {
 
 func BenchmarkParseACLLabels(b *testing.B) {
 	labels := map[string]string{
-		"cetacean.acl.read":  "group:dev,group:ops,user:alice@example.com",
-		"cetacean.acl.write": "group:ops",
+		"cetacean.acl.read":          "group:dev,group:ops,user:alice@example.com",
+		"cetacean.acl.write":         "group:ops",
 		"com.docker.stack.namespace": "mystack",
 		"traefik.enable":             "true",
 	}

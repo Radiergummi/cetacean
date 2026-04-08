@@ -73,7 +73,11 @@ func TestHasACLLabels(t *testing.T) {
 }
 
 func TestMatchLabelAudience(t *testing.T) {
-	alice := &auth.Identity{Subject: "alice", Email: "alice@example.com", Groups: []string{"dev", "ops"}}
+	alice := &auth.Identity{
+		Subject: "alice",
+		Email:   "alice@example.com",
+		Groups:  []string{"dev", "ops"},
+	}
 
 	tests := []struct {
 		name      string

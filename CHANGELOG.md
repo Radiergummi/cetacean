@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Label-based access control — teams can add `cetacean.acl.read` and `cetacean.acl.write` labels to Docker resources to control who can view and modify them, without a central policy file
+- ACL integration panel on service detail pages for viewing and editing access control labels
 - Atom feed support on resource endpoints — request via `Accept: application/atom+xml` header or `.atom` URL suffix
 - Feed icon button in page headers for pages with Atom feeds
 - `Link: rel="alternate"` header on JSON responses advertising the Atom feed URL
