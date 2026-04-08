@@ -195,7 +195,7 @@ func (e *Evaluator) checkLabels(id *auth.Identity, permission string, resource s
 		return false, false
 	}
 
-	readAudiences, writeAudiences := parseACLLabels(labels)
+	readAudiences, writeAudiences := ParseACLLabels(labels)
 	matchesWrite := matchLabelAudience(writeAudiences, id)
 	matchesRead := matchLabelAudience(readAudiences, id)
 

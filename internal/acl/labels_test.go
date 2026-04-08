@@ -10,7 +10,7 @@ func TestParseACLLabels_ReadOnly(t *testing.T) {
 	labels := map[string]string{
 		"cetacean.acl.read": "group:dev,user:alice@example.com",
 	}
-	read, write := parseACLLabels(labels)
+	read, write := ParseACLLabels(labels)
 	if len(read) != 2 {
 		t.Fatalf("expected 2 read audiences, got %d", len(read))
 	}
@@ -27,7 +27,7 @@ func TestParseACLLabels_ReadAndWrite(t *testing.T) {
 		"cetacean.acl.read":  "group:*",
 		"cetacean.acl.write": "group:ops",
 	}
-	read, write := parseACLLabels(labels)
+	read, write := ParseACLLabels(labels)
 	if len(read) != 1 || read[0] != "group:*" {
 		t.Fatalf("unexpected read: %v", read)
 	}
@@ -40,7 +40,7 @@ func TestParseACLLabels_Whitespace(t *testing.T) {
 	labels := map[string]string{
 		"cetacean.acl.read": " group:dev , user:bob ",
 	}
-	read, _ := parseACLLabels(labels)
+	read, _ := ParseACLLabels(labels)
 	if len(read) != 2 || read[0] != "group:dev" || read[1] != "user:bob" {
 		t.Fatalf("whitespace not trimmed: %v", read)
 	}
@@ -48,13 +48,13 @@ func TestParseACLLabels_Whitespace(t *testing.T) {
 
 func TestParseACLLabels_EmptyAndMissing(t *testing.T) {
 	// No ACL labels at all.
-	read, write := parseACLLabels(map[string]string{"foo": "bar"})
+	read, write := ParseACLLabels(map[string]string{"foo": "bar"})
 	if read != nil || write != nil {
 		t.Fatal("expected nil for labels without ACL entries")
 	}
 
 	// Empty value.
-	read, write = parseACLLabels(map[string]string{"cetacean.acl.read": ""})
+	read, write = ParseACLLabels(map[string]string{"cetacean.acl.read": ""})
 	if len(read) != 0 {
 		t.Fatalf("expected 0 audiences from empty value, got %d", len(read))
 	}

@@ -21,9 +21,9 @@ func hasACLLabels(labels map[string]string) bool {
 	return hasRead || hasWrite
 }
 
-// parseACLLabels extracts read and write audience lists from labels.
+// ParseACLLabels extracts read and write audience lists from labels.
 // Returns nil, nil if no ACL labels are present.
-func parseACLLabels(labels map[string]string) (read, write []string) {
+func ParseACLLabels(labels map[string]string) (read, write []string) {
 	readVal, hasRead := labels[LabelRead]
 	writeVal, hasWrite := labels[LabelWrite]
 

@@ -12,21 +12,9 @@ type ACLIntegration struct {
 }
 
 func detectACL(labels map[string]string) *ACLIntegration {
-	readVal, hasRead := labels[acl.LabelRead]
-	writeVal, hasWrite := labels[acl.LabelWrite]
-
-	if !hasRead && !hasWrite {
+	read, write := acl.ParseACLLabels(labels)
+	if read == nil && write == nil {
 		return nil
 	}
-
-	integration := &ACLIntegration{Name: "cetacean-acl"}
-
-	if hasRead {
-		integration.Read = acl.ParseAudienceList(readVal)
-	}
-	if hasWrite {
-		integration.Write = acl.ParseAudienceList(writeVal)
-	}
-
-	return integration
+	return &ACLIntegration{Name: "cetacean-acl", Read: read, Write: write}
 }

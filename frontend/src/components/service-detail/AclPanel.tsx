@@ -5,6 +5,9 @@ import { MultiCombobox } from "@/components/ui/multi-combobox";
 import { saveIntegrationLabels } from "@/lib/integrationLabels";
 import { useState } from "react";
 
+const labelKeyRead = "cetacean.acl.read";
+const labelKeyWrite = "cetacean.acl.write";
+
 /**
  * Panel displaying parsed ACL audience configuration,
  * with optional inline editing support.
@@ -37,11 +40,11 @@ export function AclPanel({
     const writeFiltered = formWrite.filter((audience) => audience.trim());
 
     if (readFiltered.length > 0) {
-      labels["cetacean.acl.read"] = readFiltered.join(",");
+      labels[labelKeyRead] = readFiltered.join(",");
     }
 
     if (writeFiltered.length > 0) {
-      labels["cetacean.acl.write"] = writeFiltered.join(",");
+      labels[labelKeyWrite] = writeFiltered.join(",");
     }
 
     return labels;
@@ -74,11 +77,6 @@ export function AclPanel({
     </div>
   );
 
-  const rows = [
-    read && read.length > 0 && (["Read", read.join(", ")] as [string, string]),
-    write && write.length > 0 && (["Write", write.join(", ")] as [string, string]),
-  ];
-
   return (
     <IntegrationSection
       title="Access Control"
@@ -92,7 +90,12 @@ export function AclPanel({
       serviceId={serviceId}
       onRawSave={onSaved}
     >
-      <KVTable rows={rows} />
+      <KVTable
+        rows={[
+          read && read.length > 0 && (["Read", read.join(", ")] as [string, string]),
+          write && write.length > 0 && (["Write", write.join(", ")] as [string, string]),
+        ]}
+      />
     </IntegrationSection>
   );
 }
