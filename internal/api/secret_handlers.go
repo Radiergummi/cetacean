@@ -5,9 +5,6 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
-	"github.com/radiergummi/cetacean/internal/acl"
-	"github.com/radiergummi/cetacean/internal/auth"
-	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
 
@@ -15,12 +12,10 @@ import (
 
 func (h *Handlers) HandleGetSecret(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	sec, ok := lookupOr404(w, r, "secret", id, h.cache.GetSecret)
+	sec, ok := lookupACL(h, w, r, "secret", id, h.cache.GetSecret, func(s swarm.Secret) string {
+		return "secret:" + s.Spec.Name
+	})
 	if !ok {
-		return
-	}
-	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "secret:"+sec.Spec.Name) {
-		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}
 	// Never expose secret data — clear it before responding.
@@ -30,16 +25,8 @@ func (h *Handlers) HandleGetSecret(w http.ResponseWriter, r *http.Request) {
 		w,
 		r,
 		NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", SecretResponse{
-			Secret: sec,
-			Services: acl.Filter(
-				h.acl,
-				auth.IdentityFromContext(r.Context()),
-				"read",
-				h.cache.ServicesUsingSecret(id),
-				func(ref cache.ServiceRef) string {
-					return "service:" + ref.Name
-				},
-			),
+			Secret:   sec,
+			Services: h.filterServiceRefs(r, h.cache.ServicesUsingSecret(id)),
 		}),
 		sec.UpdatedAt,
 	)

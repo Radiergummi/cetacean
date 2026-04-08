@@ -6,7 +6,6 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
-	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
@@ -88,12 +87,10 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	task, ok := lookupOr404(w, r, "task", id, h.cache.GetTask)
+	task, ok := lookupACL(h, w, r, "task", id, h.cache.GetTask, func(t swarm.Task) string {
+		return "task:" + t.ID
+	})
 	if !ok {
-		return
-	}
-	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "task:"+id) {
-		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}
 	et := h.enrichTask(task)
@@ -107,11 +104,9 @@ func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleTaskLogs(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if _, ok := lookupOr404(w, r, "task", id, h.cache.GetTask); !ok {
-		return
-	}
-	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "task:"+id) {
-		writeErrorCode(w, r, "ACL001", "access denied")
+	if _, ok := lookupACL(h, w, r, "task", id, h.cache.GetTask, func(t swarm.Task) string {
+		return "task:" + t.ID
+	}); !ok {
 		return
 	}
 	h.serveLogs(

@@ -1,11 +1,35 @@
 package api
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 
 	cerrdefs "github.com/containerd/errdefs"
 )
+
+// removeAll removes each resource by ID, skipping not-found errors and
+// collecting others into errs. Returns the count of successful removals.
+func removeAll(
+	ctx context.Context,
+	ids []string,
+	resourceType string,
+	removeFn func(context.Context, string) error,
+	errs []removeError,
+) (int, []removeError) {
+	var count int
+	for _, id := range ids {
+		if err := removeFn(ctx, id); err != nil {
+			if cerrdefs.IsNotFound(err) {
+				continue
+			}
+			errs = append(errs, removeError{Type: resourceType, ID: id, Error: err.Error()})
+			continue
+		}
+		count++
+	}
+	return count, errs
+}
 
 type removeError struct {
 	Type  string `json:"type"`
@@ -42,49 +66,34 @@ func (h *Handlers) HandleRemoveStack(w http.ResponseWriter, r *http.Request) {
 	var resp removeStackResponse
 	var errs []removeError
 
-	for _, id := range stack.Services {
-		if err := h.serviceLifecycle.RemoveService(ctx, id); err != nil {
-			if cerrdefs.IsNotFound(err) {
-				continue
-			}
-			errs = append(errs, removeError{Type: "service", ID: id, Error: err.Error()})
-			continue
-		}
-		resp.Removed.Services++
-	}
-
-	for _, id := range stack.Networks {
-		if err := h.resourceRemover.RemoveNetwork(ctx, id); err != nil {
-			if cerrdefs.IsNotFound(err) {
-				continue
-			}
-			errs = append(errs, removeError{Type: "network", ID: id, Error: err.Error()})
-			continue
-		}
-		resp.Removed.Networks++
-	}
-
-	for _, id := range stack.Secrets {
-		if err := h.secretWriter.RemoveSecret(ctx, id); err != nil {
-			if cerrdefs.IsNotFound(err) {
-				continue
-			}
-			errs = append(errs, removeError{Type: "secret", ID: id, Error: err.Error()})
-			continue
-		}
-		resp.Removed.Secrets++
-	}
-
-	for _, id := range stack.Configs {
-		if err := h.configWriter.RemoveConfig(ctx, id); err != nil {
-			if cerrdefs.IsNotFound(err) {
-				continue
-			}
-			errs = append(errs, removeError{Type: "config", ID: id, Error: err.Error()})
-			continue
-		}
-		resp.Removed.Configs++
-	}
+	resp.Removed.Services, errs = removeAll(
+		ctx,
+		stack.Services,
+		"service",
+		h.serviceLifecycle.RemoveService,
+		errs,
+	)
+	resp.Removed.Networks, errs = removeAll(
+		ctx,
+		stack.Networks,
+		"network",
+		h.resourceRemover.RemoveNetwork,
+		errs,
+	)
+	resp.Removed.Secrets, errs = removeAll(
+		ctx,
+		stack.Secrets,
+		"secret",
+		h.secretWriter.RemoveSecret,
+		errs,
+	)
+	resp.Removed.Configs, errs = removeAll(
+		ctx,
+		stack.Configs,
+		"config",
+		h.configWriter.RemoveConfig,
+		errs,
+	)
 
 	if len(errs) > 0 {
 		resp.Errors = errs

@@ -31,12 +31,8 @@ func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	node, ok := lookupOr404(w, r, "node", id, h.cache.GetNode)
+	node, ok := lookupACL(h, w, r, "node", id, h.cache.GetNode, nodeResource)
 	if !ok {
-		return
-	}
-	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", nodeResource(node)) {
-		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}
 	h.setAllow(w, r, "node", node.Description.Hostname)
@@ -47,12 +43,7 @@ func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	node, ok := lookupOr404(w, r, "node", id, h.cache.GetNode)
-	if !ok {
-		return
-	}
-	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", nodeResource(node)) {
-		writeErrorCode(w, r, "ACL001", "access denied")
+	if _, ok := lookupACL(h, w, r, "node", id, h.cache.GetNode, nodeResource); !ok {
 		return
 	}
 	tasks := h.cache.ListTasksByNode(id)

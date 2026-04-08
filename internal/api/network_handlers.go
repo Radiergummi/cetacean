@@ -5,9 +5,6 @@ import (
 
 	"github.com/docker/docker/api/types/network"
 
-	"github.com/radiergummi/cetacean/internal/acl"
-	"github.com/radiergummi/cetacean/internal/auth"
-	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
 
@@ -15,12 +12,18 @@ import (
 
 func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	net, ok := lookupOr404(w, r, "network", id, h.cache.GetNetwork)
+	net, ok := lookupACL(
+		h,
+		w,
+		r,
+		"network",
+		id,
+		h.cache.GetNetwork,
+		func(n network.Summary) string {
+			return "network:" + n.Name
+		},
+	)
 	if !ok {
-		return
-	}
-	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "network:"+net.Name) {
-		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}
 	h.setAllow(w, r, "network", net.Name)
@@ -28,16 +31,8 @@ func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 		w,
 		r,
 		NewDetailResponse(r.Context(), "/networks/"+id, "Network", NetworkResponse{
-			Network: net,
-			Services: acl.Filter(
-				h.acl,
-				auth.IdentityFromContext(r.Context()),
-				"read",
-				h.cache.ServicesUsingNetwork(id),
-				func(ref cache.ServiceRef) string {
-					return "service:" + ref.Name
-				},
-			),
+			Network:  net,
+			Services: h.filterServiceRefs(r, h.cache.ServicesUsingNetwork(id)),
 		}),
 		net.Created,
 	)

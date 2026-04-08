@@ -11,6 +11,10 @@ import (
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
+
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 // lookupOr404 resolves a resource from the cache by key. Returns false (and
@@ -29,6 +33,45 @@ func lookupOr404[T any](
 		writeErrorCode(w, r, code, fmt.Sprintf("%s %q not found", resource, key))
 	}
 	return item, ok
+}
+
+// lookupACL resolves a resource by key, checks the read ACL, and returns it.
+// Returns false (and writes the error response) if not found or denied.
+func lookupACL[T any](
+	h *Handlers,
+	w http.ResponseWriter,
+	r *http.Request,
+	resource string,
+	key string,
+	getter func(string) (T, bool),
+	aclResource func(T) string,
+) (T, bool) {
+	item, ok := lookupOr404(w, r, resource, key, getter)
+	if !ok {
+		return item, false
+	}
+
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", aclResource(item)) {
+		writeErrorCode(w, r, "ACL001", "access denied")
+		var zero T
+		return zero, false
+	}
+
+	return item, true
+}
+
+// filterServiceRefs applies ACL read filtering to a list of service
+// cross-references. Used by detail handlers that include "used by" services.
+func (h *Handlers) filterServiceRefs(r *http.Request, refs []cache.ServiceRef) []cache.ServiceRef {
+	return acl.Filter(
+		h.acl,
+		auth.IdentityFromContext(r.Context()),
+		"read",
+		refs,
+		func(ref cache.ServiceRef) string {
+			return "service:" + ref.Name
+		},
+	)
 }
 
 // writeDockerError handles Docker API errors that don't have a domain-specific

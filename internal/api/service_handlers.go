@@ -6,7 +6,6 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
-	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/filter"
 	"github.com/radiergummi/cetacean/internal/integrations"
@@ -20,17 +19,17 @@ func (h *Handlers) lookupServiceACL(
 	w http.ResponseWriter,
 	r *http.Request,
 ) (swarm.Service, bool) {
-	svc, ok := lookupOr404(w, r, "service", r.PathValue("id"), h.cache.GetService)
-	if !ok {
-		return swarm.Service{}, false
-	}
-
-	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "service:"+svc.Spec.Name) {
-		writeErrorCode(w, r, "ACL001", "access denied")
-		return swarm.Service{}, false
-	}
-
-	return svc, true
+	return lookupACL(
+		h,
+		w,
+		r,
+		"service",
+		r.PathValue("id"),
+		h.cache.GetService,
+		func(s swarm.Service) string {
+			return "service:" + s.Spec.Name
+		},
+	)
 }
 
 type ServiceListItem struct {

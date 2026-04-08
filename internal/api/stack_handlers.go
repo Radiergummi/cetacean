@@ -51,12 +51,18 @@ func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	detail, ok := lookupOr404(w, r, "stack", name, h.cache.GetStackDetail)
+	detail, ok := lookupACL(
+		h,
+		w,
+		r,
+		"stack",
+		name,
+		h.cache.GetStackDetail,
+		func(s cache.StackDetail) string {
+			return "stack:" + name
+		},
+	)
 	if !ok {
-		return
-	}
-	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "stack:"+name) {
-		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}
 	h.setAllow(w, r, "stack", name)

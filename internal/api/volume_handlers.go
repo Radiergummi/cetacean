@@ -6,9 +6,6 @@ import (
 
 	"github.com/docker/docker/api/types/volume"
 
-	"github.com/radiergummi/cetacean/internal/acl"
-	"github.com/radiergummi/cetacean/internal/auth"
-	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
 
@@ -16,12 +13,10 @@ import (
 
 func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	vol, ok := lookupOr404(w, r, "volume", name, h.cache.GetVolume)
+	vol, ok := lookupACL(h, w, r, "volume", name, h.cache.GetVolume, func(v volume.Volume) string {
+		return "volume:" + v.Name
+	})
 	if !ok {
-		return
-	}
-	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "volume:"+vol.Name) {
-		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}
 	h.setAllow(w, r, "volume", vol.Name)
@@ -30,16 +25,8 @@ func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
 		w,
 		r,
 		NewDetailResponse(r.Context(), "/volumes/"+name, "Volume", VolumeResponse{
-			Volume: vol,
-			Services: acl.Filter(
-				h.acl,
-				auth.IdentityFromContext(r.Context()),
-				"read",
-				h.cache.ServicesUsingVolume(name),
-				func(ref cache.ServiceRef) string {
-					return "service:" + ref.Name
-				},
-			),
+			Volume:   vol,
+			Services: h.filterServiceRefs(r, h.cache.ServicesUsingVolume(name)),
 		}),
 		created,
 	)

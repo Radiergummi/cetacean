@@ -5,9 +5,6 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
-	"github.com/radiergummi/cetacean/internal/acl"
-	"github.com/radiergummi/cetacean/internal/auth"
-	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
 
@@ -15,12 +12,10 @@ import (
 
 func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	cfg, ok := lookupOr404(w, r, "config", id, h.cache.GetConfig)
+	cfg, ok := lookupACL(h, w, r, "config", id, h.cache.GetConfig, func(c swarm.Config) string {
+		return "config:" + c.Spec.Name
+	})
 	if !ok {
-		return
-	}
-	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "config:"+cfg.Spec.Name) {
-		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}
 	h.setAllow(w, r, "config", cfg.Spec.Name)
@@ -28,16 +23,8 @@ func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 		w,
 		r,
 		NewDetailResponse(r.Context(), "/configs/"+id, "Config", ConfigResponse{
-			Config: cfg,
-			Services: acl.Filter(
-				h.acl,
-				auth.IdentityFromContext(r.Context()),
-				"read",
-				h.cache.ServicesUsingConfig(id),
-				func(ref cache.ServiceRef) string {
-					return "service:" + ref.Name
-				},
-			),
+			Config:   cfg,
+			Services: h.filterServiceRefs(r, h.cache.ServicesUsingConfig(id)),
 		}),
 		cfg.UpdatedAt,
 	)
