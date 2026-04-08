@@ -56,3 +56,32 @@ const badgeBase = "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-
 export const badgeBlue = `${badgeBase} bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300`;
 export const badgePurple = `${badgeBase} bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300`;
 export const badgeTeal = `${badgeBase} bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300`;
+
+export const integrationLabelPrefix = {
+  traefik: "traefik.",
+  shepherd: "shepherd.",
+  "swarm-cronjob": "swarm.cronjob.",
+  diun: "diun.",
+} as const;
+
+export type IntegrationName = keyof typeof integrationLabelPrefix;
+
+/**
+ * Filter a label map to entries matching a known integration prefix.
+ */
+export function rawLabelsForIntegration(
+  labels: Record<string, string> | null,
+  integrationName: string,
+): [string, string][] {
+  if (!labels) {
+    return [];
+  }
+
+  const prefix = integrationLabelPrefix[integrationName as IntegrationName];
+
+  if (!prefix) {
+    return [];
+  }
+
+  return Object.entries(labels).filter(([key]) => key.startsWith(prefix));
+}

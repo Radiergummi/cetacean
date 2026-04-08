@@ -44,7 +44,7 @@ describe("DataTable", () => {
   });
 
   it("calls onRowClick", () => {
-    const onClick = vi.fn();
+    const onClick = vi.fn<(item: Item) => void>();
     render(
       <DataTable
         columns={columns}

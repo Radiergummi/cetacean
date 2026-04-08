@@ -16,8 +16,8 @@ beforeEach(() => {
   vi.stubGlobal("matchMedia", (query: string) => ({
     matches: false,
     media: query,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
+    addEventListener: vi.fn<() => void>(),
+    removeEventListener: vi.fn<() => void>(),
   }));
 });
 

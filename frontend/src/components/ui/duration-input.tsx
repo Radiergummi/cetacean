@@ -1,12 +1,6 @@
 import { NumberField } from "@/components/ui/number-field";
+import { bestDurationUnit, durationUnits } from "@/lib/duration";
 import { useEffect, useState } from "react";
-
-const units = [
-  { label: "seconds", factor: 1_000_000_000 },
-  { label: "minutes", factor: 60_000_000_000 },
-  { label: "hours", factor: 3_600_000_000_000 },
-  { label: "days", factor: 86_400_000_000_000 },
-] as const;
 
 interface DurationInputProps {
   value: number;
@@ -14,22 +8,12 @@ interface DurationInputProps {
   disabled?: boolean;
 }
 
-function bestUnit(nanoseconds: number): (typeof units)[number] {
-  for (let index = units.length - 1; index > 0; index--) {
-    if (nanoseconds >= units[index].factor && nanoseconds % units[index].factor === 0) {
-      return units[index];
-    }
-  }
-
-  return units[0];
-}
-
 export function DurationInput({ value, onChange, disabled }: DurationInputProps) {
-  const [unit, setUnit] = useState(() => bestUnit(value));
+  const [unit, setUnit] = useState(() => bestDurationUnit(value));
   const displayValue = value === 0 ? 0 : value / unit.factor;
 
   useEffect(() => {
-    setUnit(bestUnit(value));
+    setUnit(bestDurationUnit(value));
   }, [value]);
 
   return (
@@ -48,7 +32,8 @@ export function DurationInput({ value, onChange, disabled }: DurationInputProps)
       <select
         value={unit.label}
         onChange={(event) => {
-          const next = units.find(({ label }) => label === event.target.value) ?? units[0];
+          const next =
+            durationUnits.find(({ label }) => label === event.target.value) ?? durationUnits[0];
           setUnit(next);
           const currentNumber = value / unit.factor;
           onChange(currentNumber * next.factor);
@@ -56,7 +41,7 @@ export function DurationInput({ value, onChange, disabled }: DurationInputProps)
         disabled={disabled}
         className="flex h-8 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
       >
-        {units.map(({ label }) => (
+        {durationUnits.map(({ label }) => (
           <option
             key={label}
             value={label}

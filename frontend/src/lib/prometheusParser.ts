@@ -1,4 +1,5 @@
 import type { PrometheusResponse } from "../api/types";
+import { escapePromQL } from "./utils";
 
 /**
  * Extracts [label, value] pairs from a Prometheus instant query response.
@@ -38,4 +39,25 @@ export function parseRange(
         number[],
       ],
   );
+}
+
+/**
+ * Build a Prometheus instance label selector from node identification fields.
+ * Tries exact instance match first, then address with port wildcard,
+ * then hostname with optional FQDN suffix.
+ */
+export function buildInstanceFilter(instance: string, address: string, hostname: string): string {
+  if (instance) {
+    return `instance="${escapePromQL(instance)}"`;
+  }
+
+  if (address) {
+    return `instance=~"${escapePromQL(address)}:.*"`;
+  }
+
+  if (hostname) {
+    return `instance=~"${escapePromQL(hostname)}(\\..+)?:.*"`;
+  }
+
+  return "";
 }

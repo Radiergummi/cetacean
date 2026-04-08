@@ -5,14 +5,14 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock scrollIntoView, which jsdom doesn't support
-Element.prototype.scrollIntoView = vi.fn();
+Element.prototype.scrollIntoView = vi.fn<() => void>();
 
 // Mock the api module
 vi.mock("../../api/client", () => ({
   api: {
-    serviceLogs: vi.fn(),
-    serviceLogsStreamURL: vi.fn(),
-    taskLogsStreamURL: vi.fn(),
+    serviceLogs: vi.fn<() => void>(),
+    serviceLogsStreamURL: vi.fn<() => void>(),
+    taskLogsStreamURL: vi.fn<() => void>(),
   },
 }));
 

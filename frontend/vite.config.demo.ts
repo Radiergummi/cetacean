@@ -9,7 +9,7 @@ export default defineConfig({
   build: {
     outDir: "../website/public/demo",
     emptyOutDir: false,
-    rollupOptions: {
+    rolldownOptions: {
       input: path.resolve(import.meta.dirname, "demo.html"),
       output: {
         manualChunks(id) {

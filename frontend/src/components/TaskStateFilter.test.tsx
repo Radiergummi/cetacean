@@ -37,7 +37,7 @@ describe("TaskStateFilter", () => {
   });
 
   it("calls onChange with state on click", () => {
-    const onChange = vi.fn();
+    const onChange = vi.fn<(state: string | null) => void>();
     render(
       <TaskStateFilter
         tasks={fakeTasks}
@@ -50,7 +50,7 @@ describe("TaskStateFilter", () => {
   });
 
   it("defaults to Active filter and calls onChange(null) for Active", () => {
-    const onChange = vi.fn();
+    const onChange = vi.fn<(state: string | null) => void>();
     render(
       <TaskStateFilter
         tasks={fakeTasks}

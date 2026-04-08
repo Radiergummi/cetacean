@@ -1,7 +1,14 @@
 import { api, headAllowedMethods } from "../../api/client";
 import type { SearchResourceType, SearchResponse, SearchResult } from "../../api/types";
 import { getActions, matchAction, type PaletteAction, type PaletteStep } from "../../lib/actions";
-import { resourcePath, statusColor, typeLabels, typeOrder } from "../../lib/searchConstants";
+import {
+  flattenSearchResults,
+  resourcePath,
+  statusColor,
+  typeLabels,
+  typeOrder,
+  type FlatSearchItem,
+} from "../../lib/searchConstants";
 import { showErrorToast } from "../../lib/showErrorToast";
 import { getErrorMessage } from "../../lib/utils";
 import ResourceName from "../ResourceName";
@@ -25,28 +32,6 @@ function StateOrb({ state }: { state: string }) {
       title={state}
     />
   );
-}
-
-interface FlatItem {
-  type: SearchResourceType;
-  result: SearchResult;
-}
-
-function flattenResults(response: SearchResponse, filterType?: SearchResourceType): FlatItem[] {
-  const items: FlatItem[] = [];
-  const types = filterType ? [filterType] : typeOrder;
-
-  for (const type of types) {
-    const results = response.results[type];
-
-    if (results) {
-      for (const result of results) {
-        items.push({ type, result });
-      }
-    }
-  }
-
-  return items;
 }
 
 /** Map a singular resource type from action steps to plural SearchResourceType */
@@ -141,7 +126,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
       : undefined;
 
   const flat = useMemo(
-    () => (response ? flattenResults(response, resourceFilter) : []),
+    () => (response ? flattenSearchResults(response, resourceFilter) : []),
     [response, resourceFilter],
   );
   const hasResponse = response !== null;
@@ -281,7 +266,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   }, [query, hasResponse]);
 
   const goTo = useCallback(
-    ({ result: { id }, type }: FlatItem) => {
+    ({ result: { id }, type }: FlatSearchItem) => {
       navigate(resourcePath(type, id)!);
       onClose();
     },
@@ -400,7 +385,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   }, [activeAction, actionStep, actionArgs]);
 
   const selectItem = useCallback(
-    (item: FlatItem) => {
+    (item: FlatSearchItem) => {
       if (activeAction && currentStep?.type === "resource") {
         // Pass the search result as the arg (has id and name)
         advanceStep(item.result);

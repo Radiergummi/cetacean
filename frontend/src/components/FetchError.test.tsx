@@ -14,7 +14,7 @@ describe("FetchError", () => {
   });
 
   it("shows retry button when onRetry provided", () => {
-    render(<FetchError onRetry={vi.fn()} />);
+    render(<FetchError onRetry={vi.fn<() => void>()} />);
     expect(screen.getByText("Retry")).toBeInTheDocument();
   });
 
@@ -24,7 +24,7 @@ describe("FetchError", () => {
   });
 
   it("calls onRetry when clicked", () => {
-    const onRetry = vi.fn();
+    const onRetry = vi.fn<() => void>();
     render(<FetchError onRetry={onRetry} />);
     fireEvent.click(screen.getByText("Retry"));
     expect(onRetry).toHaveBeenCalledOnce();

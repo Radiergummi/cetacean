@@ -5,7 +5,13 @@ import ResourceName from "@/components/ResourceName";
 import { Button } from "@/components/ui/button";
 import { invalidateRecommendations, useRecommendations } from "@/hooks/useRecommendations";
 import { applyRecommendation } from "@/lib/applyRecommendation";
-import { hintIcon, severityStyles, sizingCategories } from "@/lib/sizingUtils";
+import {
+  hintIcon,
+  recommendationKey,
+  recommendationLink,
+  severityStyles,
+  sizingCategories,
+} from "@/lib/sizingUtils";
 import { getErrorMessage } from "@/lib/utils";
 import { Collapsible } from "@base-ui/react/collapsible";
 import { ChevronRight, Loader2, Wrench } from "lucide-react";
@@ -72,22 +78,6 @@ const filterLabels: Record<FilterTab, string> = {
   cluster: "Cluster",
 };
 
-function targetLink(hint: Recommendation): string | null {
-  if (hint.scope === "service") {
-    return `/services/${hint.targetId}`;
-  }
-
-  if (hint.scope === "node") {
-    return `/nodes/${hint.targetId}`;
-  }
-
-  return null;
-}
-
-function recommendationKey(hint: Recommendation): string {
-  return `${hint.targetId}:${hint.category}:${hint.resource}`;
-}
-
 interface CardProps {
   hint: Recommendation;
   applying: string | null;
@@ -98,7 +88,7 @@ function RecommendationCard({ hint, applying, onApply }: CardProps) {
   const CategoryIcon = hintIcon(hint.category);
   const hasFix = hint.fixAction != null && hint.suggested != null;
   const isApplying = applying === recommendationKey(hint);
-  const link = targetLink(hint);
+  const link = recommendationLink(hint);
   const detail = categoryDetails[hint.category];
 
   return (

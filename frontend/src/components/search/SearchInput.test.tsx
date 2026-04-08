@@ -7,7 +7,7 @@ describe("SearchInput", () => {
     render(
       <SearchInput
         value=""
-        onChange={vi.fn()}
+        onChange={vi.fn<(value: string) => void>()}
         placeholder="Search nodes..."
       />,
     );
@@ -18,14 +18,14 @@ describe("SearchInput", () => {
     render(
       <SearchInput
         value=""
-        onChange={vi.fn()}
+        onChange={vi.fn<(value: string) => void>()}
       />,
     );
     expect(screen.getByPlaceholderText("Search\u2026")).toBeInTheDocument();
   });
 
   it("calls onChange on input", () => {
-    const onChange = vi.fn();
+    const onChange = vi.fn<(value: string) => void>();
     render(
       <SearchInput
         value=""
@@ -40,7 +40,7 @@ describe("SearchInput", () => {
     render(
       <SearchInput
         value="test"
-        onChange={vi.fn()}
+        onChange={vi.fn<(value: string) => void>()}
       />,
     );
     expect(screen.getByRole("button")).toBeInTheDocument();
@@ -50,14 +50,14 @@ describe("SearchInput", () => {
     render(
       <SearchInput
         value=""
-        onChange={vi.fn()}
+        onChange={vi.fn<(value: string) => void>()}
       />,
     );
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("calls onChange with empty string on clear", () => {
-    const onChange = vi.fn();
+    const onChange = vi.fn<(value: string) => void>();
     render(
       <SearchInput
         value="test"

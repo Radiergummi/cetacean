@@ -15,7 +15,7 @@ function ThrowingComponent() {
 // Suppress console.error for expected errors
 const originalError = console.error; // eslint-disable-line no-console
 beforeAll(() => {
-  console.error = vi.fn(); // eslint-disable-line no-console
+  console.error = vi.fn<(...args: unknown[]) => void>(); // eslint-disable-line no-console
 });
 afterAll(() => {
   console.error = originalError; // eslint-disable-line no-console

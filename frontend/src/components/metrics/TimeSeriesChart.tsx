@@ -1,11 +1,17 @@
 import { useChartSync } from "./ChartSyncProvider";
+import ChartTooltipOverlay, { type TooltipData } from "./ChartTooltipOverlay";
 import { useMetricsPanelContext } from "./MetricsPanelContext";
 import { api } from "@/api/client.ts";
 import type { PrometheusResponse } from "@/api/types.ts";
 import { useMatchesBreakpoint } from "@/hooks/useMatchesBreakpoint.ts";
-import { getChartColor, getSemanticChartColor } from "@/lib/chartColors.ts";
-import { chartTooltipClasses } from "@/lib/chartTooltip.ts";
+import { getSemanticChartColor } from "@/lib/chartColors.ts";
 import { formatMetricValue } from "@/lib/format.ts";
+import {
+  type ParsedMetrics,
+  parseRangeResult,
+  seriesChanged,
+  seriesLabel,
+} from "@/lib/metricsParser.ts";
 import { generateMockSeries } from "@/lib/mockChartData.ts";
 import { getErrorMessage } from "@/lib/utils";
 import {
@@ -69,14 +75,6 @@ interface Props {
 
 type State = "loading" | "data" | "empty" | "error";
 
-interface TooltipData {
-  time: string;
-  series: { label: string; color: string; value: string; raw: number; dashed?: boolean }[];
-  x: number;
-  chartWidth: number;
-  top: number;
-}
-
 const rangeIntervals: Record<string, number> = {
   "1h": 3600,
   "6h": 21600,
@@ -85,47 +83,6 @@ const rangeIntervals: Record<string, number> = {
 };
 
 const formatValue = formatMetricValue;
-
-function seriesLabel(metric: Record<string, string> | undefined, fallback?: string): string {
-  if (!metric) {
-    return fallback ?? "value";
-  }
-
-  const { __name__, ...labels } = metric;
-  const labelStr = Object.values(labels).filter(Boolean).join(", ");
-
-  if (labelStr) {
-    return labelStr;
-  }
-
-  if (__name__) {
-    return __name__;
-  }
-
-  return fallback ?? "value";
-}
-
-/** Parse a Prometheus range query response into chart-ready data. */
-function parseRangeResult(
-  response: PrometheusResponse,
-  title: string,
-  colorOverride?: string,
-): FetchedData | null {
-  if (!response.data?.result?.length) {
-    return null;
-  }
-
-  const result = response.data.result;
-  const timestamps = result[0].values!.map(([value]) => Number(value));
-  const labels = timestamps.map((timestamp) => new Date(timestamp * 1_000).toLocaleTimeString());
-  const series = result.map(({ metric, values }, index) => ({
-    label: seriesLabel(metric, result.length === 1 ? title : undefined),
-    color: colorOverride ?? getChartColor(index),
-    data: values!.map(([, value]) => Number(value)),
-  }));
-
-  return { labels, timestamps, series };
-}
 
 /** Create a vertical gradient fill for a series color. */
 function makeGradient(
@@ -137,38 +94,6 @@ function makeGradient(
   grad.addColorStop(0, color + "30");
   grad.addColorStop(1, color + "00");
   return grad;
-}
-
-const tooltipGap = 20;
-
-function tooltipLeft({ chartWidth, x }: TooltipData, element: HTMLDivElement | null): number {
-  const width = element?.offsetWidth ?? 0;
-  const showLeft = x > chartWidth / 2;
-
-  if (showLeft) {
-    return x - width - tooltipGap;
-  }
-
-  return x + tooltipGap;
-}
-
-interface FetchedData {
-  labels: string[];
-  timestamps: number[];
-  series: {
-    label: string;
-    color: string;
-    data: number[];
-  }[];
-}
-
-/** Returns true if the series labels changed between two datasets. */
-function seriesChanged(previous: FetchedData | null, next: FetchedData): boolean {
-  if (!previous || previous.series.length !== next.series.length) {
-    return true;
-  }
-
-  return previous.series.some(({ label }, index) => label !== next.series[index].label);
 }
 
 export default function TimeSeriesChart({
@@ -192,11 +117,10 @@ export default function TimeSeriesChart({
 }: Props) {
   const isMobile = useMatchesBreakpoint("md", "below");
   const chartRef = useRef<ChartJS<"line"> | null>(null);
-  const tooltipElRef = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<State>("loading");
   const [errorMessage, setErrorMessage] = useState("");
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
-  const [fetchedData, setFetchedData] = useState<FetchedData | null>(null);
+  const [fetchedData, setParsedMetrics] = useState<ParsedMetrics | null>(null);
   const tooltipRef = useRef(setTooltip);
   tooltipRef.current = setTooltip;
   const titleRef = useRef(title);
@@ -317,7 +241,7 @@ export default function TimeSeriesChart({
               colorOverride,
             );
 
-            setFetchedData(mock);
+            setParsedMetrics(mock);
             onSeriesInfoRef.current?.(mock.series.map((s) => ({ label: s.label, color: s.color })));
 
             if (seriesChanged(fetchedDataRef.current, mock)) {
@@ -334,7 +258,7 @@ export default function TimeSeriesChart({
           return;
         }
 
-        setFetchedData(parsed);
+        setParsedMetrics(parsed);
         onSeriesInfoRef.current?.(parsed.series.map((s) => ({ label: s.label, color: s.color })));
 
         if (seriesChanged(fetchedDataRef.current, parsed)) {
@@ -407,7 +331,7 @@ export default function TimeSeriesChart({
           return;
         }
 
-        setFetchedData(parsed);
+        setParsedMetrics(parsed);
         onSeriesInfoRef.current?.(parsed.series.map(({ color, label }) => ({ color, label })));
         setState("data");
       } catch {
@@ -423,7 +347,7 @@ export default function TimeSeriesChart({
           return;
         }
 
-        setFetchedData((previous) => {
+        setParsedMetrics((previous) => {
           if (!previous) {
             return previous;
           }
@@ -992,43 +916,10 @@ export default function TimeSeriesChart({
             </div>
           )}
         </div>
-        <div
-          ref={tooltipElRef}
-          className={chartTooltipClasses}
-          style={{
-            left: tooltip ? tooltipLeft(tooltip, tooltipElRef.current) : 0,
-            top: tooltip?.top ?? 0,
-            opacity: tooltip && state === "data" ? 1 : 0,
-            transition: "opacity 100ms ease",
-          }}
-        >
-          {tooltip && (
-            <>
-              <div className="mb-1.5 font-semibold text-foreground">{tooltip.time}</div>
-              {tooltip.series.map(({ color, dashed, label, value }) => (
-                <div
-                  key={label}
-                  className="flex items-center gap-2 whitespace-nowrap"
-                >
-                  {dashed ? (
-                    <span
-                      className="w-3 shrink-0 border-t-2 border-dashed"
-                      style={{ borderColor: color }}
-                    />
-                  ) : (
-                    <span
-                      className="h-3 w-1 shrink-0 rounded-sm"
-                      style={{ background: color }}
-                    />
-                  )}
-
-                  <span className="text-muted-foreground">{label}</span>
-                  <span className="ms-auto ps-4 font-semibold text-foreground">{value}</span>
-                </div>
-              ))}
-            </>
-          )}
-        </div>
+        <ChartTooltipOverlay
+          tooltip={tooltip}
+          visible={state === "data"}
+        />
       </div>
     </div>
   );

@@ -7,7 +7,7 @@ describe("ViewToggle", () => {
     render(
       <ViewToggle
         mode="table"
-        onChange={vi.fn()}
+        onChange={vi.fn<(mode: string) => void>()}
       />,
     );
     expect(screen.getByLabelText("Table view")).toBeInTheDocument();
@@ -15,7 +15,7 @@ describe("ViewToggle", () => {
   });
 
   it("calls onChange with 'grid' when grid clicked", () => {
-    const onChange = vi.fn();
+    const onChange = vi.fn<(mode: string) => void>();
     render(
       <ViewToggle
         mode="table"
@@ -27,7 +27,7 @@ describe("ViewToggle", () => {
   });
 
   it("calls onChange with 'table' when table clicked", () => {
-    const onChange = vi.fn();
+    const onChange = vi.fn<(mode: string) => void>();
     render(
       <ViewToggle
         mode="grid"
@@ -42,7 +42,7 @@ describe("ViewToggle", () => {
     render(
       <ViewToggle
         mode="table"
-        onChange={vi.fn()}
+        onChange={vi.fn<(mode: string) => void>()}
       />,
     );
     expect(screen.getByLabelText("Table view")).toHaveAttribute("aria-pressed", "true");

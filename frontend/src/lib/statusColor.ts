@@ -22,3 +22,16 @@ export function statusColor(state: string): string {
       return "bg-gray-300 dark:bg-gray-600";
   }
 }
+
+/**
+ * Derive a Tailwind background color class from running/total task counts.
+ */
+export function replicaHealthColor(running: number, total: number): string {
+  if (running === total) {
+    return "bg-green-500";
+  }
+  if (running > 0) {
+    return "bg-yellow-500";
+  }
+  return "bg-red-500";
+}

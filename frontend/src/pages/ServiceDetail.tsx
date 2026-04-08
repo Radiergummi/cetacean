@@ -19,7 +19,7 @@ import InfoCard from "../components/InfoCard";
 import { KeyValueEditor } from "../components/KeyValueEditor";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import { LogViewer } from "../components/log";
-import { MetricsPanel, type Threshold } from "../components/metrics";
+import { MetricsPanel } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
 import {
@@ -61,36 +61,14 @@ import { useRecommendations } from "../hooks/useRecommendations";
 import { useResourceStream } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
-import { deriveServiceSubResources } from "../lib/deriveServiceState";
+import { deriveServiceSubResources, serviceUpdateStatus } from "../lib/deriveServiceState";
 import { formatDuration, formatRelativeDate } from "../lib/format";
+import { integrationLabelPrefix, rawLabelsForIntegration } from "../lib/integrationLabels";
 import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
+import { cpuThresholds, memoryThresholds } from "../lib/resourceThresholds";
 import { escapePromQL } from "../lib/utils";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-
-const integrationLabelPrefix = {
-  traefik: "traefik.",
-  shepherd: "shepherd.",
-  "swarm-cronjob": "swarm.cronjob.",
-  diun: "diun.",
-} as const;
-
-function rawLabelsForIntegration(
-  labels: Record<string, string> | null,
-  integrationName: string,
-): [string, string][] {
-  if (!labels) {
-    return [];
-  }
-
-  const prefix = integrationLabelPrefix[integrationName as keyof typeof integrationLabelPrefix];
-
-  if (!prefix) {
-    return [];
-  }
-
-  return Object.entries(labels).filter(([key]) => key.startsWith(prefix));
-}
 
 export default function ServiceDetail() {
   const { id } = useParams<{ id: string }>();
@@ -811,28 +789,8 @@ export default function ServiceDetail() {
   );
 }
 
-const statusLabels: Record<string, string> = {
-  stable: "Stable",
-  updating: "Updating",
-  completed: "Stable",
-  paused: "Paused",
-  rollback_started: "Rolling back",
-  rollback_paused: "Rollback paused",
-  rollback_completed: "Rolled back",
-};
-
-function serviceStatus({ UpdateStatus }: Service): { label: string; state: string } {
-  const state = UpdateStatus?.State;
-
-  if (!state || state === "completed") {
-    return { label: "Stable", state: "stable" };
-  }
-
-  return { label: statusLabels[state] || state, state };
-}
-
 function ServiceStatusCard({ service }: { service: Service }) {
-  const { label, state } = serviceStatus(service);
+  const { label, state } = serviceUpdateStatus(service);
   const ts = service.UpdateStatus?.CompletedAt || service.UpdateStatus?.StartedAt;
   const msg = service.UpdateStatus?.Message;
 
@@ -860,68 +818,4 @@ function ServiceStatusCard({ service }: { service: Service }) {
       }
     />
   );
-}
-
-function cpuThresholds(service: Service): Threshold[] {
-  const resources = service.Spec.TaskTemplate?.Resources;
-
-  if (!resources) {
-    return [];
-  }
-
-  const out: Threshold[] = [];
-
-  if (resources.Reservations?.NanoCPUs) {
-    const value = (resources.Reservations.NanoCPUs / 1e9) * 100;
-
-    out.push({
-      label: "Reserved",
-      value,
-      color: getSemanticChartColor("reserved"),
-      dash: [12, 6],
-    });
-  }
-
-  if (resources.Limits?.NanoCPUs) {
-    const value = (resources.Limits.NanoCPUs / 1e9) * 100;
-
-    out.push({
-      label: "Limit",
-      value,
-      color: getSemanticChartColor("critical"),
-      dash: [12, 6],
-    });
-  }
-
-  return out;
-}
-
-function memoryThresholds(service: Service): Threshold[] {
-  const resources = service.Spec.TaskTemplate?.Resources;
-
-  if (!resources) {
-    return [];
-  }
-
-  const out: Threshold[] = [];
-
-  if (resources.Reservations?.MemoryBytes) {
-    out.push({
-      label: "Reserved",
-      value: resources.Reservations.MemoryBytes,
-      color: getSemanticChartColor("reserved"),
-      dash: [12, 6],
-    });
-  }
-
-  if (resources.Limits?.MemoryBytes) {
-    out.push({
-      label: "Limit",
-      value: resources.Limits.MemoryBytes,
-      color: getSemanticChartColor("critical"),
-      dash: [12, 6],
-    });
-  }
-
-  return out;
 }

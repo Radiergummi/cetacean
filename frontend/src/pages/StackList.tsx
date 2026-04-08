@@ -11,6 +11,7 @@ import { useResourceStream } from "../hooks/useResourceStream";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { useViewMode } from "../hooks/useViewMode";
 import { formatBytes, formatPercentage } from "../lib/format";
+import { stackHealth } from "../lib/stackHealth";
 import { cardGridClass } from "../lib/styles";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -55,7 +56,7 @@ export default function StackList() {
         header: "Name",
         cell: (stack) => (
           <span className="flex items-center gap-2">
-            <HealthDot health={stackHealth(stack)} />
+            <HealthDot health={stackHealth(stack.tasksByState, stack.desiredTasks)} />
             <Link
               to={`/stacks/${stack.name}`}
               className="font-medium text-link hover:underline"
@@ -145,23 +146,8 @@ export default function StackList() {
   );
 }
 
-function stackHealth(stack: StackSummary): "healthy" | "warning" | "critical" {
-  const running = stack.tasksByState["running"] ?? 0;
-
-  if (running < stack.desiredTasks) {
-    // Only critical if there are failed tasks AND we're not fully running
-    if ((stack.tasksByState["failed"] ?? 0) > 0 || (stack.tasksByState["rejected"] ?? 0) > 0) {
-      return "critical";
-    }
-
-    return "warning";
-  }
-
-  return "healthy";
-}
-
 function StackCard({ stack }: { stack: StackSummary }) {
-  const health = stackHealth(stack);
+  const health = stackHealth(stack.tasksByState, stack.desiredTasks);
   const running = stack.tasksByState["running"] ?? 0;
   const desired = stack.desiredTasks;
   const percentage = desired > 0 ? Math.min((running / desired) * 100, 100) : 0;

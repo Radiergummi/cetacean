@@ -1,4 +1,4 @@
-import type { SearchResourceType } from "../api/types";
+import type { SearchResourceType, SearchResult } from "../api/types";
 
 export { statusColor } from "./statusColor";
 
@@ -66,4 +66,33 @@ export function splitStackPrefix(name: string): { prefix: string | null; name: s
   }
 
   return { prefix: null, name };
+}
+
+export interface FlatSearchItem {
+  type: SearchResourceType;
+  result: SearchResult;
+}
+
+/**
+ * Flatten a SearchResponse into an ordered list of items,
+ * respecting typeOrder for consistent display.
+ */
+export function flattenSearchResults(
+  response: { results: Partial<Record<SearchResourceType, SearchResult[]>> },
+  filterType?: SearchResourceType,
+): FlatSearchItem[] {
+  const items: FlatSearchItem[] = [];
+  const types = filterType ? [filterType] : typeOrder;
+
+  for (const type of types) {
+    const results = response.results[type];
+
+    if (results) {
+      for (const result of results) {
+        items.push({ type, result });
+      }
+    }
+  }
+
+  return items;
 }

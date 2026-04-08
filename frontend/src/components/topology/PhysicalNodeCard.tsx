@@ -1,4 +1,5 @@
 import ResourceName from "../ResourceName";
+import { replicaHealthColor } from "@/lib/statusColor";
 import type { NodeProps } from "@xyflow/react";
 import { useNavigate } from "react-router-dom";
 
@@ -18,16 +19,6 @@ export type PhysicalNodeData = {
   availability: string;
   services: ServiceSummary[];
 };
-
-function stateColor(running: number, total: number): string {
-  if (running === total) {
-    return "bg-green-500";
-  }
-  if (running > 0) {
-    return "bg-yellow-500";
-  }
-  return "bg-red-500";
-}
 
 export default function PhysicalNodeCard({ data }: NodeProps & { data: PhysicalNodeData }) {
   const navigate = useNavigate();
@@ -79,7 +70,7 @@ export default function PhysicalNodeCard({ data }: NodeProps & { data: PhysicalN
               </div>
               <div className="flex items-center gap-1.5 text-xs">
                 <span
-                  className={`inline-block size-2 rounded-full ${stateColor(svc.running, svc.total)}`}
+                  className={`inline-block size-2 rounded-full ${replicaHealthColor(svc.running, svc.total)}`}
                 />
                 <span>
                   {svc.running}/{svc.total} tasks

@@ -9,7 +9,7 @@ function wrapper({ children }: { children: ReactNode }) {
 
 describe("ChartSyncProvider", () => {
   it("broadcasts timestamp to subscribers", () => {
-    const listener = vi.fn();
+    const listener = vi.fn<(timestamp: number) => void>();
     const { result } = renderHook(() => useChartSync(), { wrapper });
     act(() => result.current.subscribe("chart1", listener));
     act(() => result.current.publish("chart2", 1710000000));
@@ -17,7 +17,7 @@ describe("ChartSyncProvider", () => {
   });
 
   it("does not echo timestamp back to publisher", () => {
-    const listener = vi.fn();
+    const listener = vi.fn<(timestamp: number) => void>();
     const { result } = renderHook(() => useChartSync(), { wrapper });
     act(() => result.current.subscribe("chart1", listener));
     act(() => result.current.publish("chart1", 1710000000));
@@ -25,7 +25,7 @@ describe("ChartSyncProvider", () => {
   });
 
   it("clears all listeners on clear()", () => {
-    const listener = vi.fn();
+    const listener = vi.fn<(timestamp: number) => void>();
     const { result } = renderHook(() => useChartSync(), { wrapper });
     act(() => result.current.subscribe("chart1", listener));
     act(() => result.current.clear());

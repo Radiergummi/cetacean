@@ -9,7 +9,7 @@ describe("ResourceRangeSlider", () => {
     label: "CPU (cores)",
     reservation: undefined as number | undefined,
     limit: undefined as number | undefined,
-    onChange: vi.fn(),
+    onChange: vi.fn<() => void>(),
     max: 4,
     step: 0.25,
     formatLabel: identity,

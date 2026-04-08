@@ -7,7 +7,7 @@ export default defineConfig({
   base: "./",
   plugins: [react(), tailwindcss()],
   build: {
-    rollupOptions: {
+    rolldownOptions: {
       output: {
         manualChunks(id) {
           if (

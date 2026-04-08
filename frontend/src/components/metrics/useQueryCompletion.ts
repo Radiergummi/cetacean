@@ -87,7 +87,7 @@ const maxSuggestions = 20;
  * Filters and ranks suggestions: prefix matches first, then segment-prefix
  * fuzzy matches. Returns at most `maxSuggestions` items.
  */
-function filterSuggestions(
+export function filterSuggestions(
   candidates: Suggestion[],
   prefix: string,
   minPrefix = minimumPrefixLength,

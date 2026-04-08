@@ -90,3 +90,30 @@ function containerConfigFromSpec(
       : undefined,
   };
 }
+
+const updateStatusLabels: Record<string, string> = {
+  stable: "Stable",
+  updating: "Updating",
+  completed: "Stable",
+  paused: "Paused",
+  rollback_started: "Rolling back",
+  rollback_paused: "Rollback paused",
+  rollback_completed: "Rolled back",
+};
+
+/**
+ * Derive a normalised { label, state } from a service's UpdateStatus.
+ * "completed" maps to "stable"; missing status also maps to "stable".
+ */
+export function serviceUpdateStatus(service: Pick<Service, "UpdateStatus">): {
+  label: string;
+  state: string;
+} {
+  const state = service.UpdateStatus?.State;
+
+  if (!state || state === "completed") {
+    return { label: "Stable", state: "stable" };
+  }
+
+  return { label: updateStatusLabels[state] || state, state };
+}

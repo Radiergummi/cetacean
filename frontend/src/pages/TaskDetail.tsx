@@ -33,6 +33,7 @@ import {
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
 import { formatBytes, formatPercentage } from "../lib/format";
+import { cpuGaugePercent, memoryGaugePercent } from "../lib/resourceGauge";
 import { escapePromQL } from "../lib/utils";
 import { Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -232,14 +233,20 @@ export default function TaskDetail() {
         <div className="flex items-center justify-center gap-8">
           <ResourceGauge
             label="CPU"
-            value={cpuGaugePercent(myMetrics.currentCpu, service)}
+            value={cpuGaugePercent(
+              myMetrics.currentCpu,
+              service?.Spec.TaskTemplate.Resources?.Limits?.NanoCPUs,
+            )}
             subtitle={
               myMetrics.currentCpu != null ? formatPercentage(myMetrics.currentCpu) : undefined
             }
           />
           <ResourceGauge
             label="Memory"
-            value={memGaugePercent(myMetrics.currentMemory, service)}
+            value={memoryGaugePercent(
+              myMetrics.currentMemory,
+              service?.Spec.TaskTemplate.Resources?.Limits?.MemoryBytes,
+            )}
             subtitle={
               myMetrics.currentMemory != null ? formatBytes(myMetrics.currentMemory) : undefined
             }
@@ -280,28 +287,4 @@ export default function TaskDetail() {
       </ErrorBoundary>
     </div>
   );
-}
-
-function cpuGaugePercent(currentCpu: number | null, service: Service | null): number | null {
-  if (currentCpu == null) {
-    return null;
-  }
-  const limitNano = service?.Spec.TaskTemplate.Resources?.Limits?.NanoCPUs;
-  if (!limitNano) {
-    return null;
-  }
-  // currentCpu is % of 1 vCPU (e.g., 150 = 1.5 cores). Convert limit from
-  // nanoseconds to the same unit: 1e9 nano = 1 core = 100%.
-  return currentCpu / (limitNano / 1e7);
-}
-
-function memGaugePercent(currentMemory: number | null, service: Service | null): number | null {
-  if (currentMemory == null) {
-    return null;
-  }
-  const limitBytes = service?.Spec.TaskTemplate.Resources?.Limits?.MemoryBytes;
-  if (!limitBytes) {
-    return null;
-  }
-  return (currentMemory / limitBytes) * 100;
 }

@@ -1,4 +1,10 @@
-import { getCursorContext, getTokenBounds, segmentPrefixMatch } from "./useQueryCompletion";
+import {
+  filterSuggestions,
+  getCursorContext,
+  getTokenBounds,
+  segmentPrefixMatch,
+  type Suggestion,
+} from "./useQueryCompletion";
 import { describe, it, expect } from "vitest";
 
 describe("getCursorContext", () => {
@@ -140,5 +146,54 @@ describe("getTokenBounds", () => {
 
   it("handles cursor in middle of token", () => {
     expect(getTokenBounds("container_cpu", 5)).toEqual({ start: 0, end: 13 });
+  });
+});
+
+function metric(label: string): Suggestion {
+  return { label, type: "metric" };
+}
+
+describe("filterSuggestions", () => {
+  const candidates = [
+    metric("container_cpu_usage_seconds_total"),
+    metric("container_memory_usage_bytes"),
+    metric("go_gc_duration_seconds"),
+    metric("node_cpu_seconds_total"),
+    metric("up"),
+  ];
+
+  it("returns all candidates (up to limit) for empty prefix", () => {
+    const result = filterSuggestions(candidates, "");
+    expect(result).toHaveLength(5);
+  });
+
+  it("filters by prefix match", () => {
+    const result = filterSuggestions(candidates, "container");
+    expect(result.map(({ label }) => label)).toEqual([
+      "container_cpu_usage_seconds_total",
+      "container_memory_usage_bytes",
+    ]);
+  });
+
+  it("includes fuzzy segment-prefix matches after prefix matches", () => {
+    const result = filterSuggestions(candidates, "nodcpu");
+    expect(result.map(({ label }) => label)).toEqual(["node_cpu_seconds_total"]);
+  });
+
+  it("respects minimum prefix length for fuzzy matching", () => {
+    // Single char "g" with default minPrefix=2 should only return prefix matches
+    const result = filterSuggestions(candidates, "g");
+    expect(result.map(({ label }) => label)).toEqual(["go_gc_duration_seconds"]);
+  });
+
+  it("allows overriding minimum prefix length", () => {
+    const result = filterSuggestions(candidates, "u", 1);
+    expect(result.map(({ label }) => label)).toContain("up");
+  });
+
+  it("caps results at 20", () => {
+    const many = Array.from({ length: 30 }, (_, i) => metric(`metric_${i}`));
+    const result = filterSuggestions(many, "metric");
+    expect(result).toHaveLength(20);
   });
 });

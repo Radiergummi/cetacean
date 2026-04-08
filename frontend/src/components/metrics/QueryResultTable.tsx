@@ -1,28 +1,9 @@
 import type { PrometheusResponse } from "@/api/types";
 import SimpleTable from "@/components/SimpleTable";
+import { formatMetricIdentifier, normalizePrometheusRows } from "@/lib/metricsParser";
 
 interface Props {
   data: PrometheusResponse["data"];
-}
-
-interface NormalizedRow {
-  metric: Record<string, string>;
-  value: string;
-  timestamp: number;
-}
-
-function normalizeRows(data: Props["data"]): NormalizedRow[] {
-  return data.result
-    .map(({ metric, value, values }) => {
-      const point = value ?? values?.[values.length - 1];
-
-      if (!point) {
-        return null;
-      }
-
-      return { metric, value: point[1], timestamp: point[0] };
-    })
-    .filter((row): row is NormalizedRow => row !== null);
 }
 
 function LabelBadges({ metric }: { metric: Record<string, string> }) {
@@ -49,24 +30,6 @@ function LabelBadges({ metric }: { metric: Record<string, string> }) {
   );
 }
 
-function seriesLabel(metric: Record<string, string>): string {
-  const name = metric["__name__"] ?? "";
-  const labels = Object.entries(metric)
-    .filter(([key]) => key !== "__name__")
-    .map(([key, value]) => `${key}="${value}"`)
-    .join(", ");
-
-  if (!name && !labels) {
-    return "{}";
-  }
-
-  if (!labels) {
-    return name;
-  }
-
-  return `${name}{${labels}}`;
-}
-
 /**
  * Renders a Prometheus query result as a table.
  *
@@ -75,7 +38,7 @@ function seriesLabel(metric: Record<string, string>): string {
  * Labels are rendered as key=value badges, excluding __name__.
  */
 export default function QueryResultTable({ data }: Props) {
-  const rows = normalizeRows(data);
+  const rows = normalizePrometheusRows(data);
 
   if (rows.length === 0) {
     return <p className="py-4 text-center text-sm text-muted-foreground">No results</p>;
@@ -114,7 +77,7 @@ export function MatrixResultTable({ data }: Props) {
   return (
     <div className="space-y-4">
       {data.result.map(({ metric, values }, seriesIndex) => {
-        const label = seriesLabel(metric);
+        const label = formatMetricIdentifier(metric);
         const points = values ?? [];
 
         return (

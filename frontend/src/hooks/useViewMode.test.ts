@@ -4,7 +4,7 @@ import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("./useMatchesBreakpoint", () => ({
-  useMatchesBreakpoint: vi.fn(() => false),
+  useMatchesBreakpoint: vi.fn<() => boolean>(() => false),
 }));
 
 const mockUseMatchesBreakpoint = vi.mocked(useMatchesBreakpoint);

@@ -1,4 +1,5 @@
 import type { Recommendation, RecommendationSeverity } from "@/api/types";
+import { formatBytes, formatCores } from "@/lib/format";
 import { ArrowUp, Copy, RefreshCw, Scale, Shield, TrendingDown, TriangleAlert } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -76,4 +77,53 @@ export function highestSeverity(hints: Recommendation[]): RecommendationSeverity
   }
 
   return max;
+}
+
+/**
+ * Format a recommendation's suggested value as a human-readable string.
+ */
+export function formatSuggestion(hint: Recommendation): string | null {
+  if (hint.suggested == null) {
+    return null;
+  }
+
+  if (hint.category === "single-replica") {
+    return `Suggested: ${hint.suggested} replicas`;
+  }
+
+  if (hint.category === "manager-has-workloads") {
+    return "Suggested: drain manager node";
+  }
+
+  if (!hint.resource) {
+    return null;
+  }
+
+  const target = hint.category === "over-provisioned" ? "reservation" : "limit";
+  const value =
+    hint.resource === "memory" ? formatBytes(hint.suggested) : formatCores(hint.suggested / 1e9);
+
+  return `Suggested: ${hint.resource === "memory" ? "memory" : "CPU"} ${target} ${value}`;
+}
+
+/**
+ * Build a composite key for recommendation identity (deduplication, dismissal).
+ */
+export function recommendationKey(hint: Recommendation): string {
+  return `${hint.targetId}:${hint.category}:${hint.resource}`;
+}
+
+/**
+ * Map a recommendation to its navigation path, or null for cluster-scoped hints.
+ */
+export function recommendationLink(hint: Recommendation): string | null {
+  if (hint.scope === "service") {
+    return `/services/${hint.targetId}`;
+  }
+
+  if (hint.scope === "node") {
+    return `/nodes/${hint.targetId}`;
+  }
+
+  return null;
 }

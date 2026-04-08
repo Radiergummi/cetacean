@@ -1,7 +1,7 @@
 import { api } from "./client";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const mockFetch = vi.fn();
+const mockFetch = vi.fn<(...args: unknown[]) => unknown>();
 
 beforeEach(() => {
   vi.stubGlobal("fetch", mockFetch);

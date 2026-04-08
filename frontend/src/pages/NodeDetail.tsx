@@ -31,27 +31,12 @@ import {
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { formatBytes, formatNumber } from "../lib/format";
 import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
+import { buildInstanceFilter } from "../lib/prometheusParser";
 import { stackResourceCharts } from "../lib/stackQueries";
 import { escapePromQL } from "../lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-
-function buildInstanceFilter(instance: string, address: string, hostname: string): string {
-  if (instance) {
-    return `instance="${escapePromQL(instance)}"`;
-  }
-
-  if (address) {
-    return `instance=~"${escapePromQL(address)}:.*"`;
-  }
-
-  if (hostname) {
-    return `instance=~"${escapePromQL(hostname)}(\\..+)?:.*"`;
-  }
-
-  return "";
-}
 
 export default function NodeDetail() {
   const { id } = useParams<{ id: string }>();
