@@ -45,6 +45,7 @@ import {
   ServiceActions,
   type ServiceResourceShape,
 } from "../components/service-detail";
+import { AclPanel } from "../components/service-detail/AclPanel";
 import { CronjobPanel } from "../components/service-detail/CronjobPanel";
 import { DiunPanel } from "../components/service-detail/DiunPanel";
 import { ShepherdPanel } from "../components/service-detail/ShepherdPanel";
@@ -593,6 +594,14 @@ export default function ServiceDetail() {
           case "diun":
             return (
               <DiunPanel
+                key={integration.name}
+                integration={integration}
+                {...panelProps}
+              />
+            );
+          case "cetacean-acl":
+            return (
+              <AclPanel
                 key={integration.name}
                 integration={integration}
                 {...panelProps}
