@@ -21,6 +21,7 @@ interface ResourceListConfig<T> extends UseListPageConfig<T> {
   ) => Column<T>[];
   renderCard: (item: T) => ReactNode;
   emptyMessage: (hasSearch: boolean) => string;
+  headerContent?: ReactNode;
   actions?: (allowedMethods: Set<string>) => ReactNode;
   skeletonColumns?: number;
 }
@@ -75,6 +76,7 @@ export default function ResourceListPage<T>(config: ResourceListConfig<T>) {
         title={config.title}
         actions={config.actions?.(allowedMethods)}
       />
+      {config.headerContent}
       <ListToolbar
         search={search}
         onSearchChange={setSearch}
