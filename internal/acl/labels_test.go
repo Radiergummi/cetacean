@@ -54,7 +54,7 @@ func TestParseACLLabels_EmptyAndMissing(t *testing.T) {
 	}
 
 	// Empty value.
-	read, write = ParseACLLabels(map[string]string{"cetacean.acl.read": ""})
+	read, _ = ParseACLLabels(map[string]string{"cetacean.acl.read": ""})
 	if len(read) != 0 {
 		t.Fatalf("expected 0 audiences from empty value, got %d", len(read))
 	}
