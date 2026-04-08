@@ -88,6 +88,14 @@ startup. The `_FILE` variant has lower precedence than the direct env var.
 
 > **Note:** `trusted_proxies` is always required. The shared secret is optional, additional protection.
 
+### ACL
+
+| Flag | Env var | Config file key | Default | Description |
+|---|---|---|---|---|
+| — | `CETACEAN_ACL_POLICY` | `acl.policy` | _—_ | Inline ACL policy (JSON, YAML, or TOML) |
+| — | `CETACEAN_ACL_POLICY_FILE` | `acl.policy_file` | _—_ | Path to policy file (hot-reloaded on change) |
+| — | `CETACEAN_ACL_LABELS` | `acl.labels` | `false` | Enable label-based ACL evaluation |
+
 See [Authentication](authentication.md) for detailed usage guides, flow diagrams, and deployment examples.
 
 ## Config File

@@ -121,6 +121,55 @@ grants:
 
 After applying a policy, verify effective permissions with `curl -s localhost:9000/auth/whoami | jq .permissions`.
 
+## Label-Based Access Control
+
+In addition to policy files and provider grants, Cetacean can read access control directly from Docker resource labels.
+Teams place `cetacean.acl.read` and `cetacean.acl.write` labels on their resources, and Cetacean enforces them without
+requiring a central policy file.
+
+### Enabling
+
+| Setting      | Env var                | Config file key | Default | Description                       |
+|--------------|------------------------|-----------------|---------|-----------------------------------|
+| ACL labels   | `CETACEAN_ACL_LABELS`  | `acl.labels`    | `false` | Enable label-based ACL evaluation |
+
+### Label Format
+
+Labels use comma-separated audience expressions — the same `user:pattern` and `group:pattern` syntax as policy grants.
+
+```yaml
+services:
+  myapp:
+    deploy:
+      labels:
+        cetacean.acl.read: "group:*"
+        cetacean.acl.write: "group:ops"
+```
+
+`cetacean.acl.read` grants read access; `cetacean.acl.write` grants write (and implies read). Multiple audiences are
+comma-separated: `"group:frontend,user:alice@example.com"`.
+
+### Supported Resources
+
+Labels are evaluated on: `service`, `config`, `secret`, `network`, `volume`, `node`. Tasks inherit from their parent
+service. Stacks have no labels of their own — use a config policy for stack-wide grants.
+
+### Precedence Rules
+
+Labels are checked before config grants. The outcome depends on whether the identity matches any label audience:
+
+| Scenario | Result |
+|---|---|
+| Identity matches label audience, label grants `write` | Allowed (`write`) |
+| Identity matches label audience, label grants `read` only | Allowed (`read`), write denied |
+| Identity does not match label audience, has explicit config/provider grant | Config/provider grant applies |
+| Identity does not match label audience, no explicit config grant | Denied (labels suppress implicit allow-all) |
+| Labels are absent | Normal policy evaluation (config grants or allow-all default) |
+
+Within the label layer, the most permissive match wins (additive). Presence of any `cetacean.acl.*` label on a resource
+suppresses the implicit allow-all for that resource — unauthenticated-equivalent access no longer applies, even when no
+policy file is configured.
+
 ## Interaction with Operations Level
 
 ACL and [operations level](configuration.md#operations-level) are independent checks; both must pass for a write

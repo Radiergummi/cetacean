@@ -18,6 +18,7 @@ the service detail page. Panels appear above the labels section; if no recognize
 | [Shepherd](https://github.com/djmaze/shepherd) | `shepherd.*` | Service auto-updater. Shows enable status and auth config. |
 | [Swarm Cronjob](https://github.com/crazy-max/swarm-cronjob) | `swarm.cronjob.*` | Cron-scheduled jobs. Shows schedule, replica count, and skip/registry options. |
 | [Diun](https://github.com/crazy-max/diun) | `diun.*` | Image update notifications. Shows watch settings, tag filters, and notification config. |
+| [Cetacean ACL](authorization.md#label-based-access-control) | `cetacean.acl.*` | Resource-level access control. Shows read/write audience lists. |
 
 ## Editing
 
