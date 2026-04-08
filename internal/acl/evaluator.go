@@ -1,6 +1,7 @@
 package acl
 
 import (
+	"log/slog"
 	"slices"
 	"sync/atomic"
 
@@ -11,9 +12,10 @@ import (
 // policy means "allow all" — this preserves backward compatibility when no
 // policy is configured.
 type Evaluator struct {
-	policy   atomic.Pointer[Policy]
-	source   GrantSource
-	resolver ResourceResolver
+	policy        atomic.Pointer[Policy]
+	source        GrantSource
+	resolver      ResourceResolver
+	labelsEnabled bool
 }
 
 // NewEvaluator creates a new Evaluator. All parameters are optional.
@@ -45,6 +47,14 @@ func (e *Evaluator) SetSource(s GrantSource) {
 	e.source = s
 }
 
+// SetLabelsEnabled enables or disables label-based ACL evaluation.
+func (e *Evaluator) SetLabelsEnabled(enabled bool) {
+	if e == nil {
+		return
+	}
+	e.labelsEnabled = enabled
+}
+
 // Can checks if the identity has the given permission on the resource.
 // resource is "type:name", e.g. "service:webapp-api".
 // A nil evaluator or nil policy means allow all.
@@ -53,14 +63,25 @@ func (e *Evaluator) Can(id *auth.Identity, permission string, resource string) b
 		return true
 	}
 	p := e.policy.Load()
+
+	// When labels are enabled, treat nil policy as empty (labels may restrict).
+	// When labels are disabled, nil policy means allow-all (backward compat).
 	if p == nil {
-		return true
+		if !e.labelsEnabled {
+			return true
+		}
+		p = &Policy{}
 	}
 
-	// Collect all matching grants.
-	grants := e.collectGrants(id, p)
+	// Label evaluation: check resource labels first when enabled.
+	if e.labelsEnabled && e.resolver != nil {
+		if allowed, handled := e.checkLabels(id, permission, resource); handled {
+			return allowed
+		}
+	}
 
-	// Check if any grant covers the resource and permission.
+	// Collect and check config/provider grants.
+	grants := e.collectGrants(id, p)
 	for _, g := range grants {
 		if !hasPermission(g, permission) {
 			continue
@@ -85,13 +106,27 @@ func Filter[T any](
 	}
 	p := e.policy.Load()
 	if p == nil {
-		return items
+		if !e.labelsEnabled {
+			return items
+		}
+		p = &Policy{}
 	}
 
 	grants := e.collectGrants(id, p)
 	var result []T
 	for _, item := range items {
 		resource := resourceFunc(item)
+
+		// Check labels first when enabled.
+		if e.labelsEnabled && e.resolver != nil {
+			if allowed, handled := e.checkLabels(id, permission, resource); handled {
+				if allowed {
+					result = append(result, item)
+				}
+				continue
+			}
+		}
+
 		for _, g := range grants {
 			if hasPermission(g, permission) && e.grantMatchesResource(g, resource) {
 				result = append(result, item)
@@ -110,10 +145,13 @@ func (e *Evaluator) HasAnyGrant(id *auth.Identity) bool {
 	}
 	p := e.policy.Load()
 	if p == nil {
-		return true
+		if !e.labelsEnabled {
+			return true
+		}
+		p = &Policy{}
 	}
 	grants := e.collectGrants(id, p)
-	return len(grants) > 0
+	return len(grants) > 0 || e.labelsEnabled
 }
 
 // PermissionsFor returns a map of resource patterns to permission lists
@@ -146,6 +184,71 @@ func (e *Evaluator) PermissionsFor(id *auth.Identity) map[string][]string {
 		}
 	}
 	return result
+}
+
+// checkLabels evaluates label-based ACL for a resource. Returns (allowed, handled).
+// If handled is true, the label result is authoritative for this resource+identity.
+// If handled is false, the caller should fall through to config grants.
+func (e *Evaluator) checkLabels(
+	id *auth.Identity,
+	permission string,
+	resource string,
+) (bool, bool) {
+	labels := e.resolveLabels(resource)
+	if labels == nil || !hasACLLabels(labels) {
+		return false, false
+	}
+
+	readAudiences, writeAudiences := ParseACLLabels(labels)
+	matchesWrite := matchLabelAudience(writeAudiences, id)
+	matchesRead := matchLabelAudience(readAudiences, id)
+
+	if matchesWrite || matchesRead {
+		slog.Debug("ACL label grant matched",
+			"resource", resource,
+			"permission", permission,
+			"matchedWrite", matchesWrite,
+			"matchedRead", matchesRead,
+		)
+		effectiveWrite := matchesWrite
+		effectiveRead := matchesRead || matchesWrite // write implies read
+		switch permission {
+		case "write":
+			return effectiveWrite, true
+		case "read":
+			return effectiveRead, true
+		default:
+			return false, true
+		}
+	}
+
+	// Identity doesn't match any label audience. Labels are present, so they
+	// suppress implicit access — but don't block explicit config grants.
+	subject := ""
+	if id != nil {
+		subject = id.Subject
+	}
+	slog.Debug("ACL labels present but no audience match",
+		"resource", resource,
+		"subject", subject,
+	)
+	return false, false
+}
+
+// resolveLabels returns the labels for a resource, resolving task→service
+// inheritance.
+func (e *Evaluator) resolveLabels(resource string) map[string]string {
+	resType, resName, ok := splitResource(resource)
+	if !ok {
+		return nil
+	}
+	if resType == "task" {
+		if svcName := e.resolver.ServiceOfTask(resName); svcName != "" {
+			return e.resolver.LabelsOf("service", svcName)
+		}
+		return nil
+	}
+	return e.resolver.LabelsOf(resType, resName)
 }
 
 // collectGrants gathers all grants applicable to the identity: file-based

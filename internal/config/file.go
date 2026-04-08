@@ -159,6 +159,7 @@ type fileACL struct {
 	TailscaleCapability *string `toml:"tailscale_capability"`
 	OIDCClaim           *string `toml:"oidc_claim"`
 	HeadersACL          *string `toml:"headers_acl"`
+	Labels              *bool   `toml:"labels"`
 }
 
 // LoadFile reads and parses the TOML config file at path.

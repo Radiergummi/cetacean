@@ -52,6 +52,10 @@ linters:
         linters:
           - noctx    # httptest.NewRequest without context is fine in tests
           - musttag  # test-only structs don't need json tags
+      - path: '(.+)_test\.go'
+        linters:
+          - staticcheck
+        text: 'SA5011'  # t.Fatal stops execution; nil-guard + dereference is safe
     paths:
       - frontend
 

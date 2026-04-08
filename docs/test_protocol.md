@@ -184,6 +184,10 @@ All resource list pages (Nodes, Services, Tasks, Configs, Secrets, Networks, Vol
 - [ ] **Shepherd panel**: appears if shepherd labels exist
 - [ ] **Cronjob panel**: appears if swarm-cronjob labels exist
 - [ ] **Diun panel**: appears if diun labels exist
+- [ ] **ACL panel**: appears if `cetacean.acl.*` labels exist; shows read/write audience lists
+- [ ] **ACL panel editing**: click Edit → add/remove audience entries → Save; labels update on the service
+- [ ] **ACL panel raw view**: toggle to raw view → shows `cetacean.acl.read` and `cetacean.acl.write` key-value pairs
+- [ ] **ACL panel without feature enabled**: panel renders labels even when `CETACEAN_ACL_LABELS=false` (labels are valid Docker labels regardless)
 
 ### Log Viewer
 - [ ] See [Log Viewer](#log-viewer) section below
@@ -469,6 +473,29 @@ Shared by Cluster Overview, Node List, Service List, Node Detail, Service Detail
 - [ ] **Brush-to-zoom**: horizontal drag selects a time range (5px threshold); releases zooms in
 - [ ] **Linked crosshairs**: hover on one chart — vertical dashed line + dots appear on sibling charts
 - [ ] **Tab visibility**: switching to another browser tab pauses SSE streaming; switching back resumes it
+
+---
+
+## Label-Based ACL
+
+Prerequisites: an auth provider other than `none` (e.g. OIDC or headers), and `CETACEAN_ACL_LABELS=true`.
+
+### Label Grants
+- [ ] Deploy a service with `cetacean.acl.read: "group:ops"` — only users in `ops` can see the service in list/detail
+- [ ] Deploy a service with `cetacean.acl.write: "group:ops"` — `ops` users get write (and read); others denied
+- [ ] Deploy a service with both `cetacean.acl.read: "group:*"` and `cetacean.acl.write: "group:ops"` — everyone can read, only `ops` can write
+- [ ] Write implies read: a service with only `cetacean.acl.write: "group:ops"` grants `ops` both read and write
+
+### Precedence
+- [ ] **Labels win over config**: config policy grants `write` on `service:*` to `group:dev`; label on a service grants only `read` to `group:dev` — dev can read but not write that service; dev can still write unlabeled services
+- [ ] **Config fills gaps**: label on a service grants `read` to `group:ops`; a `user:bot` has an explicit config grant for write — bot can write the labeled service (not in label audience, falls through to config)
+- [ ] **Labels suppress allow-all**: no config policy file; label on a service grants `read` to `group:ops` — users not in `ops` are denied access to that service; unlabeled services remain accessible to everyone
+
+### Task Inheritance
+- [ ] Tasks inherit label grants from their parent service — if a service has `cetacean.acl.read: "group:ops"`, tasks of that service are also restricted to `ops`
+
+### Feature Disabled
+- [ ] With `CETACEAN_ACL_LABELS=false` (default): labels on services have no effect on access control; all users see all resources per normal policy rules
 
 ---
 
