@@ -856,3 +856,218 @@ func TestHasAnyGrant_LabelsEnabled_AlwaysTrue(t *testing.T) {
 		t.Fatal("HasAnyGrant should return true for all identities when labels enabled")
 	}
 }
+
+// Security edge case tests for label-based ACL
+
+func TestEvaluator_NilIdentityWithLabels(t *testing.T) {
+	e := NewEvaluator()
+	e.SetLabelsEnabled(true)
+	e.SetPolicy(&Policy{Grants: []Grant{}})
+	e.SetResolver(&stubResolver{
+		labels: map[string]map[string]string{
+			"service:webapp": {"cetacean.acl.read": "group:dev"},
+		},
+	})
+	if e.Can(nil, "read", "service:webapp") {
+		t.Fatal("nil identity must be denied even when resource has read labels")
+	}
+}
+
+func TestEvaluator_LabelWildcardMatchesEmptyIdentity(t *testing.T) {
+	e := NewEvaluator()
+	e.SetLabelsEnabled(true)
+	e.SetPolicy(&Policy{Grants: []Grant{}})
+	e.SetResolver(&stubResolver{
+		labels: map[string]map[string]string{
+			"service:webapp": {"cetacean.acl.read": "*"},
+		},
+	})
+	empty := &auth.Identity{Subject: "", Email: "", Groups: nil}
+	if !e.Can(empty, "read", "service:webapp") {
+		t.Fatal("wildcard label audience should match identity with empty fields")
+	}
+}
+
+func TestEvaluator_LabelCanEscalateAccessBeyondConfigPolicy(t *testing.T) {
+	// SECURITY: documents that resource labels CAN grant broader access
+	// than config policy. A service operator who can set labels can
+	// escalate access on their own resources. This is intentional per
+	// the label-as-authoritative design.
+	e := NewEvaluator()
+	e.SetLabelsEnabled(true)
+	e.SetPolicy(&Policy{Grants: []Grant{
+		{Resources: []string{"service:*"}, Audience: []string{"group:ops"}, Permissions: []string{"read"}},
+	}})
+	e.SetResolver(&stubResolver{
+		labels: map[string]map[string]string{
+			"service:webapp": {"cetacean.acl.write": "*"},
+		},
+	})
+	dev := &auth.Identity{Subject: "alice", Groups: []string{"dev"}}
+	if !e.Can(dev, "write", "service:webapp") {
+		t.Fatal("label write:* escalates access beyond config policy — intended behavior")
+	}
+	if !e.Can(dev, "read", "service:webapp") {
+		t.Fatal("label write:* implies read for everyone")
+	}
+	if e.Can(dev, "read", "service:other") {
+		t.Fatal("config policy still applies to unlabeled services")
+	}
+}
+
+func TestEvaluator_LabelNarrowsWildcardConfigGrant(t *testing.T) {
+	e := NewEvaluator()
+	e.SetLabelsEnabled(true)
+	e.SetPolicy(&Policy{Grants: []Grant{
+		{Resources: []string{"*"}, Audience: []string{"group:dev"}, Permissions: []string{"write"}},
+	}})
+	e.SetResolver(&stubResolver{
+		labels: map[string]map[string]string{
+			"service:sensitive": {"cetacean.acl.read": "group:ops"},
+		},
+	})
+	dev := &auth.Identity{Subject: "alice", Groups: []string{"dev"}}
+	// dev matches label audience "group:ops"? No. dev is in group:dev.
+	// handled=false → falls through to config grant (bare "*" write for group:dev).
+	// Config grant matches service:sensitive → dev gets write.
+	// Wait — this is the "config fills gaps" behavior. dev is NOT in label audience,
+	// so labels don't restrict them. They fall through to their config wildcard grant.
+	if !e.Can(dev, "write", "service:sensitive") {
+		t.Fatal("dev not in label audience → config wildcard grant applies")
+	}
+	// ops IS in label audience → label is authoritative: read only
+	ops := &auth.Identity{Subject: "bob", Groups: []string{"ops"}}
+	if !e.Can(ops, "read", "service:sensitive") {
+		t.Fatal("ops should read via label")
+	}
+	if e.Can(ops, "write", "service:sensitive") {
+		t.Fatal("ops label grants only read — label narrows even against wildcard config")
+	}
+}
+
+func TestEvaluator_ProviderGrantFillsGapForNonLabelAudience(t *testing.T) {
+	// SECURITY: when labels are present but identity doesn't match label
+	// audience, explicit provider grants can still grant access. This is
+	// the "config fills gaps" rule applied to provider grants.
+	e := NewEvaluator()
+	e.SetLabelsEnabled(true)
+	e.SetPolicy(&Policy{Grants: []Grant{}})
+	e.SetSource(&mockSource{
+		grants: []Grant{
+			{Resources: []string{"service:*"}, Permissions: []string{"write"}},
+		},
+	})
+	e.SetResolver(&stubResolver{
+		labels: map[string]map[string]string{
+			"service:sensitive": {"cetacean.acl.read": "group:ops"},
+		},
+	})
+	dev := &auth.Identity{Subject: "alice", Groups: []string{"dev"}}
+	// dev not in label audience → handled=false → provider grant applies
+	if !e.Can(dev, "write", "service:sensitive") {
+		t.Fatal("provider grant fills gap for non-label audience identity")
+	}
+}
+
+func TestEvaluator_LabelsEnabledNilResolver(t *testing.T) {
+	e := NewEvaluator()
+	e.SetLabelsEnabled(true)
+	// No SetResolver — resolver is nil
+	e.SetPolicy(&Policy{Grants: []Grant{
+		{Resources: []string{"service:webapp"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+	}})
+	alice := &auth.Identity{Subject: "alice"}
+	if !e.Can(alice, "read", "service:webapp") {
+		t.Fatal("nil resolver with labels enabled should fall through to config grant without panic")
+	}
+}
+
+func TestEvaluator_LabelsEnabledNilPolicy(t *testing.T) {
+	e := NewEvaluator()
+	e.SetLabelsEnabled(true)
+	// No SetPolicy — policy is nil; labels enabled converts nil to empty
+	e.SetResolver(&stubResolver{
+		labels: map[string]map[string]string{
+			"service:webapp": {"cetacean.acl.read": "group:dev"},
+		},
+	})
+	dev := &auth.Identity{Subject: "alice", Groups: []string{"dev"}}
+	ops := &auth.Identity{Subject: "bob", Groups: []string{"ops"}}
+	if !e.Can(dev, "read", "service:webapp") {
+		t.Fatal("dev should read via label even with nil policy")
+	}
+	if e.Can(ops, "read", "service:webapp") {
+		t.Fatal("ops not in label audience and nil policy normalized to empty — should deny")
+	}
+}
+
+func TestEvaluator_LabelMalformedAudienceDoesNotGrant(t *testing.T) {
+	e := NewEvaluator()
+	e.SetLabelsEnabled(true)
+	e.SetPolicy(&Policy{Grants: []Grant{}})
+	e.SetResolver(&stubResolver{
+		labels: map[string]map[string]string{
+			"service:webapp": {"cetacean.acl.read": "notavalidformat,group:ops"},
+		},
+	})
+	ops := &auth.Identity{Subject: "alice", Groups: []string{"ops"}}
+	malformed := &auth.Identity{Subject: "notavalidformat"}
+	if !e.Can(ops, "read", "service:webapp") {
+		t.Fatal("ops should match the valid group:ops entry")
+	}
+	if e.Can(malformed, "read", "service:webapp") {
+		t.Fatal("malformed audience entry must not accidentally grant access")
+	}
+}
+
+func TestEvaluator_LabelWhitespaceOnlyFallsThrough(t *testing.T) {
+	e := NewEvaluator()
+	e.SetLabelsEnabled(true)
+	e.SetPolicy(&Policy{Grants: []Grant{
+		{Resources: []string{"service:webapp"}, Audience: []string{"user:bot"}, Permissions: []string{"read"}},
+	}})
+	e.SetResolver(&stubResolver{
+		labels: map[string]map[string]string{
+			"service:webapp": {"cetacean.acl.read": "   "},
+		},
+	})
+	bot := &auth.Identity{Subject: "bot"}
+	if !e.Can(bot, "read", "service:webapp") {
+		t.Fatal("whitespace-only label value should fall through to config grant")
+	}
+	dev := &auth.Identity{Subject: "dev", Groups: []string{"dev"}}
+	if e.Can(dev, "read", "service:webapp") {
+		t.Fatal("dev has no config grant and whitespace label grants nothing")
+	}
+}
+
+func TestEvaluator_LabelTaskParentServiceNoACLLabels(t *testing.T) {
+	e := NewEvaluator()
+	e.SetLabelsEnabled(true)
+	e.SetPolicy(&Policy{Grants: []Grant{
+		{Resources: []string{"service:webapp"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+	}})
+	e.SetResolver(&stubResolver{
+		services: map[string]string{"task-1": "webapp"},
+		labels: map[string]map[string]string{
+			"service:webapp": {"com.docker.stack.namespace": "mystack"},
+		},
+	})
+	alice := &auth.Identity{Subject: "alice"}
+	if !e.Can(alice, "read", "task:task-1") {
+		t.Fatal("task should fall through to config grant when parent service has no ACL labels")
+	}
+}
+
+func TestEvaluator_LabelUnsupportedResourceType(t *testing.T) {
+	e := NewEvaluator()
+	e.SetLabelsEnabled(true)
+	e.SetPolicy(&Policy{Grants: []Grant{
+		{Resources: []string{"plugin:*"}, Audience: []string{"user:alice"}, Permissions: []string{"read"}},
+	}})
+	e.SetResolver(&stubResolver{labels: map[string]map[string]string{}})
+	alice := &auth.Identity{Subject: "alice"}
+	if !e.Can(alice, "read", "plugin:my-plugin") {
+		t.Fatal("unsupported label resource type should fall through to config grant")
+	}
+}
