@@ -8,8 +8,9 @@ import (
 
 // stubResolver implements ResourceResolver for testing.
 type stubResolver struct {
-	stacks   map[string]string // "type:id" -> stack name
-	services map[string]string // taskID -> service name
+	stacks   map[string]string            // "type:id" -> stack name
+	services map[string]string            // taskID -> service name
+	labels   map[string]map[string]string // "type:name" -> labels
 }
 
 func (r *stubResolver) StackOf(resourceType, resourceID string) string {
@@ -18,6 +19,10 @@ func (r *stubResolver) StackOf(resourceType, resourceID string) string {
 
 func (r *stubResolver) ServiceOfTask(taskID string) string {
 	return r.services[taskID]
+}
+
+func (r *stubResolver) LabelsOf(resourceType, name string) map[string]string {
+	return r.labels[resourceType+":"+name]
 }
 
 func TestEvaluator_NilAllowsAll(t *testing.T) {

@@ -59,3 +59,49 @@ func (c *Cache) ServiceOfTask(taskID string) string {
 	}
 	return ""
 }
+
+// LabelsOf returns the labels for a resource, or nil if unknown.
+func (c *Cache) LabelsOf(resourceType, name string) map[string]string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	switch resourceType {
+	case "service":
+		for _, s := range c.services {
+			if s.Spec.Name == name {
+				return s.Spec.Labels
+			}
+		}
+	case "config":
+		for _, cfg := range c.configs.items {
+			if cfg.Spec.Name == name {
+				return cfg.Spec.Labels
+			}
+		}
+	case "secret":
+		for _, s := range c.secrets.items {
+			if s.Spec.Name == name {
+				return s.Spec.Labels
+			}
+		}
+	case "network":
+		for _, n := range c.networks.items {
+			if n.Name == name {
+				return n.Labels
+			}
+		}
+	case "volume":
+		for _, v := range c.volumes.items {
+			if v.Name == name {
+				return v.Labels
+			}
+		}
+	case "node":
+		for _, n := range c.nodes.items {
+			if n.Description.Hostname == name || n.ID == name {
+				return n.Spec.Labels
+			}
+		}
+	}
+	return nil
+}

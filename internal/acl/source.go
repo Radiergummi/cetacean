@@ -19,6 +19,9 @@ type ResourceResolver interface {
 
 	// ServiceOfTask returns the service name for a task, or "" if unknown.
 	ServiceOfTask(taskID string) string
+
+	// LabelsOf returns the labels for a resource, or nil if unknown.
+	LabelsOf(resourceType, name string) map[string]string
 }
 
 // extractGrantsFromRaw parses a raw slice of grant-like maps into Grant
