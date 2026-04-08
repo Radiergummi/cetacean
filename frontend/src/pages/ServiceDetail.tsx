@@ -73,6 +73,7 @@ const integrationLabelPrefix = {
   shepherd: "shepherd.",
   "swarm-cronjob": "swarm.cronjob.",
   diun: "diun.",
+  "cetacean-acl": "cetacean.acl.",
 } as const;
 
 function rawLabelsForIntegration(
