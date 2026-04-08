@@ -829,3 +829,30 @@ func TestEvaluator_NilIdentityWithActivePolicy(t *testing.T) {
 		t.Fatal("nil identity should be denied when policy has audience restrictions")
 	}
 }
+
+func TestEvaluator_UnlabeledResourceWithConfigGrant(t *testing.T) {
+	e := NewEvaluator()
+	e.SetLabelsEnabled(true)
+	e.SetPolicy(&Policy{Grants: []Grant{
+		{Resources: []string{"service:*"}, Audience: []string{"group:ops"}, Permissions: []string{"read"}},
+	}})
+	e.SetResolver(&stubResolver{labels: map[string]map[string]string{}})
+
+	ops := &auth.Identity{Subject: "alice", Groups: []string{"ops"}}
+	if !e.Can(ops, "read", "service:no-labels") {
+		t.Fatal("config grant should reach unlabeled resources when labels enabled")
+	}
+}
+
+func TestHasAnyGrant_LabelsEnabled_AlwaysTrue(t *testing.T) {
+	e := NewEvaluator()
+	e.SetLabelsEnabled(true)
+	e.SetPolicy(&Policy{Grants: []Grant{}})
+
+	// Even an identity with zero config/provider grants should return true
+	// when labels are enabled — they may have label-based grants on specific resources.
+	nobody := &auth.Identity{Subject: "nobody"}
+	if !e.HasAnyGrant(nobody) {
+		t.Fatal("HasAnyGrant should return true for all identities when labels enabled")
+	}
+}
