@@ -11,9 +11,10 @@ import (
 // policy means "allow all" — this preserves backward compatibility when no
 // policy is configured.
 type Evaluator struct {
-	policy   atomic.Pointer[Policy]
-	source   GrantSource
-	resolver ResourceResolver
+	policy        atomic.Pointer[Policy]
+	source        GrantSource
+	resolver      ResourceResolver
+	labelsEnabled bool
 }
 
 // NewEvaluator creates a new Evaluator. All parameters are optional.
@@ -43,6 +44,14 @@ func (e *Evaluator) SetSource(s GrantSource) {
 		return
 	}
 	e.source = s
+}
+
+// SetLabelsEnabled enables or disables label-based ACL evaluation.
+func (e *Evaluator) SetLabelsEnabled(enabled bool) {
+	if e == nil {
+		return
+	}
+	e.labelsEnabled = enabled
 }
 
 // Can checks if the identity has the given permission on the resource.

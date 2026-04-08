@@ -283,6 +283,10 @@ func main() {
 	if authCfg.Mode != "none" {
 		aclEval = acl.NewEvaluator()
 		aclEval.SetResolver(stateCache)
+		aclEval.SetLabelsEnabled(aclCfg.Labels)
+		if aclCfg.Labels {
+			slog.Info("ACL label-based grants enabled")
+		}
 
 		// Load policy from inline or file.
 		if aclCfg.Policy != "" {
