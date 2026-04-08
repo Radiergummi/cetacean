@@ -18,7 +18,7 @@ func TestContextRoundTrip(t *testing.T) {
 	ctx := ContextWithIdentity(context.Background(), id)
 	got := IdentityFromContext(ctx)
 
-	if got == nil {
+	if got == nil { //nolint:staticcheck // t.Fatal stops execution
 		t.Fatal("expected identity, got nil")
 	}
 	if got.Subject != id.Subject {

@@ -24,7 +24,7 @@ func TestReloadPolicy_ValidFile(t *testing.T) {
 	reloadPolicy(e, path)
 
 	p := e.policy.Load()
-	if p == nil {
+	if p == nil { //nolint:staticcheck // t.Fatal stops execution
 		t.Fatal("policy should be set after reload")
 	}
 	if len(p.Grants) != 1 {
@@ -161,7 +161,7 @@ func TestWatchPolicyFile_InitialLoadAndReload(t *testing.T) {
 	}, "policy was not reloaded within deadline")
 
 	p = e.policy.Load()
-	if p == nil {
+	if p == nil { //nolint:staticcheck // t.Fatal stops execution
 		t.Fatal("policy should still be set after update")
 	}
 	if len(p.Grants) != 2 {
