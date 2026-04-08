@@ -1,36 +1,16 @@
+import { MockEventSource, createTestQueryClient, createWrapper } from "../test/mocks";
 import ClusterOverview from "./ClusterOverview";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock EventSource
-class MockEventSource {
-  static instance: MockEventSource;
-  onopen: (() => void) | null = null;
-  onerror: (() => void) | null = null;
-  listeners = new Map<string, ((e: MessageEvent) => void)[]>();
-  closed = false;
-  constructor(_url: string) {
-    MockEventSource.instance = this;
-  }
-  addEventListener(type: string, handler: (e: MessageEvent) => void) {
-    const existing = this.listeners.get(type) || [];
-    existing.push(handler);
-    this.listeners.set(type, existing);
-  }
-  close() {
-    this.closed = true;
-  }
-}
-
 vi.mock("../api/client", () => ({
   api: {
-    cluster: vi.fn(),
-    history: vi.fn().mockResolvedValue([]),
-    diskUsage: vi.fn().mockResolvedValue([]),
-    monitoringStatus: vi.fn().mockResolvedValue({
+    cluster: vi.fn<() => void>(),
+    history: vi.fn<() => Promise<unknown>>().mockResolvedValue([]),
+    diskUsage: vi.fn<() => Promise<unknown>>().mockResolvedValue([]),
+    monitoringStatus: vi.fn<() => Promise<unknown>>().mockResolvedValue({
       prometheusConfigured: false,
       prometheusReachable: false,
       nodeExporter: null,
@@ -58,9 +38,7 @@ const mockCluster = vi.mocked(api.cluster);
 let testQueryClient: QueryClient;
 
 beforeEach(() => {
-  testQueryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: 0 } },
-  });
+  testQueryClient = createTestQueryClient();
   vi.stubGlobal("EventSource", MockEventSource);
   mockCluster.mockReset();
 });
@@ -69,14 +47,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function wrapper({ children }: { children: ReactNode }) {
-  return (
-    <QueryClientProvider client={testQueryClient}>
-      <MemoryRouter>
-        <>{children}</>
-      </MemoryRouter>
-    </QueryClientProvider>
-  );
+function wrapper({ children }: { children: React.ReactNode }) {
+  return createWrapper(testQueryClient)({ children });
 }
 
 describe("ClusterOverview", () => {

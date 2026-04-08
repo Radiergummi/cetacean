@@ -1,32 +1,14 @@
 import type { StackSummary } from "../api/types";
+import { MockEventSource, localStorageStub } from "../test/mocks";
 import StackList from "./StackList";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-class MockEventSource {
-  static instance: MockEventSource;
-  onopen: (() => void) | null = null;
-  onerror: (() => void) | null = null;
-  listeners = new Map<string, ((e: MessageEvent) => void)[]>();
-  closed = false;
-  constructor(_url: string) {
-    MockEventSource.instance = this;
-  }
-  addEventListener(type: string, handler: (e: MessageEvent) => void) {
-    const existing = this.listeners.get(type) || [];
-    existing.push(handler);
-    this.listeners.set(type, existing);
-  }
-  close() {
-    this.closed = true;
-  }
-}
-
 vi.mock("../api/client", () => ({
   api: {
-    stacksSummary: vi.fn(),
+    stacksSummary: vi.fn<() => void>(),
   },
 }));
 
@@ -52,11 +34,7 @@ const fakeSummary = (name: string, overrides?: Partial<StackSummary>): StackSumm
 
 beforeEach(() => {
   vi.stubGlobal("EventSource", MockEventSource);
-  vi.stubGlobal("localStorage", {
-    getItem: () => null,
-    setItem: vi.fn(),
-    removeItem: vi.fn(),
-  });
+  vi.stubGlobal("localStorage", localStorageStub);
   mockSummary.mockReset();
 });
 

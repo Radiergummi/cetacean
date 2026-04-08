@@ -1,7 +1,7 @@
+import { MockEventSource, createTestQueryClient, createWrapper } from "../test/mocks";
 import { useSwarmQuery } from "./useSwarmQuery";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { renderHook, waitFor, act } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 interface Item {
@@ -9,41 +9,11 @@ interface Item {
   Name: string;
 }
 
-// Minimal EventSource mock
-class MockEventSource {
-  static instance: MockEventSource;
-  onopen: (() => void) | null = null;
-  onerror: (() => void) | null = null;
-  listeners = new Map<string, ((e: MessageEvent) => void)[]>();
-  closed = false;
-
-  constructor(_url: string) {
-    MockEventSource.instance = this;
-  }
-  addEventListener(type: string, handler: (e: MessageEvent) => void) {
-    const existing = this.listeners.get(type) || [];
-    existing.push(handler);
-    this.listeners.set(type, existing);
-  }
-  close() {
-    this.closed = true;
-  }
-  simulateEvent(type: string, data: unknown) {
-    const handlers = this.listeners.get(type) || [];
-    const event = new MessageEvent("message", { data: JSON.stringify(data) });
-    handlers.forEach((handler) => handler(event));
-  }
-}
-
 let testQueryClient: QueryClient;
 
 beforeEach(() => {
   vi.stubGlobal("EventSource", MockEventSource);
-  testQueryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false, gcTime: 0 },
-    },
-  });
+  testQueryClient = createTestQueryClient();
 });
 
 afterEach(() => {
@@ -51,8 +21,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function wrapper({ children }: { children: ReactNode }) {
-  return <QueryClientProvider client={testQueryClient}>{children}</QueryClientProvider>;
+function wrapper({ children }: { children: React.ReactNode }) {
+  return createWrapper(testQueryClient, { withRouter: false })({ children });
 }
 
 function makeFetchResult(items: Item[], total: number, offset = 0) {
@@ -65,7 +35,9 @@ function makeFetchResult(items: Item[], total: number, offset = 0) {
 describe("useSwarmQuery", () => {
   it("fetches initial data", async () => {
     const items: Item[] = [{ ID: "1", Name: "svc1" }];
-    const fetchFn = vi.fn().mockResolvedValue(makeFetchResult(items, 1));
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(makeFetchResult(items, 1));
 
     const { result } = renderHook(
       () => useSwarmQuery(["services"], fetchFn, "service", ({ ID }: Item) => ID),
@@ -80,8 +52,9 @@ describe("useSwarmQuery", () => {
   });
 
   it("exposes loadMore and hasMore for pagination", async () => {
-    const fetchFn = vi
-      .fn()
+    const fetchFn =
+      vi.fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>();
+    fetchFn
       .mockResolvedValueOnce(
         makeFetchResult(
           [
@@ -118,7 +91,9 @@ describe("useSwarmQuery", () => {
   });
 
   it("handles fetch errors", async () => {
-    const fetchFn = vi.fn().mockRejectedValue(new Error("fail"));
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockRejectedValue(new Error("fail"));
 
     const { result } = renderHook(
       () => useSwarmQuery(["services"], fetchFn, "service", ({ ID }: Item) => ID),
@@ -132,7 +107,9 @@ describe("useSwarmQuery", () => {
 
   it("SSE updates item in-place", async () => {
     const items: Item[] = [{ ID: "1", Name: "old" }];
-    const fetchFn = vi.fn().mockResolvedValue(makeFetchResult(items, 1));
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(makeFetchResult(items, 1));
 
     const { result } = renderHook(
       () => useSwarmQuery(["services"], fetchFn, "service", ({ ID }: Item) => ID),
@@ -155,7 +132,9 @@ describe("useSwarmQuery", () => {
   });
 
   it("SSE bumps total for unknown items", async () => {
-    const fetchFn = vi.fn().mockResolvedValue(makeFetchResult([{ ID: "1", Name: "a" }], 5));
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(makeFetchResult([{ ID: "1", Name: "a" }], 5));
 
     const { result } = renderHook(
       () => useSwarmQuery(["services"], fetchFn, "service", ({ ID }: Item) => ID),
@@ -180,15 +159,17 @@ describe("useSwarmQuery", () => {
   });
 
   it("SSE removes item", async () => {
-    const fetchFn = vi.fn().mockResolvedValue(
-      makeFetchResult(
-        [
-          { ID: "1", Name: "a" },
-          { ID: "2", Name: "b" },
-        ],
-        2,
-      ),
-    );
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(
+        makeFetchResult(
+          [
+            { ID: "1", Name: "a" },
+            { ID: "2", Name: "b" },
+          ],
+          2,
+        ),
+      );
 
     const { result } = renderHook(
       () => useSwarmQuery(["services"], fetchFn, "service", ({ ID }: Item) => ID),
@@ -219,8 +200,9 @@ describe("useSwarmQuery", () => {
       { ID: "2", Name: "b-refreshed" },
     ];
 
-    const fetchFn = vi
-      .fn()
+    const fetchFn =
+      vi.fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>();
+    fetchFn
       .mockResolvedValueOnce(makeFetchResult(page0, 2))
       .mockResolvedValueOnce(makeFetchResult(refreshed, 2));
 

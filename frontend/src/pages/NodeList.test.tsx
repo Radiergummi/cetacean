@@ -1,29 +1,14 @@
 import type { Node } from "../api/types";
+import {
+  MockEventSource,
+  createTestQueryClient,
+  createWrapper,
+  localStorageStub,
+} from "../test/mocks";
 import NodeList from "./NodeList";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-
-class MockEventSource {
-  static instance: MockEventSource;
-  onopen: (() => void) | null = null;
-  onerror: (() => void) | null = null;
-  listeners = new Map<string, ((e: MessageEvent) => void)[]>();
-  closed = false;
-  constructor(_url: string) {
-    MockEventSource.instance = this;
-  }
-  addEventListener(type: string, handler: (e: MessageEvent) => void) {
-    const existing = this.listeners.get(type) || [];
-    existing.push(handler);
-    this.listeners.set(type, existing);
-  }
-  close() {
-    this.closed = true;
-  }
-}
 
 vi.mock("../components/metrics", () => ({
   ResourceGauge: ({ label }: { label: string }) => <div data-testid={`gauge-${label}`} />,
@@ -36,16 +21,16 @@ vi.mock("../api/client", () => ({
   emptyMethods: new Set(),
   setsEqual: (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every((x) => b.has(x)),
   api: {
-    nodes: vi.fn(),
-    cluster: vi.fn().mockResolvedValue({ prometheusConfigured: false }),
-    monitoringStatus: vi.fn().mockResolvedValue({
+    nodes: vi.fn<() => void>(),
+    cluster: vi.fn<() => Promise<unknown>>().mockResolvedValue({ prometheusConfigured: false }),
+    monitoringStatus: vi.fn<() => Promise<unknown>>().mockResolvedValue({
       prometheusConfigured: false,
       prometheusReachable: false,
       nodeExporter: null,
       cadvisor: null,
     }),
-    metricsQuery: vi.fn().mockResolvedValue({ data: { result: [] } }),
-    metricsQueryRange: vi.fn().mockResolvedValue({ data: { result: [] } }),
+    metricsQuery: vi.fn<() => Promise<unknown>>().mockResolvedValue({ data: { result: [] } }),
+    metricsQueryRange: vi.fn<() => Promise<unknown>>().mockResolvedValue({ data: { result: [] } }),
   },
 }));
 
@@ -68,15 +53,9 @@ const fakeNode = (id: string, hostname: string): Node => ({
 let testQueryClient: QueryClient;
 
 beforeEach(() => {
-  testQueryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: 0 } },
-  });
+  testQueryClient = createTestQueryClient();
   vi.stubGlobal("EventSource", MockEventSource);
-  vi.stubGlobal("localStorage", {
-    getItem: () => null,
-    setItem: vi.fn(),
-    removeItem: vi.fn(),
-  });
+  vi.stubGlobal("localStorage", localStorageStub);
   mockNodes.mockReset();
 });
 
@@ -84,14 +63,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function wrapper({ children }: { children: ReactNode }) {
-  return (
-    <QueryClientProvider client={testQueryClient}>
-      <MemoryRouter>
-        <>{children}</>
-      </MemoryRouter>
-    </QueryClientProvider>
-  );
+function wrapper({ children }: { children: React.ReactNode }) {
+  return createWrapper(testQueryClient)({ children });
 }
 
 describe("NodeList", () => {

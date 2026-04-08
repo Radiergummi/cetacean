@@ -1,36 +1,21 @@
 import type { Config } from "../api/types";
+import {
+  MockEventSource,
+  createTestQueryClient,
+  createWrapper,
+  localStorageStub,
+} from "../test/mocks";
 import ConfigList from "./ConfigList";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-
-class MockEventSource {
-  static instance: MockEventSource;
-  onopen: (() => void) | null = null;
-  onerror: (() => void) | null = null;
-  listeners = new Map<string, ((e: MessageEvent) => void)[]>();
-  closed = false;
-  constructor(_url: string) {
-    MockEventSource.instance = this;
-  }
-  addEventListener(type: string, handler: (e: MessageEvent) => void) {
-    const existing = this.listeners.get(type) || [];
-    existing.push(handler);
-    this.listeners.set(type, existing);
-  }
-  close() {
-    this.closed = true;
-  }
-}
 
 vi.mock("../api/client", () => ({
   pageSize: 50,
   emptyMethods: new Set(),
   setsEqual: (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every((x) => b.has(x)),
   api: {
-    configs: vi.fn(),
+    configs: vi.fn<() => void>(),
   },
 }));
 
@@ -48,15 +33,9 @@ const fakeConfig = (id: string, name: string): Config => ({
 let testQueryClient: QueryClient;
 
 beforeEach(() => {
-  testQueryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: 0 } },
-  });
+  testQueryClient = createTestQueryClient();
   vi.stubGlobal("EventSource", MockEventSource);
-  vi.stubGlobal("localStorage", {
-    getItem: () => null,
-    setItem: vi.fn(),
-    removeItem: vi.fn(),
-  });
+  vi.stubGlobal("localStorage", localStorageStub);
   mockConfigs.mockReset();
 });
 
@@ -64,14 +43,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function wrapper({ children }: { children: ReactNode }) {
-  return (
-    <QueryClientProvider client={testQueryClient}>
-      <MemoryRouter>
-        <>{children}</>
-      </MemoryRouter>
-    </QueryClientProvider>
-  );
+function wrapper({ children }: { children: React.ReactNode }) {
+  return createWrapper(testQueryClient)({ children });
 }
 
 describe("ConfigList", () => {
