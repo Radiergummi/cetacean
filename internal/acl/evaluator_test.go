@@ -927,15 +927,11 @@ func TestEvaluator_LabelNarrowsWildcardConfigGrant(t *testing.T) {
 		},
 	})
 	dev := &auth.Identity{Subject: "alice", Groups: []string{"dev"}}
-	// dev matches label audience "group:ops"? No. dev is in group:dev.
-	// handled=false → falls through to config grant (bare "*" write for group:dev).
-	// Config grant matches service:sensitive → dev gets write.
-	// Wait — this is the "config fills gaps" behavior. dev is NOT in label audience,
-	// so labels don't restrict them. They fall through to their config wildcard grant.
+	// dev not in label audience → falls through to config wildcard grant
 	if !e.Can(dev, "write", "service:sensitive") {
 		t.Fatal("dev not in label audience → config wildcard grant applies")
 	}
-	// ops IS in label audience → label is authoritative: read only
+	// ops in label audience → label is authoritative: read only
 	ops := &auth.Identity{Subject: "bob", Groups: []string{"ops"}}
 	if !e.Can(ops, "read", "service:sensitive") {
 		t.Fatal("ops should read via label")

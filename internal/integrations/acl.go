@@ -1,8 +1,6 @@
 package integrations
 
 import (
-	"strings"
-
 	"github.com/radiergummi/cetacean/internal/acl"
 )
 
@@ -24,26 +22,11 @@ func detectACL(labels map[string]string) *ACLIntegration {
 	integration := &ACLIntegration{Name: "cetacean-acl"}
 
 	if hasRead {
-		integration.Read = splitAudiences(readVal)
+		integration.Read = acl.ParseAudienceList(readVal)
 	}
 	if hasWrite {
-		integration.Write = splitAudiences(writeVal)
+		integration.Write = acl.ParseAudienceList(writeVal)
 	}
 
 	return integration
-}
-
-func splitAudiences(value string) []string {
-	if value == "" {
-		return nil
-	}
-
-	var result []string
-	for _, part := range strings.Split(value, ",") {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			result = append(result, part)
-		}
-	}
-	return result
 }

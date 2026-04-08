@@ -32,17 +32,17 @@ func parseACLLabels(labels map[string]string) (read, write []string) {
 	}
 
 	if hasRead {
-		read = parseAudienceList(readVal)
+		read = ParseAudienceList(readVal)
 	}
 	if hasWrite {
-		write = parseAudienceList(writeVal)
+		write = ParseAudienceList(writeVal)
 	}
 	return read, write
 }
 
-// parseAudienceList splits a comma-separated audience string, trims whitespace,
-// and drops empty entries.
-func parseAudienceList(value string) []string {
+// ParseAudienceList splits a comma-separated audience string, trims whitespace,
+// and drops empty entries. Invalid expressions are included but logged as warnings.
+func ParseAudienceList(value string) []string {
 	parts := strings.Split(value, ",")
 	var result []string
 	for _, p := range parts {
