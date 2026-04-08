@@ -112,22 +112,21 @@ func Filter[T any](
 		p = &Policy{}
 	}
 
-	// When labels are enabled, use Can() per item since each resource may
-	// have different label-based grants.
-	if e.labelsEnabled && e.resolver != nil {
-		var result []T
-		for _, item := range items {
-			if e.Can(id, permission, resourceFunc(item)) {
-				result = append(result, item)
-			}
-		}
-		return result
-	}
-
 	grants := e.collectGrants(id, p)
 	var result []T
 	for _, item := range items {
 		resource := resourceFunc(item)
+
+		// Check labels first when enabled.
+		if e.labelsEnabled && e.resolver != nil {
+			if allowed, handled := e.checkLabels(id, permission, resource); handled {
+				if allowed {
+					result = append(result, item)
+				}
+				continue
+			}
+		}
+
 		for _, g := range grants {
 			if hasPermission(g, permission) && e.grantMatchesResource(g, resource) {
 				result = append(result, item)

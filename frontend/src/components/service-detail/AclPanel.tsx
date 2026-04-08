@@ -1,11 +1,9 @@
 import { IntegrationSection } from "./IntegrationSection";
 import type { AclIntegration } from "@/api/types";
 import { KVTable } from "@/components/data";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { MultiCombobox } from "@/components/ui/multi-combobox";
 import { saveIntegrationLabels } from "@/lib/integrationLabels";
 import { useState } from "react";
-import { X, Plus } from "lucide-react";
 
 /**
  * Panel displaying parsed ACL audience configuration,
@@ -55,16 +53,24 @@ export function AclPanel({
 
   const editForm = (
     <div className="space-y-4">
-      <AudienceListEditor
-        label="Read"
-        audiences={formRead}
-        onChange={setFormRead}
-      />
-      <AudienceListEditor
-        label="Write"
-        audiences={formWrite}
-        onChange={setFormWrite}
-      />
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-foreground">Read</label>
+        <MultiCombobox
+          values={formRead}
+          onChange={setFormRead}
+          options={[]}
+          placeholder="group:ops or user:alice@example.com"
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-foreground">Write</label>
+        <MultiCombobox
+          values={formWrite}
+          onChange={setFormWrite}
+          options={[]}
+          placeholder="group:ops or user:alice@example.com"
+        />
+      </div>
     </div>
   );
 
@@ -88,67 +94,5 @@ export function AclPanel({
     >
       <KVTable rows={rows} />
     </IntegrationSection>
-  );
-}
-
-function AudienceListEditor({
-  label,
-  audiences,
-  onChange,
-}: {
-  label: string;
-  audiences: string[];
-  onChange: (audiences: string[]) => void;
-}) {
-  function addEntry() {
-    onChange([...audiences, ""]);
-  }
-
-  function removeEntry(index: number) {
-    onChange(audiences.filter((_, entryIndex) => entryIndex !== index));
-  }
-
-  function updateEntry(index: number, value: string) {
-    const updated = [...audiences];
-    updated[index] = value;
-    onChange(updated);
-  }
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between">
-        <label className="text-xs font-medium text-foreground">{label}</label>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-6 px-2 text-xs"
-          onClick={addEntry}
-        >
-          <Plus className="mr-1 h-3 w-3" />
-          Add
-        </Button>
-      </div>
-      {audiences.map((audience, index) => (
-        <div key={index} className="flex items-center gap-1.5">
-          <Input
-            value={audience}
-            onChange={(event) => updateEntry(index, event.target.value)}
-            placeholder="group:ops or user:alice@example.com"
-            className="font-mono text-xs"
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 shrink-0 p-0"
-            onClick={() => removeEntry(index)}
-          >
-            <X className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      ))}
-      {audiences.length === 0 && (
-        <p className="text-xs text-muted-foreground">No audiences configured</p>
-      )}
-    </div>
   );
 }

@@ -1,6 +1,10 @@
 package integrations
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/radiergummi/cetacean/internal/acl"
+)
 
 // ACLIntegration represents parsed Cetacean ACL label configuration.
 type ACLIntegration struct {
@@ -10,8 +14,8 @@ type ACLIntegration struct {
 }
 
 func detectACL(labels map[string]string) *ACLIntegration {
-	readVal, hasRead := labels["cetacean.acl.read"]
-	writeVal, hasWrite := labels["cetacean.acl.write"]
+	readVal, hasRead := labels[acl.LabelRead]
+	writeVal, hasWrite := labels[acl.LabelWrite]
 
 	if !hasRead && !hasWrite {
 		return nil

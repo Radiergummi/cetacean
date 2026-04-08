@@ -8,22 +8,24 @@ import (
 )
 
 const (
-	labelRead  = "cetacean.acl.read"
-	labelWrite = "cetacean.acl.write"
+	// LabelRead is the Docker label key for read audience grants.
+	LabelRead = "cetacean.acl.read"
+	// LabelWrite is the Docker label key for write audience grants.
+	LabelWrite = "cetacean.acl.write"
 )
 
 // hasACLLabels returns true if the label map contains any cetacean.acl.* key.
 func hasACLLabels(labels map[string]string) bool {
-	_, hasRead := labels[labelRead]
-	_, hasWrite := labels[labelWrite]
+	_, hasRead := labels[LabelRead]
+	_, hasWrite := labels[LabelWrite]
 	return hasRead || hasWrite
 }
 
 // parseACLLabels extracts read and write audience lists from labels.
 // Returns nil, nil if no ACL labels are present.
 func parseACLLabels(labels map[string]string) (read, write []string) {
-	readVal, hasRead := labels[labelRead]
-	writeVal, hasWrite := labels[labelWrite]
+	readVal, hasRead := labels[LabelRead]
+	writeVal, hasWrite := labels[LabelWrite]
 
 	if !hasRead && !hasWrite {
 		return nil, nil
@@ -63,8 +65,7 @@ func parseAudienceList(value string) []string {
 	return result
 }
 
-// matchLabelAudience checks if any audience expression matches the identity.
-// Reuses the existing matchAudience function from match.go.
+// matchLabelAudience returns true if id matches any of the given audience expressions.
 func matchLabelAudience(audiences []string, id *auth.Identity) bool {
 	if id == nil {
 		return false
