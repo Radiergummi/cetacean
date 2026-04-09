@@ -6,6 +6,7 @@ on:
     paths:
       - "docs/**"
       - "website/**"
+      - "frontend/**"
       - "CHANGELOG.md"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
@@ -29,7 +30,14 @@ jobs:
         with:
           node-version: 25
 
-      - name: Install and build
+      - name: Build demo SPA
+        working-directory: frontend
+        run: |
+          npm ci
+          mkdir -p ../website/public/demo
+          npm run build:demo
+
+      - name: Build website
         working-directory: website
         run: |
           npm ci

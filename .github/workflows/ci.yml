@@ -21,7 +21,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: cd frontend && npm ci
       - run: cd frontend && npm run build
-      - run: cd frontend && mkdir -p ../website/public/demo && npx vite build --config vite.config.demo.ts
+      - run: cd frontend && mkdir -p ../website/public/demo && npm run build:demo
       - uses: actions/upload-artifact@v7
         with:
           name: frontend-dist
