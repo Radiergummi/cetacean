@@ -151,6 +151,15 @@
   /* Code blocks */
   .prose pre {
     @apply rounded-lg my-6 p-4 overflow-x-auto text-[0.8125rem] leading-relaxed border border-border;
+    background-color: var(--code-background) !important;
+    color: var(--code-foreground);
+  }
+  .dark .prose pre {
+    --shiki-foreground: var(--shiki-dark) !important;
+    --shiki-background: var(--code-background) !important;
+  }
+  .dark .prose pre code span {
+    color: var(--shiki-dark) !important;
   }
 
   .prose img {

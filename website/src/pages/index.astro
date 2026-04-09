@@ -1,7 +1,7 @@
 ---
 import { getEntry } from "astro:content";
 import Header from "../components/Header.astro";
-import Sidebar from "../components/Sidebar.astro";
+
 import Hero from "../components/Hero.astro";
 import "../styles/global.css";
 
@@ -23,9 +23,8 @@ const home = await getEntry("docs", "index");
   </head>
   <body class="min-h-screen">
     <Header currentPath="/" />
-    <div class="mx-auto flex max-w-[90rem]">
-      <Sidebar currentSlug="" />
-      <main class="flex-1 min-w-0">
+    <div class="mx-auto max-w-[90rem]">
+      <main class="min-w-0">
         <Hero title="Cetacean" description={home.data.description} />
       </main>
     </div>
