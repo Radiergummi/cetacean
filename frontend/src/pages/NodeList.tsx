@@ -206,9 +206,7 @@ export default function NodeList() {
           </ResourceCard>
         );
       }}
-      emptyMessage={(hasSearch) =>
-        hasSearch ? "No nodes match your search" : "No nodes found"
-      }
+      emptyMessage={(hasSearch) => (hasSearch ? "No nodes match your search" : "No nodes found")}
     />
   );
 }

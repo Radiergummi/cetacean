@@ -1,5 +1,4 @@
-import { api, emptyMethods } from "../api/client";
-import type { Plugin, SwarmInfo } from "../api/types";
+import { api } from "../api/client";
 import CollapsibleSection from "../components/CollapsibleSection";
 import { KVTable, MetadataGrid, ResourceId, Timestamp } from "../components/data";
 import FetchError from "../components/FetchError";
@@ -8,20 +7,17 @@ import InstallPluginDialog from "../components/InstallPluginDialog";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import PluginTable from "../components/PluginTable";
-import { Spinner } from "../components/Spinner";
+import { CAConfigPanel } from "../components/swarm-detail/CAConfigPanel";
+import { EncryptionPanel } from "../components/swarm-detail/EncryptionPanel";
 import { SwarmActions } from "../components/swarm-detail/SwarmActions";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "../components/ui/alert-dialog";
 import { Button } from "../components/ui/button";
+import { DurationInput } from "../components/ui/duration-input";
+import { NumberField } from "../components/ui/number-field";
+import { useSwarmPage } from "../hooks/useSwarmPage";
+import { formatDuration } from "../lib/format";
+import { EditablePanel } from "@/components/service-detail/EditablePanel";
+import { Check, Copy, Plus } from "lucide-react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -31,15 +27,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../components/ui/dialog";
-import { DurationInput } from "../components/ui/duration-input";
-import { Input } from "../components/ui/input";
-import { NumberField } from "../components/ui/number-field";
-import { Switch } from "../components/ui/switch";
-import { useAsyncAction } from "../hooks/useAsyncAction";
-import { formatDuration } from "../lib/format";
-import { EditablePanel } from "@/components/service-detail/EditablePanel";
-import { Check, Copy, KeyRound, LockOpen, Plus, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
 
 function JoinTokenDialog({
   label,
@@ -108,70 +95,18 @@ function JoinTokenDialog({
 }
 
 export default function SwarmPage() {
-  const [data, setData] = useState<SwarmInfo | null>(null);
-  const [plugins, setPlugins] = useState<Plugin[]>([]);
-  const [error, setError] = useState(false);
+  const page = useSwarmPage();
   const [installOpen, setInstallOpen] = useState(false);
-  const [allowedMethods, setAllowedMethods] = useState(emptyMethods);
 
-  const fetchSwarmInfo = useCallback(() => {
-    api
-      .swarm()
-      .then(({ data: swarmData, allowedMethods: methods }) => {
-        setData(swarmData);
-        setAllowedMethods(methods);
-      })
-      .catch(() => setError(true));
-  }, []);
-
-  useEffect(() => {
-    fetchSwarmInfo();
-    api
-      .plugins()
-      .then(({ data: pluginsData }) => setPlugins(pluginsData))
-      .catch(console.warn);
-  }, [fetchSwarmInfo]);
-
-  // Orchestration draft
-  const [draftTaskHistoryLimit, setDraftTaskHistoryLimit] = useState(0);
-
-  // Raft draft
-  const [draftSnapshotInterval, setDraftSnapshotInterval] = useState(0);
-  const [draftLogEntries, setDraftLogEntries] = useState(0);
-  const [draftKeepOldSnapshots, setDraftKeepOldSnapshots] = useState(0);
-
-  // Dispatcher draft
-  const [draftHeartbeatPeriod, setDraftHeartbeatPeriod] = useState(0);
-
-  // CA draft
-  const [draftCertExpiry, setDraftCertExpiry] = useState(0);
-
-  // Encryption draft
-  const [draftAutoLock, setDraftAutoLock] = useState(false);
-
-  // CA force rotate
-  const forceRotateCA = useAsyncAction({ toast: true });
-
-  // Unlock key
-  const [unlockKeyValue, setUnlockKeyValue] = useState<string | null>(null);
-  const [showUnlockKey, setShowUnlockKey] = useState(false);
-  const [unlockKeyCopied, setUnlockKeyCopied] = useState(false);
-  const fetchUnlockKey = useAsyncAction({ toast: true });
-  const rotateUnlockKey = useAsyncAction({ toast: true });
-
-  // Unlock swarm
-  const [unlockInput, setUnlockInput] = useState("");
-  const [unlockOpen, setUnlockOpen] = useState(false);
-  const unlockSwarm = useAsyncAction({ toast: true });
-
-  if (error) {
+  if (page.error) {
     return <FetchError message="Failed to load swarm info" />;
   }
-  if (!data) {
+
+  if (!page.data) {
     return <LoadingDetail />;
   }
 
-  const { swarm, managerAddr } = data;
+  const { swarm, managerAddr } = page.data;
   const spec = swarm.Spec;
 
   return (
@@ -181,8 +116,8 @@ export default function SwarmPage() {
         actions={
           <>
             <SwarmActions
-              allowedMethods={allowedMethods}
-              onRotated={fetchSwarmInfo}
+              allowedMethods={page.allowedMethods}
+              onRotated={page.fetchSwarmInfo}
             />
             <JoinTokenDialog
               label="Manager"
@@ -232,7 +167,7 @@ export default function SwarmPage() {
         {/* Raft */}
         <EditablePanel
           title="Raft"
-          canEdit={allowedMethods.has("PATCH")}
+          canEdit={page.allowedMethods.has("PATCH")}
           display={
             <KVTable
               rows={[
@@ -250,24 +185,24 @@ export default function SwarmPage() {
           edit={
             <div className="space-y-3">
               <NumberField
-                value={draftSnapshotInterval || undefined}
-                onChange={(next) => setDraftSnapshotInterval(next ?? 0)}
+                value={page.draftSnapshotInterval || undefined}
+                onChange={(next) => page.setDraftSnapshotInterval(next ?? 0)}
                 min={0}
                 step={1000}
                 label="Snapshot Interval"
               />
 
               <NumberField
-                value={draftKeepOldSnapshots || undefined}
-                onChange={(next) => setDraftKeepOldSnapshots(next ?? 0)}
+                value={page.draftKeepOldSnapshots || undefined}
+                onChange={(next) => page.setDraftKeepOldSnapshots(next ?? 0)}
                 min={0}
                 step={1}
                 label="Keep Old Snapshots"
               />
 
               <NumberField
-                value={draftLogEntries || undefined}
-                onChange={(next) => setDraftLogEntries(next ?? 0)}
+                value={page.draftLogEntries || undefined}
+                onChange={(next) => page.setDraftLogEntries(next ?? 0)}
                 min={0}
                 step={100}
                 label="Log Entries for Slow Followers"
@@ -282,123 +217,32 @@ export default function SwarmPage() {
             </div>
           }
           onOpen={() => {
-            setDraftSnapshotInterval(spec.Raft.SnapshotInterval);
-            setDraftLogEntries(spec.Raft.LogEntriesForSlowFollowers);
-            setDraftKeepOldSnapshots(spec.Raft.KeepOldSnapshots ?? 0);
+            page.setDraftSnapshotInterval(spec.Raft.SnapshotInterval);
+            page.setDraftLogEntries(spec.Raft.LogEntriesForSlowFollowers);
+            page.setDraftKeepOldSnapshots(spec.Raft.KeepOldSnapshots ?? 0);
           }}
           onSave={async () => {
             await api.patchSwarmRaft({
-              SnapshotInterval: draftSnapshotInterval,
-              LogEntriesForSlowFollowers: draftLogEntries,
-              KeepOldSnapshots: draftKeepOldSnapshots,
+              SnapshotInterval: page.draftSnapshotInterval,
+              LogEntriesForSlowFollowers: page.draftLogEntries,
+              KeepOldSnapshots: page.draftKeepOldSnapshots,
             });
-            fetchSwarmInfo();
+            page.fetchSwarmInfo();
           }}
         />
 
         {/* CA Configuration */}
-        <EditablePanel
-          title="CA Configuration"
-          canEdit={allowedMethods.has("POST")}
-          headerActions={
-            <AlertDialog>
-              <AlertDialogTrigger
-                render={
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    disabled={forceRotateCA.loading}
-                  >
-                    {forceRotateCA.loading ? (
-                      <Spinner className="size-3" />
-                    ) : (
-                      <RefreshCw className="size-3" />
-                    )}
-                    Force Rotate
-                  </Button>
-                }
-              />
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Force CA certificate rotation?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will trigger an immediate rotation of all TLS certificates across the
-                    cluster. All nodes will need to re-issue their certificates.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() =>
-                      void forceRotateCA.execute(async () => {
-                        await api.forceRotateCA();
-                        fetchSwarmInfo();
-                      }, "Failed to force CA rotation")
-                    }
-                  >
-                    Rotate
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          }
-          display={
-            <div className="space-y-2">
-              <KVTable
-                rows={[
-                  spec.CAConfig.NodeCertExpiry !== 0 && [
-                    "Node Certificate Expiry",
-                    formatDuration(spec.CAConfig.NodeCertExpiry),
-                  ],
-                  ["Force Rotate", String(spec.CAConfig.ForceRotate ?? 0)],
-                  ["Root Rotation In Progress", swarm.RootRotationInProgress ? "Yes" : "No"],
-                  ...(spec.CAConfig.ExternalCAs?.map(
-                    ({ Protocol, URL }, index): [string, string] => [
-                      `External CA ${index + 1}`,
-                      `${Protocol} — ${URL}`,
-                    ],
-                  ) ?? []),
-                ]}
-              />
-            </div>
-          }
-          edit={
-            <div className="space-y-3">
-              <label className="block space-y-1">
-                <span className="text-xs text-muted-foreground">Node Certificate Expiry</span>
-                <DurationInput
-                  value={draftCertExpiry}
-                  onChange={setDraftCertExpiry}
-                />
-              </label>
-
-              <KVTable
-                rows={[
-                  ["Force Rotate", String(spec.CAConfig.ForceRotate ?? 0)],
-                  ["Root Rotation In Progress", swarm.RootRotationInProgress ? "Yes" : "No"],
-                  ...(spec.CAConfig.ExternalCAs?.map(
-                    ({ Protocol, URL }, index): [string, string] => [
-                      `External CA ${index + 1}`,
-                      `${Protocol} — ${URL}`,
-                    ],
-                  ) ?? []),
-                ]}
-              />
-            </div>
-          }
-          onOpen={() => {
-            setDraftCertExpiry(spec.CAConfig.NodeCertExpiry);
-          }}
-          onSave={async () => {
-            await api.patchSwarmCAConfig({ NodeCertExpiry: draftCertExpiry });
-            fetchSwarmInfo();
-          }}
+        <CAConfigPanel
+          spec={spec}
+          rootRotationInProgress={swarm.RootRotationInProgress}
+          canEdit={page.allowedMethods.has("POST")}
+          onSaved={page.fetchSwarmInfo}
         />
 
         {/* Orchestration */}
         <EditablePanel
           title="Orchestration"
-          canEdit={allowedMethods.has("PATCH")}
+          canEdit={page.allowedMethods.has("PATCH")}
           display={
             <KVTable
               rows={[
@@ -413,28 +257,28 @@ export default function SwarmPage() {
           }
           edit={
             <NumberField
-              value={draftTaskHistoryLimit || undefined}
-              onChange={(next) => setDraftTaskHistoryLimit(next ?? 0)}
+              value={page.draftTaskHistoryLimit || undefined}
+              onChange={(next) => page.setDraftTaskHistoryLimit(next ?? 0)}
               min={0}
               step={1}
               label="Task History Retention Limit"
             />
           }
           onOpen={() => {
-            setDraftTaskHistoryLimit(spec.Orchestration.TaskHistoryRetentionLimit ?? 0);
+            page.setDraftTaskHistoryLimit(spec.Orchestration.TaskHistoryRetentionLimit ?? 0);
           }}
           onSave={async () => {
             await api.patchSwarmOrchestration({
-              TaskHistoryRetentionLimit: draftTaskHistoryLimit,
+              TaskHistoryRetentionLimit: page.draftTaskHistoryLimit,
             });
-            fetchSwarmInfo();
+            page.fetchSwarmInfo();
           }}
         />
 
         {/* Dispatcher */}
         <EditablePanel
           title="Dispatcher"
-          canEdit={allowedMethods.has("PATCH")}
+          canEdit={page.allowedMethods.has("PATCH")}
           display={
             <KVTable
               rows={[
@@ -449,209 +293,26 @@ export default function SwarmPage() {
             <label className="block space-y-1">
               <span className="text-xs text-muted-foreground">Heartbeat Period</span>
               <DurationInput
-                value={draftHeartbeatPeriod}
-                onChange={setDraftHeartbeatPeriod}
+                value={page.draftHeartbeatPeriod}
+                onChange={page.setDraftHeartbeatPeriod}
               />
             </label>
           }
           onOpen={() => {
-            setDraftHeartbeatPeriod(spec.Dispatcher.HeartbeatPeriod);
+            page.setDraftHeartbeatPeriod(spec.Dispatcher.HeartbeatPeriod);
           }}
           onSave={async () => {
-            await api.patchSwarmDispatcher({ HeartbeatPeriod: draftHeartbeatPeriod });
-            fetchSwarmInfo();
+            await api.patchSwarmDispatcher({ HeartbeatPeriod: page.draftHeartbeatPeriod });
+            page.fetchSwarmInfo();
           }}
         />
 
         {/* Encryption */}
-        <div className="space-y-3">
-          <EditablePanel
-            title="Encryption"
-            canEdit={allowedMethods.has("POST")}
-            display={
-              <KVTable
-                rows={[
-                  ["Auto-Lock Managers", spec.EncryptionConfig.AutoLockManagers ? "Yes" : "No"],
-                ]}
-              />
-            }
-            edit={
-              <label className="flex items-center gap-3 text-sm">
-                <Switch
-                  checked={draftAutoLock}
-                  onCheckedChange={setDraftAutoLock}
-                />
-                Auto-Lock Managers
-              </label>
-            }
-            onOpen={() => {
-              setDraftAutoLock(spec.EncryptionConfig.AutoLockManagers);
-            }}
-            onSave={async () => {
-              await api.patchSwarmEncryption({ AutoLockManagers: draftAutoLock });
-              fetchSwarmInfo();
-            }}
-          />
-
-          {spec.EncryptionConfig.AutoLockManagers && (
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={fetchUnlockKey.loading}
-                onClick={() => {
-                  if (showUnlockKey) {
-                    setShowUnlockKey(false);
-                    setUnlockKeyValue(null);
-                  } else {
-                    void fetchUnlockKey.execute(async () => {
-                      const result = await api.unlockKey();
-                      setUnlockKeyValue(result.unlockKey);
-                      setShowUnlockKey(true);
-                    }, "Failed to fetch unlock key");
-                  }
-                }}
-              >
-                {fetchUnlockKey.loading ? (
-                  <Spinner className="size-3" />
-                ) : (
-                  <KeyRound className="size-3.5" />
-                )}
-                {showUnlockKey ? "Hide Unlock Key" : "Show Unlock Key"}
-              </Button>
-
-              <AlertDialog>
-                <AlertDialogTrigger
-                  render={
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={rotateUnlockKey.loading}
-                    >
-                      {rotateUnlockKey.loading ? (
-                        <Spinner className="size-3" />
-                      ) : (
-                        <RefreshCw className="size-3.5" />
-                      )}
-                      Rotate Unlock Key
-                    </Button>
-                  }
-                />
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Rotate unlock key?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will invalidate the current unlock key. Make sure to save the new key.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() =>
-                        void rotateUnlockKey.execute(async () => {
-                          await api.rotateUnlockKey();
-                          setShowUnlockKey(false);
-                          setUnlockKeyValue(null);
-                          fetchSwarmInfo();
-                        }, "Failed to rotate unlock key")
-                      }
-                    >
-                      Rotate
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-
-              <Dialog
-                open={unlockOpen}
-                onOpenChange={(open) => {
-                  setUnlockOpen(open);
-
-                  if (!open) {
-                    setUnlockInput("");
-                  }
-                }}
-              >
-                <DialogTrigger
-                  render={
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={unlockSwarm.loading}
-                    >
-                      {unlockSwarm.loading ? (
-                        <Spinner className="size-3" />
-                      ) : (
-                        <LockOpen className="size-3.5" />
-                      )}
-                      Unlock Swarm
-                    </Button>
-                  }
-                />
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Unlock swarm</DialogTitle>
-                    <DialogDescription>
-                      Enter the unlock key to unlock a locked swarm manager.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <Input
-                    placeholder="SWMKEY-1-..."
-                    value={unlockInput}
-                    onChange={(event) => setUnlockInput(event.target.value)}
-                    className="font-mono"
-                  />
-                  <DialogFooter>
-                    <Button
-                      disabled={unlockSwarm.loading || !unlockInput.trim()}
-                      onClick={() =>
-                        void unlockSwarm.execute(async () => {
-                          await api.unlockSwarm(unlockInput.trim());
-                          setUnlockOpen(false);
-                          setUnlockInput("");
-                          fetchSwarmInfo();
-                        }, "Failed to unlock swarm")
-                      }
-                    >
-                      {unlockSwarm.loading ? <Spinner className="size-3" /> : null}
-                      Unlock
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
-          )}
-
-          {showUnlockKey && unlockKeyValue && (
-            <div className="space-y-2">
-              <pre className="rounded-lg bg-muted/50 p-3 font-mono text-xs select-all">
-                {unlockKeyValue}
-              </pre>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  navigator.clipboard.writeText(unlockKeyValue).then(() => {
-                    setUnlockKeyCopied(true);
-                    setTimeout(() => setUnlockKeyCopied(false), 2000);
-                  });
-                }}
-              >
-                {unlockKeyCopied ? (
-                  <>
-                    <Check className="size-3" />
-                    Copied
-                  </>
-                ) : (
-                  <>
-                    <Copy className="size-3" />
-                    Copy
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
-        </div>
+        <EncryptionPanel
+          spec={spec}
+          canEdit={page.allowedMethods.has("POST")}
+          onSaved={page.fetchSwarmInfo}
+        />
 
         {/* Task Defaults */}
         {spec.TaskDefaults.LogDriver && (
@@ -674,7 +335,7 @@ export default function SwarmPage() {
       <CollapsibleSection
         title="Plugins"
         controls={
-          allowedMethods.has("POST") ? (
+          page.allowedMethods.has("POST") ? (
             <Button
               variant="outline"
               size="sm"
@@ -686,11 +347,11 @@ export default function SwarmPage() {
           ) : undefined
         }
       >
-        {plugins.length === 0 ? (
+        {page.plugins.length === 0 ? (
           <p className="py-4 text-sm text-muted-foreground">No plugins installed.</p>
         ) : (
           <div className="space-y-3">
-            <PluginTable plugins={plugins} />
+            <PluginTable plugins={page.plugins} />
           </div>
         )}
       </CollapsibleSection>
@@ -698,12 +359,7 @@ export default function SwarmPage() {
       <InstallPluginDialog
         open={installOpen}
         onOpenChange={setInstallOpen}
-        onInstalled={() => {
-          api
-            .plugins()
-            .then(({ data: pluginsData }) => setPlugins(pluginsData))
-            .catch(console.warn);
-        }}
+        onInstalled={page.refetchPlugins}
       />
     </div>
   );

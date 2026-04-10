@@ -37,7 +37,7 @@ export interface ServiceResourceShape {
   Reservations?: { NanoCPUs?: number; MemoryBytes?: number };
 }
 
-interface AllocationData {
+export interface AllocationData {
   cpuReserved?: number;
   cpuLimit?: number;
   cpuActual?: number;

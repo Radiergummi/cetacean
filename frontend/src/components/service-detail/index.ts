@@ -15,7 +15,7 @@ export { PortsEditor } from "./PortsEditor";
 export { PolicyEditor } from "./PolicyEditor";
 export { ReplicaCard } from "./ReplicaCard";
 export { ResourcesEditor } from "./ResourcesEditor";
-export type { ServiceResourceShape } from "./ResourcesEditor";
+export type { AllocationData, ServiceResourceShape } from "./ResourcesEditor";
 export { RuntimeEditor } from "./RuntimeEditor";
 export { SecretsEditor } from "./SecretsEditor";
 export { ServiceActions } from "./ServiceActions";

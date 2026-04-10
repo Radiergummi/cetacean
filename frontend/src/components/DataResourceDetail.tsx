@@ -1,14 +1,14 @@
 import type { PatchOp } from "../api/types";
 import type { HistoryEntry, ServiceRef } from "../api/types";
+import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
+import { parseStackLabels } from "../lib/parseStackLabels";
 import ActivitySection from "./ActivitySection";
 import { MetadataGrid, ResourceId, ResourceLink, Timestamp } from "./data";
 import { KeyValueEditor } from "./KeyValueEditor";
+import PageHeader from "./PageHeader";
 import { RemoveResourceAction } from "./RemoveResourceAction";
 import ResourceName from "./ResourceName";
 import ServiceRefList from "./ServiceRefList";
-import PageHeader from "./PageHeader";
-import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
-import { parseStackLabels } from "../lib/parseStackLabels";
 import { useEffect, useState, type ReactNode } from "react";
 
 interface DataResourceDetailProps {
@@ -60,11 +60,13 @@ export default function DataResourceDetail({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={<ResourceName name={name} direction="column" />}
-        breadcrumbs={[
-          { label: listLabel, to: listPath },
-          { label: <ResourceName name={name} /> },
-        ]}
+        title={
+          <ResourceName
+            name={name}
+            direction="column"
+          />
+        }
+        breadcrumbs={[{ label: listLabel, to: listPath }, { label: <ResourceName name={name} /> }]}
         actions={
           <RemoveResourceAction
             resourceType={resourceType}
@@ -79,10 +81,23 @@ export default function DataResourceDetail({
       />
 
       <MetadataGrid>
-        <ResourceId label="ID" id={id} />
-        <ResourceLink label="Stack" name={stack} to={`/stacks/${stack}`} />
-        <Timestamp label="Created" date={createdAt} />
-        <Timestamp label="Updated" date={updatedAt} />
+        <ResourceId
+          label="ID"
+          id={id}
+        />
+        <ResourceLink
+          label="Stack"
+          name={stack}
+          to={`/stacks/${stack}`}
+        />
+        <Timestamp
+          label="Created"
+          date={createdAt}
+        />
+        <Timestamp
+          label="Updated"
+          date={updatedAt}
+        />
       </MetadataGrid>
 
       <KeyValueEditor
@@ -110,7 +125,10 @@ export default function DataResourceDetail({
         emptyMessage={`No services using this ${resourceType}.`}
       />
 
-      <ActivitySection entries={history} hideType />
+      <ActivitySection
+        entries={history}
+        hideType
+      />
     </div>
   );
 }
