@@ -360,13 +360,67 @@ max_sessions = 256
 - `CETACEAN_BASE_PATH` prefixes `/mcp` and `/oauth/*` endpoints.
 - `CETACEAN_CORS_ORIGINS` applies to MCP (OAuth flow involves browser redirects).
 
+## Shared Domain Layer
+
+Introducing a second transport (MCP alongside REST) creates a drift risk: enrichment logic (building `EnrichedTask`, redacting secret data, resolving cross-references, assembling `StackDetail`) currently lives inline in REST handlers. Duplicating it in MCP handlers would lead to divergence over time.
+
+### Approach
+
+Extract the enrichment and domain logic into a shared `internal/cluster` package. Both REST and MCP handlers become thin transport adapters that call into it.
+
+```
+REST handler:   parse HTTP request   -> cluster.ServiceDetail(cache, id) -> JSON-LD wrap    -> HTTP response
+MCP handler:    parse JSON-RPC       -> cluster.ServiceDetail(cache, id) -> MCP resource    -> JSON-RPC response
+```
+
+### Package: `internal/cluster`
+
+```
+internal/cluster/
+  resources.go   -- NodeDetail, ServiceDetail, TaskDetail, StackDetail, ConfigDetail,
+                    SecretDetail, NetworkDetail, VolumeDetail, ClusterInfo
+                    (read from cache, enrich, redact, resolve cross-refs)
+  search.go      -- Search(cache, query, types, limit)
+  list.go        -- ListNodes, ListServices, etc. (with filter/sort/pagination)
+  enrich.go      -- EnrichTask (add ServiceName, NodeHostname),
+                    RedactSecret, ResolveCrossRefs
+```
+
+Each function takes the cache (and optionally the ACL evaluator for filtering) and returns a plain Go struct. The struct is the single source of truth for what a "service detail" or "enriched task" looks like. Transport layers serialize it however they need to.
+
+### What Moves
+
+- `EnrichedTask` construction (currently inline in REST task handlers) -> `cluster.EnrichTask`
+- Secret data redaction (currently inline in multiple REST handlers) -> `cluster.RedactSecret`
+- Cross-reference resolution (`ServicesUsingConfig`, etc. assembly) -> `cluster.ConfigDetail`, etc.
+- Stack detail assembly -> `cluster.StackDetail`
+- Global search logic -> `cluster.Search`
+
+### What Stays Transport-Specific
+
+- JSON-LD wrapping (`@context`, `@id`, `@type`) -- REST only
+- ETag computation and `304 Not Modified` -- REST only
+- MCP resource URI and MIME type formatting -- MCP only
+- HTTP content negotiation -- REST only
+- JSON-RPC error codes -- MCP only
+- Pagination Link headers -- REST only
+
+### Write Operations
+
+Write operations have less drift risk because both transports call the same `DockerWriteClient` methods directly. Domain validation (e.g., valid replica count, valid availability value) is extracted into `internal/cluster` where it's non-trivial, but most write operations are simple pass-throughs to the Docker API.
+
+### Refactoring Scope
+
+Existing REST handlers are refactored as part of the MCP work: extract inline enrichment into `internal/cluster`, update REST handlers to call it. This is upfront cost that eliminates the class of bugs where one transport returns different data than the other. The REST API behavior does not change -- only the internal call structure.
+
 ## Package Structure
 
 ### New Packages
 
 ```
+internal/cluster/          -- shared domain logic (enrichment, search, validation)
 internal/mcp/              -- MCP server setup, session manager, notification bridge
-internal/mcp/resources.go  -- resource handlers (read from cache, format as JSON)
+internal/mcp/resources.go  -- resource handlers (call cluster layer, format as MCP resources)
 internal/mcp/tools.go      -- tool handlers (call DockerWriteClient, return results)
 internal/mcp/oauth/        -- OAuth 2.1 AS: authorize, token, revoke, CIMD, JWT issuance
 ```
@@ -374,8 +428,20 @@ internal/mcp/oauth/        -- OAuth 2.1 AS: authorize, token, revoke, CIMD, JWT 
 ### Dependency Graph
 
 ```
-internal/mcp/
+internal/cluster/
   +-- reads from:  cache.Cache (all getters, history)
+  +-- authz via:   acl.Evaluator (Can, Filter) -- for filtered list operations
+  +-- no external dependencies
+
+internal/api/ (existing REST handlers, refactored)
+  +-- calls:       cluster (enrichment, search, validation)
+  +-- reads from:  cache.Cache (for direct access where no enrichment needed)
+  +-- writes via:  docker.Client (DockerWriteClient interfaces)
+  +-- authz via:   acl.Evaluator
+
+internal/mcp/
+  +-- calls:       cluster (enrichment, search, validation)
+  +-- reads from:  cache.Cache (for subscriptions and notifications)
   +-- writes via:  docker.Client (DockerWriteClient interfaces)
   +-- authz via:   acl.Evaluator (Can, Filter)
   +-- identity:    auth.Identity (from HTTP context)
@@ -403,4 +469,4 @@ if cfg.MCP.Enabled {
 }
 ```
 
-The MCP package depends on existing interfaces. It does not import `docker/watcher`, `api/handlers`, or the SSE broadcaster. It is a new consumer of the same cache and write client, not a layer on top of the REST API.
+The MCP package depends on existing interfaces and the shared cluster layer. It does not import `api/handlers` or the SSE broadcaster.
