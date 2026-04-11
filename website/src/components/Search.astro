@@ -1,0 +1,189 @@
+---
+---
+<button
+  id="search-trigger"
+  type="button"
+  class="hidden md:inline-flex items-center gap-2 rounded-md border border-border bg-muted/50 px-2.5 py-1 text-sm text-muted-foreground hover:bg-muted transition-colors cursor-pointer min-w-[10rem] justify-between"
+>
+  <span class="flex items-center gap-2">
+    <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+    </svg>
+    Search...
+  </span>
+  <kbd class="pointer-events-none text-[0.6875rem] font-medium text-muted-foreground/70" id="search-shortcut-label"></kbd>
+</button>
+
+<button
+  id="search-trigger-mobile"
+  type="button"
+  class="md:hidden rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors cursor-pointer"
+  aria-label="Search"
+>
+  <svg class="size-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+    <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+  </svg>
+</button>
+
+<div id="search-overlay" class="search-overlay" hidden>
+  <div class="search-backdrop"></div>
+  <div class="search-dialog">
+    <div class="search-input-row">
+      <svg class="size-4 shrink-0 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+      </svg>
+      <input
+        id="search-input"
+        type="text"
+        placeholder="Search documentation..."
+        autocomplete="off"
+        class="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+      />
+      <kbd class="text-[0.625rem] font-medium text-muted-foreground/60 border border-border rounded px-1 py-0.5 leading-none">ESC</kbd>
+    </div>
+    <div id="search-results" class="search-results"></div>
+  </div>
+</div>
+
+<script is:inline>
+  (() => {
+    const overlay = document.getElementById("search-overlay");
+    const input = document.getElementById("search-input");
+    const resultsContainer = document.getElementById("search-results");
+    const trigger = document.getElementById("search-trigger");
+    const triggerMobile = document.getElementById("search-trigger-mobile");
+    const shortcutLabel = document.getElementById("search-shortcut-label");
+    let activeIndex = -1;
+    let debounceTimer = null;
+    let pendingQuery = null;
+
+    const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform || "");
+    shortcutLabel.textContent = isMac ? "⌘K" : "Ctrl+K";
+
+    document.body.appendChild(overlay);
+
+    let pagefindPromise = null;
+    const loadPagefind = () => {
+      if (!pagefindPromise) {
+        pagefindPromise = import("/pagefind/pagefind.js").catch(() => {
+          pagefindPromise = null;
+          return null;
+        });
+      }
+      return pagefindPromise;
+    };
+
+    const open = () => {
+      overlay.hidden = false;
+      input.value = "";
+      resultsContainer.innerHTML = "";
+      activeIndex = -1;
+      loadPagefind();
+      requestAnimationFrame(() => input.focus());
+    };
+
+    const close = () => {
+      overlay.hidden = true;
+      input.blur();
+    };
+
+    trigger.addEventListener("click", open);
+    triggerMobile.addEventListener("click", open);
+
+    document.addEventListener("keydown", (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        overlay.hidden ? open() : close();
+      }
+      if (!overlay.hidden && e.key === "Escape") {
+        close();
+      }
+    });
+
+    overlay.querySelector(".search-backdrop").addEventListener("click", close);
+
+    const getItems = () => resultsContainer.querySelectorAll("[data-search-item]");
+
+    const setActive = (index) => {
+      const items = getItems();
+      items.forEach((el) => el.removeAttribute("data-active"));
+      activeIndex = index;
+      if (index >= 0 && index < items.length) {
+        items[index].setAttribute("data-active", "");
+        items[index].scrollIntoView({ block: "nearest" });
+      }
+    };
+
+    input.addEventListener("keydown", (e) => {
+      const items = getItems();
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActive(Math.min(activeIndex + 1, items.length - 1));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActive(Math.max(activeIndex - 1, 0));
+      } else if (e.key === "Enter" && activeIndex >= 0 && activeIndex < items.length) {
+        e.preventDefault();
+        const link = items[activeIndex].querySelector("a");
+        if (link) window.location.href = link.href;
+      }
+    });
+
+    input.addEventListener("input", () => {
+      clearTimeout(debounceTimer);
+      const query = input.value.trim();
+      if (!query) {
+        resultsContainer.innerHTML = "";
+        activeIndex = -1;
+        pendingQuery = null;
+        return;
+      }
+      pendingQuery = query;
+      debounceTimer = setTimeout(() => doSearch(query), 150);
+    });
+
+    const doSearch = async (query) => {
+      const pagefind = await loadPagefind();
+      if (!pagefind) {
+        resultsContainer.innerHTML = '<div class="search-empty">Search unavailable — run <code>npm run build</code> to generate the index.</div>';
+        return;
+      }
+      const search = await pagefind.search(query);
+      if (pendingQuery !== query) return;
+      const loaded = await Promise.all(search.results.slice(0, 8).map((r) => r.data()));
+      if (pendingQuery !== query) return;
+
+      if (!loaded.length) {
+        resultsContainer.innerHTML = '<div class="search-empty">No results found.</div>';
+        activeIndex = -1;
+        return;
+      }
+
+      resultsContainer.innerHTML = "";
+      for (const item of loaded) {
+        const row = document.createElement("div");
+        row.setAttribute("data-search-item", "");
+        row.className = "search-item";
+
+        const link = document.createElement("a");
+        link.href = item.url;
+        link.className = "search-item-link";
+
+        const title = document.createElement("span");
+        title.className = "search-item-title";
+        title.textContent = item.meta.title || "";
+
+        const excerpt = document.createElement("span");
+        excerpt.className = "search-item-excerpt";
+        excerpt.innerHTML = item.excerpt || "";
+
+        link.append(title, excerpt);
+        row.appendChild(link);
+        resultsContainer.appendChild(row);
+      }
+
+      activeIndex = -1;
+      setActive(0);
+    };
+  })();
+</script>

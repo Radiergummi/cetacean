@@ -1,4 +1,6 @@
 ---
+import { repoUrl } from "../lib/navigation";
+
 interface Props {
   title: string;
   description: string;
@@ -6,7 +8,7 @@ interface Props {
 
 const { title, description } = Astro.props;
 ---
-<div class="flex flex-col items-center justify-center py-24 px-8 text-center">
+<div class="flex flex-col items-center justify-center py-24 px-8 text-center" data-pagefind-ignore>
   <span class="text-6xl mb-6">🐋</span>
   <h1 class="text-3xl font-semibold tracking-tight mb-3">{title}</h1>
   <p class="text-base text-muted-foreground max-w-sm mb-10 leading-relaxed">{description}</p>
@@ -24,7 +26,7 @@ const { title, description } = Astro.props;
       Get Started
     </a>
     <a
-      href="https://github.com/Radiergummi/cetacean"
+      href={repoUrl}
       target="_blank"
       rel="noopener"
       class="inline-flex items-center rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors"

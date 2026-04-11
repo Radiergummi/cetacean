@@ -1,3 +1,7 @@
+import pkg from "../../package.json" with { type: "json" };
+
+export const repoUrl: string = pkg.repository;
+
 export interface NavItem {
   slug: string;
   title: string;

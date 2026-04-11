@@ -20,6 +20,8 @@ const { Content, headings } = await render(entry);
   slug={entry.id}
   headings={headings}
   markdownUrl={`/${entry.id}.md`}
+  category={entry.data.category}
+  tags={entry.data.tags}
 >
   <Content />
 </DocsLayout>
