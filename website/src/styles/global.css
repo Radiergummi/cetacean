@@ -15,6 +15,7 @@
   --border: oklch(0.91 0 0);
   --link: oklch(0.488 0.195 264);
   --active: oklch(0.488 0.195 264);
+  --active-foreground: oklch(1 0 0);
   --radius: 0.625rem;
   --code-background: oklch(0.965 0 0);
   --code-foreground: oklch(0.35 0 0);
@@ -33,6 +34,7 @@
   --border: oklch(1 0 0 / 8%);
   --link: oklch(0.695 0.15 254);
   --active: oklch(0.695 0.15 254);
+  --active-foreground: oklch(1 0 0);
   --code-background: oklch(0.18 0 0);
   --code-foreground: oklch(0.8 0 0);
   --sidebar-background: oklch(0.155 0 0);
@@ -64,6 +66,10 @@
   }
   html {
     @apply font-sans antialiased;
+  }
+  ::selection {
+    background: var(--active);
+    color: var(--active-foreground);
   }
 }
 
