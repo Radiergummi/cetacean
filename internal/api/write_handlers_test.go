@@ -1145,6 +1145,19 @@ func TestHandlePatchServiceEnv_Add(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
 	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["@type"] != "ServiceEnv" {
+		t.Errorf("@type=%v, want ServiceEnv", resp["@type"])
+	}
+	if id, ok := resp["@id"].(string); !ok || !strings.HasSuffix(id, "/services/svc1/env") {
+		t.Errorf("expected @id ending in /services/svc1/env, got %v", resp["@id"])
+	}
+	if ctx, ok := resp["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
+		t.Errorf("expected @context ending in /api/context.jsonld, got %v", resp["@context"])
+	}
 }
 
 func TestHandlePatchServiceEnv_WrongContentType(t *testing.T) {
@@ -1223,6 +1236,19 @@ func TestHandlePatchServiceEnv_MergePatch(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
 	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["@type"] != "ServiceEnv" {
+		t.Errorf("@type=%v, want ServiceEnv", resp["@type"])
+	}
+	if id, ok := resp["@id"].(string); !ok || !strings.HasSuffix(id, "/services/svc1/env") {
+		t.Errorf("expected @id ending in /services/svc1/env, got %v", resp["@id"])
+	}
+	if ctx, ok := resp["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
+		t.Errorf("expected @context ending in /api/context.jsonld, got %v", resp["@context"])
+	}
 }
 
 func TestHandleGetNodeLabels(t *testing.T) {
@@ -1289,6 +1315,19 @@ func TestHandlePatchNodeLabels_Add(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["@type"] != "NodeLabels" {
+		t.Errorf("@type=%v, want NodeLabels", resp["@type"])
+	}
+	if id, ok := resp["@id"].(string); !ok || !strings.HasSuffix(id, "/nodes/node1/labels") {
+		t.Errorf("expected @id ending in /nodes/node1/labels, got %v", resp["@id"])
+	}
+	if ctx, ok := resp["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
+		t.Errorf("expected @context ending in /api/context.jsonld, got %v", resp["@context"])
 	}
 }
 
@@ -1402,6 +1441,19 @@ func TestHandlePatchServiceResources_Merge(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["@type"] != "ServiceResources" {
+		t.Errorf("@type=%v, want ServiceResources", resp["@type"])
+	}
+	if id, ok := resp["@id"].(string); !ok || !strings.HasSuffix(id, "/services/svc1/resources") {
+		t.Errorf("expected @id ending in /services/svc1/resources, got %v", resp["@id"])
+	}
+	if ctx, ok := resp["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
+		t.Errorf("expected @context ending in /api/context.jsonld, got %v", resp["@context"])
 	}
 }
 
@@ -2673,6 +2725,15 @@ func TestHandlePatchServiceContainerConfig_PartialPatch(t *testing.T) {
 	}
 	if cc["tty"] != true {
 		t.Errorf("tty=%v, want true", cc["tty"])
+	}
+	if resp["@type"] != "ServiceContainerConfig" {
+		t.Errorf("@type=%v, want ServiceContainerConfig", resp["@type"])
+	}
+	if id, ok := resp["@id"].(string); !ok || !strings.HasSuffix(id, "/services/svc1/container-config") {
+		t.Errorf("expected @id ending in /services/svc1/container-config, got %v", resp["@id"])
+	}
+	if ctx, ok := resp["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
+		t.Errorf("expected @context ending in /api/context.jsonld, got %v", resp["@context"])
 	}
 }
 
@@ -4000,6 +4061,19 @@ func TestHandlePatchConfigLabels_JSONPatch(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
 	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["@type"] != "ConfigLabels" {
+		t.Errorf("@type=%v, want ConfigLabels", resp["@type"])
+	}
+	if id, ok := resp["@id"].(string); !ok || !strings.HasSuffix(id, "/configs/cfg1/labels") {
+		t.Errorf("expected @id ending in /configs/cfg1/labels, got %v", resp["@id"])
+	}
+	if ctx, ok := resp["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
+		t.Errorf("expected @context ending in /api/context.jsonld, got %v", resp["@context"])
+	}
 }
 
 func TestHandlePatchConfigLabels_MergePatch(t *testing.T) {
@@ -4170,6 +4244,19 @@ func TestHandlePatchSecretLabels_JSONPatch(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["@type"] != "SecretLabels" {
+		t.Errorf("@type=%v, want SecretLabels", resp["@type"])
+	}
+	if id, ok := resp["@id"].(string); !ok || !strings.HasSuffix(id, "/secrets/sec1/labels") {
+		t.Errorf("expected @id ending in /secrets/sec1/labels, got %v", resp["@id"])
+	}
+	if ctx, ok := resp["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
+		t.Errorf("expected @context ending in /api/context.jsonld, got %v", resp["@context"])
 	}
 }
 

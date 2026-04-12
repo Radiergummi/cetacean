@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	json "github.com/goccy/go-json"
@@ -46,6 +47,15 @@ func TestHandleProfile_WithPermissions(t *testing.T) {
 	}
 	if _, ok := permMap["service:webapp"]; !ok {
 		t.Fatal("permissions should include service:webapp")
+	}
+	if resp["@type"] != "Profile" {
+		t.Errorf("@type=%v, want Profile", resp["@type"])
+	}
+	if id, ok := resp["@id"].(string); !ok || !strings.HasSuffix(id, "/profile") {
+		t.Errorf("expected @id ending in /profile, got %v", resp["@id"])
+	}
+	if ctx, ok := resp["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
+		t.Errorf("expected @context ending in /api/context.jsonld, got %v", resp["@context"])
 	}
 }
 

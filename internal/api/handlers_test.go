@@ -303,6 +303,7 @@ func TestHandleClusterMetrics_WithPrometheus(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
+	bodyBytes := w.Body.Bytes()
 	var resp struct {
 		CPU struct {
 			Percent float64 `json:"percent"`
@@ -314,7 +315,7 @@ func TestHandleClusterMetrics_WithPrometheus(t *testing.T) {
 			Percent float64 `json:"percent"`
 		} `json:"disk"`
 	}
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.Unmarshal(bodyBytes, &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
 	if resp.CPU.Percent == 0 {
@@ -325,6 +326,20 @@ func TestHandleClusterMetrics_WithPrometheus(t *testing.T) {
 	}
 	if resp.Disk.Percent == 0 {
 		t.Error("expected non-zero Disk percent")
+	}
+
+	var envelope map[string]any
+	if err := json.Unmarshal(bodyBytes, &envelope); err != nil {
+		t.Fatalf("decode envelope: %v", err)
+	}
+	if envelope["@type"] != "ClusterMetrics" {
+		t.Errorf("@type=%v, want ClusterMetrics", envelope["@type"])
+	}
+	if id, ok := envelope["@id"].(string); !ok || !strings.HasSuffix(id, "/cluster/metrics") {
+		t.Errorf("expected @id ending in /cluster/metrics, got %v", envelope["@id"])
+	}
+	if ctx, ok := envelope["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
+		t.Errorf("expected @context ending in /api/context.jsonld, got %v", envelope["@context"])
 	}
 }
 

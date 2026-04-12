@@ -294,6 +294,19 @@ func TestHandlePluginPrivileges_OK(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
 	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["@type"] != "PluginPrivileges" {
+		t.Errorf("@type=%v, want PluginPrivileges", resp["@type"])
+	}
+	if id, ok := resp["@id"].(string); !ok || !strings.HasSuffix(id, "/plugins/privileges") {
+		t.Errorf("expected @id ending in /plugins/privileges, got %v", resp["@id"])
+	}
+	if ctx, ok := resp["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
+		t.Errorf("expected @context ending in /api/context.jsonld, got %v", resp["@context"])
+	}
 }
 
 func TestHandlePluginPrivileges_MissingRemote(t *testing.T) {

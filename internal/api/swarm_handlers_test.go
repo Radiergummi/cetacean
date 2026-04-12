@@ -171,6 +171,20 @@ func TestHandleSwarmOrchestration_Success(t *testing.T) {
 	if orch.TaskHistoryRetentionLimit == nil || *orch.TaskHistoryRetentionLimit != 10 {
 		t.Fatalf("TaskHistoryRetentionLimit=%v, want 10", orch.TaskHistoryRetentionLimit)
 	}
+
+	var envelope map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope["@type"] != "SwarmOrchestration" {
+		t.Errorf("@type=%v, want SwarmOrchestration", envelope["@type"])
+	}
+	if id, ok := envelope["@id"].(string); !ok || !strings.HasSuffix(id, "/swarm/orchestration") {
+		t.Errorf("expected @id ending in /swarm/orchestration, got %v", envelope["@id"])
+	}
+	if ctx, ok := envelope["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
+		t.Errorf("expected @context ending in /api/context.jsonld, got %v", envelope["@context"])
+	}
 }
 
 func TestHandleSwarmOrchestration_NilClient(t *testing.T) {
@@ -345,6 +359,20 @@ func TestHandleSwarmRaft_Success(t *testing.T) {
 	}
 	if capturedSpec.Raft.HeartbeatTick != 1 {
 		t.Fatalf("HeartbeatTick=%d, want 1 (preserved)", capturedSpec.Raft.HeartbeatTick)
+	}
+
+	var envelope map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope["@type"] != "SwarmRaft" {
+		t.Errorf("@type=%v, want SwarmRaft", envelope["@type"])
+	}
+	if id, ok := envelope["@id"].(string); !ok || !strings.HasSuffix(id, "/swarm/raft") {
+		t.Errorf("expected @id ending in /swarm/raft, got %v", envelope["@id"])
+	}
+	if ctx, ok := envelope["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
+		t.Errorf("expected @context ending in /api/context.jsonld, got %v", envelope["@context"])
 	}
 }
 
@@ -529,6 +557,20 @@ func TestHandleSwarmDispatcher_Success(t *testing.T) {
 	if disp.HeartbeatPeriod != 10*time.Second {
 		t.Fatalf("HeartbeatPeriod=%v, want %v", disp.HeartbeatPeriod, 10*time.Second)
 	}
+
+	var envelope map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope["@type"] != "SwarmDispatcher" {
+		t.Errorf("@type=%v, want SwarmDispatcher", envelope["@type"])
+	}
+	if id, ok := envelope["@id"].(string); !ok || !strings.HasSuffix(id, "/swarm/dispatcher") {
+		t.Errorf("expected @id ending in /swarm/dispatcher, got %v", envelope["@id"])
+	}
+	if ctx, ok := envelope["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
+		t.Errorf("expected @context ending in /api/context.jsonld, got %v", envelope["@context"])
+	}
 }
 
 func TestHandleSwarmDispatcher_NilClient(t *testing.T) {
@@ -671,6 +713,20 @@ func TestHandleSwarmCAConfig_Success(t *testing.T) {
 	if ca.NodeCertExpiry != newExpiry {
 		t.Fatalf("NodeCertExpiry=%v, want %v", ca.NodeCertExpiry, newExpiry)
 	}
+
+	var envelope map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope["@type"] != "SwarmCAConfig" {
+		t.Errorf("@type=%v, want SwarmCAConfig", envelope["@type"])
+	}
+	if id, ok := envelope["@id"].(string); !ok || !strings.HasSuffix(id, "/swarm/ca") {
+		t.Errorf("expected @id ending in /swarm/ca, got %v", envelope["@id"])
+	}
+	if ctx, ok := envelope["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
+		t.Errorf("expected @context ending in /api/context.jsonld, got %v", envelope["@context"])
+	}
 }
 
 func TestHandleSwarmCAConfig_NilClient(t *testing.T) {
@@ -804,6 +860,20 @@ func TestHandleSwarmEncryption_Success(t *testing.T) {
 
 	if !capturedSpec.EncryptionConfig.AutoLockManagers {
 		t.Fatal("AutoLockManagers should be true")
+	}
+
+	var envelope map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope["@type"] != "SwarmEncryption" {
+		t.Errorf("@type=%v, want SwarmEncryption", envelope["@type"])
+	}
+	if id, ok := envelope["@id"].(string); !ok || !strings.HasSuffix(id, "/swarm/encryption") {
+		t.Errorf("expected @id ending in /swarm/encryption, got %v", envelope["@id"])
+	}
+	if ctx, ok := envelope["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
+		t.Errorf("expected @context ending in /api/context.jsonld, got %v", envelope["@context"])
 	}
 }
 
