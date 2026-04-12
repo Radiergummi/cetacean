@@ -1,5 +1,6 @@
 import { defineConfig } from "astro/config";
 import sitemap from "@astrojs/sitemap";
+import mdx from "@astrojs/mdx";
 import tailwindcss from "@tailwindcss/vite";
 import { visit } from "unist-util-visit";
 import { existsSync, readFileSync } from "node:fs";
@@ -135,7 +136,7 @@ export default defineConfig({
   srcDir: "./src",
   trailingSlash: "always",
   prefetch: true,
-  integrations: [sitemap()],
+  integrations: [sitemap(), mdx()],
   vite: {
     plugins: [tailwindcss(), pagefindDevPlugin()],
   },
