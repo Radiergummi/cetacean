@@ -17,7 +17,7 @@ Press `?` to see all shortcuts. The highlights:
 
 | Shortcut                 | Action                                    |
 |--------------------------|-------------------------------------------|
-| `Cmd K` / `Ctrl K`       | Command palette (search + actions)        |
+| `⌘ K` / `Ctrl K`         | Command palette (search + actions)        |
 | `g` then `s`/`n`/`k`/... | Navigate to services, nodes, stacks, etc. |
 | `j`/`k` or `↓`/`↑`       | Move through table rows                   |
 | `Enter`                  | Open selected resource                    |
@@ -26,15 +26,15 @@ The `g` shortcuts are chords: Press `g`, release, then the second key.
 
 ## Command Palette
 
-`Cmd K` opens the command palette. Type to search across all resource types, or type an action name (`scale`,
+`⌘ K` opens the command palette. Type to search across all resource types, or type an action name (`scale`,
 `restart`, `drain`, `rollback`) to trigger write operations with guided steps and confirmation. Actions respect
 [operations level](configuration.md#operations-level) and [authorization](authorization.md) permissions.
 
 ## Filtering
 
-List pages support search and expr-lang filter expressions via the API's `?filter=` parameter:
+List pages support search and [expr-lang](https://expr-lang.org/) filter expressions via the API's `?filter=` parameter:
 
-```
+```js
 role == "manager" && state == "ready"       # nodes
 name contains "web" && mode == "replicated" # services
 state == "failed" || error != ""            # tasks

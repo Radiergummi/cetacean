@@ -68,7 +68,7 @@ firewall, or reverse proxy that handles authentication externally.
 
 ### OIDC
 
-OpenID Connect with authorization code flow for browsers and Bearer token validation for machines/scripts.
+[OpenID Connect](https://openid.net/developers/how-connect-works/) with authorization code flow for browsers and Bearer token validation for machines/scripts.
 
 #### Configuration
 
@@ -132,26 +132,25 @@ openssl rand -hex 32   # generate a 32-byte key
 
 #### Logout
 
-`POST /auth/logout` clears the session cookie. If the IdP supports it (RFC 9722), the user is also redirected to the
-IdP for sign-out.
+`POST /auth/logout` clears the session cookie. If the IdP supports it ([RFC 9722](https://www.rfc-editor.org/rfc/rfc9722)), the user is also redirected to the IdP for sign-out.
 
 #### IdP Setup Examples
 
-**Keycloak:**
+**[Keycloak](https://www.keycloak.org/):**
 
 1. Create a client with `confidential` access type
 2. Set valid redirect URI to `https://cetacean.example.com/auth/callback`
 3. Enable "Standard Flow" (authorization code)
 4. Note the client ID and secret from the Credentials tab
 
-**Auth0:**
+**[Auth0](https://auth0.com/):**
 
 1. Create a "Regular Web Application"
 2. Add `https://cetacean.example.com/auth/callback` to Allowed Callback URLs
 3. Add `https://cetacean.example.com` to Allowed Logout URLs
 4. Use the Auth0 domain as the issuer (e.g., `https://your-tenant.auth0.com`)
 
-**Dex:**
+**[Dex](https://dexidp.io/):**
 
 ```yaml
 staticClients:
@@ -166,7 +165,7 @@ staticClients:
 
 ### Tailscale
 
-Identifies users via the Tailscale WhoIs API. Every request from a tailnet peer is automatically authenticated -- no
+Identifies users via the [Tailscale](https://tailscale.com/) WhoIs API. Every request from a tailnet peer is automatically authenticated -- no
 login flow needed.
 
 #### Choosing a Mode
@@ -183,7 +182,7 @@ Tailscale auth has two modes. Pick based on your deployment:
 | **Best for**                     | Hosts already running Tailscale (bare-metal, VMs)                                                       | Containers, Docker Swarm services, or hosts without Tailscale installed                       |
 
 **Security note on local mode:** Cetacean binds to `server.listen_addr` (default `:9000`, all interfaces). A
-defense-in-depth IP range check rejects requests not from Tailscale's CGNAT (`100.64.0.0/10`) or ULA
+defense-in-depth IP range check rejects requests not from Tailscale's [CGNAT](https://www.rfc-editor.org/rfc/rfc6598) (`100.64.0.0/10`) or [ULA](https://www.rfc-editor.org/rfc/rfc4193)
 (`fd7a:115c:a1e0::/48`) ranges, but this is an application-layer check, not a socket-level restriction. For tighter
 isolation, bind to your node's Tailscale IP (e.g. `-listen-addr 100.x.x.x:9000`) or use tsnet mode, which only
 accepts connections through the embedded Tailscale node.
@@ -259,7 +258,7 @@ Multiple grants are deduplicated and merged into the identity's `groups` array.
 
 ### Client Certificates (mTLS)
 
-Authenticates via mTLS client certificates. Supports standard X.509 certificates and SPIFFE X.509-SVIDs for
+Authenticates via [mTLS](https://en.wikipedia.org/wiki/Mutual_authentication#mTLS) client certificates. Supports standard [X.509](https://www.rfc-editor.org/rfc/rfc5280) certificates and SPIFFE X.509-SVIDs for
 workload identity.
 
 **Requires TLS termination at Cetacean** (not behind a TLS-terminating proxy).
@@ -316,7 +315,7 @@ every request:
 
 #### Proxy Configuration Examples
 
-**nginx** with OAuth2 Proxy:
+**[nginx](https://nginx.org/)** with OAuth2 Proxy:
 
 ```nginx
 location / {
@@ -334,7 +333,7 @@ location / {
 }
 ```
 
-**Traefik** with ForwardAuth:
+**[Traefik](https://traefik.io/)** with ForwardAuth:
 
 ```yaml
 http:

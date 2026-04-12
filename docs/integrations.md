@@ -12,12 +12,12 @@ the service detail page. Panels appear above the labels section; if no recognize
 
 ## Supported Tools
 
-| Tool | Labels | Description |
-|---|---|---|
-| [Traefik](https://traefik.io/) | `traefik.*` | HTTP routers, services, and middlewares parsed from `traefik.http.*` labels. TCP/UDP labels are preserved but not structured. |
-| [Shepherd](https://github.com/djmaze/shepherd) | `shepherd.*` | Service auto-updater. Shows enable status and auth config. |
-| [Swarm Cronjob](https://github.com/crazy-max/swarm-cronjob) | `swarm.cronjob.*` | Cron-scheduled jobs. Shows schedule, replica count, and skip/registry options. |
-| [Diun](https://github.com/crazy-max/diun) | `diun.*` | Image update notifications. Shows watch settings, tag filters, and notification config. |
+| Tool                                                        | Labels            | Description                                                                                                                   |
+| ----------------------------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| [Traefik](https://traefik.io/)                              | `traefik.*`       | HTTP routers, services, and middlewares parsed from `traefik.http.*` labels. TCP/UDP labels are preserved but not structured. |
+| [Shepherd](https://github.com/djmaze/shepherd)              | `shepherd.*`      | Service auto-updater. Shows enable status and auth config.                                                                    |
+| [Swarm Cronjob](https://github.com/crazy-max/swarm-cronjob) | `swarm.cronjob.*` | Cron-scheduled jobs. Shows schedule, replica count, and skip/registry options.                                                |
+| [Diun](https://github.com/crazy-max/diun)                   | `diun.*`          | Image update notifications. Shows watch settings, tag filters, and notification config.                                       |
 
 ## Editing
 

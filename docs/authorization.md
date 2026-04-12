@@ -19,17 +19,17 @@ A grant is a tuple of **(resources, audience, permissions)**. All matching grant
 
 ```yaml
 grants:
-  - resources: [ "stack:webapp-*", "stack:api-*" ]
-    audience: [ "group:engineering" ]
-    permissions: [ "read", "write" ]
+  - resources: ["stack:webapp-*", "stack:api-*"]
+    audience: ["group:engineering"]
+    permissions: ["read", "write"]
 
-  - resources: [ "*" ]
-    audience: [ "group:ops" ]
-    permissions: [ "read", "write" ]
+  - resources: ["*"]
+    audience: ["group:ops"]
+    permissions: ["read", "write"]
 
-  - resources: [ "stack:public-*" ]
-    audience: [ "user:*@example.com" ]
-    permissions: [ "read" ]
+  - resources: ["stack:public-*"]
+    audience: ["user:*@example.com"]
+    permissions: ["read"]
 ```
 
 **Resources** use `type:pattern` with glob wildcards (`*`, `?`). Supported types: `service`, `stack`, `node`, `task`,
@@ -46,7 +46,7 @@ matches everyone.
 Policies can be provided as a file or inline. Inline takes precedence. Format is auto-detected (JSON, YAML, or TOML).
 
 | Setting       | Env var                    | Config file key   | Description                                  |
-|---------------|----------------------------|-------------------|----------------------------------------------|
+| ------------- | -------------------------- | ----------------- | -------------------------------------------- |
 | Inline policy | `CETACEAN_ACL_POLICY`      | `acl.policy`      | Policy string (requires restart to change)   |
 | Policy file   | `CETACEAN_ACL_POLICY_FILE` | `acl.policy_file` | Path to policy file (hot-reloaded on change) |
 
@@ -59,7 +59,7 @@ Auth providers can also supply per-user grants directly, unioned with file polic
 authenticated user (no `audience` field).
 
 | Provider  | Source                       | Config                                   |
-|-----------|------------------------------|------------------------------------------|
+| --------- | ---------------------------- | ---------------------------------------- |
 | Tailscale | CapMap peer capability       | `CETACEAN_AUTH_TAILSCALE_ACL_CAPABILITY` |
 | OIDC      | Custom token claim           | `CETACEAN_AUTH_OIDC_ACL_CLAIM`           |
 | Headers   | Proxy-injected header (JSON) | `CETACEAN_AUTH_HEADERS_ACL`              |
@@ -72,51 +72,52 @@ authenticated user (no `audience` field).
 
 ```yaml
 grants:
-  - resources: [ "*" ]
-    audience: [ "*" ]
-    permissions: [ "read" ]
-  - resources: [ "*" ]
-    audience: [ "group:ops" ]
-    permissions: [ "write" ]
+  - resources: ["*"]
+    audience: ["*"]
+    permissions: ["read"]
+  - resources: ["*"]
+    audience: ["group:ops"]
+    permissions: ["write"]
 ```
 
 **Team-scoped stacks:** each team manages their own stacks, shared infra is read-only:
 
 ```yaml
 grants:
-  - resources: [ "stack:frontend-*" ]
-    audience: [ "group:frontend" ]
-    permissions: [ "read", "write" ]
-  - resources: [ "stack:api-*" ]
-    audience: [ "group:backend" ]
-    permissions: [ "read", "write" ]
-  - resources: [ "stack:monitoring", "stack:ingress" ]
-    audience: [ "*" ]
-    permissions: [ "read" ]
+  - resources: ["stack:frontend-*"]
+    audience: ["group:frontend"]
+    permissions: ["read", "write"]
+  - resources: ["stack:api-*"]
+    audience: ["group:backend"]
+    permissions: ["read", "write"]
+  - resources: ["stack:monitoring", "stack:ingress"]
+    audience: ["*"]
+    permissions: ["read"]
 ```
 
 **On-call with limited blast radius:** write services and tasks, read-only infra. Combine with `operations_level=1`:
 
 ```yaml
 grants:
-  - resources: [ "service:*", "task:*" ]
-    audience: [ "group:oncall" ]
-    permissions: [ "read", "write" ]
-  - resources: [ "node:*", "swarm:*", "config:*", "secret:*", "network:*", "volume:*" ]
-    audience: [ "group:oncall" ]
-    permissions: [ "read" ]
+  - resources: ["service:*", "task:*"]
+    audience: ["group:oncall"]
+    permissions: ["read", "write"]
+  - resources:
+      ["node:*", "swarm:*", "config:*", "secret:*", "network:*", "volume:*"]
+    audience: ["group:oncall"]
+    permissions: ["read"]
 ```
 
 **Multi-tenant isolation:** tenants see only their own stacks, no cross-visibility:
 
 ```yaml
 grants:
-  - resources: [ "stack:acme-*" ]
-    audience: [ "group:tenant-acme" ]
-    permissions: [ "read", "write" ]
-  - resources: [ "stack:globex-*" ]
-    audience: [ "group:tenant-globex" ]
-    permissions: [ "read", "write" ]
+  - resources: ["stack:acme-*"]
+    audience: ["group:tenant-acme"]
+    permissions: ["read", "write"]
+  - resources: ["stack:globex-*"]
+    audience: ["group:tenant-globex"]
+    permissions: ["read", "write"]
 ```
 
 After applying a policy, verify effective permissions with `curl -s localhost:9000/auth/whoami | jq .permissions`.
@@ -124,12 +125,12 @@ After applying a policy, verify effective permissions with `curl -s localhost:90
 ## Interaction with Operations Level
 
 ACL and [operations level](configuration.md#operations-level) are independent checks; both must pass for a write
-operation to succeed. Operations level is a global ceiling (which *categories* of writes are enabled), while ACL
-controls which *resources* each user can modify. A common pattern is `operations_level=1` (safe ops only) combined with
+operation to succeed. Operations level is a global ceiling (which _categories_ of writes are enabled), while ACL
+controls which _resources_ each user can modify. A common pattern is `operations_level=1` (safe ops only) combined with
 ACL grants for per-team scoping.
 
 | Scenario                                    | Result                |
-|---------------------------------------------|-----------------------|
+| ------------------------------------------- | --------------------- |
 | Operations level allows, ACL grants `write` | Allowed               |
 | Operations level allows, ACL denies `write` | Denied (`403 ACL002`) |
 | Operations level blocks, ACL grants `write` | Denied (`403 OPS001`) |

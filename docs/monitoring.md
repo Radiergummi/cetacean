@@ -10,11 +10,11 @@ tags: [monitoring, prometheus, node-exporter, cadvisor, metrics]
 Cetacean works without Prometheus, but you'll miss out on CPU/memory charts, resource gauges, capacity bars, per-task
 sparklines, and stack-level drill-downs.
 
-| Component | What it does | What you get |
-|---|---|---|
-| **Prometheus** | Stores and queries metrics | Anything metrics-related at all |
-| **node-exporter** | Host-level metrics (CPU, memory, disk) | Node gauges, cluster capacity bars |
-| **cAdvisor** | Container-level metrics | Per-service charts, per-task sparklines, stack drill-downs |
+| Component                                                            | What it does                           | What you get                                               |
+| -------------------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------- |
+| **[Prometheus](https://prometheus.io/)**                             | Stores and queries metrics             | Anything metrics-related at all                            |
+| **[node-exporter](https://github.com/prometheus/node_exporter)**     | Host-level metrics (CPU, memory, disk) | Node gauges, cluster capacity bars                         |
+| **[cAdvisor](https://github.com/google/cadvisor)**                   | Container-level metrics                | Per-service charts, per-task sparklines, stack drill-downs |
 
 ## Setup
 

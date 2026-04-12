@@ -59,7 +59,7 @@ go build -o cetacean .
 
 Cetacean works without Prometheus, but metrics unlock CPU/memory charts, resource gauges, and capacity bars.
 
-Deploy the bundled monitoring stack (Prometheus + node-exporter + cAdvisor) and point Cetacean at it:
+Deploy the bundled monitoring stack ([Prometheus](https://prometheus.io/) + [node-exporter](https://github.com/prometheus/node_exporter) + [cAdvisor](https://github.com/google/cadvisor)) and point Cetacean at it:
 
 ```bash
 docker stack deploy -c compose.monitoring.yaml monitoring

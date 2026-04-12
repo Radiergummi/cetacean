@@ -18,7 +18,7 @@ Cetacean checks four domains. Checks that only need Docker state run every 60 se
 every 5 minutes.
 
 | Category               | What it checks                                                                                                          | Requires                              |
-|------------------------|-------------------------------------------------------------------------------------------------------------------------|---------------------------------------|
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
 | **Resource Sizing**    | CPU/memory usage vs. configured limits and reservations (over-provisioned, approaching limit, at limit, missing limits) | Prometheus + cAdvisor                 |
 | **Operational Health** | Flaky services (frequent task restarts), node disk/memory pressure                                                      | Prometheus + node-exporter + cAdvisor |
 | **Config Hygiene**     | Missing health checks, missing restart policies                                                                         | —                                     |
@@ -35,7 +35,7 @@ fewer recommendations.
 Sizing thresholds are configurable. Other checkers use fixed thresholds.
 
 | Setting             | Config file key                       | Default | Description                                                 |
-|---------------------|---------------------------------------|---------|-------------------------------------------------------------|
+| ------------------- | ------------------------------------- | ------- | ----------------------------------------------------------- |
 | Headroom multiplier | `sizing.headroom_multiplier`          | `2.0`   | Multiplier for suggested values                             |
 | Over-provisioned    | `sizing.thresholds.over_provisioned`  | `0.20`  | Usage below this fraction of reservation → over-provisioned |
 | Approaching limit   | `sizing.thresholds.approaching_limit` | `0.80`  | Usage above this fraction of limit → warning                |
