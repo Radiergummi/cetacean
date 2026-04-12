@@ -8,9 +8,6 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       min-width: 0;
       min-height: calc(100vh - 4rem);
     }
-    .scalar-container [id] {
-      scroll-margin-top: 5rem;
-    }
   </style>
   <div class="scalar-container" id="scalar-root"></div>
   <script is:inline src="/scalar.js"></script>
@@ -19,6 +16,14 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       function isDark() {
         return document.documentElement.classList.contains("dark");
       }
+
+      function applyThemeClasses() {
+        var dark = isDark();
+        document.body.classList.toggle("dark-mode", dark);
+        document.body.classList.toggle("light-mode", !dark);
+      }
+
+      applyThemeClasses();
 
       Scalar.createApiReference("#scalar-root", {
         url: "/openapi.yaml",
@@ -54,16 +59,10 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
         ]
       });
 
-      new MutationObserver(function() {
-        document.body.classList.toggle("dark-mode", isDark());
-        document.body.classList.toggle("light-mode", !isDark());
-      }).observe(document.documentElement, {
+      new MutationObserver(applyThemeClasses).observe(document.documentElement, {
         attributes: true,
         attributeFilter: ["class"],
       });
-
-      document.body.classList.toggle("dark-mode", isDark());
-      document.body.classList.toggle("light-mode", !isDark());
     })();
   </script>
 </BaseLayout>
