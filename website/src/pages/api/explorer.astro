@@ -1,38 +1,26 @@
 ---
-import Head from "../../components/Head.astro";
-import Header from "../../components/Header.astro";
-import Sidebar from "../../components/Sidebar.astro";
-import "../../styles/global.css";
+import BaseLayout from "../../layouts/BaseLayout.astro";
 ---
-<html lang="en" data-astro-reload>
-  <head>
-    <Head title="API Reference" description="Interactive API reference for the Cetacean REST API." />
-    <style>
-      .scalar-container {
-        flex: 1;
-        min-width: 0;
-        min-height: calc(100vh - 4rem);
-      }
-    </style>
-  </head>
-  <body class="min-h-screen">
-    <Header currentPath="/api/explorer" />
-    <div class="mx-auto flex max-w-[90rem]">
-      <Sidebar currentSlug="api/explorer" />
-      <div class="scalar-container">
-        <script
-          id="api-reference"
-          data-url="/openapi.yaml"
-          type="application/json"
-          is:inline
-          set:html={JSON.stringify({
-            theme: "none",
-            hideDownloadButton: false,
-            hideDarkModeToggle: true,
-          })}
-        />
-        <script is:inline src="/scalar.js"></script>
-      </div>
-    </div>
-  </body>
-</html>
+<BaseLayout title="API Reference" description="Interactive API reference for the Cetacean REST API." slug="api/explorer" reload>
+  <style slot="head">
+    .scalar-container {
+      flex: 1;
+      min-width: 0;
+      min-height: calc(100vh - 4rem);
+    }
+  </style>
+  <div class="scalar-container">
+    <script
+      id="api-reference"
+      data-url="/openapi.yaml"
+      type="application/json"
+      is:inline
+      set:html={JSON.stringify({
+        theme: "none",
+        hideDownloadButton: false,
+        hideDarkModeToggle: true,
+      })}
+    />
+    <script is:inline src="/scalar.js"></script>
+  </div>
+</BaseLayout>

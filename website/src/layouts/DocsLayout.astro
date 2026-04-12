@@ -1,13 +1,10 @@
 ---
-import Head from "../components/Head.astro";
-import Header from "../components/Header.astro";
-import Sidebar from "../components/Sidebar.astro";
+import BaseLayout from "./BaseLayout.astro";
 import TableOfContents from "../components/TableOfContents.astro";
 import CopyPageButton from "../components/CopyPageButton.astro";
 import PrevNext from "../components/PrevNext.astro";
 import { repoUrl, sidebarGroups } from "../lib/navigation";
 import { getLastModified } from "../lib/git";
-import "../styles/global.css";
 
 interface Heading {
     depth: number;
@@ -31,14 +28,7 @@ const lastModified = await getLastModified(`docs/${slug}.md`);
 const breadcrumbCategory = sidebarGroups.find((g) => g.items.some((i) => i.slug === slug))?.label;
 ---
 
-<html lang="en">
-    <head>
-        <Head title={title} description={description} lastModified={lastModified} breadcrumbCategory={breadcrumbCategory} />
-    </head>
-    <body class="min-h-screen">
-        <Header currentPath={Astro.url.pathname} />
-        <div class="mx-auto flex max-w-[90rem]">
-            <Sidebar currentSlug={slug} />
+<BaseLayout title={title} description={description} slug={slug} lastModified={lastModified} breadcrumbCategory={breadcrumbCategory}>
             <main
                 id="main-content"
                 class="flex-1 min-w-0 py-10 px-8 md:px-12 lg:px-16"
@@ -122,7 +112,6 @@ const breadcrumbCategory = sidebarGroups.find((g) => g.items.some((i) => i.slug 
                 </article>
             </main>
             <TableOfContents headings={headings} />
-        </div>
         <script is:inline>
             function copyWithFeedback(button, text) {
                 navigator.clipboard.writeText(text).then(() => {
@@ -247,5 +236,4 @@ const breadcrumbCategory = sidebarGroups.find((g) => g.items.some((i) => i.slug 
                 }
             });
         </script>
-    </body>
-</html>
+</BaseLayout>
