@@ -72,14 +72,7 @@ OpenID Connect with authorization code flow for browsers and Bearer token valida
 
 #### Configuration
 
-| Flag                       | Env var                            | Config file key           | Required | Default                | Description                                                                    |
-|----------------------------|------------------------------------|---------------------------|----------|------------------------|--------------------------------------------------------------------------------|
-| `-auth-oidc-issuer`        | `CETACEAN_AUTH_OIDC_ISSUER`        | `auth.oidc.issuer`        | Yes      | --                     | OIDC issuer URL (must support OIDC Discovery)                                  |
-| `-auth-oidc-client-id`     | `CETACEAN_AUTH_OIDC_CLIENT_ID`     | `auth.oidc.client_id`     | Yes      | --                     | OAuth 2.0 client ID                                                            |
-| `-auth-oidc-client-secret` | `CETACEAN_AUTH_OIDC_CLIENT_SECRET` | `auth.oidc.client_secret` | Yes      | --                     | OAuth 2.0 client secret                                                        |
-| `-auth-oidc-redirect-url`  | `CETACEAN_AUTH_OIDC_REDIRECT_URL`  | `auth.oidc.redirect_url`  | Yes      | --                     | Callback URL (must be HTTPS, or `http://localhost`/`http://127.0.0.1` for dev) |
-| `-auth-oidc-scopes`        | `CETACEAN_AUTH_OIDC_SCOPES`        | `auth.oidc.scopes`        | No       | `openid,profile,email` | Comma-separated OIDC scopes                                                    |
-| `-auth-oidc-session-key`   | `CETACEAN_AUTH_OIDC_SESSION_KEY`   | `auth.oidc.session_key`   | No       | random                 | Hex-encoded 32-byte HMAC key for session cookies. Random per-process if unset. |
+See [OIDC configuration](configuration#oidc) for all parameters.
 
 #### Browser Flow
 
@@ -223,13 +216,7 @@ remain on the regular listener for Docker health checks.
 
 #### Configuration
 
-| Flag                         | Env var                              | Config file key             | Required   | Default    | Description                             |
-|------------------------------|--------------------------------------|-----------------------------|------------|------------|-----------------------------------------|
-| `-auth-tailscale-mode`       | `CETACEAN_AUTH_TAILSCALE_MODE`       | `auth.tailscale.mode`       | No         | `local`    | `local` or `tsnet`                      |
-| `-auth-tailscale-authkey`    | `CETACEAN_AUTH_TAILSCALE_AUTHKEY`    | `auth.tailscale.authkey`    | tsnet only | --         | Tailscale auth key for node enrollment  |
-| `-auth-tailscale-hostname`   | `CETACEAN_AUTH_TAILSCALE_HOSTNAME`   | `auth.tailscale.hostname`   | No         | `cetacean` | Tailscale node hostname (tsnet mode)    |
-| `-auth-tailscale-state-dir`  | `CETACEAN_AUTH_TAILSCALE_STATE_DIR`  | `auth.tailscale.state_dir`  | No         | --         | State directory for tsnet               |
-| `-auth-tailscale-capability` | `CETACEAN_AUTH_TAILSCALE_CAPABILITY` | `auth.tailscale.capability` | No         | --         | App capability key for group extraction |
+See [Tailscale configuration](configuration#tailscale) for all parameters.
 
 #### Capability-Based Groups
 
@@ -279,11 +266,7 @@ workload identity.
 
 #### Configuration
 
-| Flag            | Env var                 | Config file key | Required | Default | Description                                        |
-|-----------------|-------------------------|-----------------|----------|---------|----------------------------------------------------|
-| `-auth-cert-ca` | `CETACEAN_AUTH_CERT_CA` | `auth.cert.ca`  | Yes      | --      | Path to CA bundle (PEM) for client cert validation |
-| `-tls-cert`     | `CETACEAN_TLS_CERT`     | `tls.cert`      | Yes      | --      | Server certificate (PEM)                           |
-| `-tls-key`      | `CETACEAN_TLS_KEY`      | `tls.key`       | Yes      | --      | Server private key (PEM)                           |
+See [Client certificate configuration](configuration#client-certificates) for CA settings and [TLS settings](configuration#general-settings) for server certificate and key.
 
 ```bash
 ./cetacean \
@@ -310,15 +293,7 @@ Reads identity from HTTP headers set by a trusted reverse proxy (nginx, Traefik,
 
 #### Configuration
 
-| Flag                            | Env var                                 | Config file key                | Required       | Default | Description                                         |
-|---------------------------------|-----------------------------------------|--------------------------------|----------------|---------|-----------------------------------------------------|
-| `-auth-headers-subject`         | `CETACEAN_AUTH_HEADERS_SUBJECT`         | `auth.headers.subject`         | Yes            | --      | Header name for subject (e.g., `X-Remote-User`)     |
-| `-auth-headers-name`            | `CETACEAN_AUTH_HEADERS_NAME`            | `auth.headers.name`            | No             | --      | Header name for display name                        |
-| `-auth-headers-email`           | `CETACEAN_AUTH_HEADERS_EMAIL`           | `auth.headers.email`           | No             | --      | Header name for email                               |
-| `-auth-headers-groups`          | `CETACEAN_AUTH_HEADERS_GROUPS`          | `auth.headers.groups`          | No             | --      | Header name for groups (comma-separated)            |
-| `-auth-headers-secret-header`   | `CETACEAN_AUTH_HEADERS_SECRET_HEADER`   | `auth.headers.secret_header`   | No             | --      | Header name for shared secret                       |
-| `-auth-headers-secret-value`    | `CETACEAN_AUTH_HEADERS_SECRET_VALUE`    | `auth.headers.secret_value`    | Conditional    | --      | Shared secret value (required if secret header set) |
-| `-auth-headers-trusted-proxies` | `CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES` | `auth.headers.trusted_proxies` | **Deprecated** | --      | Use `-trusted-proxies` instead                      |
+See [Trusted proxy header configuration](configuration#trusted-proxy-headers) for all parameters.
 
 Header auth requires the general `trusted_proxies` setting (see [General Settings](configuration.md#general-settings)).
 
