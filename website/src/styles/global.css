@@ -214,9 +214,6 @@
     background: none;
     color: var(--muted-foreground);
   }
-  .prose .config-param-no-default {
-    @apply italic;
-  }
 
   /* Inline code */
   .prose code:not(pre code) {

@@ -39,7 +39,7 @@ const { name, flag, env, default: defaultValue, required, deprecated } = Astro.p
       {defaultValue !== undefined && (
         <>
           <span class="config-param-label">Default</span>
-          {defaultValue !== "" ? <code>{defaultValue}</code> : <span class="config-param-no-default">—</span>}
+          <code>{defaultValue}</code>
         </>
       )}
     </div>
