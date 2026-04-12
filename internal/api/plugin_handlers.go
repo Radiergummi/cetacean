@@ -138,7 +138,7 @@ func (h *Handlers) HandlePluginPrivileges(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	writeJSON(w, privileges)
+	writeJSON(w, NewDetailResponse(r.Context(), "/plugins/privileges", "PluginPrivileges", map[string]any{"privileges": privileges}))
 }
 
 func (h *Handlers) HandleInstallPlugin(w http.ResponseWriter, r *http.Request) {
