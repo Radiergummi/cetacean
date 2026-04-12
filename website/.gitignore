@@ -4,3 +4,6 @@ public/demo/assets/
 public/demo/demo.html
 public/demo/index.html
 public/demo/404.html
+
+# OpenAPI spec (copied from api/openapi.yaml at build time)
+public/openapi.yaml

@@ -6,6 +6,8 @@
   "repository": "https://github.com/Radiergummi/cetacean",
   "type": "module",
   "scripts": {
+    "prebuild": "cp ../api/openapi.yaml public/openapi.yaml",
+    "predev": "cp ../api/openapi.yaml public/openapi.yaml",
     "dev": "astro dev",
     "build": "astro build",
     "postbuild": "pagefind --site dist",
