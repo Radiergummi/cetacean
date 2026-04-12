@@ -354,10 +354,17 @@ paths:
       responses:
         "200":
           description: Current user identity
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Identity"
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - $ref: "#/components/schemas/Identity"
         "401":
           description: Not authenticated
 
@@ -1257,6 +1264,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/NodeCollection"
+              example:
+                "@context": /api/context.jsonld
+                "@type": Collection
+                items:
+                  - ID: qz7k3v9xm2p4
+                    Version: { Index: 42 }
+                    CreatedAt: "2025-01-15T10:30:00Z"
+                    Spec:
+                      Name: node-1
+                      Role: manager
+                      Availability: active
+                    Status:
+                      State: ready
+                      Addr: 10.0.0.2
+                    Description:
+                      Hostname: node-1
+                      Platform: { Architecture: x86_64, OS: linux }
+                      Resources: { NanoCPUs: 4000000000, MemoryBytes: 8589934592 }
+                    ManagerStatus:
+                      Leader: true
+                      Reachability: reachable
+                      Addr: 10.0.0.2:2377
+                total: 3
+                limit: 50
+                offset: 0
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
@@ -1528,6 +1560,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServiceCollection"
+              example:
+                "@context": /api/context.jsonld
+                "@type": Collection
+                items:
+                  - ID: r8m2x5nk3p7q
+                    Version: { Index: 156 }
+                    Spec:
+                      Name: webapp
+                      Labels:
+                        com.docker.stack.namespace: myapp
+                      TaskTemplate:
+                        ContainerSpec:
+                          Image: nginx:1.27@sha256:abc123...
+                        Resources:
+                          Limits: { NanoCPUs: 1000000000, MemoryBytes: 536870912 }
+                      Mode:
+                        Replicated: { Replicas: 3 }
+                    RunningTasks: 3
+                total: 12
+                limit: 50
+                offset: 0
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
@@ -2796,6 +2849,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TaskCollection"
+              example:
+                "@context": /api/context.jsonld
+                "@type": Collection
+                items:
+                  - ID: t7w2k9m4x1p6
+                    ServiceID: r8m2x5nk3p7q
+                    NodeID: qz7k3v9xm2p4
+                    Slot: 1
+                    Status:
+                      Timestamp: "2025-03-20T14:22:00Z"
+                      State: running
+                      ContainerStatus:
+                        ContainerID: abc123def456
+                    DesiredState: running
+                    ServiceName: webapp
+                    NodeHostname: node-1
+                total: 42
+                limit: 50
+                offset: 0
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
@@ -2975,6 +3047,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StackCollection"
+              example:
+                "@context": /api/context.jsonld
+                "@type": Collection
+                items:
+                  - name: myapp
+                    services: [r8m2x5nk3p7q, j4n6w8t2k9m1]
+                    configs: [cfg_abc123]
+                    secrets: [sec_def456]
+                    networks: [net_ghi789]
+                    volumes: []
+                total: 4
+                limit: 50
+                offset: 0
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
@@ -3831,6 +3916,7 @@ components:
       description: Resource ID
       schema:
         type: string
+      example: qz7k3v9xm2p4
 
     search:
       name: search
@@ -3838,6 +3924,7 @@ components:
       description: Case-insensitive substring search on resource names
       schema:
         type: string
+      example: web
 
     filter:
       name: filter
@@ -3848,6 +3935,7 @@ components:
       schema:
         type: string
         maxLength: 512
+      example: role == "manager" && state == "ready"
 
     limit:
       name: limit

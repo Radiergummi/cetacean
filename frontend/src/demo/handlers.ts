@@ -486,11 +486,11 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     http.get("*/auth/whoami", () => {
-      return jsonResponse<Identity>({
+      return jsonResponse(detailEnvelope("/auth/whoami", "Identity", {
         subject: "demo",
         displayName: "Demo User",
         provider: "none",
-      });
+      }));
     }),
 
     // ---- Cluster ----
