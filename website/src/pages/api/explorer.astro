@@ -9,26 +9,27 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       min-height: calc(100vh - 4rem);
     }
   </style>
-  <div class="scalar-container">
-    <script id="api-reference" data-url="/openapi.yaml" type="application/json" is:inline>
-      {"hideDarkModeToggle":true,"hideSearch":true,"showToolbar":false,"showDeveloperTools":false}
-    </script>
-    <script is:inline src="/scalar.js"></script>
-    <script is:inline>
-      (function syncScalarTheme() {
-        function isDark() {
-          return document.documentElement.classList.contains("dark");
-        }
-        function apply() {
-          document.body.classList.toggle("dark-mode", isDark());
-          document.body.classList.toggle("light-mode", !isDark());
-        }
-        apply();
-        new MutationObserver(apply).observe(document.documentElement, {
-          attributes: true,
-          attributeFilter: ["class"],
-        });
-      })();
-    </script>
-  </div>
+  <div class="scalar-container" id="scalar-root"></div>
+  <script>
+    import { createApiReference } from "@scalar/api-reference";
+
+    function isDark() {
+      return document.documentElement.classList.contains("dark");
+    }
+
+    const ref = createApiReference("#scalar-root", {
+      url: "/openapi.yaml",
+      hideDarkModeToggle: true,
+      hideSearch: true,
+      showDeveloperTools: "never",
+      darkMode: isDark(),
+    });
+
+    new MutationObserver(() => {
+      ref.updateConfig({ darkMode: isDark() });
+    }).observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+  </script>
 </BaseLayout>
