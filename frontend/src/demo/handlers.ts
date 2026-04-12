@@ -55,6 +55,10 @@ function jsonResponse<T extends JsonBodyType>(data: T, status = 200) {
   });
 }
 
+function detailEnvelope(id: string, type: string, extra: Record<string, unknown>) {
+  return { "@context": "/api/context.jsonld", "@id": id, "@type": type, ...extra };
+}
+
 function notFound() {
   return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
 }
@@ -474,14 +478,11 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
     // The frontend calls /profile for whoami
     http.get("*/profile", () => {
-      return jsonResponse({
-        "@context": "/api/context.jsonld",
-        "@id": "/profile",
-        "@type": "Profile",
+      return jsonResponse(detailEnvelope("/profile", "Profile", {
         subject: "demo",
         displayName: "Demo User",
         provider: "none",
-      });
+      }));
     }),
 
     http.get("*/auth/whoami", () => {
@@ -494,14 +495,11 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
     // ---- Cluster ----
     http.get("*/cluster/metrics", () => {
-      return jsonResponse({
-        "@context": "/api/context.jsonld",
-        "@id": "/cluster/metrics",
-        "@type": "ClusterMetrics",
+      return jsonResponse(detailEnvelope("/cluster/metrics", "ClusterMetrics", {
         cpu: { used: 4.2, total: 16, percent: 26.25 },
         memory: { used: 12_884_901_888, total: 34_359_738_368, percent: 37.5 },
         disk: { used: 53_687_091_200, total: 214_748_364_800, percent: 25.0 },
-      });
+      }));
     }),
 
     http.get("*/cluster/capacity", () => {
@@ -1404,12 +1402,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         id: node.ID,
         resource: node,
       });
-      return jsonResponse({
-        "@context": "/api/context.jsonld",
-        "@id": `/nodes/${params.id}/labels`,
-        "@type": "NodeLabels",
+      return jsonResponse(detailEnvelope(`/nodes/${params.id}/labels`, "NodeLabels", {
         labels: node.Spec.Labels,
-      });
+      }));
     }),
 
     // ---- Write: Task operations ----
@@ -1470,12 +1465,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       service.Version.Index++;
       service.UpdatedAt = new Date().toISOString();
       broadcastServiceUpdate(service);
-      return jsonResponse({
-        "@context": "/api/context.jsonld",
-        "@id": `/services/${params.id}/env`,
-        "@type": "ServiceEnv",
+      return jsonResponse(detailEnvelope(`/services/${params.id}/env`, "ServiceEnv", {
         env: Object.fromEntries(envMap),
-      });
+      }));
     }),
 
     http.patch("*/services/:id/labels", async ({ params, request }) => {
@@ -1502,12 +1494,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       service.Version.Index++;
       service.UpdatedAt = new Date().toISOString();
       broadcastServiceUpdate(service);
-      return jsonResponse({
-        "@context": "/api/context.jsonld",
-        "@id": `/services/${params.id}/labels`,
-        "@type": "ServiceLabels",
+      return jsonResponse(detailEnvelope(`/services/${params.id}/labels`, "ServiceLabels", {
         labels: service.Spec.Labels,
-      });
+      }));
     }),
 
     // Service spec field updates — each entry maps a sub-resource path to
