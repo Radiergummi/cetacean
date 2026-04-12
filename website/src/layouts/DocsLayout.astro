@@ -1,5 +1,5 @@
 ---
-import { ClientRouter } from "astro:transitions";
+import Head from "../components/Head.astro";
 import Header from "../components/Header.astro";
 import Sidebar from "../components/Sidebar.astro";
 import TableOfContents from "../components/TableOfContents.astro";
@@ -26,18 +26,7 @@ const { title, description, slug, headings, markdownUrl, category, tags } = Astr
 ---
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content={description} />
-    <title>{title} — Cetacean</title>
-    <ClientRouter />
-    <script is:inline>
-      (function() {
-        var theme = localStorage.getItem("theme") || "system";
-        var dark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-        if (dark) document.documentElement.classList.add("dark");
-      })();
-    </script>
+    <Head title={title} description={description} />
   </head>
   <body class="min-h-screen">
     <Header currentPath={Astro.url.pathname} />

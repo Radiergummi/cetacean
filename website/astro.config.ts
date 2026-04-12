@@ -1,4 +1,5 @@
 import { defineConfig } from "astro/config";
+import sitemap from "@astrojs/sitemap";
 import tailwindcss from "@tailwindcss/vite";
 import { visit } from "unist-util-visit";
 import { existsSync, readFileSync } from "node:fs";
@@ -130,8 +131,11 @@ function remarkStripTitle() {
 }
 
 export default defineConfig({
+  site: "https://cetacean.dev",
   srcDir: "./src",
+  trailingSlash: "always",
   prefetch: true,
+  integrations: [sitemap()],
   vite: {
     plugins: [tailwindcss(), pagefindDevPlugin()],
   },

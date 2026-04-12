@@ -1,6 +1,6 @@
 ---
-import { ClientRouter } from "astro:transitions";
 import { getEntry } from "astro:content";
+import Head from "../components/Head.astro";
 import Header from "../components/Header.astro";
 import Hero from "../components/Hero.astro";
 import "../styles/global.css";
@@ -9,18 +9,7 @@ const home = await getEntry("docs", "index");
 ---
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content={home.data.description} />
-    <title>Cetacean — {home.data.description}</title>
-    <ClientRouter />
-    <script is:inline>
-      (function() {
-        var theme = localStorage.getItem("theme") || "system";
-        var dark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-        if (dark) document.documentElement.classList.add("dark");
-      })();
-    </script>
+    <Head title="Cetacean" description={home.data.description} isHome />
   </head>
   <body class="min-h-screen">
     <Header currentPath="/" />

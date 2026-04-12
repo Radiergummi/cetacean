@@ -1,0 +1,60 @@
+---
+import { ClientRouter } from "astro:transitions";
+
+interface Props {
+  title: string;
+  description: string;
+  isHome?: boolean;
+}
+
+const { title, description, isHome = false } = Astro.props;
+
+const siteName = "Cetacean";
+const fullTitle = isHome ? `${siteName} — ${description}` : `${title} — ${siteName}`;
+const canonicalUrl = new URL(Astro.url.pathname, Astro.site).href;
+
+const jsonLd = isHome
+  ? {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: siteName,
+      description,
+      url: canonicalUrl,
+    }
+  : {
+      "@context": "https://schema.org",
+      "@type": "TechArticle",
+      name: title,
+      headline: title,
+      description,
+      url: canonicalUrl,
+      isPartOf: { "@type": "WebSite", name: siteName, url: Astro.site?.href },
+    };
+---
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{fullTitle}</title>
+<meta name="description" content={description} />
+<link rel="canonical" href={canonicalUrl} />
+
+<meta property="og:type" content={isHome ? "website" : "article"} />
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+<meta property="og:url" content={canonicalUrl} />
+<meta property="og:site_name" content={siteName} />
+<meta property="og:locale" content="en_US" />
+
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:title" content={title} />
+<meta name="twitter:description" content={description} />
+
+<script type="application/ld+json" set:html={JSON.stringify(jsonLd).replace(/</g, "\\u003c")} />
+
+<ClientRouter />
+<script is:inline>
+  (function() {
+    var theme = localStorage.getItem("theme") || "system";
+    var dark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    if (dark) document.documentElement.classList.add("dark");
+  })();
+</script>

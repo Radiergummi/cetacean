@@ -15,6 +15,7 @@
     "lint": "oxlint"
   },
   "dependencies": {
+    "@astrojs/sitemap": "^3.7.2",
     "@fontsource-variable/geist": "^5.2.8",
     "@tailwindcss/vite": "^4.2.2",
     "astro": "^6.1.3",
