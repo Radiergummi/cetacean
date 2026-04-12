@@ -111,7 +111,7 @@
     document.addEventListener("keydown", (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        getOverlay().hidden ? open() : close();
+        if (getOverlay().hidden) { open(); } else { close(); }
         return;
       }
       const overlay = getOverlay();

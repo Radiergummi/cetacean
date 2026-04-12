@@ -38,19 +38,14 @@ const breadcrumbLd = !isHome ? {
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
   itemListElement: [
-    {
-      "@type": "ListItem",
-      position: 1,
-      name: siteName,
-      item: Astro.site?.href,
-    },
-    {
-      "@type": "ListItem",
-      position: 2,
-      name: title,
-    },
+    { "@type": "ListItem", position: 1, name: siteName, item: Astro.site?.href },
+    { "@type": "ListItem", position: 2, name: title },
   ],
 } : null;
+
+const ldScripts = [jsonLd, breadcrumbLd].filter(Boolean).map(
+  (ld) => `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, "\\u003c")}</script>`
+).join("\n");
 ---
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -70,8 +65,7 @@ const breadcrumbLd = !isHome ? {
 <meta name="twitter:title" content={title} />
 <meta name="twitter:description" content={description} />
 
-<script type="application/ld+json" set:html={JSON.stringify(jsonLd).replace(/</g, "\\u003c")} />
-{breadcrumbLd && <script type="application/ld+json" set:html={JSON.stringify(breadcrumbLd).replace(/</g, "\\u003c")} />}
+<Fragment set:html={ldScripts} />
 
 <ClientRouter />
 <script is:inline>
