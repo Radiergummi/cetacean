@@ -3,7 +3,7 @@ import BaseLayout from "./BaseLayout.astro";
 import TableOfContents from "../components/TableOfContents.astro";
 import CopyPageButton from "../components/CopyPageButton.astro";
 import PrevNext from "../components/PrevNext.astro";
-import { repoUrl, sidebarGroups } from "../lib/navigation";
+import { repoUrl } from "../lib/navigation";
 import { getLastModified } from "../lib/git";
 
 interface Heading {
@@ -25,10 +25,9 @@ interface Props {
 const { title, description, slug, headings, markdownUrl, category, tags } =
     Astro.props;
 const lastModified = await getLastModified(`docs/${slug}.md`);
-const breadcrumbCategory = sidebarGroups.find((g) => g.items.some((i) => i.slug === slug))?.label;
 ---
 
-<BaseLayout title={title} description={description} slug={slug} lastModified={lastModified} breadcrumbCategory={breadcrumbCategory}>
+<BaseLayout title={title} description={description} slug={slug} lastModified={lastModified}>
             <main
                 id="main-content"
                 class="flex-1 min-w-0 py-10 px-8 md:px-12 lg:px-16"
@@ -72,6 +71,7 @@ const breadcrumbCategory = sidebarGroups.find((g) => g.items.some((i) => i.slug 
                             href={`${repoUrl}/edit/main/docs/${slug}.md`}
                             target="_blank"
                             rel="noopener noreferrer"
+                            aria-label="Edit this page on GitHub (opens in new tab)"
                         >
                             <svg
                                 xmlns="http://www.w3.org/2000/svg"
@@ -112,12 +112,16 @@ const breadcrumbCategory = sidebarGroups.find((g) => g.items.some((i) => i.slug 
                 </article>
             </main>
             <TableOfContents headings={headings} />
+        <div id="copy-status" class="sr-only" aria-live="polite" role="status"></div>
         <script is:inline>
             function copyWithFeedback(button, text) {
                 navigator.clipboard.writeText(text).then(() => {
                     button.textContent = "Copied!";
+                    var status = document.getElementById("copy-status");
+                    if (status) status.textContent = "Copied to clipboard";
                     setTimeout(() => {
                         button.textContent = "Copy";
+                        if (status) status.textContent = "";
                     }, 2000);
                 });
             }

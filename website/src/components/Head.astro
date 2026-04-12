@@ -6,10 +6,9 @@ interface Props {
   description: string;
   isHome?: boolean;
   lastModified?: Date | null;
-  breadcrumbCategory?: string;
 }
 
-const { title, description, isHome = false, lastModified, breadcrumbCategory } = Astro.props;
+const { title, description, isHome = false, lastModified } = Astro.props;
 
 const siteName = "Cetacean";
 const fullTitle = isHome ? `${siteName} — ${description}` : `${title} — ${siteName}`;
@@ -35,7 +34,7 @@ const jsonLd: Record<string, unknown> = isHome
       ...(lastModified && { dateModified: lastModified.toISOString() }),
     };
 
-const breadcrumbLd = !isHome && breadcrumbCategory ? {
+const breadcrumbLd = !isHome ? {
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
   itemListElement: [
@@ -48,13 +47,7 @@ const breadcrumbLd = !isHome && breadcrumbCategory ? {
     {
       "@type": "ListItem",
       position: 2,
-      name: breadcrumbCategory,
-    },
-    {
-      "@type": "ListItem",
-      position: 3,
       name: title,
-      item: canonicalUrl,
     },
   ],
 } : null;

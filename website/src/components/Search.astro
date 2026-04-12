@@ -81,10 +81,10 @@
       const overlay = getOverlay();
       overlay.hidden = true;
       getInput()?.blur();
-      if (previouslyFocused && previouslyFocused.focus) {
+      if (previouslyFocused && document.contains(previouslyFocused)) {
         previouslyFocused.focus();
-        previouslyFocused = null;
       }
+      previouslyFocused = null;
     };
 
     document.addEventListener("click", (e) => {
@@ -118,6 +118,20 @@
       if (overlay.hidden) return;
       if (e.key === "Escape") {
         close();
+      } else if (e.key === "Tab") {
+        var dialog = overlay.querySelector(".search-dialog");
+        var focusable = dialog.querySelectorAll('input, button, a[href], [tabindex]:not([tabindex="-1"])');
+        if (focusable.length) {
+          var first = focusable[0];
+          var last = focusable[focusable.length - 1];
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
       } else if (e.key === "ArrowDown") {
         e.preventDefault();
         setActive(Math.min(activeIndex + 1, getItems().length - 1));

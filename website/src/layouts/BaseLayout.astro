@@ -9,14 +9,13 @@ interface Props {
   description: string;
   slug: string;
   lastModified?: Date;
-  breadcrumbCategory?: string;
 }
 
-const { title, description, slug, lastModified, breadcrumbCategory } = Astro.props;
+const { title, description, slug, lastModified } = Astro.props;
 ---
 <html lang="en">
   <head>
-    <Head title={title} description={description} lastModified={lastModified} breadcrumbCategory={breadcrumbCategory} />
+    <Head title={title} description={description} lastModified={lastModified} />
     <slot name="head" />
   </head>
   <body class="min-h-screen">
