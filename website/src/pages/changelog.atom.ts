@@ -41,7 +41,7 @@ export async function GET(context: APIContext) {
   const entries = releases.map((release) => `  <entry>
     <title>Cetacean ${release.version}</title>
     <id>tag:cetacean.dev,${release.date}:release/${release.version}</id>
-    <link href="${site}/changelog/" rel="alternate" />
+    <link href="${site}/changelog" rel="alternate" />
     <updated>${release.date}T00:00:00Z</updated>
     <content type="html"><![CDATA[${escapeCdata(release.html)}]]></content>
   </entry>`).join("\n");
@@ -50,8 +50,8 @@ export async function GET(context: APIContext) {
 <feed xmlns="http://www.w3.org/2005/Atom">
   <title>Cetacean Releases</title>
   <subtitle>Release notes for the Cetacean Docker Swarm dashboard</subtitle>
-  <id>${site}/changelog/</id>
-  <link href="${site}/changelog/" rel="alternate" />
+  <id>${site}/changelog</id>
+  <link href="${site}/changelog" rel="alternate" />
   <link href="${site}/changelog.atom" rel="self" type="application/atom+xml" />
   <updated>${updated}T00:00:00Z</updated>
   <author><name>Cetacean</name></author>
