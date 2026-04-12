@@ -10,13 +10,11 @@ interface Props {
   slug: string;
   lastModified?: Date;
   breadcrumbCategory?: string;
-  /** Force full page reload instead of View Transitions. */
-  reload?: boolean;
 }
 
-const { title, description, slug, lastModified, breadcrumbCategory, reload } = Astro.props;
+const { title, description, slug, lastModified, breadcrumbCategory } = Astro.props;
 ---
-<html lang="en" {...(reload && { "data-astro-reload": true })}>
+<html lang="en">
   <head>
     <Head title={title} description={description} lastModified={lastModified} breadcrumbCategory={breadcrumbCategory} />
     <slot name="head" />

@@ -5,6 +5,8 @@ export const repoUrl: string = pkg.repository;
 export interface NavItem {
   slug: string;
   title: string;
+  /** Force full page reload when navigating to this page (skips View Transitions). */
+  reload?: boolean;
 }
 
 export interface NavGroup {
@@ -45,7 +47,7 @@ export const sidebarGroups: NavGroup[] = [
     items: [
       { slug: "configuration", title: "Configuration" },
       { slug: "api", title: "API Guide" },
-      { slug: "api/explorer", title: "API Reference" },
+      { slug: "api/explorer", title: "API Reference", reload: true },
       { slug: "api/schema", title: "Schema Reference" },
     ],
   },

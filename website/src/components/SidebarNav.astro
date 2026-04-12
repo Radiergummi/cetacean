@@ -15,7 +15,7 @@ const { currentSlug } = Astro.props;
         {group.label}
       </h3>
       <ul class="space-y-0.5">
-        {group.items.map(({ slug, title }) => (
+        {group.items.map(({ slug, title, reload }) => (
           <li>
             <a
               href={`/${slug}`}
@@ -27,6 +27,7 @@ const { currentSlug } = Astro.props;
               ]}
               style={currentSlug === slug ? `color: var(--active)` : undefined}
               {...(currentSlug === slug && { "aria-current": "page" })}
+              {...(reload && { "data-astro-reload": true })}
             >
               {title}
             </a>

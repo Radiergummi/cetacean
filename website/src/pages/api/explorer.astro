@@ -1,7 +1,7 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
 ---
-<BaseLayout title="API Reference" description="Interactive API reference for the Cetacean REST API." slug="api/explorer" reload>
+<BaseLayout title="API Reference" description="Interactive API reference for the Cetacean REST API." slug="api/explorer">
   <style slot="head">
     .scalar-container {
       flex: 1;
@@ -10,17 +10,25 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     }
   </style>
   <div class="scalar-container">
-    <script
-      id="api-reference"
-      data-url="/openapi.yaml"
-      type="application/json"
-      is:inline
-      set:html={JSON.stringify({
-        theme: "none",
-        hideDownloadButton: false,
-        hideDarkModeToggle: true,
-      })}
-    />
+    <script id="api-reference" data-url="/openapi.yaml" type="application/json" is:inline>
+      {"hideDarkModeToggle":true}
+    </script>
     <script is:inline src="/scalar.js"></script>
+    <script is:inline>
+      (function syncScalarTheme() {
+        function isDark() {
+          return document.documentElement.classList.contains("dark");
+        }
+        function apply() {
+          document.body.classList.toggle("dark-mode", isDark());
+          document.body.classList.toggle("light-mode", !isDark());
+        }
+        apply();
+        new MutationObserver(apply).observe(document.documentElement, {
+          attributes: true,
+          attributeFilter: ["class"],
+        });
+      })();
+    </script>
   </div>
 </BaseLayout>
