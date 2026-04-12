@@ -11,13 +11,15 @@ export async function getStaticPaths() {
 }
 
 export async function GET({ props }: { props: { id: string } }) {
-  let content: string;
-  try {
-    content = await readFile(join(docsDir, `${props.id}.mdx`), "utf-8");
-  } catch {
-    content = await readFile(join(docsDir, `${props.id}.md`), "utf-8");
+  for (const ext of ["mdx", "md"]) {
+    try {
+      const content = await readFile(join(docsDir, `${props.id}.${ext}`), "utf-8");
+      return new Response(content, {
+        headers: { "Content-Type": "text/markdown; charset=utf-8" },
+      });
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    }
   }
-  return new Response(content, {
-    headers: { "Content-Type": "text/markdown; charset=utf-8" },
-  });
+  return new Response("Not found", { status: 404 });
 }

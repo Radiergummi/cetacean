@@ -30,7 +30,7 @@ function remarkDocsLinks() {
         !node.url.startsWith("http") &&
         !node.url.startsWith("//")
       ) {
-        node.url = node.url.replace(/\.md(#|$)/, "$1");
+        node.url = node.url.replace(/\.mdx?(#|$)/, "$1");
       }
     });
   };
@@ -134,7 +134,8 @@ function remarkStripTitle() {
 export default defineConfig({
   site: "https://cetacean.dev",
   srcDir: "./src",
-  trailingSlash: "always",
+  trailingSlash: "never",
+  build: { format: "file" },
   prefetch: true,
   integrations: [sitemap(), mdx()],
   vite: {
