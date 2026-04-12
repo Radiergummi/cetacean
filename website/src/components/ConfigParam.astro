@@ -1,0 +1,45 @@
+---
+interface Props {
+  name: string
+  flag?: string
+  env?: string
+  default?: string
+  required?: boolean
+  deprecated?: boolean
+}
+
+const { name, flag, env, default: defaultValue, required, deprecated } = Astro.props;
+---
+
+<div class:list={["config-param", { deprecated }]}>
+  <div class="config-param-heading">
+    <code>{name}</code>
+    {required && <span class="config-param-badge required">required</span>}
+    {deprecated && <span class="config-param-badge deprecated">deprecated</span>}
+  </div>
+  <div class="config-param-description">
+    <slot />
+  </div>
+  {(flag || env || defaultValue !== undefined) && (
+    <div class="config-param-meta">
+      {flag && (
+        <>
+          <span class="config-param-label">Flag</span>
+          <code>{flag}</code>
+        </>
+      )}
+      {env && (
+        <>
+          <span class="config-param-label">Env var</span>
+          <code>{env}</code>
+        </>
+      )}
+      {defaultValue !== undefined && (
+        <>
+          <span class="config-param-label">Default</span>
+          {defaultValue ? <code>{defaultValue}</code> : <span class="config-param-no-default">—</span>}
+        </>
+      )}
+    </div>
+  )}
+</div>

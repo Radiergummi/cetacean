@@ -147,6 +147,67 @@
     @apply border-b-0;
   }
 
+  /* ── Config parameter cards ──────────────────────────────────────── */
+
+  .prose .config-param {
+    @apply py-3.5 px-4 border border-border rounded-lg;
+  }
+  .prose .config-param + .config-param {
+    @apply mt-1;
+  }
+  .prose .config-param.deprecated {
+    @apply opacity-60;
+  }
+  .prose .config-param-heading {
+    @apply flex items-baseline gap-2 mb-1.5;
+  }
+  .prose .config-param-heading > code {
+    @apply text-[0.9375rem] font-semibold rounded-none px-0 py-0;
+    background: none;
+    color: var(--foreground);
+  }
+  .prose .config-param-badge {
+    @apply text-[0.625rem] font-semibold uppercase tracking-wider leading-tight rounded px-1.5 py-0.5;
+  }
+  .prose .config-param-badge.required {
+    color: oklch(0.55 0.15 25);
+    border: 1px solid oklch(0.55 0.15 25 / 40%);
+  }
+  .dark .prose .config-param-badge.required {
+    color: oklch(0.7 0.15 25);
+    border: 1px solid oklch(0.7 0.15 25 / 40%);
+  }
+  .prose .config-param-badge.deprecated {
+    @apply text-muted-foreground;
+    border: 1px solid var(--border);
+  }
+  .prose .config-param-description {
+    @apply text-sm leading-relaxed mb-2.5;
+  }
+  .prose .config-param-description > :first-child {
+    @apply mt-0;
+  }
+  .prose .config-param-description > :last-child {
+    @apply mb-0;
+  }
+  .prose .config-param-meta {
+    @apply text-[0.8rem] text-muted-foreground;
+    display: grid;
+    grid-template-columns: 4.5rem 1fr;
+    gap: 0.15rem 0.75rem;
+  }
+  .prose .config-param-label {
+    @apply font-medium;
+  }
+  .prose .config-param-meta code {
+    @apply text-[0.8rem] rounded-none px-0 py-0;
+    background: none;
+    color: var(--muted-foreground);
+  }
+  .prose .config-param-no-default {
+    @apply italic;
+  }
+
   /* Inline code */
   .prose code:not(pre code) {
     @apply rounded-md px-1.5 py-0.5 text-[0.8125rem] font-mono font-medium;
