@@ -5,15 +5,18 @@ interface Props {
   title: string;
   description: string;
   isHome?: boolean;
+  lastModified?: Date | null;
+  breadcrumbCategory?: string;
 }
 
-const { title, description, isHome = false } = Astro.props;
+const { title, description, isHome = false, lastModified, breadcrumbCategory } = Astro.props;
 
 const siteName = "Cetacean";
 const fullTitle = isHome ? `${siteName} — ${description}` : `${title} — ${siteName}`;
-const canonicalUrl = new URL(Astro.url.pathname, Astro.site).href;
+const pathname = Astro.url.pathname.replace(/\/index\.html$/, "/");
+const canonicalUrl = new URL(pathname, Astro.site).href;
 
-const jsonLd = isHome
+const jsonLd: Record<string, unknown> = isHome
   ? {
       "@context": "https://schema.org",
       "@type": "WebSite",
@@ -29,7 +32,32 @@ const jsonLd = isHome
       description,
       url: canonicalUrl,
       isPartOf: { "@type": "WebSite", name: siteName, url: Astro.site?.href },
+      ...(lastModified && { dateModified: lastModified.toISOString() }),
     };
+
+const breadcrumbLd = !isHome && breadcrumbCategory ? {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: siteName,
+      item: Astro.site?.href,
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: breadcrumbCategory,
+    },
+    {
+      "@type": "ListItem",
+      position: 3,
+      name: title,
+      item: canonicalUrl,
+    },
+  ],
+} : null;
 ---
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -50,6 +78,7 @@ const jsonLd = isHome
 <meta name="twitter:description" content={description} />
 
 <script type="application/ld+json" set:html={JSON.stringify(jsonLd).replace(/</g, "\\u003c")} />
+{breadcrumbLd && <script type="application/ld+json" set:html={JSON.stringify(breadcrumbLd).replace(/</g, "\\u003c")} />}
 
 <ClientRouter />
 <script is:inline>

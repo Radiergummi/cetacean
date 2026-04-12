@@ -7,22 +7,22 @@ const { markdownUrl } = Astro.props;
 ---
 <div class="copy-page-dropdown" data-markdown-url={markdownUrl}>
   <button type="button" class="copy-page-action" data-action="copy">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
     <span class="copy-page-label">Copy page</span>
   </button>
-  <button type="button" class="copy-page-toggle" aria-label="More options">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+  <button type="button" class="copy-page-toggle" aria-label="More options" aria-expanded="false">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg>
   </button>
   <div class="copy-page-menu" hidden>
     <button type="button" class="copy-page-menu-item" data-action="copy">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
       <span>
         <strong>Copy page</strong>
         <small>Copy page as Markdown for LLMs</small>
       </span>
     </button>
     <a href={markdownUrl} class="copy-page-menu-item" target="_blank" rel="noopener">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><path d="M9 17h6"/><path d="M9 13h6"/></svg>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><path d="M9 17h6"/><path d="M9 13h6"/></svg>
       <span>
         <strong>View as Markdown</strong>
         <small>View this page as plain text</small>
@@ -32,31 +32,47 @@ const { markdownUrl } = Astro.props;
 </div>
 
 <script is:inline>
-  document.querySelectorAll(".copy-page-dropdown").forEach(function(dropdown) {
+  if (!window.__copyPageInitialized) {
+    window.__copyPageInitialized = true;
+    document.addEventListener("click", function(e) {
+      if (e.target.closest(".copy-page-dropdown")) return;
+      document.querySelectorAll(".copy-page-dropdown").forEach(function(dd) {
+        var menu = dd.querySelector(".copy-page-menu");
+        if (menu && !menu.hidden) {
+          menu.hidden = true;
+          var toggle = dd.querySelector(".copy-page-toggle");
+          toggle.querySelector("svg").style.transform = "";
+          toggle.setAttribute("aria-expanded", "false");
+        }
+      });
+    });
+  }
+
+  document.querySelectorAll(".copy-page-dropdown:not([data-initialized])").forEach(function(dropdown) {
+    dropdown.setAttribute("data-initialized", "");
     var toggle = dropdown.querySelector(".copy-page-toggle");
     var menu = dropdown.querySelector(".copy-page-menu");
     var markdownUrl = dropdown.dataset.markdownUrl;
 
-    function closeMenu() {
-      menu.hidden = true;
-      toggle.querySelector("svg").style.transform = "";
-    }
-
-    function openMenu() {
-      menu.hidden = false;
-      toggle.querySelector("svg").style.transform = "rotate(180deg)";
-    }
-
     toggle.addEventListener("click", function() {
       if (menu.hidden) {
-        openMenu();
+        menu.hidden = false;
+        toggle.querySelector("svg").style.transform = "rotate(180deg)";
+        toggle.setAttribute("aria-expanded", "true");
       } else {
-        closeMenu();
+        menu.hidden = true;
+        toggle.querySelector("svg").style.transform = "";
+        toggle.setAttribute("aria-expanded", "false");
       }
     });
 
-    document.addEventListener("click", function(e) {
-      if (!dropdown.contains(e.target)) closeMenu();
+    dropdown.addEventListener("keydown", function(e) {
+      if (e.key === "Escape" && !menu.hidden) {
+        menu.hidden = true;
+        toggle.querySelector("svg").style.transform = "";
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.focus();
+      }
     });
 
     var label = dropdown.querySelector(".copy-page-label");
@@ -71,7 +87,9 @@ const { markdownUrl } = Astro.props;
           label.textContent = "Copied!";
           setTimeout(function() { label.textContent = "Copy page"; }, 2000);
         });
-      closeMenu();
+      menu.hidden = true;
+      toggle.querySelector("svg").style.transform = "";
+      toggle.setAttribute("aria-expanded", "false");
     }
 
     dropdown.querySelectorAll('[data-action="copy"]').forEach(function(btn) {

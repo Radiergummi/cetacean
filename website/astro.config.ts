@@ -55,6 +55,7 @@ function remarkCodeTabs() {
   return (tree) => {
     const { children } = tree;
     let i = 0;
+    let tabGroupCount = 0;
 
     while (i < children.length) {
       if (!isTabCode(children[i])) {
@@ -79,18 +80,19 @@ function remarkCodeTabs() {
         return label;
       });
 
+      const tabGroupId = `tabs-${tabGroupCount++}`;
       const replacement = [];
       const buttons = labels
         .map(
           (label, idx) =>
-            `<button role="tab" class="code-tabs-button${idx === 0 ? " active" : ""}" data-tab="${idx}">${label}</button>`,
+            `<button role="tab" class="code-tabs-button${idx === 0 ? " active" : ""}" data-tab="${idx}" aria-selected="${idx === 0}" aria-controls="${tabGroupId}-panel-${idx}" id="${tabGroupId}-tab-${idx}">${label}</button>`,
         )
         .join("");
 
       replacement.push(html(`<div class="code-tabs"><div class="code-tabs-bar" role="tablist">${buttons}</div>`));
 
       for (let j = 0; j < group.length; j++) {
-        replacement.push(html(`<div class="code-tab-panel${j === 0 ? " active" : ""}" data-tab="${j}">`));
+        replacement.push(html(`<div class="code-tab-panel${j === 0 ? " active" : ""}" data-tab="${j}" role="tabpanel" id="${tabGroupId}-panel-${j}" aria-labelledby="${tabGroupId}-tab-${j}">`));
         replacement.push(group[j]);
         replacement.push(html("</div>"));
       }
@@ -132,7 +134,7 @@ function remarkStripTitle() {
 }
 
 export default defineConfig({
-  site: "https://cetacean.dev",
+  site: "https://cetacean.mazetti.me",
   srcDir: "./src",
   trailingSlash: "never",
   build: { format: "file" },

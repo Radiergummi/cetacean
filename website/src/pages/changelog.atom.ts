@@ -35,12 +35,12 @@ function escapeCdata(html: string): string {
 export async function GET(context: APIContext) {
   const raw = readFileSync(changelogPath, "utf-8");
   const releases = await parseReleases(raw);
-  const site = context.site?.origin ?? "https://cetacean.dev";
+  const site = context.site?.origin ?? "https://cetacean.mazetti.me";
   const updated = releases[0]?.date || new Date().toISOString().slice(0, 10);
 
   const entries = releases.map((release) => `  <entry>
     <title>Cetacean ${release.version}</title>
-    <id>tag:cetacean.dev,${release.date}:release/${release.version}</id>
+    <id>tag:cetacean.mazetti.me,${release.date}:release/${release.version}</id>
     <link href="${site}/changelog" rel="alternate" />
     <updated>${release.date}T00:00:00Z</updated>
     <content type="html"><![CDATA[${escapeCdata(release.html)}]]></content>

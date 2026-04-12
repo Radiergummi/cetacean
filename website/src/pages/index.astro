@@ -14,7 +14,7 @@ const home = await getEntry("docs", "index");
   <body class="min-h-screen">
     <Header currentPath="/" />
     <div class="mx-auto max-w-[90rem]">
-      <main class="min-w-0">
+      <main id="main-content" class="min-w-0">
         <Hero title="Cetacean" description={home.data.description} />
       </main>
     </div>

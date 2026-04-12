@@ -5,147 +5,247 @@ import Sidebar from "../components/Sidebar.astro";
 import TableOfContents from "../components/TableOfContents.astro";
 import CopyPageButton from "../components/CopyPageButton.astro";
 import PrevNext from "../components/PrevNext.astro";
-import { repoUrl } from "../lib/navigation";
+import { repoUrl, sidebarGroups } from "../lib/navigation";
+import { getLastModified } from "../lib/git";
 import "../styles/global.css";
 
 interface Heading {
-  depth: number;
-  slug: string;
-  text: string;
+    depth: number;
+    slug: string;
+    text: string;
 }
 
 interface Props {
-  title: string;
-  description: string;
-  slug: string;
-  headings: Heading[];
-  markdownUrl?: string;
-  category?: string;
-  tags?: string[];
+    title: string;
+    description: string;
+    slug: string;
+    headings: Heading[];
+    markdownUrl?: string;
+    category?: string;
+    tags?: string[];
 }
 
-const { title, description, slug, headings, markdownUrl, category, tags } = Astro.props;
+const { title, description, slug, headings, markdownUrl, category, tags } =
+    Astro.props;
+const lastModified = await getLastModified(`docs/${slug}.md`);
+const breadcrumbCategory = sidebarGroups.find((g) => g.items.some((i) => i.slug === slug))?.label;
 ---
+
 <html lang="en">
-  <head>
-    <Head title={title} description={description} />
-  </head>
-  <body class="min-h-screen">
-    <Header currentPath={Astro.url.pathname} />
-    <div class="mx-auto flex max-w-[90rem]">
-      <Sidebar currentSlug={slug} />
-      <main class="flex-1 min-w-0 py-10 px-8 md:px-12 lg:px-16" transition:animate="fade">
-        <article class="prose mx-auto" data-pagefind-body>
-          <span class="hidden" data-pagefind-meta="description">{description}</span>
-          {category && <meta data-pagefind-filter={`category:${category}`} />}
-          {tags?.map((tag) => <meta data-pagefind-filter={`tag:${tag}`} />)}
-          <div class="not-prose flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6" data-pagefind-ignore>
-            <h1 class="text-2xl font-semibold tracking-tight m-0" data-pagefind-meta="title">{title}</h1>
-            {markdownUrl && <CopyPageButton markdownUrl={markdownUrl} />}
-          </div>
-          <slot />
-          <div class="edit-link not-prose" data-pagefind-ignore>
-            <a href={`${repoUrl}/edit/main/docs/${slug}.md`} target="_blank" rel="noopener noreferrer">
-              <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
-              </svg>
-              Edit this page on GitHub
-            </a>
-          </div>
-          <PrevNext slug={slug} />
-        </article>
-      </main>
-      <TableOfContents headings={headings} />
-    </div>
-    <script is:inline>
-      function copyWithFeedback(button, text) {
-        navigator.clipboard.writeText(text).then(() => {
-          button.textContent = "Copied!";
-          setTimeout(() => { button.textContent = "Copy"; }, 2000);
-        });
-      }
+    <head>
+        <Head title={title} description={description} lastModified={lastModified} breadcrumbCategory={breadcrumbCategory} />
+    </head>
+    <body class="min-h-screen">
+        <Header currentPath={Astro.url.pathname} />
+        <div class="mx-auto flex max-w-[90rem]">
+            <Sidebar currentSlug={slug} />
+            <main
+                id="main-content"
+                class="flex-1 min-w-0 py-10 px-8 md:px-12 lg:px-16"
+                transition:animate="fade"
+            >
+                <article class="prose mx-auto" data-pagefind-body>
+                    <span class="hidden" data-pagefind-meta="description"
+                        >{description}</span
+                    >
+                    {
+                        category && (
+                            <meta
+                                data-pagefind-filter={`category:${category}`}
+                            />
+                        )
+                    }
+                    {
+                        tags?.map((tag) => (
+                            <meta data-pagefind-filter={`tag:${tag}`} />
+                        ))
+                    }
+                    <div
+                        class="not-prose flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
+                        data-pagefind-ignore
+                    >
+                        <h1
+                            class="text-2xl font-semibold tracking-tight m-0"
+                            data-pagefind-meta="title"
+                        >
+                            {title}
+                        </h1>
+                        {
+                            markdownUrl && (
+                                <CopyPageButton markdownUrl={markdownUrl} />
+                            )
+                        }
+                    </div>
+                    <slot />
+                    <div class="edit-link not-prose" data-pagefind-ignore>
+                        <a
+                            href={`${repoUrl}/edit/main/docs/${slug}.md`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                class="size-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke-width="1.5"
+                                stroke="currentColor"
+                                aria-hidden="true"
+                            >
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"
+                                ></path>
+                            </svg>
+                            Edit this page on GitHub
+                        </a>
+                        {
+                            lastModified && (
+                                <span class="last-modified">
+                                    Last updated{" "}
+                                    <time datetime={lastModified.toISOString()}>
+                                        {lastModified.toLocaleDateString(
+                                            undefined,
+                                            {
+                                                year: "numeric",
+                                                month: "long",
+                                                day: "numeric",
+                                            },
+                                        )}
+                                    </time>
+                                </span>
+                            )
+                        }
+                    </div>
+                    <PrevNext slug={slug} />
+                </article>
+            </main>
+            <TableOfContents headings={headings} />
+        </div>
+        <script is:inline>
+            function copyWithFeedback(button, text) {
+                navigator.clipboard.writeText(text).then(() => {
+                    button.textContent = "Copied!";
+                    setTimeout(() => {
+                        button.textContent = "Copy";
+                    }, 2000);
+                });
+            }
 
-      document.addEventListener("astro:page-load", () => {
-        // Hide HTTP request separators (###).
-        document.querySelectorAll('pre[data-language="http"] .line').forEach((line) => {
-          if (line.textContent.trim() === "###") line.style.display = "none";
-        });
+            document.addEventListener("astro:page-load", () => {
+                // Hide HTTP request separators (###).
+                document
+                    .querySelectorAll('pre[data-language="http"] .line')
+                    .forEach((line) => {
+                        if (line.textContent.trim() === "###")
+                            line.style.display = "none";
+                    });
 
-        document.querySelectorAll(".prose table:not([data-initialized])").forEach((table) => {
-          table.setAttribute("data-initialized", "");
-          const wrapper = document.createElement("div");
-          wrapper.className = "table-wrapper";
-          table.parentNode.insertBefore(wrapper, table);
-          wrapper.appendChild(table);
-        });
+                document
+                    .querySelectorAll(".prose table:not([data-initialized])")
+                    .forEach((table) => {
+                        table.setAttribute("data-initialized", "");
+                        const wrapper = document.createElement("div");
+                        wrapper.className = "table-wrapper";
+                        table.parentNode.insertBefore(wrapper, table);
+                        wrapper.appendChild(table);
+                    });
 
-        document.querySelectorAll(".prose pre:not([data-initialized])").forEach((pre) => {
-          pre.setAttribute("data-initialized", "");
-          if (pre.closest(".code-tabs")) return;
-          const wrapper = document.createElement("div");
-          wrapper.className = "code-block-wrapper";
-          pre.parentNode.insertBefore(wrapper, pre);
-          wrapper.appendChild(pre);
+                document
+                    .querySelectorAll(".prose pre:not([data-initialized])")
+                    .forEach((pre) => {
+                        pre.setAttribute("data-initialized", "");
+                        if (pre.closest(".code-tabs")) return;
+                        const wrapper = document.createElement("div");
+                        wrapper.className = "code-block-wrapper";
+                        pre.parentNode.insertBefore(wrapper, pre);
+                        wrapper.appendChild(pre);
 
-          const button = document.createElement("button");
-          button.className = "copy-button";
-          button.textContent = "Copy";
-          button.addEventListener("click", () => {
-            const code = pre.querySelector("code");
-            copyWithFeedback(button, code ? code.textContent : pre.textContent);
-          });
-          wrapper.appendChild(button);
-        });
+                        const button = document.createElement("button");
+                        button.className = "copy-button";
+                        button.textContent = "Copy";
+                        button.addEventListener("click", () => {
+                            const code = pre.querySelector("code");
+                            copyWithFeedback(
+                                button,
+                                code ? code.textContent : pre.textContent,
+                            );
+                        });
+                        wrapper.appendChild(button);
+                    });
 
-        // Code tabs: switch panels and persist preference.
-        const tabPrefs = JSON.parse(localStorage.getItem("code-tab-prefs") || "{}");
+                // Code tabs: switch panels and persist preference.
+                const tabPrefs = JSON.parse(
+                    localStorage.getItem("code-tab-prefs") || "{}",
+                );
 
-        document.querySelectorAll(".code-tabs:not([data-initialized])").forEach((tabs) => {
-          tabs.setAttribute("data-initialized", "");
-          const bar = tabs.querySelector(".code-tabs-bar");
-          const buttons = bar.querySelectorAll(".code-tabs-button");
+                document
+                    .querySelectorAll(".code-tabs:not([data-initialized])")
+                    .forEach((tabs) => {
+                        tabs.setAttribute("data-initialized", "");
+                        const bar = tabs.querySelector(".code-tabs-bar");
+                        const buttons =
+                            bar.querySelectorAll(".code-tabs-button");
 
-          const copyButton = document.createElement("button");
-          copyButton.className = "code-tabs-copy";
-          copyButton.textContent = "Copy";
-          copyButton.addEventListener("click", () => {
-            const activeCode = tabs.querySelector(".code-tab-panel.active code");
-            if (activeCode) copyWithFeedback(copyButton, activeCode.textContent);
-          });
-          bar.appendChild(copyButton);
+                        const copyButton = document.createElement("button");
+                        copyButton.className = "code-tabs-copy";
+                        copyButton.textContent = "Copy";
+                        copyButton.addEventListener("click", () => {
+                            const activeCode = tabs.querySelector(
+                                ".code-tab-panel.active code",
+                            );
+                            if (activeCode)
+                                copyWithFeedback(
+                                    copyButton,
+                                    activeCode.textContent,
+                                );
+                        });
+                        bar.appendChild(copyButton);
 
-          const labels = Array.from(buttons).map((b) => b.textContent);
-          const preferred = labels.find((l) => tabPrefs[l]);
-          if (preferred) {
-            activateGroup(tabs, labels.indexOf(preferred));
-          }
+                        const labels = Array.from(buttons).map(
+                            (b) => b.textContent,
+                        );
+                        const preferred = labels.find((l) => tabPrefs[l]);
+                        if (preferred) {
+                            activateGroup(tabs, labels.indexOf(preferred));
+                        }
 
-          bar.addEventListener("click", (e) => {
-            const button = e.target.closest(".code-tabs-button");
-            if (!button) return;
-            const idx = Number(button.dataset.tab);
-            activateGroup(tabs, idx);
-            tabPrefs[buttons[idx].textContent] = true;
-            localStorage.setItem("code-tab-prefs", JSON.stringify(tabPrefs));
+                        bar.addEventListener("click", (e) => {
+                            const button =
+                                e.target.closest(".code-tabs-button");
+                            if (!button) return;
+                            const idx = Number(button.dataset.tab);
+                            activateGroup(tabs, idx);
+                            tabPrefs[buttons[idx].textContent] = true;
+                            localStorage.setItem(
+                                "code-tab-prefs",
+                                JSON.stringify(tabPrefs),
+                            );
 
-            const label = buttons[idx].textContent;
-            document.querySelectorAll(".code-tabs").forEach((other) => {
-              if (other === tabs) return;
-              other.querySelectorAll(".code-tabs-button").forEach((b, i) => {
-                if (b.textContent === label) activateGroup(other, i);
-              });
+                            const label = buttons[idx].textContent;
+                            document
+                                .querySelectorAll(".code-tabs")
+                                .forEach((other) => {
+                                    if (other === tabs) return;
+                                    other
+                                        .querySelectorAll(".code-tabs-button")
+                                        .forEach((b, i) => {
+                                            if (b.textContent === label)
+                                                activateGroup(other, i);
+                                        });
+                                });
+                        });
+                    });
+                function activateGroup(group, idx) {
+                    const btns = group.querySelectorAll(".code-tabs-button");
+                    const pnls = group.querySelectorAll(".code-tab-panel");
+                    btns.forEach((b) => { b.classList.remove("active"); b.setAttribute("aria-selected", "false"); });
+                    pnls.forEach((p) => p.classList.remove("active"));
+                    if (btns[idx]) { btns[idx].classList.add("active"); btns[idx].setAttribute("aria-selected", "true"); }
+                    pnls[idx]?.classList.add("active");
+                }
             });
-          });
-        });
-        function activateGroup(group, idx) {
-          const btns = group.querySelectorAll(".code-tabs-button");
-          const pnls = group.querySelectorAll(".code-tab-panel");
-          btns.forEach((b) => b.classList.remove("active"));
-          pnls.forEach((p) => p.classList.remove("active"));
-          btns[idx]?.classList.add("active");
-          pnls[idx]?.classList.add("active");
-        }
-      });
-    </script>
-  </body>
+        </script>
+    </body>
 </html>

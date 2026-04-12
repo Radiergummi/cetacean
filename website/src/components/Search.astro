@@ -7,7 +7,7 @@
     class="inline-flex items-center gap-2 rounded-md border border-border bg-muted/50 px-2.5 py-1 text-sm text-muted-foreground hover:bg-muted transition-colors cursor-pointer w-full max-w-2xs lg:max-w-xs justify-between"
   >
     <span class="flex items-center gap-2">
-      <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+      <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
       </svg>
       Search...
@@ -18,10 +18,10 @@
 
 
 <div id="search-overlay" class="search-overlay" hidden transition:persist>
-  <div class="search-backdrop"></div>
-  <div class="search-dialog">
+  <div class="search-backdrop" aria-hidden="true"></div>
+  <div class="search-dialog" role="dialog" aria-modal="true" aria-label="Search documentation">
     <div class="search-input-row">
-      <svg class="size-4 shrink-0 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+      <svg class="size-4 shrink-0 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
       </svg>
       <input
@@ -29,11 +29,13 @@
         type="text"
         placeholder="Search documentation..."
         autocomplete="off"
+        aria-label="Search"
         class="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
       />
       <kbd class="text-[0.625rem] font-medium text-muted-foreground/60 border border-border rounded px-1 py-0.5 leading-none">ESC</kbd>
     </div>
     <div id="search-results" class="search-results"></div>
+    <div id="search-status" class="sr-only" aria-live="polite" role="status"></div>
   </div>
 </div>
 
@@ -45,6 +47,7 @@
     let debounceTimer = null;
     let pendingQuery = null;
     let pagefindPromise = null;
+    let previouslyFocused = null;
 
     const loadPagefind = () => {
       if (!pagefindPromise) {
@@ -59,8 +62,10 @@
     const getOverlay = () => document.getElementById("search-overlay");
     const getInput = () => document.getElementById("search-input");
     const getResults = () => document.getElementById("search-results");
+    const getStatus = () => document.getElementById("search-status");
 
     const open = () => {
+      previouslyFocused = document.activeElement;
       const overlay = getOverlay();
       const input = getInput();
       const results = getResults();
@@ -76,6 +81,10 @@
       const overlay = getOverlay();
       overlay.hidden = true;
       getInput()?.blur();
+      if (previouslyFocused && previouslyFocused.focus) {
+        previouslyFocused.focus();
+        previouslyFocused = null;
+      }
     };
 
     document.addEventListener("click", (e) => {
@@ -128,6 +137,7 @@
       const query = e.target.value.trim();
       if (!query) {
         getResults().innerHTML = "";
+        getStatus().textContent = "";
         activeIndex = -1;
         pendingQuery = null;
         return;
@@ -150,6 +160,7 @@
 
       if (!loaded.length) {
         resultsContainer.innerHTML = '<div class="search-empty">No results found.</div>';
+        getStatus().textContent = "No results found.";
         activeIndex = -1;
         return;
       }
@@ -179,6 +190,7 @@
 
       activeIndex = -1;
       setActive(0);
+      getStatus().textContent = loaded.length + " result" + (loaded.length === 1 ? "" : "s") + " found.";
     };
   }
 
