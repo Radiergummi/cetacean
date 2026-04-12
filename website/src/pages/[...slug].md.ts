@@ -6,20 +6,18 @@ export async function getStaticPaths() {
   const docs = await getDocPaths();
   return docs.map((doc) => ({
     params: { slug: doc.id },
-    props: { id: doc.id },
+    props: { filePath: doc.filePath },
   }));
 }
 
-export async function GET({ props }: { props: { id: string } }) {
-  for (const ext of ["mdx", "md"]) {
-    try {
-      const content = await readFile(join(docsDir, `${props.id}.${ext}`), "utf-8");
-      return new Response(content, {
-        headers: { "Content-Type": "text/markdown; charset=utf-8" },
-      });
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-    }
+export async function GET({ props }: { props: { filePath?: string } }) {
+  const path = props.filePath ?? join(docsDir, "not-found");
+  try {
+    const content = await readFile(path, "utf-8");
+    return new Response(content, {
+      headers: { "Content-Type": "text/markdown; charset=utf-8" },
+    });
+  } catch {
+    return new Response("Not found", { status: 404 });
   }
-  return new Response("Not found", { status: 404 });
 }
