@@ -32,6 +32,8 @@ tags:
     description: Authentication endpoints (OIDC login flow, identity)
   - name: Cluster
     description: Cluster-wide information, swarm config, disk usage, and plugins
+  - name: Plugins
+    description: Docker plugin management (install, enable, disable, upgrade, configure, remove)
   - name: Nodes
     description: Swarm nodes
   - name: Services
@@ -930,6 +932,285 @@ paths:
                 $ref: "#/components/schemas/PluginCollection"
         "304":
           $ref: "#/components/responses/NotModified"
+    post:
+      operationId: installPlugin
+      tags: [Plugins]
+      summary: Install a plugin
+      description: |
+        Installs a plugin from a remote registry. Requires operations level 3.
+        Returns the installed plugin detail as a JSON-LD envelope.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [remote]
+              properties:
+                remote:
+                  type: string
+                  description: Plugin reference (e.g. "vieux/sshfs:latest")
+      responses:
+        "201":
+          description: Plugin installed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      plugin:
+                        type: object
+                        description: Docker Plugin object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low or ACL denied
+
+  /plugins/privileges:
+    post:
+      operationId: getPluginPrivileges
+      tags: [Plugins]
+      summary: Get plugin privileges
+      description: |
+        Returns the list of privileges required by a remote plugin image.
+        Used before installing a plugin to review requested permissions.
+        Requires operations level 3.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [remote]
+              properties:
+                remote:
+                  type: string
+                  description: Plugin reference (e.g. "vieux/sshfs:latest")
+      responses:
+        "200":
+          description: Plugin privileges
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      privileges:
+                        type: array
+                        items:
+                          type: object
+                        description: List of requested plugin privileges
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low or ACL denied
+
+  /plugins/{name}:
+    get:
+      operationId: getPlugin
+      tags: [Plugins]
+      summary: Plugin detail
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Plugin name
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Plugin detail
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      plugin:
+                        type: object
+                        description: Docker Plugin object
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: removePlugin
+      tags: [Plugins]
+      summary: Remove a plugin
+      description: |
+        Removes an installed plugin. Use `?force=true` to force removal
+        even if the plugin is in use. Requires operations level 3.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Plugin name
+          schema:
+            type: string
+        - name: force
+          in: query
+          description: Force removal even if the plugin is in use
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "204":
+          description: Plugin removed
+        "403":
+          description: Operations level too low or ACL denied
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /plugins/{name}/enable:
+    post:
+      operationId: enablePlugin
+      tags: [Plugins]
+      summary: Enable a plugin
+      description: Enables a disabled plugin. Requires operations level 2.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Plugin name
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Plugin enabled
+        "403":
+          description: Operations level too low or ACL denied
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /plugins/{name}/disable:
+    post:
+      operationId: disablePlugin
+      tags: [Plugins]
+      summary: Disable a plugin
+      description: Disables an enabled plugin. Requires operations level 2.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Plugin name
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Plugin disabled
+        "403":
+          description: Operations level too low or ACL denied
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /plugins/{name}/upgrade:
+    post:
+      operationId: upgradePlugin
+      tags: [Plugins]
+      summary: Upgrade a plugin
+      description: |
+        Upgrades a plugin to a new remote image. Requires operations level 3.
+        Returns the updated plugin detail, or 204 with `Prefer: return=minimal`.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Plugin name
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [remote]
+              properties:
+                remote:
+                  type: string
+                  description: New plugin reference
+      responses:
+        "200":
+          description: Upgraded plugin detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      plugin:
+                        type: object
+                        description: Docker Plugin object
+        "204":
+          description: No content (Prefer return=minimal)
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low or ACL denied
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /plugins/{name}/settings:
+    patch:
+      operationId: configurePlugin
+      tags: [Plugins]
+      summary: Configure plugin settings
+      description: |
+        Updates plugin args and environment variables. Requires operations level 2.
+        Returns the updated plugin detail, or 204 with `Prefer: return=minimal`.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Plugin name
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                args:
+                  type: array
+                  items:
+                    type: string
+                  description: Plugin args to set
+                env:
+                  type: array
+                  items:
+                    type: string
+                  description: Plugin env vars to set
+      responses:
+        "200":
+          description: Updated plugin detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      plugin:
+                        type: object
+                        description: Docker Plugin object
+        "204":
+          description: No content (Prefer return=minimal)
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Operations level too low or ACL denied
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   # ── Nodes ────────────────────────────────────────────────────────────
 
