@@ -24,14 +24,14 @@ import "../../styles/global.css";
           id="api-reference"
           data-url="/openapi.yaml"
           type="application/json"
-        >
-          {JSON.stringify({
+          is:inline
+          set:html={JSON.stringify({
             theme: "none",
             hideDownloadButton: false,
             hideDarkModeToggle: true,
           })}
-        </script>
-        <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+        />
+        <script is:inline src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
       </div>
     </div>
   </body>
