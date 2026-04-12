@@ -10,26 +10,57 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     }
   </style>
   <div class="scalar-container" id="scalar-root"></div>
-  <script>
-    import { createApiReference } from "@scalar/api-reference";
+  <script is:inline src="/scalar.js"></script>
+  <script is:inline>
+    (function() {
+      function isDark() {
+        return document.documentElement.classList.contains("dark");
+      }
 
-    function isDark() {
-      return document.documentElement.classList.contains("dark");
-    }
+      Scalar.createApiReference("#scalar-root", {
+        url: "/openapi.yaml",
+        hideDarkModeToggle: true,
+        hideSearch: true,
+        showOperationId: true,
+        title: "Cetacean API Reference",
+        telemetry: false,
+        baseServerURL: 'https://cetacean.example.com',
+        hideTestRequestButton: true,
+        darkMode: isDark(),
+        defaultHttpClient: {
+          targetKey: 'http',
+          clientKey: '1.1'
+        },
+        mcp: {
+          disabled: true
+        },
+        hideClientButton: true,
+        withDefaultFonts: false,
+        agent: {
+          disabled: true,
+        },
+        servers: [
+          {
+            url: 'https://{hostname}',
+            variables: {
+              hostname: {
+                default: 'cetacean.example.com'
+              }
+            }
+          },
+        ]
+      });
 
-    const ref = createApiReference("#scalar-root", {
-      url: "/openapi.yaml",
-      hideDarkModeToggle: true,
-      hideSearch: true,
-      showDeveloperTools: "never",
-      darkMode: isDark(),
-    });
+      new MutationObserver(function() {
+        document.body.classList.toggle("dark-mode", isDark());
+        document.body.classList.toggle("light-mode", !isDark());
+      }).observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
 
-    new MutationObserver(() => {
-      ref.updateConfig({ darkMode: isDark() });
-    }).observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
+      document.body.classList.toggle("dark-mode", isDark());
+      document.body.classList.toggle("light-mode", !isDark());
+    })();
   </script>
 </BaseLayout>

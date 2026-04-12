@@ -7,3 +7,4 @@ public/demo/404.html
 
 # Copied at build time (prebuild/predev scripts)
 public/openapi.yaml
+public/scalar.js
