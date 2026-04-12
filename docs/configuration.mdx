@@ -1,0 +1,251 @@
+---
+title: Configuration
+description: CLI flags, environment variables, TOML config file, operations level, health checks, and snapshots.
+category: reference
+tags: [configuration, environment, toml, operations-level]
+---
+
+import ConfigParam from '@/components/ConfigParam.astro'
+
+# Configuration
+
+Cetacean can be configured through CLI flags, environment variables, or a TOML config file. When the same setting is
+specified in multiple places, the precedence order is: **flag > env var > config file > default**.
+
+Sensitive settings (secrets, keys) also accept a `_FILE` suffix on their env var to read the secret from that file at
+startup. The `_FILE` variant has lower precedence than the direct env var.
+
+## General Settings
+
+<ConfigParam name="server.listen_addr" flag="-listen" env="CETACEAN_LISTEN_ADDR" default=":9000">
+  HTTP server bind address.
+</ConfigParam>
+
+<ConfigParam name="server.base_path" flag="-base-path" env="CETACEAN_BASE_PATH">
+  URL base path prefix for sub-path deployments (e.g., `/cetacean`).
+</ConfigParam>
+
+<ConfigParam name="docker.host" flag="-docker-host" env="CETACEAN_DOCKER_HOST" default="unix:///var/run/docker.sock">
+  Docker socket URI.
+</ConfigParam>
+
+<ConfigParam name="prometheus.url" flag="-prometheus-url" env="CETACEAN_PROMETHEUS_URL">
+  Prometheus base URL. Unset = metrics disabled.
+</ConfigParam>
+
+<ConfigParam name="logging.level" flag="-log-level" env="CETACEAN_LOG_LEVEL" default="info">
+  Log level: `debug`, `info`, `warn`, `error`.
+</ConfigParam>
+
+<ConfigParam name="logging.format" flag="-log-format" env="CETACEAN_LOG_FORMAT" default="json">
+  Log format: `json` or `text`.
+</ConfigParam>
+
+<ConfigParam name="server.pprof" flag="-pprof" env="CETACEAN_PPROF" default="false">
+  Expose Go pprof endpoints at `/debug/pprof/`.
+</ConfigParam>
+
+<ConfigParam name="server.self_metrics" flag="-self-metrics" env="CETACEAN_SELF_METRICS" default="true">
+  Expose Prometheus metrics at `/-/metrics`.
+</ConfigParam>
+
+<ConfigParam name="server.recommendations" flag="-recommendations" env="CETACEAN_RECOMMENDATIONS" default="true">
+  Enable recommendation engine.
+</ConfigParam>
+
+<ConfigParam name="server.operations_level" flag="-operations-level" env="CETACEAN_OPERATIONS_LEVEL" default="1">
+  Write operation tier: 0=read-only, 1=operational, 2=configuration, 3=impactful.
+</ConfigParam>
+
+<ConfigParam name="server.sse.batch_interval" flag="-sse-batch-interval" env="CETACEAN_SSE_BATCH_INTERVAL" default="100ms">
+  SSE event batching window (Go duration).
+</ConfigParam>
+
+<ConfigParam name="server.cors.origins" flag="-cors-origins" env="CETACEAN_CORS_ORIGINS">
+  Allowed CORS origins (comma-separated or `*`). Unset = CORS disabled.
+</ConfigParam>
+
+<ConfigParam name="server.trusted_proxies" flag="-trusted-proxies" env="CETACEAN_TRUSTED_PROXIES">
+  Trusted reverse proxy CIDRs/IPs (comma-separated). Enables real client IP resolution.
+</ConfigParam>
+
+<ConfigParam name="storage.snapshot" flag="-snapshot" env="CETACEAN_SNAPSHOT" default="true">
+  Enable disk persistence of swarm state.
+</ConfigParam>
+
+<ConfigParam name="storage.data_dir" flag="-data-dir" env="CETACEAN_DATA_DIR" default="./data">
+  Directory for snapshot file.
+</ConfigParam>
+
+<ConfigParam name="tls.cert" flag="-tls-cert" env="CETACEAN_TLS_CERT">
+  Server certificate path (PEM).
+</ConfigParam>
+
+<ConfigParam name="tls.key" flag="-tls-key" env="CETACEAN_TLS_KEY">
+  Server private key path (PEM).
+</ConfigParam>
+
+<ConfigParam name="config" flag="-config" env="CETACEAN_CONFIG">
+  Path to TOML config file.
+</ConfigParam>
+
+> **Note:** TLS cert and key must be set together or not at all. Required for `cert` auth mode (mTLS), optional
+> otherwise.
+
+## Authentication and Authorization Settings
+
+<ConfigParam name="auth.mode" flag="-auth-mode" env="CETACEAN_AUTH_MODE" default="none">
+  Auth provider: `none`, [`oidc`](#oidc), [`tailscale`](#tailscale), [`cert`](#client-certificates), [`headers`](#trusted-proxy-headers).
+</ConfigParam>
+
+### OIDC
+
+<ConfigParam name="auth.oidc.issuer" flag="-auth-oidc-issuer" env="CETACEAN_AUTH_OIDC_ISSUER" required>
+  OIDC issuer URL.
+</ConfigParam>
+
+<ConfigParam name="auth.oidc.client_id" flag="-auth-oidc-client-id" env="CETACEAN_AUTH_OIDC_CLIENT_ID" required>
+  OAuth 2.0 client ID.
+</ConfigParam>
+
+<ConfigParam name="auth.oidc.client_secret" flag="-auth-oidc-client-secret" env="CETACEAN_AUTH_OIDC_CLIENT_SECRET" required>
+  OAuth 2.0 client secret.
+</ConfigParam>
+
+<ConfigParam name="auth.oidc.redirect_url" flag="-auth-oidc-redirect-url" env="CETACEAN_AUTH_OIDC_REDIRECT_URL" required>
+  Callback URL (HTTPS required, loopback exempt).
+</ConfigParam>
+
+<ConfigParam name="auth.oidc.scopes" flag="-auth-oidc-scopes" env="CETACEAN_AUTH_OIDC_SCOPES" default="openid,profile,email">
+  Comma-separated scopes.
+</ConfigParam>
+
+<ConfigParam name="auth.oidc.session_key" flag="-auth-oidc-session-key" env="CETACEAN_AUTH_OIDC_SESSION_KEY" default="random">
+  Hex-encoded 32-byte HMAC key; random per-process if unset.
+</ConfigParam>
+
+### Tailscale
+
+<ConfigParam name="auth.tailscale.mode" flag="-auth-tailscale-mode" env="CETACEAN_AUTH_TAILSCALE_MODE" default="local">
+  `local` or `tsnet`.
+</ConfigParam>
+
+<ConfigParam name="auth.tailscale.authkey" flag="-auth-tailscale-authkey" env="CETACEAN_AUTH_TAILSCALE_AUTHKEY">
+  Auth key for node enrollment (tsnet only).
+</ConfigParam>
+
+<ConfigParam name="auth.tailscale.hostname" flag="-auth-tailscale-hostname" env="CETACEAN_AUTH_TAILSCALE_HOSTNAME" default="cetacean">
+  Tailscale node hostname.
+</ConfigParam>
+
+<ConfigParam name="auth.tailscale.state_dir" flag="-auth-tailscale-state-dir" env="CETACEAN_AUTH_TAILSCALE_STATE_DIR">
+  State directory for tsnet.
+</ConfigParam>
+
+<ConfigParam name="auth.tailscale.capability" flag="-auth-tailscale-capability" env="CETACEAN_AUTH_TAILSCALE_CAPABILITY">
+  App capability key for group extraction.
+</ConfigParam>
+
+### Client Certificates
+
+<ConfigParam name="auth.cert.ca" flag="-auth-cert-ca" env="CETACEAN_AUTH_CERT_CA" required>
+  Path to CA bundle (PEM).
+</ConfigParam>
+
+> **Note:** Requires `-tls-cert` and `-tls-key` to be set (mTLS needs TLS termination at Cetacean).
+
+### Trusted Proxy Headers
+
+<ConfigParam name="auth.headers.subject" flag="-auth-headers-subject" env="CETACEAN_AUTH_HEADERS_SUBJECT" required>
+  Header name for subject.
+</ConfigParam>
+
+<ConfigParam name="auth.headers.name" flag="-auth-headers-name" env="CETACEAN_AUTH_HEADERS_NAME">
+  Header name for display name.
+</ConfigParam>
+
+<ConfigParam name="auth.headers.email" flag="-auth-headers-email" env="CETACEAN_AUTH_HEADERS_EMAIL">
+  Header name for email.
+</ConfigParam>
+
+<ConfigParam name="auth.headers.groups" flag="-auth-headers-groups" env="CETACEAN_AUTH_HEADERS_GROUPS">
+  Header name for groups (comma-separated).
+</ConfigParam>
+
+<ConfigParam name="auth.headers.secret_header" flag="-auth-headers-secret-header" env="CETACEAN_AUTH_HEADERS_SECRET_HEADER">
+  Header name for shared secret.
+</ConfigParam>
+
+<ConfigParam name="auth.headers.secret_value" flag="-auth-headers-secret-value" env="CETACEAN_AUTH_HEADERS_SECRET_VALUE">
+  Secret value (required if secret header set).
+</ConfigParam>
+
+<ConfigParam name="auth.headers.trusted_proxies" flag="-auth-headers-trusted-proxies" env="CETACEAN_AUTH_HEADERS_TRUSTED_PROXIES" deprecated>
+  Use `server.trusted_proxies` instead.
+</ConfigParam>
+
+> **Note:** `trusted_proxies` is always required. The shared secret is optional, additional protection.
+
+See [Authentication](authentication.md) for detailed usage guides, flow diagrams, and deployment examples.
+
+## Config File
+
+Pass a TOML file via `-config` or `CETACEAN_CONFIG`. Every field is optional — omitting a key uses the default.
+
+```bash
+cetacean -config /etc/cetacean/config.toml
+```
+
+See [`config.reference.toml`](./config.reference.toml) for a complete reference with all options, defaults, and
+descriptions. Copy it as a starting point and uncomment what you need.
+
+## Subcommands
+
+```
+cetacean                  Start the server
+cetacean healthcheck      Exit 0 if ready, 1 otherwise (for Docker HEALTHCHECK)
+```
+
+## Snapshots
+
+Cetacean saves all cached swarm state to `${data_dir}/snapshot.json` after every sync. On startup, it loads the snapshot
+to serve stale-but-fast data while the live sync catches up. Writes are crash-safe.
+
+## Health Checks
+
+Two meta endpoints, exempt from authentication and content negotiation:
+
+| Endpoint        | Behavior                                        | Use for                             |
+|-----------------|-------------------------------------------------|-------------------------------------|
+| `GET /-/health` | Always 200 if the process is running            | Uptime monitoring, restart policies |
+| `GET /-/ready`  | 200 after the first Docker sync; 503 until then | Load balancers, `depends_on` gating |
+
+The binary includes a `cetacean healthcheck` subcommand (used by the built-in Docker `HEALTHCHECK`).
+
+## Operations Level
+
+The `operations_level` setting controls which write operations are available. The default is `1`. Requests above the
+configured level receive `403 Forbidden`. Each level includes everything below it.
+
+| Operation                                                         | 0 Read-only | 1 Operational | 2 Configuration | 3 Impactful |
+|-------------------------------------------------------------------|:-----------:|:-------------:|:---------------:|:-----------:|
+| Browse all resources                                              |      ✔      |       ✔       |        ✔        |      ✔      |
+| Scale, restart, rollback, update image                            |      —      |       ✔       |        ✔        |      ✔      |
+| Edit service definitions (env, resources, ports, placement, etc.) |      —      |       —       |        ✔        |      ✔      |
+| Create/edit configs, secrets, plugins                             |      —      |       —       |        ✔        |      ✔      |
+| Edit swarm settings (raft, orchestration, dispatcher)             |      —      |       —       |        ✔        |      ✔      |
+| Delete resources, change node availability/role                   |      —      |       —       |        —        |      ✔      |
+| Change service/endpoint mode, remove nodes/stacks                 |      —      |       —       |        —        |      ✔      |
+| Manage CA, encryption, rotate tokens, unlock swarm                |      —      |       —       |        —        |      ✔      |
+
+When combined with [ACL](authorization.md#interaction-with-operations-level), both checks must pass — operations level
+is the global ceiling, ACL controls per-user scope.
+
+## Profiling
+
+When `pprof` is enabled, standard Go profiling endpoints are available at `/debug/pprof/`:
+
+```bash
+go tool pprof http://localhost:9000/debug/pprof/profile   # 30s CPU profile
+go tool pprof http://localhost:9000/debug/pprof/heap       # heap snapshot
+```
