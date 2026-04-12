@@ -684,11 +684,11 @@ export const api = {
       "application/json-patch+json",
     ).then(({ labels }) => labels),
   patchServiceResources: (id: string, partial: unknown) =>
-    patch<Record<string, unknown>>(
+    patch<{ resources: Record<string, unknown> }>(
       `/services/${id}/resources`,
       partial,
       "application/merge-patch+json",
-    ),
+    ).then(({ resources }) => resources),
   putServiceHealthcheck: (id: string, healthcheck: Healthcheck) =>
     put<{ healthcheck: Healthcheck }>(`/services/${id}/healthcheck`, healthcheck),
 
