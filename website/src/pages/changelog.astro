@@ -1,15 +1,10 @@
 ---
 import DocsLayout from "../layouts/DocsLayout.astro";
-import fs from "node:fs";
-import path from "node:path";
+import { readFileSync } from "node:fs";
 import { marked } from "marked";
+import { changelogPath, slugify } from "../lib/docs";
 
-function slugify(text: string): string {
-  return text.toLowerCase().replace(/[^\w]+/g, "-").replace(/^-|-$/g, "");
-}
-
-const changelogPath = path.resolve("../CHANGELOG.md");
-const raw = fs.readFileSync(changelogPath, "utf-8");
+const raw = readFileSync(changelogPath, "utf-8");
 
 const headings: { depth: number; slug: string; text: string }[] = [];
 const renderer = new marked.Renderer();
