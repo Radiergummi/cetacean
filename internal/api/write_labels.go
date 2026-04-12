@@ -95,5 +95,10 @@ func handlePatchLabels[T any](
 		labels = map[string]string{}
 	}
 
-	writeMutationResponse(w, r, labels)
+	writeMutationResponse(w, r, NewDetailResponse(
+		r.Context(),
+		r.URL.Path,
+		"Labels",
+		LabelsResponse{Labels: labels},
+	))
 }

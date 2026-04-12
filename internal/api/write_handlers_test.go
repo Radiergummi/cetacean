@@ -2663,11 +2663,16 @@ func TestHandlePatchServiceContainerConfig_PartialPatch(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
-	if resp["hostname"] != "new-host" {
-		t.Errorf("hostname=%v, want new-host", resp["hostname"])
+
+	cc, ok := resp["containerConfig"].(map[string]any)
+	if !ok {
+		t.Fatalf("containerConfig missing or wrong type; body: %s", w.Body.String())
 	}
-	if resp["tty"] != true {
-		t.Errorf("tty=%v, want true", resp["tty"])
+	if cc["hostname"] != "new-host" {
+		t.Errorf("hostname=%v, want new-host", cc["hostname"])
+	}
+	if cc["tty"] != true {
+		t.Errorf("tty=%v, want true", cc["tty"])
 	}
 }
 

@@ -50,7 +50,12 @@ func (h *Handlers) HandlePatchSwarmOrchestration(w http.ResponseWriter, r *http.
 		return
 	}
 
-	writeMutationResponse(w, r, map[string]any{"orchestration": spec.Orchestration})
+	writeMutationResponse(w, r, NewDetailResponse(
+		r.Context(),
+		r.URL.Path,
+		"SwarmOrchestration",
+		map[string]any{"orchestration": spec.Orchestration},
+	))
 }
 
 func (h *Handlers) HandlePatchSwarmRaft(w http.ResponseWriter, r *http.Request) {
@@ -100,7 +105,12 @@ func (h *Handlers) HandlePatchSwarmRaft(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	writeMutationResponse(w, r, map[string]any{"raft": spec.Raft})
+	writeMutationResponse(w, r, NewDetailResponse(
+		r.Context(),
+		r.URL.Path,
+		"SwarmRaft",
+		map[string]any{"raft": spec.Raft},
+	))
 }
 
 func (h *Handlers) HandlePatchSwarmDispatcher(w http.ResponseWriter, r *http.Request) {
@@ -144,7 +154,12 @@ func (h *Handlers) HandlePatchSwarmDispatcher(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	writeMutationResponse(w, r, map[string]any{"dispatcher": spec.Dispatcher})
+	writeMutationResponse(w, r, NewDetailResponse(
+		r.Context(),
+		r.URL.Path,
+		"SwarmDispatcher",
+		map[string]any{"dispatcher": spec.Dispatcher},
+	))
 }
 
 func (h *Handlers) HandlePatchSwarmCAConfig(w http.ResponseWriter, r *http.Request) {
@@ -188,7 +203,12 @@ func (h *Handlers) HandlePatchSwarmCAConfig(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	writeMutationResponse(w, r, map[string]any{"caConfig": spec.CAConfig})
+	writeMutationResponse(w, r, NewDetailResponse(
+		r.Context(),
+		r.URL.Path,
+		"SwarmCAConfig",
+		map[string]any{"caConfig": spec.CAConfig},
+	))
 }
 
 func (h *Handlers) HandlePatchSwarmEncryption(w http.ResponseWriter, r *http.Request) {
@@ -234,7 +254,12 @@ func (h *Handlers) HandlePatchSwarmEncryption(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	writeMutationResponse(w, r, map[string]any{"encryption": spec.EncryptionConfig})
+	writeMutationResponse(w, r, NewDetailResponse(
+		r.Context(),
+		r.URL.Path,
+		"SwarmEncryption",
+		map[string]any{"encryption": spec.EncryptionConfig},
+	))
 }
 
 func (h *Handlers) HandlePostRotateToken(w http.ResponseWriter, r *http.Request) {

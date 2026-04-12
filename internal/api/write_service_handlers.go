@@ -287,7 +287,12 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 	if result.Spec.TaskTemplate.ContainerSpec != nil {
 		resultEnv = result.Spec.TaskTemplate.ContainerSpec.Env
 	}
-	writeMutationResponse(w, r, envSliceToMap(resultEnv))
+	writeMutationResponse(w, r, NewDetailResponse(
+		r.Context(),
+		r.URL.Path,
+		"ServiceEnv",
+		map[string]any{"env": envSliceToMap(resultEnv)},
+	))
 }
 
 func (h *Handlers) HandleGetServiceLabels(w http.ResponseWriter, r *http.Request) {
@@ -952,7 +957,12 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 	}
 
 	result := containerConfigFromSpec(updated.Spec.TaskTemplate.ContainerSpec)
-	writeMutationResponse(w, r, result)
+	writeMutationResponse(w, r, NewDetailResponse(
+		r.Context(),
+		r.URL.Path,
+		"ServiceContainerConfig",
+		map[string]any{"containerConfig": result},
+	))
 }
 
 func extractConfigRefs(cs *swarm.ContainerSpec) []serviceConfigRef {

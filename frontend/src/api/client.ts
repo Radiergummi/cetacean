@@ -605,9 +605,17 @@ export const api = {
   createSecret: (name: string, data: string) =>
     mutationFetch<SecretDetail>("/secrets", "POST", { name, data }, "application/json"),
   patchConfigLabels: (id: string, ops: PatchOp[]) =>
-    patch<Record<string, string>>(`/configs/${id}/labels`, ops, "application/json-patch+json"),
+    patch<{ labels: Record<string, string> }>(
+      `/configs/${id}/labels`,
+      ops,
+      "application/json-patch+json",
+    ).then((response) => response.labels),
   patchSecretLabels: (id: string, ops: PatchOp[]) =>
-    patch<Record<string, string>>(`/secrets/${id}/labels`, ops, "application/json-patch+json"),
+    patch<{ labels: Record<string, string> }>(
+      `/secrets/${id}/labels`,
+      ops,
+      "application/json-patch+json",
+    ).then((response) => response.labels),
   removeNetwork: (id: string) => del(`/networks/${id}`),
   removeVolume: (name: string, force?: boolean) =>
     del(force ? `/volumes/${name}?force=true` : `/volumes/${name}`),
@@ -657,11 +665,23 @@ export const api = {
 
   // Tier 2: sub-resource PATCHes
   patchServiceEnv: (id: string, ops: PatchOp[]) =>
-    patch<Record<string, string>>(`/services/${id}/env`, ops, "application/json-patch+json"),
+    patch<{ env: Record<string, string> }>(
+      `/services/${id}/env`,
+      ops,
+      "application/json-patch+json",
+    ).then((response) => response.env),
   patchNodeLabels: (id: string, ops: PatchOp[]) =>
-    patch<Record<string, string>>(`/nodes/${id}/labels`, ops, "application/json-patch+json"),
+    patch<{ labels: Record<string, string> }>(
+      `/nodes/${id}/labels`,
+      ops,
+      "application/json-patch+json",
+    ).then((response) => response.labels),
   patchServiceLabels: (id: string, ops: PatchOp[]) =>
-    patch<Record<string, string>>(`/services/${id}/labels`, ops, "application/json-patch+json"),
+    patch<{ labels: Record<string, string> }>(
+      `/services/${id}/labels`,
+      ops,
+      "application/json-patch+json",
+    ).then((response) => response.labels),
   patchServiceResources: (id: string, partial: unknown) =>
     patch<Record<string, unknown>>(
       `/services/${id}/resources`,
@@ -740,11 +760,11 @@ export const api = {
     fetchJSON<ContainerConfig>(`/services/${id}/container-config`, signal),
 
   patchServiceContainerConfig: (id: string, partial: Record<string, unknown>) =>
-    patch<ContainerConfig>(
+    patch<{ containerConfig: ContainerConfig }>(
       `/services/${id}/container-config`,
       partial,
       "application/merge-patch+json",
-    ),
+    ).then((response) => response.containerConfig),
 
   health: (signal?: AbortSignal) =>
     fetchJSON<HealthInfo>(`/-/health`, signal).then(({ data }) => data),
