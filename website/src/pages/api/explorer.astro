@@ -1,0 +1,38 @@
+---
+import Head from "../../components/Head.astro";
+import Header from "../../components/Header.astro";
+import Sidebar from "../../components/Sidebar.astro";
+import "../../styles/global.css";
+---
+<html lang="en">
+  <head>
+    <Head title="API Reference" description="Interactive API reference for the Cetacean REST API." />
+    <style>
+      .scalar-container {
+        flex: 1;
+        min-width: 0;
+        min-height: calc(100vh - 4rem);
+      }
+    </style>
+  </head>
+  <body class="min-h-screen">
+    <Header currentPath="/api/explorer" />
+    <div class="mx-auto flex max-w-[90rem]">
+      <Sidebar currentSlug="api/explorer" />
+      <div class="scalar-container">
+        <script
+          id="api-reference"
+          data-url="/openapi.yaml"
+          type="application/json"
+        >
+          {JSON.stringify({
+            theme: "none",
+            hideDownloadButton: false,
+            hideDarkModeToggle: true,
+          })}
+        </script>
+        <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+      </div>
+    </div>
+  </body>
+</html>
