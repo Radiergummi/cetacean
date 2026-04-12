@@ -1,0 +1,37 @@
+{
+  "name": "sse",
+  "scopeName": "source.sse",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#data-field" },
+    { "include": "#field" }
+  ],
+  "repository": {
+    "comment": {
+      "match": "^(:)(.*)",
+      "captures": {
+        "1": { "name": "punctuation.definition.comment.sse" },
+        "2": { "name": "comment.line.sse" }
+      }
+    },
+    "field": {
+      "match": "^(id|event|retry)(:\\s*)(.*)",
+      "captures": {
+        "1": { "name": "keyword.other.sse" },
+        "2": { "name": "punctuation.separator.sse" },
+        "3": { "name": "string.unquoted.sse" }
+      }
+    },
+    "data-field": {
+      "begin": "(data)(: )",
+      "beginCaptures": {
+        "1": { "name": "keyword.other.sse" },
+        "2": { "name": "punctuation.separator.sse" }
+      },
+      "end": "$",
+      "patterns": [
+        { "include": "source.json" }
+      ]
+    }
+  }
+}

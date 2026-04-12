@@ -1,31 +1,23 @@
 ---
 ---
-<button
-  id="search-trigger"
-  type="button"
-  class="hidden md:inline-flex items-center gap-2 rounded-md border border-border bg-muted/50 px-2.5 py-1 text-sm text-muted-foreground hover:bg-muted transition-colors cursor-pointer min-w-[10rem] justify-between"
->
-  <span class="flex items-center gap-2">
-    <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-      <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-    </svg>
-    Search...
-  </span>
-  <kbd class="pointer-events-none text-[0.6875rem] font-medium text-muted-foreground/70" id="search-shortcut-label"></kbd>
-</button>
+<div class="flex-1 hidden md:flex justify-center px-4">
+  <button
+    id="search-trigger"
+    type="button"
+    class="inline-flex items-center gap-2 rounded-md border border-border bg-muted/50 px-2.5 py-1 text-sm text-muted-foreground hover:bg-muted transition-colors cursor-pointer w-full max-w-2xs lg:max-w-xs justify-between"
+  >
+    <span class="flex items-center gap-2">
+      <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+      </svg>
+      Search...
+    </span>
+    <kbd class="pointer-events-none text-[0.6875rem] font-medium text-muted-foreground/70" id="search-shortcut-label"></kbd>
+  </button>
+</div>
 
-<button
-  id="search-trigger-mobile"
-  type="button"
-  class="md:hidden rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors cursor-pointer"
-  aria-label="Search"
->
-  <svg class="size-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-    <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-  </svg>
-</button>
 
-<div id="search-overlay" class="search-overlay" hidden>
+<div id="search-overlay" class="search-overlay" hidden transition:persist>
   <div class="search-backdrop"></div>
   <div class="search-dialog">
     <div class="search-input-row">
@@ -46,23 +38,14 @@
 </div>
 
 <script is:inline>
-  (() => {
-    const overlay = document.getElementById("search-overlay");
-    const input = document.getElementById("search-input");
-    const resultsContainer = document.getElementById("search-results");
-    const trigger = document.getElementById("search-trigger");
-    const triggerMobile = document.getElementById("search-trigger-mobile");
-    const shortcutLabel = document.getElementById("search-shortcut-label");
+  if (!window.__searchInitialized) {
+    window.__searchInitialized = true;
+
     let activeIndex = -1;
     let debounceTimer = null;
     let pendingQuery = null;
-
-    const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform || "");
-    shortcutLabel.textContent = isMac ? "⌘K" : "Ctrl+K";
-
-    document.body.appendChild(overlay);
-
     let pagefindPromise = null;
+
     const loadPagefind = () => {
       if (!pagefindPromise) {
         pagefindPromise = import("/pagefind/pagefind.js").catch(() => {
@@ -73,36 +56,38 @@
       return pagefindPromise;
     };
 
+    const getOverlay = () => document.getElementById("search-overlay");
+    const getInput = () => document.getElementById("search-input");
+    const getResults = () => document.getElementById("search-results");
+
     const open = () => {
+      const overlay = getOverlay();
+      const input = getInput();
+      const results = getResults();
       overlay.hidden = false;
       input.value = "";
-      resultsContainer.innerHTML = "";
+      results.innerHTML = "";
       activeIndex = -1;
       loadPagefind();
       requestAnimationFrame(() => input.focus());
     };
 
     const close = () => {
+      const overlay = getOverlay();
       overlay.hidden = true;
-      input.blur();
+      getInput()?.blur();
     };
 
-    trigger.addEventListener("click", open);
-    triggerMobile.addEventListener("click", open);
-
-    document.addEventListener("keydown", (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        overlay.hidden ? open() : close();
+    document.addEventListener("click", (e) => {
+      if (e.target.closest("#search-trigger") || e.target.closest("#search-trigger-mobile")) {
+        open();
       }
-      if (!overlay.hidden && e.key === "Escape") {
+      if (e.target.closest(".search-backdrop")) {
         close();
       }
     });
 
-    overlay.querySelector(".search-backdrop").addEventListener("click", close);
-
-    const getItems = () => resultsContainer.querySelectorAll("[data-search-item]");
+    const getItems = () => getResults().querySelectorAll("[data-search-item]");
 
     const setActive = (index) => {
       const items = getItems();
@@ -114,26 +99,35 @@
       }
     };
 
-    input.addEventListener("keydown", (e) => {
-      const items = getItems();
-      if (e.key === "ArrowDown") {
+    document.addEventListener("keydown", (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        setActive(Math.min(activeIndex + 1, items.length - 1));
+        getOverlay().hidden ? open() : close();
+        return;
+      }
+      const overlay = getOverlay();
+      if (overlay.hidden) return;
+      if (e.key === "Escape") {
+        close();
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActive(Math.min(activeIndex + 1, getItems().length - 1));
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         setActive(Math.max(activeIndex - 1, 0));
-      } else if (e.key === "Enter" && activeIndex >= 0 && activeIndex < items.length) {
+      } else if (e.key === "Enter" && activeIndex >= 0 && activeIndex < getItems().length) {
         e.preventDefault();
-        const link = items[activeIndex].querySelector("a");
+        const link = getItems()[activeIndex].querySelector("a");
         if (link) window.location.href = link.href;
       }
     });
 
-    input.addEventListener("input", () => {
+    document.addEventListener("input", (e) => {
+      if (e.target.id !== "search-input") return;
       clearTimeout(debounceTimer);
-      const query = input.value.trim();
+      const query = e.target.value.trim();
       if (!query) {
-        resultsContainer.innerHTML = "";
+        getResults().innerHTML = "";
         activeIndex = -1;
         pendingQuery = null;
         return;
@@ -144,6 +138,7 @@
 
     const doSearch = async (query) => {
       const pagefind = await loadPagefind();
+      const resultsContainer = getResults();
       if (!pagefind) {
         resultsContainer.innerHTML = '<div class="search-empty">Search unavailable — run <code>npm run build</code> to generate the index.</div>';
         return;
@@ -185,5 +180,14 @@
       activeIndex = -1;
       setActive(0);
     };
-  })();
+  }
+
+  // Move overlay to body on initial load (persists across navigations via transition:persist).
+  const overlay = document.getElementById("search-overlay");
+  if (overlay?.parentElement !== document.body) document.body.appendChild(overlay);
+
+  const label = document.getElementById("search-shortcut-label");
+  if (label) {
+    label.textContent = /Mac|iPod|iPhone|iPad/.test(navigator.platform || "") ? "⌘K" : "Ctrl+K";
+  }
 </script>

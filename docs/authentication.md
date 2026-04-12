@@ -115,7 +115,13 @@ Browser                        Cetacean                          IdP
 For scripts and API clients, send an ID token in the `Authorization` header. The token is validated against the IdP's
 JWKS endpoint on every request.
 
-```bash
+```http tab
+GET /services HTTP/1.1
+Authorization: Bearer eyJhbGci...
+Accept: application/json
+```
+
+```bash tab
 curl -H "Authorization: Bearer eyJhbGci..." \
      -H "Accept: application/json" \
      http://localhost:9000/services
@@ -472,7 +478,11 @@ services:
 
 Check the current identity with `GET /auth/whoami`:
 
-```bash
+```http tab
+GET /auth/whoami HTTP/1.1
+```
+
+```bash tab
 curl -s http://localhost:9000/auth/whoami | jq .
 ```
 

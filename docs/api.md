@@ -41,18 +41,23 @@ All negotiated responses include `Vary: Accept`.
 
 Requesting an unsupported type returns `406 Not Acceptable`.
 
-```bash
-# Force JSON via extension
-curl http://localhost:9000/services.json
+```http tab
+GET /services HTTP/1.1
+Accept: application/json
+```
 
-# Force Atom feed via extension
-curl http://localhost:9000/services.atom
-
-# Force JSON via Accept header
+```bash tab
 curl -H "Accept: application/json" http://localhost:9000/services
+```
 
-# Pin to API v1
-curl -H "Accept: application/vnd.cetacean.v1+json" http://localhost:9000/services
+Extensions also work — append `.json` or `.atom` to any resource path:
+
+```http tab
+GET /services.json HTTP/1.1
+```
+
+```bash tab
+curl http://localhost:9000/services.json
 ```
 
 ## Atom Feeds
@@ -86,7 +91,23 @@ Atom feeds use cursor-based pagination. The feed includes a `next` link when mor
 | `before`  | Return entries older than this cursor ID         |
 | `limit`   | Number of entries per page (default 50, max 200) |
 
-```bash
+```http tab
+# Request an Atom feed
+GET /services HTTP/1.1
+Accept: application/atom+xml
+###
+
+# Request via extension
+GET /services.atom HTTP/1.1
+###
+
+# Page through history feed
+GET /history.atom?limit=50 HTTP/1.1
+
+GET /history.atom?before=<cursor-id>&limit=50 HTTP/1.1
+```
+
+```bash tab
 # Request an Atom feed
 curl -H "Accept: application/atom+xml" http://localhost:9000/services
 
@@ -125,17 +146,34 @@ List endpoints support two pagination mechanisms: query parameters and HTTP Rang
 | `search`  | string | --      | Case-insensitive substring match on name                       |
 | `filter`  | string | --      | [expr-lang](https://expr-lang.org/) expression (max 512 chars) |
 
-```bash
-# Page through services
+```http tab
+# Paginate results
+GET /services?limit=10&offset=20 HTTP/1.1
+###
+
+# Sort by field
+GET /nodes?sort=hostname&dir=desc HTTP/1.1
+###
+
+# Search by name
+GET /configs?search=nginx HTTP/1.1
+###
+
+# Filter with expression
+GET /services?filter=name+contains+'web' HTTP/1.1
+```
+
+```bash tab
+# Paginate results
 curl "http://localhost:9000/services?limit=10&offset=20"
 
-# Sort nodes by hostname descending
+# Sort by field
 curl "http://localhost:9000/nodes?sort=hostname&dir=desc"
 
-# Search configs by name
+# Search by name
 curl "http://localhost:9000/configs?search=nginx"
 
-# Filter services with expr-lang
+# Filter with expression
 curl "http://localhost:9000/services?filter=name+contains+'web'"
 ```
 
@@ -180,14 +218,27 @@ Filter expressions use [expr-lang](https://expr-lang.org/) syntax. The result mu
 
 **Stacks**: `name`, `services` (count), `configs` (count), `secrets` (count), `networks` (count), `volumes` (count)
 
-```bash
-# Manager nodes that are ready
+```http tab
+# Filter ready managers
+GET /nodes?filter=role+%3D%3D+%22manager%22+%26%26+state+%3D%3D+%22ready%22 HTTP/1.1
+###
+
+# Filter failed tasks
+GET /tasks?filter=state+%3D%3D+%22failed%22+%7C%7C+error+!%3D+%22%22 HTTP/1.1
+###
+
+# Filter stacks by service count
+GET /stacks?filter=services+>+5 HTTP/1.1
+```
+
+```bash tab
+# Filter ready managers
 curl "http://localhost:9000/nodes?filter=role+%3D%3D+%22manager%22+%26%26+state+%3D%3D+%22ready%22"
 
-# Failed tasks with errors
+# Filter failed tasks
 curl "http://localhost:9000/tasks?filter=state+%3D%3D+%22failed%22+%7C%7C+error+!%3D+%22%22"
 
-# Stacks with more than 5 services
+# Filter stacks by service count
 curl "http://localhost:9000/stacks?filter=services+>+5"
 ```
 
@@ -327,14 +378,30 @@ open a per-resource event stream.
 List Endpoints stream events filtered by resource type. Detail Endpoints stream events for a single resource. Stack
 streams include events for all member resources (services, tasks, configs, secrets, networks, volumes).
 
-```bash
+```http tab
+# Stream all node events
+GET /nodes HTTP/1.1
+Accept: text/event-stream
+###
+
+# Stream events for a single service
+GET /services/abc123 HTTP/1.1
+Accept: text/event-stream
+###
+
+# Stream events for a stack and all its resources
+GET /stacks/myapp HTTP/1.1
+Accept: text/event-stream
+```
+
+```bash tab
 # Stream all node events
 curl -H "Accept: text/event-stream" http://localhost:9000/nodes
 
-# Stream events for a specific service
+# Stream events for a single service
 curl -H "Accept: text/event-stream" http://localhost:9000/services/abc123
 
-# Stream changes to a stack (includes member resources)
+# Stream events for a stack and all its resources
 curl -H "Accept: text/event-stream" http://localhost:9000/stacks/myapp
 ```
 
@@ -344,7 +411,12 @@ This is the primary SSE mechanism -- the frontend uses per-resource streams for 
 
 `/events` provides a single stream of all resource changes:
 
-```bash
+```http tab
+GET /events HTTP/1.1
+Accept: text/event-stream
+```
+
+```bash tab
 curl -H "Accept: text/event-stream" http://localhost:9000/events
 ```
 
@@ -352,7 +424,7 @@ curl -H "Accept: text/event-stream" http://localhost:9000/events
 
 Single events are sent with the resource type as the event name:
 
-```
+```sse
 id: 1
 event: service
 data: {"@id":"/services/abc","@type":"Service","type":"service","action":"update","id":"abc","resource":{...}}
@@ -360,7 +432,7 @@ data: {"@id":"/services/abc","@type":"Service","type":"service","action":"update
 
 When multiple events arrive within the batch interval (default 100ms), they are sent as a `batch` event:
 
-```
+```sse
 id: 2
 event: batch
 data: [{"@id":"/services/abc","@type":"Service","type":"service","action":"update","id":"abc","resource":{...}},...]
@@ -370,8 +442,12 @@ data: [{"@id":"/services/abc","@type":"Service","type":"service","action":"updat
 
 Use `?types=` to subscribe to specific resource types:
 
-```bash
-# Only service and node events
+```http tab
+GET /events?types=service,node HTTP/1.1
+Accept: text/event-stream
+```
+
+```bash tab
 curl -H "Accept: text/event-stream" "http://localhost:9000/events?types=service,node"
 ```
 
@@ -393,7 +469,12 @@ tell the client to do a full reload.
 The `/metrics` endpoint supports SSE for live-updating charts. Request `text/event-stream` to receive periodic metric
 updates instead of a one-shot JSON proxy response.
 
-```bash
+```http tab
+GET /metrics?query=up&step=15&range=3600 HTTP/1.1
+Accept: text/event-stream
+```
+
+```bash tab
 curl -H "Accept: text/event-stream" "http://localhost:9000/metrics?query=up&step=15&range=3600"
 ```
 
@@ -434,14 +515,28 @@ No content negotiation. No discovery `Link` headers.
 
 Supports [SSE for live updates](#metrics-sse).
 
-```bash
+```http tab
+# Instant query
+GET /metrics?query=up HTTP/1.1
+###
+
+# Range query
+GET /metrics?query=up&start=1700000000&end=1700003600&step=15 HTTP/1.1
+###
+
+# Live-updating SSE stream
+GET /metrics?query=up&step=15&range=3600 HTTP/1.1
+Accept: text/event-stream
+```
+
+```bash tab
 # Instant query
 curl "http://localhost:9000/metrics?query=up"
 
 # Range query
 curl "http://localhost:9000/metrics?query=up&start=1700000000&end=1700003600&step=15"
 
-# SSE stream
+# Live-updating SSE stream
 curl -H "Accept: text/event-stream" "http://localhost:9000/metrics?query=up&step=15&range=3600"
 ```
 
@@ -474,13 +569,28 @@ Write operations on the swarm configuration. Gated by [operations level](configu
 
 PATCH endpoints accept `application/merge-patch+json`.
 
-```bash
-# Update task history retention
+```http tab
+# Patch orchestration config
+PATCH /swarm/orchestration HTTP/1.1
+Content-Type: application/merge-patch+json
+
+{"taskHistoryRetentionLimit": 10}
+###
+
+# Rotate a join token
+POST /swarm/rotate-token HTTP/1.1
+Content-Type: application/json
+
+{"role": "worker"}
+```
+
+```bash tab
+# Patch orchestration config
 curl -X PATCH -H "Content-Type: application/merge-patch+json" \
   -d '{"taskHistoryRetentionLimit": 10}' \
   http://localhost:9000/swarm/orchestration
 
-# Rotate worker join token
+# Rotate a join token
 curl -X POST -d '{"role": "worker"}' http://localhost:9000/swarm/rotate-token
 ```
 
@@ -503,14 +613,33 @@ curl -X POST -d '{"role": "worker"}' http://localhost:9000/swarm/rotate-token
 | PUT    | `/nodes/{id}/role`         | 3    | Promote or demote a node.                      |
 | DELETE | `/nodes/{id}`              | 3    | Remove a node from the swarm.                  |
 
-```bash
-# Drain a node
+```http tab
+# Set node availability
+PUT /nodes/abc123/availability HTTP/1.1
+Content-Type: application/json
+
+{"availability": "drain"}
+###
+
+# Get node labels
+GET /nodes/abc123/labels HTTP/1.1
+###
+
+# Patch node labels
+PATCH /nodes/abc123/labels HTTP/1.1
+Content-Type: application/json-patch+json
+
+[{"op": "add", "path": "/env", "value": "production"}]
+```
+
+```bash tab
+# Set node availability
 curl -X PUT -d '{"availability": "drain"}' http://localhost:9000/nodes/abc123/availability
 
 # Get node labels
 curl http://localhost:9000/nodes/abc123/labels
 
-# Add a label via JSON Patch
+# Patch node labels
 curl -X PATCH -H "Content-Type: application/json-patch+json" \
   -d '[{"op": "add", "path": "/env", "value": "production"}]' \
   http://localhost:9000/nodes/abc123/labels
@@ -525,11 +654,21 @@ curl -X PATCH -H "Content-Type: application/json-patch+json" \
 | GET    | `/services/{id}/tasks` | Tasks for a service.                          | --                                                   |
 | GET    | `/services/{id}/logs`  | Service logs. Supports SSE for streaming.     | `limit`, `after`, `before`, `stream`                 |
 
-```bash
+```http tab
+# Stream logs via SSE
+GET /services/abc123/logs HTTP/1.1
+Accept: text/event-stream
+###
+
+# Fetch recent stderr logs
+GET /services/abc123/logs?limit=100&stream=stderr&after=1h HTTP/1.1
+```
+
+```bash tab
 # Stream logs via SSE
 curl -H "Accept: text/event-stream" http://localhost:9000/services/abc123/logs
 
-# Logs with filters
+# Fetch recent stderr logs
 curl "http://localhost:9000/services/abc123/logs?limit=100&stream=stderr&after=1h"
 ```
 
@@ -553,17 +692,40 @@ SSE log streams use `Last-Event-ID` for reconnection (set to the timestamp of th
 | POST   | `/services/{id}/rollback` | Rollback to previous spec.                |
 | POST   | `/services/{id}/restart`  | Force re-deploy (increments ForceUpdate). |
 
-```bash
-# Scale to 5 replicas
+```http tab
+# Scale a service
+PUT /services/abc123/scale HTTP/1.1
+Content-Type: application/json
+
+{"replicas": 5}
+###
+
+# Update service image
+PUT /services/abc123/image HTTP/1.1
+Content-Type: application/json
+
+{"image": "nginx:1.27"}
+###
+
+# Rollback to previous spec
+POST /services/abc123/rollback HTTP/1.1
+###
+
+# Force re-deploy
+POST /services/abc123/restart HTTP/1.1
+```
+
+```bash tab
+# Scale a service
 curl -X PUT -d '{"replicas": 5}' http://localhost:9000/services/abc123/scale
 
-# Update image
+# Update service image
 curl -X PUT -d '{"image": "nginx:1.27"}' http://localhost:9000/services/abc123/image
 
-# Rollback
+# Rollback to previous spec
 curl -X POST http://localhost:9000/services/abc123/rollback
 
-# Restart
+# Force re-deploy
 curl -X POST http://localhost:9000/services/abc123/restart
 ```
 
@@ -607,16 +769,35 @@ available; write operations require operations level 2.
 JSON Patch endpoints require `Content-Type: application/json-patch+json`. Merge Patch endpoints require
 `Content-Type: application/merge-patch+json`. Mismatched content types return `415`.
 
-```bash
+```http tab
+# Get environment variables
+GET /services/abc123/env HTTP/1.1
+###
+
+# Patch an environment variable
+PATCH /services/abc123/env HTTP/1.1
+Content-Type: application/json-patch+json
+
+[{"op": "add", "path": "/DEBUG", "value": "true"}]
+###
+
+# Patch resource limits
+PATCH /services/abc123/resources HTTP/1.1
+Content-Type: application/merge-patch+json
+
+{"memoryLimit": 536870912}
+```
+
+```bash tab
 # Get environment variables
 curl http://localhost:9000/services/abc123/env
 
-# Add an env var via JSON Patch
+# Patch an environment variable
 curl -X PATCH -H "Content-Type: application/json-patch+json" \
   -d '[{"op": "add", "path": "/DEBUG", "value": "true"}]' \
   http://localhost:9000/services/abc123/env
 
-# Update resources via Merge Patch
+# Patch resource limits
 curl -X PATCH -H "Content-Type: application/merge-patch+json" \
   -d '{"memoryLimit": 536870912}' \
   http://localhost:9000/services/abc123/resources
@@ -630,8 +811,20 @@ curl -X PATCH -H "Content-Type: application/merge-patch+json" \
 | PUT    | `/services/{id}/endpoint-mode` | Change endpoint mode (vip/dnsrr).        |
 | DELETE | `/services/{id}`               | Remove a service from the swarm.         |
 
-```bash
-# Switch to global mode
+```http tab
+# Change service mode
+PUT /services/abc123/mode HTTP/1.1
+Content-Type: application/json
+
+{"mode": "global"}
+###
+
+# Remove a service
+DELETE /services/abc123 HTTP/1.1
+```
+
+```bash tab
+# Change service mode
 curl -X PUT -d '{"mode": "global"}' http://localhost:9000/services/abc123/mode
 
 # Remove a service
@@ -741,11 +934,20 @@ The `limit` parameter controls max results **per type** (default 3, max 1000). S
 
 Response is grouped by resource type. Services and tasks include a `state` field.
 
-```bash
-# Quick search (3 per type)
+```http tab
+# Search with default limit (3 per type)
+GET /search?q=nginx HTTP/1.1
+###
+
+# Search with all results
+GET /search?q=nginx&limit=0 HTTP/1.1
+```
+
+```bash tab
+# Search with default limit (3 per type)
 curl "http://localhost:9000/search?q=nginx"
 
-# Full search (up to 1000 per type)
+# Search with all results
 curl "http://localhost:9000/search?q=nginx&limit=0"
 ```
 
@@ -757,14 +959,27 @@ Ring buffer of the last 10,000 resource change events.
 |--------|------------|-----------------|---------------------------------------------------|
 | GET    | `/history` | Recent changes. | `limit` (1-200, default 50), `type`, `resourceId` |
 
-```bash
+```http tab
+# Recent changes
+GET /history HTTP/1.1
+###
+
+# Filter by resource type
+GET /history?type=service&limit=10 HTTP/1.1
+###
+
+# Filter by resource ID
+GET /history?resourceId=abc123 HTTP/1.1
+```
+
+```bash tab
 # Recent changes
 curl http://localhost:9000/history
 
-# Filter by type
+# Filter by resource type
 curl "http://localhost:9000/history?type=service&limit=10"
 
-# Changes for a specific resource
+# Filter by resource ID
 curl "http://localhost:9000/history?resourceId=abc123"
 ```
 
@@ -823,10 +1038,10 @@ See [Authentication](authentication.md) for full details on each auth mode.
 | GET    | `/api/errors/{code}`  | Error code detail: title, HTTP status, description, and suggestion (JSON).        |
 
 ```bash
-# Download OpenAPI spec (JSON)
+# Download OpenAPI spec
 curl http://localhost:9000/api > openapi.json
 
-# Open playground in browser
+# Open interactive playground in browser
 open http://localhost:9000/api
 ```
 

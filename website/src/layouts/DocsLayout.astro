@@ -1,4 +1,5 @@
 ---
+import { ClientRouter } from "astro:transitions";
 import Header from "../components/Header.astro";
 import Sidebar from "../components/Sidebar.astro";
 import TableOfContents from "../components/TableOfContents.astro";
@@ -29,6 +30,7 @@ const { title, description, slug, headings, markdownUrl, category, tags } = Astr
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
     <title>{title} — Cetacean</title>
+    <ClientRouter />
     <script is:inline>
       (function() {
         var theme = localStorage.getItem("theme") || "system";
@@ -41,7 +43,7 @@ const { title, description, slug, headings, markdownUrl, category, tags } = Astr
     <Header currentPath={Astro.url.pathname} />
     <div class="mx-auto flex max-w-[90rem]">
       <Sidebar currentSlug={slug} />
-      <main class="flex-1 min-w-0 py-10 px-8 md:px-12 lg:px-16">
+      <main class="flex-1 min-w-0 py-10 px-8 md:px-12 lg:px-16" transition:animate="fade">
         <article class="prose mx-auto" data-pagefind-body>
           <span class="hidden" data-pagefind-meta="description">{description}</span>
           {category && <meta data-pagefind-filter={`category:${category}`} />}
@@ -56,25 +58,93 @@ const { title, description, slug, headings, markdownUrl, category, tags } = Astr
       <TableOfContents headings={headings} />
     </div>
     <script is:inline>
-      document.querySelectorAll(".prose table").forEach(function(table) {
-        var wrapper = document.createElement("div");
-        wrapper.className = "table-wrapper";
-        table.parentNode.insertBefore(wrapper, table);
-        wrapper.appendChild(table);
-      });
-      document.querySelectorAll(".prose pre").forEach(function(pre) {
-        var button = document.createElement("button");
-        button.className = "copy-button";
-        button.textContent = "Copy";
-        button.addEventListener("click", function() {
-          var code = pre.querySelector("code");
-          navigator.clipboard.writeText(code ? code.textContent : pre.textContent).then(function() {
-            button.textContent = "Copied!";
-            setTimeout(function() { button.textContent = "Copy"; }, 2000);
+      function copyWithFeedback(button, text) {
+        navigator.clipboard.writeText(text).then(() => {
+          button.textContent = "Copied!";
+          setTimeout(() => { button.textContent = "Copy"; }, 2000);
+        });
+      }
+
+      document.addEventListener("astro:page-load", () => {
+        // Hide HTTP request separators (###).
+        document.querySelectorAll('pre[data-language="http"] .line').forEach((line) => {
+          if (line.textContent.trim() === "###") line.style.display = "none";
+        });
+
+        document.querySelectorAll(".prose table:not([data-initialized])").forEach((table) => {
+          table.setAttribute("data-initialized", "");
+          const wrapper = document.createElement("div");
+          wrapper.className = "table-wrapper";
+          table.parentNode.insertBefore(wrapper, table);
+          wrapper.appendChild(table);
+        });
+
+        document.querySelectorAll(".prose pre:not([data-initialized])").forEach((pre) => {
+          pre.setAttribute("data-initialized", "");
+          if (pre.closest(".code-tabs")) return;
+          const wrapper = document.createElement("div");
+          wrapper.className = "code-block-wrapper";
+          pre.parentNode.insertBefore(wrapper, pre);
+          wrapper.appendChild(pre);
+
+          const button = document.createElement("button");
+          button.className = "copy-button";
+          button.textContent = "Copy";
+          button.addEventListener("click", () => {
+            const code = pre.querySelector("code");
+            copyWithFeedback(button, code ? code.textContent : pre.textContent);
+          });
+          wrapper.appendChild(button);
+        });
+
+        // Code tabs: switch panels and persist preference.
+        const tabPrefs = JSON.parse(localStorage.getItem("code-tab-prefs") || "{}");
+
+        document.querySelectorAll(".code-tabs:not([data-initialized])").forEach((tabs) => {
+          tabs.setAttribute("data-initialized", "");
+          const bar = tabs.querySelector(".code-tabs-bar");
+          const buttons = bar.querySelectorAll(".code-tabs-button");
+
+          const copyButton = document.createElement("button");
+          copyButton.className = "code-tabs-copy";
+          copyButton.textContent = "Copy";
+          copyButton.addEventListener("click", () => {
+            const activeCode = tabs.querySelector(".code-tab-panel.active code");
+            if (activeCode) copyWithFeedback(copyButton, activeCode.textContent);
+          });
+          bar.appendChild(copyButton);
+
+          const labels = Array.from(buttons).map((b) => b.textContent);
+          const preferred = labels.find((l) => tabPrefs[l]);
+          if (preferred) {
+            activateGroup(tabs, labels.indexOf(preferred));
+          }
+
+          bar.addEventListener("click", (e) => {
+            const button = e.target.closest(".code-tabs-button");
+            if (!button) return;
+            const idx = Number(button.dataset.tab);
+            activateGroup(tabs, idx);
+            tabPrefs[buttons[idx].textContent] = true;
+            localStorage.setItem("code-tab-prefs", JSON.stringify(tabPrefs));
+
+            const label = buttons[idx].textContent;
+            document.querySelectorAll(".code-tabs").forEach((other) => {
+              if (other === tabs) return;
+              other.querySelectorAll(".code-tabs-button").forEach((b, i) => {
+                if (b.textContent === label) activateGroup(other, i);
+              });
+            });
           });
         });
-        pre.style.position = "relative";
-        pre.appendChild(button);
+        function activateGroup(group, idx) {
+          const btns = group.querySelectorAll(".code-tabs-button");
+          const pnls = group.querySelectorAll(".code-tab-panel");
+          btns.forEach((b) => b.classList.remove("active"));
+          pnls.forEach((p) => p.classList.remove("active"));
+          btns[idx]?.classList.add("active");
+          pnls[idx]?.classList.add("active");
+        }
       });
     </script>
   </body>

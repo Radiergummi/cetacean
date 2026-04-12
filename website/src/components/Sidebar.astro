@@ -12,27 +12,37 @@ const { currentSlug } = Astro.props;
   <SidebarNav currentSlug={currentSlug} />
 </aside>
 
-<div id="mobile-sidebar" class="fixed inset-0 z-40 hidden md:hidden">
-  <div id="mobile-sidebar-backdrop" class="absolute inset-0 bg-background/60 backdrop-blur-sm"></div>
-  <aside class="relative w-72 h-full bg-background border-r border-border overflow-y-auto py-8 px-6 shadow-xl">
+<div id="mobile-sidebar" class="mobile-sidebar-overlay fixed inset-0 z-40 pointer-events-none md:hidden">
+  <div id="mobile-sidebar-backdrop" class="mobile-sidebar-backdrop absolute inset-0"></div>
+  <aside class="mobile-sidebar-panel absolute right-0 top-0 w-72 h-full bg-background border-l border-border overflow-y-auto pt-20 pb-8 px-6 shadow-xl">
     <SidebarNav currentSlug={currentSlug} />
   </aside>
 </div>
 
 <script is:inline>
-  (function () {
-    var toggle = document.getElementById("mobile-menu-toggle");
-    var sidebar = document.getElementById("mobile-sidebar");
-    var backdrop = document.getElementById("mobile-sidebar-backdrop");
+  if (!window.__sidebarInitialized) {
+    window.__sidebarInitialized = true;
 
-    if (!toggle || !sidebar || !backdrop) return;
+    const getSidebar = () => document.getElementById("mobile-sidebar");
 
-    toggle.addEventListener("click", function () {
-      sidebar.classList.toggle("hidden");
+    document.addEventListener("click", (e) => {
+      const sidebar = getSidebar();
+      if (!sidebar) return;
+
+      if (e.target.closest("#mobile-menu-toggle")) {
+        sidebar.classList.toggle("open");
+        document.body.style.overflow = sidebar.classList.contains("open") ? "hidden" : "";
+      }
+      if (e.target.closest("#mobile-sidebar-backdrop")) {
+        sidebar.classList.remove("open");
+        document.body.style.overflow = "";
+      }
     });
+  }
 
-    backdrop.addEventListener("click", function () {
-      sidebar.classList.add("hidden");
-    });
-  })();
+  document.addEventListener("astro:page-load", () => {
+    const sidebar = document.getElementById("mobile-sidebar");
+    if (sidebar) sidebar.classList.remove("open");
+    document.body.style.overflow = "";
+  });
 </script>

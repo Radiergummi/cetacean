@@ -19,49 +19,47 @@
 </button>
 
 <script is:inline>
-  (function () {
-    var states = ["light", "dark", "system"];
+  if (!window.__themeInitialized) {
+    window.__themeInitialized = true;
 
-    function getTheme() {
-      return localStorage.getItem("theme") || "system";
-    }
+    const states = ["light", "dark", "system"];
 
-    function applyTheme(theme) {
-      var dark =
-        theme === "dark" ||
-        (theme === "system" &&
-          window.matchMedia("(prefers-color-scheme: dark)").matches);
+    window.__getTheme = () => localStorage.getItem("theme") || "system";
+
+    window.__applyTheme = (theme) => {
+      const dark = theme === "dark" ||
+        (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
       document.documentElement.classList.toggle("dark", dark);
-    }
+    };
 
-    function updateIcon(theme) {
-      document.getElementById("icon-sun").classList.toggle("hidden", theme !== "light");
-      document.getElementById("icon-moon").classList.toggle("hidden", theme !== "dark");
-      document.getElementById("icon-system").classList.toggle("hidden", theme !== "system");
-    }
+    window.__applyTheme(window.__getTheme());
 
-    function init() {
-      var theme = getTheme();
-      applyTheme(theme);
-      updateIcon(theme);
-    }
-
-    init();
-
-    document.getElementById("theme-toggle").addEventListener("click", function () {
-      var current = getTheme();
-      var next = states[(states.indexOf(current) + 1) % states.length];
-      localStorage.setItem("theme", next);
-      applyTheme(next);
-      updateIcon(next);
-    });
-
-    window
-      .matchMedia("(prefers-color-scheme: dark)")
-      .addEventListener("change", function () {
-        if (getTheme() === "system") {
-          applyTheme("system");
+    window.matchMedia("(prefers-color-scheme: dark)")
+      .addEventListener("change", () => {
+        if (window.__getTheme() === "system") {
+          window.__applyTheme("system");
+          document.getElementById("icon-sun").classList.add("hidden");
+          document.getElementById("icon-moon").classList.add("hidden");
+          document.getElementById("icon-system").classList.remove("hidden");
         }
       });
-  })();
+  }
+
+  document.addEventListener("astro:page-load", () => {
+    const theme = window.__getTheme();
+    document.getElementById("icon-sun").classList.toggle("hidden", theme !== "light");
+    document.getElementById("icon-moon").classList.toggle("hidden", theme !== "dark");
+    document.getElementById("icon-system").classList.toggle("hidden", theme !== "system");
+
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+      const current = window.__getTheme();
+      const states = ["light", "dark", "system"];
+      const next = states[(states.indexOf(current) + 1) % states.length];
+      localStorage.setItem("theme", next);
+      window.__applyTheme(next);
+      document.getElementById("icon-sun").classList.toggle("hidden", next !== "light");
+      document.getElementById("icon-moon").classList.toggle("hidden", next !== "dark");
+      document.getElementById("icon-system").classList.toggle("hidden", next !== "system");
+    });
+  });
 </script>
