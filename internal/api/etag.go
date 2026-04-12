@@ -85,7 +85,9 @@ func writeCachedJSONStatus(w http.ResponseWriter, r *http.Request, status int, v
 	etag := computeETag(body)
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-cache")
+	if w.Header().Get("Cache-Control") == "" {
+		w.Header().Set("Cache-Control", "no-cache")
+	}
 
 	if etagMatch(r.Header.Get("If-None-Match"), etag) {
 		w.WriteHeader(http.StatusNotModified)

@@ -1404,7 +1404,12 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         id: node.ID,
         resource: node,
       });
-      return jsonResponse<{ labels: Record<string, string> }>({ labels: node.Spec.Labels });
+      return jsonResponse({
+        "@context": "/api/context.jsonld",
+        "@id": `/nodes/${params.id}/labels`,
+        "@type": "NodeLabels",
+        labels: node.Spec.Labels,
+      });
     }),
 
     // ---- Write: Task operations ----
@@ -1465,7 +1470,12 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       service.Version.Index++;
       service.UpdatedAt = new Date().toISOString();
       broadcastServiceUpdate(service);
-      return jsonResponse<{ env: Record<string, string> }>({ env: Object.fromEntries(envMap) });
+      return jsonResponse({
+        "@context": "/api/context.jsonld",
+        "@id": `/services/${params.id}/env`,
+        "@type": "ServiceEnv",
+        env: Object.fromEntries(envMap),
+      });
     }),
 
     http.patch("*/services/:id/labels", async ({ params, request }) => {
@@ -1492,7 +1502,12 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       service.Version.Index++;
       service.UpdatedAt = new Date().toISOString();
       broadcastServiceUpdate(service);
-      return jsonResponse<{ labels: Record<string, string> }>({ labels: service.Spec.Labels });
+      return jsonResponse({
+        "@context": "/api/context.jsonld",
+        "@id": `/services/${params.id}/labels`,
+        "@type": "ServiceLabels",
+        labels: service.Spec.Labels,
+      });
     }),
 
     // Service spec field updates — each entry maps a sub-resource path to
