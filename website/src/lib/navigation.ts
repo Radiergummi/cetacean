@@ -12,6 +12,21 @@ export interface NavGroup {
   items: NavItem[];
 }
 
+const allPages: NavItem[] = [];
+
+export function getPrevNext(slug: string): { prev: NavItem | null; next: NavItem | null } {
+  if (!allPages.length) {
+    for (const group of sidebarGroups) {
+      allPages.push(...group.items);
+    }
+  }
+  const index = allPages.findIndex((item) => item.slug === slug);
+  return {
+    prev: index > 0 ? allPages[index - 1] : null,
+    next: index >= 0 && index < allPages.length - 1 ? allPages[index + 1] : null,
+  };
+}
+
 export const sidebarGroups: NavGroup[] = [
   {
     label: "Guide",

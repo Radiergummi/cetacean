@@ -269,6 +269,65 @@
   transform: translateX(0);
 }
 
+/* ── Edit link ────────────────────────────────────────────────────── */
+
+.edit-link {
+  margin-top: 3rem;
+}
+.edit-link a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.edit-link a:hover {
+  color: var(--foreground);
+}
+
+/* ── Prev/next navigation ─────────────────────────────────────────── */
+
+.prev-next {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.prev-next-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  text-decoration: none;
+  color: var(--foreground);
+  transition: color 0.15s;
+}
+.prev-next-link:hover {
+  color: var(--active);
+}
+
+.prev-next-right {
+  text-align: right;
+  margin-left: auto;
+}
+
+.prev-next-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.prev-next-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
 /* ── Code tabs ────────────────────────────────────────────────────── */
 
 .prose .code-tabs {
