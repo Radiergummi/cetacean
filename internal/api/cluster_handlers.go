@@ -240,7 +240,7 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 	}
 
 	if h.promClient == nil {
-		writeJSON(w, MonitoringStatus{})
+		writeJSON(w, NewDetailResponse(r.Context(), "/metrics/status", "MonitoringStatus", MonitoringStatus{}))
 		return
 	}
 
@@ -299,7 +299,7 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	writeJSON(w, status)
+	writeJSON(w, NewDetailResponse(r.Context(), "/metrics/status", "MonitoringStatus", status))
 }
 
 func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {

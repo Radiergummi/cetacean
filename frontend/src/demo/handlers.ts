@@ -841,28 +841,30 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       }
 
       const container = service.Spec.TaskTemplate.ContainerSpec;
-      return jsonResponse<ContainerConfig>({
-        command: container?.Command ?? [],
-        args: container?.Args ?? [],
-        dir: container?.Dir ?? "",
-        user: container?.User ?? "",
-        hostname: container?.Hostname ?? "",
-        init: container?.Init,
-        tty: container?.TTY ?? false,
-        readOnly: container?.ReadOnly ?? false,
-        stopSignal: container?.StopSignal ?? "",
-        stopGracePeriod: container?.StopGracePeriod,
-        capabilityAdd: container?.CapabilityAdd ?? [],
-        capabilityDrop: container?.CapabilityDrop ?? [],
-        groups: container?.Groups ?? [],
-        hosts: container?.Hosts ?? [],
-        dnsConfig: container?.DNSConfig
-          ? {
-              nameservers: container.DNSConfig.Nameservers ?? undefined,
-              search: container.DNSConfig.Search ?? undefined,
-              options: container.DNSConfig.Options ?? undefined,
-            }
-          : undefined,
+      return jsonResponse<{ containerConfig: ContainerConfig }>({
+        containerConfig: {
+          command: container?.Command ?? [],
+          args: container?.Args ?? [],
+          dir: container?.Dir ?? "",
+          user: container?.User ?? "",
+          hostname: container?.Hostname ?? "",
+          init: container?.Init,
+          tty: container?.TTY ?? false,
+          readOnly: container?.ReadOnly ?? false,
+          stopSignal: container?.StopSignal ?? "",
+          stopGracePeriod: container?.StopGracePeriod,
+          capabilityAdd: container?.CapabilityAdd ?? [],
+          capabilityDrop: container?.CapabilityDrop ?? [],
+          groups: container?.Groups ?? [],
+          hosts: container?.Hosts ?? [],
+          dnsConfig: container?.DNSConfig
+            ? {
+                nameservers: container.DNSConfig.Nameservers ?? undefined,
+                search: container.DNSConfig.Search ?? undefined,
+                options: container.DNSConfig.Options ?? undefined,
+              }
+            : undefined,
+        },
       });
     }),
 

@@ -2642,18 +2642,21 @@ func TestHandleGetServiceContainerConfig_OK(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
 	}
-	var resp map[string]any
+	var resp struct {
+		ContainerConfig map[string]any `json:"containerConfig"`
+	}
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
-	if resp["hostname"] != "web-1" {
-		t.Errorf("hostname=%v, want web-1", resp["hostname"])
+	cc := resp.ContainerConfig
+	if cc["hostname"] != "web-1" {
+		t.Errorf("hostname=%v, want web-1", cc["hostname"])
 	}
-	if resp["readOnly"] != true {
-		t.Errorf("readOnly=%v, want true", resp["readOnly"])
+	if cc["readOnly"] != true {
+		t.Errorf("readOnly=%v, want true", cc["readOnly"])
 	}
-	if resp["stopGracePeriod"] != float64(10_000_000_000) {
-		t.Errorf("stopGracePeriod=%v, want 10000000000", resp["stopGracePeriod"])
+	if cc["stopGracePeriod"] != float64(10_000_000_000) {
+		t.Errorf("stopGracePeriod=%v, want 10000000000", cc["stopGracePeriod"])
 	}
 }
 

@@ -173,7 +173,7 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 		resp.Oldest = lines[0].Timestamp
 		resp.Newest = lines[len(lines)-1].Timestamp
 	}
-	writeJSON(w, resp)
+	writeJSON(w, NewDetailResponse(r.Context(), r.URL.Path, "LogResponse", resp))
 }
 
 func (h *Handlers) serveLogsSSE(

@@ -758,7 +758,7 @@ export const api = {
     ),
 
   serviceContainerConfig: (id: string, signal?: AbortSignal) =>
-    fetchJSON<ContainerConfig>(`/services/${id}/container-config`, signal),
+    fetchJSON<{ containerConfig: ContainerConfig }>(`/services/${id}/container-config`, signal),
 
   patchServiceContainerConfig: (id: string, partial: Record<string, unknown>) =>
     patch<{ containerConfig: ContainerConfig }>(

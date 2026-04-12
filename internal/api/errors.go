@@ -3,8 +3,6 @@ package api
 import (
 	"net/http"
 	"sort"
-
-	json "github.com/goccy/go-json"
 )
 
 // ErrorDef defines a well-known error type with a stable code, human-readable
@@ -609,8 +607,7 @@ func HandleErrorIndex(w http.ResponseWriter, r *http.Request) {
 		defs[i] = errorRegistry[code]
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(defs) // best-effort: status already sent
+	writeCachedJSON(w, r, NewCollectionResponse(r.Context(), defs, len(defs), len(defs), 0))
 }
 
 // HandleErrorDetail serves documentation for a single error code.
@@ -622,6 +619,5 @@ func HandleErrorDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(def) // best-effort: status already sent
+	writeCachedJSON(w, r, NewDetailResponse(r.Context(), "/api/errors/"+code, "ErrorDef", def))
 }

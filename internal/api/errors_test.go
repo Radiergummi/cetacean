@@ -22,12 +22,12 @@ func TestHandleErrorIndex_JSON(t *testing.T) {
 		t.Errorf("Content-Type=%s, want application/json", ct)
 	}
 
-	var defs []ErrorDef
-	if err := json.Unmarshal(w.Body.Bytes(), &defs); err != nil {
+	var resp CollectionResponse[ErrorDef]
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if len(defs) != len(errorRegistry) {
-		t.Errorf("got %d errors, want %d", len(defs), len(errorRegistry))
+	if len(resp.Items) != len(errorRegistry) {
+		t.Errorf("got %d errors, want %d", len(resp.Items), len(errorRegistry))
 	}
 }
 

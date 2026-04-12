@@ -390,7 +390,7 @@ func (h *Handlers) HandleGetUnlockKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, map[string]any{"unlockKey": key})
+	writeCachedJSON(w, r, NewDetailResponse(r.Context(), "/swarm/unlock-key", "SwarmUnlockKey", map[string]any{"unlockKey": key}))
 }
 
 func (h *Handlers) HandlePostUnlockSwarm(w http.ResponseWriter, r *http.Request) {
