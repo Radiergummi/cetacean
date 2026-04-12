@@ -37,10 +37,10 @@ const { markdownUrl } = Astro.props;
     document.addEventListener("click", function(e) {
       if (e.target.closest(".copy-page-dropdown")) return;
       document.querySelectorAll(".copy-page-dropdown").forEach(function(dd) {
-        var menu = dd.querySelector(".copy-page-menu");
+        const menu = dd.querySelector(".copy-page-menu");
         if (menu && !menu.hidden) {
           menu.hidden = true;
-          var toggle = dd.querySelector(".copy-page-toggle");
+          const toggle = dd.querySelector(".copy-page-toggle");
           toggle.querySelector("svg").style.transform = "";
           toggle.setAttribute("aria-expanded", "false");
         }
@@ -50,9 +50,9 @@ const { markdownUrl } = Astro.props;
 
   document.querySelectorAll(".copy-page-dropdown:not([data-initialized])").forEach(function(dropdown) {
     dropdown.setAttribute("data-initialized", "");
-    var toggle = dropdown.querySelector(".copy-page-toggle");
-    var menu = dropdown.querySelector(".copy-page-menu");
-    var markdownUrl = dropdown.dataset.markdownUrl;
+    const toggle = dropdown.querySelector(".copy-page-toggle");
+    const menu = dropdown.querySelector(".copy-page-menu");
+    const markdownUrl = dropdown.dataset.markdownUrl;
 
     toggle.addEventListener("click", function() {
       if (menu.hidden) {
@@ -75,7 +75,7 @@ const { markdownUrl } = Astro.props;
       }
     });
 
-    var label = dropdown.querySelector(".copy-page-label");
+    const label = dropdown.querySelector(".copy-page-label");
 
     function copyMarkdown() {
       fetch(markdownUrl)

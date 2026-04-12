@@ -38,17 +38,17 @@ const filtered = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
 
 <script is:inline>
   (function() {
-    var links = document.querySelectorAll("#toc-list a[data-heading]");
+    const links = document.querySelectorAll("#toc-list a[data-heading]");
     if (!links.length) return;
-    var headings = Array.from(links).map(function(link) {
+    const headings = Array.from(links).map(function(link) {
       return { link: link, target: document.getElementById(link.dataset.heading) };
     }).filter(function(h) { return h.target; });
-    var current = null;
-    var observer = new IntersectionObserver(function(entries) {
+    let current = null;
+    const observer = new IntersectionObserver(function(entries) {
       entries.forEach(function(entry) {
         if (entry.isIntersecting) {
           if (current) { current.classList.remove("font-medium"); current.style.color = ""; }
-          var match = headings.find(function(h) { return h.target === entry.target; });
+          const match = headings.find(function(h) { return h.target === entry.target; });
           if (match) {
             match.link.classList.add("font-medium");
             match.link.style.color = "var(--active)";

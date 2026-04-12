@@ -35,7 +35,7 @@
 
     window.__applyTheme(window.__getTheme());
 
-    var themeLabels = { light: "Light theme", dark: "Dark theme", system: "System theme" };
+    const themeLabels = { light: "Light theme", dark: "Dark theme", system: "System theme" };
 
     window.__updateThemeUI = function(theme) {
       document.getElementById("icon-sun").classList.toggle("hidden", theme !== "light");

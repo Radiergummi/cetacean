@@ -31,7 +31,7 @@ const { currentSlug } = Astro.props;
       sidebar.setAttribute("aria-hidden", "false");
       document.body.style.overflow = "hidden";
       getToggle()?.setAttribute("aria-expanded", "true");
-      var firstLink = sidebar.querySelector("a[href]");
+      const firstLink = sidebar.querySelector("a[href]");
       if (firstLink) requestAnimationFrame(() => firstLink.focus());
     };
 
@@ -39,7 +39,7 @@ const { currentSlug } = Astro.props;
       sidebar.classList.remove("open");
       sidebar.setAttribute("aria-hidden", "true");
       document.body.style.overflow = "";
-      var toggle = getToggle();
+      const toggle = getToggle();
       if (toggle) {
         toggle.setAttribute("aria-expanded", "false");
         toggle.focus();
@@ -68,11 +68,11 @@ const { currentSlug } = Astro.props;
       if (e.key === "Escape") {
         closeSidebar(sidebar);
       } else if (e.key === "Tab") {
-        var panel = sidebar.querySelector(".mobile-sidebar-panel");
-        var focusable = panel.querySelectorAll('input, button, a[href], [tabindex]:not([tabindex="-1"])');
+        const panel = sidebar.querySelector(".mobile-sidebar-panel");
+        const focusable = panel.querySelectorAll('input, button, a[href], [tabindex]:not([tabindex="-1"])');
         if (focusable.length) {
-          var first = focusable[0];
-          var last = focusable[focusable.length - 1];
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
           if (e.shiftKey && document.activeElement === first) {
             e.preventDefault();
             last.focus();
@@ -91,7 +91,7 @@ const { currentSlug } = Astro.props;
         sidebar.setAttribute("aria-hidden", "true");
       }
       document.body.style.overflow = "";
-      var toggle = getToggle();
+      const toggle = getToggle();
       if (toggle) toggle.setAttribute("aria-expanded", "false");
     });
   }

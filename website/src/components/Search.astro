@@ -119,11 +119,11 @@
       if (e.key === "Escape") {
         close();
       } else if (e.key === "Tab") {
-        var dialog = overlay.querySelector(".search-dialog");
-        var focusable = dialog.querySelectorAll('input, button, a[href], [tabindex]:not([tabindex="-1"])');
+        const dialog = overlay.querySelector(".search-dialog");
+        const focusable = dialog.querySelectorAll('input, button, a[href], [tabindex]:not([tabindex="-1"])');
         if (focusable.length) {
-          var first = focusable[0];
-          var last = focusable[focusable.length - 1];
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
           if (e.shiftKey && document.activeElement === first) {
             e.preventDefault();
             last.focus();

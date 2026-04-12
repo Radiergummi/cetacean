@@ -4,6 +4,7 @@ info:
   version: "1.0"
   description: |
     Observability and management API for Docker Swarm Mode clusters.
+    For a detailed walkthrough of conventions, query parameters, SSE streaming, and write operations, see the [API Guide](/api).
 
     Uses content negotiation — same URLs serve JSON, HTML (SPA), or SSE based on
     the Accept header. Append `.json` or `.html` to any path to force a content type.
