@@ -4,7 +4,7 @@ import Header from "../../components/Header.astro";
 import Sidebar from "../../components/Sidebar.astro";
 import "../../styles/global.css";
 ---
-<html lang="en">
+<html lang="en" data-astro-reload>
   <head>
     <Head title="API Reference" description="Interactive API reference for the Cetacean REST API." />
     <style>
@@ -31,7 +31,7 @@ import "../../styles/global.css";
             hideDarkModeToggle: true,
           })}
         />
-        <script is:inline src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+        <script is:inline src="/scalar.js"></script>
       </div>
     </div>
   </body>

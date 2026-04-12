@@ -5,5 +5,6 @@ public/demo/demo.html
 public/demo/index.html
 public/demo/404.html
 
-# OpenAPI spec (copied from api/openapi.yaml at build time)
+# Copied at build time (prebuild/predev scripts)
 public/openapi.yaml
+public/scalar.js
