@@ -639,7 +639,7 @@ paths:
             schema:
               type: object
               properties:
-                taskHistoryRetentionLimit:
+                TaskHistoryRetentionLimit:
                   type: integer
       responses:
         "200":
@@ -676,18 +676,18 @@ paths:
             schema:
               type: object
               properties:
-                snapshotInterval:
+                SnapshotInterval:
                   type: integer
                   format: uint64
-                keepOldSnapshots:
+                KeepOldSnapshots:
                   type: integer
                   format: uint64
-                logEntriesForSlowFollowers:
+                LogEntriesForSlowFollowers:
                   type: integer
                   format: uint64
-                electionTick:
+                ElectionTick:
                   type: integer
-                heartbeatTick:
+                HeartbeatTick:
                   type: integer
       responses:
         "200":
@@ -724,7 +724,7 @@ paths:
             schema:
               type: object
               properties:
-                heartbeatPeriod:
+                HeartbeatPeriod:
                   type: integer
                   format: int64
                   description: Heartbeat period in nanoseconds
@@ -763,7 +763,7 @@ paths:
             schema:
               type: object
               properties:
-                nodeCertExpiry:
+                NodeCertExpiry:
                   type: integer
                   format: int64
                   description: Node certificate expiry in nanoseconds
@@ -801,9 +801,9 @@ paths:
           application/merge-patch+json:
             schema:
               type: object
-              required: [autoLockManagers]
+              required: [AutoLockManagers]
               properties:
-                autoLockManagers:
+                AutoLockManagers:
                   type: boolean
       responses:
         "200":
@@ -1384,9 +1384,14 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      labels:
+                        type: object
+                        additionalProperties:
+                          type: string
         "404":
           $ref: "#/components/responses/NotFound"
     patch:
@@ -1749,9 +1754,14 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      env:
+                        type: object
+                        additionalProperties:
+                          type: string
         "404":
           $ref: "#/components/responses/NotFound"
     patch:
@@ -2091,9 +2101,14 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      labels:
+                        type: object
+                        additionalProperties:
+                          type: string
         "404":
           $ref: "#/components/responses/NotFound"
     patch:
@@ -3072,9 +3087,14 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      labels:
+                        type: object
+                        additionalProperties:
+                          type: string
         "404":
           $ref: "#/components/responses/NotFound"
     patch:
@@ -3272,9 +3292,14 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      labels:
+                        type: object
+                        additionalProperties:
+                          type: string
         "404":
           $ref: "#/components/responses/NotFound"
     patch:
