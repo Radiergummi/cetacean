@@ -623,11 +623,19 @@ paths:
                   type: integer
       responses:
         "200":
-          description: Updated swarm info
+          description: Updated orchestration config
           content:
             application/json:
               schema:
-                type: object
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      orchestration:
+                        type: object
+                        description: Docker swarm.OrchestrationConfig object
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -663,11 +671,19 @@ paths:
                   type: integer
       responses:
         "200":
-          description: Updated swarm info
+          description: Updated raft config
           content:
             application/json:
               schema:
-                type: object
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      raft:
+                        type: object
+                        description: Docker swarm.RaftConfig object
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -694,11 +710,19 @@ paths:
                   description: Heartbeat period in nanoseconds
       responses:
         "200":
-          description: Updated swarm info
+          description: Updated dispatcher config
           content:
             application/json:
               schema:
-                type: object
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      dispatcher:
+                        type: object
+                        description: Docker swarm.DispatcherConfig object
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -725,11 +749,19 @@ paths:
                   description: Node certificate expiry in nanoseconds
       responses:
         "200":
-          description: Updated swarm info
+          description: Updated CA config
           content:
             application/json:
               schema:
-                type: object
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      caConfig:
+                        type: object
+                        description: Docker swarm.CAConfig object
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -755,11 +787,19 @@ paths:
                   type: boolean
       responses:
         "200":
-          description: Updated swarm info
+          description: Updated encryption config
           content:
             application/json:
               schema:
-                type: object
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      encryption:
+                        type: object
+                        description: Docker swarm.EncryptionConfig object
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
