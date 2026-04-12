@@ -54,6 +54,7 @@ linters:
           - musttag  # test-only structs don't need json tags
     paths:
       - frontend
+      - website
 
 formatters:
   enable:
