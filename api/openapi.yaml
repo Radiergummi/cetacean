@@ -328,7 +328,18 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Identity"
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - $ref: "#/components/schemas/Identity"
+                  - type: object
+                    properties:
+                      permissions:
+                        type: object
+                        additionalProperties:
+                          type: array
+                          items:
+                            type: string
+                        description: Per-resource permission map (present when ACL is active)
         "304":
           $ref: "#/components/responses/NotModified"
         "401":
@@ -551,10 +562,17 @@ paths:
       responses:
         "200":
           description: Cluster metrics
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ClusterMetrics"
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - $ref: "#/components/schemas/ClusterMetrics"
+        "304":
+          $ref: "#/components/responses/NotModified"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -1392,9 +1410,16 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      labels:
+                        type: object
+                        additionalProperties:
+                          type: string
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -1750,9 +1775,16 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      env:
+                        type: object
+                        additionalProperties:
+                          type: string
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -2085,9 +2117,16 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      labels:
+                        type: object
+                        additionalProperties:
+                          type: string
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -2472,7 +2511,15 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      containerConfig:
+                        type: object
+                        description: Container config fields
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -3051,9 +3098,16 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      labels:
+                        type: object
+                        additionalProperties:
+                          type: string
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -3244,9 +3298,16 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      labels:
+                        type: object
+                        additionalProperties:
+                          type: string
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
