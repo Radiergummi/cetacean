@@ -25,7 +25,6 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       }
 
       function init() {
-        applyThemeClasses();
         Scalar.createApiReference("#scalar-root", {
           url: "/openapi.yaml",
           hideDarkModeToggle: true,
@@ -61,6 +60,20 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
         });
 
         new MutationObserver(applyThemeClasses).observe(document.documentElement, {
+          attributes: true,
+          attributeFilter: ["class"],
+        });
+
+        // Scalar resets body classes during its Vue mount. Watch for that
+        // and re-apply our theme classes, but only when they're actually missing.
+        new MutationObserver(function() {
+          var dark = isDark();
+          var hasDark = document.body.classList.contains("dark-mode");
+          var hasLight = document.body.classList.contains("light-mode");
+          if (dark && !hasDark || !dark && !hasLight) {
+            applyThemeClasses();
+          }
+        }).observe(document.body, {
           attributes: true,
           attributeFilter: ["class"],
         });
