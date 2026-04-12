@@ -214,7 +214,11 @@ func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) 
 	}()
 
 	wg.Wait()
-	writeCachedJSON(w, r, NewDetailResponse(r.Context(), "/cluster/metrics", "ClusterMetrics", metrics))
+	writeCachedJSON(
+		w,
+		r,
+		NewDetailResponse(r.Context(), "/cluster/metrics", "ClusterMetrics", metrics),
+	)
 }
 
 type MonitoringStatus struct {

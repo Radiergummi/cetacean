@@ -2729,7 +2729,8 @@ func TestHandlePatchServiceContainerConfig_PartialPatch(t *testing.T) {
 	if resp["@type"] != "ServiceContainerConfig" {
 		t.Errorf("@type=%v, want ServiceContainerConfig", resp["@type"])
 	}
-	if id, ok := resp["@id"].(string); !ok || !strings.HasSuffix(id, "/services/svc1/container-config") {
+	if id, ok := resp["@id"].(string); !ok ||
+		!strings.HasSuffix(id, "/services/svc1/container-config") {
 		t.Errorf("expected @id ending in /services/svc1/container-config, got %v", resp["@id"])
 	}
 	if ctx, ok := resp["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {

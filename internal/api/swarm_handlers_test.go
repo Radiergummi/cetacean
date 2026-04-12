@@ -182,7 +182,8 @@ func TestHandleSwarmOrchestration_Success(t *testing.T) {
 	if id, ok := envelope["@id"].(string); !ok || !strings.HasSuffix(id, "/swarm/orchestration") {
 		t.Errorf("expected @id ending in /swarm/orchestration, got %v", envelope["@id"])
 	}
-	if ctx, ok := envelope["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
+	if ctx, ok := envelope["@context"].(string); !ok ||
+		!strings.HasSuffix(ctx, "/api/context.jsonld") {
 		t.Errorf("expected @context ending in /api/context.jsonld, got %v", envelope["@context"])
 	}
 }
@@ -371,7 +372,8 @@ func TestHandleSwarmRaft_Success(t *testing.T) {
 	if id, ok := envelope["@id"].(string); !ok || !strings.HasSuffix(id, "/swarm/raft") {
 		t.Errorf("expected @id ending in /swarm/raft, got %v", envelope["@id"])
 	}
-	if ctx, ok := envelope["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
+	if ctx, ok := envelope["@context"].(string); !ok ||
+		!strings.HasSuffix(ctx, "/api/context.jsonld") {
 		t.Errorf("expected @context ending in /api/context.jsonld, got %v", envelope["@context"])
 	}
 }
@@ -568,7 +570,8 @@ func TestHandleSwarmDispatcher_Success(t *testing.T) {
 	if id, ok := envelope["@id"].(string); !ok || !strings.HasSuffix(id, "/swarm/dispatcher") {
 		t.Errorf("expected @id ending in /swarm/dispatcher, got %v", envelope["@id"])
 	}
-	if ctx, ok := envelope["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
+	if ctx, ok := envelope["@context"].(string); !ok ||
+		!strings.HasSuffix(ctx, "/api/context.jsonld") {
 		t.Errorf("expected @context ending in /api/context.jsonld, got %v", envelope["@context"])
 	}
 }
@@ -724,7 +727,8 @@ func TestHandleSwarmCAConfig_Success(t *testing.T) {
 	if id, ok := envelope["@id"].(string); !ok || !strings.HasSuffix(id, "/swarm/ca") {
 		t.Errorf("expected @id ending in /swarm/ca, got %v", envelope["@id"])
 	}
-	if ctx, ok := envelope["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
+	if ctx, ok := envelope["@context"].(string); !ok ||
+		!strings.HasSuffix(ctx, "/api/context.jsonld") {
 		t.Errorf("expected @context ending in /api/context.jsonld, got %v", envelope["@context"])
 	}
 }
@@ -872,7 +876,8 @@ func TestHandleSwarmEncryption_Success(t *testing.T) {
 	if id, ok := envelope["@id"].(string); !ok || !strings.HasSuffix(id, "/swarm/encryption") {
 		t.Errorf("expected @id ending in /swarm/encryption, got %v", envelope["@id"])
 	}
-	if ctx, ok := envelope["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
+	if ctx, ok := envelope["@context"].(string); !ok ||
+		!strings.HasSuffix(ctx, "/api/context.jsonld") {
 		t.Errorf("expected @context ending in /api/context.jsonld, got %v", envelope["@context"])
 	}
 }

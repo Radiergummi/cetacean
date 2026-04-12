@@ -338,7 +338,8 @@ func TestHandleClusterMetrics_WithPrometheus(t *testing.T) {
 	if id, ok := envelope["@id"].(string); !ok || !strings.HasSuffix(id, "/cluster/metrics") {
 		t.Errorf("expected @id ending in /cluster/metrics, got %v", envelope["@id"])
 	}
-	if ctx, ok := envelope["@context"].(string); !ok || !strings.HasSuffix(ctx, "/api/context.jsonld") {
+	if ctx, ok := envelope["@context"].(string); !ok ||
+		!strings.HasSuffix(ctx, "/api/context.jsonld") {
 		t.Errorf("expected @context ending in /api/context.jsonld, got %v", envelope["@context"])
 	}
 }
