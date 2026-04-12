@@ -17,9 +17,11 @@ const { name, flag, env, default: defaultValue, required, deprecated } = Astro.p
     {required && <span class="config-param-badge required">required</span>}
     {deprecated && <span class="config-param-badge deprecated">deprecated</span>}
   </div>
-  <div class="config-param-description">
-    <slot />
-  </div>
+  {Astro.slots.has("default") && (
+    <div class="config-param-description">
+      <slot />
+    </div>
+  )}
   {(flag || env || defaultValue !== undefined) && (
     <div class="config-param-meta">
       {flag && (
@@ -37,7 +39,7 @@ const { name, flag, env, default: defaultValue, required, deprecated } = Astro.p
       {defaultValue !== undefined && (
         <>
           <span class="config-param-label">Default</span>
-          {defaultValue ? <code>{defaultValue}</code> : <span class="config-param-no-default">—</span>}
+          {defaultValue !== "" ? <code>{defaultValue}</code> : <span class="config-param-no-default">—</span>}
         </>
       )}
     </div>
