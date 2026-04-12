@@ -109,7 +109,18 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	swarmACL := h.requireWriteACL(swarmResource)
 
 	authProvider.RegisterRoutes(mux)
-	mux.HandleFunc("GET /auth/whoami", auth.WhoamiHandler(authProvider))
+	mux.HandleFunc("GET /auth/whoami", func(w http.ResponseWriter, r *http.Request) {
+		id, err := authProvider.Authenticate(w, r)
+		if err != nil {
+			writeErrorCode(w, r, "AUT001", "authentication required")
+			return
+		}
+		if id == nil {
+			return // provider handled the response (e.g. redirect)
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, NewDetailResponse(r.Context(), "/auth/whoami", "Identity", id))
+	})
 
 	// Meta endpoints (no content negotiation, no discovery links)
 	mux.HandleFunc("GET /-/health", h.HandleHealth)
