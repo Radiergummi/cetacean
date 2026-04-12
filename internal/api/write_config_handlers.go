@@ -70,6 +70,7 @@ func (h *Handlers) HandlePatchConfigLabels(w http.ResponseWriter, r *http.Reques
 	handlePatchLabels(w, r, patchLabelsSpec[swarm.Config]{
 		resource:     "config",
 		pathKey:      "id",
+		typeName:     "ConfigLabels",
 		getter:       h.cache.GetConfig,
 		getLabels:    func(c swarm.Config) map[string]string { return c.Spec.Labels },
 		update:       h.configWriter.UpdateConfigLabels,

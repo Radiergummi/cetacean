@@ -148,6 +148,7 @@ func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request)
 	handlePatchLabels(w, r, patchLabelsSpec[swarm.Node]{
 		resource:     "node",
 		pathKey:      "id",
+		typeName:     "NodeLabels",
 		getter:       h.cache.GetNode,
 		getLabels:    func(n swarm.Node) map[string]string { return n.Spec.Labels },
 		update:       h.nodeWriter.UpdateNodeLabels,

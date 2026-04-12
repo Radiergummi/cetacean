@@ -23,6 +23,7 @@ type getLabelsSpec[T any] struct {
 type patchLabelsSpec[T any] struct {
 	resource     string // e.g. "node", "service"
 	pathKey      string // path value key: "id" or "name"
+	typeName     string // JSON-LD type: "NodeLabels", "ServiceLabels", etc.
 	getter       func(string) (T, bool)
 	getLabels    func(T) map[string]string
 	update       func(ctx context.Context, id string, labels map[string]string) (T, error)
@@ -98,7 +99,7 @@ func handlePatchLabels[T any](
 	writeMutationResponse(w, r, NewDetailResponse(
 		r.Context(),
 		r.URL.Path,
-		"Labels",
+		spec.typeName,
 		LabelsResponse{Labels: labels},
 	))
 }

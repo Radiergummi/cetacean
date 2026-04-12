@@ -72,6 +72,7 @@ func (h *Handlers) HandlePatchSecretLabels(w http.ResponseWriter, r *http.Reques
 	handlePatchLabels(w, r, patchLabelsSpec[swarm.Secret]{
 		resource:     "secret",
 		pathKey:      "id",
+		typeName:     "SecretLabels",
 		getter:       h.cache.GetSecret,
 		getLabels:    func(s swarm.Secret) map[string]string { return s.Spec.Labels },
 		update:       h.secretWriter.UpdateSecretLabels,

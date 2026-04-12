@@ -310,6 +310,7 @@ func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Reque
 	handlePatchLabels(w, r, patchLabelsSpec[swarm.Service]{
 		resource:     "service",
 		pathKey:      "id",
+		typeName:     "ServiceLabels",
 		getter:       h.cache.GetService,
 		getLabels:    func(s swarm.Service) map[string]string { return s.Spec.Labels },
 		update:       h.serviceSpec.UpdateServiceLabels,

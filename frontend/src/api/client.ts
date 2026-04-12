@@ -609,13 +609,13 @@ export const api = {
       `/configs/${id}/labels`,
       ops,
       "application/json-patch+json",
-    ).then((response) => response.labels),
+    ).then((response) => response?.labels),
   patchSecretLabels: (id: string, ops: PatchOp[]) =>
     patch<{ labels: Record<string, string> }>(
       `/secrets/${id}/labels`,
       ops,
       "application/json-patch+json",
-    ).then((response) => response.labels),
+    ).then((response) => response?.labels),
   removeNetwork: (id: string) => del(`/networks/${id}`),
   removeVolume: (name: string, force?: boolean) =>
     del(force ? `/volumes/${name}?force=true` : `/volumes/${name}`),
@@ -669,19 +669,19 @@ export const api = {
       `/services/${id}/env`,
       ops,
       "application/json-patch+json",
-    ).then((response) => response.env),
+    ).then((response) => response?.env),
   patchNodeLabels: (id: string, ops: PatchOp[]) =>
     patch<{ labels: Record<string, string> }>(
       `/nodes/${id}/labels`,
       ops,
       "application/json-patch+json",
-    ).then((response) => response.labels),
+    ).then((response) => response?.labels),
   patchServiceLabels: (id: string, ops: PatchOp[]) =>
     patch<{ labels: Record<string, string> }>(
       `/services/${id}/labels`,
       ops,
       "application/json-patch+json",
-    ).then((response) => response.labels),
+    ).then((response) => response?.labels),
   patchServiceResources: (id: string, partial: unknown) =>
     patch<Record<string, unknown>>(
       `/services/${id}/resources`,
@@ -764,7 +764,7 @@ export const api = {
       `/services/${id}/container-config`,
       partial,
       "application/merge-patch+json",
-    ).then((response) => response.containerConfig),
+    ).then((response) => response?.containerConfig),
 
   health: (signal?: AbortSignal) =>
     fetchJSON<HealthInfo>(`/-/health`, signal).then(({ data }) => data),
