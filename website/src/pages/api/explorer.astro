@@ -19,13 +19,13 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       }
 
       function applyThemeClasses() {
-        const dark = isDark();
+        var dark = isDark();
         document.body.classList.toggle("dark-mode", dark);
         document.body.classList.toggle("light-mode", !dark);
       }
 
       function init() {
-        Scalar.createApiReference("#scalar-root", {
+        var ref = Scalar.createApiReference("#scalar-root", {
           url: "/openapi.yaml",
           hideDarkModeToggle: true,
           hideSearch: true,
@@ -59,21 +59,18 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
           ]
         });
 
-        new MutationObserver(applyThemeClasses).observe(document.documentElement, {
-          attributes: true,
-          attributeFilter: ["class"],
-        });
+        // Scalar overwrites body classes during its async Vue mount.
+        // Poll briefly until our classes stick, then switch to observers.
+        var attempts = 0;
+        var poll = setInterval(function() {
+          applyThemeClasses();
+          if (++attempts >= 20) clearInterval(poll);
+        }, 100);
 
-        // Scalar resets body classes during its Vue mount. Watch for that
-        // and re-apply our theme classes, but only when they're actually missing.
         new MutationObserver(function() {
-          var dark = isDark();
-          var hasDark = document.body.classList.contains("dark-mode");
-          var hasLight = document.body.classList.contains("light-mode");
-          if (dark && !hasDark || !dark && !hasLight) {
-            applyThemeClasses();
-          }
-        }).observe(document.body, {
+          applyThemeClasses();
+          clearInterval(poll);
+        }).observe(document.documentElement, {
           attributes: true,
           attributeFilter: ["class"],
         });
