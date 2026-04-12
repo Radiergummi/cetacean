@@ -44,7 +44,8 @@ export const sidebarGroups: NavGroup[] = [
     label: "Reference",
     items: [
       { slug: "configuration", title: "Configuration" },
-      { slug: "api", title: "API Reference" },
+      { slug: "api", title: "API Guide" },
+      { slug: "api/explorer", title: "API Reference" },
       { slug: "api/schema", title: "Schema Reference" },
     ],
   },
