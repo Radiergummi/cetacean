@@ -1,6 +1,9 @@
 import { api } from "../../api/client";
 import type { SwarmInfo } from "../../api/types";
+import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { formatDuration } from "../../lib/format";
+import { KVTable } from "../data";
+import { EditablePanel } from "../service-detail/EditablePanel";
 import { Spinner } from "../Spinner";
 import {
   AlertDialog,
@@ -15,9 +18,6 @@ import {
 } from "../ui/alert-dialog";
 import { Button } from "../ui/button";
 import { DurationInput } from "../ui/duration-input";
-import { KVTable } from "../data";
-import { EditablePanel } from "../service-detail/EditablePanel";
-import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { RefreshCw } from "lucide-react";
 import { useState } from "react";
 
@@ -95,12 +95,10 @@ export function CAConfigPanel({
               ],
               ["Force Rotate", String(spec.CAConfig.ForceRotate ?? 0)],
               ["Root Rotation In Progress", rootRotationInProgress ? "Yes" : "No"],
-              ...(spec.CAConfig.ExternalCAs?.map(
-                ({ Protocol, URL }, index): [string, string] => [
-                  `External CA ${index + 1}`,
-                  `${Protocol} — ${URL}`,
-                ],
-              ) ?? []),
+              ...(spec.CAConfig.ExternalCAs?.map(({ Protocol, URL }, index): [string, string] => [
+                `External CA ${index + 1}`,
+                `${Protocol} — ${URL}`,
+              ]) ?? []),
             ]}
           />
         </div>
@@ -119,12 +117,10 @@ export function CAConfigPanel({
             rows={[
               ["Force Rotate", String(spec.CAConfig.ForceRotate ?? 0)],
               ["Root Rotation In Progress", rootRotationInProgress ? "Yes" : "No"],
-              ...(spec.CAConfig.ExternalCAs?.map(
-                ({ Protocol, URL }, index): [string, string] => [
-                  `External CA ${index + 1}`,
-                  `${Protocol} — ${URL}`,
-                ],
-              ) ?? []),
+              ...(spec.CAConfig.ExternalCAs?.map(({ Protocol, URL }, index): [string, string] => [
+                `External CA ${index + 1}`,
+                `${Protocol} — ${URL}`,
+              ]) ?? []),
             ]}
           />
         </div>

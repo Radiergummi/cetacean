@@ -11,13 +11,6 @@ import { CAConfigPanel } from "../components/swarm-detail/CAConfigPanel";
 import { EncryptionPanel } from "../components/swarm-detail/EncryptionPanel";
 import { SwarmActions } from "../components/swarm-detail/SwarmActions";
 import { Button } from "../components/ui/button";
-import { DurationInput } from "../components/ui/duration-input";
-import { NumberField } from "../components/ui/number-field";
-import { useSwarmPage } from "../hooks/useSwarmPage";
-import { formatDuration } from "../lib/format";
-import { EditablePanel } from "@/components/service-detail/EditablePanel";
-import { Check, Copy, Plus } from "lucide-react";
-import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +20,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../components/ui/dialog";
+import { DurationInput } from "../components/ui/duration-input";
+import { NumberField } from "../components/ui/number-field";
+import { useSwarmPage } from "../hooks/useSwarmPage";
+import { formatDuration } from "../lib/format";
+import { EditablePanel } from "@/components/service-detail/EditablePanel";
+import { Check, Copy, Plus } from "lucide-react";
+import { useState } from "react";
 
 function JoinTokenDialog({
   label,

@@ -1,5 +1,8 @@
 import { api } from "../../api/client";
 import type { SwarmInfo } from "../../api/types";
+import { useAsyncAction } from "../../hooks/useAsyncAction";
+import { KVTable } from "../data";
+import { EditablePanel } from "../service-detail/EditablePanel";
 import { Spinner } from "../Spinner";
 import {
   AlertDialog,
@@ -24,9 +27,6 @@ import {
 } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Switch } from "../ui/switch";
-import { KVTable } from "../data";
-import { EditablePanel } from "../service-detail/EditablePanel";
-import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { Check, Copy, KeyRound, LockOpen, RefreshCw } from "lucide-react";
 import { useState } from "react";
 
@@ -58,9 +58,7 @@ export function EncryptionPanel({ spec, canEdit, onSaved }: EncryptionPanelProps
         canEdit={canEdit}
         display={
           <KVTable
-            rows={[
-              ["Auto-Lock Managers", spec.EncryptionConfig.AutoLockManagers ? "Yes" : "No"],
-            ]}
+            rows={[["Auto-Lock Managers", spec.EncryptionConfig.AutoLockManagers ? "Yes" : "No"]]}
           />
         }
         edit={
