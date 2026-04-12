@@ -1,7 +1,7 @@
 import { randomHex, type Dataset } from "./dataset";
 import { handleInstantQuery, handleRangeQuery } from "./prometheus";
 import { broadcast, type SSEClients } from "./sseHandlers";
-import type { ClusterSnapshot, ClusterMetrics, HealthInfo, LogResponse } from "@/api/client";
+import type { ClusterSnapshot, HealthInfo, LogResponse } from "@/api/client";
 import type {
   ClusterCapacity,
   CollectionResponse,
@@ -474,7 +474,10 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
     // The frontend calls /profile for whoami
     http.get("*/profile", () => {
-      return jsonResponse<Identity>({
+      return jsonResponse({
+        "@context": "/api/context.jsonld",
+        "@id": "/profile",
+        "@type": "Profile",
         subject: "demo",
         displayName: "Demo User",
         provider: "none",
@@ -491,12 +494,14 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
     // ---- Cluster ----
     http.get("*/cluster/metrics", () => {
-      const data: ClusterMetrics = {
+      return jsonResponse({
+        "@context": "/api/context.jsonld",
+        "@id": "/cluster/metrics",
+        "@type": "ClusterMetrics",
         cpu: { used: 4.2, total: 16, percent: 26.25 },
         memory: { used: 12_884_901_888, total: 34_359_738_368, percent: 37.5 },
         disk: { used: 53_687_091_200, total: 214_748_364_800, percent: 25.0 },
-      };
-      return jsonResponse<ClusterMetrics>(data);
+      });
     }),
 
     http.get("*/cluster/capacity", () => {

@@ -67,5 +67,5 @@ func (h *Handlers) HandleProfile(w http.ResponseWriter, r *http.Request) {
 	resp.Permissions = h.acl.PermissionsFor(id)
 
 	w.Header().Set("Cache-Control", "no-store")
-	writeCachedJSON(w, r, resp)
+	writeCachedJSON(w, r, NewDetailResponse(r.Context(), "/profile", "Profile", resp))
 }
