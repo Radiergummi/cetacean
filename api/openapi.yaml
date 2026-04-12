@@ -840,18 +840,14 @@ paths:
           application/json:
             schema:
               type: object
-              required: [role]
+              required: [target]
               properties:
-                role:
+                target:
                   type: string
                   enum: [worker, manager]
       responses:
-        "200":
-          description: New join tokens
-          content:
-            application/json:
-              schema:
-                type: object
+        "204":
+          description: Token rotated
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -1363,7 +1359,13 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      node:
+                        type: object
+                        description: Docker swarm.Node object
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -1480,7 +1482,13 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      node:
+                        type: object
+                        description: Docker swarm.Node object
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -1658,7 +1666,18 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      service:
+                        type: object
+                        description: Docker swarm.Service object
+                      integrations:
+                        type: array
+                        description: Detected third-party integrations (e.g. Traefik)
+                        items:
+                          $ref: "#/components/schemas/Integration"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -1691,7 +1710,18 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      service:
+                        type: object
+                        description: Docker swarm.Service object
+                      integrations:
+                        type: array
+                        description: Detected third-party integrations (e.g. Traefik)
+                        items:
+                          $ref: "#/components/schemas/Integration"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -1713,7 +1743,18 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      service:
+                        type: object
+                        description: Docker swarm.Service object
+                      integrations:
+                        type: array
+                        description: Detected third-party integrations (e.g. Traefik)
+                        items:
+                          $ref: "#/components/schemas/Integration"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -1735,7 +1776,18 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      service:
+                        type: object
+                        description: Docker swarm.Service object
+                      integrations:
+                        type: array
+                        description: Detected third-party integrations (e.g. Traefik)
+                        items:
+                          $ref: "#/components/schemas/Integration"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -2192,7 +2244,13 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      healthcheck:
+                        type: object
+                        description: Docker container.HealthConfig object
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -2223,7 +2281,13 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      healthcheck:
+                        type: object
+                        description: Docker container.HealthConfig object
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -2273,25 +2337,40 @@ paths:
         content:
           application/json:
             schema:
-              type: array
-              items:
-                type: object
-                properties:
-                  configID:
-                    type: string
-                  configName:
-                    type: string
-                  fileName:
-                    type: string
+              type: object
+              properties:
+                configs:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      configID:
+                        type: string
+                      configName:
+                        type: string
+                      fileName:
+                        type: string
       responses:
         "200":
           description: Updated config references
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      configs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            configID:
+                              type: string
+                            configName:
+                              type: string
+                            fileName:
+                              type: string
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -2339,25 +2418,40 @@ paths:
         content:
           application/json:
             schema:
-              type: array
-              items:
-                type: object
-                properties:
-                  secretID:
-                    type: string
-                  secretName:
-                    type: string
-                  fileName:
-                    type: string
+              type: object
+              properties:
+                secrets:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      secretID:
+                        type: string
+                      secretName:
+                        type: string
+                      fileName:
+                        type: string
       responses:
         "200":
           description: Updated secret references
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      secrets:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            secretID:
+                              type: string
+                            secretName:
+                              type: string
+                            fileName:
+                              type: string
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -2405,25 +2499,40 @@ paths:
         content:
           application/json:
             schema:
-              type: array
-              items:
-                type: object
-                properties:
-                  target:
-                    type: string
-                  aliases:
-                    type: array
-                    items:
-                      type: string
+              type: object
+              properties:
+                networks:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      target:
+                        type: string
+                      aliases:
+                        type: array
+                        items:
+                          type: string
       responses:
         "200":
           description: Updated network attachments
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      networks:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            target:
+                              type: string
+                            aliases:
+                              type: array
+                              items:
+                                type: string
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -2465,19 +2574,28 @@ paths:
         content:
           application/json:
             schema:
-              type: array
-              items:
-                type: object
-                description: Docker mount.Mount object
+              type: object
+              properties:
+                mounts:
+                  type: array
+                  items:
+                    type: object
+                    description: Docker mount.Mount object
       responses:
         "200":
           description: Updated mount configuration
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      mounts:
+                        type: array
+                        items:
+                          type: object
+                          description: Docker mount.Mount object
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -2578,7 +2696,18 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      service:
+                        type: object
+                        description: Docker swarm.Service object
+                      integrations:
+                        type: array
+                        description: Detected third-party integrations (e.g. Traefik)
+                        items:
+                          $ref: "#/components/schemas/Integration"
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -2614,7 +2743,18 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      service:
+                        type: object
+                        description: Docker swarm.Service object
+                      integrations:
+                        type: array
+                        description: Detected third-party integrations (e.g. Traefik)
+                        items:
+                          $ref: "#/components/schemas/Integration"
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
