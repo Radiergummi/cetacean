@@ -66,6 +66,10 @@
   }
   html {
     @apply font-sans antialiased;
+    scroll-behavior: smooth;
+  }
+  [id] {
+    scroll-margin-top: 5rem;
   }
   ::selection {
     background: var(--active);
@@ -145,6 +149,12 @@
   }
   .prose tbody tr:last-child td {
     @apply border-b-0;
+  }
+
+  /* ── Schema entries (borderless) ─────────────────────────────────── */
+
+  .prose .schema-entry {
+    @apply my-6;
   }
 
   /* ── Config parameter cards ──────────────────────────────────────── */

@@ -1,0 +1,91 @@
+---
+import DocsLayout from "../../layouts/DocsLayout.astro";
+import { properties, rfc9457Properties, types } from "../../lib/schema";
+
+const allProperties = [...properties, ...rfc9457Properties].sort((a, b) => a.name.localeCompare(b.name));
+const headings = [
+  { depth: 2, slug: "types", text: "Types" },
+  ...types.map((t) => ({ depth: 3, slug: t.name, text: t.name })),
+  { depth: 2, slug: "properties", text: "Properties" },
+  ...allProperties.map((p) => ({ depth: 3, slug: p.name, text: p.name })),
+];
+---
+<DocsLayout
+  title="Schema Reference"
+  description="JSON-LD vocabulary for the Cetacean API: types, properties, and their IRIs."
+  slug="api/schema"
+  headings={headings}
+>
+  <p>
+    Cetacean API responses include <a href="https://json-ld.org/">JSON-LD</a> metadata
+    (<code>@context</code>, <code>@id</code>, <code>@type</code>) for self-description.
+    This page documents the vocabulary. The machine-readable context document is available
+    at <a href="/api/schema.jsonld"><code>/api/schema.jsonld</code></a>.
+  </p>
+
+  <h2 id="types">Types</h2>
+  <p>Each API response includes an <code>@type</code> value identifying the resource kind.</p>
+
+  {types.map((type) => (
+    <div id={type.name} class="schema-entry">
+      <div class="config-param-heading">
+        <code>{type.name}</code>
+      </div>
+      <div class="config-param-description">
+        <p>{type.description}</p>
+      </div>
+      <div class="config-param-meta">
+        <span class="config-param-label">Endpoint</span>
+        <span><code>{type.endpoint}</code></span>
+        {type.properties.length > 0 && (
+          <>
+            <span class="config-param-label">Properties</span>
+            <span>
+              {type.properties.map((p, i) => (
+                <>
+                  {i > 0 && ", "}
+                  <a href={`#${p}`}><code>{p}</code></a>
+                </>
+              ))}
+            </span>
+          </>
+        )}
+      </div>
+    </div>
+  ))}
+
+  <h2 id="properties">Properties</h2>
+  <p>
+    Properties are mapped to IRIs via the <code>@context</code>. The <code>urn:cetacean:</code> namespace
+    is the default vocabulary; RFC 9457 problem detail fields use <code>urn:ietf:rfc:9457#</code>.
+  </p>
+
+  {allProperties.map((prop) => (
+    <div id={prop.name} class="schema-entry">
+      <div class="config-param-heading">
+        <code>{prop.name}</code>
+        {prop.container && (
+          <span class="config-param-badge required">{prop.container}</span>
+        )}
+      </div>
+      <div class="config-param-description">
+        <p set:html={prop.description.replace(/`([^`]+)`/g, "<code>$1</code>")} />
+      </div>
+      <div class="config-param-meta">
+        <span class="config-param-label">IRI</span>
+        <span><code>{prop.iri}</code></span>
+        <span class="config-param-label">Type</span>
+        <span><code>{prop.expectedType}</code></span>
+        <span class="config-param-label">Used on</span>
+        <span>
+          {prop.usedOn.map((t, i) => (
+            <>
+              {i > 0 && ", "}
+              <a href={`#${t}`}>{t}</a>
+            </>
+          ))}
+        </span>
+      </div>
+    </div>
+  ))}
+</DocsLayout>
