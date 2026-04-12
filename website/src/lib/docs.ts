@@ -5,7 +5,10 @@ export const docsDir = resolve("../docs");
 export const changelogPath = resolve("../CHANGELOG.md");
 
 export function slugify(text: string): string {
-  return text.toLowerCase().replace(/[^\w]+/g, "-").replace(/^-|-$/g, "");
+  return text
+    .toLowerCase()
+    .replace(/[^\w]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 export async function getDocPaths() {

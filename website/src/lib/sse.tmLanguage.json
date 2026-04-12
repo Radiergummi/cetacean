@@ -1,11 +1,7 @@
 {
   "name": "sse",
   "scopeName": "source.sse",
-  "patterns": [
-    { "include": "#comment" },
-    { "include": "#data-field" },
-    { "include": "#field" }
-  ],
+  "patterns": [{ "include": "#comment" }, { "include": "#data-field" }, { "include": "#field" }],
   "repository": {
     "comment": {
       "match": "^(:)(.*)",
@@ -29,9 +25,7 @@
         "2": { "name": "punctuation.separator.sse" }
       },
       "end": "$",
-      "patterns": [
-        { "include": "source.json" }
-      ]
+      "patterns": [{ "include": "source.json" }]
     }
   }
 }

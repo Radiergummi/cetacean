@@ -75,7 +75,8 @@ function remarkCodeTabs() {
       }
 
       const labels = group.map((node) => {
-        const label = parseTabLabel(node.meta) || defaultTabLabels[node.lang] || node.lang || "Code";
+        const label =
+          parseTabLabel(node.meta) || defaultTabLabels[node.lang] || node.lang || "Code";
         stripTabMeta(node);
         return label;
       });
@@ -89,10 +90,16 @@ function remarkCodeTabs() {
         )
         .join("");
 
-      replacement.push(html(`<div class="code-tabs"><div class="code-tabs-bar" role="tablist">${buttons}</div>`));
+      replacement.push(
+        html(`<div class="code-tabs"><div class="code-tabs-bar" role="tablist">${buttons}</div>`),
+      );
 
       for (let j = 0; j < group.length; j++) {
-        replacement.push(html(`<div class="code-tab-panel${j === 0 ? " active" : ""}" data-tab="${j}" role="tabpanel" id="${tabGroupId}-panel-${j}" aria-labelledby="${tabGroupId}-tab-${j}">`));
+        replacement.push(
+          html(
+            `<div class="code-tab-panel${j === 0 ? " active" : ""}" data-tab="${j}" role="tabpanel" id="${tabGroupId}-panel-${j}" aria-labelledby="${tabGroupId}-tab-${j}">`,
+          ),
+        );
         replacement.push(group[j]);
         replacement.push(html("</div>"));
       }

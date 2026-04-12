@@ -38,13 +38,17 @@ export async function GET(context: APIContext) {
   const site = context.site?.origin ?? "https://cetacean.mazetti.me";
   const updated = releases[0]?.date || new Date().toISOString().slice(0, 10);
 
-  const entries = releases.map((release) => `  <entry>
+  const entries = releases
+    .map(
+      (release) => `  <entry>
     <title>Cetacean ${release.version}</title>
     <id>tag:cetacean.mazetti.me,${release.date}:release/${release.version}</id>
     <link href="${site}/changelog" rel="alternate" />
     <updated>${release.date}T00:00:00Z</updated>
     <content type="html"><![CDATA[${escapeCdata(release.html)}]]></content>
-  </entry>`).join("\n");
+  </entry>`,
+    )
+    .join("\n");
 
   const atom = `<?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">

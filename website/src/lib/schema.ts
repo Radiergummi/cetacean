@@ -226,7 +226,8 @@ export const properties: Property[] = [
   {
     name: "name",
     iri: "urn:cetacean:name",
-    description: "The human-readable name of a resource. For nodes this is the hostname; for services, configs, secrets, networks, and volumes it is the Docker object name.",
+    description:
+      "The human-readable name of a resource. For nodes this is the hostname; for services, configs, secrets, networks, and volumes it is the Docker object name.",
     expectedType: "String",
     usedOn: ["Node", "Service", "Stack", "Config", "Secret", "Network", "Volume", "ServiceRef"],
   },
@@ -290,7 +291,8 @@ export const properties: Property[] = [
   {
     name: "operationsLevel",
     iri: "urn:cetacean:operationsLevel",
-    description: "Current operations level (0=read-only, 1=operational, 2=configuration, 3=impactful).",
+    description:
+      "Current operations level (0=read-only, 1=operational, 2=configuration, 3=impactful).",
     expectedType: "Integer",
     usedOn: ["Health"],
   },
@@ -454,7 +456,8 @@ export const properties: Property[] = [
   {
     name: "slot",
     iri: "urn:cetacean:slot",
-    description: "The slot number of a task within a replicated service. Each replica occupies a unique slot.",
+    description:
+      "The slot number of a task within a replicated service. Each replica occupies a unique slot.",
     expectedType: "Integer",
     usedOn: ["Task"],
   },
@@ -475,7 +478,8 @@ export const properties: Property[] = [
   {
     name: "state",
     iri: "urn:cetacean:state",
-    description: "The current state of a resource. For nodes: `ready`, `down`, or `unknown`. For tasks: `running`, `failed`, `complete`, etc. For services: a derived state based on running/desired task counts.",
+    description:
+      "The current state of a resource. For nodes: `ready`, `down`, or `unknown`. For tasks: `running`, `failed`, `complete`, etc. For services: a derived state based on running/desired task counts.",
     expectedType: "String",
     usedOn: ["Node", "Service", "Task"],
   },
@@ -629,7 +633,21 @@ export const types: ResourceType[] = [
     name: "Service",
     description: "A Docker Swarm service.",
     endpoint: "/services/{id}",
-    properties: ["service", "name", "mode", "replicas", "image", "ports", "networks", "aliases", "tasks", "updateStatus", "state", "changes", "integrations"],
+    properties: [
+      "service",
+      "name",
+      "mode",
+      "replicas",
+      "image",
+      "ports",
+      "networks",
+      "aliases",
+      "tasks",
+      "updateStatus",
+      "state",
+      "changes",
+      "integrations",
+    ],
   },
   {
     name: "Task",
@@ -678,11 +696,21 @@ export const types: ResourceType[] = [
     description: "Cluster-wide overview with counts and resource totals.",
     endpoint: "/cluster",
     properties: [
-      "nodeCount", "serviceCount", "taskCount", "stackCount",
-      "nodesReady", "nodesDown", "nodesDraining",
-      "servicesConverged", "servicesDegraded",
-      "reservedCPU", "reservedMemory", "totalCPU", "totalMemory",
-      "tasksByState", "prometheusConfigured",
+      "nodeCount",
+      "serviceCount",
+      "taskCount",
+      "stackCount",
+      "nodesReady",
+      "nodesDown",
+      "nodesDraining",
+      "servicesConverged",
+      "servicesDegraded",
+      "reservedCPU",
+      "reservedMemory",
+      "totalCPU",
+      "totalMemory",
+      "tasksByState",
+      "prometheusConfigured",
     ],
   },
   {
@@ -821,7 +849,8 @@ export const types: ResourceType[] = [
   },
   {
     name: "ServiceRef",
-    description: "A cross-reference to a service (used in config/secret/network/volume detail responses).",
+    description:
+      "A cross-reference to a service (used in config/secret/network/volume detail responses).",
     endpoint: "Embedded in detail responses",
     properties: ["name"],
   },
