@@ -19,68 +19,56 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       }
 
       function applyThemeClasses() {
-        var dark = isDark();
+        const dark = isDark();
         document.body.classList.toggle("dark-mode", dark);
         document.body.classList.toggle("light-mode", !dark);
       }
 
       function init() {
-        var ref = Scalar.createApiReference("#scalar-root", {
+        Scalar.createApiReference("#scalar-root", {
           url: "/openapi.yaml",
           hideDarkModeToggle: true,
           hideSearch: true,
           showOperationId: true,
           title: "Cetacean API Reference",
           telemetry: false,
-          baseServerURL: 'https://cetacean.example.com',
+          baseServerURL: "https://cetacean.example.com",
           hideTestRequestButton: true,
           darkMode: isDark(),
-          defaultHttpClient: {
-            targetKey: 'http',
-            clientKey: '1.1'
-          },
-          mcp: {
-            disabled: true
-          },
+          defaultHttpClient: { targetKey: "http", clientKey: "1.1" },
+          hiddenClients: ["ruby", "php", "c", "csharp", "clojure", "dart", "fsharp", "node.js", "objc", "r", "powershell", "ocaml", "kotlin"],
+          mcp: { disabled: true },
           hideClientButton: true,
           withDefaultFonts: false,
-          agent: {
-            disabled: true,
-          },
+          agent: { disabled: true },
           servers: [
             {
-              url: 'https://{hostname}',
-              variables: {
-                hostname: {
-                  default: 'cetacean.example.com'
-                }
-              }
+              url: "https://{hostname}",
+              variables: { hostname: { default: "cetacean.example.com" } },
             },
-          ]
+          ],
         });
 
-        // Scalar overwrites body classes during its async Vue mount.
-        // Poll briefly until our classes stick, then switch to observers.
-        var attempts = 0;
-        var poll = setInterval(function() {
+        // Scalar's async Vue mount may clobber body classes after we set them.
+        // Poll briefly until our classes stick; the observer handles later toggles.
+        let attempts = 0;
+        const poll = setInterval(function() {
           applyThemeClasses();
           if (++attempts >= 20) clearInterval(poll);
         }, 100);
 
-        new MutationObserver(function() {
-          applyThemeClasses();
-          clearInterval(poll);
-        }).observe(document.documentElement, {
+        const observer = new MutationObserver(applyThemeClasses);
+        observer.observe(document.documentElement, {
           attributes: true,
           attributeFilter: ["class"],
         });
 
-        // Clean up Scalar-specific body classes when leaving the page
         document.addEventListener("astro:before-swap", function cleanup() {
           clearInterval(poll);
+          observer.disconnect();
           document.body.classList.remove("dark-mode", "light-mode");
           document.removeEventListener("astro:before-swap", cleanup);
-        });
+        }, { once: true });
       }
 
       if (typeof Scalar !== "undefined") {

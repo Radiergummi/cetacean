@@ -2406,6 +2406,15 @@ func TestHandleGetNodeRole_Manager(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
+	if resp["@context"] == "" {
+		t.Error("missing @context")
+	}
+	if resp["@id"] == "" {
+		t.Error("missing @id")
+	}
+	if resp["@type"] != "NodeRole" {
+		t.Errorf("@type=%v, want NodeRole", resp["@type"])
+	}
 	if resp["role"] != "manager" {
 		t.Errorf("role=%v, want manager", resp["role"])
 	}

@@ -186,11 +186,15 @@ func (h *Handlers) HandleNetworkTopology(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	writeCachedJSON(w, r, NetworkTopology{
-		Nodes:    nodes,
-		Edges:    edges,
-		Networks: topoNetworks,
-	})
+	writeCachedJSON(
+		w,
+		r,
+		NewDetailResponse(r.Context(), "/topology/networks", "NetworkTopology", NetworkTopology{
+			Nodes:    nodes,
+			Edges:    edges,
+			Networks: topoNetworks,
+		}),
+	)
 }
 
 func (h *Handlers) HandlePlacementTopology(w http.ResponseWriter, r *http.Request) {
@@ -264,7 +268,16 @@ func (h *Handlers) HandlePlacementTopology(w http.ResponseWriter, r *http.Reques
 		})
 	}
 
-	writeCachedJSON(w, r, PlacementTopology{Nodes: topoNodes})
+	writeCachedJSON(
+		w,
+		r,
+		NewDetailResponse(
+			r.Context(),
+			"/topology/placement",
+			"PlacementTopology",
+			PlacementTopology{Nodes: topoNodes},
+		),
+	)
 }
 
 func replicaCount(svc swarm.Service) int {

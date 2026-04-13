@@ -282,6 +282,9 @@ describe("computed endpoint shapes", () => {
 describe("topology endpoint shapes", () => {
   it("GET /topology/networks has nodes, edges, networks", async () => {
     const data = await fetchJSON("/topology/networks");
+    expect(data["@context"]).toBeTruthy();
+    expect(data["@id"]).toBeTruthy();
+    expect(data["@type"]).toBe("NetworkTopology");
     expect(Array.isArray(data.nodes)).toBe(true);
     expect(Array.isArray(data.edges)).toBe(true);
     expect(Array.isArray(data.networks)).toBe(true);
@@ -289,7 +292,11 @@ describe("topology endpoint shapes", () => {
 
   it("GET /topology/placement has nodes with tasks", async () => {
     const data = await fetchJSON("/topology/placement");
+    expect(data["@context"]).toBeTruthy();
+    expect(data["@id"]).toBeTruthy();
+    expect(data["@type"]).toBe("PlacementTopology");
     expect(Array.isArray(data.nodes)).toBe(true);
+
     for (const node of data.nodes) {
       expect(Array.isArray(node.tasks)).toBe(true);
     }

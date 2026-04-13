@@ -11,7 +11,6 @@ import type {
   DiskUsageSummary,
   Healthcheck,
   HistoryEntry,
-  Identity,
   LogDriver,
   MonitoringStatus,
   Network,
@@ -574,7 +573,14 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         stack: network.Labels?.[stackLabel],
       }));
 
-      return jsonResponse({ nodes, edges, networks });
+      return jsonResponse({
+        "@context": "/api/context.jsonld",
+        "@id": "/topology/networks",
+        "@type": "NetworkTopology",
+        nodes,
+        edges,
+        networks,
+      });
     }),
 
     http.get("*/topology/placement", () => {
@@ -600,7 +606,12 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
           }),
       }));
 
-      return jsonResponse({ nodes: placementNodes });
+      return jsonResponse({
+        "@context": "/api/context.jsonld",
+        "@id": "/topology/placement",
+        "@type": "PlacementTopology",
+        nodes: placementNodes,
+      });
     }),
 
     // ---- Nodes ----
@@ -628,7 +639,17 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       }
 
       const managerCount = dataset.nodes.filter((node) => node.Spec.Role === "manager").length;
-      return jsonResponse<{ role: string; isLeader: boolean; managerCount: number }>({
+      return jsonResponse<{
+        "@context": string;
+        "@id": string;
+        "@type": string;
+        role: string;
+        isLeader: boolean;
+        managerCount: number;
+      }>({
+        "@context": "/api/context.jsonld",
+        "@id": `/nodes/${params.id as string}/role`,
+        "@type": "NodeRole",
         role: node.Spec.Role,
         isLeader: node.ManagerStatus?.Leader ?? false,
         managerCount,

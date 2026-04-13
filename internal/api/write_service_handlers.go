@@ -897,7 +897,16 @@ func (h *Handlers) HandleGetServiceContainerConfig(w http.ResponseWriter, r *htt
 	}
 
 	resp := containerConfigFromSpec(svc.Spec.TaskTemplate.ContainerSpec)
-	writeCachedJSON(w, r, NewDetailResponse(r.Context(), r.URL.Path, "ServiceContainerConfig", map[string]any{"containerConfig": resp}))
+	writeCachedJSON(
+		w,
+		r,
+		NewDetailResponse(
+			r.Context(),
+			"/services/"+svc.ID+"/container-config",
+			"ServiceContainerConfig",
+			map[string]any{"containerConfig": resp},
+		),
+	)
 }
 
 func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *http.Request) {

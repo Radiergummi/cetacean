@@ -126,11 +126,11 @@ func (h *Handlers) HandleGetNodeRole(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeCachedJSON(w, r, NodeRoleResponse{
+	writeCachedJSON(w, r, NewDetailResponse(r.Context(), r.URL.Path, "NodeRole", NodeRoleResponse{
 		Role:         string(node.Spec.Role),
 		IsLeader:     node.ManagerStatus != nil && node.ManagerStatus.Leader,
 		ManagerCount: managerCount,
-	})
+	}))
 }
 
 func (h *Handlers) HandleGetNodeLabels(w http.ResponseWriter, r *http.Request) {

@@ -35,19 +35,34 @@ func TestHandleNetworkTopology(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleNetworkTopology(w, req)
 
-	var resp NetworkTopology
+	var resp map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
 
-	if len(resp.Nodes) != 2 {
-		t.Errorf("nodes=%d, want 2", len(resp.Nodes))
+	if resp["@context"] == "" {
+		t.Error("missing @context")
 	}
-	if len(resp.Edges) != 1 {
-		t.Errorf("edges=%d, want 1", len(resp.Edges))
+	if resp["@id"] == "" {
+		t.Error("missing @id")
 	}
-	if len(resp.Networks) != 1 {
-		t.Errorf("networks=%d, want 1", len(resp.Networks))
+	if resp["@type"] != "NetworkTopology" {
+		t.Errorf("@type=%v, want NetworkTopology", resp["@type"])
+	}
+
+	nodes, _ := resp["nodes"].([]any)
+	if len(nodes) != 2 {
+		t.Errorf("nodes=%d, want 2", len(nodes))
+	}
+
+	edges, _ := resp["edges"].([]any)
+	if len(edges) != 1 {
+		t.Errorf("edges=%d, want 1", len(edges))
+	}
+
+	networks, _ := resp["networks"].([]any)
+	if len(networks) != 1 {
+		t.Errorf("networks=%d, want 1", len(networks))
 	}
 }
 
@@ -72,15 +87,19 @@ func TestHandleNetworkTopology_WithReplicatedService(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleNetworkTopology(w, req)
 
-	var resp NetworkTopology
+	var resp map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(resp.Nodes) != 1 {
-		t.Fatalf("nodes=%d, want 1", len(resp.Nodes))
+
+	nodes, _ := resp["nodes"].([]any)
+	if len(nodes) != 1 {
+		t.Fatalf("nodes=%d, want 1", len(nodes))
 	}
-	if resp.Nodes[0].Replicas != 3 {
-		t.Errorf("replicas=%d, want 3", resp.Nodes[0].Replicas)
+
+	node, _ := nodes[0].(map[string]any)
+	if node["replicas"] != float64(3) {
+		t.Errorf("replicas=%v, want 3", node["replicas"])
 	}
 }
 
@@ -115,19 +134,35 @@ func TestHandlePlacementTopology(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandlePlacementTopology(w, req)
 
-	var resp PlacementTopology
+	var resp map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
 
-	if len(resp.Nodes) != 1 {
-		t.Errorf("nodes=%d, want 1", len(resp.Nodes))
+	if resp["@context"] == "" {
+		t.Error("missing @context")
 	}
-	if len(resp.Nodes[0].Tasks) != 1 {
-		t.Errorf("tasks=%d, want 1", len(resp.Nodes[0].Tasks))
+	if resp["@id"] == "" {
+		t.Error("missing @id")
 	}
-	if resp.Nodes[0].Tasks[0].ServiceName != "nginx" {
-		t.Errorf("serviceName=%s, want nginx", resp.Nodes[0].Tasks[0].ServiceName)
+	if resp["@type"] != "PlacementTopology" {
+		t.Errorf("@type=%v, want PlacementTopology", resp["@type"])
+	}
+
+	nodes, _ := resp["nodes"].([]any)
+	if len(nodes) != 1 {
+		t.Errorf("nodes=%d, want 1", len(nodes))
+	}
+
+	node, _ := nodes[0].(map[string]any)
+	tasks, _ := node["tasks"].([]any)
+	if len(tasks) != 1 {
+		t.Errorf("tasks=%d, want 1", len(tasks))
+	}
+
+	task, _ := tasks[0].(map[string]any)
+	if task["serviceName"] != "nginx" {
+		t.Errorf("serviceName=%v, want nginx", task["serviceName"])
 	}
 }
 
@@ -165,25 +200,30 @@ func TestHandleNetworkTopology_EnrichedFields(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleNetworkTopology(w, req)
 
-	var resp NetworkTopology
+	var resp map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(resp.Nodes) != 1 {
-		t.Fatalf("nodes=%d, want 1", len(resp.Nodes))
+
+	nodes, _ := resp["nodes"].([]any)
+	if len(nodes) != 1 {
+		t.Fatalf("nodes=%d, want 1", len(nodes))
 	}
-	n := resp.Nodes[0]
-	if n.Image != "nginx:1.25" {
-		t.Errorf("image=%q, want nginx:1.25", n.Image)
+
+	n, _ := nodes[0].(map[string]any)
+	if n["image"] != "nginx:1.25" {
+		t.Errorf("image=%q, want nginx:1.25", n["image"])
 	}
-	if n.Mode != "replicated" {
-		t.Errorf("mode=%q, want replicated", n.Mode)
+	if n["mode"] != "replicated" {
+		t.Errorf("mode=%q, want replicated", n["mode"])
 	}
-	if len(n.Ports) != 1 || n.Ports[0] != "80:8080/tcp" {
-		t.Errorf("ports=%v, want [80:8080/tcp]", n.Ports)
+
+	ports, _ := n["ports"].([]any)
+	if len(ports) != 1 || ports[0] != "80:8080/tcp" {
+		t.Errorf("ports=%v, want [80:8080/tcp]", ports)
 	}
-	if n.UpdateStatus != "updating" {
-		t.Errorf("updateStatus=%q, want updating", n.UpdateStatus)
+	if n["updateStatus"] != "updating" {
+		t.Errorf("updateStatus=%q, want updating", n["updateStatus"])
 	}
 }
 
@@ -218,15 +258,29 @@ func TestHandlePlacementTopology_EnrichedFields(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandlePlacementTopology(w, req)
 
-	var resp PlacementTopology
+	var resp map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if resp.Nodes[0].Availability != "active" {
-		t.Errorf("availability=%q, want active", resp.Nodes[0].Availability)
+
+	nodes, _ := resp["nodes"].([]any)
+	if len(nodes) == 0 {
+		t.Fatal("nodes is empty")
 	}
-	if resp.Nodes[0].Tasks[0].Image != "nginx:1.25" {
-		t.Errorf("image=%q, want nginx:1.25", resp.Nodes[0].Tasks[0].Image)
+
+	node, _ := nodes[0].(map[string]any)
+	if node["availability"] != "active" {
+		t.Errorf("availability=%q, want active", node["availability"])
+	}
+
+	tasks, _ := node["tasks"].([]any)
+	if len(tasks) == 0 {
+		t.Fatal("tasks is empty")
+	}
+
+	task, _ := tasks[0].(map[string]any)
+	if task["image"] != "nginx:1.25" {
+		t.Errorf("image=%q, want nginx:1.25", task["image"])
 	}
 }
 

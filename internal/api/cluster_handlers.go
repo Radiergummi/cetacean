@@ -240,7 +240,15 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 	}
 
 	if h.promClient == nil {
-		writeJSON(w, NewDetailResponse(r.Context(), "/metrics/status", "MonitoringStatus", MonitoringStatus{}))
+		writeJSON(
+			w,
+			NewDetailResponse(
+				r.Context(),
+				"/metrics/status",
+				"MonitoringStatus",
+				MonitoringStatus{},
+			),
+		)
 		return
 	}
 
