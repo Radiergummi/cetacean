@@ -103,6 +103,51 @@ func NewDetailResponse(ctx context.Context, id, typ string, extra any) DetailRes
 	}
 }
 
+// Item wraps a collection entry with JSON-LD @id and @type fields.
+// MarshalJSON produces: {"@id": "...", "@type": "...", <fields of T>}
+type Item[T any] struct {
+	id  string
+	typ string
+	val T
+}
+
+// MarshalJSON inlines the wrapped value's fields after @id and @type.
+func (i Item[T]) MarshalJSON() ([]byte, error) {
+	valBytes, err := json.Marshal(i.val)
+	if err != nil {
+		return nil, err
+	}
+
+	idJSON, err := json.Marshal(i.id)
+	if err != nil {
+		return nil, err
+	}
+
+	buf := make([]byte, 0, len(valBytes)+64)
+	buf = append(buf, `{"@id":`...)
+	buf = append(buf, idJSON...)
+	buf = append(buf, `,"@type":"`...)
+	buf = append(buf, i.typ...)
+	buf = append(buf, `"`...)
+
+	if len(valBytes) > 2 { // not "{}"
+		buf = append(buf, ',')
+		buf = append(buf, valBytes[1:len(valBytes)-1]...)
+	}
+
+	buf = append(buf, '}')
+	return buf, nil
+}
+
+// wrapItems maps a slice of T to []Item[T] using the given type name and ID extractor.
+func wrapItems[T any](items []T, typ string, id func(T) string) []Item[T] {
+	out := make([]Item[T], len(items))
+	for index, v := range items {
+		out[index] = Item[T]{id: id(v), typ: typ, val: v}
+	}
+	return out
+}
+
 // CollectionResponse is the JSON-LD wrapper for list endpoints.
 type CollectionResponse[T any] struct {
 	Context string `json:"@context"`

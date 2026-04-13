@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	json "github.com/goccy/go-json"
@@ -154,5 +155,104 @@ func TestNewCollectionResponse_Empty(t *testing.T) {
 	}
 	if resp.Total != 0 {
 		t.Errorf("Total = %d, want 0", resp.Total)
+	}
+}
+
+type testStruct struct {
+	Name  string `json:"name"`
+	Value int    `json:"value"`
+}
+
+func TestItem_MarshalJSON(t *testing.T) {
+	item := Item[testStruct]{
+		id:  "/things/abc",
+		typ: "Thing",
+		val: testStruct{Name: "hello", Value: 42},
+	}
+
+	body, err := json.Marshal(item)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify @id and @type are present at the top level.
+	var m map[string]any
+	if err := json.Unmarshal(body, &m); err != nil {
+		t.Fatal(err)
+	}
+
+	if m["@id"] != "/things/abc" {
+		t.Errorf("@id = %v, want /things/abc", m["@id"])
+	}
+	if m["@type"] != "Thing" {
+		t.Errorf("@type = %v, want Thing", m["@type"])
+	}
+	if m["name"] != "hello" {
+		t.Errorf("name = %v, want hello", m["name"])
+	}
+	if m["value"] != float64(42) {
+		t.Errorf("value = %v, want 42", m["value"])
+	}
+
+	// @id and @type must appear first (key order).
+	s := string(body)
+	idPos := strings.Index(s, `"@id"`)
+	typePos := strings.Index(s, `"@type"`)
+	namePos := strings.Index(s, `"name"`)
+
+	if idPos > typePos || idPos > namePos {
+		t.Errorf("@id should appear before @type and name in output: %s", s)
+	}
+
+	if typePos > namePos {
+		t.Errorf("@type should appear before name in output: %s", s)
+	}
+}
+
+func TestItem_MarshalJSON_EmptyStruct(t *testing.T) {
+	item := Item[struct{}]{
+		id:  "/empty/1",
+		typ: "Empty",
+		val: struct{}{},
+	}
+
+	body, err := json.Marshal(item)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := `{"@id":"/empty/1","@type":"Empty"}`
+	if string(body) != expected {
+		t.Errorf("empty struct item:\n got: %s\nwant: %s", body, expected)
+	}
+}
+
+func TestWrapItems(t *testing.T) {
+	items := []testStruct{
+		{Name: "a", Value: 1},
+		{Name: "b", Value: 2},
+	}
+
+	wrapped := wrapItems(items, "Thing", func(s testStruct) string { return "/things/" + s.Name })
+
+	if len(wrapped) != 2 {
+		t.Fatalf("len = %d, want 2", len(wrapped))
+	}
+
+	for index, item := range wrapped {
+		body, err := json.Marshal(item)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var m map[string]any
+		if err := json.Unmarshal(body, &m); err != nil {
+			t.Fatal(err)
+		}
+		if m["@type"] != "Thing" {
+			t.Errorf("item %d: @type = %v, want Thing", index, m["@type"])
+		}
+		if m["@id"] != "/things/"+items[index].Name {
+			t.Errorf("item %d: @id = %v, want /things/%s", index, m["@id"], items[index].Name)
+		}
 	}
 }
