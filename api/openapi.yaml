@@ -94,6 +94,12 @@ paths:
                     type: integer
                     description: Configured write operations level (0=read-only, 1=operational, 2=configuration, 3=impactful)
                     example: 1
+              example:
+                status: ok
+                version: 0.11.0
+                commit: 607a5c7
+                buildDate: "2025-03-15T10:00:00Z"
+                operationsLevel: 1
 
   /-/ready:
     get:
@@ -157,6 +163,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MonitoringStatus"
+              example:
+                prometheusConfigured: true
+                prometheusReachable: true
+                nodeExporter:
+                  targets: 3
+                  nodes: 3
+                cadvisor:
+                  targets: 3
+                  nodes: 3
 
   /metrics/labels:
     get:
@@ -365,6 +380,15 @@ paths:
                 allOf:
                   - $ref: "#/components/schemas/DetailEnvelope"
                   - $ref: "#/components/schemas/Identity"
+              example:
+                "@context": /api/context.jsonld
+                "@id": /auth/whoami
+                "@type": Identity
+                subject: user@example.com
+                displayName: Jane Doe
+                email: user@example.com
+                groups: [engineering, ops]
+                provider: oidc
         "401":
           description: Not authenticated
 
@@ -463,13 +487,18 @@ paths:
         the SPA error reference page.
       responses:
         "200":
-          description: Array of error definitions
+          description: Collection of error definitions
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ErrorDef"
+                allOf:
+                  - $ref: "#/components/schemas/CollectionEnvelope"
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ErrorDef"
 
   /api/errors/{code}:
     get:
@@ -494,7 +523,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorDef"
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - $ref: "#/components/schemas/ErrorDef"
         "404":
           description: Unknown error code
 
@@ -556,6 +587,29 @@ paths:
                 allOf:
                   - $ref: "#/components/schemas/DetailEnvelope"
                   - $ref: "#/components/schemas/ClusterSnapshot"
+              example:
+                "@context": /api/context.jsonld
+                "@id": /cluster
+                "@type": Cluster
+                nodeCount: 3
+                serviceCount: 12
+                taskCount: 42
+                stackCount: 4
+                tasksByState:
+                  running: 38
+                  complete: 3
+                  failed: 1
+                nodesReady: 3
+                nodesDown: 0
+                nodesDraining: 0
+                totalCPU: 12
+                totalMemory: 25769803776
+                servicesConverged: 11
+                servicesDegraded: 1
+                reservedCPU: 8000000000
+                reservedMemory: 17179869184
+                lastSync: "2025-03-20T14:30:00Z"
+                prometheusConfigured: true
         "304":
           $ref: "#/components/responses/NotModified"
 
@@ -603,6 +657,15 @@ paths:
                 allOf:
                   - $ref: "#/components/schemas/DetailEnvelope"
                   - $ref: "#/components/schemas/ClusterCapacity"
+              example:
+                "@context": /api/context.jsonld
+                "@id": /cluster/capacity
+                "@type": ClusterCapacity
+                maxNodeCPU: 8
+                maxNodeMemory: 17179869184
+                totalCPU: 12
+                totalMemory: 25769803776
+                nodeCount: 3
         "304":
           $ref: "#/components/responses/NotModified"
 
@@ -649,6 +712,8 @@ paths:
               properties:
                 TaskHistoryRetentionLimit:
                   type: integer
+            example:
+              TaskHistoryRetentionLimit: 10
       responses:
         "200":
           description: Updated orchestration config
@@ -697,6 +762,10 @@ paths:
                   type: integer
                 HeartbeatTick:
                   type: integer
+            example:
+              SnapshotInterval: 10000
+              ElectionTick: 10
+              HeartbeatTick: 1
       responses:
         "200":
           description: Updated raft config
@@ -736,6 +805,8 @@ paths:
                   type: integer
                   format: int64
                   description: Heartbeat period in nanoseconds
+            example:
+              HeartbeatPeriod: 5000000000
       responses:
         "200":
           description: Updated dispatcher config
@@ -775,6 +846,8 @@ paths:
                   type: integer
                   format: int64
                   description: Node certificate expiry in nanoseconds
+            example:
+              NodeCertExpiry: 7776000000000000
       responses:
         "200":
           description: Updated CA config
@@ -813,6 +886,8 @@ paths:
               properties:
                 AutoLockManagers:
                   type: boolean
+            example:
+              AutoLockManagers: true
       responses:
         "200":
           description: Updated encryption config
@@ -852,6 +927,8 @@ paths:
                 target:
                   type: string
                   enum: [worker, manager]
+            example:
+              target: worker
       responses:
         "204":
           description: Token rotated
@@ -915,6 +992,8 @@ paths:
                 properties:
                   unlockKey:
                     type: string
+              example:
+                unlockKey: SWMKEY-1-kX9P2q3r4s5t6u7v8w9x0y1z2A3B4C5D6E7F8G9H
         "500":
           description: Failed to retrieve unlock key
 
@@ -1320,6 +1399,32 @@ paths:
                       node:
                         type: object
                         description: Docker swarm.Node object
+              example:
+                "@context": /api/context.jsonld
+                "@id": /nodes/qz7k3v9xm2p4
+                "@type": Node
+                node:
+                  ID: qz7k3v9xm2p4
+                  Version: { Index: 42 }
+                  CreatedAt: "2025-01-15T10:30:00Z"
+                  Spec:
+                    Name: node-1
+                    Role: manager
+                    Availability: active
+                    Labels:
+                      region: us-east-1
+                  Status:
+                    State: ready
+                    Addr: 10.0.0.2
+                  Description:
+                    Hostname: node-1
+                    Platform: { Architecture: x86_64, OS: linux }
+                    Resources: { NanoCPUs: 4000000000, MemoryBytes: 8589934592 }
+                    Engine: { EngineVersion: "27.4.1" }
+                  ManagerStatus:
+                    Leader: true
+                    Reachability: reachable
+                    Addr: 10.0.0.2:2377
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
@@ -1385,6 +1490,8 @@ paths:
                 availability:
                   type: string
                   enum: [active, drain, pause]
+            example:
+              availability: drain
       responses:
         "200":
           description: Updated node
@@ -1427,6 +1534,13 @@ paths:
                         type: object
                         additionalProperties:
                           type: string
+              example:
+                "@context": /api/context.jsonld
+                "@id": /nodes/qz7k3v9xm2p4/labels
+                "@type": NodeLabels
+                labels:
+                  region: us-east-1
+                  env: production
         "404":
           $ref: "#/components/responses/NotFound"
     patch:
@@ -1444,6 +1558,12 @@ paths:
           application/json-patch+json:
             schema:
               $ref: "#/components/schemas/JSONPatch"
+            example:
+              - op: add
+                path: /env
+                value: staging
+              - op: remove
+                path: /deprecated-label
       responses:
         "200":
           description: Updated node labels
@@ -1483,11 +1603,24 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  role:
-                    type: string
-                    enum: [worker, manager]
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      role:
+                        type: string
+                        enum: [worker, manager]
+                      isLeader:
+                        type: boolean
+                      managerCount:
+                        type: integer
+              example:
+                "@context": /api/context.jsonld
+                "@id": /nodes/qz7k3v9xm2p4/role
+                "@type": NodeRole
+                role: manager
+                isLeader: true
+                managerCount: 3
         "404":
           $ref: "#/components/responses/NotFound"
     put:
@@ -1617,6 +1750,51 @@ paths:
                         description: Detected third-party integrations (e.g. Traefik)
                         items:
                           $ref: "#/components/schemas/Integration"
+              example:
+                "@context": /api/context.jsonld
+                "@id": /services/r8m2x5nk3p7q
+                "@type": Service
+                service:
+                  ID: r8m2x5nk3p7q
+                  Version: { Index: 156 }
+                  Spec:
+                    Name: webapp
+                    Labels:
+                      com.docker.stack.namespace: myapp
+                    TaskTemplate:
+                      ContainerSpec:
+                        Image: nginx:1.27@sha256:abc123...
+                        Env: [NODE_ENV=production]
+                        Healthcheck:
+                          Test: [CMD, curl, -f, http://localhost/]
+                          Interval: 30000000000
+                          Timeout: 5000000000
+                          Retries: 3
+                      Resources:
+                        Limits: { NanoCPUs: 1000000000, MemoryBytes: 536870912 }
+                        Reservations: { NanoCPUs: 500000000, MemoryBytes: 268435456 }
+                      RestartPolicy:
+                        Condition: on-failure
+                        MaxAttempts: 3
+                    Mode:
+                      Replicated: { Replicas: 3 }
+                    UpdateConfig:
+                      Parallelism: 1
+                      Delay: 10000000000
+                      FailureAction: rollback
+                    EndpointSpec:
+                      Ports:
+                        - Protocol: tcp
+                          TargetPort: 80
+                          PublishedPort: 8080
+                          PublishMode: ingress
+                  Endpoint:
+                    Ports:
+                      - Protocol: tcp
+                        TargetPort: 80
+                        PublishedPort: 8080
+                        PublishMode: ingress
+                integrations: []
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
@@ -1713,6 +1891,8 @@ paths:
                 replicas:
                   type: integer
                   minimum: 0
+            example:
+              replicas: 5
       responses:
         "200":
           description: Updated service
@@ -1757,6 +1937,8 @@ paths:
                 image:
                   type: string
                   example: nginx:latest
+            example:
+              image: nginx:1.28
       responses:
         "200":
           description: Updated service
@@ -1868,6 +2050,14 @@ paths:
                         type: object
                         additionalProperties:
                           type: string
+              example:
+                "@context": /api/context.jsonld
+                "@id": /services/r8m2x5nk3p7q/env
+                "@type": ServiceEnv
+                env:
+                  NODE_ENV: production
+                  DATABASE_URL: postgres://db:5432/app
+                  LOG_LEVEL: info
         "404":
           $ref: "#/components/responses/NotFound"
     patch:
@@ -1885,6 +2075,13 @@ paths:
           application/json-patch+json:
             schema:
               $ref: "#/components/schemas/JSONPatch"
+            example:
+              - op: add
+                path: /LOG_LEVEL
+                value: debug
+              - op: replace
+                path: /NODE_ENV
+                value: staging
       responses:
         "200":
           description: Updated environment variables
@@ -1943,6 +2140,11 @@ paths:
           application/merge-patch+json:
             schema:
               $ref: "#/components/schemas/ServiceResources"
+            example:
+              cpuLimit: 2000000000
+              memoryLimit: 536870912
+              cpuReservation: 500000000
+              memoryReservation: 268435456
       responses:
         "200":
           description: Updated resource requirements
@@ -1987,6 +2189,12 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ServicePlacement"
+            example:
+              placement:
+                Constraints:
+                  - node.role == worker
+                  - node.labels.region == us-east-1
+                MaxReplicas: 2
       responses:
         "200":
           description: Updated placement constraints and preferences
@@ -2033,6 +2241,16 @@ paths:
           application/merge-patch+json:
             schema:
               $ref: "#/components/schemas/ServicePorts"
+            example:
+              ports:
+                - Protocol: tcp
+                  TargetPort: 8080
+                  PublishedPort: 80
+                  PublishMode: ingress
+                - Protocol: tcp
+                  TargetPort: 9090
+                  PublishedPort: 9090
+                  PublishMode: host
       responses:
         "200":
           description: Updated port bindings
@@ -2081,6 +2299,11 @@ paths:
           application/merge-patch+json:
             schema:
               $ref: "#/components/schemas/ServiceUpdatePolicy"
+            example:
+              parallelism: 2
+              delay: 10000000000
+              failureAction: rollback
+              order: start-first
       responses:
         "200":
           description: Updated update policy
@@ -2129,6 +2352,11 @@ paths:
           application/merge-patch+json:
             schema:
               $ref: "#/components/schemas/ServiceRollbackPolicy"
+            example:
+              parallelism: 1
+              delay: 5000000000
+              failureAction: pause
+              order: stop-first
       responses:
         "200":
           description: Updated rollback policy
@@ -2177,6 +2405,12 @@ paths:
           application/merge-patch+json:
             schema:
               $ref: "#/components/schemas/ServiceLogDriver"
+            example:
+              logDriver:
+                Name: json-file
+                Options:
+                  max-size: 10m
+                  max-file: "3"
       responses:
         "200":
           description: Updated log driver configuration
@@ -2232,6 +2466,12 @@ paths:
           application/json-patch+json:
             schema:
               $ref: "#/components/schemas/JSONPatch"
+            example:
+              - op: add
+                path: /team
+                value: backend
+              - op: remove
+                path: /deprecated
       responses:
         "200":
           description: Updated service labels
@@ -2291,6 +2531,12 @@ paths:
             schema:
               type: object
               description: Docker container.HealthConfig object
+            example:
+              Test: [CMD, curl, -f, http://localhost/health]
+              Interval: 30000000000
+              Timeout: 5000000000
+              Retries: 3
+              StartPeriod: 10000000000
       responses:
         "200":
           description: Updated healthcheck configuration
@@ -2403,6 +2649,11 @@ paths:
                         type: string
                       fileName:
                         type: string
+            example:
+              configs:
+                - configID: cfg_abc123
+                  configName: app.conf
+                  fileName: /etc/app/config.json
       responses:
         "200":
           description: Updated config references
@@ -2484,6 +2735,11 @@ paths:
                         type: string
                       fileName:
                         type: string
+            example:
+              secrets:
+                - secretID: sec_def456
+                  secretName: db_password
+                  fileName: /run/secrets/db_password
       responses:
         "200":
           description: Updated secret references
@@ -2565,6 +2821,10 @@ paths:
                         type: array
                         items:
                           type: string
+            example:
+              networks:
+                - target: net_ghi789
+                  aliases: [webapp]
       responses:
         "200":
           description: Updated network attachments
@@ -2634,6 +2894,12 @@ paths:
                   items:
                     type: object
                     description: Docker mount.Mount object
+            example:
+              mounts:
+                - Type: volume
+                  Source: myapp_data
+                  Target: /data
+                  ReadOnly: false
       responses:
         "200":
           description: Updated mount configuration
@@ -2743,6 +3009,9 @@ paths:
                   type: integer
                   minimum: 0
                   description: Initial replica count (only for replicated mode)
+            example:
+              mode: replicated
+              replicas: 3
       responses:
         "200":
           description: Updated service
@@ -2790,6 +3059,8 @@ paths:
                 endpointMode:
                   type: string
                   enum: [vip, dnsrr]
+            example:
+              endpointMode: vip
       responses:
         "200":
           description: Updated service
@@ -2916,6 +3187,30 @@ paths:
                             type: string
                           hostname:
                             type: string
+              example:
+                "@context": /api/context.jsonld
+                "@id": /tasks/t7w2k9m4x1p6
+                "@type": Task
+                task:
+                  ID: t7w2k9m4x1p6
+                  ServiceID: r8m2x5nk3p7q
+                  NodeID: qz7k3v9xm2p4
+                  Slot: 1
+                  Status:
+                    Timestamp: "2025-03-20T14:22:00Z"
+                    State: running
+                    ContainerStatus:
+                      ContainerID: abc123def456
+                      PID: 12345
+                  DesiredState: running
+                  ServiceName: webapp
+                  NodeHostname: node-1
+                service:
+                  "@id": /services/r8m2x5nk3p7q
+                  name: webapp
+                node:
+                  "@id": /nodes/qz7k3v9xm2p4
+                  hostname: node-1
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
@@ -3010,6 +3305,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HistoryCollection"
+              example:
+                "@context": /api/context.jsonld
+                "@type": Collection
+                items:
+                  - id: 1042
+                    type: service
+                    action: update
+                    resourceId: r8m2x5nk3p7q
+                    resourceName: webapp
+                    timestamp: "2025-03-20T14:30:00Z"
+                  - id: 1041
+                    type: task
+                    action: create
+                    resourceId: t7w2k9m4x1p6
+                    resourceName: "webapp.1"
+                    timestamp: "2025-03-20T14:29:58Z"
+                total: 1042
+                limit: 50
+                offset: 0
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
@@ -3117,6 +3431,25 @@ paths:
                     properties:
                       stack:
                         $ref: "#/components/schemas/StackDetail"
+              example:
+                "@context": /api/context.jsonld
+                "@id": /stacks/myapp
+                "@type": Stack
+                stack:
+                  name: myapp
+                  services:
+                    - ID: r8m2x5nk3p7q
+                      Spec: { Name: webapp }
+                  configs:
+                    - ID: cfg_abc123
+                      Spec: { Name: app.conf }
+                  secrets:
+                    - ID: sec_def456
+                      Spec: { Name: db_password }
+                  networks:
+                    - Id: net_ghi789
+                      Name: myapp_default
+                  volumes: []
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
@@ -3189,6 +3522,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ConfigCollection"
+              example:
+                "@context": /api/context.jsonld
+                "@type": Collection
+                items:
+                  - ID: cfg_abc123
+                    Version: { Index: 10 }
+                    CreatedAt: "2025-02-01T09:00:00Z"
+                    UpdatedAt: "2025-02-01T09:00:00Z"
+                    Spec:
+                      Name: app.conf
+                      Labels:
+                        com.docker.stack.namespace: myapp
+                      Data: YXBwX2tleT12YWx1ZQ==
+                total: 5
+                limit: 50
+                offset: 0
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
@@ -3216,6 +3565,9 @@ paths:
                   type: string
                   format: byte
                   description: Config data (base64-encoded)
+            example:
+              name: nginx.conf
+              data: c2VydmVyIHsgbGlzdGVuIDgwOyB9
       responses:
         "201":
           description: Config created
@@ -3275,6 +3627,24 @@ paths:
                         type: array
                         items:
                           $ref: "#/components/schemas/ServiceRef"
+              example:
+                "@context": /api/context.jsonld
+                "@id": /configs/cfg_abc123
+                "@type": Config
+                config:
+                  ID: cfg_abc123
+                  Version: { Index: 10 }
+                  CreatedAt: "2025-02-01T09:00:00Z"
+                  UpdatedAt: "2025-02-01T09:00:00Z"
+                  Spec:
+                    Name: app.conf
+                    Labels:
+                      com.docker.stack.namespace: myapp
+                    Data: YXBwX2tleT12YWx1ZQ==
+                services:
+                  - "@id": /services/r8m2x5nk3p7q
+                    id: r8m2x5nk3p7q
+                    name: webapp
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
@@ -3394,6 +3764,21 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SecretCollection"
+              example:
+                "@context": /api/context.jsonld
+                "@type": Collection
+                items:
+                  - ID: sec_def456
+                    Version: { Index: 8 }
+                    CreatedAt: "2025-02-01T09:00:00Z"
+                    UpdatedAt: "2025-02-01T09:00:00Z"
+                    Spec:
+                      Name: db_password
+                      Labels:
+                        com.docker.stack.namespace: myapp
+                total: 3
+                limit: 50
+                offset: 0
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
@@ -3421,6 +3806,9 @@ paths:
                   type: string
                   format: byte
                   description: Secret data (base64-encoded)
+            example:
+              name: api_key
+              data: c3VwZXItc2VjcmV0LWtleQ==
       responses:
         "201":
           description: Secret created
@@ -3480,6 +3868,23 @@ paths:
                         type: array
                         items:
                           $ref: "#/components/schemas/ServiceRef"
+              example:
+                "@context": /api/context.jsonld
+                "@id": /secrets/sec_def456
+                "@type": Secret
+                secret:
+                  ID: sec_def456
+                  Version: { Index: 8 }
+                  CreatedAt: "2025-02-01T09:00:00Z"
+                  UpdatedAt: "2025-02-01T09:00:00Z"
+                  Spec:
+                    Name: db_password
+                    Labels:
+                      com.docker.stack.namespace: myapp
+                services:
+                  - "@id": /services/r8m2x5nk3p7q
+                    id: r8m2x5nk3p7q
+                    name: webapp
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
@@ -3598,6 +4003,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/NetworkCollection"
+              example:
+                "@context": /api/context.jsonld
+                "@type": Collection
+                items:
+                  - Id: net_ghi789
+                    Name: myapp_default
+                    Driver: overlay
+                    Scope: swarm
+                    IPAM:
+                      Config:
+                        - Subnet: 10.0.1.0/24
+                    Labels:
+                      com.docker.stack.namespace: myapp
+                total: 6
+                limit: 50
+                offset: 0
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
@@ -3634,6 +4055,25 @@ paths:
                         type: array
                         items:
                           $ref: "#/components/schemas/ServiceRef"
+              example:
+                "@context": /api/context.jsonld
+                "@id": /networks/net_ghi789
+                "@type": Network
+                network:
+                  Id: net_ghi789
+                  Name: myapp_default
+                  Driver: overlay
+                  Scope: swarm
+                  IPAM:
+                    Config:
+                      - Subnet: 10.0.1.0/24
+                        Gateway: 10.0.1.1
+                  Labels:
+                    com.docker.stack.namespace: myapp
+                services:
+                  - "@id": /services/r8m2x5nk3p7q
+                    id: r8m2x5nk3p7q
+                    name: webapp
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
@@ -3688,6 +4128,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VolumeCollection"
+              example:
+                "@context": /api/context.jsonld
+                "@type": Collection
+                items:
+                  - Name: myapp_data
+                    Driver: local
+                    Scope: local
+                    Mountpoint: /var/lib/docker/volumes/myapp_data/_data
+                    Labels:
+                      com.docker.stack.namespace: myapp
+                total: 2
+                limit: 50
+                offset: 0
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
@@ -3731,6 +4184,21 @@ paths:
                         type: array
                         items:
                           $ref: "#/components/schemas/ServiceRef"
+              example:
+                "@context": /api/context.jsonld
+                "@id": /volumes/myapp_data
+                "@type": Volume
+                volume:
+                  Name: myapp_data
+                  Driver: local
+                  Scope: local
+                  Mountpoint: /var/lib/docker/volumes/myapp_data/_data
+                  Labels:
+                    com.docker.stack.namespace: myapp
+                services:
+                  - "@id": /services/r8m2x5nk3p7q
+                    id: r8m2x5nk3p7q
+                    name: webapp
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
@@ -3779,6 +4247,7 @@ paths:
           schema:
             type: string
             maxLength: 200
+          example: web
         - name: limit
           in: query
           description: Max results per resource type (0 = up to 1000)
@@ -3796,6 +4265,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SearchResponse"
+              example:
+                "@context": /api/context.jsonld
+                "@id": /search?q=web
+                "@type": SearchResult
+                query: web
+                results:
+                  services:
+                    - id: r8m2x5nk3p7q
+                      name: webapp
+                      detail: "nginx:1.27"
+                      state: running
+                  stacks:
+                    - id: myapp
+                      name: myapp
+                counts:
+                  services: 1
+                  stacks: 1
+                total: 2
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
@@ -3823,7 +4310,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/NetworkTopology"
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - $ref: "#/components/schemas/NetworkTopology"
         "304":
           $ref: "#/components/responses/NotModified"
 
@@ -3844,7 +4333,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PlacementTopology"
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - $ref: "#/components/schemas/PlacementTopology"
         "304":
           $ref: "#/components/responses/NotModified"
 
@@ -3881,6 +4372,29 @@ paths:
                       computedAt:
                         type: string
                         format: date-time
+              example:
+                "@context": /api/context.jsonld
+                "@id": /recommendations
+                "@type": Recommendations
+                items:
+                  - category: no-healthcheck
+                    severity: warning
+                    scope: service
+                    targetId: r8m2x5nk3p7q
+                    targetName: webapp
+                    message: Service has no health check configured
+                  - category: single-replica
+                    severity: info
+                    scope: service
+                    targetId: j4n6w8t2k9m1
+                    targetName: api
+                    message: Service runs a single replica with no redundancy
+                total: 2
+                summary:
+                  critical: 0
+                  warning: 1
+                  info: 1
+                computedAt: "2025-03-20T14:35:00Z"
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
