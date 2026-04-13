@@ -2,100 +2,37 @@ package api
 
 import (
 	"io"
-	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/docker/docker/api/types/swarm"
-	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
-	"github.com/getkin/kin-openapi/routers/gorillamux"
 
 	"github.com/radiergummi/cetacean/internal/api/sse"
-	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 func TestResponsesMatchOpenAPISpec(t *testing.T) {
-	specPath := "../../api/openapi.yaml"
-	specBytes, err := os.ReadFile(specPath)
-	if err != nil {
-		t.Fatalf("failed to read openapi spec: %v", err)
-	}
+	specBytes, _, specRouter := loadTestSpec(t)
 
-	// Load and validate the spec.
-	loader := openapi3.NewLoader()
-	doc, err := loader.LoadFromFile(specPath)
-	if err != nil {
-		t.Fatalf("failed to load openapi spec: %v", err)
-	}
-	if err := doc.Validate(loader.Context); err != nil {
-		t.Fatalf("openapi spec validation failed: %v", err)
-	}
-
-	// Create a kin-openapi router to match requests to spec operations.
-	specRouter, err := gorillamux.NewRouter(doc)
-	if err != nil {
-		t.Fatalf("failed to create spec router: %v", err)
-	}
-
-	// Set up a populated cache.
 	c := cache.New(nil)
-	c.SetNode(swarm.Node{
-		ID: "node-1",
-		Spec: swarm.NodeSpec{
-			Role:         swarm.NodeRoleManager,
-			Availability: swarm.NodeAvailabilityActive,
-		},
-		Description: swarm.NodeDescription{
-			Hostname: "manager-1",
-		},
-		Status: swarm.NodeStatus{State: swarm.NodeStateReady},
-	})
+	populateSpecFixtures(c)
+
+	// Add a second worker node for pagination coverage.
 	c.SetNode(swarm.Node{
 		ID: "node-2",
 		Spec: swarm.NodeSpec{
 			Role:         swarm.NodeRoleWorker,
 			Availability: swarm.NodeAvailabilityActive,
 		},
-		Description: swarm.NodeDescription{
-			Hostname: "worker-1",
-		},
-		Status: swarm.NodeStatus{State: swarm.NodeStateReady},
-	})
-	replicas := uint64(1)
-	c.SetService(swarm.Service{
-		ID: "svc-1",
-		Spec: swarm.ServiceSpec{
-			Annotations: swarm.Annotations{Name: "web"},
-			Mode: swarm.ServiceMode{
-				Replicated: &swarm.ReplicatedService{Replicas: &replicas},
-			},
-		},
-	})
-	c.SetTask(swarm.Task{
-		ID:        "task-1",
-		ServiceID: "svc-1",
-		NodeID:    "node-1",
-		Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
+		Description: swarm.NodeDescription{Hostname: "worker-1"},
+		Status:      swarm.NodeStatus{State: swarm.NodeStateReady},
 	})
 
 	h := newTestHandlers(t, withCache(c))
 	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
 	defer b.Close()
-	noopSPA := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte("<html></html>"))
-	})
-	router := NewRouter(RouterConfig{
-		Handlers:          h,
-		Broadcaster:       b,
-		SPA:               noopSPA,
-		OpenAPISpec:       specBytes,
-		EnableSelfMetrics: true,
-		AuthProvider:      &auth.NoneProvider{},
-	})
+	router := newTestRouter(t, h, b, specBytes)
 
 	tests := []struct {
 		name       string
