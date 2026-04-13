@@ -84,6 +84,20 @@ tags:
       description: API guide
       url: /api
 
+x-tagGroups:
+  - name: Meta & Docs
+    tags: [Meta, Documentation, Monitoring]
+  - name: Authentication
+    tags: [Authentication]
+  - name: Cluster
+    tags: [Cluster, Nodes, Plugins]
+  - name: Workloads
+    tags: [Services, Tasks, Stacks]
+  - name: Resources
+    tags: [Configs, Secrets, Networks, Volumes]
+  - name: Discovery & Insights
+    tags: [Search, History, Topology, Events, Recommendations]
+
 paths:
   # ── Meta ──────────────────────────────────────────────────────────────
 
@@ -429,7 +443,7 @@ paths:
               example:
                 "@context": /api/context.jsonld
                 "@id": /profile
-                "@type": Identity
+                "@type": Profile
                 subject: user@example.com
                 displayName: Jane Doe
                 email: user@example.com
@@ -526,7 +540,9 @@ paths:
       summary: Logout
       operationId: authLogout
       tags: [Authentication]
-      description: Clears the session cookie and redirects to home.
+      description: |
+        Clears the session cookie and redirects to home. Only available in OIDC mode.
+        Uses `http.NewCrossOriginProtection` to reject cross-site POSTs.
       responses:
         "302":
           description: Redirect to home
@@ -540,15 +556,15 @@ paths:
       summary: API documentation
       description: |
         Content-negotiated. HTML requests get the Scalar API playground;
-        all other requests get this OpenAPI spec as YAML.
+        all other requests get this OpenAPI spec as JSON.
       security: []
       responses:
         "200":
           description: API documentation
           content:
-            application/yaml:
+            application/json:
               schema:
-                type: string
+                type: object
             text/html:
               schema:
                 type: string
@@ -675,18 +691,20 @@ paths:
       tags: [Events]
       summary: Real-time SSE event stream
       description: |
-        Server-Sent Events stream of resource changes. Requires `Accept: text/event-stream`.
-        HTML requests get the SPA; JSON requests get 406.
+        Content-negotiated event endpoint for resource changes.
+        - `text/event-stream`: real-time SSE stream (batched within the configured interval, default 100 ms)
+        - `application/atom+xml`: Atom feed of recent events
+        - `application/feed+json`: JSON Feed of recent events
+        - `text/html` (or no Accept): SPA
 
-        Events are batched within the configured interval (default 100 ms).
-        Single events use `event: <type>` (node, service, task, etc.).
+        Single SSE events use `event: <type>` (node, service, task, etc.).
         Batched events use `event: batch` with an array payload.
 
         Max 256 concurrent SSE clients. Returns 429 with Retry-After when exceeded.
       parameters:
         - name: types
           in: query
-          description: Comma-separated event types to subscribe to
+          description: Comma-separated event types to subscribe to (SSE only)
           schema:
             type: string
             example: node,service,task
@@ -703,7 +721,7 @@ paths:
                 "@id": /services/r8m2x5nk3p7q
                 "@type": Service
                 type: service
-                action: set
+                action: update
                 id: r8m2x5nk3p7q
                 resource:
                   ID: r8m2x5nk3p7q
@@ -712,8 +730,10 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
-        "406":
-          $ref: "#/components/responses/NotAcceptable"
+            application/feed+json:
+              schema:
+                type: object
+                description: JSON Feed 1.1 document
         "429":
           $ref: "#/components/responses/TooManyRequests"
 
@@ -886,6 +906,10 @@ paths:
   /swarm/orchestration:
     patch:
       operationId: patchSwarmOrchestration
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Cluster]
       summary: Patch swarm orchestration config
       description: Updates the swarm orchestration configuration (task history retention limit). Requires operations level 2.
@@ -918,13 +942,17 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
 
   /swarm/raft:
     patch:
       operationId: patchSwarmRaft
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Cluster]
       summary: Patch swarm raft config
       description: Updates the swarm Raft configuration (snapshot interval, log entries, election/heartbeat ticks). Requires operations level 2.
@@ -970,13 +998,17 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
 
   /swarm/dispatcher:
     patch:
       operationId: patchSwarmDispatcher
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Cluster]
       summary: Patch swarm dispatcher config
       description: Updates the swarm dispatcher configuration (heartbeat period). Requires operations level 2.
@@ -1011,13 +1043,17 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
 
   /swarm/ca:
     patch:
       operationId: patchSwarmCAConfig
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Cluster]
       summary: Patch swarm CA config
       description: Updates the swarm CA configuration (node cert expiry, external CAs). Requires operations level 3.
@@ -1052,13 +1088,17 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
 
   /swarm/encryption:
     patch:
       operationId: patchSwarmEncryption
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Cluster]
       summary: Patch swarm encryption config
       description: Toggles Raft data-at-rest encryption. Requires operations level 3.
@@ -1092,13 +1132,17 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
 
   /swarm/rotate-token:
     post:
       operationId: rotateToken
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Cluster]
       summary: Rotate join token
       description: Rotates the worker or manager join token. Requires operations level 3.
@@ -1122,11 +1166,15 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
 
   /swarm/rotate-unlock-key:
     post:
       operationId: rotateUnlockKey
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Cluster]
       summary: Rotate unlock key
       description: Rotates the swarm unlock key. Only works when autolock is enabled. Requires operations level 3.
@@ -1134,13 +1182,17 @@ paths:
         "204":
           description: Unlock key rotated. Retrieve the new key via GET /swarm/unlock-key.
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
 
   /swarm/force-rotate-ca:
     post:
       operationId: forceRotateCA
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Cluster]
       summary: Force CA certificate rotation
       description: Forces rotation of the cluster root CA certificate. Requires operations level 3.
@@ -1148,13 +1200,17 @@ paths:
         "204":
           description: CA rotation initiated
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
 
   /swarm/unlock-key:
     get:
       operationId: getUnlockKey
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Cluster]
       summary: Get swarm unlock key
       description: Returns the current swarm unlock key. Only available when autolock is enabled.
@@ -1177,6 +1233,41 @@ paths:
                 unlockKey: SWMKEY-1-kX9P2q3r4s5t6u7v8w9x0y1z2A3B4C5D6E7F8G9H
         "500":
           description: Failed to retrieve unlock key
+
+  /swarm/unlock:
+    post:
+      operationId: unlockSwarm
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
+      tags: [Cluster]
+      summary: Unlock an encrypted swarm
+      description: |
+        Unlocks a swarm that has been locked with autolock. The caller must provide
+        the current unlock key. Requires operations level 3.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [unlockKey]
+              properties:
+                unlockKey:
+                  type: string
+                  description: Current swarm unlock key
+            example:
+              unlockKey: SWMKEY-1-kX9P2q3r4s5t6u7v8w9x0y1z2A3B4C5D6E7F8G9H
+      responses:
+        "204":
+          description: Swarm unlocked
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          description: Failed to unlock swarm
 
   /disk-usage:
     get:
@@ -1201,26 +1292,30 @@ paths:
                   - "@id": /disk-usage/images
                     "@type": DiskUsageSummary
                     type: images
-                    totalCount: 24
-                    activeCount: 18
-                    size: 4823691264
+                    count: 24
+                    active: 18
+                    totalSize: 4823691264
                     reclaimable: 1124532224
                   - "@id": /disk-usage/containers
                     "@type": DiskUsageSummary
                     type: containers
-                    totalCount: 12
-                    activeCount: 12
-                    size: 234881024
+                    count: 12
+                    active: 12
+                    totalSize: 234881024
                     reclaimable: 0
-                  - type: volumes
-                    totalCount: 8
-                    activeCount: 6
-                    size: 1572864000
+                  - "@id": /disk-usage/volumes
+                    "@type": DiskUsageSummary
+                    type: volumes
+                    count: 8
+                    active: 6
+                    totalSize: 1572864000
                     reclaimable: 419430400
-                  - type: buildCache
-                    totalCount: 47
-                    activeCount: 0
-                    size: 312557568
+                  - "@id": /disk-usage/buildCache
+                    "@type": DiskUsageSummary
+                    type: buildCache
+                    count: 47
+                    active: 0
+                    totalSize: 312557568
                     reclaimable: 312557568
                 total: 4
                 limit: 4
@@ -1258,7 +1353,9 @@ paths:
                       Env: ["DEBUG=0"]
                       Mounts: []
                       Devices: []
-                  - Id: 8b9c1d2e3f4a
+                  - "@id": /plugins/rexray/ebs:latest
+                    "@type": Plugin
+                    Id: 8b9c1d2e3f4a
                     Name: rexray/ebs:latest
                     Enabled: false
                     PluginReference: docker.io/rexray/ebs:latest@sha256:5678efgh
@@ -1272,6 +1369,10 @@ paths:
                 offset: 0
     post:
       operationId: installPlugin
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Plugins]
       summary: Install a plugin
       description: |
@@ -1306,11 +1407,15 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low or ACL denied
+          $ref: "#/components/responses/Forbidden"
 
   /plugins/privileges:
     post:
       operationId: getPluginPrivileges
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Plugins]
       summary: Get plugin privileges
       description: |
@@ -1365,7 +1470,7 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low or ACL denied
+          $ref: "#/components/responses/Forbidden"
 
   /plugins/{name}:
     get:
@@ -1398,7 +1503,7 @@ paths:
                         description: Docker Plugin object
               example:
                 "@context": /api/context.jsonld
-                "@id": /plugins/vieux%2Fsshfs:latest
+                "@id": /plugins/vieux/sshfs:latest
                 "@type": Plugin
                 plugin:
                   Id: 5724e2c8d8d7
@@ -1428,6 +1533,10 @@ paths:
           $ref: "#/components/responses/NotFound"
     delete:
       operationId: removePlugin
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Plugins]
       summary: Remove a plugin
       description: |
@@ -1452,13 +1561,17 @@ paths:
         "204":
           description: Plugin removed
         "403":
-          description: Operations level too low or ACL denied
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
   /plugins/{name}/enable:
     post:
       operationId: enablePlugin
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Plugins]
       summary: Enable a plugin
       description: Enables a disabled plugin. Requires operations level 2.
@@ -1474,13 +1587,17 @@ paths:
         "204":
           description: Plugin enabled
         "403":
-          description: Operations level too low or ACL denied
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
   /plugins/{name}/disable:
     post:
       operationId: disablePlugin
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Plugins]
       summary: Disable a plugin
       description: Disables an enabled plugin. Requires operations level 2.
@@ -1496,13 +1613,17 @@ paths:
         "204":
           description: Plugin disabled
         "403":
-          description: Operations level too low or ACL denied
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
   /plugins/{name}/upgrade:
     post:
       operationId: upgradePlugin
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Plugins]
       summary: Upgrade a plugin
       description: |
@@ -1547,13 +1668,17 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low or ACL denied
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
   /plugins/{name}/settings:
     patch:
       operationId: configurePlugin
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Plugins]
       summary: Configure plugin settings
       description: |
@@ -1604,7 +1729,7 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low or ACL denied
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -1733,16 +1858,30 @@ paths:
           $ref: "#/components/responses/NotFound"
     delete:
       operationId: removeNode
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Nodes]
       summary: Remove a node
-      description: Removes a node from the swarm. The node must be drained or down. Requires operations level 3.
+      description: |
+        Removes a node from the swarm. The node must be drained or down.
+        Use `?force=true` to force removal even if the node is not in a
+        removable state. Requires operations level 3.
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - name: force
+          in: query
+          description: Force removal even if the node is not drained or down
+          schema:
+            type: boolean
+            default: false
+          example: false
       responses:
         "204":
           description: Node removed
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -1782,7 +1921,9 @@ paths:
                       Timestamp: "2026-04-13T08:12:34Z"
                       ContainerStatus: { ContainerID: c1d2e3f4a5b6 }
                     DesiredState: running
-                  - ID: tsk_def456ghi789
+                  - "@id": /tasks/tsk_def456ghi789
+                    "@type": Task
+                    ID: tsk_def456ghi789
                     ServiceID: t9n3y6ol4q8r
                     ServiceName: api
                     NodeID: qz7k3v9xm2p4
@@ -1804,6 +1945,10 @@ paths:
   /nodes/{id}/availability:
     put:
       operationId: updateNodeAvailability
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Nodes]
       summary: Update node availability
       description: Sets the availability of a node (active, drain, or pause).
@@ -1820,6 +1965,10 @@ paths:
                 availability:
                   type: string
                   enum: [active, drain, pause]
+                  x-enum-descriptions:
+                    - Node accepts new tasks (normal operation)
+                    - Node refuses new tasks and existing tasks are rescheduled elsewhere
+                    - Node refuses new tasks but existing tasks keep running
                   description: New availability state for the node
             example:
               availability: drain
@@ -1876,11 +2025,15 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: patchNodeLabels
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Nodes]
       summary: Patch node labels
       description: |
-        Applies a JSON Patch (RFC 6902) to the node labels.
-        Requires `Content-Type: application/json-patch+json`.
+        Applies a JSON Patch (RFC 6902) or JSON Merge Patch (RFC 7396) to the node labels.
+        Requires `Content-Type: application/json-patch+json` or `application/merge-patch+json`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
       requestBody:
@@ -1895,6 +2048,16 @@ paths:
                 value: staging
               - op: remove
                 path: /deprecated-label
+          application/merge-patch+json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+                nullable: true
+              description: Label keys to set (string value) or remove (null value)
+            example:
+              env: staging
+              deprecated-label: null
       responses:
         "200":
           description: Updated node labels
@@ -1956,6 +2119,10 @@ paths:
           $ref: "#/components/responses/NotFound"
     put:
       operationId: updateNodeRole
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Nodes]
       summary: Update node role
       description: Promotes or demotes a node. Requires operations level 3.
@@ -1972,6 +2139,9 @@ paths:
                 role:
                   type: string
                   enum: [worker, manager]
+                  x-enum-descriptions:
+                    - Plain worker node (runs tasks, not part of raft quorum)
+                    - Manager node (runs tasks and participates in raft consensus)
                   description: New role for the node
             example:
               role: manager
@@ -1991,7 +2161,7 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -2143,6 +2313,10 @@ paths:
           $ref: "#/components/responses/NotFound"
     delete:
       operationId: removeService
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Services]
       summary: Remove a service
       description: Removes a service from the swarm. Requires operations level 3.
@@ -2152,7 +2326,7 @@ paths:
         "204":
           description: Service removed
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -2187,7 +2361,9 @@ paths:
                     Slot: 1
                     Status: { State: running, Timestamp: "2026-04-13T08:12:34Z" }
                     DesiredState: running
-                  - ID: tsk_ghi789jkl012
+                  - "@id": /tasks/tsk_ghi789jkl012
+                    "@type": Task
+                    ID: tsk_ghi789jkl012
                     ServiceID: r8m2x5nk3p7q
                     ServiceName: webapp
                     NodeID: e9f0g1h2i3j4
@@ -2195,7 +2371,9 @@ paths:
                     Slot: 2
                     Status: { State: running, Timestamp: "2026-04-13T08:12:36Z" }
                     DesiredState: running
-                  - ID: tsk_mno345pqr678
+                  - "@id": /tasks/tsk_mno345pqr678
+                    "@type": Task
+                    ID: tsk_mno345pqr678
                     ServiceID: r8m2x5nk3p7q
                     ServiceName: webapp
                     NodeID: y3z4a5b6c7d8
@@ -2253,6 +2431,10 @@ paths:
   /services/{id}/scale:
     put:
       operationId: scaleService
+      x-badges:
+        - name: "operations-level:1"
+          position: after
+          color: green
       tags: [Services]
       summary: Scale a service
       description: Sets the replica count for a replicated service.
@@ -2289,6 +2471,10 @@ paths:
   /services/{id}/image:
     put:
       operationId: updateServiceImage
+      x-badges:
+        - name: "operations-level:1"
+          position: after
+          color: green
       tags: [Services]
       summary: Update service image
       description: Updates the container image for a service.
@@ -2325,6 +2511,10 @@ paths:
   /services/{id}/rollback:
     post:
       operationId: rollbackService
+      x-badges:
+        - name: "operations-level:1"
+          position: after
+          color: green
       tags: [Services]
       summary: Rollback a service
       description: Rolls back the service to its previous specification.
@@ -2366,6 +2556,10 @@ paths:
   /services/{id}/restart:
     post:
       operationId: restartService
+      x-badges:
+        - name: "operations-level:1"
+          position: after
+          color: green
       tags: [Services]
       summary: Restart a service
       description: Forces a re-deploy of the service by incrementing its ForceUpdate counter.
@@ -2433,11 +2627,16 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: patchServiceEnv
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Services]
       summary: Patch service environment variables
       description: |
-        Applies a JSON Patch (RFC 6902) to the service environment variables.
-        Requires `Content-Type: application/json-patch+json`.
+        Applies a JSON Patch (RFC 6902) or JSON Merge Patch (RFC 7396) to the service
+        environment variables. Requires `Content-Type: application/json-patch+json` or
+        `application/merge-patch+json`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
       requestBody:
@@ -2453,6 +2652,17 @@ paths:
               - op: replace
                 path: /NODE_ENV
                 value: staging
+          application/merge-patch+json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+                nullable: true
+              description: Environment variables to set (string value) or remove (null value)
+            example:
+              LOG_LEVEL: debug
+              NODE_ENV: staging
+              DEPRECATED_VAR: null
       responses:
         "200":
           description: Updated environment variables
@@ -2503,6 +2713,10 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: patchServiceResources
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Services]
       summary: Patch service resource requirements
       description: |
@@ -2569,6 +2783,10 @@ paths:
           $ref: "#/components/responses/NotFound"
     put:
       operationId: putServicePlacement
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Services]
       summary: Update service placement constraints
       description: Replaces the placement constraints and preferences for the service.
@@ -2627,6 +2845,10 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: patchServicePorts
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Services]
       summary: Patch service port bindings
       description: |
@@ -2693,6 +2915,10 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: patchServiceUpdatePolicy
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Services]
       summary: Patch service update policy
       description: |
@@ -2759,6 +2985,10 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: patchServiceRollbackPolicy
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Services]
       summary: Patch service rollback policy
       description: |
@@ -2821,6 +3051,10 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: patchServiceLogDriver
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Services]
       summary: Patch service log driver
       description: |
@@ -2884,11 +3118,16 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: patchServiceLabels
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Services]
       summary: Patch service labels
       description: |
-        Applies a JSON Patch (RFC 6902) to the service labels.
-        Requires `Content-Type: application/json-patch+json`. Requires operations level 2.
+        Applies a JSON Patch (RFC 6902) or JSON Merge Patch (RFC 7396) to the service labels.
+        Requires `Content-Type: application/json-patch+json` or `application/merge-patch+json`.
+        Requires operations level 2.
       parameters:
         - $ref: "#/components/parameters/resourceId"
       requestBody:
@@ -2903,6 +3142,16 @@ paths:
                 value: backend
               - op: remove
                 path: /deprecated
+          application/merge-patch+json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+                nullable: true
+              description: Label keys to set (string value) or remove (null value)
+            example:
+              team: backend
+              deprecated: null
       responses:
         "200":
           description: Updated service labels
@@ -2922,7 +3171,7 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -2956,6 +3205,10 @@ paths:
           $ref: "#/components/responses/NotFound"
     put:
       operationId: putServiceHealthcheck
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Services]
       summary: Replace service healthcheck config
       description: Replaces the healthcheck configuration for the service. Requires operations level 2.
@@ -2990,13 +3243,17 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
     patch:
       operationId: patchServiceHealthcheck
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Services]
       summary: Patch service healthcheck config
       description: |
@@ -3030,7 +3287,7 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -3052,20 +3309,29 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    configID:
-                      type: string
-                    configName:
-                      type: string
-                    fileName:
-                      type: string
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      configs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            configID:
+                              type: string
+                            configName:
+                              type: string
+                            fileName:
+                              type: string
         "404":
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: patchServiceConfigs
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Services]
       summary: Patch service config references
       description: Replaces the config references for the service. Requires operations level 2.
@@ -3119,7 +3385,7 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -3139,20 +3405,29 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    secretID:
-                      type: string
-                    secretName:
-                      type: string
-                    fileName:
-                      type: string
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      secrets:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            secretID:
+                              type: string
+                            secretName:
+                              type: string
+                            fileName:
+                              type: string
         "404":
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: patchServiceSecrets
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Services]
       summary: Patch service secret references
       description: Replaces the secret references for the service. Requires operations level 2.
@@ -3206,7 +3481,7 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -3226,20 +3501,29 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    target:
-                      type: string
-                    aliases:
-                      type: array
-                      items:
-                        type: string
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      networks:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            target:
+                              type: string
+                            aliases:
+                              type: array
+                              items:
+                                type: string
         "404":
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: patchServiceNetworks
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Services]
       summary: Patch service network attachments
       description: Replaces the network attachments for the service. Requires operations level 2.
@@ -3292,7 +3576,7 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -3312,14 +3596,23 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
-                  description: Docker mount.Mount object
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      mounts:
+                        type: array
+                        items:
+                          type: object
+                          description: Docker mount.Mount object
         "404":
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: patchServiceMounts
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Services]
       summary: Patch service mount configuration
       description: Replaces the mount configuration for the service. Requires operations level 2.
@@ -3362,7 +3655,7 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -3382,31 +3675,43 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                description: Subset of Docker container spec fields
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      containerConfig:
+                        $ref: "#/components/schemas/ContainerConfig"
               example:
-                Hostname: webapp
-                User: "1000:1000"
-                WorkingDir: /app
-                Command: ["/usr/local/bin/server"]
-                Args: ["--config", "/etc/app/config.toml"]
-                TTY: false
-                OpenStdin: false
-                StopSignal: SIGTERM
-                StopGracePeriod: 10000000000
-                ReadOnly: true
-                Init: true
-                CapabilityAdd: ["NET_BIND_SERVICE"]
-                CapabilityDrop: ["ALL"]
-                Sysctls:
-                  net.core.somaxconn: "1024"
-                DNSConfig:
-                  Nameservers: ["1.1.1.1", "1.0.0.1"]
-                  Search: ["internal.example.com"]
+                "@context": /api/context.jsonld
+                "@id": /services/r8m2x5nk3p7q/container-config
+                "@type": ServiceContainerConfig
+                containerConfig:
+                  command: ["/usr/local/bin/server"]
+                  args: ["--config", "/etc/app/config.toml"]
+                  dir: /app
+                  user: "1000:1000"
+                  hostname: webapp
+                  init: true
+                  tty: false
+                  readOnly: true
+                  stopSignal: SIGTERM
+                  stopGracePeriod: 10000000000
+                  capabilityAdd: ["NET_BIND_SERVICE"]
+                  capabilityDrop: ["ALL"]
+                  groups: ["docker"]
+                  hosts: ["db:10.0.0.5"]
+                  dnsConfig:
+                    nameservers: ["1.1.1.1", "1.0.0.1"]
+                    search: ["internal.example.com"]
+                    options: ["ndots:2"]
         "404":
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: patchServiceContainerConfig
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Services]
       summary: Patch service container config
       description: |
@@ -3419,12 +3724,11 @@ paths:
         content:
           application/merge-patch+json:
             schema:
-              type: object
-              description: Container config fields to merge
+              $ref: "#/components/schemas/ContainerConfig"
             example:
-              WorkingDir: /srv
-              StopGracePeriod: 30000000000
-              ReadOnly: true
+              dir: /srv
+              stopGracePeriod: 30000000000
+              readOnly: true
       responses:
         "200":
           description: Updated container configuration
@@ -3436,14 +3740,13 @@ paths:
                   - type: object
                     properties:
                       containerConfig:
-                        type: object
-                        description: Container config fields
+                        $ref: "#/components/schemas/ContainerConfig"
         "204":
           description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -3452,8 +3755,49 @@ paths:
           $ref: "#/components/responses/UnsupportedMediaType"
 
   /services/{id}/mode:
+    get:
+      operationId: getServiceMode
+      tags: [Services]
+      summary: Get service mode
+      description: Returns the current service mode (replicated or global) and replica count.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Service mode
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      mode:
+                        type: string
+                        enum: [replicated, global]
+                      replicas:
+                        type: integer
+                        nullable: true
+                        minimum: 0
+              example:
+                "@context": /api/context.jsonld
+                "@id": /services/r8m2x5nk3p7q/mode
+                "@type": ServiceMode
+                mode: replicated
+                replicas: 3
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "404":
+          $ref: "#/components/responses/NotFound"
     put:
       operationId: updateServiceMode
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Services]
       summary: Change service mode
       description: |
@@ -3472,6 +3816,9 @@ paths:
                 mode:
                   type: string
                   enum: [replicated, global]
+                  x-enum-descriptions:
+                    - Fixed number of replicas scheduled across the cluster
+                    - One task per node (ignores replica count)
                 replicas:
                   type: integer
                   minimum: 0
@@ -3489,15 +3836,51 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
 
   /services/{id}/endpoint-mode:
+    get:
+      operationId: getServiceEndpointMode
+      tags: [Services]
+      summary: Get service endpoint mode
+      description: Returns the current endpoint resolution mode (virtual IP or DNS round-robin).
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Service endpoint mode
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      endpointMode:
+                        type: string
+                        enum: ["", vip, dnsrr]
+              example:
+                "@context": /api/context.jsonld
+                "@id": /services/r8m2x5nk3p7q/endpoint-mode
+                "@type": ServiceEndpointMode
+                endpointMode: vip
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "404":
+          $ref: "#/components/responses/NotFound"
     put:
       operationId: updateServiceEndpointMode
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Services]
       summary: Change service endpoint mode
       description: |
@@ -3515,6 +3898,9 @@ paths:
                 endpointMode:
                   type: string
                   enum: [vip, dnsrr]
+                  x-enum-descriptions:
+                    - Virtual IP-based load balancing (Swarm assigns a single VIP per service)
+                    - DNS round-robin (clients resolve the service name to task IPs directly)
                   description: New endpoint resolution mode (virtual IP or DNS round-robin)
             example:
               endpointMode: vip
@@ -3528,7 +3914,7 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -3670,6 +4056,10 @@ paths:
           $ref: "#/components/responses/NotFound"
     delete:
       operationId: removeTask
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Tasks]
       summary: Force-remove a task
       description: |
@@ -3774,15 +4164,16 @@ paths:
                     type: service
                     action: update
                     resourceId: r8m2x5nk3p7q
-                    resourceName: webapp
+                    name: webapp
                     timestamp: "2025-03-20T14:30:00Z"
+                    summary: Image updated to nginx:1.28
                   - "@id": /history/1041
                     "@type": HistoryEntry
                     id: 1041
                     type: task
-                    action: create
+                    action: update
                     resourceId: t7w2k9m4x1p6
-                    resourceName: "webapp.1"
+                    name: "webapp.1"
                     timestamp: "2025-03-20T14:29:58Z"
                 total: 1042
                 limit: 50
@@ -3871,22 +4262,36 @@ paths:
                 "@context": /api/context.jsonld
                 "@type": Collection
                 items:
-                  - "@id": /stacks/myapp/summary
+                  - "@id": /stacks/myapp
                     "@type": StackSummary
                     name: myapp
-                    services: 4
-                    runningTasks: 11
+                    serviceCount: 4
+                    configCount: 1
+                    secretCount: 1
+                    networkCount: 1
+                    volumeCount: 0
                     desiredTasks: 12
-                    cpuUsage: 1.42
-                    memoryUsage: 2147483648
-                  - "@id": /stacks/monitoring/summary
+                    tasksByState: { running: 11, shutdown: 1 }
+                    updatingServices: 0
+                    memoryLimitBytes: 2147483648
+                    cpuLimitCores: 4.0
+                    memoryUsageBytes: 1610612736
+                    cpuUsagePercent: 35.2
+                  - "@id": /stacks/monitoring
                     "@type": StackSummary
                     name: monitoring
-                    services: 3
-                    runningTasks: 3
+                    serviceCount: 3
+                    configCount: 0
+                    secretCount: 0
+                    networkCount: 1
+                    volumeCount: 1
                     desiredTasks: 3
-                    cpuUsage: 0.18
-                    memoryUsage: 536870912
+                    tasksByState: { running: 3 }
+                    updatingServices: 0
+                    memoryLimitBytes: 1073741824
+                    cpuLimitCores: 2.0
+                    memoryUsageBytes: 536870912
+                    cpuUsagePercent: 4.5
                 total: 2
                 limit: 2
                 offset: 0
@@ -3950,6 +4355,10 @@ paths:
           $ref: "#/components/responses/NotFound"
     delete:
       operationId: removeStack
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Stacks]
       summary: Remove a stack
       description: Removes all services in the stack. Requires operations level 3.
@@ -3980,7 +4389,7 @@ paths:
                       type: string
                     description: IDs of services that failed to remove
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -4043,6 +4452,10 @@ paths:
           $ref: "#/components/responses/BadRequest"
     post:
       operationId: createConfig
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Configs]
       summary: Create a config
       description: Creates a new config in the swarm. Requires operations level 2.
@@ -4089,7 +4502,7 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "409":
           description: Config name conflict
 
@@ -4150,6 +4563,10 @@ paths:
           $ref: "#/components/responses/NotFound"
     delete:
       operationId: removeConfig
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Configs]
       summary: Remove a config
       description: Removes a config from the swarm. Fails if the config is in use by a service. Requires operations level 3.
@@ -4159,7 +4576,7 @@ paths:
         "204":
           description: Config removed
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -4191,11 +4608,15 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: patchConfigLabels
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Configs]
       summary: Patch config labels
       description: |
-        Applies a JSON Patch (RFC 6902) to the config labels.
-        Requires `Content-Type: application/json-patch+json`.
+        Applies a JSON Patch (RFC 6902) or JSON Merge Patch (RFC 7396) to the config labels.
+        Requires `Content-Type: application/json-patch+json` or `application/merge-patch+json`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
       requestBody:
@@ -4210,6 +4631,16 @@ paths:
                 value: production
               - op: remove
                 path: /draft
+          application/merge-patch+json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+                nullable: true
+              description: Label keys to set (string value) or remove (null value)
+            example:
+              environment: production
+              draft: null
       responses:
         "200":
           description: Updated config labels
@@ -4294,6 +4725,10 @@ paths:
           $ref: "#/components/responses/BadRequest"
     post:
       operationId: createSecret
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Secrets]
       summary: Create a secret
       description: Creates a new secret in the swarm. Requires operations level 2.
@@ -4340,7 +4775,7 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "409":
           description: Secret name conflict
 
@@ -4400,6 +4835,10 @@ paths:
           $ref: "#/components/responses/NotFound"
     delete:
       operationId: removeSecret
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Secrets]
       summary: Remove a secret
       description: Removes a secret from the swarm. Fails if the secret is in use by a service. Requires operations level 3.
@@ -4409,7 +4848,7 @@ paths:
         "204":
           description: Secret removed
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -4441,11 +4880,15 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: patchSecretLabels
+      x-badges:
+        - name: "operations-level:2"
+          position: after
+          color: orange
       tags: [Secrets]
       summary: Patch secret labels
       description: |
-        Applies a JSON Patch (RFC 6902) to the secret labels.
-        Requires `Content-Type: application/json-patch+json`.
+        Applies a JSON Patch (RFC 6902) or JSON Merge Patch (RFC 7396) to the secret labels.
+        Requires `Content-Type: application/json-patch+json` or `application/merge-patch+json`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
       requestBody:
@@ -4461,6 +4904,16 @@ paths:
               - op: replace
                 path: /version
                 value: "v2"
+          application/merge-patch+json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+                nullable: true
+              description: Label keys to set (string value) or remove (null value)
+            example:
+              rotated-at: "2026-04-13"
+              version: v2
       responses:
         "200":
           description: Updated secret labels
@@ -4600,6 +5053,10 @@ paths:
           $ref: "#/components/responses/NotFound"
     delete:
       operationId: removeNetwork
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Networks]
       summary: Remove a network
       description: Removes a network from the swarm. Fails if services are still attached. Requires operations level 3.
@@ -4609,7 +5066,7 @@ paths:
         "204":
           description: Network removed
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -4730,9 +5187,16 @@ paths:
           $ref: "#/components/responses/NotFound"
     delete:
       operationId: removeVolume
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
       tags: [Volumes]
       summary: Remove a volume
-      description: Removes a volume. Fails if the volume is in use by a container. Requires operations level 3.
+      description: |
+        Removes a volume. Fails with 409 if the volume is in use by a container.
+        Use `?force=true` to force removal even if the volume is in use.
+        Requires operations level 3.
       parameters:
         - name: name
           in: path
@@ -4741,11 +5205,18 @@ paths:
           schema:
             type: string
           example: myapp_data
+        - name: force
+          in: query
+          description: Force removal even if the volume is in use
+          schema:
+            type: boolean
+            default: false
+          example: false
       responses:
         "204":
           description: Volume removed
         "403":
-          description: Operations level too low
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -4791,7 +5262,7 @@ paths:
                 $ref: "#/components/schemas/SearchResponse"
               example:
                 "@context": /api/context.jsonld
-                "@id": /search?q=web
+                "@id": /search
                 "@type": SearchResult
                 query: web
                 results:
@@ -4816,6 +5287,38 @@ paths:
           $ref: "#/components/responses/BadRequest"
 
   # ── Topology ─────────────────────────────────────────────────────────
+
+  /topology:
+    get:
+      operationId: getTopology
+      tags: [Topology]
+      summary: Cluster topology graph (content-negotiated)
+      description: |
+        Returns a graph of the cluster topology in one of three formats, selected
+        by the `Accept` header:
+        - `application/vnd.jgf+json`: JSON Graph Format (also served for `application/json`)
+        - `application/graphml+xml`: GraphML XML
+        - `text/vnd.graphviz`: Graphviz DOT
+
+        HTML requests return the SPA. Unrecognized types return 406.
+      responses:
+        "200":
+          description: Topology graph in the negotiated format
+          content:
+            application/vnd.jgf+json:
+              schema:
+                type: object
+                description: JSON Graph Format (JGF) document
+            application/graphml+xml:
+              schema:
+                type: string
+                description: GraphML XML document
+            text/vnd.graphviz:
+              schema:
+                type: string
+                description: Graphviz DOT source
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
 
   /topology/networks:
     get:
@@ -4912,6 +5415,7 @@ paths:
   /recommendations:
     get:
       operationId: getRecommendations
+      x-scalar-stability: experimental
       tags: [Recommendations]
       summary: Cluster health recommendations
       description: |
@@ -4945,7 +5449,7 @@ paths:
               example:
                 "@context": /api/context.jsonld
                 "@id": /recommendations
-                "@type": Recommendations
+                "@type": RecommendationCollection
                 items:
                   - category: no-healthcheck
                     severity: warning
@@ -5120,6 +5624,37 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/ProblemDetail"
+          examples:
+            invalidFilter:
+              summary: Invalid filter expression (FLT002)
+              value:
+                "@context": /api/context.jsonld
+                type: /api/errors/FLT002
+                title: Invalid Filter Expression
+                status: 400
+                detail: "unexpected token at position 14: expected identifier"
+                instance: /services
+                requestId: req_a1b2c3d4e5f6
+            invalidJSON:
+              summary: Invalid JSON in request body (API008)
+              value:
+                "@context": /api/context.jsonld
+                type: /api/errors/API008
+                title: Invalid JSON
+                status: 400
+                detail: "unexpected end of JSON input"
+                instance: /services/r8m2x5nk3p7q/env
+                requestId: req_a1b2c3d4e5f6
+            patchApplyFailed:
+              summary: JSON Patch application failed (API011)
+              value:
+                "@context": /api/context.jsonld
+                type: /api/errors/API011
+                title: Patch Application Failed
+                status: 400
+                detail: "test operation failed: /NODE_ENV expected 'staging' got 'production'"
+                instance: /services/r8m2x5nk3p7q/env
+                requestId: req_a1b2c3d4e5f6
 
     NotFound:
       description: Resource not found
@@ -5127,6 +5662,14 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/ProblemDetail"
+          example:
+            "@context": /api/context.jsonld
+            type: about:blank
+            title: Not Found
+            status: 404
+            detail: "service r8m2x5nk3p7q not found"
+            instance: /services/r8m2x5nk3p7q
+            requestId: req_a1b2c3d4e5f6
 
     NotAcceptable:
       description: Requested content type not supported for this endpoint
@@ -5134,6 +5677,27 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/ProblemDetail"
+          examples:
+            sseNotSupported:
+              summary: SSE requested on non-streaming endpoint (API001)
+              value:
+                "@context": /api/context.jsonld
+                type: /api/errors/API001
+                title: SSE Not Supported
+                status: 406
+                detail: "this endpoint does not support text/event-stream"
+                instance: /services/r8m2x5nk3p7q
+                requestId: req_a1b2c3d4e5f6
+            sseRequired:
+              summary: SSE required on streaming-only endpoint (API002)
+              value:
+                "@context": /api/context.jsonld
+                type: /api/errors/API002
+                title: SSE Required
+                status: 406
+                detail: "this endpoint only supports text/event-stream"
+                instance: /events
+                requestId: req_a1b2c3d4e5f6
 
     Conflict:
       description: Version conflict — the resource was modified concurrently; retry the operation
@@ -5141,6 +5705,14 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/ProblemDetail"
+          example:
+            "@context": /api/context.jsonld
+            type: /api/errors/SVC001
+            title: Service Version Conflict
+            status: 409
+            detail: Service was modified concurrently; retry the operation with the latest version.
+            instance: /services/r8m2x5nk3p7q/image
+            requestId: req_a1b2c3d4e5f6
 
     UnsupportedMediaType:
       description: Unsupported Content-Type for this endpoint
@@ -5148,6 +5720,52 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/ProblemDetail"
+          example:
+            "@context": /api/context.jsonld
+            type: /api/errors/API006
+            title: Invalid Request Body
+            status: 415
+            detail: "PATCH requires Content-Type: application/json-patch+json or application/merge-patch+json"
+            instance: /services/r8m2x5nk3p7q/env
+            requestId: req_a1b2c3d4e5f6
+
+    Forbidden:
+      description: Access denied by operations level or ACL
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+          examples:
+            operationsLevel:
+              summary: Operations level too low (OPS001)
+              value:
+                "@context": /api/context.jsonld
+                type: /api/errors/OPS001
+                title: Operations Level Too Low
+                status: 403
+                detail: "service removal requires operations level 3 (currently 1)"
+                instance: /services/r8m2x5nk3p7q
+                requestId: req_a1b2c3d4e5f6
+            aclReadDenied:
+              summary: ACL read denied (ACL001)
+              value:
+                "@context": /api/context.jsonld
+                type: /api/errors/ACL001
+                title: Access Denied
+                status: 403
+                detail: "no grant matches service:webapp for user@example.com"
+                instance: /services/r8m2x5nk3p7q
+                requestId: req_a1b2c3d4e5f6
+            aclWriteDenied:
+              summary: ACL write denied (ACL002)
+              value:
+                "@context": /api/context.jsonld
+                type: /api/errors/ACL002
+                title: Write Access Denied
+                status: 403
+                detail: "grants for service:webapp permit read but not write"
+                instance: /services/r8m2x5nk3p7q/image
+                requestId: req_a1b2c3d4e5f6
 
     TooManyRequests:
       description: Too many concurrent connections
@@ -5158,6 +5776,27 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/ProblemDetail"
+          examples:
+            sseLimit:
+              summary: SSE broadcaster limit reached (SSE001)
+              value:
+                "@context": /api/context.jsonld
+                type: /api/errors/SSE001
+                title: Too Many SSE Connections
+                status: 429
+                detail: "server is at the 256-client SSE limit; retry after the period indicated"
+                instance: /events
+                requestId: req_a1b2c3d4e5f6
+            logStreamLimit:
+              summary: Per-endpoint log stream limit (LOG001)
+              value:
+                "@context": /api/context.jsonld
+                type: /api/errors/LOG001
+                title: Too Many Log Streams
+                status: 429
+                detail: "server is at the 128-client log-stream limit"
+                instance: /services/r8m2x5nk3p7q/logs
+                requestId: req_a1b2c3d4e5f6
 
   # ── Schemas ──────────────────────────────────────────────────────────
 
@@ -5694,12 +6333,34 @@ components:
             - single-replica
             - manager-has-workloads
             - uneven-distribution
+          x-enum-descriptions:
+            - Service consistently uses far less than its reserved resources
+            - Service usage is nearing its configured resource limit
+            - Service is actively hitting its configured resource limit
+            - Service has no CPU or memory limit set
+            - Service has no CPU or memory reservation set
+            - Service has no healthcheck defined
+            - Service has no restart policy defined
+            - Service is restarting frequently or failing tasks
+            - Node's disk is nearly full
+            - Node is under sustained memory pressure
+            - Service has only one replica (no redundancy)
+            - Manager node is running non-system workloads
+            - Tasks for a service are unevenly distributed across nodes
         severity:
           type: string
           enum: [info, warning, critical]
+          x-enum-descriptions:
+            - Informational, no action required
+            - Warrants attention but not urgent
+            - Urgent, should be addressed immediately
         scope:
           type: string
           enum: [service, node, cluster]
+          x-enum-descriptions:
+            - Recommendation targets a specific service
+            - Recommendation targets a specific node
+            - Recommendation applies to the cluster as a whole
         targetId:
           type: string
         targetName:
@@ -5914,9 +6575,15 @@ components:
           type: string
           description: Diagnostic message when Prometheus is configured but unreachable.
         nodeExporter:
-          $ref: "#/components/schemas/TargetStatus"
+          allOf:
+            - $ref: "#/components/schemas/TargetStatus"
+          nullable: true
+          description: Null when node-exporter targets cannot be detected.
         cadvisor:
-          $ref: "#/components/schemas/TargetStatus"
+          allOf:
+            - $ref: "#/components/schemas/TargetStatus"
+          nullable: true
+          description: Null when cAdvisor targets cannot be detected.
       example:
         prometheusConfigured: true
         prometheusReachable: true
@@ -5958,7 +6625,7 @@ components:
           description: Resource type (node, service, task, etc.)
         action:
           type: string
-          description: Change action (set, delete)
+          description: Change action (update, remove)
         resourceId:
           type: string
         name:
@@ -5969,7 +6636,7 @@ components:
         id: 8421
         timestamp: "2026-04-13T08:12:34Z"
         type: service
-        action: set
+        action: update
         resourceId: r8m2x5nk3p7q
         name: webapp
         summary: Image updated to nginx:1.28
@@ -6047,7 +6714,7 @@ components:
           description: Event type string (node, service, task, etc.)
         action:
           type: string
-          description: Event action (set, delete)
+          description: Event action (update, remove)
         id:
           type: string
           description: Resource ID
@@ -6058,7 +6725,7 @@ components:
         "@id": /services/r8m2x5nk3p7q
         "@type": Service
         type: service
-        action: set
+        action: update
         id: r8m2x5nk3p7q
         resource:
           ID: r8m2x5nk3p7q
@@ -6317,6 +6984,12 @@ components:
         provider:
           type: string
           enum: [none, oidc, tailscale, cert, headers]
+          x-enum-descriptions:
+            - Anonymous access (no authentication configured)
+            - OIDC auth code flow or Bearer token
+            - Tailscale identity via local daemon or tsnet
+            - mTLS client certificate (with optional SPIFFE)
+            - Trusted proxy headers
           description: Authentication provider that produced this identity
         raw:
           type: object
@@ -6524,6 +7197,63 @@ components:
         monitor: 5000000000
         maxFailureRatio: 0
         order: stop-first
+
+    NullableStringArray:
+      type: array
+      nullable: true
+      items:
+        type: string
+
+    ContainerConfig:
+      type: object
+      description: |
+        Subset of Docker container spec fields exposed for per-service
+        configuration updates. Field names are camelCase. Arrays and nested
+        objects serialize as `null` when unset.
+      properties:
+        command:
+          $ref: "#/components/schemas/NullableStringArray"
+        args:
+          $ref: "#/components/schemas/NullableStringArray"
+        dir:
+          type: string
+          description: Working directory
+        user:
+          type: string
+        hostname:
+          type: string
+        init:
+          type: boolean
+          nullable: true
+        tty:
+          type: boolean
+        readOnly:
+          type: boolean
+        stopSignal:
+          type: string
+        stopGracePeriod:
+          type: integer
+          format: int64
+          nullable: true
+          description: Grace period in nanoseconds
+        capabilityAdd:
+          $ref: "#/components/schemas/NullableStringArray"
+        capabilityDrop:
+          $ref: "#/components/schemas/NullableStringArray"
+        groups:
+          $ref: "#/components/schemas/NullableStringArray"
+        hosts:
+          $ref: "#/components/schemas/NullableStringArray"
+        dnsConfig:
+          type: object
+          nullable: true
+          properties:
+            nameservers:
+              $ref: "#/components/schemas/NullableStringArray"
+            search:
+              $ref: "#/components/schemas/NullableStringArray"
+            options:
+              $ref: "#/components/schemas/NullableStringArray"
 
     ServiceLogDriver:
       type: object

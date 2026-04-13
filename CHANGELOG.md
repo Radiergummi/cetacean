@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Atom feed support on resource endpoints — request via `Accept: application/atom+xml` header or `.atom` URL suffix
 - Feed icon button in page headers for pages with Atom feeds
 - `Link: rel="alternate"` header on JSON responses advertising the Atom feed URL
+- API reference shows operations-level badges on write endpoints, an experimental marker on the recommendations endpoint, and human-readable descriptions for enum values (recommendation categories, node availability/role, service mode, auth providers)
 
 ### Fixed
 - Corrected OpenAPI spec examples to match actual API responses
