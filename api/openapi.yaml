@@ -2026,18 +2026,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: "#/components/schemas/DetailEnvelope"
-                  - type: object
-                    properties:
-                      service:
-                        type: object
-                        description: Docker swarm.Service object
-                      integrations:
-                        type: array
-                        description: Detected third-party integrations (e.g. Traefik)
-                        items:
-                          $ref: "#/components/schemas/Integration"
+                $ref: "#/components/schemas/ServiceDetail"
               example:
                 "@context": /api/context.jsonld
                 "@id": /services/r8m2x5nk3p7q
@@ -2227,18 +2216,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: "#/components/schemas/DetailEnvelope"
-                  - type: object
-                    properties:
-                      service:
-                        type: object
-                        description: Docker swarm.Service object
-                      integrations:
-                        type: array
-                        description: Detected third-party integrations (e.g. Traefik)
-                        items:
-                          $ref: "#/components/schemas/Integration"
+                $ref: "#/components/schemas/ServiceDetail"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -2274,18 +2252,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: "#/components/schemas/DetailEnvelope"
-                  - type: object
-                    properties:
-                      service:
-                        type: object
-                        description: Docker swarm.Service object
-                      integrations:
-                        type: array
-                        description: Detected third-party integrations (e.g. Traefik)
-                        items:
-                          $ref: "#/components/schemas/Integration"
+                $ref: "#/components/schemas/ServiceDetail"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -2307,18 +2274,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: "#/components/schemas/DetailEnvelope"
-                  - type: object
-                    properties:
-                      service:
-                        type: object
-                        description: Docker swarm.Service object
-                      integrations:
-                        type: array
-                        description: Detected third-party integrations (e.g. Traefik)
-                        items:
-                          $ref: "#/components/schemas/Integration"
+                $ref: "#/components/schemas/ServiceDetail"
               example:
                 "@context": /api/context.jsonld
                 "@id": /services/r8m2x5nk3p7q
@@ -2359,18 +2315,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: "#/components/schemas/DetailEnvelope"
-                  - type: object
-                    properties:
-                      service:
-                        type: object
-                        description: Docker swarm.Service object
-                      integrations:
-                        type: array
-                        description: Detected third-party integrations (e.g. Traefik)
-                        items:
-                          $ref: "#/components/schemas/Integration"
+                $ref: "#/components/schemas/ServiceDetail"
               example:
                 "@context": /api/context.jsonld
                 "@id": /services/r8m2x5nk3p7q
@@ -3478,18 +3423,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: "#/components/schemas/DetailEnvelope"
-                  - type: object
-                    properties:
-                      service:
-                        type: object
-                        description: Docker swarm.Service object
-                      integrations:
-                        type: array
-                        description: Detected third-party integrations (e.g. Traefik)
-                        items:
-                          $ref: "#/components/schemas/Integration"
+                $ref: "#/components/schemas/ServiceDetail"
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -3528,18 +3462,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: "#/components/schemas/DetailEnvelope"
-                  - type: object
-                    properties:
-                      service:
-                        type: object
-                        description: Docker swarm.Service object
-                      integrations:
-                        type: array
-                        description: Detected third-party integrations (e.g. Traefik)
-                        items:
-                          $ref: "#/components/schemas/Integration"
+                $ref: "#/components/schemas/ServiceDetail"
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -6565,6 +6488,21 @@ components:
             max-file: "3"
 
     # ── Integrations ──────────────────────────────────────────────────
+
+    ServiceDetail:
+      description: Service detail response with JSON-LD envelope and detected integrations
+      allOf:
+        - $ref: "#/components/schemas/DetailEnvelope"
+        - type: object
+          properties:
+            service:
+              type: object
+              description: Docker swarm.Service object
+            integrations:
+              type: array
+              description: Detected third-party integrations (e.g. Traefik)
+              items:
+                $ref: "#/components/schemas/Integration"
 
     Integration:
       description: A detected third-party integration on a service
