@@ -521,12 +521,16 @@ paths:
                 "@context": /api/context.jsonld
                 "@type": Collection
                 items:
-                  - code: SVC001
+                  - "@id": /api/errors/SVC001
+                    "@type": ErrorDef
+                    code: SVC001
                     title: Service Version Conflict
                     status: 409
                     description: The service was modified by another request since you last read it.
                     suggestion: Re-read the service and retry the operation.
-                  - code: OPS001
+                  - "@id": /api/errors/OPS001
+                    "@type": ErrorDef
+                    code: OPS001
                     title: Operations Level Too Low
                     status: 403
                     description: This write operation requires a higher operations level.
@@ -1085,12 +1089,16 @@ paths:
                 "@context": /api/context.jsonld
                 "@type": Collection
                 items:
-                  - type: images
+                  - "@id": /disk-usage/images
+                    "@type": DiskUsageSummary
+                    type: images
                     totalCount: 24
                     activeCount: 18
                     size: 4823691264
                     reclaimable: 1124532224
-                  - type: containers
+                  - "@id": /disk-usage/containers
+                    "@type": DiskUsageSummary
+                    type: containers
                     totalCount: 12
                     activeCount: 12
                     size: 234881024
@@ -1130,7 +1138,9 @@ paths:
                 "@context": /api/context.jsonld
                 "@type": Collection
                 items:
-                  - Id: 5724e2c8d8d7
+                  - "@id": /plugins/vieux/sshfs:latest
+                    "@type": Plugin
+                    Id: 5724e2c8d8d7
                     Name: vieux/sshfs:latest
                     Enabled: true
                     PluginReference: docker.io/vieux/sshfs:latest@sha256:1234abcd
@@ -1525,7 +1535,9 @@ paths:
                 "@context": /api/context.jsonld
                 "@type": Collection
                 items:
-                  - ID: qz7k3v9xm2p4
+                  - "@id": /nodes/qz7k3v9xm2p4
+                    "@type": Node
+                    ID: qz7k3v9xm2p4
                     Version: { Index: 42 }
                     CreatedAt: "2025-01-15T10:30:00Z"
                     Spec:
@@ -1648,7 +1660,9 @@ paths:
                 "@context": /api/context.jsonld
                 "@type": Collection
                 items:
-                  - ID: tsk_abc123def456
+                  - "@id": /tasks/tsk_abc123def456
+                    "@type": Task
+                    ID: tsk_abc123def456
                     ServiceID: r8m2x5nk3p7q
                     ServiceName: webapp
                     NodeID: qz7k3v9xm2p4
@@ -1910,7 +1924,9 @@ paths:
                 "@context": /api/context.jsonld
                 "@type": Collection
                 items:
-                  - ID: r8m2x5nk3p7q
+                  - "@id": /services/r8m2x5nk3p7q
+                    "@type": Service
+                    ID: r8m2x5nk3p7q
                     Version: { Index: 156 }
                     Spec:
                       Name: webapp
@@ -2051,7 +2067,9 @@ paths:
                 "@context": /api/context.jsonld
                 "@type": Collection
                 items:
-                  - ID: tsk_abc123def456
+                  - "@id": /tasks/tsk_abc123def456
+                    "@type": Task
+                    ID: tsk_abc123def456
                     ServiceID: r8m2x5nk3p7q
                     ServiceName: webapp
                     NodeID: qz7k3v9xm2p4
@@ -3469,7 +3487,9 @@ paths:
                 "@context": /api/context.jsonld
                 "@type": Collection
                 items:
-                  - ID: t7w2k9m4x1p6
+                  - "@id": /tasks/t7w2k9m4x1p6
+                    "@type": Task
+                    ID: t7w2k9m4x1p6
                     ServiceID: r8m2x5nk3p7q
                     NodeID: qz7k3v9xm2p4
                     Slot: 1
@@ -3657,13 +3677,17 @@ paths:
                 "@context": /api/context.jsonld
                 "@type": Collection
                 items:
-                  - id: 1042
+                  - "@id": /history/1042
+                    "@type": HistoryEntry
+                    id: 1042
                     type: service
                     action: update
                     resourceId: r8m2x5nk3p7q
                     resourceName: webapp
                     timestamp: "2025-03-20T14:30:00Z"
-                  - id: 1041
+                  - "@id": /history/1041
+                    "@type": HistoryEntry
+                    id: 1041
                     type: task
                     action: create
                     resourceId: t7w2k9m4x1p6
@@ -3715,7 +3739,9 @@ paths:
                 "@context": /api/context.jsonld
                 "@type": Collection
                 items:
-                  - name: myapp
+                  - "@id": /stacks/myapp
+                    "@type": Stack
+                    name: myapp
                     services: [r8m2x5nk3p7q, j4n6w8t2k9m1]
                     configs: [cfg_abc123]
                     secrets: [sec_def456]
@@ -3754,13 +3780,17 @@ paths:
                 "@context": /api/context.jsonld
                 "@type": Collection
                 items:
-                  - name: myapp
+                  - "@id": /stacks/myapp/summary
+                    "@type": StackSummary
+                    name: myapp
                     services: 4
                     runningTasks: 11
                     desiredTasks: 12
                     cpuUsage: 1.42
                     memoryUsage: 2147483648
-                  - name: monitoring
+                  - "@id": /stacks/monitoring/summary
+                    "@type": StackSummary
+                    name: monitoring
                     services: 3
                     runningTasks: 3
                     desiredTasks: 3
@@ -3899,7 +3929,9 @@ paths:
                 "@context": /api/context.jsonld
                 "@type": Collection
                 items:
-                  - ID: cfg_abc123
+                  - "@id": /configs/cfg_abc123
+                    "@type": Config
+                    ID: cfg_abc123
                     Version: { Index: 10 }
                     CreatedAt: "2025-02-01T09:00:00Z"
                     UpdatedAt: "2025-02-01T09:00:00Z"
@@ -4149,7 +4181,9 @@ paths:
                 "@context": /api/context.jsonld
                 "@type": Collection
                 items:
-                  - ID: sec_def456
+                  - "@id": /secrets/sec_def456
+                    "@type": Secret
+                    ID: sec_def456
                     Version: { Index: 8 }
                     CreatedAt: "2025-02-01T09:00:00Z"
                     UpdatedAt: "2025-02-01T09:00:00Z"
@@ -4397,7 +4431,9 @@ paths:
                 "@context": /api/context.jsonld
                 "@type": Collection
                 items:
-                  - Id: net_ghi789
+                  - "@id": /networks/net_ghi789
+                    "@type": Network
+                    Id: net_ghi789
                     Name: myapp_default
                     Driver: overlay
                     Scope: swarm
@@ -4524,7 +4560,9 @@ paths:
                 "@context": /api/context.jsonld
                 "@type": Collection
                 items:
-                  - Name: myapp_data
+                  - "@id": /volumes/myapp_data
+                    "@type": Volume
+                    Name: myapp_data
                     Driver: local
                     Scope: local
                     Mountpoint: /var/lib/docker/volumes/myapp_data/_data

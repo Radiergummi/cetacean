@@ -593,14 +593,11 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         stack: network.Labels?.[stackLabel],
       }));
 
-      return jsonResponse({
-        "@context": "/api/context.jsonld",
-        "@id": "/topology/networks",
-        "@type": "NetworkTopology",
+      return jsonResponse(detailEnvelope("/topology/networks", "NetworkTopology", {
         nodes,
         edges,
         networks,
-      });
+      }));
     }),
 
     http.get("*/topology/placement", () => {
@@ -626,12 +623,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
           }),
       }));
 
-      return jsonResponse({
-        "@context": "/api/context.jsonld",
-        "@id": "/topology/placement",
-        "@type": "PlacementTopology",
+      return jsonResponse(detailEnvelope("/topology/placement", "PlacementTopology", {
         nodes: placementNodes,
-      });
+      }));
     }),
 
     // ---- Nodes ----
@@ -659,21 +653,11 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       }
 
       const managerCount = dataset.nodes.filter((node) => node.Spec.Role === "manager").length;
-      return jsonResponse<{
-        "@context": string;
-        "@id": string;
-        "@type": string;
-        role: string;
-        isLeader: boolean;
-        managerCount: number;
-      }>({
-        "@context": "/api/context.jsonld",
-        "@id": `/nodes/${params.id as string}/role`,
-        "@type": "NodeRole",
+      return jsonResponse(detailEnvelope(`/nodes/${params.id as string}/role`, "NodeRole", {
         role: node.Spec.Role,
         isLeader: node.ManagerStatus?.Leader ?? false,
         managerCount,
-      });
+      }));
     }),
 
     http.get("*/nodes/:id", ({ params }) => {
@@ -958,7 +942,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     http.get("*/stacks/summary", () => {
       const items = buildStackSummaries(dataset);
       return jsonResponse<CollectionResponse<StackSummary & { "@id": string; "@type": string }>>({
-        items: items.map((s) => ({ "@id": `/stacks/${s.name}`, "@type": "StackSummary", ...s })),
+        items: items.map((s) => wrapItem(s, "StackSummary", `/stacks/${s.name}`)),
         total: items.length,
         limit: 50,
         offset: 0,
@@ -1171,11 +1155,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       ];
       return jsonResponse<CollectionResponse<DiskUsageSummary & { "@id": string; "@type": string }>>(
         {
-          items: summaries.map((s) => ({
-            "@id": `/disk-usage/${s.type}`,
-            "@type": "DiskUsageSummary",
-            ...s,
-          })),
+          items: summaries.map((s) => wrapItem(s, "DiskUsageSummary", `/disk-usage/${s.type}`)),
           total: summaries.length,
           limit: 50,
           offset: 0,

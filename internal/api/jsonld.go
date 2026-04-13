@@ -26,6 +26,11 @@ type DetailResponse struct {
 // MarshalJSON produces deterministic output: @context, @id, @type first,
 // then extra fields.
 func (d DetailResponse) MarshalJSON() ([]byte, error) {
+	contextJSON, err := json.Marshal(d.context)
+	if err != nil {
+		return nil, err
+	}
+
 	idJSON, err := json.Marshal(d.id)
 	if err != nil {
 		return nil, err
@@ -38,9 +43,9 @@ func (d DetailResponse) MarshalJSON() ([]byte, error) {
 
 	// Estimate capacity: fixed fields ~80 bytes + extras.
 	buf := make([]byte, 0, 256)
-	buf = append(buf, `{"@context":"`...)
-	buf = append(buf, d.context...)
-	buf = append(buf, `","@id":`...)
+	buf = append(buf, `{"@context":`...)
+	buf = append(buf, contextJSON...)
+	buf = append(buf, `,"@id":`...)
 	buf = append(buf, idJSON...)
 	buf = append(buf, `,"@type":`...)
 	buf = append(buf, typJSON...)
@@ -123,12 +128,16 @@ func (i Item[T]) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 
+	typJSON, err := json.Marshal(i.typ)
+	if err != nil {
+		return nil, err
+	}
+
 	buf := make([]byte, 0, len(valBytes)+64)
 	buf = append(buf, `{"@id":`...)
 	buf = append(buf, idJSON...)
-	buf = append(buf, `,"@type":"`...)
-	buf = append(buf, i.typ...)
-	buf = append(buf, `"`...)
+	buf = append(buf, `,"@type":`...)
+	buf = append(buf, typJSON...)
 
 	if len(valBytes) > 2 { // not "{}"
 		buf = append(buf, ',')
