@@ -2373,7 +2373,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ServiceResources"
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      resources:
+                        type: object
+                        description: Docker swarm.ResourceRequirements (Limits and Reservations)
         "404":
           $ref: "#/components/responses/NotFound"
     patch:
@@ -2383,7 +2389,6 @@ paths:
       description: |
         Applies a JSON Merge Patch (RFC 7396) to the service resource requirements.
         Requires `Content-Type: application/merge-patch+json`.
-        Fields: `cpuLimit`, `cpuReservation`, `memoryLimit`, `memoryReservation` (all in nanoCPUs/bytes, or null to unset).
       parameters:
         - $ref: "#/components/parameters/resourceId"
       requestBody:
@@ -2391,19 +2396,28 @@ paths:
         content:
           application/merge-patch+json:
             schema:
-              $ref: "#/components/schemas/ServiceResources"
+              type: object
+              description: Docker swarm.ResourceRequirements fields to merge
             example:
-              cpuLimit: 2000000000
-              memoryLimit: 536870912
-              cpuReservation: 500000000
-              memoryReservation: 268435456
+              Limits:
+                NanoCPUs: 2000000000
+                MemoryBytes: 536870912
+              Reservations:
+                NanoCPUs: 500000000
+                MemoryBytes: 268435456
       responses:
         "200":
           description: Updated resource requirements
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ServiceResources"
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      resources:
+                        type: object
+                        description: Docker swarm.ResourceRequirements (Limits and Reservations)
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -2425,7 +2439,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ServicePlacement"
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      placement:
+                        type: object
+                        description: Docker swarm.Placement object
         "404":
           $ref: "#/components/responses/NotFound"
     put:
@@ -2440,20 +2460,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ServicePlacement"
+              type: object
+              description: Docker swarm.Placement object
             example:
-              placement:
-                Constraints:
-                  - node.role == worker
-                  - node.labels.region == us-east-1
-                MaxReplicas: 2
+              Constraints:
+                - node.role == worker
+                - node.labels.region == us-east-1
+              MaxReplicas: 2
       responses:
         "200":
           description: Updated placement constraints and preferences
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ServicePlacement"
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      placement:
+                        type: object
+                        description: Docker swarm.Placement object
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -2475,7 +2501,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ServicePorts"
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - $ref: "#/components/schemas/ServicePorts"
         "404":
           $ref: "#/components/responses/NotFound"
     patch:
@@ -2509,7 +2537,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ServicePorts"
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - $ref: "#/components/schemas/ServicePorts"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -2533,7 +2563,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ServiceUpdatePolicy"
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      updatePolicy:
+                        type: object
+                        description: Docker swarm.UpdateConfig object
         "404":
           $ref: "#/components/responses/NotFound"
     patch:
@@ -2550,19 +2586,26 @@ paths:
         content:
           application/merge-patch+json:
             schema:
-              $ref: "#/components/schemas/ServiceUpdatePolicy"
+              type: object
+              description: Docker swarm.UpdateConfig fields to merge
             example:
-              parallelism: 2
-              delay: 10000000000
-              failureAction: rollback
-              order: start-first
+              Parallelism: 2
+              Delay: 10000000000
+              FailureAction: rollback
+              Order: start-first
       responses:
         "200":
           description: Updated update policy
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ServiceUpdatePolicy"
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      updatePolicy:
+                        type: object
+                        description: Docker swarm.UpdateConfig object
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -2586,7 +2629,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ServiceRollbackPolicy"
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      rollbackPolicy:
+                        type: object
+                        description: Docker swarm.UpdateConfig object
         "404":
           $ref: "#/components/responses/NotFound"
     patch:
@@ -2603,19 +2652,26 @@ paths:
         content:
           application/merge-patch+json:
             schema:
-              $ref: "#/components/schemas/ServiceRollbackPolicy"
+              type: object
+              description: Docker swarm.UpdateConfig fields to merge
             example:
-              parallelism: 1
-              delay: 5000000000
-              failureAction: pause
-              order: stop-first
+              Parallelism: 1
+              Delay: 5000000000
+              FailureAction: pause
+              Order: stop-first
       responses:
         "200":
           description: Updated rollback policy
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ServiceRollbackPolicy"
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      rollbackPolicy:
+                        type: object
+                        description: Docker swarm.UpdateConfig object
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -2639,7 +2695,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ServiceLogDriver"
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - $ref: "#/components/schemas/ServiceLogDriver"
         "404":
           $ref: "#/components/responses/NotFound"
     patch:
@@ -2656,20 +2714,22 @@ paths:
         content:
           application/merge-patch+json:
             schema:
-              $ref: "#/components/schemas/ServiceLogDriver"
+              type: object
+              description: Docker swarm.Driver fields to merge
             example:
-              logDriver:
-                Name: json-file
-                Options:
-                  max-size: 10m
-                  max-file: "3"
+              Name: json-file
+              Options:
+                max-size: 10m
+                max-file: "3"
       responses:
         "200":
           description: Updated log driver configuration
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ServiceLogDriver"
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - $ref: "#/components/schemas/ServiceLogDriver"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -2765,8 +2825,14 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                description: Docker container.HealthConfig object
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      healthcheck:
+                        type: object
+                        description: Docker container.HealthConfig object
+                        nullable: true
         "404":
           $ref: "#/components/responses/NotFound"
     put:
