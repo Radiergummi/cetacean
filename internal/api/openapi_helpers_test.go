@@ -7,6 +7,7 @@ import (
 
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
+	"github.com/docker/docker/api/types/volume"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/routers"
 	"github.com/getkin/kin-openapi/routers/gorillamux"
@@ -74,7 +75,9 @@ func newTestRouter(
 
 // populateSpecFixtures seeds the cache with resource IDs that the exhaustive
 // contract test uses when resolving path templates. The fixture IDs
-// (node-1, svc-1, task-1, cfg-1, sec-1, net-1) match resolvePath().
+// (node-1, svc-1, task-1, cfg-1, sec-1, net-1, vol-1, stack "myapp") match
+// resolvePath(). The service carries a stack-namespace label so the "myapp"
+// stack is derivable from cache state.
 func populateSpecFixtures(c *cache.Cache) {
 	c.SetNode(swarm.Node{
 		ID: "node-1",
@@ -94,7 +97,10 @@ func populateSpecFixtures(c *cache.Cache) {
 	c.SetService(swarm.Service{
 		ID: "svc-1",
 		Spec: swarm.ServiceSpec{
-			Annotations: swarm.Annotations{Name: "web"},
+			Annotations: swarm.Annotations{
+				Name:   "web",
+				Labels: map[string]string{"com.docker.stack.namespace": "myapp"},
+			},
 			Mode: swarm.ServiceMode{
 				Replicated: &swarm.ReplicatedService{Replicas: &replicas},
 			},
@@ -123,4 +129,6 @@ func populateSpecFixtures(c *cache.Cache) {
 	})
 
 	c.SetNetwork(network.Summary{ID: "net-1", Name: "net"})
+
+	c.SetVolume(volume.Volume{Name: "vol-1", Driver: "local"})
 }

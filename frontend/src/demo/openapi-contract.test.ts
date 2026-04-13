@@ -26,7 +26,6 @@ const handlers = createHandlers(dataset, clients);
 const server = setupServer(...handlers);
 
 beforeAll(() => server.listen({ onUnhandledRequest: "bypass" }));
-afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
 interface OpenAPIOperation {
@@ -77,12 +76,15 @@ function getValidator(
 }
 
 /**
- * Endpoints where the demo response shape currently doesn't match the spec.
- * Remove entries as demo handlers are updated.
+ * Endpoints where the demo response shape doesn't match the spec. These are
+ * places where the demo mock returns null for empty arrays instead of [].
+ *
+ * Not every entry in the Go `knownDriftEndpoints` map (see
+ * internal/api/openapi_exhaustive_test.go) appears here: the demo mocks are
+ * hand-authored, so some of the nullability issues that the Go handlers
+ * exhibit don't occur in the demo. Treat the two lists as independent.
  */
 const knownDriftEndpoints = new Set<string>([
-  // Demo returns null for empty arrays; spec expects []. Matches the Go
-  // handler drift tracked in openapi_exhaustive_test.go.
   "/services/{id}/configs",
   "/services/{id}/secrets",
   "/services/{id}/networks",

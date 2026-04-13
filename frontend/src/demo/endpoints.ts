@@ -85,9 +85,11 @@ export function buildDemoEndpoints(dataset: Dataset): string[] {
 /**
  * Endpoints that the contract test skips because their responses are either
  * streaming (SSE), proxied passthroughs, or intentionally not JSON.
+ * Keys are path-only (no query string) — shouldSkipContract strips queries
+ * before checking.
  */
 export const nonContractEndpoints = new Set<string>([
-  "/metrics?query=up",
+  "/metrics",
   "/metrics/labels",
   "/metrics/labels/job",
 ]);
@@ -99,7 +101,7 @@ export const nonContractEndpoints = new Set<string>([
 export function shouldSkipContract(path: string): boolean {
   const pathOnly = path.split("?")[0];
 
-  if (nonContractEndpoints.has(path)) {
+  if (nonContractEndpoints.has(pathOnly)) {
     return true;
   }
 
