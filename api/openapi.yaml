@@ -187,14 +187,19 @@ paths:
           description: Series selector(s) to filter labels by
           schema:
             type: string
+          example: 'up{job="node-exporter"}'
         - name: start
           in: query
+          description: Start of the time range to consider (RFC 3339 or Unix timestamp)
           schema:
             type: string
+          example: "2026-04-13T00:00:00Z"
         - name: end
           in: query
+          description: End of the time range to consider (RFC 3339 or Unix timestamp)
           schema:
             type: string
+          example: "2026-04-13T01:00:00Z"
       responses:
         "200":
           description: Label names
@@ -221,11 +226,13 @@ paths:
           description: Label name
           schema:
             type: string
+          example: instance
         - name: match[]
           in: query
           description: Series selector(s) to filter values by
           schema:
             type: string
+          example: 'up{job="node-exporter"}'
       responses:
         "200":
           description: Label values
@@ -277,31 +284,37 @@ paths:
           description: PromQL query expression
           schema:
             type: string
+          example: 'sum(rate(container_cpu_usage_seconds_total[5m])) by (container_label_com_docker_swarm_service_name)'
         - name: time
           in: query
           description: Evaluation timestamp (instant queries)
           schema:
             type: string
+          example: "2026-04-13T12:00:00Z"
         - name: start
           in: query
           description: Range start timestamp (triggers range query)
           schema:
             type: string
+          example: "2026-04-13T11:00:00Z"
         - name: end
           in: query
           description: Range end timestamp (triggers range query)
           schema:
             type: string
+          example: "2026-04-13T12:00:00Z"
         - name: step
           in: query
           description: Query resolution step width (range queries and SSE)
           schema:
             type: string
+          example: 60s
         - name: range
           in: query
           description: Lookback duration in seconds (SSE initial range query)
           schema:
             type: string
+          example: "3600"
       responses:
         "200":
           description: Prometheus query result or SSE stream
@@ -401,9 +414,10 @@ paths:
       parameters:
         - name: redirect
           in: query
+          description: URL to redirect to after login
           schema:
             type: string
-          description: URL to redirect to after login
+          example: /services
       responses:
         "302":
           description: Redirect to OIDC provider
@@ -418,13 +432,17 @@ paths:
         - name: code
           in: query
           required: true
+          description: Authorization code returned by the OIDC provider
           schema:
             type: string
+          example: 4/0AY0e-g7...
         - name: state
           in: query
           required: true
+          description: Opaque state parameter that must match the value sent in the initial authorization request
           schema:
             type: string
+          example: af0ifjsldkj
       responses:
         "302":
           description: Redirect to original URL after successful authentication
@@ -1156,6 +1174,8 @@ paths:
                 remote:
                   type: string
                   description: Plugin reference (e.g. "vieux/sshfs:latest")
+            example:
+              remote: vieux/sshfs:latest
       responses:
         "201":
           description: Plugin installed
@@ -1245,6 +1265,7 @@ paths:
           description: Plugin name
           schema:
             type: string
+          example: vieux/sshfs:latest
       responses:
         "200":
           description: Plugin detail
@@ -1305,12 +1326,14 @@ paths:
           description: Plugin name
           schema:
             type: string
+          example: vieux/sshfs:latest
         - name: force
           in: query
           description: Force removal even if the plugin is in use
           schema:
             type: boolean
             default: false
+          example: false
       responses:
         "204":
           description: Plugin removed
@@ -1332,6 +1355,7 @@ paths:
           description: Plugin name
           schema:
             type: string
+          example: vieux/sshfs:latest
       responses:
         "204":
           description: Plugin enabled
@@ -1353,6 +1377,7 @@ paths:
           description: Plugin name
           schema:
             type: string
+          example: vieux/sshfs:latest
       responses:
         "204":
           description: Plugin disabled
@@ -1376,6 +1401,7 @@ paths:
           description: Plugin name
           schema:
             type: string
+          example: vieux/sshfs:latest
       requestBody:
         required: true
         content:
@@ -1426,6 +1452,7 @@ paths:
           description: Plugin name
           schema:
             type: string
+          example: vieux/sshfs:latest
       requestBody:
         required: true
         content:
@@ -1481,9 +1508,11 @@ paths:
         - $ref: "#/components/parameters/offset"
         - name: sort
           in: query
+          description: Field to sort the result list by
           schema:
             type: string
             enum: [hostname, role, status, availability]
+          example: hostname
         - $ref: "#/components/parameters/dir"
       responses:
         "200":
@@ -1824,6 +1853,8 @@ paths:
                 role:
                   type: string
                   enum: [worker, manager]
+            example:
+              role: manager
       responses:
         "200":
           description: Updated node
@@ -1860,9 +1891,11 @@ paths:
         - $ref: "#/components/parameters/offset"
         - name: sort
           in: query
+          description: Field to sort the result list by
           schema:
             type: string
             enum: [name, mode]
+          example: name
         - $ref: "#/components/parameters/dir"
       responses:
         "200":
@@ -2788,6 +2821,9 @@ paths:
             schema:
               type: object
               description: Docker container.HealthConfig fields to merge
+            example:
+              Interval: 60000000000
+              Retries: 5
       responses:
         "200":
           description: Updated healthcheck configuration
@@ -3341,9 +3377,11 @@ paths:
         - $ref: "#/components/parameters/offset"
         - name: sort
           in: query
+          description: Field to sort the result list by
           schema:
             type: string
             enum: [state, service, node]
+          example: state
         - $ref: "#/components/parameters/dir"
       responses:
         "200":
@@ -3519,11 +3557,13 @@ paths:
           description: Filter by resource type (node, service, task, etc.)
           schema:
             type: string
+          example: service
         - name: resourceId
           in: query
           description: Filter by specific resource ID
           schema:
             type: string
+          example: r8m2x5nk3p7q
         - name: limit
           in: query
           description: Max entries to return
@@ -3532,6 +3572,7 @@ paths:
             minimum: 1
             maximum: 200
             default: 50
+          example: 50
       responses:
         "200":
           description: History entries
@@ -3582,9 +3623,11 @@ paths:
         - $ref: "#/components/parameters/offset"
         - name: sort
           in: query
+          description: Field to sort the result list by
           schema:
             type: string
             enum: [name]
+          example: name
         - $ref: "#/components/parameters/dir"
       responses:
         "200":
@@ -3672,6 +3715,7 @@ paths:
           description: Stack name
           schema:
             type: string
+          example: myapp
       responses:
         "200":
           description: Stack detail
@@ -3725,6 +3769,7 @@ paths:
           description: Stack name
           schema:
             type: string
+          example: myapp
       responses:
         "200":
           description: Stack removal initiated
@@ -3762,9 +3807,11 @@ paths:
         - $ref: "#/components/parameters/offset"
         - name: sort
           in: query
+          description: Field to sort the result list by
           schema:
             type: string
             enum: [name, created, updated]
+          example: name
         - $ref: "#/components/parameters/dir"
       responses:
         "200":
@@ -4010,9 +4057,11 @@ paths:
         - $ref: "#/components/parameters/offset"
         - name: sort
           in: query
+          description: Field to sort the result list by
           schema:
             type: string
             enum: [name, created, updated]
+          example: name
         - $ref: "#/components/parameters/dir"
       responses:
         "200":
@@ -4256,9 +4305,11 @@ paths:
         - $ref: "#/components/parameters/offset"
         - name: sort
           in: query
+          description: Field to sort the result list by
           schema:
             type: string
             enum: [name, driver, scope]
+          example: name
         - $ref: "#/components/parameters/dir"
       responses:
         "200":
@@ -4381,9 +4432,11 @@ paths:
         - $ref: "#/components/parameters/offset"
         - name: sort
           in: query
+          description: Field to sort the result list by
           schema:
             type: string
             enum: [name, driver, scope]
+          example: name
         - $ref: "#/components/parameters/dir"
       responses:
         "200":
@@ -4433,6 +4486,7 @@ paths:
           description: Volume name
           schema:
             type: string
+          example: myapp_data
       responses:
         "200":
           description: Volume detail with cross-referenced services
@@ -4487,6 +4541,7 @@ paths:
           description: Volume name
           schema:
             type: string
+          example: myapp_data
       responses:
         "204":
           description: Volume removed
@@ -4524,6 +4579,7 @@ paths:
             type: integer
             default: 3
             minimum: 0
+          example: 5
       responses:
         "200":
           description: Grouped search results
@@ -4599,10 +4655,10 @@ paths:
                 edges:
                   - source: r8m2x5nk3p7q
                     target: t9n3y6ol4q8r
-                    network: myapp_default
+                    networks: [myapp_default]
                   - source: t9n3y6ol4q8r
                     target: u0o4z7pm5r9s
-                    network: myapp_default
+                    networks: [myapp_default]
         "304":
           $ref: "#/components/responses/NotModified"
 

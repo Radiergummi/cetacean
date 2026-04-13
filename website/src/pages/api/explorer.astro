@@ -49,25 +49,32 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
           ],
         });
 
-        // Scalar's async Vue mount may clobber body classes after we set them.
-        // Poll briefly until our classes stick; the observer handles later toggles.
-        let attempts = 0;
-        const poll = setInterval(function() {
-          applyThemeClasses();
-          if (++attempts >= 20) clearInterval(poll);
-        }, 100);
+        applyThemeClasses();
 
-        const observer = new MutationObserver(applyThemeClasses);
-        observer.observe(document.documentElement, {
+        // Watch <html> for site theme toggles, and <body> in case Scalar's
+        // async Vue mount clobbers our classes — both re-apply via the same
+        // handler.
+        const htmlObserver = new MutationObserver(applyThemeClasses);
+        htmlObserver.observe(document.documentElement, {
           attributes: true,
           attributeFilter: ["class"],
         });
 
-        document.addEventListener("astro:before-swap", function cleanup() {
-          clearInterval(poll);
-          observer.disconnect();
+        const bodyObserver = new MutationObserver(function() {
+          const dark = isDark();
+          if (document.body.classList.contains("dark-mode") !== dark) {
+            applyThemeClasses();
+          }
+        });
+        bodyObserver.observe(document.body, {
+          attributes: true,
+          attributeFilter: ["class"],
+        });
+
+        document.addEventListener("astro:before-swap", function() {
+          htmlObserver.disconnect();
+          bodyObserver.disconnect();
           document.body.classList.remove("dark-mode", "light-mode");
-          document.removeEventListener("astro:before-swap", cleanup);
         }, { once: true });
       }
 
