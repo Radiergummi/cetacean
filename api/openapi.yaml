@@ -1000,6 +1000,7 @@ paths:
                 target:
                   type: string
                   enum: [worker, manager]
+                  description: Which join token to rotate
             example:
               target: worker
       responses:
@@ -1702,6 +1703,7 @@ paths:
                 availability:
                   type: string
                   enum: [active, drain, pause]
+                  description: New availability state for the node
             example:
               availability: drain
       responses:
@@ -1853,6 +1855,7 @@ paths:
                 role:
                   type: string
                   enum: [worker, manager]
+                  description: New role for the node
             example:
               role: manager
       responses:
@@ -2138,6 +2141,7 @@ paths:
                 replicas:
                   type: integer
                   minimum: 0
+                  description: Desired number of replicas
             example:
               replicas: 5
       responses:
@@ -2183,6 +2187,7 @@ paths:
               properties:
                 image:
                   type: string
+                  description: New container image reference
                   example: nginx:latest
             example:
               image: nginx:1.28
@@ -2890,6 +2895,7 @@ paths:
               properties:
                 configs:
                   type: array
+                  description: Replacement set of config references for the service
                   items:
                     type: object
                     properties:
@@ -2976,6 +2982,7 @@ paths:
               properties:
                 secrets:
                   type: array
+                  description: Replacement set of secret references for the service
                   items:
                     type: object
                     properties:
@@ -3062,6 +3069,7 @@ paths:
               properties:
                 networks:
                   type: array
+                  description: Replacement set of network attachments for the service
                   items:
                     type: object
                     properties:
@@ -3141,6 +3149,7 @@ paths:
               properties:
                 mounts:
                   type: array
+                  description: Replacement set of mounts for the service
                   items:
                     type: object
                     description: Docker mount.Mount object
@@ -3332,6 +3341,7 @@ paths:
                 endpointMode:
                   type: string
                   enum: [vip, dnsrr]
+                  description: New endpoint resolution mode (virtual IP or DNS round-robin)
             example:
               endpointMode: vip
       responses:
