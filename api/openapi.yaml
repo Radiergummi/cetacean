@@ -31,14 +31,23 @@ tags:
     description: Health checks and operational endpoints (no content negotiation, no discovery links)
   - name: Authentication
     description: Authentication endpoints (OIDC login flow, identity)
+    externalDocs:
+      description: Authentication guide
+      url: /authentication
   - name: Cluster
     description: Cluster-wide information, swarm config, disk usage, and plugins
   - name: Plugins
     description: Docker plugin management (install, enable, disable, upgrade, configure, remove)
   - name: Nodes
     description: Swarm nodes
+    externalDocs:
+      description: Dashboard guide
+      url: /dashboard
   - name: Services
     description: Swarm services
+    externalDocs:
+      description: Dashboard guide
+      url: /dashboard
   - name: Tasks
     description: Swarm tasks (enriched with ServiceName and NodeHostname)
   - name: Stacks
@@ -59,10 +68,21 @@ tags:
     description: Network and placement topology views
   - name: Monitoring
     description: Prometheus metrics proxy and monitoring status
+    externalDocs:
+      description: Monitoring setup guide
+      url: /monitoring
   - name: Events
     description: Real-time SSE event stream
+  - name: Recommendations
+    description: Recommendation engine for sizing, config hygiene, operational health, and cluster topology
+    externalDocs:
+      description: Recommendations guide
+      url: /recommendations
   - name: Documentation
     description: API spec and JSON-LD context
+    externalDocs:
+      description: API guide
+      url: /api
 
 paths:
   # ── Meta ──────────────────────────────────────────────────────────────
@@ -73,6 +93,7 @@ paths:
       tags: [Meta]
       summary: Health check
       description: Always returns 200 with version info. No content negotiation.
+      security: []
       responses:
         "200":
           description: Healthy
@@ -109,6 +130,7 @@ paths:
       description: |
         Returns 200 after the initial Docker sync completes,
         503 while still syncing.
+      security: []
       responses:
         "200":
           description: Ready
@@ -140,6 +162,7 @@ paths:
         Serves Prometheus exposition format with Cetacean's operational metrics
         (HTTP requests, SSE connections, cache state, etc.).
         Disabled when CETACEAN_SELF_METRICS=false.
+      security: []
       responses:
         "200":
           description: Prometheus metrics
@@ -176,15 +199,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MonitoringStatus"
-              example:
-                prometheusConfigured: true
-                prometheusReachable: true
-                nodeExporter:
-                  targets: 3
-                  nodes: 3
-                cadvisor:
-                  targets: 3
-                  nodes: 3
+              examples:
+                healthy:
+                  summary: Prometheus configured with full coverage
+                  value:
+                    prometheusConfigured: true
+                    prometheusReachable: true
+                    nodeExporter: { targets: 3, nodes: 3 }
+                    cadvisor: { targets: 3, nodes: 3 }
+                partial:
+                  summary: Prometheus reachable but missing exporters on some nodes
+                  value:
+                    prometheusConfigured: true
+                    prometheusReachable: true
+                    nodeExporter: { targets: 2, nodes: 3 }
+                    cadvisor: { targets: 3, nodes: 3 }
+                unreachable:
+                  summary: Prometheus configured but not reachable
+                  value:
+                    prometheusConfigured: true
+                    prometheusReachable: false
+                    error: "dial tcp: lookup prometheus on 127.0.0.11:53: no such host"
+                    nodeExporter: { targets: 0, nodes: 3 }
+                    cadvisor: { targets: 0, nodes: 3 }
+                unconfigured:
+                  summary: Prometheus not configured
+                  value:
+                    prometheusConfigured: false
+                    prometheusReachable: false
+                    nodeExporter: { targets: 0, nodes: 3 }
+                    cadvisor: { targets: 0, nodes: 3 }
 
   /metrics/labels:
     get:
@@ -437,6 +481,7 @@ paths:
       operationId: authLogin
       tags: [Authentication]
       description: Redirects to OIDC provider for authentication. Only available in OIDC mode.
+      security: []
       parameters:
         - name: redirect
           in: query
@@ -454,6 +499,7 @@ paths:
       operationId: authCallback
       tags: [Authentication]
       description: Handles the OIDC authorization code callback. Only available in OIDC mode.
+      security: []
       parameters:
         - name: code
           in: query
@@ -495,6 +541,7 @@ paths:
       description: |
         Content-negotiated. HTML requests get the Scalar API playground;
         all other requests get this OpenAPI spec as YAML.
+      security: []
       responses:
         "200":
           description: API documentation
@@ -512,6 +559,7 @@ paths:
       tags: [Documentation]
       summary: JSON-LD context document
       description: Defines the vocabulary for JSON-LD terms used in responses.
+      security: []
       responses:
         "200":
           description: JSON-LD context
@@ -543,6 +591,7 @@ paths:
         Lists all well-known error codes with their titles, HTTP status codes,
         descriptions, and suggestions. Browser requests (Accept: text/html) serve
         the SPA error reference page.
+      security: []
       responses:
         "200":
           description: Collection of error definitions
@@ -587,6 +636,7 @@ paths:
       description: |
         Returns documentation for a single error code including its title,
         HTTP status, description, and suggested resolution.
+      security: []
       parameters:
         - name: code
           in: path
@@ -1979,29 +2029,41 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServiceCollection"
-              example:
-                "@context": /api/context.jsonld
-                "@type": Collection
-                items:
-                  - "@id": /services/r8m2x5nk3p7q
-                    "@type": Service
-                    ID: r8m2x5nk3p7q
-                    Version: { Index: 156 }
-                    Spec:
-                      Name: webapp
-                      Labels:
-                        com.docker.stack.namespace: myapp
-                      TaskTemplate:
-                        ContainerSpec:
-                          Image: nginx:1.27@sha256:abc123...
-                        Resources:
-                          Limits: { NanoCPUs: 1000000000, MemoryBytes: 536870912 }
-                      Mode:
-                        Replicated: { Replicas: 3 }
-                    RunningTasks: 3
-                total: 12
-                limit: 50
-                offset: 0
+              examples:
+                populated:
+                  summary: Cluster with deployed services
+                  value:
+                    "@context": /api/context.jsonld
+                    "@type": Collection
+                    items:
+                      - "@id": /services/r8m2x5nk3p7q
+                        "@type": Service
+                        ID: r8m2x5nk3p7q
+                        Version: { Index: 156 }
+                        Spec:
+                          Name: webapp
+                          Labels:
+                            com.docker.stack.namespace: myapp
+                          TaskTemplate:
+                            ContainerSpec:
+                              Image: nginx:1.27@sha256:abc123...
+                            Resources:
+                              Limits: { NanoCPUs: 1000000000, MemoryBytes: 536870912 }
+                          Mode:
+                            Replicated: { Replicas: 3 }
+                        RunningTasks: 3
+                    total: 12
+                    limit: 50
+                    offset: 0
+                empty:
+                  summary: No services deployed
+                  value:
+                    "@context": /api/context.jsonld
+                    "@type": Collection
+                    items: []
+                    total: 0
+                    limit: 50
+                    offset: 0
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
