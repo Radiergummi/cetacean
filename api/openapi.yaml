@@ -4997,19 +4997,15 @@ components:
       properties:
         "@context":
           type: string
-          example: /api/context.jsonld
         type:
           type: string
           description: "Problem type URI — `/api/errors/{code}` for domain errors, `about:blank` for generic"
-          example: /api/errors/SVC001
         title:
           type: string
           description: Short human-readable summary
-          example: Service Version Conflict
         status:
           type: integer
           description: HTTP status code
-          example: 409
         detail:
           type: string
           description: Human-readable explanation
@@ -5019,6 +5015,14 @@ components:
         requestId:
           type: string
           description: Correlation ID for this request
+      example:
+        "@context": /api/context.jsonld
+        type: /api/errors/SVC001
+        title: Service Version Conflict
+        status: 409
+        detail: Service was modified concurrently; retry the operation with the latest version.
+        instance: /services/r8m2x5nk3p7q/image
+        requestId: req_a1b2c3d4e5f6
 
     ErrorDef:
       type: object
@@ -5028,21 +5032,24 @@ components:
         code:
           type: string
           description: "Stable error code (three-letter prefix + three-digit number)"
-          example: SVC001
         title:
           type: string
           description: Short human-readable title
-          example: Service Version Conflict
         status:
           type: integer
           description: HTTP status code this error produces
-          example: 409
         description:
           type: string
           description: Detailed explanation of the error
         suggestion:
           type: string
           description: Recommended action to resolve the error
+      example:
+        code: SVC001
+        title: Service Version Conflict
+        status: 409
+        description: A service write operation was rejected because the service has been modified since the version was read.
+        suggestion: Re-fetch the service to get the current version, then retry the write.
 
     # ── JSON-LD Envelopes ────────────────────────────────────────────
 
@@ -5241,6 +5248,19 @@ components:
         RunningTasks:
           type: integer
           description: Number of currently running tasks
+      example:
+        ID: r8m2x5nk3p7q
+        Version: { Index: 156 }
+        Spec:
+          Name: webapp
+          Labels: { com.docker.stack.namespace: myapp }
+          TaskTemplate:
+            ContainerSpec: { Image: "nginx:1.27@sha256:abc123..." }
+            Resources:
+              Limits: { NanoCPUs: 1000000000, MemoryBytes: 536870912 }
+          Mode:
+            Replicated: { Replicas: 3 }
+        RunningTasks: 3
 
     EnrichedTask:
       type: object
@@ -5261,6 +5281,20 @@ components:
         NodeHostname:
           type: string
           description: Resolved from cache
+      example:
+        ID: tsk_abc123def456
+        ServiceID: r8m2x5nk3p7q
+        ServiceName: webapp
+        NodeID: qz7k3v9xm2p4
+        NodeHostname: node-1
+        Slot: 1
+        DesiredState: running
+        Status:
+          State: running
+          Timestamp: "2026-04-13T08:12:34Z"
+          ContainerStatus:
+            ContainerID: 8f4b9a2c1d3e
+            PID: 4242
 
     Stack:
       type: object
@@ -5292,6 +5326,13 @@ components:
           items:
             type: string
           description: Volume names
+      example:
+        name: myapp
+        services: [r8m2x5nk3p7q, f3k9l2m7n8o4]
+        configs: [cfg_nginx_conf]
+        secrets: [sec_db_password]
+        networks: [net_myapp_default]
+        volumes: [myapp_postgres_data]
 
     StackDetail:
       type: object
@@ -5362,6 +5403,20 @@ components:
           type: number
           format: double
           description: Populated from Prometheus (0 if unavailable)
+      example:
+        name: myapp
+        serviceCount: 2
+        configCount: 1
+        secretCount: 1
+        networkCount: 1
+        volumeCount: 1
+        desiredTasks: 5
+        tasksByState: { running: 5 }
+        updatingServices: 0
+        memoryLimitBytes: 2147483648
+        cpuLimitCores: 4.0
+        memoryUsageBytes: 1073741824
+        cpuUsagePercent: 35.2
 
     # ── Recommendations ─────────────────────────────────────────────
 
@@ -5406,6 +5461,18 @@ components:
           type: number
         fixAction:
           type: string
+      example:
+        category: over-provisioned
+        severity: info
+        scope: service
+        targetId: r8m2x5nk3p7q
+        targetName: webapp
+        resource: memory
+        message: "Service uses 120 MiB on average but has 512 MiB reserved (23%)"
+        current: 125829120
+        configured: 536870912
+        suggested: 268435456
+        fixAction: Reduce memoryReservation to 256 MiB to free up capacity.
 
     RecommendationSummary:
       type: object
@@ -5416,6 +5483,10 @@ components:
           type: integer
         info:
           type: integer
+      example:
+        critical: 1
+        warning: 4
+        info: 7
 
     # ── Cluster ──────────────────────────────────────────────────────
 
@@ -5469,6 +5540,26 @@ components:
           type: boolean
         localNodeID:
           type: string
+      example:
+        nodeCount: 3
+        serviceCount: 12
+        taskCount: 36
+        stackCount: 4
+        tasksByState: { running: 34, shutdown: 2 }
+        nodesReady: 3
+        nodesDown: 0
+        nodesDraining: 0
+        totalCPU: 12
+        totalMemory: 25769803776
+        servicesConverged: 11
+        servicesDegraded: 1
+        reservedCPU: 6000000000
+        reservedMemory: 12884901888
+        maxNodeCPU: 4
+        maxNodeMemory: 8589934592
+        lastSync: "2026-04-13T12:00:00Z"
+        prometheusConfigured: true
+        localNodeID: qz7k3v9xm2p4
 
     ClusterCapacity:
       type: object
@@ -5490,6 +5581,12 @@ components:
         nodeCount:
           type: integer
           description: Number of nodes in the cluster
+      example:
+        maxNodeCPU: 4
+        maxNodeMemory: 8589934592
+        totalCPU: 12
+        totalMemory: 25769803776
+        nodeCount: 3
 
     ClusterMetrics:
       type: object
@@ -5500,6 +5597,10 @@ components:
           $ref: "#/components/schemas/ResourceMetric"
         disk:
           $ref: "#/components/schemas/ResourceMetric"
+      example:
+        cpu: { used: 4.22, total: 12, percent: 35.2 }
+        memory: { used: 10737418240, total: 25769803776, percent: 41.7 }
+        disk: { used: 53687091200, total: 214748364800, percent: 25.0 }
 
     ResourceMetric:
       type: object
@@ -5513,6 +5614,10 @@ components:
         percent:
           type: number
           format: double
+      example:
+        used: 4.22
+        total: 12
+        percent: 35.2
 
     DiskUsageSummary:
       type: object
@@ -5530,6 +5635,12 @@ components:
         reclaimable:
           type: integer
           format: int64
+      example:
+        type: images
+        count: 42
+        active: 18
+        totalSize: 12884901888
+        reclaimable: 5368709120
 
     MonitoringStatus:
       type: object
@@ -5545,6 +5656,11 @@ components:
           $ref: "#/components/schemas/TargetStatus"
         cadvisor:
           $ref: "#/components/schemas/TargetStatus"
+      example:
+        prometheusConfigured: true
+        prometheusReachable: true
+        nodeExporter: { targets: 3, nodes: 3 }
+        cadvisor: { targets: 3, nodes: 3 }
 
     TargetStatus:
       type: object
@@ -5555,6 +5671,9 @@ components:
         nodes:
           type: integer
           description: Total nodes in the cluster (for comparison)
+      example:
+        targets: 3
+        nodes: 3
 
     # ── History ──────────────────────────────────────────────────────
 
@@ -5579,6 +5698,14 @@ components:
           type: string
         summary:
           type: string
+      example:
+        id: 8421
+        timestamp: "2026-04-13T08:12:34Z"
+        type: service
+        action: set
+        resourceId: r8m2x5nk3p7q
+        name: webapp
+        summary: Image updated to nginx:1.28
 
     # ── Logs ─────────────────────────────────────────────────────────
 
@@ -5598,6 +5725,19 @@ components:
         hasMore:
           type: boolean
           description: Whether more lines exist beyond the limit
+      example:
+        lines:
+          - timestamp: "2026-04-13T08:12:34.123456789Z"
+            message: "172.18.0.1 - - [13/Apr/2026:08:12:34 +0000] \"GET / HTTP/1.1\" 200 612"
+            stream: stdout
+            attrs: { "com.docker.swarm.task.id": tsk_abc123def456 }
+          - timestamp: "2026-04-13T08:12:35.987654321Z"
+            message: "2026/04/13 08:12:35 [error] 42#42: upstream timed out"
+            stream: stderr
+            attrs: { "com.docker.swarm.task.id": tsk_ghi789jkl012 }
+        oldest: "2026-04-13T08:12:34.123456789Z"
+        newest: "2026-04-13T08:12:35.987654321Z"
+        hasMore: true
 
     LogLine:
       type: object
@@ -5615,6 +5755,11 @@ components:
           additionalProperties:
             type: string
           description: Docker log attributes (e.g. task ID)
+      example:
+        timestamp: "2026-04-13T08:12:34.123456789Z"
+        message: "172.18.0.1 - - [13/Apr/2026:08:12:34 +0000] \"GET / HTTP/1.1\" 200 612"
+        stream: stdout
+        attrs: { "com.docker.swarm.task.id": tsk_abc123def456 }
 
     # ── SSE ──────────────────────────────────────────────────────────
 
@@ -5642,6 +5787,19 @@ components:
         resource:
           type: object
           description: The full resource object (type varies by event type)
+      example:
+        "@id": /services/r8m2x5nk3p7q
+        "@type": Service
+        type: service
+        action: set
+        id: r8m2x5nk3p7q
+        resource:
+          ID: r8m2x5nk3p7q
+          Version: { Index: 157 }
+          Spec:
+            Name: webapp
+            TaskTemplate:
+              ContainerSpec: { Image: "nginx:1.28@sha256:def456..." }
 
     # ── Search ───────────────────────────────────────────────────────
 
@@ -5650,13 +5808,10 @@ components:
       properties:
         "@context":
           type: string
-          example: /api/context.jsonld
         "@id":
           type: string
-          example: /search
         "@type":
           type: string
-          example: SearchResult
         query:
           type: string
         results:
@@ -5674,6 +5829,23 @@ components:
         total:
           type: integer
           description: Total matches across all types
+      example:
+        "@context": /api/context.jsonld
+        "@id": /search
+        "@type": SearchResult
+        query: web
+        results:
+          services:
+            - id: r8m2x5nk3p7q
+              name: webapp
+              detail: "nginx:1.27@sha256:abc123..."
+              state: running
+          stacks:
+            - id: webshop
+              name: webshop
+              detail: "3 services"
+        counts: { services: 1, stacks: 1 }
+        total: 2
 
     SearchResult:
       type: object
@@ -5688,6 +5860,11 @@ components:
         state:
           type: string
           description: Present for services and tasks
+      example:
+        id: r8m2x5nk3p7q
+        name: webapp
+        detail: "nginx:1.27@sha256:abc123..."
+        state: running
 
     # ── Topology ─────────────────────────────────────────────────────
 
@@ -5706,6 +5883,34 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TopoNetwork"
+      example:
+        nodes:
+          - id: r8m2x5nk3p7q
+            name: webapp
+            stack: myapp
+            replicas: 3
+            image: "nginx:1.27"
+            ports: ["8080:80/tcp"]
+            mode: replicated
+            networkAliases: { net_myapp_default: [webapp] }
+          - id: f3k9l2m7n8o4
+            name: api
+            stack: myapp
+            replicas: 2
+            image: "myorg/api:v1.2.3"
+            ports: []
+            mode: replicated
+            networkAliases: { net_myapp_default: [api] }
+        edges:
+          - source: r8m2x5nk3p7q
+            target: f3k9l2m7n8o4
+            networks: [net_myapp_default]
+        networks:
+          - id: net_myapp_default
+            name: myapp_default
+            driver: overlay
+            scope: swarm
+            stack: myapp
 
     TopoServiceNode:
       type: object
@@ -5772,6 +5977,20 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TopoClusterNode"
+      example:
+        nodes:
+          - id: qz7k3v9xm2p4
+            hostname: node-1
+            role: manager
+            state: ready
+            availability: active
+            tasks:
+              - id: tsk_abc123def456
+                serviceId: r8m2x5nk3p7q
+                serviceName: webapp
+                state: running
+                slot: 1
+                image: "nginx:1.27"
 
     TopoClusterNode:
       type: object
@@ -5836,6 +6055,12 @@ components:
           type: object
           additionalProperties: true
           description: All raw claims from the authentication provider
+      example:
+        subject: user@example.com
+        displayName: Jane Doe
+        email: user@example.com
+        groups: [engineering, ops]
+        provider: oidc
 
     # ── Write operation schemas ───────────────────────────────────────
 
@@ -5856,6 +6081,15 @@ components:
           value:
             type: string
             description: New value (required for add/replace/test)
+      example:
+        - op: add
+          path: /LOG_LEVEL
+          value: debug
+        - op: replace
+          path: /NODE_ENV
+          value: staging
+        - op: remove
+          path: /DEPRECATED_FLAG
 
     ServiceResources:
       type: object
@@ -5881,6 +6115,11 @@ components:
           format: int64
           description: Memory reservation in bytes (null to unset)
           nullable: true
+      example:
+        cpuLimit: 2000000000
+        cpuReservation: 500000000
+        memoryLimit: 536870912
+        memoryReservation: 268435456
 
     ServicePlacement:
       type: object
@@ -5909,6 +6148,14 @@ components:
               description: Target platforms
               items:
                 type: object
+      example:
+        placement:
+          Constraints: ["node.role == worker", "node.labels.zone == us-east-1a"]
+          Preferences:
+            - Spread: { SpreadDescriptor: "node.labels.zone" }
+          MaxReplicas: 2
+          Platforms:
+            - { Architecture: amd64, OS: linux }
 
     ServicePorts:
       type: object
@@ -5932,6 +6179,16 @@ components:
               PublishMode:
                 type: string
                 enum: [ingress, host]
+      example:
+        ports:
+          - Protocol: tcp
+            TargetPort: 80
+            PublishedPort: 8080
+            PublishMode: ingress
+          - Protocol: tcp
+            TargetPort: 443
+            PublishedPort: 8443
+            PublishMode: ingress
 
     ServiceUpdatePolicy:
       type: object
@@ -5959,6 +6216,13 @@ components:
         order:
           type: string
           enum: [stop-first, start-first]
+      example:
+        parallelism: 1
+        delay: 10000000000
+        failureAction: rollback
+        monitor: 5000000000
+        maxFailureRatio: 0
+        order: start-first
 
     ServiceRollbackPolicy:
       type: object
@@ -5986,6 +6250,13 @@ components:
         order:
           type: string
           enum: [stop-first, start-first]
+      example:
+        parallelism: 1
+        delay: 0
+        failureAction: pause
+        monitor: 5000000000
+        maxFailureRatio: 0
+        order: stop-first
 
     ServiceLogDriver:
       type: object
@@ -6004,6 +6275,12 @@ components:
               additionalProperties:
                 type: string
               description: Log driver options
+      example:
+        logDriver:
+          Name: json-file
+          Options:
+            max-size: 10m
+            max-file: "3"
 
     # ── Integrations ──────────────────────────────────────────────────
 
@@ -6046,6 +6323,25 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TraefikMiddleware"
+      example:
+        name: traefik
+        enabled: true
+        routers:
+          - name: webapp
+            rule: "Host(`app.example.com`)"
+            entrypoints: [websecure]
+            tls: { certResolver: letsencrypt }
+            middlewares: [rate-limit]
+            service: webapp
+            priority: 100
+        services:
+          - name: webapp
+            port: 80
+            scheme: http
+        middlewares:
+          - name: rate-limit
+            type: rateLimit
+            config: { average: 100, burst: 50 }
 
     TraefikRouter:
       type: object
@@ -6147,6 +6443,9 @@ components:
         authConfig:
           type: string
           description: Registry auth configuration ID
+      example:
+        name: shepherd
+        enabled: true
 
     CronjobIntegration:
       type: object
@@ -6169,6 +6468,14 @@ components:
           type: boolean
         queryRegistry:
           type: boolean
+      example:
+        name: swarm-cronjob
+        enabled: true
+        schedule: "0 3 * * *"
+        skipRunning: true
+        replicas: 1
+        registryAuth: false
+        queryRegistry: false
 
     DiunIntegration:
       type: object
@@ -6207,3 +6514,12 @@ components:
           type: object
           additionalProperties:
             type: string
+      example:
+        name: diun
+        enabled: true
+        watchRepo: true
+        notifyOn: new;update
+        sortTags: semver
+        maxTags: 5
+        includeTags: '^\d+\.\d+\.\d+$'
+        platform: linux/amd64
