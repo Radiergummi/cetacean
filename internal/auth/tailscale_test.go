@@ -366,7 +366,7 @@ func TestTailscaleProvider_Whoami_Success(t *testing.T) {
 		},
 	}
 
-	handler := WhoamiHandler(p)
+	handler := WhoamiHandler(p, WriteIdentityJSON)
 
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.RemoteAddr = "100.64.0.1:12345"
@@ -391,7 +391,7 @@ func TestTailscaleProvider_Whoami_Unauthenticated(t *testing.T) {
 		},
 	}
 
-	handler := WhoamiHandler(p)
+	handler := WhoamiHandler(p, WriteIdentityJSON)
 
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.RemoteAddr = "192.168.1.1:12345"

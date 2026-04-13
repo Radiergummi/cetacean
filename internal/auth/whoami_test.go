@@ -19,7 +19,7 @@ func TestWhoamiHandler_ReturnsIdentityJSON(t *testing.T) {
 		TrustedProxies: anyProxy,
 	})
 
-	handler := WhoamiHandler(p)
+	handler := WhoamiHandler(p, WriteIdentityJSON)
 	r := httptest.NewRequest(http.MethodGet, "/auth/whoami", nil)
 	r.Header.Set("X-User", "alice")
 	r.Header.Set("X-Name", "Alice Smith")
@@ -63,7 +63,7 @@ func TestWhoamiHandler_Returns401WithoutHeaders(t *testing.T) {
 		TrustedProxies: anyProxy,
 	})
 
-	handler := WhoamiHandler(p)
+	handler := WhoamiHandler(p, WriteIdentityJSON)
 	r := httptest.NewRequest(http.MethodGet, "/auth/whoami", nil)
 	// No X-User header set.
 
@@ -83,7 +83,7 @@ func TestWhoamiHandler_ValidSecret(t *testing.T) {
 		TrustedProxies: anyProxy,
 	})
 
-	handler := WhoamiHandler(p)
+	handler := WhoamiHandler(p, WriteIdentityJSON)
 	r := httptest.NewRequest(http.MethodGet, "/auth/whoami", nil)
 	r.Header.Set("X-User", "bob")
 	r.Header.Set("X-Proxy-Secret", "s3cret")
@@ -112,7 +112,7 @@ func TestWhoamiHandler_InvalidSecret_Returns401(t *testing.T) {
 		TrustedProxies: anyProxy,
 	})
 
-	handler := WhoamiHandler(p)
+	handler := WhoamiHandler(p, WriteIdentityJSON)
 	r := httptest.NewRequest(http.MethodGet, "/auth/whoami", nil)
 	r.Header.Set("X-User", "bob")
 	r.Header.Set("X-Proxy-Secret", "wrong")
@@ -131,7 +131,7 @@ func TestWhoamiHandler_SetsCacheControlNoStore(t *testing.T) {
 		TrustedProxies: anyProxy,
 	})
 
-	handler := WhoamiHandler(p)
+	handler := WhoamiHandler(p, WriteIdentityJSON)
 	r := httptest.NewRequest(http.MethodGet, "/auth/whoami", nil)
 	r.Header.Set("X-User", "alice")
 

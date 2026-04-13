@@ -436,7 +436,7 @@ func TestCertProvider_WhoamiCacheControl(t *testing.T) {
 		NotAfter:     time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
 
-	handler := WhoamiHandler(p)
+	handler := WhoamiHandler(p, WriteIdentityJSON)
 
 	r := httptest.NewRequest("GET", "/", nil)
 	r.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{cert}}

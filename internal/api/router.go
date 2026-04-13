@@ -109,18 +109,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	swarmACL := h.requireWriteACL(swarmResource)
 
 	authProvider.RegisterRoutes(mux)
-	mux.HandleFunc("GET /auth/whoami", func(w http.ResponseWriter, r *http.Request) {
-		id, err := authProvider.Authenticate(w, r)
-		if err != nil {
-			writeErrorCode(w, r, "AUT001", "authentication required")
-			return
-		}
-		if id == nil {
-			return // provider handled the response (e.g. redirect)
-		}
-		w.Header().Set("Cache-Control", "no-store")
-		writeJSON(w, NewDetailResponse(r.Context(), "/auth/whoami", "Identity", id))
-	})
+	mux.HandleFunc("GET /auth/whoami", auth.WhoamiHandler(authProvider, writeIdentityJSONLD))
 
 	// Meta endpoints (no content negotiation, no discovery links)
 	mux.HandleFunc("GET /-/health", h.HandleHealth)
@@ -685,4 +674,10 @@ func securityHeaders(next http.Handler, tlsEnabled bool) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// writeIdentityJSONLD writes an auth identity as a JSON-LD DetailResponse.
+// Used by the /auth/whoami handler.
+func writeIdentityJSONLD(w http.ResponseWriter, r *http.Request, id *auth.Identity) {
+	writeJSON(w, NewDetailResponse(r.Context(), "/auth/whoami", "Identity", id))
 }
