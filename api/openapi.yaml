@@ -642,20 +642,23 @@ paths:
             example: node,service,task
       responses:
         "200":
-          description: SSE event stream
+          description: |
+            SSE event stream. Each frame has the shape `event: <type>\ndata: <SSEEvent-JSON>\n\n`.
+            The schema below describes the JSON payload of a single `data:` line.
           content:
             text/event-stream:
               schema:
                 $ref: "#/components/schemas/SSEEvent"
-              example: |
-                event: service
-                data: {"@id":"/services/r8m2x5nk3p7q","@type":"Service","type":"service","action":"set","id":"r8m2x5nk3p7q","resource":{"ID":"r8m2x5nk3p7q","Spec":{"Name":"webapp"},"UpdateStatus":{"State":"updating"}}}
-
-                event: task
-                data: {"@id":"/tasks/tsk_abc123def456","@type":"Task","type":"task","action":"set","id":"tsk_abc123def456","resource":{"ID":"tsk_abc123def456","ServiceID":"r8m2x5nk3p7q","Status":{"State":"running"}}}
-
-                event: batch
-                data: [{"@id":"/services/r8m2x5nk3p7q","@type":"Service","type":"service","action":"set","id":"r8m2x5nk3p7q"},{"@id":"/nodes/qz7k3v9xm2p4","@type":"Node","type":"node","action":"set","id":"qz7k3v9xm2p4"}]
+              example:
+                "@id": /services/r8m2x5nk3p7q
+                "@type": Service
+                type: service
+                action: set
+                id: r8m2x5nk3p7q
+                resource:
+                  ID: r8m2x5nk3p7q
+                  Spec: { Name: webapp }
+                  UpdateStatus: { State: updating }
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
@@ -2183,12 +2186,12 @@ paths:
             text/event-stream:
               schema:
                 $ref: "#/components/schemas/LogLine"
-              example: |
-                event: log
-                data: {"timestamp":"2026-04-13T08:12:34.123456789Z","message":"172.18.0.1 - - [13/Apr/2026:08:12:34 +0000] \"GET / HTTP/1.1\" 200 612","stream":"stdout","attrs":{"com.docker.swarm.task.id":"tsk_abc123def456"}}
-
-                event: log
-                data: {"timestamp":"2026-04-13T08:12:35.987654321Z","message":"2026/04/13 08:12:35 [error] 42#42: upstream timed out","stream":"stderr","attrs":{"com.docker.swarm.task.id":"tsk_ghi789jkl012"}}
+              example:
+                timestamp: "2026-04-13T08:12:34.123456789Z"
+                message: 172.18.0.1 - - [13/Apr/2026:08:12:34 +0000] "GET / HTTP/1.1" 200 612
+                stream: stdout
+                attrs:
+                  com.docker.swarm.task.id: tsk_abc123def456
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -3721,12 +3724,12 @@ paths:
             text/event-stream:
               schema:
                 $ref: "#/components/schemas/LogLine"
-              example: |
-                event: log
-                data: {"timestamp":"2026-04-13T08:12:34.123456789Z","message":"starting server on :8080","stream":"stdout","attrs":{"com.docker.swarm.task.id":"tsk_abc123def456"}}
-
-                event: log
-                data: {"timestamp":"2026-04-13T08:12:35.987654321Z","message":"ready to accept connections","stream":"stdout","attrs":{"com.docker.swarm.task.id":"tsk_abc123def456"}}
+              example:
+                timestamp: "2026-04-13T08:12:34.123456789Z"
+                message: starting server on :8080
+                stream: stdout
+                attrs:
+                  com.docker.swarm.task.id: tsk_abc123def456
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
