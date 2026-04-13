@@ -74,6 +74,13 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
           attributes: true,
           attributeFilter: ["class"],
         });
+
+        // Clean up Scalar-specific body classes when leaving the page
+        document.addEventListener("astro:before-swap", function cleanup() {
+          clearInterval(poll);
+          document.body.classList.remove("dark-mode", "light-mode");
+          document.removeEventListener("astro:before-swap", cleanup);
+        });
       }
 
       if (typeof Scalar !== "undefined") {

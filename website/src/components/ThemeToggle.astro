@@ -63,7 +63,9 @@
     });
 
     document.addEventListener("astro:page-load", () => {
-      window.__updateThemeUI(window.__getTheme());
+      var theme = window.__getTheme();
+      window.__applyTheme(theme);
+      window.__updateThemeUI(theme);
     });
   }
 </script>
