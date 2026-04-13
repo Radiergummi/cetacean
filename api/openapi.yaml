@@ -1018,15 +1018,8 @@ paths:
       summary: Rotate unlock key
       description: Rotates the swarm unlock key. Only works when autolock is enabled. Requires operations level 3.
       responses:
-        "200":
-          description: New unlock key
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  unlockKey:
-                    type: string
+        "204":
+          description: Unlock key rotated. Retrieve the new key via GET /swarm/unlock-key.
         "403":
           description: Operations level too low
         "409":
@@ -1039,12 +1032,8 @@ paths:
       summary: Force CA certificate rotation
       description: Forces rotation of the cluster root CA certificate. Requires operations level 3.
       responses:
-        "200":
+        "204":
           description: CA rotation initiated
-          content:
-            application/json:
-              schema:
-                type: object
         "403":
           description: Operations level too low
         "409":
@@ -1062,11 +1051,16 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  unlockKey:
-                    type: string
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      unlockKey:
+                        type: string
               example:
+                "@context": /api/context.jsonld
+                "@id": /swarm/unlock-key
+                "@type": SwarmUnlockKey
                 unlockKey: SWMKEY-1-kX9P2q3r4s5t6u7v8w9x0y1z2A3B4C5D6E7F8G9H
         "500":
           description: Failed to retrieve unlock key
