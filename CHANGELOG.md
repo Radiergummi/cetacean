@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Feed icon button in page headers for pages with Atom feeds
 - `Link: rel="alternate"` header on JSON responses advertising the Atom feed URL
 
+### Fixed
+- Corrected OpenAPI spec examples to match actual API responses
+- Documented missing OpenAPI endpoints and parameters: `POST /swarm/unlock`, `GET /topology`, `GET /services/{id}/mode`, `GET /services/{id}/endpoint-mode`, `?force` on node and volume deletion, and `application/merge-patch+json` support on env and label PATCH endpoints
+- Removed dead `GET /swarm/plugins` alias route
+- Empty cross-reference and collection fields now serialize as `[]` instead of `null` on config/secret/network/volume/stack detail, service sub-resources (configs, secrets, networks, mounts), stack listings, and the recommendations endpoint
+
 ## [0.11.0] - 2026-04-02
 
 ### Added

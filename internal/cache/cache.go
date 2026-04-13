@@ -529,7 +529,14 @@ func (c *Cache) ListStacks() []Stack {
 	defer c.mu.RUnlock()
 	out := make([]Stack, 0, len(c.stacks))
 	for _, s := range c.stacks {
-		out = append(out, s)
+		out = append(out, Stack{
+			Name:     s.Name,
+			Services: append([]string{}, s.Services...),
+			Configs:  append([]string{}, s.Configs...),
+			Secrets:  append([]string{}, s.Secrets...),
+			Networks: append([]string{}, s.Networks...),
+			Volumes:  append([]string{}, s.Volumes...),
+		})
 	}
 	return out
 }
@@ -541,7 +548,14 @@ func (c *Cache) GetStackDetail(name string) (StackDetail, bool) {
 	if !ok {
 		return StackDetail{}, false
 	}
-	detail := StackDetail{Name: s.Name}
+	detail := StackDetail{
+		Name:     s.Name,
+		Services: []swarm.Service{},
+		Configs:  []swarm.Config{},
+		Secrets:  []swarm.Secret{},
+		Networks: []network.Summary{},
+		Volumes:  []volume.Volume{},
+	}
 	for _, id := range s.Services {
 		if svc, ok := c.services[id]; ok {
 			detail.Services = append(detail.Services, svc)

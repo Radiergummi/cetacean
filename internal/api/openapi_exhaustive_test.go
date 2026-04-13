@@ -21,21 +21,7 @@ import (
 // skips these so it fails only on newly introduced drift. Each entry should
 // have a follow-up issue or commit removing it once the handler or spec is
 // fixed.
-var knownDriftEndpoints = map[string]string{
-	"/api":                    "content-type negotiation mismatch with spec",
-	"/configs/{id}":           "services array serializes as null when empty",
-	"/secrets/{id}":           "services array serializes as null when empty",
-	"/networks/{id}":          "services array serializes as null when empty",
-	"/volumes/{name}":         "services array serializes as null when empty",
-	"/recommendations":        "items array serializes as null when empty",
-	"/metrics/status":         "cadvisor field is null when absent (should be omitempty or nullable)",
-	"/services/{id}/configs":  "configs array serializes as null when empty",
-	"/services/{id}/secrets":  "secrets array serializes as null when empty",
-	"/services/{id}/networks": "networks array serializes as null when empty",
-	"/services/{id}/mounts":   "mounts array serializes as null when empty",
-	"/stacks":                 "stack items have null arrays for empty configs/secrets/networks/volumes",
-	"/stacks/{name}":          "stack detail arrays serialize as null when empty",
-}
+var knownDriftEndpoints = map[string]string{}
 
 // TestEveryReadEndpointMatchesSpec walks every GET operation in the OpenAPI
 // spec, issues a request with substituted path parameters, and validates the
@@ -140,7 +126,11 @@ func TestEveryReadEndpointMatchesSpec(t *testing.T) {
 					Options: &openapi3filter.Options{SkipSettingDefaults: true},
 				},
 			); err != nil {
-				t.Errorf("response validation failed: %v\nresponse body: %s", err, string(bodyBytes))
+				t.Errorf(
+					"response validation failed: %v\nresponse body: %s",
+					err,
+					string(bodyBytes),
+				)
 				return
 			}
 
@@ -166,6 +156,13 @@ func skipEndpoint(path string) bool {
 	// Prometheus proxy passes through responses without conforming to an
 	// internal schema; covered by dedicated tests.
 	if path == "/metrics" || strings.HasPrefix(path, "/metrics/labels") {
+		return true
+	}
+
+	// Topology returns custom content types (application/vnd.jgf+json,
+	// application/graphml+xml, text/vnd.graphviz) that openapi3filter's
+	// default body decoders don't understand. Covered by dedicated tests.
+	if path == "/topology" {
 		return true
 	}
 

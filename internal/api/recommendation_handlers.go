@@ -20,6 +20,9 @@ func (h *Handlers) HandleRecommendations(w http.ResponseWriter, r *http.Request)
 		h.recEngine.Results(),
 		recommendationResource,
 	)
+	if results == nil {
+		results = []recommendations.Recommendation{}
+	}
 
 	summary := recommendations.ComputeSummary(results)
 	writeCachedJSON(

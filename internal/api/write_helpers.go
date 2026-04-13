@@ -62,8 +62,9 @@ func lookupACL[T any](
 
 // filterServiceRefs applies ACL read filtering to a list of service
 // cross-references. Used by detail handlers that include "used by" services.
+// Always returns a non-nil slice so the field serializes as [] instead of null.
 func (h *Handlers) filterServiceRefs(r *http.Request, refs []cache.ServiceRef) []cache.ServiceRef {
-	return acl.Filter(
+	filtered := acl.Filter(
 		h.acl,
 		auth.IdentityFromContext(r.Context()),
 		"read",
@@ -72,6 +73,10 @@ func (h *Handlers) filterServiceRefs(r *http.Request, refs []cache.ServiceRef) [
 			return "service:" + ref.Name
 		},
 	)
+	if filtered == nil {
+		return []cache.ServiceRef{}
+	}
+	return filtered
 }
 
 // writeDockerError handles Docker API errors that don't have a domain-specific
