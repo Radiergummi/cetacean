@@ -15,46 +15,22 @@ import (
 
 // --- Stacks ---
 
+func stackID(s cache.Stack) string { return "/stacks/" + s.Name }
+
 func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
-	h.setAllowList(w, r, "stack")
-	stacks := h.cache.ListStacks()
-	stacks = acl.Filter(
-		h.acl,
-		auth.IdentityFromContext(r.Context()),
-		"read",
-		stacks,
-		func(s cache.Stack) string {
-			return "stack:" + s.Name
+	handleList(h, w, r, listSpec[cache.Stack]{
+		resourceType: "stack",
+		linkTemplate: "/stacks/{name}",
+		list:         h.cache.ListStacks,
+		aclResource:  func(s cache.Stack) string { return "stack:" + s.Name },
+		searchName:   func(s cache.Stack) string { return s.Name },
+		filterEnv:    filter.StackEnv,
+		sortKeys: map[string]func(cache.Stack) string{
+			"name": func(s cache.Stack) string { return s.Name },
 		},
-	)
-	stacks = searchFilter(
-		stacks,
-		r.URL.Query().Get("search"),
-		func(s cache.Stack) string { return s.Name },
-	)
-	var ok bool
-	if stacks, ok = exprFilter(stacks, r.URL.Query().Get("filter"), filter.StackEnv, w, r); !ok {
-		return
-	}
-	p, err := parsePagination(r)
-	if err != nil {
-		writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
-		return
-	}
-	stacks = sortItems(stacks, p.Sort, p.Dir, map[string]func(cache.Stack) string{
-		"name": func(s cache.Stack) string { return s.Name },
+		itemType: "Stack",
+		idFunc:   stackID,
 	})
-	raw := applyPagination(r.Context(), stacks, p)
-	wrapped := CollectionResponse[Item[cache.Stack]]{
-		Context: raw.Context,
-		Type:    raw.Type,
-		Items:   wrapItems(raw.Items, "Stack", func(s cache.Stack) string { return "/stacks/" + s.Name }),
-		Total:   raw.Total,
-		Limit:   raw.Limit,
-		Offset:  raw.Offset,
-	}
-	writeLinkTemplate(w, r, "/stacks/{name}")
-	writeCollectionResponse(w, r, wrapped, p)
 }
 
 func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {

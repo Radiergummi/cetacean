@@ -62,7 +62,7 @@ func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 		r,
 		NewCollectionResponse(
 			r.Context(),
-			wrapItems(enriched, "Task", func(t EnrichedTask) string { return "/tasks/" + t.ID }),
+			wrapItems(enriched, "Task", enrichedTaskID),
 			len(enriched),
 			len(enriched),
 			0,

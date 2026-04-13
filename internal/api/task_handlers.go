@@ -37,6 +37,10 @@ func (h *Handlers) enrichTasks(tasks []swarm.Task) []EnrichedTask {
 	return out
 }
 
+// enrichedTaskID extracts the JSON-LD @id for an enriched task. Shared across
+// task list handlers and service/node task sub-collections.
+func enrichedTaskID(t EnrichedTask) string { return "/tasks/" + t.ID }
+
 // taskStateSortKey returns a sort key that orders running tasks first,
 // then starting/preparing, then terminal states alphabetically.
 func taskStateSortKey(state swarm.TaskState) string {
@@ -59,7 +63,6 @@ func taskStateSortKey(state swarm.TaskState) string {
 func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 	tasks, p, ok := prepareList(h, w, r, listSpec[swarm.Task]{
 		resourceType: "task",
-		linkTemplate: "/tasks/{id}",
 		list:         h.cache.ListTasks,
 		aclResource:  func(t swarm.Task) string { return "task:" + t.ID },
 		filterEnv:    filter.TaskEnv,
@@ -81,7 +84,7 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 		r,
 		NewCollectionResponse(
 			r.Context(),
-			wrapItems(enriched, "Task", func(t EnrichedTask) string { return "/tasks/" + t.ID }),
+			wrapItems(enriched, "Task", enrichedTaskID),
 			paged.Total,
 			paged.Limit,
 			paged.Offset,

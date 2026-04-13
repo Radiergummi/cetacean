@@ -40,7 +40,6 @@ type ServiceListItem struct {
 func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 	services, p, ok := prepareList(h, w, r, listSpec[swarm.Service]{
 		resourceType: "service",
-		linkTemplate: "/services/{id}",
 		list:         h.cache.ListServices,
 		aclResource:  func(s swarm.Service) string { return "service:" + s.Spec.Name },
 		searchName:   func(s swarm.Service) string { return s.Spec.Name },
@@ -75,7 +74,11 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 		r,
 		NewCollectionResponse(
 			r.Context(),
-			wrapItems(items, "Service", func(s ServiceListItem) string { return "/services/" + s.ID }),
+			wrapItems(
+				items,
+				"Service",
+				func(s ServiceListItem) string { return "/services/" + s.ID },
+			),
 			paged.Total,
 			paged.Limit,
 			paged.Offset,
@@ -117,7 +120,7 @@ func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {
 		r,
 		NewCollectionResponse(
 			r.Context(),
-			wrapItems(tasks, "Task", func(t EnrichedTask) string { return "/tasks/" + t.ID }),
+			wrapItems(tasks, "Task", enrichedTaskID),
 			len(tasks),
 			len(tasks),
 			0,
