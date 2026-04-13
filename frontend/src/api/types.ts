@@ -1,4 +1,6 @@
 export interface Node {
+  "@id"?: string;
+  "@type"?: string;
   ID: string;
   Version: { Index: number };
   Spec: {
@@ -144,10 +146,14 @@ export interface Service {
 }
 
 export interface ServiceListItem extends Service {
+  "@id"?: string;
+  "@type"?: string;
   RunningTasks: number;
 }
 
 export interface Task {
+  "@id"?: string;
+  "@type"?: string;
   ID: string;
   Version: { Index: number };
   ServiceID: string;
@@ -174,6 +180,8 @@ export interface Task {
 }
 
 export interface Config {
+  "@id"?: string;
+  "@type"?: string;
   ID: string;
   Version: { Index: number };
   CreatedAt: string;
@@ -186,6 +194,8 @@ export interface Config {
 }
 
 export interface Secret {
+  "@id"?: string;
+  "@type"?: string;
   ID: string;
   Version: { Index: number };
   CreatedAt: string;
@@ -197,6 +207,8 @@ export interface Secret {
 }
 
 export interface Network {
+  "@id"?: string;
+  "@type"?: string;
   Id: string; // Docker SDK: network.Summary uses "Id" not "ID"
   Name: string;
   Created: string;
@@ -215,6 +227,8 @@ export interface Network {
 }
 
 export interface Volume {
+  "@id"?: string;
+  "@type"?: string;
   Name: string;
   Driver: string;
   Labels: Record<string, string> | null;
@@ -225,6 +239,8 @@ export interface Volume {
 }
 
 export interface Stack {
+  "@id"?: string;
+  "@type"?: string;
   name: string;
   services: string[];
   configs: string[];
@@ -246,6 +262,8 @@ export interface CollectionResponse<T> {
 }
 
 export interface HistoryEntry {
+  "@id"?: string;
+  "@type"?: string;
   id: number;
   timestamp: string;
   type: string;
@@ -378,6 +396,8 @@ export interface VolumeDetail {
 }
 
 export interface StackSummary {
+  "@id"?: string;
+  "@type"?: string;
   name: string;
   serviceCount: number;
   configCount: number;
@@ -493,6 +513,8 @@ export interface PluginEnv {
 }
 
 export interface Plugin {
+  "@id"?: string;
+  "@type"?: string;
   Id?: string;
   Name: string;
   Enabled: boolean;
@@ -532,6 +554,8 @@ export interface Plugin {
 }
 
 export interface DiskUsageSummary {
+  "@id"?: string;
+  "@type"?: string;
   type: "images" | "containers" | "volumes" | "buildCache";
   count: number;
   active: number;

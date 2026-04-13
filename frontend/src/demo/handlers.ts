@@ -110,6 +110,26 @@ function paginate<T>(items: T[], request: Request): CollectionResponse<T> {
   return { items: sliced, total: items.length, limit, offset };
 }
 
+function wrapItem<T>(item: T, type: string, id: string): T & { "@id": string; "@type": string } {
+  return { "@id": id, "@type": type, ...item };
+}
+
+function paginateWrapped<T>(
+  items: T[],
+  request: Request,
+  type: string,
+  idExtractor: (item: T) => string,
+): CollectionResponse<T & { "@id": string; "@type": string }> {
+  const { offset, limit } = parseRange(request);
+  const sliced = items.slice(offset, offset + limit);
+  return {
+    items: sliced.map((item) => wrapItem(item, type, idExtractor(item))),
+    total: items.length,
+    limit,
+    offset,
+  };
+}
+
 function getStackName(labels: Record<string, string> | null): string | undefined {
   return labels?.[stackLabel];
 }
@@ -618,7 +638,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     http.get("*/nodes/:id/tasks", ({ params, request }) => {
       const nodeID = params.id as string;
       const nodeTasks = dataset.tasks.filter((task) => task.NodeID === nodeID);
-      return jsonResponse<CollectionResponse<Task>>(paginate(nodeTasks, request));
+      return jsonResponse(paginateWrapped(nodeTasks, request, "Task", (t) => `/tasks/${t.ID}`));
     }),
 
     http.get("*/nodes/:id/labels", ({ params }) => {
@@ -667,14 +687,16 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     http.get("*/nodes", ({ request }) => {
-      return jsonResponse<CollectionResponse<Node>>(paginate(dataset.nodes, request));
+      return jsonResponse(
+        paginateWrapped(dataset.nodes, request, "Node", (n) => `/nodes/${n.ID}`),
+      );
     }),
 
     // ---- Services ----
     http.get("*/services/:id/tasks", ({ params, request }) => {
       const serviceID = params.id as string;
       const serviceTasks = dataset.tasks.filter((task) => task.ServiceID === serviceID);
-      return jsonResponse<CollectionResponse<Task>>(paginate(serviceTasks, request));
+      return jsonResponse(paginateWrapped(serviceTasks, request, "Task", (t) => `/tasks/${t.ID}`));
     }),
 
     http.get("*/services/:id/env", ({ params }) => {
@@ -908,7 +930,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         ...service,
         RunningTasks: countRunningTasks(dataset, service.ID),
       }));
-      return jsonResponse<CollectionResponse<ServiceListItem>>(paginate(items, request));
+      return jsonResponse(
+        paginateWrapped(items, request, "Service", (s) => `/services/${s.ID}`),
+      );
     }),
 
     // ---- Tasks ----
@@ -927,14 +951,14 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     http.get("*/tasks", ({ request }) => {
-      return jsonResponse<CollectionResponse<Task>>(paginate(dataset.tasks, request));
+      return jsonResponse(paginateWrapped(dataset.tasks, request, "Task", (t) => `/tasks/${t.ID}`));
     }),
 
     // ---- Stacks ----
     http.get("*/stacks/summary", () => {
       const items = buildStackSummaries(dataset);
-      return jsonResponse<CollectionResponse<StackSummary>>({
-        items,
+      return jsonResponse<CollectionResponse<StackSummary & { "@id": string; "@type": string }>>({
+        items: items.map((s) => ({ "@id": `/stacks/${s.name}`, "@type": "StackSummary", ...s })),
         total: items.length,
         limit: 50,
         offset: 0,
@@ -982,7 +1006,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         networks: stack.networks,
         volumes: stack.volumes,
       }));
-      return jsonResponse<CollectionResponse<Stack>>(paginate(items, request));
+      return jsonResponse(paginateWrapped(items, request, "Stack", (s) => `/stacks/${s.name}`));
     }),
 
     // ---- Configs ----
@@ -1006,7 +1030,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     http.get("*/configs", ({ request }) => {
-      return jsonResponse<CollectionResponse<Config>>(paginate(dataset.configs, request));
+      return jsonResponse(
+        paginateWrapped(dataset.configs, request, "Config", (c) => `/configs/${c.ID}`),
+      );
     }),
 
     // ---- Secrets ----
@@ -1030,7 +1056,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     http.get("*/secrets", ({ request }) => {
-      return jsonResponse<CollectionResponse<Secret>>(paginate(dataset.secrets, request));
+      return jsonResponse(
+        paginateWrapped(dataset.secrets, request, "Secret", (s) => `/secrets/${s.ID}`),
+      );
     }),
 
     // ---- Networks ----
@@ -1053,7 +1081,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     http.get("*/networks", ({ request }) => {
-      return jsonResponse<CollectionResponse<Network>>(paginate(dataset.networks, request));
+      return jsonResponse(
+        paginateWrapped(dataset.networks, request, "Network", (n) => `/networks/${n.Id}`),
+      );
     }),
 
     // ---- Volumes ----
@@ -1077,7 +1107,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     http.get("*/volumes", ({ request }) => {
-      return jsonResponse<CollectionResponse<Volume>>(paginate(dataset.volumes, request));
+      return jsonResponse(
+        paginateWrapped(dataset.volumes, request, "Volume", (v) => `/volumes/${v.Name}`),
+      );
     }),
 
     // ---- Search ----
@@ -1093,9 +1125,8 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
     // ---- History ----
     http.get("*/history", () => {
-      const items: HistoryEntry[] = [];
-      return jsonResponse<CollectionResponse<HistoryEntry>>({
-        items,
+      return jsonResponse<CollectionResponse<HistoryEntry & { "@id": string; "@type": string }>>({
+        items: [],
         total: 0,
         limit: 50,
         offset: 0,
@@ -1114,40 +1145,47 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
     // ---- Disk usage ----
     http.get("*/disk-usage", () => {
-      return jsonResponse<CollectionResponse<DiskUsageSummary>>({
-        items: [
-          { type: "images", count: 11, active: 11, totalSize: 3_221_225_472, reclaimable: 0 },
-          {
-            type: "containers",
-            count: 25,
-            active: 23,
-            totalSize: 524_288_000,
-            reclaimable: 104_857_600,
-          },
-          {
-            type: "volumes",
-            count: 2,
-            active: 2,
-            totalSize: 1_073_741_824,
-            reclaimable: 0,
-          },
-          {
-            type: "buildCache",
-            count: 0,
-            active: 0,
-            totalSize: 0,
-            reclaimable: 0,
-          },
-        ],
-        total: 4,
-        limit: 50,
-        offset: 0,
-      });
+      const summaries: DiskUsageSummary[] = [
+        { type: "images", count: 11, active: 11, totalSize: 3_221_225_472, reclaimable: 0 },
+        {
+          type: "containers",
+          count: 25,
+          active: 23,
+          totalSize: 524_288_000,
+          reclaimable: 104_857_600,
+        },
+        {
+          type: "volumes",
+          count: 2,
+          active: 2,
+          totalSize: 1_073_741_824,
+          reclaimable: 0,
+        },
+        {
+          type: "buildCache",
+          count: 0,
+          active: 0,
+          totalSize: 0,
+          reclaimable: 0,
+        },
+      ];
+      return jsonResponse<CollectionResponse<DiskUsageSummary & { "@id": string; "@type": string }>>(
+        {
+          items: summaries.map((s) => ({
+            "@id": `/disk-usage/${s.type}`,
+            "@type": "DiskUsageSummary",
+            ...s,
+          })),
+          total: summaries.length,
+          limit: 50,
+          offset: 0,
+        },
+      );
     }),
 
     // ---- Plugins ----
     http.get("*/plugins", () => {
-      return jsonResponse<CollectionResponse<Plugin>>({
+      return jsonResponse<CollectionResponse<Plugin & { "@id": string; "@type": string }>>({
         items: [],
         total: 0,
         limit: 50,
