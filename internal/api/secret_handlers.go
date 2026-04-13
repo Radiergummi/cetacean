@@ -51,5 +51,7 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 			"created": func(s swarm.Secret) string { return s.CreatedAt.String() },
 			"updated": func(s swarm.Secret) string { return s.UpdatedAt.String() },
 		},
+		itemType: "Secret",
+		idFunc:   func(s swarm.Secret) string { return "/secrets/" + s.ID },
 	})
 }

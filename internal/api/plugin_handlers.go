@@ -41,7 +41,13 @@ func (h *Handlers) HandleListPlugins(w http.ResponseWriter, r *http.Request) {
 	writeCachedJSON(
 		w,
 		r,
-		NewCollectionResponse(r.Context(), plugins, len(plugins), len(plugins), 0),
+		NewCollectionResponse(
+			r.Context(),
+			wrapItems(plugins, "Plugin", func(p *types.Plugin) string { return "/plugins/" + p.Name }),
+			len(plugins),
+			len(plugins),
+			0,
+		),
 	)
 }
 

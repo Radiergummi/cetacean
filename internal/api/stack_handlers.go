@@ -44,9 +44,17 @@ func (h *Handlers) HandleListStacks(w http.ResponseWriter, r *http.Request) {
 	stacks = sortItems(stacks, p.Sort, p.Dir, map[string]func(cache.Stack) string{
 		"name": func(s cache.Stack) string { return s.Name },
 	})
-	resp := applyPagination(r.Context(), stacks, p)
+	raw := applyPagination(r.Context(), stacks, p)
+	wrapped := CollectionResponse[Item[cache.Stack]]{
+		Context: raw.Context,
+		Type:    raw.Type,
+		Items:   wrapItems(raw.Items, "Stack", func(s cache.Stack) string { return "/stacks/" + s.Name }),
+		Total:   raw.Total,
+		Limit:   raw.Limit,
+		Offset:  raw.Offset,
+	}
 	writeLinkTemplate(w, r, "/stacks/{name}")
-	writeCollectionResponse(w, r, resp, p)
+	writeCollectionResponse(w, r, wrapped, p)
 }
 
 func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
@@ -121,7 +129,17 @@ func (h *Handlers) HandleStackSummary(w http.ResponseWriter, r *http.Request) {
 	writeCachedJSON(
 		w,
 		r,
-		NewCollectionResponse(r.Context(), summaries, len(summaries), len(summaries), 0),
+		NewCollectionResponse(
+			r.Context(),
+			wrapItems(
+				summaries,
+				"StackSummary",
+				func(s cache.StackSummary) string { return "/stacks/" + s.Name },
+			),
+			len(summaries),
+			len(summaries),
+			0,
+		),
 	)
 }
 

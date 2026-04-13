@@ -43,5 +43,7 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 			"created": func(c swarm.Config) string { return c.CreatedAt.String() },
 			"updated": func(c swarm.Config) string { return c.UpdatedAt.String() },
 		},
+		itemType: "Config",
+		idFunc:   func(c swarm.Config) string { return "/configs/" + c.ID },
 	})
 }

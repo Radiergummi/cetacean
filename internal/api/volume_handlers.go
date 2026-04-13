@@ -45,5 +45,7 @@ func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 			"driver": func(v volume.Volume) string { return v.Driver },
 			"scope":  func(v volume.Volume) string { return v.Scope },
 		},
+		itemType: "Volume",
+		idFunc:   func(v volume.Volume) string { return "/volumes/" + v.Name },
 	})
 }

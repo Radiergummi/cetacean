@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -43,7 +44,18 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 	entries = filtered
 
 	writeCachedJSON(
-		w, r,
-		NewCollectionResponse(r.Context(), entries, len(entries), len(entries), 0),
+		w,
+		r,
+		NewCollectionResponse(
+			r.Context(),
+			wrapItems(
+				entries,
+				"HistoryEntry",
+				func(e cache.HistoryEntry) string { return fmt.Sprintf("/history/%d", e.ID) },
+			),
+			len(entries),
+			len(entries),
+			0,
+		),
 	)
 }

@@ -73,7 +73,13 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 	writeCollectionResponse(
 		w,
 		r,
-		NewCollectionResponse(r.Context(), items, paged.Total, paged.Limit, paged.Offset),
+		NewCollectionResponse(
+			r.Context(),
+			wrapItems(items, "Service", func(s ServiceListItem) string { return "/services/" + s.ID }),
+			paged.Total,
+			paged.Limit,
+			paged.Offset,
+		),
 		p,
 	)
 }
@@ -106,7 +112,17 @@ func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tasks := h.enrichTasks(h.cache.ListTasksByService(r.PathValue("id")))
-	writeCachedJSON(w, r, NewCollectionResponse(r.Context(), tasks, len(tasks), len(tasks), 0))
+	writeCachedJSON(
+		w,
+		r,
+		NewCollectionResponse(
+			r.Context(),
+			wrapItems(tasks, "Task", func(t EnrichedTask) string { return "/tasks/" + t.ID }),
+			len(tasks),
+			len(tasks),
+			0,
+		),
+	)
 }
 
 func (h *Handlers) HandleServiceLogs(w http.ResponseWriter, r *http.Request) {

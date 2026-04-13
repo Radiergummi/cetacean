@@ -448,7 +448,18 @@ func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
 	})
 
 	writeCachedJSON(
-		w, r,
-		NewCollectionResponse(r.Context(), summaries, len(summaries), len(summaries), 0),
+		w,
+		r,
+		NewCollectionResponse(
+			r.Context(),
+			wrapItems(
+				summaries,
+				"DiskUsageSummary",
+				func(d DiskUsageSummary) string { return "/disk-usage/" + d.Type },
+			),
+			len(summaries),
+			len(summaries),
+			0,
+		),
 	)
 }

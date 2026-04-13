@@ -74,12 +74,17 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	paged := applyPagination(r.Context(), tasks, p)
+	enriched := h.enrichTasks(paged.Items)
 	writeLinkTemplate(w, r, "/tasks/{id}")
 	writeCollectionResponse(
 		w,
 		r,
 		NewCollectionResponse(
-			r.Context(), h.enrichTasks(paged.Items), paged.Total, paged.Limit, paged.Offset,
+			r.Context(),
+			wrapItems(enriched, "Task", func(t EnrichedTask) string { return "/tasks/" + t.ID }),
+			paged.Total,
+			paged.Limit,
+			paged.Offset,
 		),
 		p,
 	)

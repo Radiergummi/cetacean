@@ -26,6 +26,8 @@ func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 			"status":       func(n swarm.Node) string { return string(n.Status.State) },
 			"availability": func(n swarm.Node) string { return string(n.Spec.Availability) },
 		},
+		itemType: "Node",
+		idFunc:   func(n swarm.Node) string { return "/nodes/" + n.ID },
 	})
 }
 
@@ -56,6 +58,14 @@ func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 	)
 	enriched := h.enrichTasks(tasks)
 	writeCachedJSON(
-		w, r, NewCollectionResponse(r.Context(), enriched, len(enriched), len(enriched), 0),
+		w,
+		r,
+		NewCollectionResponse(
+			r.Context(),
+			wrapItems(enriched, "Task", func(t EnrichedTask) string { return "/tasks/" + t.ID }),
+			len(enriched),
+			len(enriched),
+			0,
+		),
 	)
 }

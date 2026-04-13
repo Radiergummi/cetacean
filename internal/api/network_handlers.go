@@ -51,5 +51,7 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 			"driver": func(n network.Summary) string { return n.Driver },
 			"scope":  func(n network.Summary) string { return n.Scope },
 		},
+		itemType: "Network",
+		idFunc:   func(n network.Summary) string { return "/networks/" + n.ID },
 	})
 }
