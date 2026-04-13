@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/docker/docker/api/types/network"
@@ -17,34 +18,58 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
-// loadTestSpec reads the OpenAPI spec from disk, validates it, and returns
-// the raw bytes, parsed document, and request router. Shared by all
-// spec-conformance tests.
+// Cached spec artifacts — parsing and validation cost dozens of ms so we only
+// pay it once per `go test` process. The returned values are read-only after
+// construction (tests call Paths.Map() and specRouter.FindRoute, both
+// concurrency-safe).
+var (
+	specOnce    sync.Once
+	specBytes   []byte
+	specDoc     *openapi3.T
+	specRouter  routers.Router
+	specLoadErr error
+)
+
+// loadTestSpec returns the OpenAPI spec bytes, parsed document, and request
+// router. The spec is loaded, validated, and routed once per test binary.
 func loadTestSpec(t *testing.T) ([]byte, *openapi3.T, routers.Router) {
 	t.Helper()
 
-	specPath := "../../api/openapi.yaml"
-	specBytes, err := os.ReadFile(specPath)
-	if err != nil {
-		t.Fatalf("read spec: %v", err)
+	specOnce.Do(func() {
+		const specPath = "../../api/openapi.yaml"
+
+		bytes, err := os.ReadFile(specPath)
+		if err != nil {
+			specLoadErr = err
+			return
+		}
+
+		loader := openapi3.NewLoader()
+		doc, err := loader.LoadFromData(bytes)
+		if err != nil {
+			specLoadErr = err
+			return
+		}
+
+		if err := doc.Validate(loader.Context); err != nil {
+			specLoadErr = err
+			return
+		}
+
+		r, err := gorillamux.NewRouter(doc)
+		if err != nil {
+			specLoadErr = err
+			return
+		}
+
+		specBytes, specDoc, specRouter = bytes, doc, r
+	})
+
+	if specLoadErr != nil {
+		t.Fatalf("load spec: %v", specLoadErr)
 	}
 
-	loader := openapi3.NewLoader()
-	doc, err := loader.LoadFromData(specBytes)
-	if err != nil {
-		t.Fatalf("load spec: %v", err)
-	}
-
-	if err := doc.Validate(loader.Context); err != nil {
-		t.Fatalf("spec validation: %v", err)
-	}
-
-	specRouter, err := gorillamux.NewRouter(doc)
-	if err != nil {
-		t.Fatalf("build spec router: %v", err)
-	}
-
-	return specBytes, doc, specRouter
+	return specBytes, specDoc, specRouter
 }
 
 // newTestRouter wires up an HTTP router backed by the given handlers and

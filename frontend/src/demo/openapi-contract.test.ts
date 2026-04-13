@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { load as parseYAML } from "js-yaml";
 import { setupServer } from "msw/node";
 import OpenAPIResponseValidator from "openapi-response-validator";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { buildDataset } from "./dataset";
 import { buildDemoEndpoints, shouldSkipContract } from "./endpoints";
@@ -76,19 +76,19 @@ function getValidator(
 }
 
 /**
- * Endpoints where the demo response shape doesn't match the spec. These are
- * places where the demo mock returns null for empty arrays instead of [].
+ * Endpoints where the demo response shape doesn't match the spec. Each entry
+ * must document why the mock diverges so the allowlist can be chipped away.
  *
  * Not every entry in the Go `knownDriftEndpoints` map (see
  * internal/api/openapi_exhaustive_test.go) appears here: the demo mocks are
  * hand-authored, so some of the nullability issues that the Go handlers
  * exhibit don't occur in the demo. Treat the two lists as independent.
  */
-const knownDriftEndpoints = new Set<string>([
-  "/services/{id}/configs",
-  "/services/{id}/secrets",
-  "/services/{id}/networks",
-  "/services/{id}/mounts",
+const knownDriftEndpoints = new Map<string, string>([
+  ["/services/{id}/configs", "mock returns null for empty configs array"],
+  ["/services/{id}/secrets", "mock returns null for empty secrets array"],
+  ["/services/{id}/networks", "mock returns null for empty networks array"],
+  ["/services/{id}/mounts", "mock returns null for empty mounts array"],
 ]);
 
 function findOperation(
@@ -127,7 +127,8 @@ describe("demo handler responses match OpenAPI spec", () => {
       return;
     }
 
-    if (knownDriftEndpoints.has(match.pathTemplate)) {
+    const driftReason = knownDriftEndpoints.get(match.pathTemplate);
+    if (driftReason) {
       return;
     }
 
