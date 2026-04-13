@@ -5104,7 +5104,14 @@ components:
               type: array
               items:
                 type: object
-                description: Docker swarm.Node object
+                description: Docker swarm.Node object with JSON-LD fields
+                properties:
+                  "@id":
+                    type: string
+                    description: JSON-LD item identifier (e.g. /nodes/abc123)
+                  "@type":
+                    type: string
+                    description: JSON-LD type name (Node)
 
     ServiceCollection:
       allOf:
@@ -5145,7 +5152,14 @@ components:
               type: array
               items:
                 type: object
-                description: Docker swarm.Config object
+                description: Docker swarm.Config object with JSON-LD fields
+                properties:
+                  "@id":
+                    type: string
+                    description: JSON-LD item identifier (e.g. /configs/abc123)
+                  "@type":
+                    type: string
+                    description: JSON-LD type name (Config)
 
     SecretCollection:
       allOf:
@@ -5156,7 +5170,14 @@ components:
               type: array
               items:
                 type: object
-                description: Docker swarm.Secret object (data always nil)
+                description: Docker swarm.Secret object with JSON-LD fields (data always nil)
+                properties:
+                  "@id":
+                    type: string
+                    description: JSON-LD item identifier (e.g. /secrets/abc123)
+                  "@type":
+                    type: string
+                    description: JSON-LD type name (Secret)
 
     NetworkCollection:
       allOf:
@@ -5167,7 +5188,14 @@ components:
               type: array
               items:
                 type: object
-                description: Docker network.Summary object
+                description: Docker network.Summary object with JSON-LD fields
+                properties:
+                  "@id":
+                    type: string
+                    description: JSON-LD item identifier (e.g. /networks/abc123)
+                  "@type":
+                    type: string
+                    description: JSON-LD type name (Network)
 
     VolumeCollection:
       allOf:
@@ -5178,7 +5206,14 @@ components:
               type: array
               items:
                 type: object
-                description: Docker volume.Volume object
+                description: Docker volume.Volume object with JSON-LD fields
+                properties:
+                  "@id":
+                    type: string
+                    description: JSON-LD item identifier (e.g. /volumes/myvolume)
+                  "@type":
+                    type: string
+                    description: JSON-LD type name (Volume)
 
     HistoryCollection:
       allOf:
@@ -5209,7 +5244,14 @@ components:
               type: array
               items:
                 type: object
-                description: Docker Plugin object
+                description: Docker Plugin object with JSON-LD fields
+                properties:
+                  "@id":
+                    type: string
+                    description: JSON-LD item identifier (e.g. /plugins/abc123)
+                  "@type":
+                    type: string
+                    description: JSON-LD type name (Plugin)
 
     StackSummaryCollection:
       allOf:
@@ -5240,6 +5282,12 @@ components:
       type: object
       description: Service with running task count (extends Docker swarm.Service)
       properties:
+        "@id":
+          type: string
+          description: JSON-LD item identifier (e.g. /services/abc123)
+        "@type":
+          type: string
+          description: JSON-LD type name (Service)
         ID:
           type: string
         Spec:
@@ -5266,6 +5314,12 @@ components:
       type: object
       description: Docker swarm.Task with added ServiceName and NodeHostname
       properties:
+        "@id":
+          type: string
+          description: JSON-LD item identifier (e.g. /tasks/abc123)
+        "@type":
+          type: string
+          description: JSON-LD type name (Task)
         ID:
           type: string
         ServiceID:
@@ -5299,6 +5353,12 @@ components:
     Stack:
       type: object
       properties:
+        "@id":
+          type: string
+          description: JSON-LD item identifier (e.g. /stacks/myapp)
+        "@type":
+          type: string
+          description: JSON-LD type name (Stack)
         name:
           type: string
         services:
@@ -5369,6 +5429,12 @@ components:
     StackSummary:
       type: object
       properties:
+        "@id":
+          type: string
+          description: JSON-LD item identifier (e.g. /stacks/myapp)
+        "@type":
+          type: string
+          description: JSON-LD type name (StackSummary)
         name:
           type: string
         serviceCount:
@@ -5622,6 +5688,12 @@ components:
     DiskUsageSummary:
       type: object
       properties:
+        "@id":
+          type: string
+          description: JSON-LD item identifier (e.g. /disk-usage/images)
+        "@type":
+          type: string
+          description: JSON-LD type name (DiskUsageSummary)
         type:
           type: string
           enum: [images, containers, volumes, buildCache]
@@ -5680,6 +5752,12 @@ components:
     HistoryEntry:
       type: object
       properties:
+        "@id":
+          type: string
+          description: JSON-LD item identifier (e.g. /history/8421)
+        "@type":
+          type: string
+          description: JSON-LD type name (HistoryEntry)
         id:
           type: integer
           format: uint64
