@@ -16,13 +16,6 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
-// knownDriftEndpoints lists path templates where the Go handler response
-// shape currently differs from the OpenAPI spec. The exhaustive contract test
-// skips these so it fails only on newly introduced drift. Each entry should
-// have a follow-up issue or commit removing it once the handler or spec is
-// fixed.
-var knownDriftEndpoints = map[string]string{}
-
 // TestEveryReadEndpointMatchesSpec walks every GET operation in the OpenAPI
 // spec, issues a request with substituted path parameters, and validates the
 // response body against the spec's response schema. New endpoints in the spec
@@ -47,7 +40,6 @@ func TestEveryReadEndpointMatchesSpec(t *testing.T) {
 	var (
 		validated  int
 		unresolved int
-		knownDrift int
 		nonSuccess int
 	)
 
@@ -64,12 +56,6 @@ func TestEveryReadEndpointMatchesSpec(t *testing.T) {
 		if !ok {
 			t.Logf("skipping %s: no fixture for path parameters", pathTemplate)
 			unresolved++
-			continue
-		}
-
-		if reason, known := knownDriftEndpoints[pathTemplate]; known {
-			t.Logf("skipping %s: known drift (fix me): %s", pathTemplate, reason)
-			knownDrift++
 			continue
 		}
 
@@ -139,8 +125,8 @@ func TestEveryReadEndpointMatchesSpec(t *testing.T) {
 	}
 
 	t.Logf(
-		"validated=%d known-drift=%d non-2xx=%d unresolved-params=%d",
-		validated, knownDrift, nonSuccess, unresolved,
+		"validated=%d non-2xx=%d unresolved-params=%d",
+		validated, nonSuccess, unresolved,
 	)
 }
 
