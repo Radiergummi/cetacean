@@ -419,8 +419,12 @@ export const api = {
       ({ data, allowedMethods }) => ({ data: data.plugin, allowedMethods }),
     ),
   pluginPrivileges: (remote: string) =>
-    mutationFetch<{ privileges: PluginPrivilege[] }>("/plugins/privileges", "POST", { remote }, "application/json")
-      .then(({ privileges }) => privileges),
+    mutationFetch<{ privileges: PluginPrivilege[] }>(
+      "/plugins/privileges",
+      "POST",
+      { remote },
+      "application/json",
+    ).then(({ privileges }) => privileges),
   installPlugin: (remote: string) =>
     mutationFetch<{ plugin: Plugin }>("/plugins", "POST", { remote }, "application/json"),
   enablePlugin: (name: string) => post<void>(`/plugins/${encodeURIComponent(name)}/enable`),

@@ -29,12 +29,10 @@ import type {
   Service,
   ServiceConfigRef,
   ServiceDetail,
-  ServiceListItem,
   ServiceMount,
   ServiceNetworkRef,
   ServiceRef,
   ServiceSecretRef,
-  Stack,
   StackDetail,
   StackSummary,
   SwarmInfo,
@@ -102,12 +100,6 @@ function parseRange(request: Request): { offset: number; limit: number } {
   }
 
   return { offset: 0, limit: 50 };
-}
-
-function paginate<T>(items: T[], request: Request): CollectionResponse<T> {
-  const { offset, limit } = parseRange(request);
-  const sliced = items.slice(offset, offset + limit);
-  return { items: sliced, total: items.length, limit, offset };
 }
 
 function wrapItem<T>(item: T, type: string, id: string): T & { "@id": string; "@type": string } {
@@ -497,28 +489,34 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
     // The frontend calls /profile for whoami
     http.get("*/profile", () => {
-      return jsonResponse(detailEnvelope("/profile", "Profile", {
-        subject: "demo",
-        displayName: "Demo User",
-        provider: "none",
-      }));
+      return jsonResponse(
+        detailEnvelope("/profile", "Profile", {
+          subject: "demo",
+          displayName: "Demo User",
+          provider: "none",
+        }),
+      );
     }),
 
     http.get("*/auth/whoami", () => {
-      return jsonResponse(detailEnvelope("/auth/whoami", "Identity", {
-        subject: "demo",
-        displayName: "Demo User",
-        provider: "none",
-      }));
+      return jsonResponse(
+        detailEnvelope("/auth/whoami", "Identity", {
+          subject: "demo",
+          displayName: "Demo User",
+          provider: "none",
+        }),
+      );
     }),
 
     // ---- Cluster ----
     http.get("*/cluster/metrics", () => {
-      return jsonResponse(detailEnvelope("/cluster/metrics", "ClusterMetrics", {
-        cpu: { used: 4.2, total: 16, percent: 26.25 },
-        memory: { used: 12_884_901_888, total: 34_359_738_368, percent: 37.5 },
-        disk: { used: 53_687_091_200, total: 214_748_364_800, percent: 25.0 },
-      }));
+      return jsonResponse(
+        detailEnvelope("/cluster/metrics", "ClusterMetrics", {
+          cpu: { used: 4.2, total: 16, percent: 26.25 },
+          memory: { used: 12_884_901_888, total: 34_359_738_368, percent: 37.5 },
+          disk: { used: 53_687_091_200, total: 214_748_364_800, percent: 25.0 },
+        }),
+      );
     }),
 
     http.get("*/cluster/capacity", () => {
@@ -593,11 +591,13 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         stack: network.Labels?.[stackLabel],
       }));
 
-      return jsonResponse(detailEnvelope("/topology/networks", "NetworkTopology", {
-        nodes,
-        edges,
-        networks,
-      }));
+      return jsonResponse(
+        detailEnvelope("/topology/networks", "NetworkTopology", {
+          nodes,
+          edges,
+          networks,
+        }),
+      );
     }),
 
     http.get("*/topology/placement", () => {
@@ -623,9 +623,11 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
           }),
       }));
 
-      return jsonResponse(detailEnvelope("/topology/placement", "PlacementTopology", {
-        nodes: placementNodes,
-      }));
+      return jsonResponse(
+        detailEnvelope("/topology/placement", "PlacementTopology", {
+          nodes: placementNodes,
+        }),
+      );
     }),
 
     // ---- Nodes ----
@@ -653,11 +655,13 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       }
 
       const managerCount = dataset.nodes.filter((node) => node.Spec.Role === "manager").length;
-      return jsonResponse(detailEnvelope(`/nodes/${params.id as string}/role`, "NodeRole", {
-        role: node.Spec.Role,
-        isLeader: node.ManagerStatus?.Leader ?? false,
-        managerCount,
-      }));
+      return jsonResponse(
+        detailEnvelope(`/nodes/${params.id as string}/role`, "NodeRole", {
+          role: node.Spec.Role,
+          isLeader: node.ManagerStatus?.Leader ?? false,
+          managerCount,
+        }),
+      );
     }),
 
     http.get("*/nodes/:id", ({ params }) => {
@@ -671,9 +675,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     http.get("*/nodes", ({ request }) => {
-      return jsonResponse(
-        paginateWrapped(dataset.nodes, request, "Node", (n) => `/nodes/${n.ID}`),
-      );
+      return jsonResponse(paginateWrapped(dataset.nodes, request, "Node", (n) => `/nodes/${n.ID}`));
     }),
 
     // ---- Services ----
@@ -914,9 +916,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         ...service,
         RunningTasks: countRunningTasks(dataset, service.ID),
       }));
-      return jsonResponse(
-        paginateWrapped(items, request, "Service", (s) => `/services/${s.ID}`),
-      );
+      return jsonResponse(paginateWrapped(items, request, "Service", (s) => `/services/${s.ID}`));
     }),
 
     // ---- Tasks ----
@@ -1153,14 +1153,14 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
           reclaimable: 0,
         },
       ];
-      return jsonResponse<CollectionResponse<DiskUsageSummary & { "@id": string; "@type": string }>>(
-        {
-          items: summaries.map((s) => wrapItem(s, "DiskUsageSummary", `/disk-usage/${s.type}`)),
-          total: summaries.length,
-          limit: 50,
-          offset: 0,
-        },
-      );
+      return jsonResponse<
+        CollectionResponse<DiskUsageSummary & { "@id": string; "@type": string }>
+      >({
+        items: summaries.map((s) => wrapItem(s, "DiskUsageSummary", `/disk-usage/${s.type}`)),
+        total: summaries.length,
+        limit: 50,
+        offset: 0,
+      });
     }),
 
     // ---- Plugins ----
@@ -1443,9 +1443,11 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         id: node.ID,
         resource: node,
       });
-      return jsonResponse(detailEnvelope(`/nodes/${params.id}/labels`, "NodeLabels", {
-        labels: node.Spec.Labels,
-      }));
+      return jsonResponse(
+        detailEnvelope(`/nodes/${params.id}/labels`, "NodeLabels", {
+          labels: node.Spec.Labels,
+        }),
+      );
     }),
 
     // ---- Write: Task operations ----
@@ -1506,9 +1508,11 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       service.Version.Index++;
       service.UpdatedAt = new Date().toISOString();
       broadcastServiceUpdate(service);
-      return jsonResponse(detailEnvelope(`/services/${params.id}/env`, "ServiceEnv", {
-        env: Object.fromEntries(envMap),
-      }));
+      return jsonResponse(
+        detailEnvelope(`/services/${params.id}/env`, "ServiceEnv", {
+          env: Object.fromEntries(envMap),
+        }),
+      );
     }),
 
     http.patch("*/services/:id/labels", async ({ params, request }) => {
@@ -1535,9 +1539,11 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       service.Version.Index++;
       service.UpdatedAt = new Date().toISOString();
       broadcastServiceUpdate(service);
-      return jsonResponse(detailEnvelope(`/services/${params.id}/labels`, "ServiceLabels", {
-        labels: service.Spec.Labels,
-      }));
+      return jsonResponse(
+        detailEnvelope(`/services/${params.id}/labels`, "ServiceLabels", {
+          labels: service.Spec.Labels,
+        }),
+      );
     }),
 
     // Service spec field updates — each entry maps a sub-resource path to

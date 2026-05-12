@@ -50,6 +50,39 @@ func TestWriteAndLoadSnapshot(t *testing.T) {
 	}
 }
 
+func TestSnapshot_RoundTripsRestartTracker(t *testing.T) {
+	c := New(nil)
+	c.SetService(
+		swarm.Service{
+			ID:   "svc1",
+			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+		},
+	)
+	c.SetTask(swarm.Task{
+		ID:        "t1",
+		ServiceID: "svc1",
+		Status:    swarm.TaskStatus{State: swarm.TaskStateFailed, Timestamp: time.Now()},
+	})
+
+	if got := c.RestartCount("svc1", 24*time.Hour); got != 1 {
+		t.Fatalf("setup: want 1, got %d", got)
+	}
+
+	path := filepath.Join(t.TempDir(), "snapshot.json")
+	if err := c.WriteToDisk(path); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	c2 := New(nil)
+	if err := c2.LoadFromDisk(path); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+
+	if got := c2.RestartCount("svc1", 24*time.Hour); got != 1 {
+		t.Errorf("restored count: want 1, got %d", got)
+	}
+}
+
 func TestLoadSnapshot_FileNotExists(t *testing.T) {
 	c := New(nil)
 	err := c.LoadFromDisk("/nonexistent/path")

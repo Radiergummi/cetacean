@@ -1,3 +1,9 @@
+import { buildDataset } from "./dataset";
+import { buildDemoEndpoints, shouldSkipContract } from "./endpoints";
+import { createHandlers } from "./handlers";
+import type { SSEClients } from "./sseHandlers";
+import { load as parseYAML } from "js-yaml";
+import { setupServer } from "msw/node";
 /// <reference types="node" />
 /**
  * Validates every demo MSW handler's response against the OpenAPI spec.
@@ -9,16 +15,8 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-
-import { load as parseYAML } from "js-yaml";
-import { setupServer } from "msw/node";
 import OpenAPIResponseValidator from "openapi-response-validator";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-
-import { buildDataset } from "./dataset";
-import { buildDemoEndpoints, shouldSkipContract } from "./endpoints";
-import { createHandlers } from "./handlers";
-import type { SSEClients } from "./sseHandlers";
 
 const dataset = buildDataset();
 const clients: SSEClients = { global: new Set(), byType: new Map(), byId: new Map() };
@@ -29,9 +27,12 @@ beforeAll(() => server.listen({ onUnhandledRequest: "bypass" }));
 afterAll(() => server.close());
 
 interface OpenAPIOperation {
-  responses: Record<string, {
-    content?: Record<string, { schema?: unknown }>;
-  }>;
+  responses: Record<
+    string,
+    {
+      content?: Record<string, { schema?: unknown }>;
+    }
+  >;
 }
 
 interface OpenAPISpec {
@@ -47,10 +48,7 @@ const spec = parseYAML(readFileSync(specPath, "utf-8")) as OpenAPISpec;
 // doesn't rebuild ~60 regexes on every test case.
 const templateRegexes = new Map<string, RegExp>();
 for (const template of Object.keys(spec.paths)) {
-  templateRegexes.set(
-    template,
-    new RegExp("^" + template.replace(/\{[^}]+\}/g, "[^/]+") + "$"),
-  );
+  templateRegexes.set(template, new RegExp("^" + template.replace(/\{[^}]+\}/g, "[^/]+") + "$"));
 }
 
 // Cache validators by path template so they're built at most once per template
@@ -58,10 +56,7 @@ for (const template of Object.keys(spec.paths)) {
 // eagerly at construction time; that work is amortised across 50+ tests).
 const validatorCache = new Map<string, OpenAPIResponseValidator>();
 
-function getValidator(
-  pathTemplate: string,
-  operation: OpenAPIOperation,
-): OpenAPIResponseValidator {
+function getValidator(pathTemplate: string, operation: OpenAPIOperation): OpenAPIResponseValidator {
   let v = validatorCache.get(pathTemplate);
   if (!v) {
     // Cast: the library's types are stricter (expect fully-resolved SchemaObject)

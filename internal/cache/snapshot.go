@@ -11,18 +11,19 @@ import (
 	json "github.com/goccy/go-json"
 )
 
-const snapshotVersion = 1
+const snapshotVersion = 2
 
 type DiskSnapshot struct {
-	Version   int               `json:"version"`
-	Timestamp time.Time         `json:"timestamp"`
-	Nodes     []swarm.Node      `json:"nodes"`
-	Services  []swarm.Service   `json:"services"`
-	Tasks     []swarm.Task      `json:"tasks"`
-	Configs   []swarm.Config    `json:"configs"`
-	Secrets   []swarm.Secret    `json:"secrets"`
-	Networks  []network.Summary `json:"networks"`
-	Volumes   []volume.Volume   `json:"volumes"`
+	Version   int                     `json:"version"`
+	Timestamp time.Time               `json:"timestamp"`
+	Nodes     []swarm.Node            `json:"nodes"`
+	Services  []swarm.Service         `json:"services"`
+	Tasks     []swarm.Task            `json:"tasks"`
+	Configs   []swarm.Config          `json:"configs"`
+	Secrets   []swarm.Secret          `json:"secrets"`
+	Networks  []network.Summary       `json:"networks"`
+	Volumes   []volume.Volume         `json:"volumes"`
+	Restarts  *RestartTrackerSnapshot `json:"restarts,omitempty"`
 }
 
 // WriteToDisk serializes the cache to a JSON file using atomic rename.
@@ -40,6 +41,9 @@ func (c *Cache) WriteToDisk(path string) error {
 		Volumes:   c.volumes.list(),
 	}
 	c.mu.RUnlock()
+
+	restarts := c.restarts.Snapshot()
+	snap.Restarts = &restarts
 
 	// Never persist secret data to disk.
 	for i := range snap.Secrets {
@@ -76,9 +80,9 @@ func (c *Cache) LoadFromDisk(path string) error {
 		return fmt.Errorf("unmarshal snapshot: %w", err)
 	}
 
-	if snap.Version != snapshotVersion {
+	if snap.Version < 1 || snap.Version > snapshotVersion {
 		return fmt.Errorf(
-			"snapshot version mismatch: got %d, want %d",
+			"unsupported snapshot version: got %d, supported 1..%d",
 			snap.Version,
 			snapshotVersion,
 		)
@@ -100,6 +104,10 @@ func (c *Cache) LoadFromDisk(path string) error {
 		HasNetworks: true,
 		HasVolumes:  true,
 	})
+
+	if snap.Restarts != nil {
+		c.restarts.Restore(*snap.Restarts)
+	}
 
 	// Set lastSync to the snapshot timestamp so SnapshotAge reflects staleness.
 	c.mu.Lock()

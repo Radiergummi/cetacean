@@ -251,21 +251,23 @@ func main() {
 		}
 
 		var checkers []recommendations.Checker
-		// Always register cache-only checkers.
+		// Always register cache-only checkers. The operational checker derives
+		// flaky-service detection from the cache and falls back gracefully when
+		// Prometheus is unavailable (node disk/memory checks are skipped).
+		var opQuery recommendations.QueryFunc
+		if promClient != nil {
+			opQuery = promClient.InstantQuery
+		}
 		checkers = append(checkers,
 			recommendations.NewConfigChecker(stateCache),
 			recommendations.NewClusterChecker(stateCache),
+			recommendations.NewOperationalChecker(opQuery, stateCache, sizingCfg.Lookback),
 		)
 		// Register Prometheus-dependent checkers when available.
 		if promClient != nil {
 			checkers = append(
 				checkers,
 				recommendations.NewSizingChecker(promClient.InstantQuery, stateCache, sizingCfg),
-				recommendations.NewOperationalChecker(
-					promClient.InstantQuery,
-					stateCache,
-					sizingCfg.Lookback,
-				),
 			)
 		}
 		recEngine = recommendations.NewEngine(checkers...)

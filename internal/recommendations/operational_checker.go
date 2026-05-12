@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"math"
 	"net"
 	"time"
 
@@ -30,8 +29,15 @@ func NewOperationalChecker(
 func (oc *OperationalChecker) Name() string            { return "operational" }
 func (oc *OperationalChecker) Interval() time.Duration { return 5 * time.Minute }
 
-// Check runs flaky service, disk full, and memory pressure queries in parallel.
+// Check derives flaky-service recommendations from the cache and, when
+// Prometheus is configured, runs disk-full and memory-pressure queries.
 func (oc *OperationalChecker) Check(ctx context.Context) []Recommendation {
+	recs := oc.flakyServiceRecs()
+
+	if oc.query == nil {
+		return recs
+	}
+
 	tickCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -40,20 +46,8 @@ func (oc *OperationalChecker) Check(ctx context.Context) []Recommendation {
 		err     error
 	}
 
-	flakyCh := make(chan queryResult, 1)
 	diskCh := make(chan queryResult, 1)
 	memCh := make(chan queryResult, 1)
-
-	lookbackStr := formatPromDuration(oc.lookback)
-
-	go func() {
-		query := fmt.Sprintf(
-			`sum by (%s)(changes(container_last_seen{%s}[%s]))`,
-			serviceLabelKey, serviceFilter, lookbackStr,
-		)
-		entries, err := queryEntries(tickCtx, oc.query, query, serviceLabelKey)
-		flakyCh <- queryResult{entries, err}
-	}()
 
 	go func() {
 		query := `max by (instance)(` +
@@ -69,13 +63,8 @@ func (oc *OperationalChecker) Check(ctx context.Context) []Recommendation {
 		memCh <- queryResult{entries, err}
 	}()
 
-	flakyResult := <-flakyCh
 	diskResult := <-diskCh
 	memResult := <-memCh
-
-	if flakyResult.err != nil {
-		slog.Warn("operational: flaky service query failed", "error", flakyResult.err)
-	}
 
 	if diskResult.err != nil {
 		slog.Warn("operational: disk usage query failed", "error", diskResult.err)
@@ -83,12 +72,6 @@ func (oc *OperationalChecker) Check(ctx context.Context) []Recommendation {
 
 	if memResult.err != nil {
 		slog.Warn("operational: memory pressure query failed", "error", memResult.err)
-	}
-
-	var recs []Recommendation
-
-	if flakyResult.err == nil {
-		recs = append(recs, oc.flakyServiceRecs(flakyResult.results)...)
 	}
 
 	if diskResult.err == nil {
@@ -104,30 +87,24 @@ func (oc *OperationalChecker) Check(ctx context.Context) []Recommendation {
 	return recs
 }
 
-func (oc *OperationalChecker) flakyServiceRecs(entries []queryEntry) []Recommendation {
-	serviceNameToID := make(map[string]string)
-	for _, svc := range oc.cache.ListServices() {
-		serviceNameToID[svc.Spec.Name] = svc.ID
-	}
-
+func (oc *OperationalChecker) flakyServiceRecs() []Recommendation {
 	var recs []Recommendation
 
-	for _, entry := range entries {
-		restarts := entry.value
-		if restarts <= 5 {
+	for _, svc := range oc.cache.ListServices() {
+		count := oc.cache.RestartCount(svc.ID, oc.lookback)
+		if count <= 5 {
 			continue
 		}
 
-		targetID := serviceNameToID[entry.key]
 		recs = append(recs, Recommendation{
 			Category:   CategoryFlakyService,
 			Severity:   SeverityWarning,
 			Scope:      ScopeService,
-			TargetID:   targetID,
-			TargetName: entry.key,
+			TargetID:   svc.ID,
+			TargetName: svc.Spec.Name,
 			Message: fmt.Sprintf(
-				"Service has had %d task restarts over the past %s",
-				int(math.Round(restarts)),
+				"Service has had %d task failures over the past %s",
+				count,
 				formatPromDuration(oc.lookback),
 			),
 		})

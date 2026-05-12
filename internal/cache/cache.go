@@ -107,6 +107,7 @@ type Cache struct {
 	onChange       OnChangeFunc
 	history        *History
 	serviceRef     serviceRefIndex
+	restarts       *RestartTracker
 }
 
 func New(onChange OnChangeFunc) *Cache {
@@ -119,6 +120,7 @@ func New(onChange OnChangeFunc) *Cache {
 		serviceRef:     newServiceRefIndex(),
 		onChange:       onChange,
 		history:        NewHistory(10000),
+		restarts:       NewRestartTracker(7*24*time.Hour, time.Hour),
 	}
 
 	c.nodes = ResourceMap[swarm.Node]{
@@ -192,6 +194,15 @@ func New(onChange OnChangeFunc) *Cache {
 }
 
 func (c *Cache) History() *History { return c.history }
+
+// RestartCount returns the number of involuntary task terminations recorded for
+// serviceID within the lookback window (capped at the tracker horizon).
+func (c *Cache) RestartCount(serviceID string, lookback time.Duration) uint64 {
+	return c.restarts.Count(serviceID, lookback)
+}
+
+// Restarts returns the underlying RestartTracker for snapshot serialization.
+func (c *Cache) Restarts() *RestartTracker { return c.restarts }
 
 func (c *Cache) SetOnChange(fn OnChangeFunc) {
 	c.onChange = fn
@@ -351,6 +362,7 @@ func (c *Cache) DeleteService(id string) {
 	delete(c.services, id)
 	c.mu.Unlock()
 
+	c.restarts.Forget(id)
 	c.notify(Event{Type: EventService, Action: "remove", ID: id, Name: name})
 	c.notifyRefChanges(oldRefs, refSet{})
 }
@@ -370,17 +382,24 @@ func (c *Cache) ListServices() []swarm.Service {
 func (c *Cache) SetTask(t swarm.Task) {
 	c.mu.Lock()
 	changed := true
+	wasFailure := false
 	if old, ok := c.tasks[t.ID]; ok {
 		changed = old.Status.State != t.Status.State ||
 			old.DesiredState != t.DesiredState ||
 			old.Status.Err != t.Status.Err ||
 			old.NodeID != t.NodeID ||
 			old.Version != t.Version
+		wasFailure = IsFailureState(old.Status.State)
 		c.removeTaskIndex(old)
 	}
 	c.tasks[t.ID] = t
 	c.addTaskIndex(t)
 	c.mu.Unlock()
+
+	if IsFailureState(t.Status.State) && !wasFailure && t.ServiceID != "" {
+		c.restarts.Record(t.ServiceID, t.Status.Timestamp)
+	}
+
 	if changed {
 		c.notify(Event{Type: EventTask, Action: "update", ID: t.ID, Resource: t})
 	}
@@ -997,9 +1016,32 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 		c.nodes.Replace(nodes)
 	}
 	if data.HasServices {
+		// Forget restart buckets for services no longer present.
+		for id := range c.services {
+			if _, ok := services[id]; !ok {
+				c.restarts.Forget(id)
+			}
+		}
 		c.services = services
 	}
+
+	// Detect new failures missed by the live event stream: any task whose state
+	// is failed/rejected/orphaned in the new snapshot but was not in that state
+	// in the previous snapshot is recorded here. The snapshot-load path
+	// overwrites these counts via Restore() afterwards, so this only affects
+	// the periodic full-sync path.
+	var newFailures []swarm.Task
 	if data.HasTasks {
+		for id, t := range tasks {
+			if !IsFailureState(t.Status.State) {
+				continue
+			}
+			old, existed := c.tasks[id]
+			if existed && IsFailureState(old.Status.State) {
+				continue
+			}
+			newFailures = append(newFailures, t)
+		}
 		c.tasks = tasks
 		c.tasksByService = byService
 		c.tasksByNode = byNode
@@ -1022,6 +1064,13 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 	c.serviceRef.rebuild(c.services)
 	c.lastSync = time.Now()
 	c.mu.Unlock()
+
+	for _, t := range newFailures {
+		if t.ServiceID == "" {
+			continue
+		}
+		c.restarts.Record(t.ServiceID, t.Status.Timestamp)
+	}
 
 	if data.HasNodes {
 		metrics.SetCacheResources("nodes", len(data.Nodes))

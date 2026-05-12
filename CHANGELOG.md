@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Documented missing OpenAPI endpoints and parameters: `POST /swarm/unlock`, `GET /topology`, `GET /services/{id}/mode`, `GET /services/{id}/endpoint-mode`, `?force` on node and volume deletion, and `application/merge-patch+json` support on env and label PATCH endpoints
 - Removed dead `GET /swarm/plugins` alias route
 - Empty cross-reference and collection fields now serialize as `[]` instead of `null` on config/secret/network/volume/stack detail, service sub-resources (configs, secrets, networks, mounts), stack listings, and the recommendations endpoint
+- Flaky-service warnings now report actual task failures instead of inflated counts derived from a misused Prometheus metric — restarts are tracked from swarm events and persist across restarts via the snapshot. Flaky-service detection no longer requires Prometheus.
 
 ## [0.11.0] - 2026-04-02
 
