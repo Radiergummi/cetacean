@@ -67,6 +67,7 @@ require (
 	github.com/jsimonetti/rtnetlink v1.4.0 // indirect
 	github.com/klauspost/compress v1.18.2 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
+	github.com/mark3labs/mcp-go v0.54.0 // indirect
 	github.com/mdlayher/netlink v1.7.3-0.20250113171957-fbb4dce95f42 // indirect
 	github.com/mdlayher/socket v0.5.0 // indirect
 	github.com/mitchellh/go-ps v1.0.0 // indirect
