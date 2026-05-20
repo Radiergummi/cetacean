@@ -98,6 +98,17 @@ func TestDeriveServiceState(t *testing.T) {
 			runningCount: 0,
 			want:         "running",
 		},
+		{
+			name: "global updating",
+			svc: swarm.Service{
+				Spec: swarm.ServiceSpec{
+					Mode: swarm.ServiceMode{Global: &swarm.GlobalService{}},
+				},
+				UpdateStatus: &swarm.UpdateStatus{State: swarm.UpdateStateUpdating},
+			},
+			runningCount: 2,
+			want:         "updating",
+		},
 	}
 
 	for _, tc := range tests {

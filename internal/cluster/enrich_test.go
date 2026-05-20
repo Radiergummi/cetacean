@@ -88,7 +88,7 @@ func TestEnrichTaskMissingNode(t *testing.T) {
 func TestEnrichTasksSlice(t *testing.T) {
 	c := newTestCache()
 
-	for i, name := range []string{"alpha", "beta", "gamma"} {
+	for _, name := range []string{"alpha", "beta", "gamma"} {
 		svc := swarm.Service{}
 		svc.ID = name + "-svc"
 		svc.Spec.Name = name
@@ -98,8 +98,6 @@ func TestEnrichTasksSlice(t *testing.T) {
 		node.ID = name + "-node"
 		node.Description.Hostname = name + "-host"
 		c.SetNode(node)
-
-		_ = i
 	}
 
 	tasks := []swarm.Task{
