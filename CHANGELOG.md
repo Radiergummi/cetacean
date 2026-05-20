@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.2] - 2026-05-20
+
+### Security
+- Bumped `go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp` to v1.43.0 to pick up the fix for unbounded HTTP response bodies (GHSA-w8rr-5gcm-pp58)
+- Pinned `fast-uri` ≥ 3.1.2 via npm overrides in the dashboard, clearing the path-traversal and host-confusion advisories (GHSA-q3j6-qgpj-74h6, GHSA-v39h-62p7-jpjc)
+- Pinned `hono` ≥ 4.12.18, `ip-address` ≥ 10.1.1, `postcss` ≥ 8.5.10 in the dashboard's transitive (dev-only) deps
+- Updated the marketing site's deps via `npm audit fix`, clearing the critical `protobufjs` arbitrary-code-execution advisory (GHSA-xq3m-2v4x-88gg) and the bundled `dompurify`/`astro` advisories
+
+### Fixed
+- Production frontend build no longer pulls test files through `tsc`, so test-only Node imports stop breaking the release pipeline
+
 ## [0.11.1] - 2026-05-20
 
 ### Added

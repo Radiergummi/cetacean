@@ -117,6 +117,7 @@ describe("demo handler responses match OpenAPI spec", () => {
 
   it.each(endpoints)("GET %s matches spec", async (path) => {
     const match = findOperation("get", path);
+    // oxlint-disable-next-line jest/valid-expect -- vitest supports a message arg
     expect(match, `no spec operation for GET ${path}`).not.toBeNull();
     if (!match) {
       return;
@@ -143,6 +144,7 @@ describe("demo handler responses match OpenAPI spec", () => {
     const validator = getValidator(match.pathTemplate, match.operation);
     const errors = validator.validateResponse(response.status, body);
 
+    // oxlint-disable-next-line jest/valid-expect -- vitest supports a message arg
     expect(
       errors,
       `response body does not match spec for ${path} (${match.pathTemplate}):\n${JSON.stringify(errors, null, 2)}`,
