@@ -389,6 +389,7 @@ func main() {
 		tlsEnabled:  tlsCfg.Enabled(),
 		cache:       stateCache,
 		writeClient: dockerClient,
+		logs:        dockerClient,
 		acl:         aclEval,
 		rec:         recEngine,
 	})
@@ -597,6 +598,7 @@ type mcpDeps struct {
 	tlsEnabled  bool
 	cache       *cache.Cache
 	writeClient mcp.DockerWriteClient
+	logs        mcp.LogStreamer
 	acl         *acl.Evaluator
 	rec         mcp.RecommendationEngine
 }
@@ -647,6 +649,7 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 
 	mcpSrv, err := mcp.New(d.cache, mcp.Options{
 		WriteClient:     d.writeClient,
+		Logs:            d.logs,
 		ACL:             d.acl,
 		Config:          d.cfg.MCP,
 		GlobalOpsLevel:  d.cfg.OperationsLevel,

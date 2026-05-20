@@ -486,13 +486,16 @@ func (s *Server) toolSearch(ctx context.Context, req mcplib.CallToolRequest) (st
 	return marshalResult(results)
 }
 
-func (s *Server) toolGetLogs(_ context.Context, req mcplib.CallToolRequest) (string, error) {
-	if _, err := req.RequireString("service"); err != nil {
+func (s *Server) toolGetLogs(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
+	service, err := req.RequireString("service")
+	if err != nil {
 		return "", err
 	}
-	// Real log retrieval lands in Task 12 — keep the schema published so
-	// clients can discover the tool, but return an empty array until then.
-	return "[]", nil
+	resp, err := s.readServiceLogsImpl(ctx, service, optsFromToolRequest(req))
+	if err != nil {
+		return "", err
+	}
+	return marshalResult(resp)
 }
 
 func (s *Server) toolScaleService(ctx context.Context, req mcplib.CallToolRequest) (string, error) {

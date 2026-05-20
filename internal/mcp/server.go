@@ -55,6 +55,7 @@ type RecommendationEngine interface {
 type Server struct {
 	cache          *cache.Cache
 	writeClient    DockerWriteClient
+	logs           LogStreamer
 	acl            *acl.Evaluator
 	config         config.MCPConfig
 	globalOpsLevel config.OperationsLevel
@@ -81,6 +82,7 @@ type Server struct {
 // "none"). Recommendations may be nil when CETACEAN_RECOMMENDATIONS=false.
 type Options struct {
 	WriteClient     DockerWriteClient
+	Logs            LogStreamer
 	ACL             *acl.Evaluator
 	Config          config.MCPConfig
 	GlobalOpsLevel  config.OperationsLevel
@@ -100,6 +102,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 	srv := &Server{
 		cache:          c,
 		writeClient:    opts.WriteClient,
+		logs:           opts.Logs,
 		acl:            opts.ACL,
 		config:         opts.Config,
 		globalOpsLevel: opts.GlobalOpsLevel,

@@ -250,11 +250,16 @@ func (s *Server) lookupResource(
 	}
 }
 
-// readServiceLogs is a stub for Task 12. Returning an empty array keeps the
-// resource template wired without requiring a Docker log client during the
-// resource refactor.
-func (s *Server) readServiceLogs(_ context.Context, _ string) (any, error) {
-	return []string{}, nil
+// readServiceLogs returns a LogResourceResponse for a single service. The
+// resource read uses default options (most recent 100 lines, no level filter);
+// callers wanting cursored pagination use the get_logs tool which accepts
+// `since` and `tail` arguments.
+func (s *Server) readServiceLogs(ctx context.Context, serviceID string) (any, error) {
+	resp, err := s.readServiceLogsImpl(ctx, serviceID, logOptions{tail: defaultLogTail})
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 func notFound(uri string) error {
