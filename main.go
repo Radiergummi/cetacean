@@ -383,7 +383,7 @@ func main() {
 		slog.Info("CORS enabled", "origins", cfg.CORSOrigins)
 	}
 
-	mcpHandler, oauthRoutes := setupMCP(mcpDeps{
+	mcpHandler, oauthRoutes, closeMCP := setupMCP(mcpDeps{
 		cfg:         cfg,
 		authMode:    authCfg.Mode,
 		tlsEnabled:  tlsCfg.Enabled(),
@@ -392,6 +392,7 @@ func main() {
 		acl:         aclEval,
 		rec:         recEngine,
 	})
+	defer closeMCP()
 
 	router := api.NewRouter(api.RouterConfig{
 		Handlers:          handlers,
@@ -601,16 +602,18 @@ type mcpDeps struct {
 }
 
 // setupMCP builds the MCP HTTP handler and the OAuth route registrar when
-// CETACEAN_MCP=true. Both return values are nil when MCP is disabled, and the
-// OAuth registrar is also nil when auth mode is "none" (no token issuance is
-// possible without a user identity).
+// CETACEAN_MCP=true. The first two return values are nil when MCP is
+// disabled; the OAuth registrar is also nil when auth mode is "none" (no
+// token issuance is possible without a user identity). The third return is
+// a cleanup function the caller must invoke at shutdown so the MCP server's
+// cache change listener detaches before the cache itself is torn down.
 //
 // The issuer/MCPResource URLs are derived from the listen address and TLS
 // setting; deployments behind a reverse proxy should override these via a
 // future CETACEAN_MCP_ISSUER env var.
-func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string)) {
+func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string), func()) {
 	if !d.cfg.MCP.Enabled {
-		return nil, nil
+		return nil, nil, func() {}
 	}
 
 	scheme := "http"
@@ -659,7 +662,7 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 		"max_sessions", d.cfg.MCP.MaxSessions)
 
 	if oauthSrv == nil {
-		return mcpSrv.Handler(), nil
+		return mcpSrv.Handler(), nil, mcpSrv.Close
 	}
-	return mcpSrv.Handler(), oauthSrv.RegisterRoutes
+	return mcpSrv.Handler(), oauthSrv.RegisterRoutes, mcpSrv.Close
 }

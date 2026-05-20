@@ -68,6 +68,12 @@ type Server struct {
 	// per-identity tools/list filter (filterToolsForIdentity) inspects this
 	// slice to know which tools may need further hiding from a given caller.
 	registeredTools []toolDef
+
+	// notifications tracks per-session resource subscriptions and fans cache
+	// events out as MCP notifications. cancelNotifications is the listener
+	// detach returned by cache.AddOnChangeListener.
+	notifications       *NotificationManager
+	cancelNotifications func()
 }
 
 // Options bundles the dependencies for New. OAuth is optional — when nil, the
@@ -99,6 +105,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		globalOpsLevel: opts.GlobalOpsLevel,
 		oauth:          opts.OAuth,
 		recEngine:      opts.Recommendations,
+		notifications:  NewNotificationManager(),
 	}
 
 	mcpSrv := mcpserver.NewMCPServer(
@@ -107,11 +114,13 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		mcpserver.WithResourceCapabilities(true, true),
 		mcpserver.WithToolCapabilities(true),
 		mcpserver.WithToolFilter(srv.filterToolsForIdentity),
+		mcpserver.WithHooks(srv.installSubscriptionHooks()),
 	)
 	srv.mcpServer = mcpSrv
 
 	srv.registerResources()
 	srv.registerTools()
+	srv.cancelNotifications = srv.startNotifications()
 
 	httpSrv := mcpserver.NewStreamableHTTPServer(mcpSrv,
 		mcpserver.WithStateful(true),
@@ -130,6 +139,16 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 	srv.httpServer = httpSrv
 
 	return srv, nil
+}
+
+// Close releases external resources held by the server. Currently this means
+// detaching the cache change listener so the cache can be torn down without
+// firing into a stale notification path. Safe to call multiple times.
+func (s *Server) Close() {
+	if s.cancelNotifications != nil {
+		s.cancelNotifications()
+		s.cancelNotifications = nil
+	}
 }
 
 // Handler returns the http.Handler for the MCP endpoint. When OAuth is
