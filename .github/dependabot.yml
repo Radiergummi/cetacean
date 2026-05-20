@@ -27,3 +27,114 @@ updates:
       docker:
         patterns:
           - "docker/*"
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore(deps)
+      include: scope
+    labels:
+      - dependencies
+      - go
+    # Bundle minor + patch into a single PR per group; major bumps still
+    # come through as individual PRs so they get a proper review.
+    groups:
+      go-deps:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # docker/docker periodically ships advisories (docker cp races, etc.)
+      # that target the daemon, not SDK consumers. Cetacean uses the SDK
+      # only for inspect/event/log calls and is not exposed. Skip the
+      # advisory-driven bump PRs so we don't churn on unfixable noise.
+      # Re-evaluate if we ever wire up docker cp / container archive APIs.
+      - dependency-name: "github.com/docker/docker"
+        update-types:
+          - version-update:semver-patch
+
+  # Dashboard SPA. Production deps shipped to users — keep on a faster
+  # cadence and don't group across major bumps, since UI deps tend to
+  # have visible behavior changes.
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: chore(deps)
+      include: scope
+    labels:
+      - dependencies
+      - frontend
+    groups:
+      # Group routine minor/patch bumps for related families so we don't
+      # drown in 30 individual PRs.
+      react-ecosystem:
+        patterns:
+          - "react"
+          - "react-*"
+          - "@tanstack/*"
+        update-types:
+          - minor
+          - patch
+      tailwind:
+        patterns:
+          - "tailwindcss"
+          - "@tailwindcss/*"
+          - "tw-*"
+        update-types:
+          - minor
+          - patch
+      types:
+        patterns:
+          - "@types/*"
+      tooling:
+        patterns:
+          - "vite"
+          - "vitest"
+          - "@vitejs/*"
+          - "oxlint"
+          - "oxfmt"
+          - "typescript"
+          - "msw"
+          - "jsdom"
+          - "@testing-library/*"
+        update-types:
+          - minor
+          - patch
+
+  # Marketing/docs site (Astro). Lower stakes than the dashboard, so
+  # group aggressively.
+  - package-ecosystem: npm
+    directory: /website
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore(deps)
+      include: scope
+    labels:
+      - dependencies
+      - website
+    groups:
+      website-all:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
