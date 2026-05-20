@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"slices"
 	"strings"
 )
 
@@ -53,8 +54,8 @@ func resolveClientIP(r *http.Request, trusted []netip.Prefix) (string, bool) {
 
 	// Walk right-to-left: the rightmost non-trusted entry is the client.
 	parts := strings.Split(xff, ",")
-	for i := len(parts) - 1; i >= 0; i-- {
-		ip, err := netip.ParseAddr(strings.TrimSpace(parts[i]))
+	for _, part := range slices.Backward(parts) {
+		ip, err := netip.ParseAddr(strings.TrimSpace(part))
 		if err != nil {
 			continue
 		}

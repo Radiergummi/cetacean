@@ -52,6 +52,8 @@ linters:
         linters:
           - noctx    # httptest.NewRequest without context is fine in tests
           - musttag  # test-only structs don't need json tags
+      - path: '(.+)_test\.go'
+        text: 'G124' # cookie hardening attributes don't matter on test fixtures
     paths:
       - frontend
       - website

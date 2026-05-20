@@ -877,7 +877,7 @@ func TestCache_ListStackSummaries(t *testing.T) {
 				},
 			},
 			Mode: swarm.ServiceMode{
-				Replicated: &swarm.ReplicatedService{Replicas: uint64Ptr(2)},
+				Replicated: &swarm.ReplicatedService{Replicas: new(uint64(2))},
 			},
 		},
 	})
@@ -894,7 +894,7 @@ func TestCache_ListStackSummaries(t *testing.T) {
 				ContainerSpec: &swarm.ContainerSpec{Image: "api:latest"},
 			},
 			Mode: swarm.ServiceMode{
-				Replicated: &swarm.ReplicatedService{Replicas: uint64Ptr(1)},
+				Replicated: &swarm.ReplicatedService{Replicas: new(uint64(1))},
 			},
 		},
 		UpdateStatus: &swarm.UpdateStatus{State: swarm.UpdateStateUpdating},
@@ -987,9 +987,6 @@ func TestCache_ListStackSummaries(t *testing.T) {
 		t.Errorf("cpuUsagePercent=%f, want 0 (populated by handler, not cache)", s.CPUUsagePercent)
 	}
 }
-
-//go:fix inline
-func uint64Ptr(v uint64) *uint64 { return new(v) }
 
 func TestReplaceAll_PartialSync(t *testing.T) {
 	c := New(nil)

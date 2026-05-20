@@ -1736,9 +1736,6 @@ func TestHandleListNodes_Search(t *testing.T) {
 	}
 }
 
-//go:fix inline
-func uint64Ptr(v uint64) *uint64 { return new(v) }
-
 func TestHandleStackSummary(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
@@ -1752,7 +1749,7 @@ func TestHandleStackSummary(t *testing.T) {
 				ContainerSpec: &swarm.ContainerSpec{Image: "nginx"},
 			},
 			Mode: swarm.ServiceMode{
-				Replicated: &swarm.ReplicatedService{Replicas: uint64Ptr(2)},
+				Replicated: &swarm.ReplicatedService{Replicas: new(uint64(2))},
 			},
 		},
 	})
@@ -1829,7 +1826,7 @@ func TestHandleStackSummary_PrometheusDown(t *testing.T) {
 				ContainerSpec: &swarm.ContainerSpec{Image: "nginx"},
 			},
 			Mode: swarm.ServiceMode{
-				Replicated: &swarm.ReplicatedService{Replicas: uint64Ptr(1)},
+				Replicated: &swarm.ReplicatedService{Replicas: new(uint64(1))},
 			},
 		},
 	})
