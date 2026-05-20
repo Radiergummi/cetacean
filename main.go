@@ -383,7 +383,15 @@ func main() {
 		slog.Info("CORS enabled", "origins", cfg.CORSOrigins)
 	}
 
-	mcpHandler, oauthRoutes := setupMCP(cfg, authCfg.Mode, tlsCfg.Enabled(), stateCache, dockerClient, aclEval, recEngine)
+	mcpHandler, oauthRoutes := setupMCP(mcpDeps{
+		cfg:         cfg,
+		authMode:    authCfg.Mode,
+		tlsEnabled:  tlsCfg.Enabled(),
+		cache:       stateCache,
+		writeClient: dockerClient,
+		acl:         aclEval,
+		rec:         recEngine,
+	})
 
 	router := api.NewRouter(api.RouterConfig{
 		Handlers:          handlers,
@@ -578,6 +586,20 @@ func serveDualListeners(
 	}
 }
 
+// mcpDeps bundles the runtime objects setupMCP needs. The split between
+// config sources (cfg/authMode/tlsEnabled — each loaded separately in main)
+// and runtime objects is preserved so callers don't have to wedge unrelated
+// runtime state onto config structs.
+type mcpDeps struct {
+	cfg         *config.Config
+	authMode    string
+	tlsEnabled  bool
+	cache       *cache.Cache
+	writeClient mcp.DockerWriteClient
+	acl         *acl.Evaluator
+	rec         mcp.RecommendationEngine
+}
+
 // setupMCP builds the MCP HTTP handler and the OAuth route registrar when
 // CETACEAN_MCP=true. Both return values are nil when MCP is disabled, and the
 // OAuth registrar is also nil when auth mode is "none" (no token issuance is
@@ -586,29 +608,21 @@ func serveDualListeners(
 // The issuer/MCPResource URLs are derived from the listen address and TLS
 // setting; deployments behind a reverse proxy should override these via a
 // future CETACEAN_MCP_ISSUER env var.
-func setupMCP(
-	cfg *config.Config,
-	authMode string,
-	tlsEnabled bool,
-	c *cache.Cache,
-	wc mcp.DockerWriteClient,
-	aclEval *acl.Evaluator,
-	rec mcp.RecommendationEngine,
-) (http.Handler, func(mux *http.ServeMux, basePath string)) {
-	if !cfg.MCP.Enabled {
+func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string)) {
+	if !d.cfg.MCP.Enabled {
 		return nil, nil
 	}
 
 	scheme := "http"
-	if tlsEnabled {
+	if d.tlsEnabled {
 		scheme = "https"
 	}
-	issuer := scheme + "://" + cfg.ListenAddr
-	mcpResource := issuer + cfg.BasePath + "/mcp"
+	issuer := scheme + "://" + d.cfg.ListenAddr
+	mcpResource := issuer + d.cfg.BasePath + "/mcp"
 
 	var oauthSrv *oauth.Server
-	if authMode != "none" {
-		signingKey := []byte(cfg.MCP.SigningKey)
+	if d.authMode != "none" {
+		signingKey := []byte(d.cfg.MCP.SigningKey)
 		if len(signingKey) == 0 {
 			signingKey = make([]byte, 32)
 			if _, err := rand.Read(signingKey); err != nil {
@@ -619,30 +633,30 @@ func setupMCP(
 		}
 		oauthSrv = oauth.NewServer(oauth.ServerConfig{
 			Issuer:      issuer,
-			BasePath:    cfg.BasePath,
+			BasePath:    d.cfg.BasePath,
 			MCPResource: mcpResource,
-			MCP:         cfg.MCP,
+			MCP:         d.cfg.MCP,
 			SigningKey:  signingKey,
 		})
 		slog.Info("MCP OAuth 2.1 authorization server enabled",
 			"issuer", issuer, "resource", mcpResource)
 	}
 
-	mcpSrv, err := mcp.New(c, mcp.Options{
-		WriteClient:     wc,
-		ACL:             aclEval,
-		Config:          cfg.MCP,
-		GlobalOpsLevel:  cfg.OperationsLevel,
+	mcpSrv, err := mcp.New(d.cache, mcp.Options{
+		WriteClient:     d.writeClient,
+		ACL:             d.acl,
+		Config:          d.cfg.MCP,
+		GlobalOpsLevel:  d.cfg.OperationsLevel,
 		OAuth:           oauthSrv,
-		Recommendations: rec,
+		Recommendations: d.rec,
 	})
 	if err != nil {
 		slog.Error("MCP server setup failed", "error", err)
 		os.Exit(1)
 	}
 	slog.Info("MCP server enabled",
-		"operations_level", cfg.MCP.EffectiveOperationsLevel(cfg.OperationsLevel),
-		"max_sessions", cfg.MCP.MaxSessions)
+		"operations_level", d.cfg.MCP.EffectiveOperationsLevel(d.cfg.OperationsLevel),
+		"max_sessions", d.cfg.MCP.MaxSessions)
 
 	if oauthSrv == nil {
 		return mcpSrv.Handler(), nil
