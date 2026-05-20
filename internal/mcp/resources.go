@@ -150,47 +150,59 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if s.recEngine == nil {
 			return []any{}, nil
 		}
-		return s.recEngine.Results(), nil
+		return s.filterRecommendations(ctx, s.recEngine.Results()), nil
 
 	case "history":
-		return s.cache.History().List(cache.HistoryQuery{Limit: 100}), nil
+		return s.filterHistory(ctx, s.cache.History().List(cache.HistoryQuery{Limit: 100})), nil
 
 	case "nodes":
 		if resourceID == "" {
-			return s.cache.ListNodes(), nil
+			return s.filterNodes(ctx, s.cache.ListNodes()), nil
 		}
 		node, ok := s.cache.GetNode(resourceID)
 		if !ok {
 			return nil, notFound(uri)
 		}
+		if err := s.checkRead(ctx, "node", nodeACLName(node)); err != nil {
+			return nil, err
+		}
 		return node, nil
 
 	case "services":
 		if resourceID == "" {
-			return s.cache.ListServices(), nil
-		}
-		if subResource == "logs" {
-			return s.readServiceLogs(ctx, resourceID)
+			return s.filterServices(ctx, s.cache.ListServices()), nil
 		}
 		svc, ok := s.cache.GetService(resourceID)
 		if !ok {
 			return nil, notFound(uri)
 		}
+		if err := s.checkRead(ctx, "service", svc.Spec.Name); err != nil {
+			return nil, err
+		}
+		if subResource == "logs" {
+			return s.readServiceLogs(ctx, resourceID)
+		}
 		return svc, nil
 
 	case "tasks":
 		if resourceID == "" {
-			return cluster.EnrichTasks(s.cache, s.cache.ListTasks()), nil
+			return s.filterTasks(ctx, cluster.EnrichTasks(s.cache, s.cache.ListTasks())), nil
 		}
 		task, ok := s.cache.GetTask(resourceID)
 		if !ok {
 			return nil, notFound(uri)
 		}
+		if err := s.checkRead(ctx, "task", task.ID); err != nil {
+			return nil, err
+		}
 		return cluster.EnrichTask(s.cache, task), nil
 
 	case "stacks":
 		if resourceID == "" {
-			return s.cache.ListStacks(), nil
+			return s.filterStacks(ctx, s.cache.ListStacks()), nil
+		}
+		if err := s.checkRead(ctx, "stack", resourceID); err != nil {
+			return nil, err
 		}
 		stack, ok := s.cache.GetStackDetail(resourceID)
 		if !ok {
@@ -200,37 +212,49 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 
 	case "configs":
 		if resourceID == "" {
-			return s.cache.ListConfigs(), nil
+			return s.filterConfigs(ctx, s.cache.ListConfigs()), nil
 		}
 		cfg, ok := s.cache.GetConfig(resourceID)
 		if !ok {
 			return nil, notFound(uri)
 		}
+		if err := s.checkRead(ctx, "config", cfg.Spec.Name); err != nil {
+			return nil, err
+		}
 		return cfg, nil
 
 	case "secrets":
 		if resourceID == "" {
-			return cluster.RedactSecrets(s.cache.ListSecrets()), nil
+			return cluster.RedactSecrets(s.filterSecrets(ctx, s.cache.ListSecrets())), nil
 		}
 		sec, ok := s.cache.GetSecret(resourceID)
 		if !ok {
 			return nil, notFound(uri)
 		}
+		if err := s.checkRead(ctx, "secret", sec.Spec.Name); err != nil {
+			return nil, err
+		}
 		return cluster.RedactSecret(sec), nil
 
 	case "networks":
 		if resourceID == "" {
-			return s.cache.ListNetworks(), nil
+			return s.filterNetworks(ctx, s.cache.ListNetworks()), nil
 		}
 		net, ok := s.cache.GetNetwork(resourceID)
 		if !ok {
 			return nil, notFound(uri)
 		}
+		if err := s.checkRead(ctx, "network", net.Name); err != nil {
+			return nil, err
+		}
 		return net, nil
 
 	case "volumes":
 		if resourceID == "" {
-			return s.cache.ListVolumes(), nil
+			return s.filterVolumes(ctx, s.cache.ListVolumes()), nil
+		}
+		if err := s.checkRead(ctx, "volume", resourceID); err != nil {
+			return nil, err
 		}
 		vol, ok := s.cache.GetVolume(resourceID)
 		if !ok {

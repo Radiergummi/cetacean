@@ -496,7 +496,7 @@ func (s *Server) toolSearch(ctx context.Context, req mcplib.CallToolRequest) (st
 	}
 	limit := req.GetInt("limit", 3)
 
-	results := cluster.Search(ctx, s.cache, query, limit)
+	results := s.filterSearchResults(ctx, cluster.Search(ctx, s.cache, query, limit))
 	return marshalResult(results)
 }
 

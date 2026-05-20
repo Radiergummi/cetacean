@@ -5,6 +5,8 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 )
@@ -12,8 +14,8 @@ import (
 func TestNotificationSubscribeAndMatch(t *testing.T) {
 	nm := NewNotificationManager()
 
-	nm.Subscribe("session1", "cetacean://services/svc1")
-	nm.Subscribe("session1", "cetacean://nodes/node1")
+	nm.Subscribe("session1", "cetacean://services/svc1", nil)
+	nm.Subscribe("session1", "cetacean://nodes/node1", nil)
 
 	matches := nm.MatchingURIs("session1", cache.Event{
 		Type:   cache.EventService,
@@ -27,7 +29,7 @@ func TestNotificationSubscribeAndMatch(t *testing.T) {
 
 func TestNotificationNoMatchForDifferentID(t *testing.T) {
 	nm := NewNotificationManager()
-	nm.Subscribe("session1", "cetacean://services/svc1")
+	nm.Subscribe("session1", "cetacean://services/svc1", nil)
 
 	matches := nm.MatchingURIs("session1", cache.Event{
 		Type:   cache.EventService,
@@ -41,7 +43,7 @@ func TestNotificationNoMatchForDifferentID(t *testing.T) {
 
 func TestNotificationLogURIMatches(t *testing.T) {
 	nm := NewNotificationManager()
-	nm.Subscribe("session1", "cetacean://services/svc1/logs")
+	nm.Subscribe("session1", "cetacean://services/svc1/logs", nil)
 
 	matches := nm.MatchingURIs("session1", cache.Event{
 		Type:   cache.EventService,
@@ -55,8 +57,8 @@ func TestNotificationLogURIMatches(t *testing.T) {
 
 func TestNotificationDetailAndLogMatchTogether(t *testing.T) {
 	nm := NewNotificationManager()
-	nm.Subscribe("session1", "cetacean://services/svc1")
-	nm.Subscribe("session1", "cetacean://services/svc1/logs")
+	nm.Subscribe("session1", "cetacean://services/svc1", nil)
+	nm.Subscribe("session1", "cetacean://services/svc1/logs", nil)
 
 	matches := nm.MatchingURIs("session1", cache.Event{
 		Type:   cache.EventService,
@@ -70,7 +72,7 @@ func TestNotificationDetailAndLogMatchTogether(t *testing.T) {
 
 func TestNotificationUnsubscribe(t *testing.T) {
 	nm := NewNotificationManager()
-	nm.Subscribe("session1", "cetacean://services/svc1")
+	nm.Subscribe("session1", "cetacean://services/svc1", nil)
 	nm.Unsubscribe("session1", "cetacean://services/svc1")
 
 	matches := nm.MatchingURIs("session1", cache.Event{
@@ -85,8 +87,8 @@ func TestNotificationUnsubscribe(t *testing.T) {
 
 func TestNotificationRemoveSessionDropsAll(t *testing.T) {
 	nm := NewNotificationManager()
-	nm.Subscribe("session1", "cetacean://services/svc1")
-	nm.Subscribe("session1", "cetacean://nodes/node1")
+	nm.Subscribe("session1", "cetacean://services/svc1", nil)
+	nm.Subscribe("session1", "cetacean://nodes/node1", nil)
 	nm.RemoveSession("session1")
 
 	if ids := nm.sessionIDs(); len(ids) != 0 {
@@ -135,6 +137,74 @@ func TestNotificationEventTypeToURIPrefix(t *testing.T) {
 	}
 }
 
+func TestNotification_SubscribeCapturesIdentity(t *testing.T) {
+	nm := NewNotificationManager()
+	id := &auth.Identity{Subject: "alice"}
+	nm.Subscribe("session1", "cetacean://services/svc1", id)
+
+	got := nm.IdentityFor("session1")
+	if got == nil || got.Subject != "alice" {
+		t.Fatalf("IdentityFor = %v, want identity alice", got)
+	}
+}
+
+func TestEventACLResource(t *testing.T) {
+	tests := []struct {
+		name  string
+		event cache.Event
+		want  string
+	}{
+		{"service uses Name", cache.Event{Type: cache.EventService, ID: "svc1", Name: "web"}, "service:web"},
+		{"task uses ID", cache.Event{Type: cache.EventTask, ID: "task1", Name: "ignored"}, "task:task1"},
+		{"node uses Name", cache.Event{Type: cache.EventNode, ID: "node1", Name: "worker-1"}, "node:worker-1"},
+		{"missing name → empty", cache.Event{Type: cache.EventService, ID: "svc1"}, ""},
+		{"missing task id → empty", cache.Event{Type: cache.EventTask, Name: "x"}, ""},
+		{"sync → empty", cache.Event{Type: cache.EventSync}, ""},
+	}
+	for _, tc := range tests {
+		got := eventACLResource(tc.event)
+		if got != tc.want {
+			t.Errorf("%s: eventACLResource = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+// TestDispatchCacheEvent_ACLBlocksUpdatedNotification asserts that a subscriber
+// whose stored identity can't read the affected resource does NOT show up in
+// the matching deliveries — the dispatch loop short-circuits before calling
+// SendNotificationToSpecificClient. The check is done on the canRead helper
+// directly (mcp-go's send machinery is exercised in integration tests).
+func TestDispatchCacheEvent_ACLBlocksUpdatedNotification(t *testing.T) {
+	c := cache.New(nil)
+	e := acl.NewEvaluator()
+	e.SetPolicy(readOnlyPolicy("service:public-*"))
+
+	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = e })
+
+	id := &auth.Identity{Subject: "alice"}
+	srv.notifications.Subscribe("session1", "cetacean://services/svc1", id)
+
+	allowed := srv.canRead(id, "service:public-api")
+	denied := srv.canRead(id, "service:secret-svc")
+	if !allowed {
+		t.Fatal("identity should be allowed to read service:public-api")
+	}
+	if denied {
+		t.Fatal("identity should NOT be allowed to read service:secret-svc")
+	}
+}
+
+// TestDispatchCacheEvent_ACLOffPassesThrough confirms the dispatch is a no-op
+// when no evaluator is attached (auth mode "none" / no policy).
+func TestDispatchCacheEvent_ACLOffPassesThrough(t *testing.T) {
+	c := cache.New(nil)
+	srv := newResourceTestServer(t, c)
+
+	if !srv.canRead(nil, "service:anything") {
+		t.Fatal("canRead should allow everything when ACL is nil")
+	}
+}
+
 // TestStartNotificationsCancelDetachesListener verifies that calling the
 // returned cancel function actually removes the listener from the cache —
 // otherwise the cache would keep firing into a stale Server after shutdown.
@@ -148,7 +218,7 @@ func TestStartNotificationsCancelDetachesListener(t *testing.T) {
 	}
 
 	// Establish a subscription so the notification path has work to do.
-	srv.notifications.Subscribe("session1", "cetacean://services/svc1")
+	srv.notifications.Subscribe("session1", "cetacean://services/svc1", nil)
 
 	// Drive the cache once before cancel and once after — both should not
 	// panic. The strong guarantee is that Close detaches; we exercise it

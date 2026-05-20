@@ -7,6 +7,7 @@ import (
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -15,41 +16,54 @@ import (
 // cache's OnChange listener registered in StartNotifications.
 type NotificationManager struct {
 	mu sync.RWMutex
-	// subscriptions[sessionID][uri] is the set of resource URIs each session
-	// has subscribed to via resources/subscribe.
-	subscriptions map[string]map[string]struct{}
+	// sessions holds per-session subscription state. Each session record stores
+	// both the subscribed URIs and the *auth.Identity captured at subscribe
+	// time — used by dispatch to ACL-filter notifications per-session.
+	sessions map[string]*sessionState
+}
+
+type sessionState struct {
+	identity *auth.Identity
+	uris     map[string]struct{}
 }
 
 // NewNotificationManager returns an empty manager. Subscriptions are populated
 // via mcp-go's OnAfterSubscribe hook (wired in StartNotifications).
 func NewNotificationManager() *NotificationManager {
 	return &NotificationManager{
-		subscriptions: make(map[string]map[string]struct{}),
+		sessions: make(map[string]*sessionState),
 	}
 }
 
-// Subscribe records that sessionID is interested in updates to uri. Idempotent.
-func (nm *NotificationManager) Subscribe(sessionID, uri string) {
+// Subscribe records that sessionID is interested in updates to uri. The
+// identity is captured for later ACL re-checks at dispatch time. Idempotent;
+// a later call updates the stored identity (matching token refresh behaviour).
+func (nm *NotificationManager) Subscribe(sessionID, uri string, identity *auth.Identity) {
 	if sessionID == "" || uri == "" {
 		return
 	}
 	nm.mu.Lock()
 	defer nm.mu.Unlock()
-	if nm.subscriptions[sessionID] == nil {
-		nm.subscriptions[sessionID] = make(map[string]struct{})
+	st := nm.sessions[sessionID]
+	if st == nil {
+		st = &sessionState{uris: make(map[string]struct{})}
+		nm.sessions[sessionID] = st
 	}
-	nm.subscriptions[sessionID][uri] = struct{}{}
+	st.identity = identity
+	st.uris[uri] = struct{}{}
 }
 
 // Unsubscribe removes sessionID's interest in uri.
 func (nm *NotificationManager) Unsubscribe(sessionID, uri string) {
 	nm.mu.Lock()
 	defer nm.mu.Unlock()
-	if subs, ok := nm.subscriptions[sessionID]; ok {
-		delete(subs, uri)
-		if len(subs) == 0 {
-			delete(nm.subscriptions, sessionID)
-		}
+	st, ok := nm.sessions[sessionID]
+	if !ok {
+		return
+	}
+	delete(st.uris, uri)
+	if len(st.uris) == 0 {
+		delete(nm.sessions, sessionID)
 	}
 }
 
@@ -57,7 +71,20 @@ func (nm *NotificationManager) Unsubscribe(sessionID, uri string) {
 func (nm *NotificationManager) RemoveSession(sessionID string) {
 	nm.mu.Lock()
 	defer nm.mu.Unlock()
-	delete(nm.subscriptions, sessionID)
+	delete(nm.sessions, sessionID)
+}
+
+// IdentityFor returns the identity associated with sessionID, or nil when the
+// session has no live subscription (or was never recorded). Exposed for tests
+// and for the list_changed dispatch path, which iterates known sessions.
+func (nm *NotificationManager) IdentityFor(sessionID string) *auth.Identity {
+	nm.mu.RLock()
+	defer nm.mu.RUnlock()
+	st, ok := nm.sessions[sessionID]
+	if !ok {
+		return nil
+	}
+	return st.identity
 }
 
 // MatchingURIs returns the subscribed URIs (for the given session) that match
@@ -73,19 +100,19 @@ func (nm *NotificationManager) MatchingURIs(sessionID string, event cache.Event)
 	nm.mu.RLock()
 	defer nm.mu.RUnlock()
 
-	subs := nm.subscriptions[sessionID]
-	if len(subs) == 0 {
+	st, ok := nm.sessions[sessionID]
+	if !ok || len(st.uris) == 0 {
 		return nil
 	}
 
 	var matches []string
 	detail := prefix + event.ID
-	if _, ok := subs[detail]; ok {
+	if _, ok := st.uris[detail]; ok {
 		matches = append(matches, detail)
 	}
 	if event.Type == cache.EventService {
 		logURI := detail + "/logs"
-		if _, ok := subs[logURI]; ok {
+		if _, ok := st.uris[logURI]; ok {
 			matches = append(matches, logURI)
 		}
 	}
@@ -105,21 +132,21 @@ func (nm *NotificationManager) IsListChange(event cache.Event) bool {
 func (nm *NotificationManager) sessionIDs() []string {
 	nm.mu.RLock()
 	defer nm.mu.RUnlock()
-	if len(nm.subscriptions) == 0 {
+	if len(nm.sessions) == 0 {
 		return nil
 	}
-	out := make([]string, 0, len(nm.subscriptions))
-	for id := range nm.subscriptions {
+	out := make([]string, 0, len(nm.sessions))
+	for id := range nm.sessions {
 		out = append(out, id)
 	}
 	return out
 }
 
 // matchingDeliveries walks every session's subscriptions under a single RLock
-// and returns the (session, uri) pairs that need notification for this event.
-// The returned slice may be nil when no session is interested. The lock is
-// released before the caller dispatches notifications so a slow send cannot
-// block subscribe/unsubscribe.
+// and returns the (session, uri, identity) tuples that need notification for
+// this event. The identity is included so the dispatcher can ACL-check without
+// re-acquiring the lock. The lock is released before the caller dispatches so
+// a slow send cannot block subscribe/unsubscribe.
 func (nm *NotificationManager) matchingDeliveries(event cache.Event) []delivery {
 	prefix := eventTypeToURIPrefix(event.Type)
 	if prefix == "" || event.ID == "" {
@@ -135,13 +162,13 @@ func (nm *NotificationManager) matchingDeliveries(event cache.Event) []delivery 
 	defer nm.mu.RUnlock()
 
 	var out []delivery
-	for sessionID, subs := range nm.subscriptions {
-		if _, ok := subs[detail]; ok {
-			out = append(out, delivery{sessionID: sessionID, uri: detail})
+	for sessionID, st := range nm.sessions {
+		if _, ok := st.uris[detail]; ok {
+			out = append(out, delivery{sessionID: sessionID, uri: detail, identity: st.identity})
 		}
 		if logURI != "" {
-			if _, ok := subs[logURI]; ok {
-				out = append(out, delivery{sessionID: sessionID, uri: logURI})
+			if _, ok := st.uris[logURI]; ok {
+				out = append(out, delivery{sessionID: sessionID, uri: logURI, identity: st.identity})
 			}
 		}
 	}
@@ -151,6 +178,7 @@ func (nm *NotificationManager) matchingDeliveries(event cache.Event) []delivery 
 type delivery struct {
 	sessionID string
 	uri       string
+	identity  *auth.Identity
 }
 
 func eventTypeToURIPrefix(t cache.EventType) string {
@@ -195,6 +223,12 @@ func (s *Server) startNotifications() func() {
 // dispatchCacheEvent fans an event out to subscribed sessions. Detail
 // subscribers get notifications/resources/updated; list-relevant changes
 // (create/remove) additionally broadcast notifications/resources/list_changed.
+//
+// Notifications are ACL-checked per-delivery: a session whose stored identity
+// can't read the affected resource never receives the notification, even if it
+// subscribed before a policy tightening. The list_changed broadcast carries no
+// resource URI — it's a "go refetch" signal whose payload becomes empty after
+// the next per-resource list call's ACL filter, so it stays a broadcast.
 func (s *Server) dispatchCacheEvent(event cache.Event) {
 	if event.Type == cache.EventSync {
 		// The full-resync event isn't useful as a single notification.
@@ -202,7 +236,11 @@ func (s *Server) dispatchCacheEvent(event cache.Event) {
 		return
 	}
 
+	aclResource := eventACLResource(event)
 	for _, d := range s.notifications.matchingDeliveries(event) {
+		if aclResource != "" && !s.canRead(d.identity, aclResource) {
+			continue
+		}
 		_ = s.mcpServer.SendNotificationToSpecificClient(d.sessionID, "notifications/resources/updated", map[string]any{
 			"uri": d.uri,
 		})
@@ -215,6 +253,61 @@ func (s *Server) dispatchCacheEvent(event cache.Event) {
 	}
 }
 
+// canRead returns true when identity is allowed to read aclResource (or when
+// ACL is disabled). Lookup-only counterpart of checkRead for the dispatch hot
+// path where we don't want an error return.
+func (s *Server) canRead(identity *auth.Identity, aclResource string) bool {
+	if s.acl == nil {
+		return true
+	}
+	return s.acl.Can(identity, "read", aclResource)
+}
+
+// eventACLResource returns the ACL resource key for a cache event, or "" when
+// the event carries no resource (sync, ref_changed, etc). Mirrors the ACL key
+// convention used by lookupResource and tools.go.
+func eventACLResource(event cache.Event) string {
+	prefix := eventTypeToACLPrefix(event.Type)
+	if prefix == "" {
+		return ""
+	}
+	// Tasks key on ID; everything else keys on Name (which the cache fills via
+	// ExtractName, matching the convention used by REST handlers).
+	if event.Type == cache.EventTask {
+		if event.ID == "" {
+			return ""
+		}
+		return prefix + event.ID
+	}
+	if event.Name == "" {
+		return ""
+	}
+	return prefix + event.Name
+}
+
+func eventTypeToACLPrefix(t cache.EventType) string {
+	switch t {
+	case cache.EventNode:
+		return "node:"
+	case cache.EventService:
+		return "service:"
+	case cache.EventTask:
+		return "task:"
+	case cache.EventConfig:
+		return "config:"
+	case cache.EventSecret:
+		return "secret:"
+	case cache.EventNetwork:
+		return "network:"
+	case cache.EventVolume:
+		return "volume:"
+	case cache.EventStack:
+		return "stack:"
+	default:
+		return ""
+	}
+}
+
 // installSubscriptionHooks returns the mcp-go Hooks that wire client subscribe
 // / unsubscribe / session lifecycle into the NotificationManager. The hook
 // callbacks read the session ID from the request context — mcp-go stamps a
@@ -224,7 +317,7 @@ func (s *Server) installSubscriptionHooks() *mcpserver.Hooks {
 
 	h.AddAfterSubscribe(func(ctx context.Context, _ any, msg *mcplib.SubscribeRequest, _ *mcplib.EmptyResult) {
 		if sid := sessionIDFromContext(ctx); sid != "" {
-			s.notifications.Subscribe(sid, msg.Params.URI)
+			s.notifications.Subscribe(sid, msg.Params.URI, auth.IdentityFromContext(ctx))
 		}
 	})
 
