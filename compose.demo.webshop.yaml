@@ -1,0 +1,91 @@
+services:
+  frontend:
+    image: nginx:1.27-alpine
+    networks: [internal, public]
+    deploy:
+      replicas: 3
+      labels:
+        traefik.enable: "true"
+        traefik.http.routers.webshop.rule: "Host(`shop.example.com`)"
+        traefik.http.routers.webshop.entrypoints: "websecure"
+        traefik.http.routers.webshop.tls.certresolver: "letsencrypt"
+        traefik.http.services.webshop.loadbalancer.server.port: "80"
+      resources:
+        limits: { cpus: "0.5", memory: 128M }
+        reservations: { cpus: "0.1", memory: 32M }
+      update_config: { parallelism: 1, delay: 10s, order: start-first }
+      rollback_config: { parallelism: 1, order: start-first }
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  api:
+    image: node:22-alpine
+    command: ["node", "-e", "require('http').createServer((_,r)=>{r.writeHead(200);r.end('ok')}).listen(3000)"]
+    networks: [internal, public]
+    deploy:
+      replicas: 2
+      labels:
+        traefik.enable: "true"
+        traefik.http.routers.webshop-api.rule: "Host(`api.shop.example.com`)"
+        traefik.http.routers.webshop-api.entrypoints: "websecure"
+        traefik.http.services.webshop-api.loadbalancer.server.port: "3000"
+        traefik.http.middlewares.api-ratelimit.ratelimit.average: "100"
+      resources:
+        limits: { cpus: "1.0", memory: 512M }
+        reservations: { cpus: "0.25", memory: 128M }
+      update_config: { parallelism: 1, delay: 5s }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  worker:
+    image: node:22-alpine
+    command: ["node", "-e", "setInterval(()=>console.log(JSON.stringify({level:'info',msg:'processed job',queue:'orders',duration_ms:Math.floor(Math.random()*200),ts:new Date().toISOString()})),5000)"]
+    networks: [internal]
+    deploy:
+      replicas: 2
+      resources:
+        limits: { cpus: "0.5", memory: 256M }
+        reservations: { cpus: "0.1", memory: 64M }
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
+    networks: [internal]
+    deploy:
+      replicas: 1
+      resources:
+        limits: { cpus: "0.25", memory: 96M }
+        reservations: { memory: 32M }
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: webshop
+      POSTGRES_USER: webshop
+      POSTGRES_PASSWORD: demo-password
+    networks: [internal]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    deploy:
+      replicas: 1
+      resources:
+        limits: { cpus: "1.0", memory: 512M }
+        reservations: { cpus: "0.25", memory: 256M }
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webshop"]
+      interval: 10s
+      timeout: 3s
+
+volumes:
+  pgdata:

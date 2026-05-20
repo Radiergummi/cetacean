@@ -1,0 +1,49 @@
+services:
+  traefik:
+    image: traefik:v3.3
+    command:
+      - "--providers.swarm=true"
+      - "--providers.swarm.exposedByDefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [public]
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits: { cpus: "0.5", memory: 128M }
+
+  shepherd:
+    image: mazzolino/shepherd:latest
+    environment:
+      SLEEP_TIME: "5m"
+      FILTER_SERVICES: "label=shepherd.enable=true"
+      ROLLBACK_ON_FAILURE: "true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    deploy:
+      replicas: 1
+      labels:
+        shepherd.enable: "true"
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits: { cpus: "0.25", memory: 64M }
+
+  registry:
+    image: registry:2
+    networks: [internal]
+    deploy:
+      replicas: 1
+      resources:
+        limits: { cpus: "0.25", memory: 128M }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/v2/ || exit 1"]
+      interval: 15s
+      timeout: 3s

@@ -1,0 +1,25 @@
+# Demo stacks for screenshots — deploys realistic-looking services
+#
+# Deploy:
+#   docker network create -d overlay --attachable public
+#   docker stack deploy -c compose.demo.yaml -c compose.demo.webshop.yaml webshop
+#   docker stack deploy -c compose.demo.yaml -c compose.demo.platform.yaml platform
+#
+# Remove:
+#   docker stack rm webshop platform
+#   docker network rm public
+
+# Shared base — networks and dummy configs/secrets for populating the dashboard
+configs:
+  app-config:
+    file: /tmp/demo-secret.txt
+
+secrets:
+  db-credentials:
+    file: /tmp/demo-secret.txt
+
+networks:
+  public:
+    external: true
+  internal:
+    driver: overlay
