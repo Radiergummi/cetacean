@@ -76,6 +76,8 @@ func (s *AuthCodeStore) Issue(data AuthCodeData, ttl time.Duration) string {
 
 // Redeem looks up the code by hash, always deletes it (single-use), and
 // returns the bound data only when the entry existed and was not expired.
+// The returned AuthCodeData carries an independent copy of Groups so the
+// caller can safely mutate it without racing other holders of the same code.
 func (s *AuthCodeStore) Redeem(code string) (AuthCodeData, bool) {
 	h := hashToken(code)
 
@@ -91,7 +93,9 @@ func (s *AuthCodeStore) Redeem(code string) (AuthCodeData, bool) {
 		return AuthCodeData{}, false
 	}
 
-	return entry.data, true
+	out := entry.data
+	out.Groups = append([]string(nil), entry.data.Groups...)
+	return out, true
 }
 
 // ---------------------------------------------------------------------------
@@ -161,6 +165,8 @@ func (s *RefreshTokenStore) Issue(data RefreshTokenData, ttl time.Duration) stri
 
 // Validate returns the data for a live, unexpired token without consuming it.
 // It is safe to call concurrently without side effects on store state.
+// The returned RefreshTokenData carries an independent copy of Groups so the
+// caller can safely mutate it without racing other validators.
 func (s *RefreshTokenStore) Validate(token string) (RefreshTokenData, bool) {
 	h := hashToken(token)
 
@@ -175,7 +181,9 @@ func (s *RefreshTokenStore) Validate(token string) (RefreshTokenData, bool) {
 		return RefreshTokenData{}, false
 	}
 
-	return entry.data, true
+	out := entry.data
+	out.Groups = append([]string(nil), entry.data.Groups...)
+	return out, true
 }
 
 // Rotate implements refresh-token rotation with theft detection.
@@ -191,10 +199,20 @@ func (s *RefreshTokenStore) Validate(token string) (RefreshTokenData, bool) {
 func (s *RefreshTokenStore) Rotate(oldToken string, ttl time.Duration) RotateResult {
 	oldHash := hashToken(oldToken)
 
+	// Generate the candidate replacement outside the critical section so
+	// crypto/rand.Read cannot block other callers of Validate/Rotate. The
+	// allocation is wasted on the non-rotating paths (theft, unknown,
+	// expired), but those are rare.
+	newRaw := generateOpaqueToken()
+	newHash := hashToken(newRaw)
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Step 2: replay / theft check runs before anything else.
+	// Step 2: replay / theft check runs before anything else. On theft, the
+	// grant family is burned and Data is intentionally zero — the data is no
+	// longer in the store. Callers that need to log the affected subject
+	// must record it at issue time.
 	if grantID, isConsumed := s.consumed[oldHash]; isConsumed {
 		s.revokeGrantLocked(grantID)
 		return RotateResult{Theft: true}
@@ -217,18 +235,17 @@ func (s *RefreshTokenStore) Rotate(oldToken string, ttl time.Duration) RotateRes
 	delete(s.tokens, oldHash)
 	s.consumed[oldHash] = grantID
 
-	newRaw := generateOpaqueToken()
-	newHash := hashToken(newRaw)
-
 	s.tokens[newHash] = refreshTokenEntry{
 		data:      entry.data,
 		expiresAt: time.Now().Add(ttl),
 	}
 	s.grants[grantID] = append(s.grants[grantID], newHash)
 
+	out := entry.data
+	out.Groups = append([]string(nil), entry.data.Groups...)
 	return RotateResult{
 		NewToken: newRaw,
-		Data:     entry.data,
+		Data:     out,
 		OK:       true,
 	}
 }
