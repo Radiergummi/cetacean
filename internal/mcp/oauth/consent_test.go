@@ -109,6 +109,11 @@ func TestConsentPageRejectsInvalidRedirectURI(t *testing.T) {
 		}
 	}
 
+	// Must respond with a 4xx error (not a redirect).
+	if rec.Code < 400 || rec.Code >= 500 {
+		t.Errorf("expected 4xx status for invalid redirect_uri, got %d", rec.Code)
+	}
+
 	// Should render an error page instead.
 	body := rec.Body.String()
 	if strings.Contains(body, "attacker.example.com") {

@@ -14,6 +14,11 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
+// authCodeTTL is the lifetime of an authorization code issued at the end of
+// the consent flow. RFC 6749 §4.1.2 recommends short-lived codes; 60 seconds
+// is a common conservative choice.
+const authCodeTTL = 60 * time.Second
+
 // ServerConfig holds configuration for the OAuth 2.1 authorization server.
 type ServerConfig struct {
 	// Issuer is the canonical issuer URL, e.g. "https://cetacean.example.com".
@@ -241,13 +246,8 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	refreshTokenRaw := r.FormValue("refresh_token")
 	resourceForm := r.FormValue("resource")
 
-	// RFC 8707 resource indicator validation.
-	if _, err := ValidateResourceIndicator(resourceForm, s.cfg.MCPResource, s.cfg.MCP.RequireResourceIndicator); err != nil {
-		writeTokenError(w, http.StatusBadRequest, "invalid_target", err.Error())
-		return
-	}
-
-	// Rotate the refresh token (detects theft).
+	// Rotate the refresh token FIRST so it is consumed before any validation
+	// that might need to revoke the grant family (e.g. resource mismatch).
 	result := s.refreshTokens.Rotate(refreshTokenRaw, s.cfg.MCP.RefreshTokenTTL)
 	if result.Theft {
 		// Per RFC 6749 §5.2: don't leak that it was theft.
@@ -256,6 +256,14 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	}
 	if !result.OK {
 		writeTokenError(w, http.StatusBadRequest, "invalid_grant", "refresh token is invalid or expired")
+		return
+	}
+
+	// RFC 8707 resource indicator validation against the server's resource.
+	// Validate after rotation so a mismatched resource triggers grant revocation.
+	if _, err := ValidateResourceIndicator(resourceForm, s.cfg.MCPResource, s.cfg.MCP.RequireResourceIndicator); err != nil {
+		s.refreshTokens.RevokeGrant(result.NewToken)
+		writeTokenError(w, http.StatusBadRequest, "invalid_target", err.Error())
 		return
 	}
 
@@ -396,12 +404,11 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 	// Require identity from auth middleware.
 	identity := auth.IdentityFromContext(r.Context())
 	if identity == nil {
-		w.WriteHeader(http.StatusUnauthorized)
 		renderErrorPage(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
 
-	csrfToken, _ := issueCSRFNonce(w, s.cfg.SigningKey, state)
+	csrfToken, _ := issueCSRFNonce(w, s.cfg.SigningKey, state, strings.HasPrefix(s.cfg.Issuer, "https://"))
 
 	actionURL := s.cfg.BasePath + "/oauth/authorize"
 
@@ -448,6 +455,8 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	secure := strings.HasPrefix(s.cfg.Issuer, "https://")
+
 	// Validate CSRF.
 	if !verifyCSRFToken(r, s.cfg.SigningKey) {
 		renderErrorPage(w, http.StatusBadRequest, "invalid or missing CSRF token")
@@ -455,6 +464,7 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if decision == "deny" {
+		clearCSRFCookie(w, secure)
 		redirectWithError(w, r, redirectURIRaw, state, "access_denied",
 			"user denied the authorization request")
 		return
@@ -463,12 +473,13 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	// Require identity.
 	identity := auth.IdentityFromContext(r.Context())
 	if identity == nil {
-		w.WriteHeader(http.StatusUnauthorized)
+		clearCSRFCookie(w, secure)
 		renderErrorPage(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
 
 	if codeChallengeMethod != "S256" {
+		clearCSRFCookie(w, secure)
 		redirectWithError(w, r, redirectURIRaw, state, "invalid_request",
 			"code_challenge_method must be S256")
 		return
@@ -476,11 +487,12 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 
 	effectiveResource, err := ValidateResourceIndicator(resourceParam, s.cfg.MCPResource, s.cfg.MCP.RequireResourceIndicator)
 	if err != nil {
+		clearCSRFCookie(w, secure)
 		redirectWithError(w, r, redirectURIRaw, state, "invalid_target", err.Error())
 		return
 	}
 
-	// Issue authorization code (60s TTL).
+	// Issue authorization code.
 	rawCode := s.authCodes.Issue(AuthCodeData{
 		ClientID:      clientID,
 		RedirectURI:   redirectURIRaw,
@@ -488,7 +500,10 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		Resource:      effectiveResource,
 		Subject:       identity.Subject,
 		Groups:        identity.Groups,
-	}, 60*time.Second)
+	}, authCodeTTL)
+
+	// Clear the CSRF cookie — the flow is complete.
+	clearCSRFCookie(w, secure)
 
 	// Redirect with code.
 	redirectURI, _ := url.Parse(redirectURIRaw)

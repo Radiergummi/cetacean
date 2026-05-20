@@ -397,6 +397,43 @@ func TestRevocationUnknownToken(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// TestTokenExchangeRefreshMismatchedResource
+// ---------------------------------------------------------------------------
+
+func TestTokenExchangeRefreshMismatchedResource(t *testing.T) {
+	srv := newTestServer(t)
+	// Issue a refresh token bound to MCPResource.
+	rt := srv.refreshTokens.Issue(RefreshTokenData{
+		Subject:  "u@e",
+		ClientID: "https://example.com/client",
+		Resource: srv.cfg.MCPResource,
+	}, time.Hour)
+
+	form := url.Values{
+		"grant_type":    {"refresh_token"},
+		"refresh_token": {rt},
+		"resource":      {"https://other-cetacean.example.com/mcp"}, // mismatch
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/oauth/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	srv.HandleToken(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 for resource indicator mismatch", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "invalid_target") {
+		t.Errorf("body must mention invalid_target: %s", rec.Body.String())
+	}
+	// Critical: the family should be revoked, so the original refresh token
+	// is no longer valid.
+	if _, ok := srv.refreshTokens.Validate(rt); ok {
+		t.Errorf("refresh token must be revoked after a resource-mismatched rotate")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // TestWriteUnauthorized
 // ---------------------------------------------------------------------------
 

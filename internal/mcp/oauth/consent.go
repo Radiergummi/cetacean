@@ -131,8 +131,9 @@ func setConsentHeaders(w http.ResponseWriter) {
 
 // issueCSRFNonce generates a random nonce, sets a short-lived signed cookie,
 // and returns the CSRF token (HMAC of nonce+state). The cookie is HttpOnly
-// and SameSite=Strict.
-func issueCSRFNonce(w http.ResponseWriter, signingKey []byte, state string) (token string, nonce string) {
+// and SameSite=Strict. When secure is true (issuer is HTTPS) the cookie is
+// also marked Secure.
+func issueCSRFNonce(w http.ResponseWriter, signingKey []byte, state string, secure bool) (token string, nonce string) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
 		panic("mcp/oauth: crypto/rand failure: " + err.Error())
@@ -151,10 +152,26 @@ func issueCSRFNonce(w http.ResponseWriter, signingKey []byte, state string) (tok
 		MaxAge:   int(csrfCookieTTL.Seconds()),
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
+		Secure:   secure,
 		Path:     "/",
 	})
 
 	return token, nonce
+}
+
+// clearCSRFCookie tells the browser to drop the nonce cookie issued at the
+// start of the consent flow. Called whenever the flow terminates so a stale
+// cookie cannot survive past its useful life.
+func clearCSRFCookie(w http.ResponseWriter, secure bool) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     csrfCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		Secure:   secure,
+	})
 }
 
 // verifyCSRFToken validates the CSRF token from the form against the nonce

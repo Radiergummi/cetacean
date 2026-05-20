@@ -11,12 +11,12 @@ import "errors"
 func ValidateResourceIndicator(raw string, expected string, required bool) (string, error) {
 	if raw == "" {
 		if required {
-			return "", errors.New("invalid_target: resource parameter is required")
+			return "", errors.New("resource parameter is required")
 		}
 		return expected, nil
 	}
 	if raw != expected {
-		return "", errors.New("invalid_target: resource does not match this server")
+		return "", errors.New("resource does not match this server")
 	}
 	return raw, nil
 }
