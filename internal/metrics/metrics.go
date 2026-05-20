@@ -65,7 +65,14 @@ var (
 	sseEventsDroppedTotal = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Name: "cetacean_sse_events_dropped_total",
-			Help: "Total number of SSE events dropped.",
+			Help: "Total number of SSE events dropped because the broadcaster inbox was full.",
+		},
+	)
+
+	sseClientEventsDroppedTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "cetacean_sse_client_events_dropped_total",
+			Help: "Total number of SSE events dropped because an individual client could not keep up. A non-zero rate signals a slow consumer that may silently miss updates.",
 		},
 	)
 
@@ -138,6 +145,7 @@ func init() {
 	Registry.MustRegister(sseConnectionsActive)
 	Registry.MustRegister(sseEventsBroadcastTotal)
 	Registry.MustRegister(sseEventsDroppedTotal)
+	Registry.MustRegister(sseClientEventsDroppedTotal)
 	Registry.MustRegister(cacheResources)
 	Registry.MustRegister(cacheSyncDurationSeconds)
 	Registry.MustRegister(cacheMutationsTotal)
@@ -175,9 +183,15 @@ func RecordSSEBroadcast() {
 	sseEventsBroadcastTotal.Inc()
 }
 
-// RecordSSEDrop increments the SSE events dropped counter.
+// RecordSSEDrop increments the SSE events dropped counter (broadcaster inbox full).
 func RecordSSEDrop() {
 	sseEventsDroppedTotal.Inc()
+}
+
+// RecordSSEClientDrop increments the per-client SSE drop counter. Bumped when
+// a connected client is too slow to drain its event channel.
+func RecordSSEClientDrop() {
+	sseClientEventsDroppedTotal.Inc()
 }
 
 // SetCacheResources sets the number of cached resources for a given type.

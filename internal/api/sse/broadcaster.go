@@ -94,7 +94,12 @@ func (b *Broadcaster) fanOut() {
 				select {
 				case c.events <- e:
 				default:
-					// Slow client, drop event
+					// Slow client: drop the event rather than block the
+					// broadcaster goroutine. The drop is otherwise invisible
+					// to the client and the operator, so surface it as a
+					// counter — a steady non-zero rate is the only signal
+					// that a UI is silently missing live updates.
+					metrics.RecordSSEClientDrop()
 				}
 			}
 			b.mu.RUnlock()

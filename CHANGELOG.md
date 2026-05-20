@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Filter expressions like `exit_code != "0"` no longer match running tasks (Docker reports `-1` mid-run)
 - Task detail CPU/memory gauges fall back to the host node's capacity when the service has no per-task limit set, instead of rendering empty
 - Exit code is no longer shown on running tasks (Docker often reports `-1` while a container is alive)
+- Node list no longer crashes when a node briefly arrives without a Description payload
+- SSE drops caused by slow clients are now surfaced as the `cetacean_sse_client_events_dropped_total` metric so silent drift can be detected
 - Corrected OpenAPI spec examples to match actual API responses
 - Documented missing OpenAPI endpoints and parameters: `POST /swarm/unlock`, `GET /topology`, `GET /services/{id}/mode`, `GET /services/{id}/endpoint-mode`, `?force` on node and volume deletion, and `application/merge-patch+json` support on env and label PATCH endpoints
 - Removed dead `GET /swarm/plugins` alias route

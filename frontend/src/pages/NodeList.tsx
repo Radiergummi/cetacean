@@ -29,7 +29,7 @@ export default function NodeList() {
               className="font-medium text-link hover:underline"
               onClick={(event) => event.stopPropagation()}
             >
-              {Description.Hostname || ID}
+              {Description?.Hostname || ID}
             </Link>
           ),
         },
@@ -65,7 +65,7 @@ export default function NodeList() {
             {
               header: "CPU",
               cell: ({ Description, Status }) => {
-                const nodeMetrics = getForNode(Description.Hostname, Status.Addr);
+                const nodeMetrics = getForNode(Description?.Hostname ?? "", Status.Addr);
                 return (
                   <span className="tabular-nums">
                     {nodeMetrics.cpu != null ? `${Math.round(nodeMetrics.cpu)}%` : "\u2014"}
@@ -76,7 +76,7 @@ export default function NodeList() {
             {
               header: "Memory",
               cell: ({ Description, Status }) => {
-                const nodeMetrics = getForNode(Description.Hostname, Status.Addr);
+                const nodeMetrics = getForNode(Description?.Hostname ?? "", Status.Addr);
                 return (
                   <span className="tabular-nums">
                     {nodeMetrics.memory != null ? `${Math.round(nodeMetrics.memory)}%` : "\u2014"}
@@ -87,7 +87,7 @@ export default function NodeList() {
             {
               header: "CPU (1h)",
               cell: ({ Description, Status }) => {
-                const nodeMetrics = getForNode(Description.Hostname, Status.Addr);
+                const nodeMetrics = getForNode(Description?.Hostname ?? "", Status.Addr);
 
                 if (nodeMetrics.cpuHistory.length > 1) {
                   return <Sparkline data={nodeMetrics.cpuHistory} />;
@@ -104,7 +104,7 @@ export default function NodeList() {
         ...metrics,
         {
           header: "Engine",
-          cell: ({ Description }: Node) => Description.Engine.EngineVersion,
+          cell: ({ Description }: Node) => Description?.Engine?.EngineVersion ?? "—",
         },
       ];
     },
@@ -159,11 +159,11 @@ export default function NodeList() {
         ) : undefined
       }
       renderCard={(node) => {
-        const metrics = getForNode(node.Description.Hostname, node.Status.Addr);
+        const metrics = getForNode(node.Description?.Hostname ?? "", node.Status.Addr);
 
         return (
           <ResourceCard
-            title={node.Description.Hostname || node.ID}
+            title={node.Description?.Hostname || node.ID}
             to={`/nodes/${node.ID}`}
             badge={<TaskStatusBadge state={node.Status.State} />}
             meta={[
@@ -181,7 +181,9 @@ export default function NodeList() {
                 node.Spec.Role
               ),
               node.Spec.Availability,
-              `v${node.Description.Engine.EngineVersion}`,
+              node.Description?.Engine?.EngineVersion
+                ? `v${node.Description.Engine.EngineVersion}`
+                : "",
             ]}
           >
             {hasNodeExporter && (
