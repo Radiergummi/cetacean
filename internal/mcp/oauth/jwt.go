@@ -15,11 +15,12 @@ import (
 // Sentinel errors returned by VerifyAccessToken. Callers can use errors.Is to
 // distinguish them when building WWW-Authenticate responses.
 var (
-	ErrMalformedToken  = errors.New("malformed token")
-	ErrInvalidSig      = errors.New("invalid signature")
-	ErrTokenExpired    = errors.New("token expired")
-	ErrIssuerMismatch  = errors.New("issuer mismatch")
+	ErrMalformedToken   = errors.New("malformed token")
+	ErrInvalidSig       = errors.New("invalid signature")
+	ErrTokenExpired     = errors.New("token expired")
+	ErrIssuerMismatch   = errors.New("issuer mismatch")
 	ErrAudienceMismatch = errors.New("audience mismatch")
+	ErrMissingKey       = errors.New("signing key is empty")
 )
 
 // jwtHeader is the base64url-encoded fixed header {"alg":"HS256","typ":"JWT"},
@@ -56,6 +57,10 @@ type TokenIssuer struct {
 // IssueAccessToken mints a signed compact JWT for the given claims with the
 // specified TTL. A unique 128-bit jti is generated for each token.
 func (t *TokenIssuer) IssueAccessToken(claims AccessTokenClaims, ttl time.Duration) (string, error) {
+	if len(t.SigningKey) == 0 {
+		return "", ErrMissingKey
+	}
+
 	jtiBytes := make([]byte, 16)
 	if _, err := rand.Read(jtiBytes); err != nil {
 		panic(fmt.Sprintf("jwt: crypto/rand.Read failed (host RNG broken): %v", err))
@@ -89,6 +94,10 @@ func (t *TokenIssuer) IssueAccessToken(claims AccessTokenClaims, ttl time.Durati
 // application claims on success. Returns a wrapped sentinel error on failure
 // so callers can distinguish expiry from signature failures.
 func (t *TokenIssuer) VerifyAccessToken(token string) (*AccessTokenClaims, error) {
+	if len(t.SigningKey) == 0 {
+		return nil, ErrMissingKey
+	}
+
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("%w: expected 3 segments, got %d", ErrMalformedToken, len(parts))

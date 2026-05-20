@@ -1,6 +1,7 @@
 package oauth
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -111,17 +112,41 @@ func TestJWTMalformedToken(t *testing.T) {
 		Issuer:     "https://cetacean.example.com",
 		Audience:   "mcp",
 	}
-	cases := []string{
-		"",
-		"not-a-jwt",
-		"only.two",
-		"a.b.c.d",  // too many segments
-		"!!.!!.!!", // invalid base64
+	// Each case is paired with the sentinel error it must surface so callers
+	// (the WWW-Authenticate mapping in Task 5) get the right error code.
+	cases := []struct {
+		token string
+		want  error
+	}{
+		{"", ErrMalformedToken},           // empty
+		{"not-a-jwt", ErrMalformedToken},  // single segment
+		{"only.two", ErrMalformedToken},   // two segments
+		{"a.b.c.d", ErrMalformedToken},    // four segments
+		{"!!.!!.!!", ErrInvalidSig},       // three segments but sig won't match
 	}
 	for _, c := range cases {
-		if _, err := issuer.VerifyAccessToken(c); err == nil {
-			t.Errorf("expected error for malformed token %q", c)
+		_, err := issuer.VerifyAccessToken(c.token)
+		if err == nil {
+			t.Errorf("token %q: expected error, got nil", c.token)
+			continue
 		}
+		if !errors.Is(err, c.want) {
+			t.Errorf("token %q: got %v, want errors.Is(%v)", c.token, err, c.want)
+		}
+	}
+}
+
+func TestJWTMissingSigningKey(t *testing.T) {
+	issuer := &TokenIssuer{
+		Issuer:   "https://cetacean.example.com",
+		Audience: "mcp",
+		// SigningKey deliberately zero
+	}
+	if _, err := issuer.IssueAccessToken(AccessTokenClaims{Subject: "u@e"}, time.Hour); !errors.Is(err, ErrMissingKey) {
+		t.Errorf("IssueAccessToken with empty key: got %v, want ErrMissingKey", err)
+	}
+	if _, err := issuer.VerifyAccessToken("a.b.c"); !errors.Is(err, ErrMissingKey) {
+		t.Errorf("VerifyAccessToken with empty key: got %v, want ErrMissingKey", err)
 	}
 }
 
