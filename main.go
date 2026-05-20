@@ -195,7 +195,10 @@ func main() {
 	)
 	defer broadcaster.Close()
 
-	// Wire cache changes to SSE broadcaster
+	// Wire cache changes to SSE broadcaster.
+	// The cancel function is intentionally dropped: the broadcaster and cache
+	// share the process lifetime, so there is no window in which detaching the
+	// listener would matter.
 	stateCache.AddOnChangeListener(func(e cache.Event) {
 		broadcaster.Broadcast(e)
 	})
