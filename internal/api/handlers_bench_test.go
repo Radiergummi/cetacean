@@ -706,40 +706,6 @@ func BenchmarkParseLine(b *testing.B) {
 }
 
 // =============================================================================
-// labelsMatch (search hot path)
-// =============================================================================
-
-func BenchmarkLabelsMatch(b *testing.B) {
-	labels := map[string]string{
-		"com.docker.stack.namespace": "mystack",
-		"com.docker.stack.image":     "registry.example.com/web:v2.1.0",
-		"app.version":                "2.1.0",
-		"maintainer":                 "team-platform",
-		"environment":                "production",
-	}
-	b.Run("hit_value", func(b *testing.B) {
-		for b.Loop() {
-			labelsMatch(labels, "platform")
-		}
-	})
-	b.Run("miss", func(b *testing.B) {
-		for b.Loop() {
-			labelsMatch(labels, "nonexistent")
-		}
-	})
-	b.Run("hit_key", func(b *testing.B) {
-		for b.Loop() {
-			labelsMatch(labels, "namespace")
-		}
-	})
-	b.Run("empty_labels", func(b *testing.B) {
-		for b.Loop() {
-			labelsMatch(nil, "anything")
-		}
-	})
-}
-
-// =============================================================================
 // writeCachedJSON (full marshal + hash + conditional response)
 // =============================================================================
 

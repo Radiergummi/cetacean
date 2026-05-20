@@ -24,7 +24,7 @@ func TestSearchByName(t *testing.T) {
 
 	// Search by service name.
 	svcResults := cluster.Search(context.Background(), c, "web-frontend", 10)
-	services, ok := svcResults["services"]
+	services, ok := svcResults.Hits["services"]
 	if !ok {
 		t.Fatal("expected services in results")
 	}
@@ -43,7 +43,7 @@ func TestSearchByName(t *testing.T) {
 
 	// Search by node hostname.
 	nodeResultsMap := cluster.Search(context.Background(), c, "worker-node-1", 10)
-	nodeResults, ok := nodeResultsMap["nodes"]
+	nodeResults, ok := nodeResultsMap.Hits["nodes"]
 	if !ok {
 		t.Fatal("expected nodes in results")
 	}
@@ -66,7 +66,7 @@ func TestSearchByLabel(t *testing.T) {
 
 	results := cluster.Search(context.Background(), c, "platform-eng", 10)
 
-	services, ok := results["services"]
+	services, ok := results.Hits["services"]
 	if !ok {
 		t.Fatal("expected services in results")
 	}
@@ -91,7 +91,7 @@ func TestSearchIncludesServiceState(t *testing.T) {
 	// No tasks running → expect "failed"
 	results := cluster.Search(context.Background(), c, "stateful-service", 10)
 
-	services, ok := results["services"]
+	services, ok := results.Hits["services"]
 	if !ok {
 		t.Fatal("expected services in results")
 	}
@@ -117,7 +117,7 @@ func TestSearchRedactsSecrets(t *testing.T) {
 
 	results := cluster.Search(context.Background(), c, "my-secret-token", 10)
 
-	secrets, ok := results["secrets"]
+	secrets, ok := results.Hits["secrets"]
 	if !ok {
 		t.Fatal("expected secrets in results")
 	}
@@ -139,7 +139,7 @@ func TestSearchRedactsSecrets(t *testing.T) {
 func TestSearchLimit(t *testing.T) {
 	c := newTestCache()
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		svc := swarm.Service{}
 		svc.ID = "svc-lim-" + string(rune('a'+i))
 		svc.Spec.Name = "limit-service-" + string(rune('a'+i))
@@ -148,9 +148,15 @@ func TestSearchLimit(t *testing.T) {
 
 	results := cluster.Search(context.Background(), c, "limit-service", 2)
 
-	services, ok := results["services"]
+	services, ok := results.Hits["services"]
 	if !ok {
 		t.Fatal("expected services in results")
+	}
+	if results.Counts["services"] != 5 {
+		t.Errorf("counts[services] = %d, want 5 (pre-cap total)", results.Counts["services"])
+	}
+	if results.Total != 5 {
+		t.Errorf("total = %d, want 5", results.Total)
 	}
 	if len(services) > 2 {
 		t.Errorf("len(services) = %d, want at most 2 (limit enforced)", len(services))

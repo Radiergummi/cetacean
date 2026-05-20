@@ -7,6 +7,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
 
@@ -56,7 +57,7 @@ func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 		tasks,
 		func(t swarm.Task) string { return "task:" + t.ID },
 	)
-	enriched := h.enrichTasks(tasks)
+	enriched := cluster.EnrichTasks(h.cache, tasks)
 	writeCachedJSON(
 		w,
 		r,

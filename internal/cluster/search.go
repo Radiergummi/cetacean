@@ -19,17 +19,31 @@ type SearchResult struct {
 	State  string `json:"state,omitempty"`
 }
 
+// SearchResults is the structured result of a global search.
+//
+// Hits is keyed by resource type plural ("services", "nodes", ...) and is
+// capped at `limit` per type. Counts is the pre-cap total of matches per type
+// — clients use Counts to render "X matches, showing N" affordances. Total is
+// the sum of Counts.
+type SearchResults struct {
+	Hits   map[string][]SearchResult
+	Counts map[string]int
+	Total  int
+}
+
 // Search returns matches across all swarm resource types.
-// Results are grouped by type and capped at limit per type (0 means up to 1000).
-// Secret data is never returned; RedactSecret is applied where applicable.
-func Search(ctx context.Context, c *cache.Cache, query string, limit int) map[string][]SearchResult {
+//
+// Each per-type slice in Hits is capped at limit (0 means up to 1000), while
+// Counts always reports the pre-cap total so callers can show "X matches" even
+// when displaying a small subset. Secret data is never returned; RedactSecret
+// is applied where applicable.
+func Search(ctx context.Context, c *cache.Cache, query string, limit int) SearchResults {
 	if limit == 0 || limit > 1000 {
 		limit = 1000
 	}
 
 	ql := strings.ToLower(query)
 
-	// Fixed-size array indexed by search type for lock-free parallel writes.
 	const (
 		stServices = iota
 		stStacks
@@ -44,10 +58,10 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) map[st
 	type typeResults struct {
 		key     string
 		results []SearchResult
+		count   int
 	}
 	var allResults [stCount]typeResults
 
-	// Build service name lookup for tasks (needed by services + tasks searches).
 	services := c.ListServices()
 	svcNames := make(map[string]string, len(services))
 	for _, s := range services {
@@ -61,6 +75,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) map[st
 	go func() {
 		defer wg.Done()
 		var matches []SearchResult
+		count := 0
 		for _, s := range services {
 			if ctx.Err() != nil {
 				return
@@ -72,25 +87,30 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) map[st
 			if !hit {
 				hit = labelsMatch(s.Spec.Labels, ql)
 			}
-			if hit && len(matches) < limit {
-				detail := ""
-				if s.Spec.TaskTemplate.ContainerSpec != nil {
-					detail = s.Spec.TaskTemplate.ContainerSpec.Image
-					if i := strings.Index(detail, "@sha256:"); i > 0 {
-						detail = detail[:i]
-					}
-				}
-				running := c.RunningTaskCount(s.ID)
-				matches = append(matches, SearchResult{
-					Type:   "services",
-					ID:     s.ID,
-					Name:   s.Spec.Name,
-					Detail: detail,
-					State:  DeriveServiceState(s, running),
-				})
+			if !hit {
+				continue
 			}
+			count++
+			if len(matches) >= limit {
+				continue
+			}
+			detail := ""
+			if s.Spec.TaskTemplate.ContainerSpec != nil {
+				detail = s.Spec.TaskTemplate.ContainerSpec.Image
+				if i := strings.Index(detail, "@sha256:"); i > 0 {
+					detail = detail[:i]
+				}
+			}
+			running := c.RunningTaskCount(s.ID)
+			matches = append(matches, SearchResult{
+				Type:   "services",
+				ID:     s.ID,
+				Name:   s.Spec.Name,
+				Detail: detail,
+				State:  DeriveServiceState(s, running),
+			})
 		}
-		allResults[stServices] = typeResults{"services", matches}
+		allResults[stServices] = typeResults{"services", matches, count}
 	}()
 
 	// Stacks
@@ -98,20 +118,26 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) map[st
 		defer wg.Done()
 		stacks := c.ListStacks()
 		var matches []SearchResult
+		count := 0
 		for _, s := range stacks {
 			if ctx.Err() != nil {
 				return
 			}
-			if ContainsFold(s.Name, ql) && len(matches) < limit {
-				matches = append(matches, SearchResult{
-					Type:   "stacks",
-					ID:     s.Name,
-					Name:   s.Name,
-					Detail: fmt.Sprintf("%d services", len(s.Services)),
-				})
+			if !ContainsFold(s.Name, ql) {
+				continue
 			}
+			count++
+			if len(matches) >= limit {
+				continue
+			}
+			matches = append(matches, SearchResult{
+				Type:   "stacks",
+				ID:     s.Name,
+				Name:   s.Name,
+				Detail: fmt.Sprintf("%d services", len(s.Services)),
+			})
 		}
-		allResults[stStacks] = typeResults{"stacks", matches}
+		allResults[stStacks] = typeResults{"stacks", matches, count}
 	}()
 
 	// Nodes
@@ -119,6 +145,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) map[st
 		defer wg.Done()
 		nodes := c.ListNodes()
 		var matches []SearchResult
+		count := 0
 		for _, n := range nodes {
 			if ctx.Err() != nil {
 				return
@@ -130,16 +157,21 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) map[st
 			if !hit {
 				hit = labelsMatch(n.Spec.Labels, ql)
 			}
-			if hit && len(matches) < limit {
-				matches = append(matches, SearchResult{
-					Type:   "nodes",
-					ID:     n.ID,
-					Name:   n.Description.Hostname,
-					Detail: fmt.Sprintf("%s, %s", n.Spec.Role, n.Status.State),
-				})
+			if !hit {
+				continue
 			}
+			count++
+			if len(matches) >= limit {
+				continue
+			}
+			matches = append(matches, SearchResult{
+				Type:   "nodes",
+				ID:     n.ID,
+				Name:   n.Description.Hostname,
+				Detail: fmt.Sprintf("%s, %s", n.Spec.Role, n.Status.State),
+			})
 		}
-		allResults[stNodes] = typeResults{"nodes", matches}
+		allResults[stNodes] = typeResults{"nodes", matches, count}
 	}()
 
 	// Tasks
@@ -147,6 +179,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) map[st
 		defer wg.Done()
 		tasks := c.ListTasks()
 		var matches []SearchResult
+		count := 0
 		for _, t := range tasks {
 			if ctx.Err() != nil {
 				return
@@ -161,24 +194,29 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) map[st
 			if !hit && t.Spec.ContainerSpec != nil {
 				hit = labelsMatch(t.Spec.ContainerSpec.Labels, ql)
 			}
-			if hit && len(matches) < limit {
-				detail := ""
-				if t.Spec.ContainerSpec != nil {
-					detail = t.Spec.ContainerSpec.Image
-					if i := strings.Index(detail, "@sha256:"); i > 0 {
-						detail = detail[:i]
-					}
-				}
-				matches = append(matches, SearchResult{
-					Type:   "tasks",
-					ID:     t.ID,
-					Name:   taskName,
-					Detail: detail,
-					State:  string(t.Status.State),
-				})
+			if !hit {
+				continue
 			}
+			count++
+			if len(matches) >= limit {
+				continue
+			}
+			detail := ""
+			if t.Spec.ContainerSpec != nil {
+				detail = t.Spec.ContainerSpec.Image
+				if i := strings.Index(detail, "@sha256:"); i > 0 {
+					detail = detail[:i]
+				}
+			}
+			matches = append(matches, SearchResult{
+				Type:   "tasks",
+				ID:     t.ID,
+				Name:   taskName,
+				Detail: detail,
+				State:  string(t.Status.State),
+			})
 		}
-		allResults[stTasks] = typeResults{"tasks", matches}
+		allResults[stTasks] = typeResults{"tasks", matches, count}
 	}()
 
 	// Configs
@@ -186,6 +224,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) map[st
 		defer wg.Done()
 		configs := c.ListConfigs()
 		var matches []SearchResult
+		count := 0
 		for _, cfg := range configs {
 			if ctx.Err() != nil {
 				return
@@ -194,16 +233,21 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) map[st
 			if !hit {
 				hit = labelsMatch(cfg.Spec.Labels, ql)
 			}
-			if hit && len(matches) < limit {
-				matches = append(matches, SearchResult{
-					Type:   "configs",
-					ID:     cfg.ID,
-					Name:   cfg.Spec.Name,
-					Detail: cfg.CreatedAt.Format(time.RFC3339),
-				})
+			if !hit {
+				continue
 			}
+			count++
+			if len(matches) >= limit {
+				continue
+			}
+			matches = append(matches, SearchResult{
+				Type:   "configs",
+				ID:     cfg.ID,
+				Name:   cfg.Spec.Name,
+				Detail: cfg.CreatedAt.Format(time.RFC3339),
+			})
 		}
-		allResults[stConfigs] = typeResults{"configs", matches}
+		allResults[stConfigs] = typeResults{"configs", matches, count}
 	}()
 
 	// Secrets
@@ -211,6 +255,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) map[st
 		defer wg.Done()
 		secrets := c.ListSecrets()
 		var matches []SearchResult
+		count := 0
 		for _, s := range secrets {
 			if ctx.Err() != nil {
 				return
@@ -220,16 +265,21 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) map[st
 			if !hit {
 				hit = labelsMatch(s.Spec.Labels, ql)
 			}
-			if hit && len(matches) < limit {
-				matches = append(matches, SearchResult{
-					Type:   "secrets",
-					ID:     s.ID,
-					Name:   s.Spec.Name,
-					Detail: s.CreatedAt.Format(time.RFC3339),
-				})
+			if !hit {
+				continue
 			}
+			count++
+			if len(matches) >= limit {
+				continue
+			}
+			matches = append(matches, SearchResult{
+				Type:   "secrets",
+				ID:     s.ID,
+				Name:   s.Spec.Name,
+				Detail: s.CreatedAt.Format(time.RFC3339),
+			})
 		}
-		allResults[stSecrets] = typeResults{"secrets", matches}
+		allResults[stSecrets] = typeResults{"secrets", matches, count}
 	}()
 
 	// Networks
@@ -237,6 +287,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) map[st
 		defer wg.Done()
 		networks := c.ListNetworks()
 		var matches []SearchResult
+		count := 0
 		for _, n := range networks {
 			if ctx.Err() != nil {
 				return
@@ -245,16 +296,21 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) map[st
 			if !hit {
 				hit = labelsMatch(n.Labels, ql)
 			}
-			if hit && len(matches) < limit {
-				matches = append(matches, SearchResult{
-					Type:   "networks",
-					ID:     n.ID,
-					Name:   n.Name,
-					Detail: n.Driver,
-				})
+			if !hit {
+				continue
 			}
+			count++
+			if len(matches) >= limit {
+				continue
+			}
+			matches = append(matches, SearchResult{
+				Type:   "networks",
+				ID:     n.ID,
+				Name:   n.Name,
+				Detail: n.Driver,
+			})
 		}
-		allResults[stNetworks] = typeResults{"networks", matches}
+		allResults[stNetworks] = typeResults{"networks", matches, count}
 	}()
 
 	// Volumes
@@ -262,6 +318,7 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) map[st
 		defer wg.Done()
 		volumes := c.ListVolumes()
 		var matches []SearchResult
+		count := 0
 		for _, v := range volumes {
 			if ctx.Err() != nil {
 				return
@@ -270,27 +327,38 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) map[st
 			if !hit {
 				hit = labelsMatch(v.Labels, ql)
 			}
-			if hit && len(matches) < limit {
-				matches = append(matches, SearchResult{
-					Type:   "volumes",
-					ID:     v.Name,
-					Name:   v.Name,
-					Detail: v.Driver,
-				})
+			if !hit {
+				continue
 			}
+			count++
+			if len(matches) >= limit {
+				continue
+			}
+			matches = append(matches, SearchResult{
+				Type:   "volumes",
+				ID:     v.Name,
+				Name:   v.Name,
+				Detail: v.Driver,
+			})
 		}
-		allResults[stVolumes] = typeResults{"volumes", matches}
+		allResults[stVolumes] = typeResults{"volumes", matches, count}
 	}()
 
 	wg.Wait()
 
-	results := make(map[string][]SearchResult, stCount)
-	for _, tr := range allResults {
-		if len(tr.results) > 0 {
-			results[tr.key] = tr.results
-		}
+	out := SearchResults{
+		Hits:   make(map[string][]SearchResult, stCount),
+		Counts: make(map[string]int, stCount),
 	}
-	return results
+	for _, tr := range allResults {
+		if tr.count == 0 {
+			continue
+		}
+		out.Hits[tr.key] = tr.results
+		out.Counts[tr.key] = tr.count
+		out.Total += tr.count
+	}
+	return out
 }
 
 // ContainsFold reports whether s contains substr using case-insensitive

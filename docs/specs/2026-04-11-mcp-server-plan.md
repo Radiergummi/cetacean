@@ -26,7 +26,7 @@ Worked on branch `feat/mcp-server` (off `main`). Each task lands as one or more 
 | 4 — Token stores | ✅ done | `f7added`, `3a56a78` | Theft-detection invariant; `Groups` cloned on return; `crypto/rand` outside lock. |
 | 5 — OAuth 2.1 endpoints | ✅ done | `6bbad08`, `8982000` | AS metadata, PRM, authorize+consent, token, revoke, DCR. Resource-mismatch on refresh-token grant revokes the family (Rotate first, then validate). |
 | 6 — Shared cluster layer | ✅ done | `2bb4ec3`, `f550d1f` | `internal/cluster/` with `EnrichTask`, `RedactSecret`, `DeriveServiceState`, `Search`. Helpers **copied** from `api/handlers.go`; originals stay until Task 7. |
-| 7 — REST handler refactor | ⏳ pending | — | See **Notes from implementation** below for the `Search` count divergence. |
+| 7 — REST handler refactor | ✅ done | _pending commit_ | Picked **Option B** — `cluster.Search` now returns `SearchResults{Hits, Counts, Total}` so REST keeps the pre-cap `Counts`/`Total` exercised by `TestHandleSearch_CapsAtThreePerType`. `api.EnrichedTask` is a type alias to `cluster.EnrichedTask`. Helpers `containsFold`/`segmentPrefixMatch`/`labelsMatch` and `isSeparator`/`separatorReplacer` deleted from `api/handlers.go`; call sites use `cluster.ContainsFold` / `cluster.SegmentPrefixMatch`. |
 | 8 — MCP server core + router wiring | ⏳ pending | — | |
 | 9 — MCP resources | ⏳ pending | — | |
 | 10 — MCP tools | ⏳ pending | — | |
@@ -41,8 +41,9 @@ Worked on branch `feat/mcp-server` (off `main`). Each task lands as one or more 
 - **`Server` struct fields** (Task 8/10): includes `globalOpsLevel config.OperationsLevel`, `registeredTools []toolDef`, `recEngine recEngine`. `recEngine` is a narrow interface defined in Task 8's snippet; Task 9 audits the real recommendations API.
 - **`handleReadResource`** must match `mcp-go`'s `ResourceHandlerFunc` signature `func(ctx, mcp.ReadResourceRequest) ([]mcp.ResourceContents, error)` — already updated in Task 9 snippet.
 - **`filterToolsForIdentity`** is wired but a pass-through by default; refinements that hide write tools from no-write-grant identities are a follow-up. Tier and ACL are already enforced at registration and call time respectively.
-- **`cluster.Search` returns no count metadata** (intentional — it's a search-with-cap query). REST currently returns `Counts` and `Total` per type as part of `CollectionResponse`. Task 7 needs to either (a) extend `cluster.Search`'s return type, or (b) keep counting at the REST wrapper layer. Pick one; do not silently change the REST response shape.
-- **`internal/api/` helpers `containsFold`, `containsFoldNoAlloc`, `segmentPrefixMatch`, `labelsMatch`** are duplicated in `internal/cluster/` (exported as `ContainsFold`, `SegmentPrefixMatch`; `labelsMatch` is unexported). Task 7 deletes the originals in `api/` and updates call sites to use the cluster names.
+- **`cluster.Search` returns `SearchResults{Hits, Counts, Total}`** (Task 7 picked Option B). The existing REST test `TestHandleSearch_CapsAtThreePerType` asserts the pre-cap `Counts` semantic; keeping it required a struct return rather than a bare map. MCP callers should treat `Counts` as informational.
+- **`internal/api/` helpers `containsFold`, `containsFoldNoAlloc`, `segmentPrefixMatch`, `labelsMatch`, `isSeparator`, `separatorReplacer`** were duplicated in `internal/cluster/` (exported as `ContainsFold`, `SegmentPrefixMatch`; `labelsMatch` is unexported). Task 7 deleted the originals in `api/`; remaining call sites (`searchFilter` in `handlers.go`, `TestSegmentPrefixMatch` in `handlers_test.go`) now use the cluster names. `BenchmarkLabelsMatch` in `handlers_bench_test.go` was removed (it benchmarked deleted code; equivalent coverage belongs in `internal/cluster/`).
+- **`api.EnrichedTask` is a type alias** to `cluster.EnrichedTask` (Task 7). The struct definition moved to the cluster package; the alias keeps `responses.go` and existing test imports working without churn.
 - **OAuth tests** rely on `newTestServer(t)` defined in `server_test.go` and reused across the four `_test.go` files in the package. If Task 8 introduces fixtures, follow the same single-helper pattern.
 
 ---

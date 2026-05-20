@@ -16,6 +16,7 @@ import (
 
 	promapi "github.com/radiergummi/cetacean/internal/api/prometheus"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 func noopErrorWriter(w http.ResponseWriter, _ *http.Request, _, detail string) {
@@ -2306,10 +2307,10 @@ func TestSegmentPrefixMatch(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("%s_in_%s", tt.query, tt.target), func(t *testing.T) {
-			got := segmentPrefixMatch(tt.target, tt.query)
+			got := cluster.SegmentPrefixMatch(tt.target, tt.query)
 			if got != tt.want {
 				t.Errorf(
-					"segmentPrefixMatch(%q, %q) = %v, want %v",
+					"SegmentPrefixMatch(%q, %q) = %v, want %v",
 					tt.target,
 					tt.query,
 					got,
