@@ -1,0 +1,266 @@
+package oauth
+
+import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"sync"
+	"time"
+)
+
+// generateOpaqueToken returns a 32-byte cryptographically random token
+// encoded as base64url (no padding). Panics on RNG failure.
+func generateOpaqueToken() string {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		panic("mcp/oauth: crypto/rand failure: " + err.Error())
+	}
+
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// hashToken returns the SHA-256 hash of raw encoded as base64url (no padding).
+func hashToken(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
+// ---------------------------------------------------------------------------
+// AuthCodeStore
+// ---------------------------------------------------------------------------
+
+// AuthCodeData carries the claims bound to a single-use authorization code.
+type AuthCodeData struct {
+	ClientID      string
+	RedirectURI   string
+	CodeChallenge string
+	Resource      string // RFC 8707 — the MCP endpoint URL the code is bound to
+	Subject       string
+	Groups        []string
+}
+
+type authCodeEntry struct {
+	data      AuthCodeData
+	expiresAt time.Time
+}
+
+// AuthCodeStore is a short-lived, single-use authorization code store.
+// Raw codes are never persisted; only their SHA-256 hashes are stored.
+type AuthCodeStore struct {
+	mu     sync.Mutex
+	codes  map[string]authCodeEntry // hash → entry
+}
+
+// NewAuthCodeStore returns a ready-to-use AuthCodeStore.
+func NewAuthCodeStore() *AuthCodeStore {
+	return &AuthCodeStore{
+		codes: make(map[string]authCodeEntry),
+	}
+}
+
+// Issue mints a new authorization code, stores a hash of it, and returns
+// the raw code to the caller. The code is valid for ttl from now.
+func (s *AuthCodeStore) Issue(data AuthCodeData, ttl time.Duration) string {
+	raw := generateOpaqueToken()
+	h := hashToken(raw)
+
+	s.mu.Lock()
+	s.codes[h] = authCodeEntry{
+		data:      data,
+		expiresAt: time.Now().Add(ttl),
+	}
+	s.mu.Unlock()
+
+	return raw
+}
+
+// Redeem looks up the code by hash, always deletes it (single-use), and
+// returns the bound data only when the entry existed and was not expired.
+func (s *AuthCodeStore) Redeem(code string) (AuthCodeData, bool) {
+	h := hashToken(code)
+
+	s.mu.Lock()
+	entry, exists := s.codes[h]
+	delete(s.codes, h)
+	s.mu.Unlock()
+
+	if !exists {
+		return AuthCodeData{}, false
+	}
+	if time.Now().After(entry.expiresAt) {
+		return AuthCodeData{}, false
+	}
+
+	return entry.data, true
+}
+
+// ---------------------------------------------------------------------------
+// RefreshTokenStore
+// ---------------------------------------------------------------------------
+
+// RefreshTokenData carries the claims bound to a refresh token.
+type RefreshTokenData struct {
+	Subject  string
+	Groups   []string
+	ClientID string
+	Resource string // RFC 8707 — the MCP endpoint URL this grant is bound to
+	grantID  string // assigned and tracked by the store; unexported
+}
+
+// RotateResult is returned by RefreshTokenStore.Rotate.
+type RotateResult struct {
+	NewToken string          // empty when OK is false
+	Data     RefreshTokenData
+	OK       bool
+	Theft    bool // true when a previously-consumed token was re-presented
+}
+
+type refreshTokenEntry struct {
+	data      RefreshTokenData
+	expiresAt time.Time
+}
+
+// RefreshTokenStore manages long-lived refresh tokens with rotation-on-use
+// and grant-family theft detection. Raw tokens are never persisted; only
+// their SHA-256 hashes are held in memory.
+type RefreshTokenStore struct {
+	mu       sync.Mutex
+	tokens   map[string]refreshTokenEntry // hash → live entry
+	consumed map[string]string            // hash → grantID (rotated-away tokens)
+	grants   map[string][]string          // grantID → ordered slice of all hashes ever issued
+}
+
+// NewRefreshTokenStore returns a ready-to-use RefreshTokenStore.
+func NewRefreshTokenStore() *RefreshTokenStore {
+	return &RefreshTokenStore{
+		tokens:   make(map[string]refreshTokenEntry),
+		consumed: make(map[string]string),
+		grants:   make(map[string][]string),
+	}
+}
+
+// Issue mints a new refresh token for a fresh grant family and returns the
+// raw token. A unique grantID is stamped onto a copy of data.
+func (s *RefreshTokenStore) Issue(data RefreshTokenData, ttl time.Duration) string {
+	raw := generateOpaqueToken()
+	h := hashToken(raw)
+
+	grantID := generateOpaqueToken()
+	data.grantID = grantID
+
+	s.mu.Lock()
+	s.tokens[h] = refreshTokenEntry{
+		data:      data,
+		expiresAt: time.Now().Add(ttl),
+	}
+	s.grants[grantID] = []string{h}
+	s.mu.Unlock()
+
+	return raw
+}
+
+// Validate returns the data for a live, unexpired token without consuming it.
+// It is safe to call concurrently without side effects on store state.
+func (s *RefreshTokenStore) Validate(token string) (RefreshTokenData, bool) {
+	h := hashToken(token)
+
+	s.mu.Lock()
+	entry, exists := s.tokens[h]
+	s.mu.Unlock()
+
+	if !exists {
+		return RefreshTokenData{}, false
+	}
+	if time.Now().After(entry.expiresAt) {
+		return RefreshTokenData{}, false
+	}
+
+	return entry.data, true
+}
+
+// Rotate implements refresh-token rotation with theft detection.
+//
+// Algorithm:
+//  1. Hash the presented token.
+//  2. Replay check FIRST: if the hash is in consumed, burn the entire grant
+//     family and return RotateResult{Theft: true}.
+//  3. Look up in live tokens; if absent, return RotateResult{}.
+//  4. If expired, delete and return RotateResult{}.
+//  5. Move old hash to consumed, mint a fresh token, register it in tokens
+//     and grants, return RotateResult{OK: true, NewToken: ..., Data: ...}.
+func (s *RefreshTokenStore) Rotate(oldToken string, ttl time.Duration) RotateResult {
+	oldHash := hashToken(oldToken)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Step 2: replay / theft check runs before anything else.
+	if grantID, isConsumed := s.consumed[oldHash]; isConsumed {
+		s.revokeGrantLocked(grantID)
+		return RotateResult{Theft: true}
+	}
+
+	// Step 3: live token lookup.
+	entry, exists := s.tokens[oldHash]
+	if !exists {
+		return RotateResult{}
+	}
+
+	// Step 4: expiry check.
+	if time.Now().After(entry.expiresAt) {
+		delete(s.tokens, oldHash)
+		return RotateResult{}
+	}
+
+	// Step 5: rotate.
+	grantID := entry.data.grantID
+	delete(s.tokens, oldHash)
+	s.consumed[oldHash] = grantID
+
+	newRaw := generateOpaqueToken()
+	newHash := hashToken(newRaw)
+
+	s.tokens[newHash] = refreshTokenEntry{
+		data:      entry.data,
+		expiresAt: time.Now().Add(ttl),
+	}
+	s.grants[grantID] = append(s.grants[grantID], newHash)
+
+	return RotateResult{
+		NewToken: newRaw,
+		Data:     entry.data,
+		OK:       true,
+	}
+}
+
+// RevokeGrant revokes every token in the grant family that contains the
+// given token, whether that token is currently live or already consumed.
+func (s *RefreshTokenStore) RevokeGrant(token string) {
+	h := hashToken(token)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Determine grantID from either the live tokens map or the consumed map.
+	grantID := ""
+	if entry, exists := s.tokens[h]; exists {
+		grantID = entry.data.grantID
+	} else if id, exists := s.consumed[h]; exists {
+		grantID = id
+	}
+
+	if grantID != "" {
+		s.revokeGrantLocked(grantID)
+	}
+}
+
+// revokeGrantLocked removes every hash ever associated with grantID from both
+// tokens and consumed, then drops the grant record. Must be called with s.mu held.
+func (s *RefreshTokenStore) revokeGrantLocked(grantID string) {
+	hashes := s.grants[grantID]
+	for _, h := range hashes {
+		delete(s.tokens, h)
+		delete(s.consumed, h)
+	}
+	delete(s.grants, grantID)
+}
