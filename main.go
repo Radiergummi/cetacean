@@ -196,7 +196,7 @@ func main() {
 	defer broadcaster.Close()
 
 	// Wire cache changes to SSE broadcaster
-	stateCache.SetOnChange(func(e cache.Event) {
+	stateCache.AddOnChangeListener(func(e cache.Event) {
 		broadcaster.Broadcast(e)
 	})
 

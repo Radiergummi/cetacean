@@ -91,6 +91,11 @@ type ClusterSnapshot struct {
 
 type OnChangeFunc func(Event)
 
+type listenerEntry struct {
+	id uint64
+	fn OnChangeFunc
+}
+
 type Cache struct {
 	mu             sync.RWMutex
 	nodes          ResourceMap[swarm.Node]
@@ -104,7 +109,9 @@ type Cache struct {
 	volumes        ResourceMap[volume.Volume]
 	stacks         map[string]Stack
 	lastSync       time.Time
-	onChange       OnChangeFunc
+	listenerMu     sync.RWMutex
+	listeners      []listenerEntry
+	nextListenerID uint64
 	history        *History
 	serviceRef     serviceRefIndex
 	restarts       *RestartTracker
@@ -118,9 +125,11 @@ func New(onChange OnChangeFunc) *Cache {
 		tasksByNode:    make(map[string]map[string]struct{}),
 		stacks:         make(map[string]Stack),
 		serviceRef:     newServiceRefIndex(),
-		onChange:       onChange,
 		history:        NewHistory(10000),
 		restarts:       NewRestartTracker(7*24*time.Hour, time.Hour),
+	}
+	if onChange != nil {
+		c.AddOnChangeListener(onChange)
 	}
 
 	c.nodes = ResourceMap[swarm.Node]{
@@ -204,8 +213,25 @@ func (c *Cache) RestartCount(serviceID string, lookback time.Duration) uint64 {
 // Restarts returns the underlying RestartTracker for snapshot serialization.
 func (c *Cache) Restarts() *RestartTracker { return c.restarts }
 
-func (c *Cache) SetOnChange(fn OnChangeFunc) {
-	c.onChange = fn
+// AddOnChangeListener registers fn to be called on every cache change event.
+// The returned cancel function removes the listener; it is safe to call multiple times.
+func (c *Cache) AddOnChangeListener(fn OnChangeFunc) func() {
+	c.listenerMu.Lock()
+	id := c.nextListenerID
+	c.nextListenerID++
+	c.listeners = append(c.listeners, listenerEntry{id: id, fn: fn})
+	c.listenerMu.Unlock()
+
+	return func() {
+		c.listenerMu.Lock()
+		for i, entry := range c.listeners {
+			if entry.id == id {
+				c.listeners = append(c.listeners[:i], c.listeners[i+1:]...)
+				break
+			}
+		}
+		c.listenerMu.Unlock()
+	}
 }
 
 func (c *Cache) notify(e Event) {
@@ -227,8 +253,18 @@ func (c *Cache) notify(e Event) {
 	} else {
 		e.HistoryID = c.history.Count()
 	}
-	if c.onChange != nil {
-		c.onChange(e)
+
+	// Snapshot listeners under read lock, then call outside the lock to avoid
+	// re-entrant deadlock if a listener calls back into the cache.
+	c.listenerMu.RLock()
+	fns := make([]OnChangeFunc, len(c.listeners))
+	for i, entry := range c.listeners {
+		fns[i] = entry.fn
+	}
+	c.listenerMu.RUnlock()
+
+	for _, fn := range fns {
+		fn(e)
 	}
 }
 

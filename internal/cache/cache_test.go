@@ -1198,6 +1198,44 @@ func TestCache_SetService_RefChangeDiff(t *testing.T) {
 	}
 }
 
+func TestCache_MultipleListeners(t *testing.T) {
+	c := New(nil)
+
+	var aSeen, bSeen []Event
+	cancelA := c.AddOnChangeListener(func(e Event) { aSeen = append(aSeen, e) })
+	cancelB := c.AddOnChangeListener(func(e Event) { bSeen = append(bSeen, e) })
+	t.Cleanup(cancelA)
+	t.Cleanup(cancelB)
+
+	c.SetNode(swarm.Node{ID: "node1"})
+	if len(aSeen) != 1 || len(bSeen) != 1 {
+		t.Fatalf("listeners received %d / %d events, want 1 / 1", len(aSeen), len(bSeen))
+	}
+}
+
+func TestCache_ListenerCancel(t *testing.T) {
+	c := New(nil)
+
+	var seen int
+	cancel := c.AddOnChangeListener(func(Event) { seen++ })
+	c.SetNode(swarm.Node{ID: "node1"})
+	cancel()
+	c.SetNode(swarm.Node{ID: "node2"})
+
+	if seen != 1 {
+		t.Fatalf("listener saw %d events after cancel, want 1", seen)
+	}
+}
+
+func TestCache_LegacyConstructorStillFires(t *testing.T) {
+	var seen int
+	c := New(func(Event) { seen++ })
+	c.SetNode(swarm.Node{ID: "node1"})
+	if seen != 1 {
+		t.Fatalf("constructor callback fired %d times, want 1", seen)
+	}
+}
+
 func TestCache_DeleteService_EmitsCrossRefEvents(t *testing.T) {
 	var events []Event
 	c := New(func(e Event) { events = append(events, e) })
