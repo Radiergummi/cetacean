@@ -25,6 +25,17 @@ const cimdMaxRedirects = 5
 // cimdMaxBodyBytes is the hard cap on the response body (5 KiB).
 const cimdMaxBodyBytes = 5 * 1024
 
+// cimdFetchTimeout bounds the total per-fetch budget end-to-end.
+const cimdFetchTimeout = 5 * time.Second
+
+// cgnatBlock is RFC 6598 (100.64.0.0/10) — carrier-grade NAT and Tailscale's
+// default address pool. net.IP.IsPrivate covers RFC 1918 and ULA but not
+// CGNAT, so we add it explicitly.
+var cgnatBlock = func() *net.IPNet {
+	_, n, _ := net.ParseCIDR("100.64.0.0/10")
+	return n
+}()
+
 // Sentinel errors for CIMD fetch failures. All are wrapped with %w so callers
 // can use errors.Is for fine-grained handling.
 var (
@@ -94,9 +105,11 @@ type CIMDFetcher struct {
 	cache map[string]cachedEntry
 }
 
-// defaultCIMDClient is used when CIMDFetcher.Client is nil.
+// defaultCIMDClient is used when CIMDFetcher.Client is nil. The matching
+// per-fetch context.WithTimeout sets the same upper bound so the two
+// mechanisms agree and neither extends the other.
 var defaultCIMDClient = &http.Client{
-	Timeout: 10 * time.Second,
+	Timeout: cimdFetchTimeout,
 }
 
 // httpClient returns an HTTP client with the SSRF-aware redirect policy applied.
@@ -151,7 +164,7 @@ func (f *CIMDFetcher) Fetch(ctx context.Context, clientID string) (*ClientMetada
 
 	// Step 5: build the request with a 5-second per-fetch timeout layered on
 	// top of any parent context deadline.
-	fetchCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	fetchCtx, cancel := context.WithTimeout(ctx, cimdFetchTimeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(fetchCtx, http.MethodGet, clientID, nil)
@@ -272,6 +285,9 @@ func (f *CIMDFetcher) checkIP(ip net.IP) error {
 	}
 	if ip.IsPrivate() {
 		return fmt.Errorf("%w: resolved to private address %s", ErrCIMDSSRFBlocked, ip)
+	}
+	if cgnatBlock.Contains(ip) {
+		return fmt.Errorf("%w: resolved to CGNAT address %s", ErrCIMDSSRFBlocked, ip)
 	}
 	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
 		return fmt.Errorf("%w: resolved to link-local address %s", ErrCIMDSSRFBlocked, ip)

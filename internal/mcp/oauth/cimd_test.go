@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,8 +13,8 @@ import (
 )
 
 // serveMetadata returns an http.HandlerFunc that serves a ClientMetadata JSON
-// document with client_id set to clientID. If clientID is empty, the handler
-// sets it to the host from the incoming request (i.e. the test server URL).
+// document. When clientID is non-empty it overrides meta.ClientID; otherwise
+// the document is returned as-is.
 func serveMetadata(clientID string, meta ClientMetadata) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		m := meta
@@ -266,5 +267,25 @@ func TestCIMDFetchNonOKStatus(t *testing.T) {
 	}
 	if fmt.Sprintf("%v", err) == "" {
 		t.Fatal("error message is empty")
+	}
+}
+
+
+func TestCIMDFetchBlocksCGNAT(t *testing.T) {
+	f := &CIMDFetcher{}
+	if err := f.checkIP(net.ParseIP("100.64.1.1")); !errors.Is(err, ErrCIMDSSRFBlocked) {
+		t.Errorf("100.64.1.1: got %v, want errors.Is(ErrCIMDSSRFBlocked)", err)
+	}
+	if err := f.checkIP(net.ParseIP("100.127.255.254")); !errors.Is(err, ErrCIMDSSRFBlocked) {
+		t.Errorf("100.127.255.254 (upper CGNAT): got %v, want errors.Is(ErrCIMDSSRFBlocked)", err)
+	}
+	// Just outside CGNAT range should not trip CGNAT (other checks might).
+	if err := f.checkIP(net.ParseIP("100.63.255.255")); errors.Is(err, ErrCIMDSSRFBlocked) {
+		// Allowed unless caught by another rule; we only care that the CGNAT branch did not falsely match.
+		if !strings.Contains(err.Error(), "CGNAT") {
+			// Other SSRF reason is OK.
+		} else {
+			t.Errorf("100.63.255.255: incorrectly classified as CGNAT")
+		}
 	}
 }
