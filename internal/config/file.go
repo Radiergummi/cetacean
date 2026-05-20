@@ -63,6 +63,7 @@ type fileConfig struct {
 type fileMCP struct {
 	Enabled         *bool         `toml:"enabled"`
 	OperationsLevel *int          `toml:"operations_level"`
+	Issuer          *string       `toml:"issuer"`
 	SigningKey      *string       `toml:"signing_key"`
 	AccessTokenTTL  *string       `toml:"access_token_ttl"`
 	RefreshTokenTTL *string       `toml:"refresh_token_ttl"`

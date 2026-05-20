@@ -46,8 +46,8 @@ Worked on branch `feat/mcp-server` (off `main`). Each task lands as one or more 
 - **`api.EnrichedTask` is a type alias** to `cluster.EnrichedTask` (Task 7). The struct definition moved to the cluster package; the alias keeps `responses.go` and existing test imports working without churn.
 - **OAuth tests** rely on `newTestServer(t)` defined in `server_test.go` and reused across the four `_test.go` files in the package. If Task 8 introduces fixtures, follow the same single-helper pattern.
 - **`oauth.Server.VerifyAccessToken`** was added during Task 8 so the MCP HTTP middleware can validate bearer tokens without depending on `*oauth.TokenIssuer` directly.
-- **MCP issuer URL** is currently derived from `cfg.ListenAddr` + TLS scheme. This is wrong behind a reverse proxy or for hosts that listen on `:port`. A future `CETACEAN_MCP_ISSUER` env var should override it; tracked as a known gap.
-- **DCR rate limiting** in `oauth.NewServer` uses `cfg.MCP.DCRRateLimit` as a per-minute limit per the existing `newClientRegistry` contract — but the design's variable doc reads "per hour". Resolve before Task 14 ships docs (the registry or the doc/env-var name needs to move).
+- **MCP issuer URL** override shipped via `CETACEAN_MCP_ISSUER` (or `[mcp].issuer`). When unset, the issuer continues to derive from listen address + TLS scheme. Validation rejects non-http(s) schemes, missing hosts, fragments, and query strings; trailing slashes are trimmed.
+- **DCR rate limit doc resolved**: the implementation in `dcr.go` uses a 1-hour window, matching the design and the CLAUDE.md env var description; the stale "per minute" comment on `MCPConfig.DCRRateLimit` was corrected.
 
 ---
 

@@ -104,6 +104,52 @@ func TestMCPConfigFromEnv(t *testing.T) {
 	}
 }
 
+func TestMCPConfigIssuerOverride(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_ISSUER", "https://cetacean.example.com/")
+
+	cfg, err := Load(nil, nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.MCP.Issuer != "https://cetacean.example.com" {
+		t.Errorf("Issuer = %q, want trailing slash trimmed", cfg.MCP.Issuer)
+	}
+}
+
+func TestMCPConfigIssuerInvalid(t *testing.T) {
+	cases := map[string]string{
+		"bad scheme": "ftp://cetacean.example.com",
+		"no host":    "https://",
+		"has query":  "https://cetacean.example.com?foo=bar",
+	}
+	for name, raw := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("CETACEAN_MCP_ISSUER", raw)
+			if _, err := Load(nil, nil); err == nil {
+				t.Errorf("expected error for %q", raw)
+			}
+		})
+	}
+}
+
+func TestMCPConfigIssuerFromFile(t *testing.T) {
+	t.Setenv("CETACEAN_MCP_ISSUER", "")
+
+	want := "https://cetacean.example.com"
+	fc := &fileConfig{
+		MCP: &fileMCP{Issuer: &want},
+	}
+
+	cfg, err := Load(fc, nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.MCP.Issuer != want {
+		t.Errorf("Issuer = %q, want %q", cfg.MCP.Issuer, want)
+	}
+}
+
 func TestMCPEffectiveOperationsLevel(t *testing.T) {
 	inherit := MCPConfig{OperationsLevel: OpsInherit}
 	if got := inherit.EffectiveOperationsLevel(OpsImpactful); got != OpsImpactful {

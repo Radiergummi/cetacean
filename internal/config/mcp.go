@@ -2,8 +2,10 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -15,6 +17,13 @@ type MCPConfig struct {
 	// OperationsLevel overrides the global operations level for MCP clients.
 	// OpsInherit (-1) means fall back to the global CETACEAN_OPERATIONS_LEVEL.
 	OperationsLevel OperationsLevel
+
+	// Issuer is the canonical external URL of this Cetacean instance, used as
+	// the OAuth 2.1 issuer identifier and as the base for the MCP resource
+	// audience. Empty means "derive from the listen address" — only correct
+	// when no reverse proxy sits in front. Behind a proxy, set this to the
+	// public URL (e.g. "https://cetacean.example.com").
+	Issuer string
 
 	// SigningKey is the HMAC key used to sign MCP tokens. If empty, main.go
 	// auto-generates an ephemeral key on startup.
@@ -39,7 +48,7 @@ type MCPConfig struct {
 	// DCREnabled enables Dynamic Client Registration (RFC 7591).
 	DCREnabled bool
 
-	// DCRRateLimit is the maximum number of DCR requests per minute.
+	// DCRRateLimit is the maximum number of DCR requests per IP per hour.
 	DCRRateLimit int
 
 	// DCRMaxClients is the maximum number of dynamically registered clients.
@@ -57,6 +66,7 @@ func DefaultMCPConfig() MCPConfig {
 	return MCPConfig{
 		Enabled:                  false,
 		OperationsLevel:          OpsInherit,
+		Issuer:                   "",
 		SigningKey:               "",
 		AccessTokenTTL:           time.Hour,
 		RefreshTokenTTL:          720 * time.Hour,
@@ -90,6 +100,7 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 	// Extract file-level pointers (safely handle nil sub-struct).
 	var (
 		fEnabled       *bool
+		fIssuer        *string
 		fSigningKey    *string
 		fAccessTTL     *string
 		fRefreshTTL    *string
@@ -105,6 +116,7 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 	)
 	if fm != nil {
 		fEnabled = fm.Enabled
+		fIssuer = fm.Issuer
 		fSigningKey = fm.SigningKey
 		fAccessTTL = fm.AccessTokenTTL
 		fRefreshTTL = fm.RefreshTokenTTL
@@ -194,9 +206,15 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		return MCPConfig{}, err
 	}
 
+	issuer, err := resolveMCPIssuer(fIssuer)
+	if err != nil {
+		return MCPConfig{}, err
+	}
+
 	return MCPConfig{
 		Enabled:         resolveBool(nil, "CETACEAN_MCP", fEnabled, def.Enabled),
 		OperationsLevel: opsLevel,
+		Issuer:          issuer,
 		SigningKey: resolve(
 			nil,
 			"CETACEAN_MCP_SIGNING_KEY",
@@ -229,6 +247,40 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		),
 		AuthBypass: resolveStringSlice(nil, "CETACEAN_MCP_AUTH_BYPASS", fAuthBypass),
 	}, nil
+}
+
+// resolveMCPIssuer reads CETACEAN_MCP_ISSUER and the file value, validates
+// the result as an http(s) URL with a host, and strips trailing slashes.
+// Empty input is allowed and means "derive from listen address" at startup.
+func resolveMCPIssuer(file *string) (string, error) {
+	const envKey = "CETACEAN_MCP_ISSUER"
+
+	raw := os.Getenv(envKey)
+	source := envKey
+	if raw == "" && file != nil {
+		raw = *file
+		source = "config file"
+	}
+	if raw == "" {
+		return "", nil
+	}
+
+	raw = strings.TrimRight(raw, "/")
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("invalid URL from %s %q: %w", source, raw, err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "", fmt.Errorf("%s must use http or https scheme, got %q", source, u.Scheme)
+	}
+	if u.Host == "" {
+		return "", fmt.Errorf("%s must include a host, got %q", source, raw)
+	}
+	if u.Fragment != "" || u.RawQuery != "" {
+		return "", fmt.Errorf("%s must not contain a fragment or query, got %q", source, raw)
+	}
+
+	return raw, nil
 }
 
 // resolveMCPOpsLevel reads CETACEAN_MCP_OPERATIONS_LEVEL and the file value,

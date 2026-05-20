@@ -103,6 +103,7 @@ docker stack deploy -c compose.monitoring.yaml monitoring  # Deploy standalone m
 | `CETACEAN_AUTH_HEADERS_ACL` | — | No (HTTP header containing grants JSON) |
 | `CETACEAN_MCP` | `false` | No (enable embedded MCP server at `/mcp`) |
 | `CETACEAN_MCP_OPERATIONS_LEVEL` | inherits `CETACEAN_OPERATIONS_LEVEL` | No (tier for MCP tools; 0–3) |
+| `CETACEAN_MCP_ISSUER` | derived from listen addr + TLS | No (canonical external base URL for OAuth issuer + MCP resource audience; set behind a reverse proxy) |
 | `CETACEAN_MCP_SIGNING_KEY` | auto-generated | No (HMAC-SHA256 JWT signing key) |
 | `CETACEAN_MCP_ACCESS_TOKEN_TTL` | `1h` | No |
 | `CETACEAN_MCP_REFRESH_TOKEN_TTL` | `720h` | No |

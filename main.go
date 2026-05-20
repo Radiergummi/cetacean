@@ -610,19 +610,22 @@ type mcpDeps struct {
 // a cleanup function the caller must invoke at shutdown so the MCP server's
 // cache change listener detaches before the cache itself is torn down.
 //
-// The issuer/MCPResource URLs are derived from the listen address and TLS
-// setting; deployments behind a reverse proxy should override these via a
-// future CETACEAN_MCP_ISSUER env var.
+// The issuer defaults to the listen address + TLS scheme, which only works
+// when no reverse proxy is in front. Behind a proxy, set CETACEAN_MCP_ISSUER
+// (or [mcp].issuer) to the canonical external URL.
 func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string), func()) {
 	if !d.cfg.MCP.Enabled {
 		return nil, nil, func() {}
 	}
 
-	scheme := "http"
-	if d.tlsEnabled {
-		scheme = "https"
+	issuer := d.cfg.MCP.Issuer
+	if issuer == "" {
+		scheme := "http"
+		if d.tlsEnabled {
+			scheme = "https"
+		}
+		issuer = scheme + "://" + d.cfg.ListenAddr
 	}
-	issuer := scheme + "://" + d.cfg.ListenAddr
 	mcpResource := issuer + d.cfg.BasePath + "/mcp"
 
 	var oauthSrv *oauth.Server
