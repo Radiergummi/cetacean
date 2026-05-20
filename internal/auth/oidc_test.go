@@ -387,9 +387,9 @@ func TestExtractBearerToken(t *testing.T) {
 		if tt.header != "" {
 			r.Header.Set("Authorization", tt.header)
 		}
-		got := extractBearerToken(r)
+		got := ExtractBearerToken(r)
 		if got != tt.want {
-			t.Errorf("extractBearerToken(%q) = %q, want %q", tt.header, got, tt.want)
+			t.Errorf("ExtractBearerToken(%q) = %q, want %q", tt.header, got, tt.want)
 		}
 	}
 }

@@ -13,7 +13,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strings"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
@@ -25,6 +24,11 @@ import (
 	"github.com/radiergummi/cetacean/internal/mcp/oauth"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 )
+
+// ProviderName identifies identities derived from MCP bearer tokens. Stamped
+// on auth.Identity.Provider so downstream code can distinguish OAuth-vended
+// MCP identities from regular Cetacean auth provider identities.
+const ProviderName = "mcp-oauth"
 
 // DockerWriteClient is the narrow surface of Docker write operations the MCP
 // tools need. The concrete docker.Client and the existing api.DockerWriteClient
@@ -131,7 +135,7 @@ func (s *Server) Handler() http.Handler {
 // protected-resource metadata URL.
 func (s *Server) bearerAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token := extractBearerToken(r)
+		token := auth.ExtractBearerToken(r)
 		if token == "" {
 			s.oauth.WriteUnauthorized(w, "invalid_token")
 			return
@@ -146,21 +150,11 @@ func (s *Server) bearerAuth(next http.Handler) http.Handler {
 		identity := &auth.Identity{
 			Subject:  claims.Subject,
 			Groups:   claims.Groups,
-			Provider: "mcp-oauth",
+			Provider: ProviderName,
 		}
 		ctx := auth.ContextWithIdentity(r.Context(), identity)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
-}
-
-// extractBearerToken pulls the credential from Authorization: Bearer <token>.
-// Scheme comparison is case-insensitive per RFC 6750 §2.1.
-func extractBearerToken(r *http.Request) string {
-	a := r.Header.Get("Authorization")
-	if len(a) > 7 && strings.EqualFold(a[:7], "bearer ") {
-		return a[7:]
-	}
-	return ""
 }
 
 // registerResources is implemented in resources.go (Task 9).

@@ -22,14 +22,29 @@ type searchResult struct {
 	State  string `json:"state,omitempty"`
 }
 
+// searchACLPrefix maps cluster.Search's plural type keys to the ACL resource
+// prefix used elsewhere in the codebase (service_handlers.go etc.). Kept as
+// an explicit map so a future irregular plural ("policies") doesn't silently
+// produce a wrong ACL key.
+var searchACLPrefix = map[string]string{
+	"services": "service:",
+	"stacks":   "stack:",
+	"nodes":    "node:",
+	"tasks":    "task:",
+	"configs":  "config:",
+	"secrets":  "secret:",
+	"networks": "network:",
+	"volumes":  "volume:",
+}
+
 // aclResourceFor returns the ACL resource string for a search result.
-// Tasks use the task ID; every other type uses the resource name.
+// Tasks key on the task ID, every other type keys on the resource name.
 func aclResourceFor(resourceType, name, id string) string {
+	prefix := searchACLPrefix[resourceType]
 	if resourceType == "tasks" {
-		return "task:" + id
+		return prefix + id
 	}
-	// Trim the trailing "s" off the plural type name (services -> service).
-	return strings.TrimSuffix(resourceType, "s") + ":" + name
+	return prefix + name
 }
 
 // HandleSearch performs a cross-resource global search via the shared cluster

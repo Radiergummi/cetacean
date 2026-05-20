@@ -63,10 +63,6 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 	var allResults [stCount]typeResults
 
 	services := c.ListServices()
-	svcNames := make(map[string]string, len(services))
-	for _, s := range services {
-		svcNames[s.ID] = s.Spec.Name
-	}
 
 	var wg sync.WaitGroup
 	wg.Add(stCount)
@@ -178,6 +174,13 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 	go func() {
 		defer wg.Done()
 		tasks := c.ListTasks()
+		// Task names embed the service name (svcName.slot); build the lookup
+		// once here rather than at the top level so cluster-wide searches that
+		// never hit the tasks branch don't pay the allocation.
+		svcNames := make(map[string]string, len(services))
+		for _, s := range services {
+			svcNames[s.ID] = s.Spec.Name
+		}
 		var matches []SearchResult
 		count := 0
 		for _, t := range tasks {

@@ -109,7 +109,7 @@ func (p *OIDCProvider) Authenticate(w http.ResponseWriter, r *http.Request) (*Id
 	}
 
 	// 2. Check Bearer token.
-	if token := extractBearerToken(r); token != "" {
+	if token := ExtractBearerToken(r); token != "" {
 		idToken, err := p.verifier.Verify(r.Context(), token)
 		if err != nil {
 			return nil, &AuthError{
@@ -387,7 +387,7 @@ func (p *OIDCProvider) authenticateQuiet(r *http.Request) (*Identity, error) {
 		return id, nil
 	}
 
-	if token := extractBearerToken(r); token != "" {
+	if token := ExtractBearerToken(r); token != "" {
 		idToken, err := p.verifier.Verify(r.Context(), token)
 		if err != nil {
 			return nil, fmt.Errorf("invalid bearer token: %w", err)
@@ -492,9 +492,9 @@ func claimsToIdentity(claims map[string]any) *Identity {
 	return id
 }
 
-// extractBearerToken extracts the token from an Authorization: Bearer header.
+// ExtractBearerToken extracts the token from an Authorization: Bearer header.
 // The scheme comparison is case-insensitive per RFC 6750 Section 2.1.
-func extractBearerToken(r *http.Request) string {
+func ExtractBearerToken(r *http.Request) string {
 	auth := r.Header.Get("Authorization")
 	if len(auth) > 7 && strings.EqualFold(auth[:7], "bearer ") {
 		return auth[7:]
