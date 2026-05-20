@@ -34,18 +34,30 @@ type staticResource struct {
 var (
 	staticResources = []staticResource{
 		{uri: "cetacean://cluster", name: "Cluster", description: "Swarm cluster info"},
-		{uri: "cetacean://recommendations", name: "Recommendations", description: "Current cluster recommendations"},
+		{
+			uri:         "cetacean://recommendations",
+			name:        "Recommendations",
+			description: "Current cluster recommendations",
+		},
 		{uri: "cetacean://history", name: "History", description: "Recent change history"},
 	}
 
 	resourceTemplates = []resourceTemplate{
 		{uri: "cetacean://nodes/{id}", name: "Node", description: "Node detail"},
 		{uri: "cetacean://services/{id}", name: "Service", description: "Service detail"},
-		{uri: "cetacean://services/{id}/logs", name: "Service Logs", description: "Service log stream"},
+		{
+			uri:         "cetacean://services/{id}/logs",
+			name:        "Service Logs",
+			description: "Service log stream",
+		},
 		{uri: "cetacean://tasks/{id}", name: "Task", description: "Task detail"},
 		{uri: "cetacean://stacks/{name}", name: "Stack", description: "Stack detail"},
 		{uri: "cetacean://configs/{id}", name: "Config", description: "Config detail"},
-		{uri: "cetacean://secrets/{id}", name: "Secret", description: "Secret metadata (data redacted)"},
+		{
+			uri:         "cetacean://secrets/{id}",
+			name:        "Secret",
+			description: "Secret metadata (data redacted)",
+		},
 		{uri: "cetacean://networks/{id}", name: "Network", description: "Network detail"},
 		{uri: "cetacean://volumes/{name}", name: "Volume", description: "Volume detail"},
 	}
@@ -77,7 +89,10 @@ func (s *Server) registerResources() {
 // ResourceTemplateHandlerFunc shape. It parses the cetacean:// URI, reads the
 // matching cache slice (with redaction and enrichment), and returns a single
 // TextResourceContents entry.
-func (s *Server) handleReadResource(ctx context.Context, req mcplib.ReadResourceRequest) ([]mcplib.ResourceContents, error) {
+func (s *Server) handleReadResource(
+	ctx context.Context,
+	req mcplib.ReadResourceRequest,
+) ([]mcplib.ResourceContents, error) {
 	uri := req.Params.URI
 	body, err := s.readResource(ctx, uri)
 	if err != nil {
@@ -130,7 +145,10 @@ func (s *Server) readResource(ctx context.Context, uri string) (string, error) {
 // ACL enforcement is deferred to Task 11 — the identity is already on the
 // context (see WithHTTPContextFunc) and individual handlers will filter list
 // reads / refuse detail reads once the policy plumbing lands.
-func (s *Server) lookupResource(ctx context.Context, uri, resourceType, resourceID, subResource string) (any, error) {
+func (s *Server) lookupResource(
+	ctx context.Context,
+	uri, resourceType, resourceID, subResource string,
+) (any, error) {
 	switch resourceType {
 	case "cluster":
 		return s.cache.Snapshot(), nil

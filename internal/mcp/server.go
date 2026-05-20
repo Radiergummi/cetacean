@@ -31,9 +31,18 @@ import (
 const ProviderName = "mcp-oauth"
 
 // DockerWriteClient is the narrow surface of Docker write operations the MCP
-// tools need. The concrete docker.Client and the existing api.DockerWriteClient
-// both satisfy it; real method shape lands with Task 10 when tools register.
-type DockerWriteClient any
+// tools invoke. The concrete docker.Client and the existing api.DockerWriteClient
+// both satisfy it via Go's structural typing.
+//
+// Tools are split across three operations tiers (see Design § Tools). The
+// interface composes one writer per tier so test fakes can implement only the
+// surface they exercise.
+type DockerWriteClient interface {
+	ServiceLifecycleWriter
+	ServiceSpecWriter
+	NodeWriter
+	ResourceRemover
+}
 
 // RecommendationEngine is the narrow surface of the recommendations engine
 // consumed by the MCP server. *recommendations.Engine satisfies it; passing
@@ -53,6 +62,12 @@ type Server struct {
 	mcpServer      *mcpserver.MCPServer
 	httpServer     *mcpserver.StreamableHTTPServer
 	recEngine      RecommendationEngine
+
+	// registeredTools is the subset of toolCatalog() the server actually wired
+	// into mcp-go after applying the operations-level tier filter. The
+	// per-identity tools/list filter (filterToolsForIdentity) inspects this
+	// slice to know which tools may need further hiding from a given caller.
+	registeredTools []toolDef
 }
 
 // Options bundles the dependencies for New. OAuth is optional — when nil, the
@@ -156,9 +171,6 @@ func (s *Server) bearerAuth(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
-
-// registerTools is implemented in tools.go (Task 10).
-func (s *Server) registerTools() {}
 
 // filterToolsForIdentity is wired as a WithToolFilter for tools/list. It
 // receives the identity-carrying context from mcp-go (see WithHTTPContextFunc
