@@ -157,10 +157,6 @@ func (s *Server) bearerAuth(next http.Handler) http.Handler {
 	})
 }
 
-// registerResources is implemented in resources.go (Task 9).
-// Defined here as a stub so New compiles before Task 9 lands.
-func (s *Server) registerResources() {}
-
 // registerTools is implemented in tools.go (Task 10).
 func (s *Server) registerTools() {}
 
