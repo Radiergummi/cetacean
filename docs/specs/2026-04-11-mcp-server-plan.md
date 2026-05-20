@@ -12,6 +12,41 @@
 
 ---
 
+## Implementation Status
+
+Worked on branch `feat/mcp-server` (off `main`). Each task lands as one or more commits; review fixes are subsequent commits, not amends. As of the last update:
+
+| Task | Status | Landing commits | Notes |
+|------|--------|----------------|-------|
+| 0 — Cache multi-listener refactor | ✅ done | `f462706`, `d8fdc1d` | Listener mutex separated from data mutex; broadcaster wired in `main.go` (sse.go untouched — plan had wrong file). |
+| 0.5 — mcp-go pin + audit | ✅ done | `e50276c`, `8bb9de6`, `0008652` | Pinned `v0.54.0`. Found `WithToolFilter` ServerOption — eliminates the original plan's speculative `SetListToolsFilter` probe. Server struct + plan reconciled. |
+| 1 — MCP configuration | ✅ done | `ef41fa7`, `9ee7dc4` | `MCPConfig` integrated into existing `Load()` (no standalone `LoadMCP`). `OpsInherit = -1` sentinel. |
+| 2 — JWT library | ✅ done | `1609c05`, `a8507b7` | HS256, 5 sentinel errors + `ErrMissingKey` guard. |
+| 3 — CIMD fetcher | ✅ done | `54cbe46`, `acc354f` | SSRF block-list also covers RFC 6598 CGNAT (Tailscale relevance). |
+| 4 — Token stores | ✅ done | `f7added`, `3a56a78` | Theft-detection invariant; `Groups` cloned on return; `crypto/rand` outside lock. |
+| 5 — OAuth 2.1 endpoints | ✅ done | `6bbad08`, `8982000` | AS metadata, PRM, authorize+consent, token, revoke, DCR. Resource-mismatch on refresh-token grant revokes the family (Rotate first, then validate). |
+| 6 — Shared cluster layer | ✅ done | `2bb4ec3`, `f550d1f` | `internal/cluster/` with `EnrichTask`, `RedactSecret`, `DeriveServiceState`, `Search`. Helpers **copied** from `api/handlers.go`; originals stay until Task 7. |
+| 7 — REST handler refactor | ⏳ pending | — | See **Notes from implementation** below for the `Search` count divergence. |
+| 8 — MCP server core + router wiring | ⏳ pending | — | |
+| 9 — MCP resources | ⏳ pending | — | |
+| 10 — MCP tools | ⏳ pending | — | |
+| 11 — Notifications / subscriptions | ⏳ pending | — | |
+| 12 — Log resource + tool | ⏳ pending | — | |
+| 13 — End-to-end integration test | ⏳ pending | — | |
+| 14 — Documentation | ⏳ pending | — | |
+
+### Notes from implementation (forward-relevant)
+
+- **`WithToolFilter` exists** in `mcp-go v0.54.0` — use it at `NewMCPServer` construction (already reflected in Task 8). The original plan's speculative duck-typed `SetListToolsFilter` probe is replaced.
+- **`Server` struct fields** (Task 8/10): includes `globalOpsLevel config.OperationsLevel`, `registeredTools []toolDef`, `recEngine recEngine`. `recEngine` is a narrow interface defined in Task 8's snippet; Task 9 audits the real recommendations API.
+- **`handleReadResource`** must match `mcp-go`'s `ResourceHandlerFunc` signature `func(ctx, mcp.ReadResourceRequest) ([]mcp.ResourceContents, error)` — already updated in Task 9 snippet.
+- **`filterToolsForIdentity`** is wired but a pass-through by default; refinements that hide write tools from no-write-grant identities are a follow-up. Tier and ACL are already enforced at registration and call time respectively.
+- **`cluster.Search` returns no count metadata** (intentional — it's a search-with-cap query). REST currently returns `Counts` and `Total` per type as part of `CollectionResponse`. Task 7 needs to either (a) extend `cluster.Search`'s return type, or (b) keep counting at the REST wrapper layer. Pick one; do not silently change the REST response shape.
+- **`internal/api/` helpers `containsFold`, `containsFoldNoAlloc`, `segmentPrefixMatch`, `labelsMatch`** are duplicated in `internal/cluster/` (exported as `ContainsFold`, `SegmentPrefixMatch`; `labelsMatch` is unexported). Task 7 deletes the originals in `api/` and updates call sites to use the cluster names.
+- **OAuth tests** rely on `newTestServer(t)` defined in `server_test.go` and reused across the four `_test.go` files in the package. If Task 8 introduces fixtures, follow the same single-helper pattern.
+
+---
+
 ### File Map
 
 | Action | File | Responsibility |
@@ -59,7 +94,7 @@
 
 ---
 
-### Task 0: Cache Multi-Listener Refactor
+### Task 0: Cache Multi-Listener Refactor ✅
 
 **Why first:** the MCP notification bridge needs to subscribe to cache changes without displacing the existing SSE broadcaster. Today `cache.Cache` exposes a single `SetOnChange(fn)` slot. This task replaces it with a multi-listener registry, migrates the broadcaster, and lands as a standalone PR before any MCP work begins.
 
@@ -145,7 +180,7 @@ git commit -m "refactor(cache): replace SetOnChange with multi-listener registry
 
 ---
 
-### Task 0.5: mcp-go API Surface Audit
+### Task 0.5: mcp-go API Surface Audit ✅
 
 **Why:** the design references `mcp-go` function names and option types from the original spec date. Before any MCP code is written, we pin a specific version and audit the current API.
 
@@ -193,7 +228,7 @@ git commit -m "chore(mcp): pin mcp-go and audit API surface"
 
 ---
 
-### Task 1: MCP Configuration
+### Task 1: MCP Configuration ✅
 
 **Files:**
 - Create: `internal/config/mcp.go`
@@ -384,7 +419,7 @@ git commit -m "feat(config): add MCP server configuration"
 
 ---
 
-### Task 2: JWT Token Library
+### Task 2: JWT Token Library ✅
 
 **Files:**
 - Create: `internal/mcp/oauth/jwt.go`
@@ -638,7 +673,7 @@ git commit -m "feat(mcp): add JWT token issuer and verifier"
 
 ---
 
-### Task 3: CIMD Fetcher
+### Task 3: CIMD Fetcher ✅
 
 **Files:**
 - Create: `internal/mcp/oauth/cimd.go`
@@ -949,7 +984,7 @@ git commit -m "feat(mcp): add CIMD fetcher with SSRF protections"
 
 ---
 
-### Task 4: Authorization Code and Refresh Token Stores
+### Task 4: Authorization Code and Refresh Token Stores ✅
 
 **Files:**
 - Create: `internal/mcp/oauth/store.go`
@@ -1343,7 +1378,7 @@ git commit -m "feat(mcp): add auth code and refresh token stores"
 
 ---
 
-### Task 5: OAuth 2.1 Server Endpoints
+### Task 5: OAuth 2.1 Server Endpoints ✅
 
 **Files:**
 - Create: `internal/mcp/oauth/server.go`
@@ -1888,7 +1923,7 @@ git commit -m "feat(mcp): add OAuth 2.1 authorization server with DCR, CIMD, PRM
 
 ---
 
-### Task 6: Extract Shared Domain Layer
+### Task 6: Extract Shared Domain Layer ✅
 
 **Files:**
 - Create: `internal/cluster/enrich.go`
@@ -2267,8 +2302,15 @@ Expected: PASS
 
 In `internal/api/search_handlers.go`:
 - Replace the inline service state derivation with `cluster.DeriveServiceState(svc, running)`.
-- Move the `containsFold`, `segmentPrefixMatch`, and `labelsMatch` helpers from `handlers.go` to `internal/cluster/search.go` (already done in Task 6). Update imports in `handlers.go` to call `cluster.ContainsFold`, etc.
+- Delete the `containsFold`, `containsFoldNoAlloc`, `segmentPrefixMatch` helpers from `handlers.go` (the duplicates landed in `internal/cluster/search.go` during Task 6 with capitalized exports). Update remaining call sites to use `cluster.ContainsFold` / `cluster.SegmentPrefixMatch`. Delete `labelsMatch` if no `api/` caller remains; otherwise leave it alone — the cluster package has its own internal copy.
 - The `HandleSearch` handler itself stays in `api/` because it handles HTTP concerns (query params, response formatting, ACL filtering). It calls `cluster` functions for the matching logic.
+
+**Count handling — REQUIRED decision:** `cluster.Search` returns `map[string][]SearchResult` only; it does NOT carry the `Counts` per type or `Total` that REST's existing `CollectionResponse`-wrapped search response includes. The current REST behaviour is documented in CLAUDE.md and exercised by frontend tests, so it MUST be preserved. Two options — pick (A) unless there's a reason not to:
+
+- **(A) Count at the REST wrapper layer.** Call `cluster.Search` with the requested per-type cap; then iterate the returned map to compute `Counts` (sum of len per type) and `Total`. This loses the "total matches before cap" semantic, so make the cap large enough (or unbounded with a separate ceiling) that the displayed totals stay meaningful. Document the new semantic in the handler.
+- **(B) Extend `cluster.Search`'s return type** to include pre-cap counts. Change the signature to return a struct like `{Hits, Counts, Total}` and update both the API handler and any future MCP caller. Heavier change but preserves exact behaviour.
+
+Whichever you pick, add a regression test in `internal/api/` that confirms the existing search response shape (presence and correctness of `Counts` and `Total`) is preserved after the refactor.
 
 - [ ] **Step 6: Run search handler tests**
 
