@@ -51,6 +51,12 @@ func TestMCPConfigFromEnv(t *testing.T) {
 	t.Setenv("CETACEAN_MCP_SESSION_IDLE_TTL", "15m")
 	t.Setenv("CETACEAN_MCP_MAX_SESSIONS", "128")
 	t.Setenv("CETACEAN_MCP_OPERATIONS_LEVEL", "2")
+	t.Setenv("CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR", "false")
+	t.Setenv("CETACEAN_MCP_DCR_ENABLED", "false")
+	t.Setenv("CETACEAN_MCP_DCR_RATE_LIMIT", "25")
+	t.Setenv("CETACEAN_MCP_DCR_MAX_CLIENTS", "500")
+	t.Setenv("CETACEAN_MCP_CIMD_ENABLED", "false")
+	t.Setenv("CETACEAN_MCP_AUTH_BYPASS", "cert,headers")
 
 	cfg, err := Load(nil, nil)
 	if err != nil {
@@ -77,6 +83,24 @@ func TestMCPConfigFromEnv(t *testing.T) {
 	}
 	if cfg.MCP.OperationsLevel != OpsConfiguration {
 		t.Errorf("ops level = %v, want OpsConfiguration", cfg.MCP.OperationsLevel)
+	}
+	if cfg.MCP.RequireResourceIndicator {
+		t.Error("RequireResourceIndicator should be false")
+	}
+	if cfg.MCP.DCREnabled {
+		t.Error("DCREnabled should be false")
+	}
+	if cfg.MCP.DCRRateLimit != 25 {
+		t.Errorf("DCR rate limit = %d, want 25", cfg.MCP.DCRRateLimit)
+	}
+	if cfg.MCP.DCRMaxClients != 500 {
+		t.Errorf("DCR max clients = %d, want 500", cfg.MCP.DCRMaxClients)
+	}
+	if cfg.MCP.CIMDEnabled {
+		t.Error("CIMDEnabled should be false")
+	}
+	if got := cfg.MCP.AuthBypass; len(got) != 2 || got[0] != "cert" || got[1] != "headers" {
+		t.Errorf("AuthBypass = %v, want [cert headers]", got)
 	}
 }
 
