@@ -2363,8 +2363,11 @@ type Server struct {
 	writeClient     DockerWriteClient
 	acl             *acl.Evaluator
 	config          config.MCPConfig
+	globalOpsLevel  config.OperationsLevel // fallback for cfg.OperationsLevel == OpsInherit
 	mcpServer       *mcpserver.MCPServer
 	httpServer      *mcpserver.StreamableHTTPServer
+	registeredTools []toolDef              // tier-filtered, populated in Task 10
+	recEngine       recEngine              // narrow interface; nil when disabled (Task 9)
 }
 
 // DockerWriteClient defines the write operations available to MCP tools.
@@ -2374,18 +2377,30 @@ type DockerWriteClient interface {
 	// that the MCP tools need access to.
 }
 
-// New creates a new MCP server.
+// recEngine is the narrow surface from internal/recommendations that the MCP
+// server consumes. Audit the engine's real API in Task 9 and refine.
+type recEngine interface {
+	Snapshot() any
+}
+
+// New creates a new MCP server. globalOpsLevel is the top-level
+// CETACEAN_OPERATIONS_LEVEL — used when cfg.OperationsLevel is OpsInherit.
+// recommendations may be nil (CETACEAN_RECOMMENDATIONS=false).
 func New(
 	c *cache.Cache,
 	writeClient DockerWriteClient,
 	aclEval *acl.Evaluator,
 	cfg config.MCPConfig,
+	globalOpsLevel config.OperationsLevel,
+	recommendations recEngine,
 ) (*Server, error) {
 	srv := &Server{
-		cache:       c,
-		writeClient: writeClient,
-		acl:         aclEval,
-		config:      cfg,
+		cache:          c,
+		writeClient:    writeClient,
+		acl:            aclEval,
+		config:         cfg,
+		globalOpsLevel: globalOpsLevel,
+		recEngine:      recommendations,
 	}
 
 	// Per-identity tools/list filtering (see Design § Per-Request Tool Filtering).
@@ -2640,8 +2655,18 @@ func (s *Server) registerResources() {
 	}
 }
 
-func (s *Server) handleReadResource(ctx context.Context, uri string) (string, error) {
-	return s.readResource(ctx, uri)
+// handleReadResource implements mcp-go's ResourceHandlerFunc:
+//   func(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error)
+// It delegates URI parsing and dispatch to readResource and wraps the JSON
+// body in a single TextResourceContents entry.
+func (s *Server) handleReadResource(ctx context.Context, req mcplib.ReadResourceRequest) ([]mcplib.ResourceContents, error) {
+	body, err := s.readResource(ctx, req.Params.URI)
+	if err != nil {
+		return nil, err
+	}
+	return []mcplib.ResourceContents{
+		mcplib.TextResourceContents{URI: req.Params.URI, MIMEType: "application/json", Text: body},
+	}, nil
 }
 
 func (s *Server) readResource(ctx context.Context, uri string) (string, error) {
@@ -2976,21 +3001,14 @@ func (s *Server) registerTools() {
 // filterToolsForIdentity is the mcp-go ToolFilterFunc: given the per-call
 // context (with auth identity populated by WithHTTPContextFunc) and the
 // globally-registered tool slice, return only the tools the identity is
-// permitted to invoke. Tier was already enforced at registration, so this
-// only needs to apply ACL.
+// permitted to invoke. Tier was already enforced at registration; ACL is
+// evaluated per call site against the specific resource being acted on,
+// so this filter is a pass-through by default. Implementers may refine it
+// to hide write tools from identities with no write grants at all — but
+// the initial cut MUST NOT widen access (returning the full slice cannot
+// grant anything, because every handler re-checks ACL at call time).
 func (s *Server) filterToolsForIdentity(ctx context.Context, tools []mcplib.Tool) []mcplib.Tool {
-	identity := auth.IdentityFromContext(ctx)
-	if s.acl == nil || identity == nil {
-		return tools
-	}
-	out := tools[:0:0]
-	for _, t := range tools {
-		td, ok := s.toolByName[t.Name]
-		if !ok || td.canInvoke(s.acl, identity) {
-			out = append(out, t)
-		}
-	}
-	return out
+	return tools
 }
 
 func (s *Server) toolScaleService(ctx context.Context, args map[string]any) (string, error) {
