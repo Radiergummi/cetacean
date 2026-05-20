@@ -384,9 +384,13 @@ func (c *Cache) SetTask(t swarm.Task) {
 	changed := true
 	wasFailure := false
 	if old, ok := c.tasks[t.ID]; ok {
+		// Status.Message captures the human-readable transition reason
+		// ("started", "shutdown requested", "rejected: …"). Without it
+		// the SSE stream silently coalesces task error-message changes.
 		changed = old.Status.State != t.Status.State ||
 			old.DesiredState != t.DesiredState ||
 			old.Status.Err != t.Status.Err ||
+			old.Status.Message != t.Status.Message ||
 			old.NodeID != t.NodeID ||
 			old.Version != t.Version
 		wasFailure = IsFailureState(old.Status.State)

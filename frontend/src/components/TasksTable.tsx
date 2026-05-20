@@ -1,6 +1,7 @@
 import type { Task } from "../api/types";
 import type { TaskMetricsData } from "../hooks/useTaskMetrics";
 import { statusColor } from "../lib/statusColor";
+import { isTerminalTaskState } from "../lib/taskState";
 import CollapsibleSection from "./CollapsibleSection";
 import { TaskSparkline } from "./metrics";
 import ResourceName from "./ResourceName";
@@ -101,7 +102,9 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
                 Spec: { ContainerSpec },
                 Status: { ContainerStatus, Err, State, Timestamp },
               }) => {
-                const exitCode = ContainerStatus?.ExitCode;
+                // Docker reports ExitCode (often -1) even while a task is running;
+                // only surface it once the task has actually terminated.
+                const exitCode = isTerminalTaskState(State) ? ContainerStatus?.ExitCode : undefined;
                 const errorMessage = Err || (exitCode && exitCode !== 0 ? `exit ${exitCode}` : "");
 
                 return (

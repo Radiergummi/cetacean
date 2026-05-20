@@ -121,8 +121,11 @@ func TaskEnv(t swarm.Task, m map[string]any) map[string]any {
 	if t.Spec.ContainerSpec != nil {
 		image = t.Spec.ContainerSpec.Image
 	}
+	// ExitCode is meaningless until the task reaches a terminal state — Docker
+	// often reports -1 mid-run. Suppressing it here keeps filters like
+	// `exit_code != "0"` from matching every running task.
 	var exitCode string
-	if t.Status.ContainerStatus != nil {
+	if t.Status.ContainerStatus != nil && cache.IsTerminalState(t.Status.State) {
 		exitCode = strconv.Itoa(t.Status.ContainerStatus.ExitCode)
 	}
 	m["id"] = t.ID

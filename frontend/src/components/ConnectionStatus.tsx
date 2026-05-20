@@ -1,11 +1,31 @@
+import { api } from "../api/client";
 import { useConnection } from "../hooks/useResourceStream";
+import { Spinner } from "./Spinner";
+import { Button } from "./ui/button";
+import { RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 export default function ConnectionStatus() {
   const { connected, lastEventAt } = useConnection();
   const [ago, setAgo] = useState("");
   const [pulsing, setPulsing] = useState(false);
+  const [resyncing, setResyncing] = useState(false);
   const previousEventRef = useRef(lastEventAt);
+
+  async function handleResync() {
+    if (resyncing) {
+      return;
+    }
+
+    setResyncing(true);
+    try {
+      await api.resync();
+    } catch (error) {
+      console.warn("resync failed", error);
+    } finally {
+      setResyncing(false);
+    }
+  }
 
   // Brief pulse when a new event arrives
   useEffect(() => {
@@ -67,6 +87,16 @@ export default function ConnectionStatus() {
           "Reconnecting"
         )}
       </span>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        onClick={() => void handleResync()}
+        disabled={resyncing}
+        title="Force a full re-sync from Docker. Use when the dashboard appears to be showing stale state."
+        aria-label="Resync from Docker"
+      >
+        {resyncing ? <Spinner className="size-3" /> : <RefreshCw className="size-3" />}
+      </Button>
     </div>
   );
 }

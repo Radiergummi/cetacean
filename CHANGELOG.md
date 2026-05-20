@@ -12,8 +12,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Feed icon button in page headers for pages with Atom feeds
 - `Link: rel="alternate"` header on JSON responses advertising the Atom feed URL
 - API reference shows operations-level badges on write endpoints, an experimental marker on the recommendations endpoint, and human-readable descriptions for enum values (recommendation categories, node availability/role, service mode, auth providers)
+- Manual resync button next to the live-connection indicator and `POST /-/resync` endpoint for forcing a full re-fetch when the cache appears stale
 
 ### Fixed
+- Service resource charts now scale reservation/limit threshold lines by replica count so they line up with the service-wide usage curve (a 3-replica service with a 1 GB/task limit no longer appears to exceed its limit at 1.5 GB usage)
+- Node and task detail pages no longer crash when Docker briefly returns a payload with null Description/Status/Spec fields (the previous `c.Resources is undefined` error)
+- Cache no longer drifts after rapid stack deploys: transient inspect failures retry with backoff instead of being silently dropped
+- Task SSE events now also fire when a task's status message changes — previously the stream silently coalesced these
+- Log viewer follow-mode keeps up with high-volume streams instead of disabling itself a few lines after Jump to Bottom
+- Loading older log pages no longer jumps the viewport to a wrong position
+- Live log indices are re-stamped after the in-memory buffer trims so search highlight and pinning stay correct
+- Late-arriving log fetches can no longer overwrite newer results during rapid filter/time-range changes
+- Container-registry icons are bundled inline instead of loaded from `github.com`, `hub.docker.com`, etc. — the previous URLs were blocked by the dashboard's CSP
+- Tightened the `img-src` CSP directive now that no external images are referenced
+- Filter expressions like `exit_code != "0"` no longer match running tasks (Docker reports `-1` mid-run)
+- Task detail CPU/memory gauges fall back to the host node's capacity when the service has no per-task limit set, instead of rendering empty
+- Exit code is no longer shown on running tasks (Docker often reports `-1` while a container is alive)
 - Corrected OpenAPI spec examples to match actual API responses
 - Documented missing OpenAPI endpoints and parameters: `POST /swarm/unlock`, `GET /topology`, `GET /services/{id}/mode`, `GET /services/{id}/endpoint-mode`, `?force` on node and volume deletion, and `application/merge-patch+json` support on env and label PATCH endpoints
 - Removed dead `GET /swarm/plugins` alias route

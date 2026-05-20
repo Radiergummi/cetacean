@@ -31,6 +31,12 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
   const fetchAbortRef = useRef<AbortController | null>(null);
   const sseRef = useRef<EventSource | null>(null);
   const scrollRafRef = useRef(0);
+  // Tracks programmatic scroll-to-bottom so the resulting scroll event
+  // doesn't disable follow-mode. Under high log rates the virtualizer
+  // measures new rows after we assign scrollTop, leaving us a few pixels
+  // above the (new) bottom — without this guard handleScroll would read
+  // that gap as user-initiated and turn following off.
+  const programmaticScrollRef = useRef(false);
 
   const streamParam = streamFilter === "all" ? undefined : streamFilter;
 
@@ -62,6 +68,12 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
 
     request
       .then((response) => {
+        // A late-arriving response from a previous fetch must not overwrite
+        // newer state. Rapid filter / time-range changes used to allow this.
+        if (controller.signal.aborted) {
+          return;
+        }
+
         const newLines = response.lines?.map(toLogLine) ?? [];
         setLines(newLines);
         oldestRef.current = response.oldest;
@@ -112,10 +124,16 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
       if (buffer.length === 0) return;
       const batch = buffer.splice(0);
       setLines((current) => {
-        const updated = current.concat(
+        const appended = current.concat(
           batch.map((line, index) => toLogLine(line, current.length + index)),
         );
-        return updated.length > maxLiveLines ? updated.slice(-maxLiveLines) : updated;
+        if (appended.length <= maxLiveLines) {
+          return appended;
+        }
+        // Re-index after the ring-buffer trim — otherwise the .index field
+        // (used for search highlight + jump-to-line) refers to positions
+        // that no longer exist in the array.
+        return appended.slice(-maxLiveLines).map((line, index) => ({ ...line, index }));
       });
     };
 
@@ -150,7 +168,20 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
     const node = containerRef.current;
     cancelAnimationFrame(scrollRafRef.current);
     scrollRafRef.current = requestAnimationFrame(() => {
-      node.scrollTop = node.scrollHeight;
+      // Two rAFs: first one lets the virtualizer commit/measure the new
+      // rows, second one applies the scroll against the now-final
+      // scrollHeight. Without this we land short of the bottom and the
+      // resulting scroll event toggles follow-mode off.
+      scrollRafRef.current = requestAnimationFrame(() => {
+        programmaticScrollRef.current = true;
+        node.scrollTop = node.scrollHeight;
+        // Guarantee the flag clears even if no scroll event fires
+        // (e.g., the assignment was a no-op because we were already at
+        // the bottom).
+        requestAnimationFrame(() => {
+          programmaticScrollRef.current = false;
+        });
+      });
     });
   }, [lines, following]);
 
@@ -174,9 +205,22 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
           setLines((current) =>
             [...olderLines, ...current].map((line, index) => ({ ...line, index })),
           );
+          // Suppress the resulting scroll event so handleScroll doesn't flip
+          // follow-mode based on the still-growing virtualizer height.
+          programmaticScrollRef.current = true;
+          // Two rAFs: the first lets React commit and the virtualizer
+          // measure the prepended rows; the second adjusts scrollTop
+          // against the final scrollHeight. Without this we land at a
+          // visibly wrong position when the virtualizer is mid-measure.
           requestAnimationFrame(() => {
-            if (scrollElement)
-              scrollElement.scrollTop += scrollElement.scrollHeight - previousScrollHeight;
+            requestAnimationFrame(() => {
+              if (scrollElement) {
+                scrollElement.scrollTop += scrollElement.scrollHeight - previousScrollHeight;
+              }
+              requestAnimationFrame(() => {
+                programmaticScrollRef.current = false;
+              });
+            });
           });
         }
         setLoadingOlder(false);
@@ -233,7 +277,17 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
   const handleScroll = useCallback(() => {
     const element = containerRef.current;
     if (!element) return;
-    const atBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 50;
+    // Swallow scroll events that we initiated ourselves. The virtualizer can
+    // still be measuring rows when the assignment lands, leaving a gap of a
+    // few hundred pixels that would otherwise look like the user scrolled up.
+    if (programmaticScrollRef.current) {
+      programmaticScrollRef.current = false;
+      setAtTop(element.scrollTop < 50);
+      return;
+    }
+    // Generous threshold: row heights vary (multi-line JSON, expanded rows)
+    // and a strict bound breaks follow-mode under burst SSE updates.
+    const atBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 200;
     setFollowing(atBottom);
     setAtTop(element.scrollTop < 50);
   }, []);

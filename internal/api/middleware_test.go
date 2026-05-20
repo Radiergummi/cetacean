@@ -127,9 +127,9 @@ func TestSecurityHeaders(t *testing.T) {
 		t.Errorf("X-Frame-Options=%q, want DENY", got)
 	}
 	if got := w.Header().
-		Get("Content-Security-Policy"); got != "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:" {
+		Get("Content-Security-Policy"); got != "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:" {
 		t.Errorf(
-			"Content-Security-Policy=%q, want default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:",
+			"Content-Security-Policy=%q, want default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:",
 			got,
 		)
 	}

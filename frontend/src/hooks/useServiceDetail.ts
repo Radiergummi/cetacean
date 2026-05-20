@@ -240,6 +240,16 @@ export function useServiceDetail(id: string | undefined) {
 
   const name = service?.Spec.Name || service?.ID || "";
 
+  // The chart queries sum across all running containers of the service, so the
+  // matching threshold lines must scale with the same number of containers.
+  // For replicated services that's the configured replica count; for global
+  // services it's the count of running tasks (one per eligible node).
+  const runningTasks = useMemo(
+    () => tasks.filter(({ Status }) => Status?.State === "running").length,
+    [tasks],
+  );
+  const thresholdReplicas = service?.Spec.Mode.Replicated?.Replicas ?? runningTasks;
+
   const metricsCharts = useMemo(
     () =>
       service
@@ -250,20 +260,20 @@ export function useServiceDetail(id: string | undefined) {
                 name,
               )}"}[5m])) * 100`,
               unit: "%",
-              thresholds: cpuThresholds(service),
+              thresholds: cpuThresholds(service, thresholdReplicas),
               yMin: 0,
             },
             {
               title: "Memory Usage",
               query: `sum(container_memory_usage_bytes{container_label_com_docker_swarm_service_name="${escapePromQL(name)}"})`,
               unit: "bytes",
-              thresholds: memoryThresholds(service),
+              thresholds: memoryThresholds(service, thresholdReplicas),
               yMin: 0,
               color: getSemanticChartColor("memory"),
             },
           ]
         : [],
-    [name, service],
+    [name, service, thresholdReplicas],
   );
 
   const filteredLabels = useMemo(() => {

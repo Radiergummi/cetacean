@@ -2,11 +2,13 @@ package docker
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"sync"
 	"time"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
@@ -150,6 +152,17 @@ func (w *Watcher) fullSync(ctx context.Context) error {
 		snap.StackCount,
 	)
 
+	return nil
+}
+
+// Resync triggers a full re-fetch of cluster state and overwrites the cache.
+// Exposed for manual recovery from drift via the admin API; the watcher's
+// regular event-stream path remains independent of this call.
+func (w *Watcher) Resync(ctx context.Context) error {
+	if err := w.fullSync(ctx); err != nil {
+		return err
+	}
+	w.writeSnapshot()
 	return nil
 }
 
@@ -348,9 +361,18 @@ func (w *Watcher) handleEvent(ctx context.Context, msg events.Message) {
 }
 
 func (w *Watcher) inspectAndApply(ctx context.Context, key eventKey) {
-	resource, err := w.client.Inspect(ctx, key.resourceType, key.id)
+	resource, err := w.inspectWithRetry(ctx, key)
 	if err != nil {
-		slog.Warn("inspect failed", "type", string(key.resourceType), "id", key.id, "error", err)
+		// Definitive failure after retries: log loudly so the operator
+		// can correlate cache drift with the underlying Docker error.
+		// The cache stays as-is; the periodic 5min re-sync will eventually
+		// reconcile, but manual Resync via the admin endpoint recovers faster.
+		slog.Warn(
+			"inspect failed; cache may drift until next periodic re-sync",
+			"type", string(key.resourceType),
+			"id", key.id,
+			"error", err,
+		)
 		return
 	}
 	switch v := resource.(type) {
@@ -369,4 +391,43 @@ func (w *Watcher) inspectAndApply(ctx context.Context, key eventKey) {
 	case volume.Volume:
 		w.store.SetVolume(v)
 	}
+}
+
+// inspectWithRetry retries transient inspect failures with capped exponential
+// backoff. Rapid stack deploys often race: an event arrives for a resource the
+// daemon hasn't fully registered yet (404), or a network glitch surfaces. The
+// previous one-shot inspect would silently drop the event and leave the cache
+// stale until the periodic 5-minute re-sync.
+func (w *Watcher) inspectWithRetry(ctx context.Context, key eventKey) (any, error) {
+	const maxAttempts = 4
+	backoff := 100 * time.Millisecond
+
+	var lastErr error
+	for range maxAttempts {
+		resource, err := w.client.Inspect(ctx, key.resourceType, key.id)
+		if err == nil {
+			return resource, nil
+		}
+		lastErr = err
+		// Don't retry on definitive 404s if the event was a "remove" raced
+		// with us — but during stack deploy a 404 means "not visible yet",
+		// so we still retry. Cancel/deadline shortcuts here only when the
+		// outer context is dead.
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
+		// Don't waste retries on errors that won't change (auth, not implemented).
+		if cerrdefs.IsUnauthorized(err) ||
+			cerrdefs.IsPermissionDenied(err) ||
+			cerrdefs.IsNotImplemented(err) {
+			return nil, err
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(backoff):
+		}
+		backoff *= 2
+	}
+	return nil, lastErr
 }

@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { Service, Task } from "../api/types";
+import type { Node, Service, Task } from "../api/types";
 import { ContainerImage, ResourceId, ResourceLink, Timestamp } from "../components/data";
 import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
@@ -34,6 +34,7 @@ import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
 import { formatBytes, formatPercentage } from "../lib/format";
 import { cpuGaugePercent, memoryGaugePercent } from "../lib/resourceGauge";
+import { isTerminalTaskState } from "../lib/taskState";
 import { escapePromQL } from "../lib/utils";
 import { Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -50,6 +51,7 @@ export default function TaskDetail() {
   } = useDetailResource<Task>(id, api.task, `/tasks/${id}`, { history: false });
 
   const [service, setService] = useState<Service | null>(null);
+  const [node, setNode] = useState<Node | null>(null);
   const canRemove = allowedMethods.has("DELETE");
   const removal = useAsyncAction({ toast: true });
 
@@ -65,6 +67,19 @@ export default function TaskDetail() {
       .then(({ data: { service } }) => setService(service))
       .catch(console.warn);
   }, [serviceId]);
+
+  // Node capacity is used as the gauge denominator when no per-task limit is set.
+  const nodeId = task?.NodeID;
+  useEffect(() => {
+    if (!nodeId) {
+      return;
+    }
+
+    api
+      .node(nodeId)
+      .then(({ data }) => setNode(data))
+      .catch(console.warn);
+  }, [nodeId]);
 
   function executeRemove() {
     if (!id) {
@@ -82,7 +97,7 @@ export default function TaskDetail() {
   const hasPrometheus = isPrometheusReady(monitoring);
   const taskMetrics = useTaskMetrics(
     id ? `container_label_com_docker_swarm_task_id="${escapePromQL(id)}"` : "",
-    hasCadvisor && !!id && task?.Status.State === "running",
+    hasCadvisor && !!id && task?.Status?.State === "running",
   );
   const myMetrics = id ? taskMetrics[id] : undefined;
 
@@ -96,8 +111,16 @@ export default function TaskDetail() {
   const serviceName = task.ServiceName || task.ServiceID.slice(0, 12);
   const nodeLabel = task.NodeHostname || task.NodeID?.slice(0, 12) || "—";
   const taskIdShort = task.ID.slice(0, 12);
-  const exitCode = task.Status.ContainerStatus?.ExitCode;
-  const containerId = task.Status.ContainerStatus?.ContainerID;
+  // Status is technically a pointer type in Docker's API — every nested field
+  // gets defensive optional chaining so a partial payload from SSE / a node
+  // transition can't crash the page.
+  const status = task.Status ?? {};
+  const taskState = status.State;
+  const containerId = status.ContainerStatus?.ContainerID;
+  // Docker reports ContainerStatus.ExitCode even for running tasks (often -1
+  // until the container terminates). Only surface it once the task has reached
+  // a terminal state, otherwise it's misleading.
+  const exitCode = isTerminalTaskState(taskState) ? status.ContainerStatus?.ExitCode : undefined;
 
   return (
     <div className="flex flex-col gap-6">
@@ -172,7 +195,7 @@ export default function TaskDetail() {
           <div className="mb-1 text-xs font-medium tracking-wider text-muted-foreground uppercase">
             State
           </div>
-          <TaskStatusBadge state={task.Status.State} />
+          <TaskStatusBadge state={taskState ?? "unknown"} />
         </div>
         <InfoCard
           label="Desired State"
@@ -192,10 +215,10 @@ export default function TaskDetail() {
           label="Slot"
           value={task.Slot ? String(task.Slot) : "\u2014"}
         />
-        <ContainerImage image={task.Spec.ContainerSpec?.Image ?? ""} />
+        <ContainerImage image={task.Spec?.ContainerSpec?.Image ?? ""} />
         <Timestamp
           label="Timestamp"
-          date={task.Status.Timestamp}
+          date={status.Timestamp}
         />
         <ResourceId
           label="Container"
@@ -210,51 +233,36 @@ export default function TaskDetail() {
           />
         )}
 
-        {task.Status.Err && (
+        {status.Err && (
           <div className="col-span-full rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/30">
             <div className="mb-1 text-xs font-medium tracking-wider text-red-600 uppercase dark:text-red-400">
               Error
             </div>
-            <div className="text-sm text-red-700 dark:text-red-300">{task.Status.Err}</div>
+            <div className="text-sm text-red-700 dark:text-red-300">{status.Err}</div>
           </div>
         )}
 
-        {task.Status.Message && (
+        {status.Message && (
           <div className="col-span-full rounded-lg border bg-card p-4">
             <div className="mb-1 text-xs font-medium tracking-wider text-muted-foreground uppercase">
               Status Message
             </div>
-            <div className="text-sm">{task.Status.Message}</div>
+            <div className="text-sm">{status.Message}</div>
           </div>
         )}
       </div>
 
-      {hasCadvisor && task.Status.State === "running" && myMetrics && (
-        <div className="flex items-center justify-center gap-8">
-          <ResourceGauge
-            label="CPU"
-            value={cpuGaugePercent(
-              myMetrics.currentCpu,
-              service?.Spec.TaskTemplate.Resources?.Limits?.NanoCPUs,
-            )}
-            subtitle={
-              myMetrics.currentCpu != null ? formatPercentage(myMetrics.currentCpu) : undefined
-            }
-          />
-          <ResourceGauge
-            label="Memory"
-            value={memoryGaugePercent(
-              myMetrics.currentMemory,
-              service?.Spec.TaskTemplate.Resources?.Limits?.MemoryBytes,
-            )}
-            subtitle={
-              myMetrics.currentMemory != null ? formatBytes(myMetrics.currentMemory) : undefined
-            }
-          />
-        </div>
+      {hasCadvisor && taskState === "running" && myMetrics && (
+        <TaskResourceGauges
+          metrics={myMetrics}
+          cpuLimit={service?.Spec?.TaskTemplate?.Resources?.Limits?.NanoCPUs}
+          memoryLimit={service?.Spec?.TaskTemplate?.Resources?.Limits?.MemoryBytes}
+          nodeCpuCapacity={node?.Description?.Resources?.NanoCPUs}
+          nodeMemoryCapacity={node?.Description?.Resources?.MemoryBytes}
+        />
       )}
 
-      {hasPrometheus && task.Status.State === "running" && (
+      {hasPrometheus && taskState === "running" && (
         <ErrorBoundary inline>
           <MetricsPanel
             header="Task Metrics"
@@ -285,6 +293,60 @@ export default function TaskDetail() {
           header="Logs"
         />
       </ErrorBoundary>
+    </div>
+  );
+}
+
+interface TaskMetricsShape {
+  currentCpu: number | null;
+  currentMemory: number | null;
+}
+
+/**
+ * Renders CPU + memory gauges for a running task. Falls back to the host
+ * node's capacity when the service has no explicit per-task limit, so the
+ * gauges always have a meaningful denominator and don't render empty.
+ */
+function TaskResourceGauges({
+  metrics,
+  cpuLimit,
+  memoryLimit,
+  nodeCpuCapacity,
+  nodeMemoryCapacity,
+}: {
+  metrics: TaskMetricsShape;
+  cpuLimit: number | undefined;
+  memoryLimit: number | undefined;
+  nodeCpuCapacity: number | undefined;
+  nodeMemoryCapacity: number | undefined;
+}) {
+  const cpuDenominator = cpuLimit || nodeCpuCapacity;
+  const memDenominator = memoryLimit || nodeMemoryCapacity;
+
+  return (
+    <div className="flex items-center justify-center gap-8">
+      <ResourceGauge
+        label="CPU"
+        value={cpuGaugePercent(metrics.currentCpu, cpuDenominator)}
+        subtitle={
+          metrics.currentCpu != null
+            ? cpuLimit
+              ? formatPercentage(metrics.currentCpu)
+              : `${formatPercentage(metrics.currentCpu)} of node`
+            : undefined
+        }
+      />
+      <ResourceGauge
+        label="Memory"
+        value={memoryGaugePercent(metrics.currentMemory, memDenominator)}
+        subtitle={
+          metrics.currentMemory != null
+            ? memoryLimit
+              ? formatBytes(metrics.currentMemory)
+              : `${formatBytes(metrics.currentMemory)} of node`
+            : undefined
+        }
+      />
     </div>
   );
 }

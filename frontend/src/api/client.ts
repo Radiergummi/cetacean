@@ -391,6 +391,7 @@ async function fetchRange<T>(
 export const api = {
   whoami: () => fetchJSON<Identity>("/profile").then(({ data }) => data),
   cluster: () => fetchJSON<ClusterSnapshot>("/cluster").then(({ data }) => data),
+  resync: () => post<{ status: string; durationMs?: number }>("/-/resync"),
   swarm: () => fetchJSON<SwarmInfo>("/swarm"),
   unlockKey: () => fetchJSON<{ unlockKey: string }>("/swarm/unlock-key").then(({ data }) => data),
   patchSwarmOrchestration: (data: Record<string, unknown>) =>

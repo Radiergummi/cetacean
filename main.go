@@ -391,6 +391,7 @@ func main() {
 		CORS:              corsConfig,
 		TLSEnabled:        tlsCfg.Enabled(),
 		TrustedProxies:    cfg.TrustedProxies,
+		Resyncer:          watcher,
 	})
 
 	var serverTLSConfig *tls.Config

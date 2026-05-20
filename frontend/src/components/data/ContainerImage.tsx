@@ -6,32 +6,38 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { imageRegistryUrl } from "@/lib/imageUrl";
-import { Pencil } from "lucide-react";
+import { Cloud, Container, GitBranch, type LucideIcon, Pencil, Server } from "lucide-react";
 import { useState } from "react";
 
-function registryFavicon(image: string): string | null {
+/**
+ * Maps an image reference to a registry-specific icon. Returning a vector
+ * component keeps us within the dashboard's `img-src 'self'` CSP — earlier
+ * versions linked to provider favicons (e.g. github.com/favicon.ico) which
+ * the browser blocked.
+ */
+function registryIcon(image: string): LucideIcon | null {
   const namePart = image.split("@")[0].split(":")[0];
-  const segments = namePart.split("/");
-  const first = segments[0];
+  const first = namePart.split("/")[0];
 
+  // Bare names like "nginx" or "library/nginx" implicitly resolve to Docker Hub.
   if (!first.includes(".") && !first.includes(":")) {
-    return "https://hub.docker.com/favicon.ico";
+    return Container;
   }
 
   if (first === "docker.io" || first === "registry-1.docker.io") {
-    return "https://hub.docker.com/favicon.ico";
+    return Container;
   }
 
   if (first === "ghcr.io") {
-    return "https://github.com/favicon.ico";
-  }
-
-  if (first === "quay.io") {
-    return "https://quay.io/static/img/quay_favicon.png";
+    return GitBranch;
   }
 
   if (first === "gcr.io" || first.endsWith(".gcr.io")) {
-    return "https://cloud.google.com/favicon.ico";
+    return Cloud;
+  }
+
+  if (first === "quay.io" || first.endsWith(".redhat.io") || first === "registry.redhat.io") {
+    return Server;
   }
 
   return null;
@@ -155,16 +161,14 @@ export default function ContainerImage({
 
   const display = image.split("@")[0].replace(/^(docker\.io|registry-1\.docker\.io)\//, "");
   const href = imageRegistryUrl(image);
-  const favicon = registryFavicon(image);
+  const Icon = registryIcon(image);
 
   const inner = (
     <>
-      {favicon && (
-        <img
-          src={favicon}
-          alt=""
-          aria-hidden="true"
+      {Icon && (
+        <Icon
           className="h-4 w-4 shrink-0"
+          aria-hidden="true"
         />
       )}
       {display}

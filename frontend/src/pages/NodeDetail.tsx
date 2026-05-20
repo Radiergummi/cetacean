@@ -75,7 +75,7 @@ export default function NodeDetail() {
 
   useEffect(() => {
     if (node) {
-      setNodeLabels(node.Spec.Labels ?? {});
+      setNodeLabels(node.Spec?.Labels ?? {});
     }
   }, [node]);
 
@@ -120,14 +120,19 @@ export default function NodeDetail() {
     return <LoadingDetail />;
   }
 
+  // Docker's Node payload uses pointer fields (*NodeDescription, *NodeSpec,
+  // *NodeStatus) that can be null for nodes mid-transition. Capture display
+  // fallbacks once so we don't have to optional-chain every render site.
+  const displayHostname = hostname || node.ID;
+  const engineVersion = node.Description?.Engine?.EngineVersion;
+  const platformOS = node.Description?.Platform?.OS;
+  const platformArch = node.Description?.Platform?.Architecture;
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={node.Description.Hostname || node.ID}
-        breadcrumbs={[
-          { label: "Nodes", to: "/nodes" },
-          { label: node.Description.Hostname || node.ID },
-        ]}
+        title={displayHostname}
+        breadcrumbs={[{ label: "Nodes", to: "/nodes" }, { label: displayHostname }]}
       />
 
       <NodeActions
@@ -138,27 +143,29 @@ export default function NodeDetail() {
       <MetadataGrid>
         <RoleEditor
           nodeId={node.ID}
-          currentRole={node.Spec.Role}
+          currentRole={node.Spec?.Role ?? "worker"}
           isLeader={node.ManagerStatus?.Leader ?? false}
           managerCount={roleData?.managerCount ?? null}
           canEdit={allowedMethods.has("PUT")}
         />
-        <StatusCard state={node.Status.State} />
+        <StatusCard state={node.Status?.State ?? "unknown"} />
         <AvailabilityEditor
           nodeId={node.ID}
-          current={node.Spec.Availability}
+          current={node.Spec?.Availability ?? "active"}
           canEdit={allowedMethods.has("PUT")}
         />
-        <EngineCard version={node.Description.Engine.EngineVersion} />
-        <OsCard
-          os={node.Description.Platform.OS}
-          architecture={node.Description.Platform.Architecture}
-        />
+        {engineVersion && <EngineCard version={engineVersion} />}
+        {platformOS && platformArch && (
+          <OsCard
+            os={platformOS}
+            architecture={platformArch}
+          />
+        )}
         <InfoCard
           label="Address"
           value={
             <span className="inline-flex items-center">
-              {node.Status.Addr || "\u2014"}
+              {node.Status?.Addr || "\u2014"}
               {node.ManagerStatus?.Addr && (
                 <span className="text-muted-foreground">
                   :{node.ManagerStatus.Addr.split(":").pop()}
@@ -169,7 +176,11 @@ export default function NodeDetail() {
         />
         <InfoCard
           label="CPUs"
-          value={formatNumber(node.Description.Resources.NanoCPUs / 1_000_000_000)}
+          value={
+            node.Description?.Resources?.NanoCPUs != null
+              ? formatNumber(node.Description.Resources.NanoCPUs / 1_000_000_000)
+              : "—"
+          }
           right={
             cpuGauge != null ? (
               <ResourceGauge
@@ -182,7 +193,11 @@ export default function NodeDetail() {
         />
         <InfoCard
           label="Memory"
-          value={formatBytes(node.Description.Resources.MemoryBytes)}
+          value={
+            node.Description?.Resources?.MemoryBytes != null
+              ? formatBytes(node.Description.Resources.MemoryBytes)
+              : "—"
+          }
           right={
             memoryGauge != null ? (
               <ResourceGauge

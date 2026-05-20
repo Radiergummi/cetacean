@@ -48,6 +48,16 @@ func IsFailureState(s swarm.TaskState) bool {
 		s == swarm.TaskStateOrphaned
 }
 
+// IsTerminalState reports whether s is any terminal state — failures plus
+// natural-completion paths. ContainerStatus.ExitCode is only meaningful here;
+// for non-terminal states Docker often reports a placeholder like -1.
+func IsTerminalState(s swarm.TaskState) bool {
+	return IsFailureState(s) ||
+		s == swarm.TaskStateComplete ||
+		s == swarm.TaskStateShutdown ||
+		s == swarm.TaskStateRemove
+}
+
 // Record increments the failure counter for serviceID at the given time and
 // prunes buckets older than the horizon. A zero timestamp falls back to now.
 func (rt *RestartTracker) Record(serviceID string, when time.Time) {

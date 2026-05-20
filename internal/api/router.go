@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/pprof"
 	"net/netip"
@@ -17,6 +18,13 @@ import (
 	"github.com/radiergummi/cetacean/internal/metrics"
 )
 
+// Resyncer triggers a manual full re-fetch of cluster state. Backed by the
+// watcher's Resync method. Decoupled as an interface so the api package
+// stays free of docker-package imports.
+type Resyncer interface {
+	Resync(ctx context.Context) error
+}
+
 // RouterConfig holds all dependencies and options for NewRouter.
 type RouterConfig struct {
 	Handlers          *Handlers
@@ -32,6 +40,7 @@ type RouterConfig struct {
 	CORS              *CORSConfig
 	TLSEnabled        bool
 	TrustedProxies    []netip.Prefix
+	Resyncer          Resyncer
 }
 
 // listFeeds builds feedHandlers for a resource list endpoint.
@@ -117,6 +126,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	mux.HandleFunc("GET /-/docker-latest-version", h.HandleDockerLatestVersion)
 	if cfg.EnableSelfMetrics {
 		mux.Handle("GET /-/metrics", metrics.Handler())
+	}
+	if cfg.Resyncer != nil {
+		mux.Handle("POST /-/resync", HandleResync(cfg.Resyncer))
 	}
 	// Metrics (content-negotiated: JSON → proxy, SSE → stream, HTML → SPA)
 	mux.HandleFunc("GET /metrics/status", h.HandleMonitoringStatus)
@@ -668,7 +680,7 @@ func securityHeaders(next http.Handler, tlsEnabled bool) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().
-			Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:")
+			Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:")
 		if tlsEnabled {
 			w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
 		}
