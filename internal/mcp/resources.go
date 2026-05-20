@@ -110,9 +110,25 @@ func (s *Server) handleReadResource(
 // readResource is the URI-dispatch core, separated from handleReadResource so
 // tests can drive it without constructing an mcp-go request.
 func (s *Server) readResource(ctx context.Context, uri string) (string, error) {
+	data, err := s.lookupResource(ctx, uri)
+	if err != nil {
+		return "", err
+	}
+	b, err := json.Marshal(data)
+	if err != nil {
+		return "", fmt.Errorf("marshal resource: %w", err)
+	}
+	return string(b), nil
+}
+
+// lookupResource parses the cetacean:// URI and resolves the cache slice it
+// addresses. Returns an error when the requested ID is unknown so
+// handleReadResource can surface a "resource not found" JSON-RPC error rather
+// than serializing a zero value.
+func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 	path := strings.TrimPrefix(uri, "cetacean://")
 	if path == uri || path == "" {
-		return "", fmt.Errorf("invalid resource URI: %s", uri)
+		return nil, fmt.Errorf("invalid resource URI: %s", uri)
 	}
 
 	parts := strings.SplitN(path, "/", 3)
@@ -126,29 +142,6 @@ func (s *Server) readResource(ctx context.Context, uri string) (string, error) {
 		subResource = parts[2]
 	}
 
-	data, err := s.lookupResource(ctx, uri, resourceType, resourceID, subResource)
-	if err != nil {
-		return "", err
-	}
-
-	b, err := json.Marshal(data)
-	if err != nil {
-		return "", fmt.Errorf("marshal resource: %w", err)
-	}
-	return string(b), nil
-}
-
-// lookupResource resolves the cache slice for a parsed URI. It returns an error
-// when the requested ID is unknown so handleReadResource can surface a
-// "resource not found" JSON-RPC error rather than serializing a zero value.
-//
-// ACL enforcement is deferred to Task 11 — the identity is already on the
-// context (see WithHTTPContextFunc) and individual handlers will filter list
-// reads / refuse detail reads once the policy plumbing lands.
-func (s *Server) lookupResource(
-	ctx context.Context,
-	uri, resourceType, resourceID, subResource string,
-) (any, error) {
 	switch resourceType {
 	case "cluster":
 		return s.cache.Snapshot(), nil

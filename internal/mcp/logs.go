@@ -44,10 +44,10 @@ const (
 	cursorTimeFormat  = time.RFC3339Nano
 )
 
-// readServiceLogsImpl is the real implementation behind Server.readServiceLogs.
-// Lives next to the toolGetLogs handler so both call paths produce identical
-// output shape. Returns an empty response (no error) when no LogStreamer is
-// configured — useful in unit tests that don't wire a Docker client.
+// readServiceLogsImpl drives both the cetacean://services/{id}/logs read and
+// the get_logs tool so they produce identical output. Returns an empty
+// response (not an error) when no LogStreamer is wired — keeps unit tests
+// that don't need a Docker client working.
 func (s *Server) readServiceLogsImpl(ctx context.Context, serviceID string, opts logOptions) (LogResourceResponse, error) {
 	if s.logs == nil {
 		return LogResourceResponse{Lines: []api.LogLine{}}, nil

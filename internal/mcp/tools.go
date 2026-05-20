@@ -209,8 +209,11 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDescription("Force-reschedule a task by removing it"),
 				mcplib.WithString("id", mcplib.Required(), mcplib.Description("Task ID")),
 			),
-			tier:    config.OpsOperational,
-			handler: s.toolRemoveTask,
+			tier: config.OpsOperational,
+			handler: s.removeHandler("id", s.aclChecker("task"),
+				func(wc DockerWriteClient, ctx context.Context, id string) error {
+					return wc.RemoveTask(ctx, id)
+				}),
 		},
 
 		// Tier 2 — Configuration.
@@ -257,8 +260,11 @@ func (s *Server) toolCatalog() []toolDef {
 					mcplib.Description("ResourceRequirements JSON object"),
 				),
 			),
-			tier:    config.OpsConfiguration,
-			handler: s.toolUpdateServiceResources,
+			tier: config.OpsConfiguration,
+			handler: updateServiceHandler(s, "resources",
+				func(wc DockerWriteClient, ctx context.Context, id string, r swarm.ResourceRequirements) (swarm.Service, error) {
+					return wc.UpdateServiceResources(ctx, id, &r)
+				}),
 		},
 		{
 			tool: mcplib.NewTool(
@@ -271,8 +277,11 @@ func (s *Server) toolCatalog() []toolDef {
 					mcplib.Description("Placement JSON object"),
 				),
 			),
-			tier:    config.OpsConfiguration,
-			handler: s.toolUpdateServicePlacement,
+			tier: config.OpsConfiguration,
+			handler: updateServiceHandler(s, "placement",
+				func(wc DockerWriteClient, ctx context.Context, id string, p swarm.Placement) (swarm.Service, error) {
+					return wc.UpdateServicePlacement(ctx, id, &p)
+				}),
 		},
 		{
 			tool: mcplib.NewTool(
@@ -285,8 +294,11 @@ func (s *Server) toolCatalog() []toolDef {
 					mcplib.Description("Array of PortConfig objects"),
 				),
 			),
-			tier:    config.OpsConfiguration,
-			handler: s.toolUpdateServicePorts,
+			tier: config.OpsConfiguration,
+			handler: updateServiceHandler(s, "ports",
+				func(wc DockerWriteClient, ctx context.Context, id string, ports []swarm.PortConfig) (swarm.Service, error) {
+					return wc.UpdateServicePorts(ctx, id, ports)
+				}),
 		},
 		{
 			tool: mcplib.NewTool(
@@ -299,8 +311,11 @@ func (s *Server) toolCatalog() []toolDef {
 					mcplib.Description("UpdateConfig JSON object"),
 				),
 			),
-			tier:    config.OpsConfiguration,
-			handler: s.toolUpdateServiceUpdatePolicy,
+			tier: config.OpsConfiguration,
+			handler: updateServiceHandler(s, "policy",
+				func(wc DockerWriteClient, ctx context.Context, id string, p swarm.UpdateConfig) (swarm.Service, error) {
+					return wc.UpdateServiceUpdatePolicy(ctx, id, &p)
+				}),
 		},
 		{
 			tool: mcplib.NewTool(
@@ -313,8 +328,11 @@ func (s *Server) toolCatalog() []toolDef {
 					mcplib.Description("UpdateConfig JSON object"),
 				),
 			),
-			tier:    config.OpsConfiguration,
-			handler: s.toolUpdateServiceRollbackPolicy,
+			tier: config.OpsConfiguration,
+			handler: updateServiceHandler(s, "policy",
+				func(wc DockerWriteClient, ctx context.Context, id string, p swarm.UpdateConfig) (swarm.Service, error) {
+					return wc.UpdateServiceRollbackPolicy(ctx, id, &p)
+				}),
 		},
 		{
 			tool: mcplib.NewTool(
@@ -327,8 +345,11 @@ func (s *Server) toolCatalog() []toolDef {
 					mcplib.Description("Driver JSON object (name + options)"),
 				),
 			),
-			tier:    config.OpsConfiguration,
-			handler: s.toolUpdateServiceLogDriver,
+			tier: config.OpsConfiguration,
+			handler: updateServiceHandler(s, "driver",
+				func(wc DockerWriteClient, ctx context.Context, id string, d swarm.Driver) (swarm.Service, error) {
+					return wc.UpdateServiceLogDriver(ctx, id, &d)
+				}),
 		},
 
 		// Tier 3 — Impactful.
@@ -362,8 +383,11 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDestructiveHintAnnotation(true),
 				mcplib.WithString("id", mcplib.Required(), mcplib.Description("Service ID")),
 			),
-			tier:    config.OpsImpactful,
-			handler: s.toolRemoveService,
+			tier: config.OpsImpactful,
+			handler: s.removeHandler("id", s.checkServiceWrite,
+				func(wc DockerWriteClient, ctx context.Context, id string) error {
+					return wc.RemoveService(ctx, id)
+				}),
 		},
 		{
 			tool: mcplib.NewTool("remove_config",
@@ -371,8 +395,11 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDestructiveHintAnnotation(true),
 				mcplib.WithString("id", mcplib.Required(), mcplib.Description("Config ID")),
 			),
-			tier:    config.OpsImpactful,
-			handler: s.toolRemoveConfig,
+			tier: config.OpsImpactful,
+			handler: s.removeHandler("id", s.aclChecker("config"),
+				func(wc DockerWriteClient, ctx context.Context, id string) error {
+					return wc.RemoveConfig(ctx, id)
+				}),
 		},
 		{
 			tool: mcplib.NewTool("remove_secret",
@@ -380,8 +407,11 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDestructiveHintAnnotation(true),
 				mcplib.WithString("id", mcplib.Required(), mcplib.Description("Secret ID")),
 			),
-			tier:    config.OpsImpactful,
-			handler: s.toolRemoveSecret,
+			tier: config.OpsImpactful,
+			handler: s.removeHandler("id", s.aclChecker("secret"),
+				func(wc DockerWriteClient, ctx context.Context, id string) error {
+					return wc.RemoveSecret(ctx, id)
+				}),
 		},
 		{
 			tool: mcplib.NewTool("remove_network",
@@ -389,8 +419,11 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDestructiveHintAnnotation(true),
 				mcplib.WithString("id", mcplib.Required(), mcplib.Description("Network ID")),
 			),
-			tier:    config.OpsImpactful,
-			handler: s.toolRemoveNetwork,
+			tier: config.OpsImpactful,
+			handler: s.removeHandler("id", s.aclChecker("network"),
+				func(wc DockerWriteClient, ctx context.Context, id string) error {
+					return wc.RemoveNetwork(ctx, id)
+				}),
 		},
 		{
 			tool: mcplib.NewTool("remove_volume",
@@ -415,11 +448,12 @@ func (s *Server) requireWriteClient() (DockerWriteClient, error) {
 	return s.writeClient, nil
 }
 
-// checkServiceWrite enforces the "write" permission on a service before the
-// tool calls the write client. Looks up the service in the cache so the ACL
-// resource is `service:<name>` rather than `service:<id>`, matching what REST
-// uses. Returns nil if ACL is disabled (no policy / no identity in context).
-func (s *Server) checkServiceWrite(ctx context.Context, id string) error {
+// checkWrite enforces the "write" permission on resourceType:resourceName for
+// the identity in ctx. Returns nil if ACL is disabled or no identity is on the
+// context (the bearer middleware would have rejected the request earlier in
+// that case). All MCP tool handlers route through this helper so denial errors
+// have a uniform shape.
+func (s *Server) checkWrite(ctx context.Context, resourceType, resourceName string) error {
 	if s.acl == nil {
 		return nil
 	}
@@ -427,50 +461,30 @@ func (s *Server) checkServiceWrite(ctx context.Context, id string) error {
 	if identity == nil {
 		return nil
 	}
+	if !s.acl.Can(identity, "write", resourceType+":"+resourceName) {
+		return fmt.Errorf("write access denied for %s:%s", resourceType, resourceName)
+	}
+	return nil
+}
+
+// checkServiceWrite resolves the service name from the cache so the ACL key
+// is `service:<name>` rather than `service:<id>`, matching REST behaviour.
+func (s *Server) checkServiceWrite(ctx context.Context, id string) error {
 	name := id
 	if svc, ok := s.cache.GetService(id); ok && svc.Spec.Name != "" {
 		name = svc.Spec.Name
 	}
-	if !s.acl.Can(identity, "write", "service:"+name) {
-		return fmt.Errorf("write access denied for service:%s", name)
-	}
-	return nil
+	return s.checkWrite(ctx, "service", name)
 }
 
-// checkNodeWrite mirrors checkServiceWrite for the node resource type. Node
-// ACL keys are `node:<hostname>` to match REST.
+// checkNodeWrite resolves the node hostname from the cache so the ACL key is
+// `node:<hostname>` rather than `node:<id>`, matching REST behaviour.
 func (s *Server) checkNodeWrite(ctx context.Context, id string) error {
-	if s.acl == nil {
-		return nil
-	}
-	identity := auth.IdentityFromContext(ctx)
-	if identity == nil {
-		return nil
-	}
 	name := id
 	if node, ok := s.cache.GetNode(id); ok && node.Description.Hostname != "" {
 		name = node.Description.Hostname
 	}
-	if !s.acl.Can(identity, "write", "node:"+name) {
-		return fmt.Errorf("write access denied for node:%s", name)
-	}
-	return nil
-}
-
-// checkSimpleWrite is the generic ACL check for resources whose ACL key is just
-// `<type>:<id>` (config, secret, network, volume, task).
-func (s *Server) checkSimpleWrite(ctx context.Context, resourceType, id string) error {
-	if s.acl == nil {
-		return nil
-	}
-	identity := auth.IdentityFromContext(ctx)
-	if identity == nil {
-		return nil
-	}
-	if !s.acl.Can(identity, "write", resourceType+":"+id) {
-		return fmt.Errorf("write access denied for %s:%s", resourceType, id)
-	}
-	return nil
+	return s.checkWrite(ctx, "node", name)
 }
 
 // --- tool handlers ---
@@ -594,22 +608,41 @@ func (s *Server) toolRestartService(
 	return marshalResult(svc)
 }
 
-func (s *Server) toolRemoveTask(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
-	id, err := req.RequireString("id")
-	if err != nil {
-		return "", err
+// removeHandler builds a tool handler for the common `{ id } → {"removed":true}`
+// shape shared by remove_task / remove_service / remove_config / remove_secret
+// / remove_network. idKey is the JSON-Schema property name (`id` for most,
+// `name` for volumes); aclCheck enforces write permission against the right
+// resource (often delegating to checkServiceWrite/checkNodeWrite when the ACL
+// key derives from a cached name); remove invokes the actual writer.
+func (s *Server) removeHandler(
+	idKey string,
+	aclCheck func(ctx context.Context, id string) error,
+	remove func(wc DockerWriteClient, ctx context.Context, id string) error,
+) func(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
+	return func(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
+		id, err := req.RequireString(idKey)
+		if err != nil {
+			return "", err
+		}
+		if err := aclCheck(ctx, id); err != nil {
+			return "", err
+		}
+		wc, err := s.requireWriteClient()
+		if err != nil {
+			return "", err
+		}
+		if err := remove(wc, ctx, id); err != nil {
+			return "", err
+		}
+		return `{"removed":true}`, nil
 	}
-	if err := s.checkSimpleWrite(ctx, "task", id); err != nil {
-		return "", err
+}
+
+// aclChecker adapts checkWrite to the removeHandler signature.
+func (s *Server) aclChecker(resourceType string) func(ctx context.Context, id string) error {
+	return func(ctx context.Context, id string) error {
+		return s.checkWrite(ctx, resourceType, id)
 	}
-	wc, err := s.requireWriteClient()
-	if err != nil {
-		return "", err
-	}
-	if err := wc.RemoveTask(ctx, id); err != nil {
-		return "", err
-	}
-	return `{"removed":true}`, nil
 }
 
 func (s *Server) toolUpdateServiceEnv(
@@ -690,160 +723,39 @@ func (s *Server) toolUpdateNodeLabels(
 	return marshalResult(node)
 }
 
-func (s *Server) toolUpdateServiceResources(
-	ctx context.Context,
-	req mcplib.CallToolRequest,
-) (string, error) {
-	id, err := req.RequireString("id")
-	if err != nil {
-		return "", err
+// updateServiceHandler builds a tool handler for the recurring
+// `{id, <argKey>: T} → swarm.Service` shape used by every Tier 2 service-spec
+// update tool. T is decoded via JSON round-trip through decodeArgInto so
+// callers can pass the same shape they see in the REST API.
+//
+// Go doesn't allow generic methods, so this is a free function taking *Server.
+func updateServiceHandler[T any](
+	s *Server,
+	argKey string,
+	call func(wc DockerWriteClient, ctx context.Context, id string, arg T) (swarm.Service, error),
+) func(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
+	return func(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
+		id, err := req.RequireString("id")
+		if err != nil {
+			return "", err
+		}
+		var arg T
+		if err := decodeArgInto(req, argKey, &arg); err != nil {
+			return "", err
+		}
+		if err := s.checkServiceWrite(ctx, id); err != nil {
+			return "", err
+		}
+		wc, err := s.requireWriteClient()
+		if err != nil {
+			return "", err
+		}
+		svc, err := call(wc, ctx, id, arg)
+		if err != nil {
+			return "", err
+		}
+		return marshalResult(svc)
 	}
-	var resources swarm.ResourceRequirements
-	if err := decodeArgInto(req, "resources", &resources); err != nil {
-		return "", err
-	}
-	if err := s.checkServiceWrite(ctx, id); err != nil {
-		return "", err
-	}
-	wc, err := s.requireWriteClient()
-	if err != nil {
-		return "", err
-	}
-	svc, err := wc.UpdateServiceResources(ctx, id, &resources)
-	if err != nil {
-		return "", err
-	}
-	return marshalResult(svc)
-}
-
-func (s *Server) toolUpdateServicePlacement(
-	ctx context.Context,
-	req mcplib.CallToolRequest,
-) (string, error) {
-	id, err := req.RequireString("id")
-	if err != nil {
-		return "", err
-	}
-	var placement swarm.Placement
-	if err := decodeArgInto(req, "placement", &placement); err != nil {
-		return "", err
-	}
-	if err := s.checkServiceWrite(ctx, id); err != nil {
-		return "", err
-	}
-	wc, err := s.requireWriteClient()
-	if err != nil {
-		return "", err
-	}
-	svc, err := wc.UpdateServicePlacement(ctx, id, &placement)
-	if err != nil {
-		return "", err
-	}
-	return marshalResult(svc)
-}
-
-func (s *Server) toolUpdateServicePorts(
-	ctx context.Context,
-	req mcplib.CallToolRequest,
-) (string, error) {
-	id, err := req.RequireString("id")
-	if err != nil {
-		return "", err
-	}
-	var ports []swarm.PortConfig
-	if err := decodeArgInto(req, "ports", &ports); err != nil {
-		return "", err
-	}
-	if err := s.checkServiceWrite(ctx, id); err != nil {
-		return "", err
-	}
-	wc, err := s.requireWriteClient()
-	if err != nil {
-		return "", err
-	}
-	svc, err := wc.UpdateServicePorts(ctx, id, ports)
-	if err != nil {
-		return "", err
-	}
-	return marshalResult(svc)
-}
-
-func (s *Server) toolUpdateServiceUpdatePolicy(
-	ctx context.Context,
-	req mcplib.CallToolRequest,
-) (string, error) {
-	id, err := req.RequireString("id")
-	if err != nil {
-		return "", err
-	}
-	var policy swarm.UpdateConfig
-	if err := decodeArgInto(req, "policy", &policy); err != nil {
-		return "", err
-	}
-	if err := s.checkServiceWrite(ctx, id); err != nil {
-		return "", err
-	}
-	wc, err := s.requireWriteClient()
-	if err != nil {
-		return "", err
-	}
-	svc, err := wc.UpdateServiceUpdatePolicy(ctx, id, &policy)
-	if err != nil {
-		return "", err
-	}
-	return marshalResult(svc)
-}
-
-func (s *Server) toolUpdateServiceRollbackPolicy(
-	ctx context.Context,
-	req mcplib.CallToolRequest,
-) (string, error) {
-	id, err := req.RequireString("id")
-	if err != nil {
-		return "", err
-	}
-	var policy swarm.UpdateConfig
-	if err := decodeArgInto(req, "policy", &policy); err != nil {
-		return "", err
-	}
-	if err := s.checkServiceWrite(ctx, id); err != nil {
-		return "", err
-	}
-	wc, err := s.requireWriteClient()
-	if err != nil {
-		return "", err
-	}
-	svc, err := wc.UpdateServiceRollbackPolicy(ctx, id, &policy)
-	if err != nil {
-		return "", err
-	}
-	return marshalResult(svc)
-}
-
-func (s *Server) toolUpdateServiceLogDriver(
-	ctx context.Context,
-	req mcplib.CallToolRequest,
-) (string, error) {
-	id, err := req.RequireString("id")
-	if err != nil {
-		return "", err
-	}
-	var driver swarm.Driver
-	if err := decodeArgInto(req, "driver", &driver); err != nil {
-		return "", err
-	}
-	if err := s.checkServiceWrite(ctx, id); err != nil {
-		return "", err
-	}
-	wc, err := s.requireWriteClient()
-	if err != nil {
-		return "", err
-	}
-	svc, err := wc.UpdateServiceLogDriver(ctx, id, &driver)
-	if err != nil {
-		return "", err
-	}
-	return marshalResult(svc)
 }
 
 func (s *Server) toolUpdateNodeAvailability(
@@ -906,91 +818,13 @@ func (s *Server) toolUpdateNodeRole(
 	return marshalResult(node)
 }
 
-func (s *Server) toolRemoveService(
-	ctx context.Context,
-	req mcplib.CallToolRequest,
-) (string, error) {
-	id, err := req.RequireString("id")
-	if err != nil {
-		return "", err
-	}
-	if err := s.checkServiceWrite(ctx, id); err != nil {
-		return "", err
-	}
-	wc, err := s.requireWriteClient()
-	if err != nil {
-		return "", err
-	}
-	if err := wc.RemoveService(ctx, id); err != nil {
-		return "", err
-	}
-	return `{"removed":true}`, nil
-}
-
-func (s *Server) toolRemoveConfig(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
-	id, err := req.RequireString("id")
-	if err != nil {
-		return "", err
-	}
-	if err := s.checkSimpleWrite(ctx, "config", id); err != nil {
-		return "", err
-	}
-	wc, err := s.requireWriteClient()
-	if err != nil {
-		return "", err
-	}
-	if err := wc.RemoveConfig(ctx, id); err != nil {
-		return "", err
-	}
-	return `{"removed":true}`, nil
-}
-
-func (s *Server) toolRemoveSecret(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
-	id, err := req.RequireString("id")
-	if err != nil {
-		return "", err
-	}
-	if err := s.checkSimpleWrite(ctx, "secret", id); err != nil {
-		return "", err
-	}
-	wc, err := s.requireWriteClient()
-	if err != nil {
-		return "", err
-	}
-	if err := wc.RemoveSecret(ctx, id); err != nil {
-		return "", err
-	}
-	return `{"removed":true}`, nil
-}
-
-func (s *Server) toolRemoveNetwork(
-	ctx context.Context,
-	req mcplib.CallToolRequest,
-) (string, error) {
-	id, err := req.RequireString("id")
-	if err != nil {
-		return "", err
-	}
-	if err := s.checkSimpleWrite(ctx, "network", id); err != nil {
-		return "", err
-	}
-	wc, err := s.requireWriteClient()
-	if err != nil {
-		return "", err
-	}
-	if err := wc.RemoveNetwork(ctx, id); err != nil {
-		return "", err
-	}
-	return `{"removed":true}`, nil
-}
-
 func (s *Server) toolRemoveVolume(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
 	name, err := req.RequireString("name")
 	if err != nil {
 		return "", err
 	}
 	force := req.GetBool("force", false)
-	if err := s.checkSimpleWrite(ctx, "volume", name); err != nil {
+	if err := s.checkWrite(ctx, "volume", name); err != nil {
 		return "", err
 	}
 	wc, err := s.requireWriteClient()

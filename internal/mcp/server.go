@@ -5,8 +5,7 @@
 // The server is mounted on Cetacean's HTTP router behind the existing auth
 // middleware. Identity flows from HTTP context to mcp-go via
 // WithHTTPContextFunc; ACL is enforced per request inside resource and tool
-// handlers. Real resource and tool registration arrives in later tasks of the
-// implementation plan; this file is the wiring.
+// handlers.
 package mcp
 
 import (
@@ -194,11 +193,12 @@ func (s *Server) bearerAuth(next http.Handler) http.Handler {
 	})
 }
 
-// filterToolsForIdentity is wired as a WithToolFilter for tools/list. It
-// receives the identity-carrying context from mcp-go (see WithHTTPContextFunc
-// above) and is expected to drop tools the caller can't run. The real
-// implementation lands in Task 10; the default is a pass-through so the
-// constructor compiles without behavior change.
+// filterToolsForIdentity is wired as a WithToolFilter for tools/list. Tier
+// gating already happened at registration, and per-resource ACL is enforced
+// inside each handler at call time, so this is a pass-through. Refinements
+// (e.g. hiding write tools from identities with no write grants at all) can
+// add filtering here without widening access — returning the full slice
+// cannot grant anything the call-time ACL check would otherwise deny.
 func (s *Server) filterToolsForIdentity(_ context.Context, tools []mcplib.Tool) []mcplib.Tool {
 	return tools
 }

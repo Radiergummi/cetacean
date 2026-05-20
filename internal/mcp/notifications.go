@@ -100,7 +100,8 @@ func (nm *NotificationManager) IsListChange(event cache.Event) bool {
 }
 
 // sessionIDs returns a snapshot of all sessions currently holding at least one
-// subscription. Used by the dispatch path to decide who needs a notification.
+// subscription. Used by tests; the dispatch path uses matchingDeliveries to
+// avoid the N+1 RLock pattern.
 func (nm *NotificationManager) sessionIDs() []string {
 	nm.mu.RLock()
 	defer nm.mu.RUnlock()
@@ -112,6 +113,44 @@ func (nm *NotificationManager) sessionIDs() []string {
 		out = append(out, id)
 	}
 	return out
+}
+
+// matchingDeliveries walks every session's subscriptions under a single RLock
+// and returns the (session, uri) pairs that need notification for this event.
+// The returned slice may be nil when no session is interested. The lock is
+// released before the caller dispatches notifications so a slow send cannot
+// block subscribe/unsubscribe.
+func (nm *NotificationManager) matchingDeliveries(event cache.Event) []delivery {
+	prefix := eventTypeToURIPrefix(event.Type)
+	if prefix == "" || event.ID == "" {
+		return nil
+	}
+	detail := prefix + event.ID
+	logURI := ""
+	if event.Type == cache.EventService {
+		logURI = detail + "/logs"
+	}
+
+	nm.mu.RLock()
+	defer nm.mu.RUnlock()
+
+	var out []delivery
+	for sessionID, subs := range nm.subscriptions {
+		if _, ok := subs[detail]; ok {
+			out = append(out, delivery{sessionID: sessionID, uri: detail})
+		}
+		if logURI != "" {
+			if _, ok := subs[logURI]; ok {
+				out = append(out, delivery{sessionID: sessionID, uri: logURI})
+			}
+		}
+	}
+	return out
+}
+
+type delivery struct {
+	sessionID string
+	uri       string
 }
 
 func eventTypeToURIPrefix(t cache.EventType) string {
@@ -163,12 +202,10 @@ func (s *Server) dispatchCacheEvent(event cache.Event) {
 		return
 	}
 
-	for _, sessionID := range s.notifications.sessionIDs() {
-		for _, uri := range s.notifications.MatchingURIs(sessionID, event) {
-			_ = s.mcpServer.SendNotificationToSpecificClient(sessionID, "notifications/resources/updated", map[string]any{
-				"uri": uri,
-			})
-		}
+	for _, d := range s.notifications.matchingDeliveries(event) {
+		_ = s.mcpServer.SendNotificationToSpecificClient(d.sessionID, "notifications/resources/updated", map[string]any{
+			"uri": d.uri,
+		})
 	}
 
 	if s.notifications.IsListChange(event) {
