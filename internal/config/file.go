@@ -57,6 +57,27 @@ type fileConfig struct {
 	Auth    *fileAuth    `toml:"auth"`
 	Sizing  *fileSizing  `toml:"sizing"`
 	ACL     *fileACL     `toml:"acl"`
+	MCP     *fileMCP     `toml:"mcp"`
+}
+
+type fileMCP struct {
+	Enabled         *bool         `toml:"enabled"`
+	OperationsLevel *int          `toml:"operations_level"`
+	SigningKey      *string       `toml:"signing_key"`
+	AccessTokenTTL  *string       `toml:"access_token_ttl"`
+	RefreshTokenTTL *string       `toml:"refresh_token_ttl"`
+	SessionIdleTTL  *string       `toml:"session_idle_ttl"`
+	MaxSessions     *int          `toml:"max_sessions"`
+	OAuth           *fileMCPOAuth `toml:"oauth"`
+}
+
+type fileMCPOAuth struct {
+	RequireResourceIndicator *bool    `toml:"require_resource_indicator"`
+	DCREnabled               *bool    `toml:"dcr_enabled"`
+	DCRRateLimit             *int     `toml:"dcr_rate_limit"`
+	DCRMaxClients            *int     `toml:"dcr_max_clients"`
+	CIMDEnabled              *bool    `toml:"cimd_enabled"`
+	AuthBypass               []string `toml:"auth_bypass"`
 }
 
 type fileSizing struct {
