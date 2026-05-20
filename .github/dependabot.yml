@@ -1,0 +1,29 @@
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
+      include: scope
+    labels:
+      - dependencies
+      - github-actions
+    # Bundle related actions into a single PR so a routine bump doesn't
+    # land 5 separate reviews. Dependabot reads the trailing `# v…`
+    # comment on each pinned SHA to figure out the current version, so
+    # the SHA-pinning convention in ci.yml/pages.yml/release.yml still
+    # works here.
+    groups:
+      actions-core:
+        patterns:
+          - "actions/*"
+      docker:
+        patterns:
+          - "docker/*"
