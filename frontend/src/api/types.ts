@@ -33,7 +33,7 @@ export interface Service {
   Spec: {
     Name: string;
     Labels: Record<string, string> | null;
-    TaskTemplate: {
+    TaskTemplate?: {
       ContainerSpec?: {
         Image: string;
         Command?: string[] | null;
@@ -611,16 +611,18 @@ export interface PrometheusResponse {
   };
 }
 
+type TaskTemplate = NonNullable<Service["Spec"]["TaskTemplate"]>;
+
 export type Healthcheck = NonNullable<
-  NonNullable<Service["Spec"]["TaskTemplate"]["ContainerSpec"]>["Healthcheck"]
+  NonNullable<TaskTemplate["ContainerSpec"]>["Healthcheck"]
 >;
 
-export type Placement = NonNullable<Service["Spec"]["TaskTemplate"]["Placement"]>;
+export type Placement = NonNullable<TaskTemplate["Placement"]>;
 export type PortConfig = NonNullable<
   NonNullable<NonNullable<Service["Spec"]["EndpointSpec"]>["Ports"]>[number]
 >;
 export type UpdateConfig = NonNullable<Service["Spec"]["UpdateConfig"]>;
-export type LogDriver = NonNullable<Service["Spec"]["TaskTemplate"]["LogDriver"]>;
+export type LogDriver = NonNullable<TaskTemplate["LogDriver"]>;
 
 export interface ContainerConfig {
   command?: string[];

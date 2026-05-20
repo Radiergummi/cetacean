@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Service detail page no longer crashes when a service's task template is absent from the response
+
 ## [0.11.2] - 2026-05-20
 
 ### Security

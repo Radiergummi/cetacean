@@ -62,7 +62,7 @@ export default function ServiceList() {
           header: "Image",
           cell: ({ Spec }) => (
             <span className="font-mono text-xs">
-              {Spec.TaskTemplate.ContainerSpec?.Image?.split("@")[0]}
+              {Spec.TaskTemplate?.ContainerSpec?.Image?.split("@")[0]}
             </span>
           ),
         },
@@ -213,7 +213,7 @@ export default function ServiceList() {
             }
             to={`/services/${service.ID}`}
             badge={<ServiceStatusBadge service={service} />}
-            subtitle={service.Spec.TaskTemplate.ContainerSpec?.Image?.split("@")[0]}
+            subtitle={service.Spec.TaskTemplate?.ContainerSpec?.Image?.split("@")[0]}
             meta={[
               desired != null ? (
                 <ReplicaHealth

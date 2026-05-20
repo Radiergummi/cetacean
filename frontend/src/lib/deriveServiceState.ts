@@ -19,11 +19,11 @@ export interface DerivedServiceState {
 export function deriveServiceSubResources(service: Service): DerivedServiceState {
   const spec = service.Spec;
   const taskTemplate = spec.TaskTemplate;
-  const containerSpec = taskTemplate.ContainerSpec;
+  const containerSpec = taskTemplate?.ContainerSpec;
 
   return {
     envVars: envSliceToMap(containerSpec?.Env),
-    serviceResources: taskTemplate.Resources ?? null,
+    serviceResources: taskTemplate?.Resources ?? null,
     serviceLabels: spec.Labels ?? {},
     healthcheck: containerSpec?.Healthcheck ?? null,
     specPorts: spec.EndpointSpec?.Ports ?? [],
@@ -53,7 +53,7 @@ function envSliceToMap(env?: string[] | null): Record<string, string> {
 }
 
 function containerConfigFromSpec(
-  spec: Service["Spec"]["TaskTemplate"]["ContainerSpec"],
+  spec: NonNullable<Service["Spec"]["TaskTemplate"]>["ContainerSpec"],
 ): ContainerConfig {
   if (!spec) {
     return {

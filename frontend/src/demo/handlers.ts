@@ -77,7 +77,7 @@ function createTask(service: Service, slot: number, node: Node): Task {
       },
     },
     DesiredState: "running",
-    Spec: { ContainerSpec: { Image: service.Spec.TaskTemplate.ContainerSpec?.Image ?? "" } },
+    Spec: { ContainerSpec: { Image: service.Spec.TaskTemplate!.ContainerSpec?.Image ?? "" } },
     ServiceName: service.Spec.Name,
     NodeHostname: node.Description.Hostname,
   };
@@ -232,7 +232,7 @@ function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
   let reservedMemory = 0;
 
   for (const service of dataset.services) {
-    const reservations = service.Spec.TaskTemplate.Resources?.Reservations;
+    const reservations = service.Spec.TaskTemplate!.Resources?.Reservations;
 
     if (!reservations) {
       continue;
@@ -324,7 +324,7 @@ function buildStackSummaries(dataset: Dataset): StackSummary[] {
         updatingServices++;
       }
 
-      const limits = service.Spec.TaskTemplate.Resources?.Limits;
+      const limits = service.Spec.TaskTemplate!.Resources?.Limits;
 
       if (limits) {
         memoryLimitBytes += (limits.MemoryBytes ?? 0) * replicas;
@@ -387,13 +387,13 @@ function searchDataset(
     "services",
     dataset.services
       .filter((service) => {
-        const image = service.Spec.TaskTemplate.ContainerSpec?.Image ?? "";
+        const image = service.Spec.TaskTemplate!.ContainerSpec?.Image ?? "";
         return matches(service.Spec.Name) || matches(image);
       })
       .map((service) => ({
         id: service.ID,
         name: service.Spec.Name,
-        detail: (service.Spec.TaskTemplate.ContainerSpec?.Image ?? "").split("@")[0],
+        detail: (service.Spec.TaskTemplate!.ContainerSpec?.Image ?? "").split("@")[0],
       })),
   );
 
@@ -550,7 +550,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         replicas:
           service.Spec.Mode.Replicated?.Replicas ??
           (service.Spec.Mode.Global ? dataset.nodes.length : 1),
-        image: (service.Spec.TaskTemplate.ContainerSpec?.Image ?? "").split("@")[0],
+        image: (service.Spec.TaskTemplate!.ContainerSpec?.Image ?? "").split("@")[0],
         ports: (service.Spec.EndpointSpec?.Ports ?? []).map(
           ({ PublishedPort, TargetPort, Protocol }) => `${PublishedPort}:${TargetPort}/${Protocol}`,
         ),
@@ -563,7 +563,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       const serviceNetworks = new Map<string, string[]>();
 
       for (const service of dataset.services) {
-        const targets = (service.Spec.TaskTemplate.Networks ?? []).map(({ Target }) => Target);
+        const targets = (service.Spec.TaskTemplate!.Networks ?? []).map(({ Target }) => Target);
         serviceNetworks.set(service.ID, targets);
       }
 
@@ -692,7 +692,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      const envArray = service.Spec.TaskTemplate.ContainerSpec?.Env ?? [];
+      const envArray = service.Spec.TaskTemplate!.ContainerSpec?.Env ?? [];
       const env: Record<string, string> = {};
 
       for (const entry of envArray) {
@@ -726,7 +726,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       }
 
       return jsonResponse<{ resources: Record<string, unknown> }>({
-        resources: service.Spec.TaskTemplate.Resources ?? {},
+        resources: service.Spec.TaskTemplate!.Resources ?? {},
       });
     }),
 
@@ -738,7 +738,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       }
 
       return jsonResponse<{ healthcheck: Healthcheck | null }>({
-        healthcheck: service.Spec.TaskTemplate.ContainerSpec?.Healthcheck ?? null,
+        healthcheck: service.Spec.TaskTemplate!.ContainerSpec?.Healthcheck ?? null,
       });
     }),
 
@@ -749,7 +749,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      const configs = (service.Spec.TaskTemplate.ContainerSpec?.Configs ?? []).map(
+      const configs = (service.Spec.TaskTemplate!.ContainerSpec?.Configs ?? []).map(
         ({ ConfigID, ConfigName, File }) => ({
           configID: ConfigID,
           configName: ConfigName,
@@ -766,7 +766,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      const secrets = (service.Spec.TaskTemplate.ContainerSpec?.Secrets ?? []).map(
+      const secrets = (service.Spec.TaskTemplate!.ContainerSpec?.Secrets ?? []).map(
         ({ SecretID, SecretName, File }) => ({
           secretID: SecretID,
           secretName: SecretName,
@@ -783,7 +783,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      const networks = (service.Spec.TaskTemplate.Networks ?? []).map(({ Target, Aliases }) => ({
+      const networks = (service.Spec.TaskTemplate!.Networks ?? []).map(({ Target, Aliases }) => ({
         target: Target,
         aliases: Aliases ?? undefined,
       }));
@@ -798,7 +798,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       }
 
       return jsonResponse<{ mounts: ServiceMount[] }>({
-        mounts: service.Spec.TaskTemplate.ContainerSpec?.Mounts ?? [],
+        mounts: service.Spec.TaskTemplate!.ContainerSpec?.Mounts ?? [],
       });
     }),
 
@@ -822,7 +822,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       }
 
       return jsonResponse<{ placement: Placement }>({
-        placement: service.Spec.TaskTemplate.Placement ?? {},
+        placement: service.Spec.TaskTemplate!.Placement ?? {},
       });
     }),
 
@@ -858,7 +858,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       }
 
       return jsonResponse<{ logDriver: Partial<LogDriver> }>({
-        logDriver: service.Spec.TaskTemplate.LogDriver ?? {},
+        logDriver: service.Spec.TaskTemplate!.LogDriver ?? {},
       });
     }),
 
@@ -869,7 +869,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      const container = service.Spec.TaskTemplate.ContainerSpec;
+      const container = service.Spec.TaskTemplate!.ContainerSpec;
       return jsonResponse<{ containerConfig: ContainerConfig }>({
         containerConfig: {
           command: container?.Command ?? [],
@@ -1006,7 +1006,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         services: findServicesUsing(
           dataset,
           (service) =>
-            service.Spec.TaskTemplate.ContainerSpec?.Configs?.some(
+            service.Spec.TaskTemplate!.ContainerSpec?.Configs?.some(
               ({ ConfigID }) => ConfigID === config.ID,
             ) ?? false,
         ),
@@ -1032,7 +1032,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         services: findServicesUsing(
           dataset,
           (service) =>
-            service.Spec.TaskTemplate.ContainerSpec?.Secrets?.some(
+            service.Spec.TaskTemplate!.ContainerSpec?.Secrets?.some(
               ({ SecretID }) => SecretID === secret.ID,
             ) ?? false,
         ),
@@ -1058,7 +1058,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         services: findServicesUsing(
           dataset,
           (service) =>
-            service.Spec.TaskTemplate.Networks?.some(({ Target }) => Target === network.Id) ??
+            service.Spec.TaskTemplate!.Networks?.some(({ Target }) => Target === network.Id) ??
             false,
         ),
       });
@@ -1083,7 +1083,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         services: findServicesUsing(
           dataset,
           (service) =>
-            service.Spec.TaskTemplate.ContainerSpec?.Mounts?.some(
+            service.Spec.TaskTemplate!.ContainerSpec?.Mounts?.some(
               ({ Source }) => Source === volume.Name,
             ) ?? false,
         ),
@@ -1319,8 +1319,8 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
       service.PreviousSpec = JSON.parse(JSON.stringify(service.Spec));
 
-      if (service.Spec.TaskTemplate.ContainerSpec) {
-        service.Spec.TaskTemplate.ContainerSpec.Image = body.image;
+      if (service.Spec.TaskTemplate!.ContainerSpec) {
+        service.Spec.TaskTemplate!.ContainerSpec.Image = body.image;
       }
 
       service.Version.Index++;
@@ -1480,7 +1480,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       }
 
       const body = (await request.json()) as Record<string, string | null>;
-      const container = service.Spec.TaskTemplate.ContainerSpec;
+      const container = service.Spec.TaskTemplate!.ContainerSpec;
 
       if (!container) {
         return notFound();
@@ -1553,10 +1553,10 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       [
         [
           "resources",
-          (service: Service) => service.Spec.TaskTemplate.Resources ?? {},
+          (service: Service) => service.Spec.TaskTemplate!.Resources ?? {},
           (service: Service, body: any) => {
-            service.Spec.TaskTemplate.Resources = {
-              ...service.Spec.TaskTemplate.Resources,
+            service.Spec.TaskTemplate!.Resources = {
+              ...service.Spec.TaskTemplate!.Resources,
               ...body,
             };
           },
@@ -1585,20 +1585,20 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         ],
         [
           "log-driver",
-          (service: Service) => service.Spec.TaskTemplate.LogDriver ?? {},
+          (service: Service) => service.Spec.TaskTemplate!.LogDriver ?? {},
           (service: Service, body: any) => {
-            service.Spec.TaskTemplate.LogDriver = {
-              ...service.Spec.TaskTemplate.LogDriver,
+            service.Spec.TaskTemplate!.LogDriver = {
+              ...service.Spec.TaskTemplate!.LogDriver,
               ...body,
             };
           },
         ],
         [
           "healthcheck",
-          (service: Service) => service.Spec.TaskTemplate.ContainerSpec?.Healthcheck ?? null,
+          (service: Service) => service.Spec.TaskTemplate!.ContainerSpec?.Healthcheck ?? null,
           (service: Service, body: any) => {
-            if (service.Spec.TaskTemplate.ContainerSpec)
-              service.Spec.TaskTemplate.ContainerSpec.Healthcheck = body;
+            if (service.Spec.TaskTemplate!.ContainerSpec)
+              service.Spec.TaskTemplate!.ContainerSpec.Healthcheck = body;
           },
         ],
       ] as [string, (service: Service) => unknown, (service: Service, body: any) => void][]
@@ -1620,12 +1620,12 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     http.put("*/services/:id/placement", async ({ params, request }) => {
       const service = dataset.servicesByID.get(params.id as string);
       if (!service) return notFound();
-      service.Spec.TaskTemplate.Placement = (await request.json()) as any;
+      service.Spec.TaskTemplate!.Placement = (await request.json()) as any;
       service.Version.Index++;
       service.UpdatedAt = new Date().toISOString();
       broadcastServiceUpdate(service);
       return jsonResponse<{ placement: Placement | undefined }>({
-        placement: service.Spec.TaskTemplate.Placement,
+        placement: service.Spec.TaskTemplate!.Placement,
       });
     }),
 

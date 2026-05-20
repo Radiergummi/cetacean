@@ -100,7 +100,7 @@ export function DeployConfigSection({
                 resources={serviceResources}
                 onSaved={onResourcesSaved}
                 canEdit={canPatch}
-                pids={taskTemplate.Resources?.Limits?.Pids}
+                pids={taskTemplate?.Resources?.Limits?.Pids}
                 allocation={allocation}
               />
             </div>
@@ -110,14 +110,14 @@ export function DeployConfigSection({
             <div className="flex flex-col gap-3 rounded-lg border p-3">
               <PlacementEditor
                 serviceId={serviceId}
-                placement={taskTemplate.Placement ?? null}
+                placement={taskTemplate?.Placement ?? null}
                 onSaved={onRefetch}
                 canEdit={canPatch}
               />
             </div>
           )}
 
-          {taskTemplate.RestartPolicy && (
+          {taskTemplate?.RestartPolicy && (
             <div className="flex flex-col gap-3 rounded-lg border p-3">
               <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 Restart Policy
@@ -149,7 +149,7 @@ export function DeployConfigSection({
         <div className="flex flex-col gap-4">
           <LogDriverEditor
             serviceId={serviceId}
-            logDriver={taskTemplate.LogDriver ?? null}
+            logDriver={taskTemplate?.LogDriver ?? null}
             onSaved={onRefetch}
             canEdit={canPatch}
           />

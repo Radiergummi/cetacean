@@ -76,7 +76,7 @@ function makeTask(dataset: Dataset, service: Service, slot: number): Task {
       ContainerStatus: { ContainerID: nextContainerID(), ExitCode: 0 },
     },
     DesiredState: "running",
-    Spec: { ContainerSpec: { Image: service.Spec.TaskTemplate.ContainerSpec?.Image ?? "" } },
+    Spec: { ContainerSpec: { Image: service.Spec.TaskTemplate!.ContainerSpec?.Image ?? "" } },
     ServiceName: service.Spec.Name,
     NodeHostname: node.Description.Hostname,
   };

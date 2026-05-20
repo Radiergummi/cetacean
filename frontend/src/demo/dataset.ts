@@ -849,7 +849,7 @@ function buildTasks(services: Service[], nodesByID: Map<string, Node>): Task[] {
   };
 
   const getImage = (index: number): string =>
-    serviceByIndex(index).Spec.TaskTemplate.ContainerSpec?.Image ?? "";
+    serviceByIndex(index).Spec.TaskTemplate?.ContainerSpec?.Image ?? "";
 
   const tasks: Task[] = [];
 
