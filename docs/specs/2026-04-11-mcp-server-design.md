@@ -10,9 +10,14 @@ Embed an MCP (Model Context Protocol) server in Cetacean, exposing cluster state
 
 Cetacean holds a complete, real-time view of a Docker Swarm cluster. An MCP server makes this view available to AI agents (Claude Code, etc.), turning Cetacean from a dashboard humans look at into a cluster interface agents can reason over. Primary use case: DevOps/SRE using an AI assistant for incident triage and routine cluster management, with a path toward autonomous agents later.
 
+## Protocol and library baseline
+
+- **MCP protocol version:** target the latest streamable-HTTP revision supported by the pinned `mcp-go` release (the 2025-03-26 transport with the 2025-06-18 authorization profile at minimum). Negotiate downward if the client requests an older `protocolVersion` on `initialize`.
+- **Library:** [`github.com/mark3labs/mcp-go`](https://github.com/mark3labs/mcp-go) at a pinned tagged release. The library is moving quickly; the implementation plan begins with a Task that pins a specific version, audits its current API surface (`NewStreamableHTTPServer`, `WithStateful`, `WithSessionIdleTTL`, `WithHTTPContextFunc`, tool/resource registration signatures), and updates the rest of the plan if any names have drifted. Re-validate at every dependency bump.
+
 ## Transport
 
-Streamable HTTP (MCP spec 2025-03-26). Single endpoint at `{base_path}/mcp`. All JSON-RPC requests and responses go through this path. Server can upgrade responses to SSE for streaming notifications.
+Streamable HTTP. Single endpoint at `{base_path}/mcp`. All JSON-RPC requests and responses go through this path. Server can upgrade responses to SSE for streaming notifications.
 
 Stateful sessions: the server issues `Mcp-Session-Id` headers. Sessions enable server-initiated notifications (resource changes, log streams) without polling.
 
@@ -51,53 +56,118 @@ The `negotiate` middleware is skipped for `/mcp` (always JSON-RPC). Auth middlew
 
 ## OAuth 2.1 Authorization Server
 
-When `CETACEAN_MCP=true` and auth mode is not `none`, Cetacean exposes an OAuth 2.1 authorization server for MCP client authorization.
+When `CETACEAN_MCP=true` and auth mode is not `none`, Cetacean exposes an OAuth 2.1 authorization server **and** identifies itself as a protected resource for the `/mcp` endpoint. The implementation targets the MCP authorization profile as revised in the 2025-06-18 spec update (Resource Indicators, Protected Resource Metadata, AS discovery via `WWW-Authenticate`).
 
 ### Endpoints
 
 ```
-GET  {base_path}/.well-known/oauth-authorization-server   -> server metadata (RFC 8414)
+GET  {base_path}/.well-known/oauth-authorization-server   -> AS metadata (RFC 8414)
+GET  {base_path}/.well-known/oauth-protected-resource     -> PRM (RFC 9728), advertises the AS
 GET  {base_path}/oauth/authorize                          -> authorization endpoint
 POST {base_path}/oauth/token                              -> token endpoint
 POST {base_path}/oauth/revoke                             -> token revocation (RFC 7009)
+POST {base_path}/oauth/register                           -> Dynamic Client Registration (RFC 7591)
 ```
+
+### Resource Server discovery
+
+When an unauthenticated or invalidly-authenticated request hits `/mcp`, Cetacean responds:
+
+```
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Bearer realm="mcp",
+  resource_metadata="https://cetacean.example.com/.well-known/oauth-protected-resource",
+  error="invalid_token"
+```
+
+The PRM document advertises:
+
+```json
+{
+  "resource": "https://cetacean.example.com/mcp",
+  "authorization_servers": ["https://cetacean.example.com"],
+  "bearer_methods_supported": ["header"],
+  "resource_documentation": "https://cetacean.example.com/api"
+}
+```
+
+Modern MCP clients use this chain to discover the AS without out-of-band config.
+
+### Resource Indicators (RFC 8707)
+
+Every authorization and token request MUST include a `resource` parameter naming the MCP endpoint (e.g. `resource=https://cetacean.example.com/mcp`). Cetacean:
+
+- Rejects authorize/token requests missing the `resource` parameter (or with a `resource` that doesn't match the MCP endpoint exactly).
+- Issues access tokens with `aud` set to the canonical MCP endpoint URL — **not** the literal string `"mcp"`. Tokens are scoped to this specific Cetacean instance and cannot be replayed against another deployment.
+- For backwards compatibility with older mcp-go clients that don't send `resource`, the server MAY accept the request and stamp the default audience; this is controlled by `CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR` (default `true`).
 
 ### Flow
 
-1. MCP client discovers OAuth metadata from `/.well-known/oauth-authorization-server`.
-2. Client redirects user to `/oauth/authorize?response_type=code&client_id=...&code_challenge=...`.
-3. Cetacean's auth middleware authenticates the user using whatever auth mode is configured (OIDC redirects to IdP, Tailscale reads identity from connection, cert reads client certificate, headers reads proxy headers).
-4. User sees a server-rendered HTML consent screen showing the verified client name/logo (from CIMD) and the redirect URI. This is not part of the SPA -- it's a standalone page served by the OAuth handler, since the flow is initiated by external MCP clients.
-5. Cetacean issues an authorization code and redirects back to the client.
-6. Client exchanges the code for access token + refresh token at `/oauth/token`.
-7. Subsequent MCP requests include `Authorization: Bearer <token>`.
+1. Client hits `/mcp` without credentials → gets 401 with `WWW-Authenticate: ... resource_metadata=...`.
+2. Client fetches PRM → discovers the AS URL.
+3. Client fetches AS metadata at `/.well-known/oauth-authorization-server` → gets `registration_endpoint`, `authorization_endpoint`, `token_endpoint`.
+4. Client identification: either
+   - **DCR**: POST to `/oauth/register` with metadata, receive a client_id (and optionally `client_secret`, but we reject symmetric methods so DCR clients are public + PKCE-only).
+   - **CIMD**: use an `https://` URL as `client_id` pointing to a self-hosted metadata document. Cetacean fetches and verifies it on first use.
+5. Client redirects user to `/oauth/authorize?response_type=code&client_id=...&code_challenge=...&resource=...&state=...`.
+6. Cetacean's auth middleware authenticates the user using whatever auth mode is configured.
+7. User sees a server-rendered HTML consent screen showing the verified client name/logo and the redirect URI.
+8. Cetacean issues an authorization code (bound to `client_id`, `redirect_uri`, `code_challenge`, `resource`, identity) and redirects back to the client.
+9. Client exchanges the code for access token + refresh token at `/oauth/token` (must echo back the same `resource`).
+10. Subsequent MCP requests include `Authorization: Bearer <token>`.
 
-This works with all auth providers because the authorization endpoint sits behind the existing auth middleware. By the time the consent screen renders, Cetacean knows who the user is regardless of auth mode.
+This works with web-capable auth providers (OIDC, headers, tailscale) because the authorization endpoint sits behind the existing auth middleware. By the time the consent screen renders, Cetacean knows who the user is.
+
+**`cert` auth mode caveat:** mTLS-based auth doesn't work in a browser consent flow because the user-agent driving consent isn't the same TLS endpoint that presented the client certificate. With `cert` mode the OAuth endpoints return 503 with a `Cetacean-Auth-Hint` header telling the client that programmatic auth (cert) is the only path; in that case MCP clients should authenticate directly against `/mcp` with their own client cert and skip OAuth entirely. This is opt-in via `CETACEAN_MCP_AUTH_BYPASS=cert`.
 
 When auth mode is `none`, the OAuth endpoints are not registered and the `/mcp` endpoint is unauthenticated.
 
-### Client Identification (CIMD)
+### Client Identification
 
-Client identification uses OAuth Client ID Metadata Documents ([draft-ietf-oauth-client-id-metadata-document-01](https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-01.html)). The `client_id` is an `https://` URL pointing to a JSON metadata document.
+Two client identification paths are supported in parallel. Both produce identical access-token semantics; they differ only in how Cetacean learns about the client.
 
-When Cetacean receives an authorization request:
+**Path A — Dynamic Client Registration (RFC 7591).** The default for ecosystem MCP clients (Claude Code, Cursor, etc.) that don't self-host metadata.
+
+```
+POST {base_path}/oauth/register
+Content-Type: application/json
+
+{
+  "client_name": "Claude Code",
+  "redirect_uris": ["http://localhost:33418/callback"],
+  "token_endpoint_auth_method": "none",
+  "grant_types": ["authorization_code", "refresh_token"],
+  "response_types": ["code"]
+}
+```
+
+Cetacean responds with a generated `client_id` (`cetacean-<random>`) and persists the registration in-memory (initial version) keyed by client_id. Symmetric auth methods (`client_secret_*`) are rejected — every DCR client is a public client and MUST use PKCE. Registrations are subject to a per-host rate limit (default 10/hour/IP) and a global cap (default 1000) to prevent abuse; over-cap registrations get 429.
+
+DCR client metadata is **not** verified — anyone can register any `client_name`. The consent screen makes this visible: DCR-registered clients are flagged "Self-reported identity" with a yellow badge.
+
+**Path B — Client ID Metadata Documents (CIMD).** For clients that publish their own metadata at a stable URL ([draft-ietf-oauth-client-id-metadata-document-01](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/)). The `client_id` is an `https://` URL pointing to a JSON metadata document. CIMD is still an IETF draft, so the implementation is gated behind `CETACEAN_MCP_CIMD_ENABLED` (default `true`) so we can disable it if the draft changes incompatibly.
+
+When Cetacean receives an authorization request with a URL-shaped `client_id`:
 
 1. Fetch the document at the `client_id` URL (with SSRF protections, see Security section).
 2. Validate the `client_id` field in the document matches the URL (exact string comparison).
 3. Validate `redirect_uris` includes the requested `redirect_uri`.
 4. Reject symmetric auth methods (`client_secret_post`, `client_secret_basic`).
-5. Display `client_name` and `logo_uri` on the consent screen.
+5. Display `client_name` and `logo_uri` on the consent screen with a green "Verified via published metadata" badge.
 6. Cache the metadata in-memory (1-hour TTL).
 
-If the `client_id` is not a URL (plain string), Cetacean treats it as an unverified public client. The consent screen shows the raw ID with a warning.
+If the `client_id` is neither a URL nor a known DCR registration, the request is rejected with `invalid_client`.
 
 ### Tokens
 
-- **Access tokens**: JWTs signed with HMAC-SHA256 using the shared signing key. Claims: `sub` (subject), `groups`, `iss` (this Cetacean instance), `aud` ("mcp"), `exp`, `iat`, `jti`. Default 1-hour expiry.
-- **Refresh tokens**: opaque, cryptographically random, stored in-memory as a hash. Default 30-day expiry. Rotation on each use (new refresh token issued, old one invalidated). If a revoked refresh token is presented, the entire grant is revoked (token theft detection).
-- **Authorization codes**: cryptographically random, single-use, 60-second expiry. Bound to `client_id`, `redirect_uri`, `code_challenge`, and authenticated identity.
+- **Access tokens**: JWTs signed with HMAC-SHA256 (HS256) using the shared signing key. Claims: `sub` (subject), `groups`, `iss` (this Cetacean instance), `aud` (canonical MCP endpoint URL from the `resource` parameter), `exp`, `iat`, `jti`, `client_id`. Default 1-hour expiry. HS256 is chosen because the AS and RS are the same process — there's no third party validating tokens, so the symmetric/asymmetric distinction doesn't matter. If we later split the AS into a separate service this should migrate to RS256/ES256.
+- **Refresh tokens**: opaque, cryptographically random, stored in-memory as a hash. Default 30-day expiry. Rotation on each use (new refresh token issued, old one invalidated). If a previously-rotated refresh token is presented again, the entire grant family is revoked (token theft detection).
+- **Authorization codes**: cryptographically random, single-use, 60-second expiry. Bound to `client_id`, `redirect_uri`, `code_challenge`, `resource`, and authenticated identity.
+- **Scopes are not used.** The access token grants whatever the underlying identity (sub + groups) is authorized to do via Cetacean ACLs. There is no MCP-specific scope vocabulary; access is enforced at every tool call and resource read through the existing `acl.Evaluator`. The token endpoint silently ignores any `scope` parameter.
 
-JWTs with a shared signing key are designed for multi-replica deployments. Any Cetacean replica can validate any token without cross-replica communication. Refresh tokens are in-memory and per-replica; a token refresh that hits a different replica requires re-authorization. This is an acceptable trade-off for the initial version.
+**Persistence caveats (initial version):**
+- DCR registrations, authorization codes, and refresh tokens are all in-memory. A restart logs every MCP client out (they will silently re-authorize via the discovery chain on next 401). Access-token JWTs survive restarts because they're self-contained — but only until they expire (default 1h). This is acceptable for v1; documented in user docs.
+- JWTs with a shared signing key support multi-replica deployments at the access-token layer. Refresh tokens and DCR registrations are per-replica; a token refresh or registered-client lookup that hits a different replica requires re-auth.
 
 ## Resources
 
@@ -191,7 +261,17 @@ All resources return `application/json` text content. JSON structure mirrors the
 - If the tier is too low: structured error "this operation requires operations level N".
 - If ACL denies: structured error "write access denied for resource type:name".
 - Tool annotations include `readOnlyHint` (true for reads, false for writes) and `destructiveHint` (true for tier 3 removals).
-- Tool list is filtered per-request: tools the identity can never use (due to tier or ACL) are omitted from `tools/list`.
+
+### Per-Request Tool Filtering
+
+The MCP spec lets clients call `tools/list`; we want the response to reflect *what this identity can do right now*, not the global registry. The global tier filter (drop tools above `effectiveOperationsLevel`) is done once at server construction and is cheap. ACL-based filtering is per-identity and must be evaluated on every `tools/list` call.
+
+`mcp-go`'s `AddTool` registers tools on a shared registry, so we cannot rely on it for identity-scoped filtering. Two viable strategies:
+
+1. **Intercept `tools/list` at the JSON-RPC layer** — register a custom handler that calls into mcp-go for the registry, then filters the response by walking each tool's "would this identity be allowed?" predicate (tier already filtered globally; ACL evaluated against the identity in context). This is the chosen approach: one extra hook, no upstream patches.
+2. ~~Per-session MCPServer instances~~ — discarded: prohibitive memory and re-registration cost.
+
+If mcp-go's current release doesn't expose a clean hook for intercepting `tools/list`, the Task 10 plan falls back to filtering inside each tool's *call* handler (returning `not_authorized` errors at call time) and accepts that `tools/list` over-reports until upstream gains the hook. This is captured as a TODO with a tracking link.
 
 ## Session Lifecycle
 
@@ -217,15 +297,18 @@ Session {
 ### Notification Flow
 
 ```
-cache.OnChange event
-  -> MCP session manager
-  -> for each active session:
-      -> does the event match any subscription?
-      -> does the identity have read access? (ACL re-checked per notification)
-      -> if yes: send notifications/resources/updated
+cache change event
+  -> cache listener fan-out (broadcaster + MCP notification manager)
+  -> MCP session manager:
+      -> for each active session:
+          -> does the event match any subscription?
+          -> does the identity have read access? (ACL re-checked per notification)
+          -> if yes: send notifications/resources/updated
 ```
 
 For list changes (resource created/removed), send `notifications/resources/list_changed` to all sessions with appropriate read access.
+
+**Cache listener prerequisite:** `cache.Cache` currently exposes only a single `SetOnChange` slot, owned by the SSE broadcaster. This is replaced with a multi-listener registry (`AddOnChangeListener(fn) (cancel func())`) so MCP notifications can subscribe without displacing the broadcaster. The migration is the first task in the implementation plan and ships independently of MCP.
 
 ### Session Cleanup
 
@@ -283,13 +366,21 @@ Sessions are ephemeral and reconnect-friendly. Designed for multi-replica deploy
 
 **Token validation (on every MCP request):**
 - Verify JWT signature.
-- Verify `exp` (not expired), `iss` (this Cetacean instance), `aud` ("mcp").
+- Verify `exp` (not expired), `iss` (this Cetacean instance), `aud` (must match the canonical MCP endpoint URL — prevents replay against a sibling Cetacean deployment).
 - Extract identity (`sub`, `groups`) for ACL evaluation.
 - Reject tokens not issued by this server (no token passthrough).
+- On any validation failure, emit `401` with a `WWW-Authenticate` header carrying `resource_metadata=` and an `error=` code (`invalid_token`, `insufficient_scope`, etc.) per RFC 6750.
 
 **Refresh token theft detection:**
 - Each refresh issues a new refresh token and invalidates the old one.
-- If a revoked refresh token is presented, revoke the entire grant.
+- Consumed token hashes are retained until the grant's original expiry, indexed by `grant_id`.
+- If a previously-rotated refresh token is presented again, revoke the entire grant family (all tokens sharing that `grant_id`).
+
+**Dynamic Client Registration abuse:**
+- Per-IP rate limit on `/oauth/register` (default 10/hour, configurable via `CETACEAN_MCP_DCR_RATE_LIMIT`).
+- Global cap on registered clients (default 1000, configurable via `CETACEAN_MCP_DCR_MAX_CLIENTS`).
+- Registrations are evicted LRU when the cap is hit.
+- DCR clients cannot self-elevate to "verified" status; they always render with the self-reported badge on consent.
 
 ### CIMD Fetch (SSRF Prevention)
 
@@ -339,6 +430,12 @@ Fetching client metadata documents is a server-side request to an attacker-contr
 | `CETACEAN_MCP_REFRESH_TOKEN_TTL` | `720h` | Refresh token lifetime (30 days) |
 | `CETACEAN_MCP_SESSION_IDLE_TTL` | `30m` | Idle session cleanup |
 | `CETACEAN_MCP_MAX_SESSIONS` | `256` | Concurrent session limit |
+| `CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR` | `true` | Require RFC 8707 `resource` parameter on authorize/token |
+| `CETACEAN_MCP_DCR_ENABLED` | `true` | Enable Dynamic Client Registration endpoint |
+| `CETACEAN_MCP_DCR_RATE_LIMIT` | `10` | Max DCR registrations per IP per hour |
+| `CETACEAN_MCP_DCR_MAX_CLIENTS` | `1000` | Global cap on registered clients |
+| `CETACEAN_MCP_CIMD_ENABLED` | `true` | Enable Client ID Metadata Documents |
+| `CETACEAN_MCP_AUTH_BYPASS` | — | Comma-separated auth modes that skip OAuth (e.g. `cert`) |
 
 ### TOML
 
@@ -351,6 +448,14 @@ access_token_ttl = "1h"
 refresh_token_ttl = "720h"
 session_idle_ttl = "30m"
 max_sessions = 256
+
+[mcp.oauth]
+require_resource_indicator = true
+dcr_enabled = true
+dcr_rate_limit = 10
+dcr_max_clients = 1000
+cimd_enabled = true
+auth_bypass = []  # e.g. ["cert"]
 ```
 
 ### Interactions with Existing Config

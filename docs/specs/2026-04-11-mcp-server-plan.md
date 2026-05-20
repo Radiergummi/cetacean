@@ -6,7 +6,9 @@
 
 **Architecture:** New `internal/cluster` package extracts domain logic shared between REST and MCP. New `internal/mcp` package wires `mcp-go`'s `StreamableHTTPServer` to the cache and write client. New `internal/mcp/oauth` package implements OAuth 2.1 AS with CIMD. All mounted on the existing router behind the existing auth middleware.
 
-**Tech Stack:** `github.com/mark3labs/mcp-go`, `crypto/hmac` (JWT), `html/template` (consent page)
+**Tech Stack:** `github.com/mark3labs/mcp-go` (pinned, audited in Task 0), `crypto/hmac` (JWT), `html/template` (consent page)
+
+> **Order matters.** Tasks 0 and 0.5 are prerequisites — the cache listener refactor and the mcp-go API audit ship and merge before any MCP work begins. They are deliberately small and review-friendly so they can land independently.
 
 ---
 
@@ -14,6 +16,11 @@
 
 | Action | File | Responsibility |
 |--------|------|----------------|
+| Modify | `internal/cache/cache.go` | Replace `SetOnChange` with multi-listener registry |
+| Modify | `internal/cache/cache_test.go` | Listener add/remove/cancel tests |
+| Modify | `internal/api/sse.go` | Migrate SSE broadcaster onto new listener API |
+| Modify | `main.go` | Replace `SetOnChange` call site with `AddOnChangeListener` |
+| Create | `docs/specs/2026-04-11-mcp-go-audit.md` | mcp-go API surface audit notes (Task 0.5) |
 | Create | `internal/config/mcp.go` | MCP config struct, env parsing, TOML support |
 | Create | `internal/config/mcp_test.go` | Config parsing tests |
 | Create | `internal/mcp/oauth/jwt.go` | JWT signing, verification, claims |
@@ -49,6 +56,140 @@
 | Modify | `internal/api/router.go` | Register MCP and OAuth endpoints |
 | Modify | `main.go` | Wire MCP server when enabled |
 | Modify | `go.mod` | Add `mark3labs/mcp-go` dependency |
+
+---
+
+### Task 0: Cache Multi-Listener Refactor
+
+**Why first:** the MCP notification bridge needs to subscribe to cache changes without displacing the existing SSE broadcaster. Today `cache.Cache` exposes a single `SetOnChange(fn)` slot. This task replaces it with a multi-listener registry, migrates the broadcaster, and lands as a standalone PR before any MCP work begins.
+
+**Files:**
+- Modify: `internal/cache/cache.go`
+- Modify: `internal/cache/cache_test.go`
+- Modify: `internal/api/sse.go` (and any other current `SetOnChange` callers)
+- Modify: `main.go`
+
+- [ ] **Step 1: Write failing tests for listener registry**
+
+```go
+// internal/cache/cache_test.go (append)
+
+func TestCache_MultipleListeners(t *testing.T) {
+    c := New(nil)
+
+    var aSeen, bSeen []Event
+    cancelA := c.AddOnChangeListener(func(e Event) { aSeen = append(aSeen, e) })
+    cancelB := c.AddOnChangeListener(func(e Event) { bSeen = append(bSeen, e) })
+    t.Cleanup(cancelA)
+    t.Cleanup(cancelB)
+
+    c.SetNode(swarm.Node{ID: "node1"})
+    if len(aSeen) != 1 || len(bSeen) != 1 {
+        t.Fatalf("listeners received %d / %d events, want 1 / 1", len(aSeen), len(bSeen))
+    }
+}
+
+func TestCache_ListenerCancel(t *testing.T) {
+    c := New(nil)
+
+    var seen int
+    cancel := c.AddOnChangeListener(func(Event) { seen++ })
+    c.SetNode(swarm.Node{ID: "node1"})
+    cancel()
+    c.SetNode(swarm.Node{ID: "node2"})
+
+    if seen != 1 {
+        t.Fatalf("listener saw %d events after cancel, want 1", seen)
+    }
+}
+
+func TestCache_LegacyConstructorStillFires(t *testing.T) {
+    var seen int
+    c := New(func(Event) { seen++ })
+    c.SetNode(swarm.Node{ID: "node1"})
+    if seen != 1 {
+        t.Fatalf("constructor callback fired %d times, want 1", seen)
+    }
+}
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `go test ./internal/cache/ -run TestCache_Multiple -v`
+Expected: FAIL — `AddOnChangeListener` undefined.
+
+- [ ] **Step 3: Implement multi-listener registry**
+
+In `internal/cache/cache.go`:
+- Replace the `onChange OnChangeFunc` field with `listeners []listenerEntry` guarded by a `sync.RWMutex` (separate from the cache's data mutex).
+- `AddOnChangeListener(fn OnChangeFunc) func()` returns a cancel function that removes the listener.
+- `notify(e Event)` iterates listeners under RLock.
+- Keep `New(onChange OnChangeFunc)` as a backwards-compatible constructor: if non-nil, it registers `onChange` as the first listener.
+- Mark `SetOnChange` as **removed** (no deprecation period — there are only two call sites: `main.go` and tests).
+
+- [ ] **Step 4: Migrate SSE broadcaster**
+
+In `internal/api/sse.go` (or wherever the broadcaster registers itself), replace the `cache.SetOnChange(broadcaster.publish)` call with `cancel := cache.AddOnChangeListener(broadcaster.publish)` and stash `cancel` on the broadcaster for shutdown. Same change in `main.go` if the wiring happens there.
+
+- [ ] **Step 5: Run full test suite**
+
+Run: `go test ./...`
+Expected: PASS
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add internal/cache/ internal/api/sse.go main.go
+git commit -m "refactor(cache): replace SetOnChange with multi-listener registry"
+```
+
+---
+
+### Task 0.5: mcp-go API Surface Audit
+
+**Why:** the design references `mcp-go` function names and option types from the original spec date. Before any MCP code is written, we pin a specific version and audit the current API.
+
+**Files:**
+- Create: `docs/specs/2026-04-11-mcp-go-audit.md`
+- Modify: `go.mod` (add and pin `github.com/mark3labs/mcp-go`)
+
+- [ ] **Step 1: Pin a tagged mcp-go release**
+
+```bash
+go get github.com/mark3labs/mcp-go@latest
+go mod tidy
+```
+
+Record the resolved version in the audit doc.
+
+- [ ] **Step 2: Audit the API surface used by this plan**
+
+For each name referenced in the plan, write down its current signature and whether it still exists:
+
+- `mcpserver.NewMCPServer(name, version, opts...)`
+- `mcpserver.NewStreamableHTTPServer(srv, opts...)`
+- `mcpserver.WithStateful(bool)` (still an option? or default?)
+- `mcpserver.WithSessionIdleTTL(d)` (or renamed?)
+- `mcpserver.WithHTTPContextFunc(fn)`
+- `mcpserver.WithResourceCapabilities(subscribe, listChanged bool)`
+- `mcpserver.WithToolCapabilities(...)` — confirm signature
+- `MCPServer.AddTool(tool, handler)` — confirm handler signature
+- `MCPServer.AddResource(res, handler)` — confirm
+- `MCPServer.AddResourceTemplate(tmpl, handler)` — confirm
+- `mcp.NewTool(name, opts...)` and option helpers (`WithDescription`, `WithString`, `WithNumber`, `Required`, `Description`)
+- `mcp.NewToolResultText`, `mcp.NewToolResultError`
+- Hook for intercepting `tools/list` to apply per-identity ACL filtering (see Design § Per-Request Tool Filtering). If no clean hook exists, document the fallback (filter at call time, accept over-reported `tools/list`).
+
+- [ ] **Step 3: Reconcile the plan**
+
+For any name that no longer exists or has changed shape, update Tasks 8–13 in this plan with the new name. If the change is substantive (e.g. session management moved), flag it in the audit doc and revisit the affected task before implementing it.
+
+- [ ] **Step 4: Commit the audit doc and pinned dep**
+
+```bash
+git add go.mod go.sum docs/specs/2026-04-11-mcp-go-audit.md
+git commit -m "chore(mcp): pin mcp-go and audit API surface"
+```
 
 ---
 
@@ -89,8 +230,17 @@ func TestMCPConfigDefaults(t *testing.T) {
 	if cfg.MaxSessions != 256 {
 		t.Errorf("max sessions = %d, want 256", cfg.MaxSessions)
 	}
-	if cfg.OperationsLevel != nil {
-		t.Error("operations level should be nil (inherits global)")
+	if cfg.OperationsLevel != OpsInherit {
+		t.Errorf("operations level = %v, want OpsInherit", cfg.OperationsLevel)
+	}
+	if !cfg.DCREnabled {
+		t.Error("DCR should be enabled by default")
+	}
+	if !cfg.CIMDEnabled {
+		t.Error("CIMD should be enabled by default")
+	}
+	if !cfg.RequireResourceIndicator {
+		t.Error("RFC 8707 resource indicator should be required by default")
 	}
 }
 ```
@@ -108,6 +258,13 @@ package config
 
 import "time"
 
+// OpsInherit is the sentinel meaning "use the global CETACEAN_OPERATIONS_LEVEL".
+// Add this to internal/config/config.go alongside the existing OpsReadOnly...OpsImpactful constants:
+//
+//   const OpsInherit OperationsLevel = -1
+//
+// (negative so it sorts below the real tiers and obviously isn't a valid runtime level).
+
 // MCPConfig holds configuration for the MCP server.
 type MCPConfig struct {
 	Enabled         bool
@@ -116,18 +273,41 @@ type MCPConfig struct {
 	RefreshTokenTTL time.Duration
 	SessionIdleTTL  time.Duration
 	MaxSessions     int
-	OperationsLevel *OperationsLevel
+	OperationsLevel OperationsLevel // OpsInherit means "fall back to global"
+
+	// OAuth knobs (see Design § OAuth 2.1 Authorization Server)
+	RequireResourceIndicator bool
+	DCREnabled               bool
+	DCRRateLimit             int
+	DCRMaxClients            int
+	CIMDEnabled              bool
+	AuthBypass               []string // auth modes that skip OAuth, e.g. ["cert"]
 }
 
 // DefaultMCPConfig returns an MCPConfig with sensible defaults.
 func DefaultMCPConfig() MCPConfig {
 	return MCPConfig{
-		Enabled:         false,
-		AccessTokenTTL:  time.Hour,
-		RefreshTokenTTL: 720 * time.Hour,
-		SessionIdleTTL:  30 * time.Minute,
-		MaxSessions:     256,
+		Enabled:                  false,
+		AccessTokenTTL:           time.Hour,
+		RefreshTokenTTL:          720 * time.Hour,
+		SessionIdleTTL:           30 * time.Minute,
+		MaxSessions:              256,
+		OperationsLevel:          OpsInherit,
+		RequireResourceIndicator: true,
+		DCREnabled:               true,
+		DCRRateLimit:             10,
+		DCRMaxClients:            1000,
+		CIMDEnabled:              true,
 	}
+}
+
+// EffectiveOperationsLevel returns the configured MCP operations level, or
+// the global level when MCP is set to OpsInherit.
+func (m MCPConfig) EffectiveOperationsLevel(global OperationsLevel) OperationsLevel {
+	if m.OperationsLevel == OpsInherit {
+		return global
+	}
+	return m.OperationsLevel
 }
 ```
 
@@ -170,7 +350,7 @@ func TestMCPConfigFromEnv(t *testing.T) {
 	if cfg.MaxSessions != 128 {
 		t.Errorf("max sessions = %d, want 128", cfg.MaxSessions)
 	}
-	if cfg.OperationsLevel == nil || *cfg.OperationsLevel != OpsConfiguration {
+	if cfg.OperationsLevel != OpsConfiguration {
 		t.Errorf("operations level = %v, want %v", cfg.OperationsLevel, OpsConfiguration)
 	}
 }
@@ -498,13 +678,29 @@ func TestCIMDFetchValid(t *testing.T) {
 		json.NewEncoder(w).Encode(meta)
 	})
 
-	fetcher := &CIMDFetcher{Client: srv.Client()}
+	fetcher := &CIMDFetcher{Client: srv.Client(), AllowLoopback: true}
 	result, err := fetcher.Fetch(context.Background(), meta.ClientID)
 	if err != nil {
 		t.Fatalf("fetch: %v", err)
 	}
 	if result.ClientName != "Test Agent" {
 		t.Errorf("client name = %q, want %q", result.ClientName, "Test Agent")
+	}
+}
+
+func TestCIMDFetchRejectsLoopbackByDefault(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(ClientMetadata{
+			ClientID:   "https://127.0.0.1/client",
+			ClientName: "Whatever",
+		})
+	}))
+	defer srv.Close()
+
+	fetcher := &CIMDFetcher{Client: srv.Client()} // AllowLoopback unset
+	_, err := fetcher.Fetch(context.Background(), srv.URL+"/client")
+	if err == nil {
+		t.Fatal("expected SSRF rejection for loopback IP")
 	}
 }
 
@@ -517,7 +713,7 @@ func TestCIMDFetchClientIDMismatch(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	fetcher := &CIMDFetcher{Client: srv.Client()}
+	fetcher := &CIMDFetcher{Client: srv.Client(), AllowLoopback: true}
 	_, err := fetcher.Fetch(context.Background(), srv.URL+"/client")
 	if err == nil {
 		t.Fatal("expected error for client_id mismatch")
@@ -530,7 +726,7 @@ func TestCIMDFetchResponseTooLarge(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	fetcher := &CIMDFetcher{Client: srv.Client()}
+	fetcher := &CIMDFetcher{Client: srv.Client(), AllowLoopback: true}
 	_, err := fetcher.Fetch(context.Background(), srv.URL+"/client")
 	if err == nil {
 		t.Fatal("expected error for oversized response")
@@ -594,6 +790,10 @@ type cachedMetadata struct {
 type CIMDFetcher struct {
 	Client *http.Client // optional, defaults to http.DefaultClient
 
+	// AllowLoopback permits CIMD URLs that resolve to 127.0.0.0/8 / ::1.
+	// Tests using httptest.NewTLSServer flip this on; production leaves it off.
+	AllowLoopback bool
+
 	mu    sync.RWMutex
 	cache map[string]cachedMetadata
 }
@@ -624,7 +824,7 @@ func (f *CIMDFetcher) Fetch(ctx context.Context, clientID string) (*ClientMetada
 	}
 
 	// SSRF: validate resolved IP is not private
-	if err := validateResolvedIP(u.Hostname()); err != nil {
+	if err := validateResolvedIP(u.Hostname(), f.AllowLoopback); err != nil {
 		return nil, fmt.Errorf("SSRF protection: %w", err)
 	}
 
@@ -714,13 +914,20 @@ func (f *CIMDFetcher) putCached(clientID string, meta *ClientMetadata) {
 }
 
 // validateResolvedIP resolves the hostname and rejects private/reserved IPs.
-func validateResolvedIP(host string) error {
+// allowLoopback is true only in tests that exercise httptest servers.
+func validateResolvedIP(host string, allowLoopback bool) error {
 	ips, err := net.LookupIP(host)
 	if err != nil {
 		return fmt.Errorf("DNS lookup failed: %w", err)
 	}
 	for _, ip := range ips {
-		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		if ip.IsLoopback() {
+			if allowLoopback {
+				continue
+			}
+			return fmt.Errorf("resolved to loopback IP: %s", ip)
+		}
+		if ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
 			return fmt.Errorf("resolved to private/reserved IP: %s", ip)
 		}
 	}
@@ -901,6 +1108,7 @@ type AuthCodeData struct {
 	ClientID      string
 	RedirectURI   string
 	CodeChallenge string
+	Resource      string // RFC 8707 — the MCP endpoint URL the code is bound to
 	Subject       string
 	Groups        []string
 }
@@ -955,6 +1163,13 @@ func (s *AuthCodeStore) Redeem(code string) (AuthCodeData, bool) {
 
 - [ ] **Step 5: Implement refresh token store with theft detection**
 
+The store tracks three pieces of state:
+1. `tokens`: hash → live entry (current refresh tokens).
+2. `consumed`: hash → grantID for tokens that have been rotated already. Used to detect replay.
+3. `grants`: grantID → list of all hashes ever issued in the family (live + consumed). Used to mass-revoke on theft.
+
+`Rotate` checks `consumed` *first*: if the presented hash was already used, the grant family is burned (all live + consumed entries deleted) and the call returns `(false, theft=true)`. Only if the hash is fresh and live do we mint a replacement.
+
 ```go
 // internal/mcp/oauth/store.go (append)
 
@@ -963,7 +1178,8 @@ type RefreshTokenData struct {
 	Subject  string
 	Groups   []string
 	ClientID string
-	grantID  string // links token families for theft detection
+	Resource string // RFC 8707 — the MCP endpoint URL this grant is bound to
+	grantID  string // links token families for theft detection (set by store)
 }
 
 type refreshTokenEntry struct {
@@ -973,20 +1189,22 @@ type refreshTokenEntry struct {
 
 // RefreshTokenStore is an in-memory store for refresh tokens.
 type RefreshTokenStore struct {
-	mu     sync.Mutex
-	tokens map[string]refreshTokenEntry
-	grants map[string][]string // grantID -> list of token hashes in this family
+	mu       sync.Mutex
+	tokens   map[string]refreshTokenEntry // live tokens, hash -> entry
+	consumed map[string]string            // rotated tokens, hash -> grantID
+	grants   map[string][]string          // grantID -> all hashes ever issued
 }
 
 // NewRefreshTokenStore creates a new refresh token store.
 func NewRefreshTokenStore() *RefreshTokenStore {
 	return &RefreshTokenStore{
-		tokens: make(map[string]refreshTokenEntry),
-		grants: make(map[string][]string),
+		tokens:   make(map[string]refreshTokenEntry),
+		consumed: make(map[string]string),
+		grants:   make(map[string][]string),
 	}
 }
 
-// Issue generates a new refresh token.
+// Issue generates a new refresh token and a fresh grant family.
 func (s *RefreshTokenStore) Issue(data RefreshTokenData, ttl time.Duration) string {
 	token := generateOpaqueToken()
 	hash := hashToken(token)
@@ -1000,7 +1218,7 @@ func (s *RefreshTokenStore) Issue(data RefreshTokenData, ttl time.Duration) stri
 	return token
 }
 
-// Validate checks that a refresh token is still valid.
+// Validate checks that a refresh token is still valid (not used for theft detection).
 func (s *RefreshTokenStore) Validate(token string) (RefreshTokenData, bool) {
 	hash := hashToken(token)
 
@@ -1014,40 +1232,53 @@ func (s *RefreshTokenStore) Validate(token string) (RefreshTokenData, bool) {
 	return entry.data, true
 }
 
-// Rotate consumes the old token and issues a new one. If the old token
-// was already consumed (theft detection), the entire grant family is revoked.
-func (s *RefreshTokenStore) Rotate(oldToken string, ttl time.Duration) (string, RefreshTokenData, bool) {
+// RotateResult reports the outcome of a Rotate call.
+type RotateResult struct {
+	NewToken string
+	Data     RefreshTokenData
+	OK       bool
+	Theft    bool // true when a previously-consumed token was presented
+}
+
+// Rotate consumes oldToken and issues a replacement. If oldToken was already
+// consumed (replay), the entire grant family is revoked and Theft=true.
+func (s *RefreshTokenStore) Rotate(oldToken string, ttl time.Duration) RotateResult {
 	oldHash := hashToken(oldToken)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Replay check first.
+	if grantID, replayed := s.consumed[oldHash]; replayed {
+		s.revokeGrantLocked(grantID)
+		return RotateResult{Theft: true}
+	}
+
 	entry, ok := s.tokens[oldHash]
 	if !ok {
-		// Token not found — might be a reuse attempt. We can't identify the
-		// grant without the token, so just reject.
-		return "", RefreshTokenData{}, false
+		// Unknown token — could be tampered, expired-and-GC'd, or never issued.
+		return RotateResult{}
 	}
-
 	if time.Now().After(entry.expiresAt) {
 		delete(s.tokens, oldHash)
-		return "", RefreshTokenData{}, false
+		return RotateResult{}
 	}
 
-	// Consume old token
+	// Mark old as consumed (do NOT delete the grant family record).
 	delete(s.tokens, oldHash)
+	s.consumed[oldHash] = entry.data.grantID
 
-	// Issue new token in same grant family
+	// Mint replacement in the same grant family.
 	newToken := generateOpaqueToken()
 	newHash := hashToken(newToken)
 	entry.expiresAt = time.Now().Add(ttl)
 	s.tokens[newHash] = entry
 	s.grants[entry.data.grantID] = append(s.grants[entry.data.grantID], newHash)
 
-	return newToken, entry.data, true
+	return RotateResult{NewToken: newToken, Data: entry.data, OK: true}
 }
 
-// RevokeGrant revokes all tokens in a grant family.
+// RevokeGrant revokes all tokens in a grant family (e.g. from /oauth/revoke).
 func (s *RefreshTokenStore) RevokeGrant(token string) {
 	hash := hashToken(token)
 
@@ -1056,13 +1287,23 @@ func (s *RefreshTokenStore) RevokeGrant(token string) {
 
 	entry, ok := s.tokens[hash]
 	if !ok {
+		// Maybe already consumed — try the consumed map.
+		if grantID, ok := s.consumed[hash]; ok {
+			s.revokeGrantLocked(grantID)
+		}
 		return
 	}
+	s.revokeGrantLocked(entry.data.grantID)
+}
 
-	for _, h := range s.grants[entry.data.grantID] {
+// revokeGrantLocked drops every hash in the family from both tables.
+// Caller must hold s.mu.
+func (s *RefreshTokenStore) revokeGrantLocked(grantID string) {
+	for _, h := range s.grants[grantID] {
 		delete(s.tokens, h)
+		delete(s.consumed, h)
 	}
-	delete(s.grants, entry.data.grantID)
+	delete(s.grants, grantID)
 }
 
 func generateOpaqueToken() string {
@@ -1079,18 +1320,21 @@ func hashToken(token string) string {
 }
 ```
 
-- [ ] **Step 6: Fix theft detection test**
+Update the `TestRefreshTokenRotation` and `TestRefreshTokenTheftDetection` tests to use the new `RotateResult` return shape:
 
-The current `Rotate` implementation consumes tokens on first use but doesn't detect reuse of already-consumed tokens across grant families. Update `Rotate` to track consumed token hashes: if a consumed hash is seen again, revoke the entire grant family via `grantID`.
+```go
+res := store.Rotate(oldToken, 720*time.Hour)
+if !res.OK { ... }
+if res.Theft { ... }
+newToken := res.NewToken
+```
 
-Add a `consumed` map (`map[string]string`, hash → grantID) to `RefreshTokenStore`. On each rotation, add the old hash to `consumed`. In `Rotate`, check `consumed` first — if found, revoke the grant.
-
-- [ ] **Step 7: Run tests to verify they pass**
+- [ ] **Step 6: Run tests to verify they pass**
 
 Run: `go test ./internal/mcp/oauth/ -run "TestAuthCode|TestRefreshToken" -v`
 Expected: PASS (all 6 tests)
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add internal/mcp/oauth/store.go internal/mcp/oauth/store_test.go
@@ -1106,6 +1350,18 @@ git commit -m "feat(mcp): add auth code and refresh token stores"
 - Create: `internal/mcp/oauth/server_test.go`
 - Create: `internal/mcp/oauth/consent.go`
 - Create: `internal/mcp/oauth/consent_test.go`
+- Create: `internal/mcp/oauth/dcr.go`
+- Create: `internal/mcp/oauth/dcr_test.go`
+- Create: `internal/mcp/oauth/prm.go`
+- Create: `internal/mcp/oauth/prm_test.go`
+- Create: `internal/mcp/oauth/resource_indicator.go`
+
+This task implements the full MCP authorization profile:
+- AS metadata (`/.well-known/oauth-authorization-server`, RFC 8414)
+- Protected Resource Metadata (`/.well-known/oauth-protected-resource`, RFC 9728)
+- `authorize` / `token` / `revoke` endpoints with RFC 8707 `resource` parameter enforcement
+- Dynamic Client Registration endpoint (`/oauth/register`, RFC 7591) — see "DCR sub-task" below
+- WWW-Authenticate emission helper for the MCP handler to use on 401
 
 - [ ] **Step 1: Write failing test for OAuth metadata endpoint**
 
@@ -1138,11 +1394,13 @@ func TestMetadataEndpoint(t *testing.T) {
 	}
 
 	var meta struct {
-		Issuer                string `json:"issuer"`
-		AuthorizationEndpoint string `json:"authorization_endpoint"`
-		TokenEndpoint         string `json:"token_endpoint"`
-		RevocationEndpoint    string `json:"revocation_endpoint"`
+		Issuer                        string   `json:"issuer"`
+		AuthorizationEndpoint         string   `json:"authorization_endpoint"`
+		TokenEndpoint                 string   `json:"token_endpoint"`
+		RevocationEndpoint            string   `json:"revocation_endpoint"`
+		RegistrationEndpoint          string   `json:"registration_endpoint"`
 		CodeChallengeMethodsSupported []string `json:"code_challenge_methods_supported"`
+		GrantTypesSupported           []string `json:"grant_types_supported"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&meta); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -1152,6 +1410,9 @@ func TestMetadataEndpoint(t *testing.T) {
 	}
 	if meta.AuthorizationEndpoint != "https://cetacean.example.com/oauth/authorize" {
 		t.Errorf("authorization_endpoint = %q", meta.AuthorizationEndpoint)
+	}
+	if meta.RegistrationEndpoint != "https://cetacean.example.com/oauth/register" {
+		t.Errorf("registration_endpoint = %q", meta.RegistrationEndpoint)
 	}
 
 	found := false
@@ -1164,6 +1425,36 @@ func TestMetadataEndpoint(t *testing.T) {
 		t.Error("S256 not in code_challenge_methods_supported")
 	}
 }
+
+func TestProtectedResourceMetadataEndpoint(t *testing.T) {
+	srv := NewServer(ServerConfig{
+		Issuer:      "https://cetacean.example.com",
+		MCPResource: "https://cetacean.example.com/mcp",
+		MCP:         config.DefaultMCPConfig(),
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/.well-known/oauth-protected-resource", nil)
+	srv.HandleProtectedResourceMetadata(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var prm struct {
+		Resource              string   `json:"resource"`
+		AuthorizationServers  []string `json:"authorization_servers"`
+		BearerMethodsSupported []string `json:"bearer_methods_supported"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&prm); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if prm.Resource != "https://cetacean.example.com/mcp" {
+		t.Errorf("resource = %q", prm.Resource)
+	}
+	if len(prm.AuthorizationServers) != 1 || prm.AuthorizationServers[0] != "https://cetacean.example.com" {
+		t.Errorf("authorization_servers = %v", prm.AuthorizationServers)
+	}
+}
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1171,14 +1462,25 @@ func TestMetadataEndpoint(t *testing.T) {
 Run: `go test ./internal/mcp/oauth/ -run TestMetadataEndpoint -v`
 Expected: FAIL — `NewServer`, `ServerConfig` not defined
 
-- [ ] **Step 3: Implement OAuth Server struct and metadata endpoint**
+- [ ] **Step 3: Implement OAuth Server struct, AS metadata and PRM**
 
 Create `internal/mcp/oauth/server.go` with:
-- `ServerConfig` struct (Issuer, BasePath, MCPConfig, TokenIssuer, CIMDFetcher, AuthCodeStore, RefreshTokenStore)
-- `Server` struct holding config and stores
-- `NewServer(cfg)` constructor that initializes stores and token issuer
-- `HandleMetadata(w, r)` returning RFC 8414 authorization server metadata as JSON
-- `RegisterRoutes(mux)` to register all OAuth endpoints on the mux
+- `ServerConfig` struct: `Issuer`, `BasePath`, `MCPResource` (canonical `/mcp` URL — used as `aud` and as the PRM `resource` field), `MCP` (config.MCPConfig), and store handles (TokenIssuer, CIMDFetcher, ClientRegistry, AuthCodeStore, RefreshTokenStore).
+- `Server` struct holding config and stores.
+- `NewServer(cfg)` constructor that initializes stores and token issuer. The `aud` of every issued JWT is `cfg.MCPResource`.
+- `HandleMetadata(w, r)` returning RFC 8414 authorization server metadata as JSON. Include:
+  - `issuer`, `authorization_endpoint`, `token_endpoint`, `revocation_endpoint`
+  - `registration_endpoint` (only when `MCP.DCREnabled`)
+  - `code_challenge_methods_supported`: `["S256"]`
+  - `grant_types_supported`: `["authorization_code", "refresh_token"]`
+  - `response_types_supported`: `["code"]`
+  - `token_endpoint_auth_methods_supported`: `["none"]` (PKCE-only, no client secrets)
+- Create `internal/mcp/oauth/prm.go` with `HandleProtectedResourceMetadata(w, r)` returning RFC 9728 metadata:
+  - `resource`: `cfg.MCPResource`
+  - `authorization_servers`: `[cfg.Issuer]`
+  - `bearer_methods_supported`: `["header"]`
+  - `resource_documentation`: `cfg.Issuer + "/api"` (optional)
+- `RegisterRoutes(mux)` to register all OAuth endpoints on the mux (including PRM and DCR when enabled).
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -1201,6 +1503,7 @@ func TestTokenExchangeWithPKCE(t *testing.T) {
 		ClientID:      "https://example.com/client",
 		RedirectURI:   "http://localhost:8080/callback",
 		CodeChallenge: challenge,
+		Resource:      "https://cetacean.example.com/mcp",
 		Subject:       "user@example.com",
 		Groups:        []string{"ops"},
 	}, 60*time.Second)
@@ -1212,6 +1515,7 @@ func TestTokenExchangeWithPKCE(t *testing.T) {
 		"redirect_uri":  {"http://localhost:8080/callback"},
 		"client_id":     {"https://example.com/client"},
 		"code_verifier": {verifier},
+		"resource":      {"https://cetacean.example.com/mcp"},
 	}
 
 	rec := httptest.NewRecorder()
@@ -1253,6 +1557,41 @@ func TestTokenExchangeWithPKCE(t *testing.T) {
 	if claims.Subject != "user@example.com" {
 		t.Errorf("subject = %q, want %q", claims.Subject, "user@example.com")
 	}
+	if claims.Audience != "https://cetacean.example.com/mcp" {
+		t.Errorf("aud = %q, want %q", claims.Audience, "https://cetacean.example.com/mcp")
+	}
+}
+
+func TestTokenExchangeMismatchedResourceIndicator(t *testing.T) {
+	srv := newTestServer(t)
+	verifier := "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+	challenge := computeS256Challenge(verifier)
+
+	code := srv.authCodes.Issue(AuthCodeData{
+		ClientID:      "https://example.com/client",
+		RedirectURI:   "http://localhost:8080/callback",
+		CodeChallenge: challenge,
+		Resource:      "https://cetacean.example.com/mcp",
+		Subject:       "user@example.com",
+	}, 60*time.Second)
+
+	form := url.Values{
+		"grant_type":    {"authorization_code"},
+		"code":          {code},
+		"redirect_uri":  {"http://localhost:8080/callback"},
+		"client_id":     {"https://example.com/client"},
+		"code_verifier": {verifier},
+		"resource":      {"https://other-cetacean.example.com/mcp"}, // mismatched
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/oauth/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	srv.HandleToken(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 for resource indicator mismatch", rec.Code)
+	}
 }
 
 func TestTokenExchangeWrongVerifier(t *testing.T) {
@@ -1287,13 +1626,36 @@ func TestTokenExchangeWrongVerifier(t *testing.T) {
 
 Include a `newTestServer(t)` helper and `computeS256Challenge(verifier)` function.
 
-- [ ] **Step 6: Implement token endpoint**
+- [ ] **Step 6: Implement token endpoint with Resource Indicator enforcement**
+
+Create `internal/mcp/oauth/resource_indicator.go` with a helper:
+
+```go
+// ValidateResourceIndicator returns the canonical resource URL the caller
+// requested, or an error if it is missing/malformed/mismatched.
+// When config.RequireResourceIndicator is false, a missing value is allowed
+// and the configured MCPResource is returned instead.
+func ValidateResourceIndicator(raw string, expected string, required bool) (string, error) {
+    if raw == "" {
+        if required {
+            return "", errors.New("invalid_target: resource parameter is required")
+        }
+        return expected, nil
+    }
+    if raw != expected {
+        return "", errors.New("invalid_target: resource does not match this server")
+    }
+    return raw, nil
+}
+```
 
 In `internal/mcp/oauth/server.go`, add `HandleToken(w, r)` supporting:
-- `grant_type=authorization_code`: redeem code, verify PKCE (S256), issue access + refresh tokens
-- `grant_type=refresh_token`: rotate refresh token, issue new access + refresh tokens
-- Return 400 with `{"error": "..."}` on validation failures
-- Set `Cache-Control: no-store` and `Pragma: no-cache` headers
+- `grant_type=authorization_code`: redeem code, verify PKCE (S256), verify the `resource` form value matches `code.Resource`, issue access + refresh tokens. The access token's `aud` claim is `code.Resource`. The refresh token is stamped with the same resource so refresh requests can cross-check.
+- `grant_type=refresh_token`: validate the refresh token's resource matches the request's `resource` form value, rotate (single-use), issue new access + refresh tokens.
+- Both grants run their `resource` form value through `ValidateResourceIndicator(form, cfg.MCPResource, cfg.RequireResourceIndicator)`.
+- Reject any incoming `scope` parameter silently (the spec says we MAY narrow; we just ignore).
+- Return 400 with `{"error": "..."}` on validation failures (`invalid_grant`, `invalid_target`, `invalid_client`).
+- Set `Cache-Control: no-store` and `Pragma: no-cache` headers.
 
 - [ ] **Step 7: Run tests to verify they pass**
 
@@ -1428,29 +1790,100 @@ func TestConsentPageRejectsInvalidRedirectURI(t *testing.T) {
 }
 ```
 
-- [ ] **Step 13: Run all OAuth tests**
+- [ ] **Step 13: Implement Dynamic Client Registration**
+
+Create `internal/mcp/oauth/dcr.go`:
+
+```go
+// ClientRegistration is a DCR-registered client (RFC 7591).
+type ClientRegistration struct {
+    ClientID                string    `json:"client_id"`
+    ClientIDIssuedAt        int64     `json:"client_id_issued_at"`
+    ClientName              string    `json:"client_name,omitempty"`
+    RedirectURIs            []string  `json:"redirect_uris"`
+    GrantTypes              []string  `json:"grant_types,omitempty"`
+    ResponseTypes           []string  `json:"response_types,omitempty"`
+    TokenEndpointAuthMethod string    `json:"token_endpoint_auth_method,omitempty"`
+}
+
+// ClientRegistry stores DCR-issued clients in memory.
+type ClientRegistry struct {
+    mu      sync.Mutex
+    clients map[string]*ClientRegistration // client_id -> registration
+    order   []string                       // insertion order for LRU eviction
+    maxCap  int
+}
+
+func NewClientRegistry(maxCap int) *ClientRegistry { ... }
+
+// Register validates and stores a new registration.
+// Returns an HTTP error code + RFC 7591 error body on failure.
+func (r *ClientRegistry) Register(req ClientRegistration) (*ClientRegistration, error) { ... }
+
+func (r *ClientRegistry) Get(clientID string) (*ClientRegistration, bool) { ... }
+```
+
+Validation rules:
+- `redirect_uris` is required, non-empty, each URI HTTPS or loopback (`http://127.0.0.1`, `http://localhost`).
+- `token_endpoint_auth_method` defaults to `none`. Reject `client_secret_*` variants explicitly with `invalid_client_metadata`.
+- `client_id` is server-generated as `cetacean-<32 random base64url chars>`.
+- LRU-evict the oldest registration when `len(clients) > maxCap`.
+
+Add a per-IP rate limiter (`time/rate.Limiter` keyed by remote address, default 10 req/hour) in front of the handler.
+
+Tests in `dcr_test.go`:
+- Successful registration returns 201, client_id, client_id_issued_at.
+- Symmetric auth method rejected with 400 `invalid_client_metadata`.
+- Missing redirect_uris rejected with 400.
+- Rate limit kicks in after 10 requests from the same IP within an hour.
+- LRU eviction when cap exceeded.
+
+- [ ] **Step 14: Implement WWW-Authenticate emission helper**
+
+Add to `internal/mcp/oauth/server.go`:
+
+```go
+// WriteUnauthorized emits a 401 with a WWW-Authenticate header pointing
+// MCP clients at the PRM document. Called by the MCP HTTP handler when a
+// bearer token is missing/invalid/expired.
+func (s *Server) WriteUnauthorized(w http.ResponseWriter, errorCode string) {
+    prmURL := s.cfg.Issuer + s.cfg.BasePath + "/.well-known/oauth-protected-resource"
+    w.Header().Set("WWW-Authenticate", fmt.Sprintf(
+        `Bearer realm="mcp", resource_metadata=%q, error=%q`, prmURL, errorCode,
+    ))
+    w.WriteHeader(http.StatusUnauthorized)
+}
+```
+
+Add a test in `server_test.go` that exercises this and asserts both the status and the header.
+
+- [ ] **Step 15: Run all OAuth tests**
 
 Run: `go test ./internal/mcp/oauth/ -v`
 Expected: PASS
 
-- [ ] **Step 14: Implement RegisterRoutes**
+- [ ] **Step 16: Implement RegisterRoutes**
 
 ```go
 // In internal/mcp/oauth/server.go
 func (s *Server) RegisterRoutes(mux *http.ServeMux, basePath string) {
 	mux.HandleFunc("GET "+basePath+"/.well-known/oauth-authorization-server", s.HandleMetadata)
+	mux.HandleFunc("GET "+basePath+"/.well-known/oauth-protected-resource", s.HandleProtectedResourceMetadata)
 	mux.HandleFunc("GET "+basePath+"/oauth/authorize", s.HandleAuthorize)
 	mux.HandleFunc("POST "+basePath+"/oauth/authorize", s.HandleAuthorize)
 	mux.HandleFunc("POST "+basePath+"/oauth/token", s.HandleToken)
 	mux.HandleFunc("POST "+basePath+"/oauth/revoke", s.HandleRevoke)
+	if s.cfg.MCP.DCREnabled {
+		mux.HandleFunc("POST "+basePath+"/oauth/register", s.HandleRegister) // wraps DCR rate limiter
+	}
 }
 ```
 
-- [ ] **Step 15: Commit**
+- [ ] **Step 17: Commit**
 
 ```bash
-git add internal/mcp/oauth/server.go internal/mcp/oauth/server_test.go internal/mcp/oauth/consent.go internal/mcp/oauth/consent_test.go
-git commit -m "feat(mcp): add OAuth 2.1 authorization server"
+git add internal/mcp/oauth/
+git commit -m "feat(mcp): add OAuth 2.1 authorization server with DCR, CIMD, PRM and RFC 8707"
 ```
 
 ---
@@ -1865,11 +2298,12 @@ git commit -m "refactor: use shared cluster layer in REST handlers"
 - Modify: `main.go`
 - Modify: `go.mod`
 
-- [ ] **Step 1: Add mcp-go dependency**
+- [ ] **Step 1: Confirm mcp-go is already pinned (from Task 0.5)**
 
 ```bash
-go get github.com/mark3labs/mcp-go
+grep mark3labs/mcp-go go.mod
 ```
+If missing, return to Task 0.5 — do not skip the audit.
 
 - [ ] **Step 2: Write failing test for MCP server creation**
 
@@ -1905,6 +2339,8 @@ Run: `go test ./internal/mcp/ -run TestNewServer -v`
 Expected: FAIL — package doesn't exist
 
 - [ ] **Step 4: Implement MCP server core**
+
+> The snippet below names options that exist as of the originally-spec'd mcp-go release. Cross-check against the Task 0.5 audit doc — if names have drifted, use the audited names instead and update this plan in the same commit.
 
 ```go
 // internal/mcp/server.go
@@ -2139,6 +2575,10 @@ func TestReadNonexistentResource(t *testing.T) {
 Run: `go test ./internal/mcp/ -run TestRead -v`
 Expected: FAIL — `readResource` not defined
 
+- [ ] **Step 2.5: Audit existing cache & recommendations APIs**
+
+Before writing the resource handler, confirm the exact names of the methods called in the snippet below by reading `internal/cache/cache.go` and `internal/recommendations/`. Substitute the audited names where they differ (e.g. `Snapshot()` vs `Results()` vs `Findings()`, `History().Recent(100)` vs whatever the current API is). Define a narrow `recEngine` interface inside `internal/mcp` matching whatever the engine exposes, rather than depending on the engine type directly.
+
 - [ ] **Step 3: Implement resource registration and read handlers**
 
 ```go
@@ -2294,8 +2734,11 @@ func (s *Server) readResource(ctx context.Context, uri string) (string, error) {
 		data = s.cache.Snapshot()
 		found = true
 	case "recommendations":
+		// recEngine is a narrow interface defined locally in internal/mcp so we
+		// don't pull recommendations as a hard dep. Match it to whatever the
+		// recommendations engine actually exposes (audit before implementing).
 		if s.recEngine != nil {
-			data = s.recEngine.Results()
+			data = s.recEngine.Snapshot()
 		} else {
 			data = []any{}
 		}
@@ -2394,20 +2837,22 @@ func TestScaleServiceTool(t *testing.T) {
 
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
-	opsLevel := config.OpsOperational
-	cfg.OperationsLevel = &opsLevel
+	cfg.OperationsLevel = config.OpsOperational
 	srv, _ := newTestMCPServer(c, mock, nil, cfg)
 
-	args := map[string]any{"id": "svc1", "replicas": float64(5)}
-	result, err := srv.callTool(context.Background(), "scale_service", args)
-	if err != nil {
-		t.Fatalf("callTool: %v", err)
+	// Drive through the real mcp-go dispatch path: send a JSON-RPC tools/call
+	// request to the HTTP handler so we exercise registration + dispatch + result
+	// serialization end-to-end. No private callTool helper.
+	resp := mcpJSONRPC(t, srv.Handler(), `{
+		"jsonrpc":"2.0","id":1,"method":"tools/call",
+		"params":{"name":"scale_service","arguments":{"id":"svc1","replicas":5}}
+	}`)
+
+	if resp.Error != nil {
+		t.Fatalf("tools/call returned error: %v", resp.Error)
 	}
 	if calledWith != 5 {
 		t.Errorf("scaled to %d, want 5", calledWith)
-	}
-	if result == "" {
-		t.Error("result is empty")
 	}
 }
 
@@ -2415,14 +2860,18 @@ func TestScaleServiceToolDeniedByTier(t *testing.T) {
 	c := cache.New(nil)
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
-	opsLevel := config.OpsReadOnly
-	cfg.OperationsLevel = &opsLevel
+	cfg.OperationsLevel = config.OpsReadOnly
 	srv, _ := newTestMCPServer(c, nil, nil, cfg)
 
-	args := map[string]any{"id": "svc1", "replicas": float64(5)}
-	_, err := srv.callTool(context.Background(), "scale_service", args)
-	if err == nil {
-		t.Fatal("expected error for read-only operations level")
+	resp := mcpJSONRPC(t, srv.Handler(), `{
+		"jsonrpc":"2.0","id":1,"method":"tools/call",
+		"params":{"name":"scale_service","arguments":{"id":"svc1","replicas":5}}
+	}`)
+
+	// At tier OpsReadOnly the tool is not registered at all, so we expect a
+	// MethodNotFound / tool-not-found error from mcp-go.
+	if resp.Error == nil {
+		t.Fatal("expected tool-not-found error at OpsReadOnly tier")
 	}
 }
 ```
@@ -2491,15 +2940,21 @@ func (s *Server) registerTools() {
 		// ... register all other tools following the same pattern
 	}
 
-	opsLevel := s.effectiveOperationsLevel()
+	opsLevel := s.config.EffectiveOperationsLevel(s.globalOpsLevel)
+
+	// Stash the tier-filtered tool list so the tools/list interceptor can
+	// further filter per-identity by ACL at request time.
+	s.registeredTools = make([]toolDef, 0, len(tools))
 
 	for _, td := range tools {
 		if opsLevel < td.tier {
 			continue // skip tools above the configured tier
 		}
+		s.registeredTools = append(s.registeredTools, td)
 
 		handler := td.handler
 		s.mcpServer.AddTool(td.tool, func(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+			// ACL is enforced inside each handler. Tier was enforced at registration.
 			result, err := handler(ctx, req.Params.Arguments)
 			if err != nil {
 				return mcplib.NewToolResultError(err.Error()), nil
@@ -2507,37 +2962,33 @@ func (s *Server) registerTools() {
 			return mcplib.NewToolResultText(result), nil
 		})
 	}
-}
 
-func (s *Server) effectiveOperationsLevel() config.OperationsLevel {
-	if s.config.OperationsLevel != nil {
-		return *s.config.OperationsLevel
+	// Per-identity filtering of tools/list (see Design § Per-Request Tool Filtering).
+	// If Task 0.5's audit found an mcp-go hook for this, wire it here. Otherwise
+	// fall back to ACL enforcement at call time only (tools/list over-reports for
+	// identities with no write permission) and open a tracking issue.
+	if hook, ok := s.mcpServer.(interface {
+		SetListToolsFilter(func(ctx context.Context, all []mcplib.Tool) []mcplib.Tool)
+	}); ok {
+		hook.SetListToolsFilter(s.filterToolsForIdentity)
 	}
-	return s.globalOpsLevel
-}
-
-func (s *Server) callTool(ctx context.Context, name string, args map[string]any) (string, error) {
-	// Internal dispatch for testing. In production, mcp-go handles dispatch.
-	// This method looks up the registered handler by name and calls it directly.
-	// Implementation: iterate s.tools map, find by name, call handler.
-	return "", fmt.Errorf("not implemented")
 }
 
 func (s *Server) toolScaleService(ctx context.Context, args map[string]any) (string, error) {
-	id, _ := args["id"].(string)
+	serviceID, _ := args["id"].(string)
 	replicasF, _ := args["replicas"].(float64)
 	replicas := uint64(replicasF)
 
-	// ACL check
-	if id := auth.IdentityFromContext(ctx); s.acl != nil && id != nil {
-		if svc, ok := s.cache.GetService(id); ok {
-			if !s.acl.Can(id, "write", "service:"+svc.Spec.Name) {
+	identity := auth.IdentityFromContext(ctx)
+	if s.acl != nil && identity != nil {
+		if svc, ok := s.cache.GetService(serviceID); ok {
+			if !s.acl.Can(identity, "write", "service:"+svc.Spec.Name) {
 				return "", fmt.Errorf("write access denied for service:%s", svc.Spec.Name)
 			}
 		}
 	}
 
-	result, err := s.serviceLifecycle.ScaleService(ctx, id, replicas)
+	result, err := s.serviceLifecycle.ScaleService(ctx, serviceID, replicas)
 	if err != nil {
 		return "", err
 	}
@@ -2818,14 +3269,14 @@ Expected: PASS
 
 - [ ] **Step 5: Wire notifications to cache events**
 
-In `internal/mcp/server.go`, add a method to start listening for cache events:
+`cache.AddOnChangeListener` was added in Task 0, so this is a single registration call.
 
 ```go
 // StartNotifications registers the MCP server as a cache event listener.
-// Call this after the cache's primary OnChange is set (so it chains, not replaces).
-func (s *Server) StartNotifications() {
-	s.cache.AddOnChangeListener(func(event cache.Event) {
-		// For each active session, check subscriptions and send notifications
+// Returns a cancel function the caller invokes at shutdown.
+func (s *Server) StartNotifications() func() {
+	return s.cache.AddOnChangeListener(func(event cache.Event) {
+		// For each active session, check subscriptions and send notifications.
 		s.notifications.dispatch(event, s.mcpServer, s.acl)
 	})
 }
@@ -2838,7 +3289,7 @@ Add a `dispatch` method to `NotificationManager` that:
 4. Sends `notifications/resources/updated` via the session's notification channel
 5. If `IsListChange`, sends `notifications/resources/list_changed` to all eligible sessions
 
-**Note:** The cache currently supports a single `OnChangeFunc`. If `AddOnChangeListener` doesn't exist, add a fan-out wrapper: the primary callback calls the broadcaster AND the MCP notification manager. Alternatively, check if the cache already supports multiple listeners.
+In `main.go`, wire the cancel into the shutdown sequence so the listener detaches cleanly before the cache is torn down.
 
 - [ ] **Step 6: Run all notification tests**
 
