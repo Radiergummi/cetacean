@@ -92,6 +92,20 @@ func isExempt(path string) bool {
 		return true
 	case path == "/auth" || strings.HasPrefix(path, "/auth/"):
 		return true
+	case path == "/mcp":
+		// MCP authenticates with its own bearer-token middleware (OAuth 2.1).
+		return true
+	case strings.HasPrefix(path, "/.well-known/"):
+		// RFC 8414 / RFC 9728 discovery documents are unauthenticated by spec.
+		return true
+	case path == "/oauth/token" ||
+		path == "/oauth/revoke" ||
+		path == "/oauth/register":
+		// OAuth machine endpoints: PKCE / DCR / refresh-token grants carry
+		// their own auth proof in the request body. Consent (/oauth/authorize)
+		// is intentionally NOT exempt — the user must be authenticated before
+		// granting access.
+		return true
 	default:
 		return false
 	}

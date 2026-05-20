@@ -567,6 +567,14 @@ func redirectWithError(w http.ResponseWriter, r *http.Request, redirectURIRaw, s
 // WWW-Authenticate helper
 // ---------------------------------------------------------------------------
 
+// VerifyAccessToken verifies a JWT signature, issuer, audience and expiry.
+// Returns the application claims on success. Exposed so the MCP HTTP handler
+// can validate bearer tokens without reaching into the oauth package's
+// internals.
+func (s *Server) VerifyAccessToken(token string) (*AccessTokenClaims, error) {
+	return s.tokenIssuer.VerifyAccessToken(token)
+}
+
 // WriteUnauthorized writes a 401 response with a WWW-Authenticate header
 // that includes the protected resource metadata URL and the error code.
 // Used by the MCP HTTP handler when a bearer token is missing or invalid.
