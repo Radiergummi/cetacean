@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-05-20
+
 ### Added
 - Atom feed support on resource endpoints — request via `Accept: application/atom+xml` header or `.atom` URL suffix
 - Feed icon button in page headers for pages with Atom feeds
