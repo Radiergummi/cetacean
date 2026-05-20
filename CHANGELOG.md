@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Embedded Model Context Protocol (MCP) server (opt-in via `CETACEAN_MCP=true`) — exposes cluster state to AI agents over streamable HTTP at `/mcp`, with twelve resources (services, nodes, tasks, stacks, configs, secrets, networks, volumes, plus cluster, recommendations, and history) and nineteen tools spanning read, operational, configuration, and impactful tiers
+- OAuth 2.1 authorization server for MCP clients implementing the MCP 2025-06-18 authorization profile — Dynamic Client Registration (RFC 7591), Client ID Metadata Documents, RFC 8707 resource indicators, PKCE-only flows, and refresh token theft detection
+
 ### Fixed
 - Service detail page no longer crashes when a service's task template is absent from the response
 

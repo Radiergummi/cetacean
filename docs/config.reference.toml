@@ -89,3 +89,25 @@
 # approaching_limit = 0.80                  # Usage above this fraction of limit → warning
 # at_limit = 0.95                           # Usage above this fraction of limit → critical
 # lookback = "168h"                         # Time window for p95 queries (default 7 days)
+
+# --- MCP server (Model Context Protocol) ---
+# See docs/specs/2026-04-11-mcp-server-design.md for protocol details.
+# Disabled by default; when enabled the server mounts /mcp and (when auth
+# mode is not "none") /.well-known/oauth-* + /oauth/* endpoints.
+
+# [mcp]
+# enabled = false                           # Enable MCP server
+# operations_level = -1                     # Tier for MCP tools (0=read, 1=ops, 2=config, 3=impactful); -1 inherits CETACEAN_OPERATIONS_LEVEL
+# signing_key = ""                          # JWT signing key (HMAC-SHA256); auto-generated if unset
+# access_token_ttl = "1h"                   # Access token lifetime
+# refresh_token_ttl = "720h"                # Refresh token lifetime (30 days)
+# session_idle_ttl = "30m"                  # Idle session cleanup
+# max_sessions = 256                        # Concurrent session limit
+
+# [mcp.oauth]
+# require_resource_indicator = true         # Require RFC 8707 resource parameter on authorize/token
+# dcr_enabled = true                        # Enable Dynamic Client Registration (RFC 7591)
+# dcr_rate_limit = 10                       # Max DCR registrations per IP per hour
+# dcr_max_clients = 1000                    # Global cap on registered clients
+# cimd_enabled = true                       # Enable Client ID Metadata Documents
+# auth_bypass = []                          # Comma-separated auth modes that skip OAuth (e.g. ["cert"])

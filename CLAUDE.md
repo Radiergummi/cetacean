@@ -101,6 +101,19 @@ docker stack deploy -c compose.monitoring.yaml monitoring  # Deploy standalone m
 | `CETACEAN_AUTH_TAILSCALE_ACL_CAPABILITY` | — | No (Tailscale CapMap key for per-user grants) |
 | `CETACEAN_AUTH_OIDC_ACL_CLAIM` | — | No (OIDC token claim containing grants) |
 | `CETACEAN_AUTH_HEADERS_ACL` | — | No (HTTP header containing grants JSON) |
+| `CETACEAN_MCP` | `false` | No (enable embedded MCP server at `/mcp`) |
+| `CETACEAN_MCP_OPERATIONS_LEVEL` | inherits `CETACEAN_OPERATIONS_LEVEL` | No (tier for MCP tools; 0–3) |
+| `CETACEAN_MCP_SIGNING_KEY` | auto-generated | No (HMAC-SHA256 JWT signing key) |
+| `CETACEAN_MCP_ACCESS_TOKEN_TTL` | `1h` | No |
+| `CETACEAN_MCP_REFRESH_TOKEN_TTL` | `720h` | No |
+| `CETACEAN_MCP_SESSION_IDLE_TTL` | `30m` | No |
+| `CETACEAN_MCP_MAX_SESSIONS` | `256` | No |
+| `CETACEAN_MCP_REQUIRE_RESOURCE_INDICATOR` | `true` | No (require RFC 8707 `resource` on authorize/token) |
+| `CETACEAN_MCP_DCR_ENABLED` | `true` | No (RFC 7591 Dynamic Client Registration) |
+| `CETACEAN_MCP_DCR_RATE_LIMIT` | `10` | No (per-IP per hour) |
+| `CETACEAN_MCP_DCR_MAX_CLIENTS` | `1000` | No (global cap, LRU-evicted) |
+| `CETACEAN_MCP_CIMD_ENABLED` | `true` | No (Client ID Metadata Documents) |
+| `CETACEAN_MCP_AUTH_BYPASS` | — | No (comma-separated auth modes that skip OAuth, e.g. `cert`) |
 
 ## Architecture
 
@@ -139,6 +152,9 @@ Docker Socket → `docker/watcher.go` (full sync + event stream) → `cache/cach
 - **`api/apidoc.go`** — Serves `/api` endpoint: HTML gets Scalar API playground (with embedded JS bundle at `/api/scalar.js`), otherwise returns OpenAPI spec as JSON. YAML spec is converted to JSON at startup.
 - **`recommendations/`** — Unified recommendation engine. `Engine` runs registered `Checker` implementations on per-checker intervals (cache-only every 60s, Prometheus-dependent every 5min). Four checkers: `SizingChecker` (resource right-sizing via Prometheus), `ConfigChecker` (missing health checks, restart policies), `OperationalChecker` (flaky services from cache restart tracker plus disk/memory pressure via Prometheus when available), `ClusterChecker` (single replicas, manager workloads, uneven distribution). Configurable sizing thresholds via `[sizing]` TOML section or `CETACEAN_SIZING_*` env vars.
 - **`filter/`** — Expression-based filtering using `expr-lang/expr`. Each resource type has an env builder exposing fields for filter expressions.
+- **`cluster/`** — Shared domain layer between REST and MCP transports. Holds `EnrichTask`/`EnrichTasks` (resolve service name + node hostname onto raw tasks), `RedactSecret`/`RedactSecrets` (zero secret data before serialization), `DeriveServiceState` (derive `running`/`pending`/`failed`/`updating` from mode + UpdateStatus + running count), and `Search` (cross-resource case-insensitive name/label match with per-type caps). Both REST handlers in `api/` and MCP handlers in `mcp/` call into this package.
+- **`mcp/`** — Embedded Model Context Protocol server (enabled via `CETACEAN_MCP=true`). Wraps `mark3labs/mcp-go` v0.54.0 streamable HTTP transport behind a bearer-token middleware that validates JWTs minted by `internal/mcp/oauth`. Exposes 12 resources (3 static: cluster, recommendations, history; 9 templated: nodes, services, services/logs, tasks, stacks, configs, secrets, networks, volumes) and 19 tools across operations tiers 0–3 (reads, ops, config, impactful). `DockerWriteClient` is a composite of narrow `ServiceLifecycleWriter`/`ServiceSpecWriter`/`NodeWriter`/`ResourceRemover` interfaces satisfied by the concrete `docker.Client`. `NotificationManager` tracks per-session subscriptions populated via mcp-go's `OnAfterSubscribe`/`OnAfterUnsubscribe` hooks; cache events fan out as `notifications/resources/updated` (per session) and `notifications/resources/list_changed` (broadcast). `Server.Close()` detaches the cache listener — `setupMCP` in `main.go` returns it and `main` defers it.
+- **`mcp/oauth/`** — OAuth 2.1 authorization server implementing the MCP 2025-06-18 authorization profile. Endpoints: `/.well-known/oauth-authorization-server` (RFC 8414), `/.well-known/oauth-protected-resource` (RFC 9728), `/oauth/authorize`, `/oauth/token`, `/oauth/revoke`, `/oauth/register` (RFC 7591 DCR). PKCE-only (S256 required, symmetric auth methods rejected); RFC 8707 `resource` parameter required by default; refresh tokens rotate single-use with grant-family theft detection. Supports two client identification paths: DCR (in-memory, LRU-evicted, per-IP rate-limited) and CIMD (fetches `https://` URL with SSRF blocklist including RFC 6598 CGNAT range, 1h TTL cache). Tokens are HS256 JWTs with `aud` = canonical `/mcp` URL.
 
 ### Frontend (`frontend/src/`)
 - React 19 + TypeScript + Vite, Tailwind CSS v4, shadcn/ui components, Chart.js for time-series and doughnut charts
