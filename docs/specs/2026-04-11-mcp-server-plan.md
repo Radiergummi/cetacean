@@ -2388,11 +2388,16 @@ func New(
 		config:      cfg,
 	}
 
+	// Per-identity tools/list filtering (see Design § Per-Request Tool Filtering).
+	// WithToolFilter receives the identity-bearing context populated by
+	// WithHTTPContextFunc below and returns a filtered slice. filterToolsForIdentity
+	// is implemented in Task 10.
 	mcpSrv := mcpserver.NewMCPServer(
 		"Cetacean",
 		"1.0.0",
 		mcpserver.WithResourceCapabilities(true, true), // subscribe + listChanged
 		mcpserver.WithToolCapabilities(true),
+		mcpserver.WithToolFilter(srv.filterToolsForIdentity),
 	)
 
 	srv.mcpServer = mcpSrv
@@ -2963,15 +2968,29 @@ func (s *Server) registerTools() {
 		})
 	}
 
-	// Per-identity filtering of tools/list (see Design § Per-Request Tool Filtering).
-	// If Task 0.5's audit found an mcp-go hook for this, wire it here. Otherwise
-	// fall back to ACL enforcement at call time only (tools/list over-reports for
-	// identities with no write permission) and open a tracking issue.
-	if hook, ok := s.mcpServer.(interface {
-		SetListToolsFilter(func(ctx context.Context, all []mcplib.Tool) []mcplib.Tool)
-	}); ok {
-		hook.SetListToolsFilter(s.filterToolsForIdentity)
+	// Per-identity tools/list filtering is wired in Task 8 via
+	// mcpserver.WithToolFilter at NewMCPServer construction. The filter callback
+	// dispatches to s.filterToolsForIdentity, which is defined here:
+}
+
+// filterToolsForIdentity is the mcp-go ToolFilterFunc: given the per-call
+// context (with auth identity populated by WithHTTPContextFunc) and the
+// globally-registered tool slice, return only the tools the identity is
+// permitted to invoke. Tier was already enforced at registration, so this
+// only needs to apply ACL.
+func (s *Server) filterToolsForIdentity(ctx context.Context, tools []mcplib.Tool) []mcplib.Tool {
+	identity := auth.IdentityFromContext(ctx)
+	if s.acl == nil || identity == nil {
+		return tools
 	}
+	out := tools[:0:0]
+	for _, t := range tools {
+		td, ok := s.toolByName[t.Name]
+		if !ok || td.canInvoke(s.acl, identity) {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 func (s *Server) toolScaleService(ctx context.Context, args map[string]any) (string, error) {
