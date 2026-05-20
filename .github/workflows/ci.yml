@@ -57,7 +57,11 @@ jobs:
           path: frontend/dist
       - uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          # Pinned deliberately. `latest` silently drifts and breaks CI
+          # when a new release ships stricter rules (e.g. 2.12.0 added
+          # govet/inline, modernize/slicesbackward, broader gosec/G124).
+          # Bump in lockstep with the local Homebrew formula.
+          version: v2.12.2
 
   lint-frontend:
     runs-on: ubuntu-latest
