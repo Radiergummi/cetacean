@@ -1,10 +1,12 @@
 package oauth
 
 import (
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -301,7 +303,7 @@ func verifySHA256Challenge(verifier, challenge string) bool {
 	}
 	sum := sha256.Sum256([]byte(verifier))
 	computed := base64.RawURLEncoding.EncodeToString(sum[:])
-	return computed == challenge
+	return hmac.Equal([]byte(computed), []byte(challenge))
 }
 
 func writeTokenError(w http.ResponseWriter, status int, code, desc string) {
@@ -520,10 +522,16 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 // false (DCR), or an error message string if the client cannot be resolved.
 func (s *Server) resolveClientMeta(r *http.Request, clientID string) (meta *ClientMetadata, verified bool, errMsg string) {
 	if strings.HasPrefix(clientID, "https://") {
-		// CIMD path.
+		// CIMD path. Don't surface the raw fetcher error to the browser —
+		// it can include DNS lookups, SSRF block reasons, "connection refused",
+		// etc. Log the specifics for operators and show a generic message.
 		m, err := s.cimd.Fetch(r.Context(), clientID)
 		if err != nil {
-			return nil, false, "could not fetch client metadata: " + err.Error()
+			slog.Warn("MCP CIMD fetch failed",
+				"client_id", clientID,
+				"error", err,
+			)
+			return nil, false, "client metadata could not be retrieved"
 		}
 		return m, true, ""
 	}
@@ -581,8 +589,28 @@ func (s *Server) VerifyAccessToken(token string) (*AccessTokenClaims, error) {
 func (s *Server) WriteUnauthorized(w http.ResponseWriter, errorCode string) {
 	prmURL := s.cfg.Issuer + s.cfg.BasePath + "/.well-known/oauth-protected-resource"
 	w.Header().Set("WWW-Authenticate", fmt.Sprintf(
-		`Bearer realm="mcp", resource_metadata=%q, error=%q`,
-		prmURL, errorCode,
+		`Bearer realm="mcp", resource_metadata=%s, error=%s`,
+		httpQuotedString(prmURL), httpQuotedString(errorCode),
 	))
 	w.WriteHeader(http.StatusUnauthorized)
+}
+
+// httpQuotedString wraps s in an RFC 7230 quoted-string. Per RFC 7230 §3.2.6
+// the only characters that must be escaped inside quoted-string are " and \;
+// everything else in the visible-ASCII range (and obs-text) is allowed bare.
+// Go's %q produces a Go-syntax string literal — close but wrong by spec,
+// notably for backticks and non-ASCII runes. We escape "\" and `"` only.
+func httpQuotedString(s string) string {
+	var b strings.Builder
+	b.Grow(len(s) + 2)
+	b.WriteByte('"')
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '"' || c == '\\' {
+			b.WriteByte('\\')
+		}
+		b.WriteByte(c)
+	}
+	b.WriteByte('"')
+	return b.String()
 }

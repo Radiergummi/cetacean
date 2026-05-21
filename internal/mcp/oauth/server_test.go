@@ -463,3 +463,21 @@ func TestWriteUnauthorized(t *testing.T) {
 		t.Errorf("WWW-Authenticate missing PRM URL %q: %q", expectedURL, wwwAuth)
 	}
 }
+
+func TestHTTPQuotedString(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{`plain`, `"plain"`},
+		{`with "quotes"`, `"with \"quotes\""`},
+		{`back\slash`, `"back\\slash"`},
+		{"back`tick", "\"back`tick\""}, // backtick must NOT be Go-escaped
+		{`https://例えば.test/x`, `"https://例えば.test/x"`},
+	}
+	for _, c := range cases {
+		got := httpQuotedString(c.in)
+		if got != c.want {
+			t.Errorf("httpQuotedString(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
