@@ -384,14 +384,15 @@ func main() {
 	}
 
 	mcpHandler, oauthRoutes, closeMCP := setupMCP(mcpDeps{
-		cfg:         cfg,
-		authMode:    authCfg.Mode,
-		tlsEnabled:  tlsCfg.Enabled(),
-		cache:       stateCache,
-		writeClient: dockerClient,
-		logs:        dockerClient,
-		acl:         aclEval,
-		rec:         recEngine,
+		cfg:          cfg,
+		authMode:     authCfg.Mode,
+		authProvider: authProvider,
+		tlsEnabled:   tlsCfg.Enabled(),
+		cache:        stateCache,
+		writeClient:  dockerClient,
+		logs:         dockerClient,
+		acl:          aclEval,
+		rec:          recEngine,
 	})
 	defer closeMCP()
 
@@ -593,14 +594,15 @@ func serveDualListeners(
 // and runtime objects is preserved so callers don't have to wedge unrelated
 // runtime state onto config structs.
 type mcpDeps struct {
-	cfg         *config.Config
-	authMode    string
-	tlsEnabled  bool
-	cache       *cache.Cache
-	writeClient mcp.DockerWriteClient
-	logs        mcp.LogStreamer
-	acl         *acl.Evaluator
-	rec         mcp.RecommendationEngine
+	cfg          *config.Config
+	authMode     string
+	authProvider auth.Provider
+	tlsEnabled   bool
+	cache        *cache.Cache
+	writeClient  mcp.DockerWriteClient
+	logs         mcp.LogStreamer
+	acl          *acl.Evaluator
+	rec          mcp.RecommendationEngine
 }
 
 // setupMCP builds the MCP HTTP handler and the OAuth route registrar when
@@ -657,6 +659,8 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 		Config:          d.cfg.MCP,
 		GlobalOpsLevel:  d.cfg.OperationsLevel,
 		OAuth:           oauthSrv,
+		AuthMode:        d.authMode,
+		AuthProvider:    d.authProvider,
 		Recommendations: d.rec,
 	})
 	if err != nil {

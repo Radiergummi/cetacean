@@ -57,7 +57,12 @@ type MCPConfig struct {
 	// CIMDEnabled enables Client-Initiated Metadata Discovery.
 	CIMDEnabled bool
 
-	// AuthBypass is a list of client IDs that skip authentication checks.
+	// AuthBypass lists upstream Cetacean auth modes (e.g. "cert") whose
+	// authenticated identity is accepted at /mcp without an OAuth bearer
+	// token. When a request reaches /mcp and the active auth mode is in this
+	// list, the MCP server derives identity from the upstream provider
+	// (e.g. the mTLS client certificate) instead of validating a JWT.
+	// Modes that would issue redirects (e.g. "oidc") are unsafe to list.
 	AuthBypass []string
 }
 

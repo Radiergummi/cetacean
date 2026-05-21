@@ -12,6 +12,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
+	"sync"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
@@ -59,6 +61,8 @@ type Server struct {
 	config         config.MCPConfig
 	globalOpsLevel config.OperationsLevel
 	oauth          *oauth.Server // nil when auth mode is "none"
+	authMode       string        // upstream auth mode ("cert", "oidc", ...); used for bypass match
+	authProvider   auth.Provider // upstream auth provider; used when bypass is active
 	mcpServer      *mcpserver.MCPServer
 	httpServer     *mcpserver.StreamableHTTPServer
 	recEngine      RecommendationEngine
@@ -74,11 +78,15 @@ type Server struct {
 	// detach returned by cache.AddOnChangeListener.
 	notifications       *NotificationManager
 	cancelNotifications func()
+	closeOnce           sync.Once
 }
 
 // Options bundles the dependencies for New. OAuth is optional — when nil, the
 // MCP endpoint is mounted without bearer-token validation (matching auth mode
 // "none"). Recommendations may be nil when CETACEAN_RECOMMENDATIONS=false.
+// AuthMode and AuthProvider together drive the CETACEAN_MCP_AUTH_BYPASS path:
+// when AuthMode appears in Config.AuthBypass, the MCP server derives identity
+// from AuthProvider (e.g. the mTLS cert) instead of requiring an OAuth bearer.
 type Options struct {
 	WriteClient     DockerWriteClient
 	Logs            LogStreamer
@@ -86,6 +94,8 @@ type Options struct {
 	Config          config.MCPConfig
 	GlobalOpsLevel  config.OperationsLevel
 	OAuth           *oauth.Server
+	AuthMode        string
+	AuthProvider    auth.Provider
 	Recommendations RecommendationEngine
 }
 
@@ -106,6 +116,8 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		config:         opts.Config,
 		globalOpsLevel: opts.GlobalOpsLevel,
 		oauth:          opts.OAuth,
+		authMode:       opts.AuthMode,
+		authProvider:   opts.AuthProvider,
 		recEngine:      opts.Recommendations,
 		notifications:  NewNotificationManager(),
 	}
@@ -145,12 +157,15 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 
 // Close releases external resources held by the server. Currently this means
 // detaching the cache change listener so the cache can be torn down without
-// firing into a stale notification path. Safe to call multiple times.
+// firing into a stale notification path. Safe to call multiple times and
+// safe under concurrent callers thanks to sync.Once.
 func (s *Server) Close() {
-	if s.cancelNotifications != nil {
-		s.cancelNotifications()
-		s.cancelNotifications = nil
-	}
+	s.closeOnce.Do(func() {
+		if s.cancelNotifications != nil {
+			s.cancelNotifications()
+			s.cancelNotifications = nil
+		}
+	})
 }
 
 // Handler returns the http.Handler for the MCP endpoint. When OAuth is
@@ -169,8 +184,21 @@ func (s *Server) Handler() http.Handler {
 // an auth.Identity in the request context, and chains to next. On missing or
 // invalid tokens it emits a 401 with RFC 6750 WWW-Authenticate carrying the
 // protected-resource metadata URL.
+//
+// When CETACEAN_MCP_AUTH_BYPASS names the active upstream auth mode (typically
+// "cert"), the upstream provider's Authenticate runs first; on success its
+// identity is used and JWT verification is skipped. This lets mTLS-authenticated
+// clients reach /mcp without taking the OAuth detour.
 func (s *Server) bearerAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.bypassActive() {
+			if id, err := s.authProvider.Authenticate(discardingResponseWriter{}, r); err == nil && id != nil {
+				ctx := auth.ContextWithIdentity(r.Context(), id)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+		}
+
 		token := auth.ExtractBearerToken(r)
 		if token == "" {
 			s.oauth.WriteUnauthorized(w, "invalid_token")
@@ -192,6 +220,26 @@ func (s *Server) bearerAuth(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
+
+// bypassActive reports whether the upstream auth mode is in the configured
+// CETACEAN_MCP_AUTH_BYPASS list and a provider is available to consult.
+func (s *Server) bypassActive() bool {
+	if s.authProvider == nil || s.authMode == "" {
+		return false
+	}
+	return slices.Contains(s.config.AuthBypass, s.authMode)
+}
+
+// discardingResponseWriter swallows writes from upstream providers invoked for
+// identity-only bypass checks. Providers that would normally write a redirect
+// or partial body (OIDC) end up with their output dropped — callers should
+// only list providers that don't write on the success path (cert, headers,
+// tailscale) in AuthBypass.
+type discardingResponseWriter struct{}
+
+func (discardingResponseWriter) Header() http.Header         { return http.Header{} }
+func (discardingResponseWriter) Write(p []byte) (int, error) { return len(p), nil }
+func (discardingResponseWriter) WriteHeader(int)             {}
 
 // filterToolsForIdentity is wired as a WithToolFilter for tools/list. Tier
 // gating already happened at registration, and per-resource ACL is enforced
