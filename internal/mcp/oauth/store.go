@@ -59,15 +59,22 @@ func NewAuthCodeStore() *AuthCodeStore {
 }
 
 // Issue mints a new authorization code, stores a hash of it, and returns
-// the raw code to the caller. The code is valid for ttl from now.
+// the raw code to the caller. The code is valid for ttl from now. Expired
+// entries are pruned inline so abandoned flows cannot accumulate.
 func (s *AuthCodeStore) Issue(data AuthCodeData, ttl time.Duration) string {
 	raw := generateOpaqueToken()
 	h := hashToken(raw)
+	now := time.Now()
 
 	s.mu.Lock()
+	for h, entry := range s.codes {
+		if now.After(entry.expiresAt) {
+			delete(s.codes, h)
+		}
+	}
 	s.codes[h] = authCodeEntry{
 		data:      data,
-		expiresAt: time.Now().Add(ttl),
+		expiresAt: now.Add(ttl),
 	}
 	s.mu.Unlock()
 
@@ -124,6 +131,12 @@ type refreshTokenEntry struct {
 	expiresAt time.Time
 }
 
+// maxGrantHistorySize caps the per-grant rotation history. Theft detection
+// works only for replays of tokens within this window; older consumed hashes
+// are evicted. Tokens past their TTL would fail to rotate anyway, so the
+// effective theft-detection window is min(history, TTL).
+const maxGrantHistorySize = 32
+
 // RefreshTokenStore manages long-lived refresh tokens with rotation-on-use
 // and grant-family theft detection. Raw tokens are never persisted; only
 // their SHA-256 hashes are held in memory.
@@ -131,7 +144,7 @@ type RefreshTokenStore struct {
 	mu       sync.Mutex
 	tokens   map[string]refreshTokenEntry // hash → live entry
 	consumed map[string]string            // hash → grantID (rotated-away tokens)
-	grants   map[string][]string          // grantID → ordered slice of all hashes ever issued
+	grants   map[string][]string          // grantID → ordered slice of recent hashes (capped at maxGrantHistorySize)
 }
 
 // NewRefreshTokenStore returns a ready-to-use RefreshTokenStore.
@@ -224,9 +237,10 @@ func (s *RefreshTokenStore) Rotate(oldToken string, ttl time.Duration) RotateRes
 		return RotateResult{}
 	}
 
-	// Step 4: expiry check.
+	// Step 4: expiry check. Tear down the whole family so consumed and grants
+	// don't accumulate orphaned entries past the token's natural lifetime.
 	if time.Now().After(entry.expiresAt) {
-		delete(s.tokens, oldHash)
+		s.revokeGrantLocked(entry.data.grantID)
 		return RotateResult{}
 	}
 
@@ -239,7 +253,14 @@ func (s *RefreshTokenStore) Rotate(oldToken string, ttl time.Duration) RotateRes
 		data:      entry.data,
 		expiresAt: time.Now().Add(ttl),
 	}
-	s.grants[grantID] = append(s.grants[grantID], newHash)
+	history := append(s.grants[grantID], newHash)
+	if overflow := len(history) - maxGrantHistorySize; overflow > 0 {
+		for _, evicted := range history[:overflow] {
+			delete(s.consumed, evicted)
+		}
+		history = history[overflow:]
+	}
+	s.grants[grantID] = history
 
 	out := entry.data
 	out.Groups = append([]string(nil), entry.data.Groups...)

@@ -190,3 +190,76 @@ func TestRefreshTokenGrantIDDiffers(t *testing.T) {
 		t.Fatal("revoking unrelated grant must not affect b")
 	}
 }
+
+func TestRefreshTokenRotationBoundsHistory(t *testing.T) {
+	s := NewRefreshTokenStore()
+	token := s.Issue(RefreshTokenData{Subject: "u"}, time.Hour)
+
+	// Rotate well past the history cap.
+	for i := range maxGrantHistorySize * 3 {
+		res := s.Rotate(token, time.Hour)
+		if !res.OK {
+			t.Fatalf("rotation %d failed", i)
+		}
+		token = res.NewToken
+	}
+
+	// Walk the single grant family and confirm both maps are bounded.
+	for _, hashes := range s.grants {
+		if len(hashes) > maxGrantHistorySize {
+			t.Errorf("grant history len = %d, want <= %d", len(hashes), maxGrantHistorySize)
+		}
+	}
+	if len(s.consumed) > maxGrantHistorySize {
+		t.Errorf("consumed len = %d, want <= %d", len(s.consumed), maxGrantHistorySize)
+	}
+
+	// The live token still rotates after the cap is reached.
+	res := s.Rotate(token, time.Hour)
+	if !res.OK {
+		t.Fatal("rotation after history cap should still succeed")
+	}
+}
+
+func TestRefreshTokenExpiryCleansFamily(t *testing.T) {
+	s := NewRefreshTokenStore()
+	token := s.Issue(RefreshTokenData{Subject: "u"}, -time.Second) // already expired
+
+	res := s.Rotate(token, time.Hour)
+	if res.OK {
+		t.Fatal("expired token must not rotate")
+	}
+	if len(s.tokens) != 0 || len(s.consumed) != 0 || len(s.grants) != 0 {
+		t.Errorf("expired grant left residue: tokens=%d consumed=%d grants=%d",
+			len(s.tokens), len(s.consumed), len(s.grants))
+	}
+}
+
+func TestAuthCodeIssueSweepsExpired(t *testing.T) {
+	s := NewAuthCodeStore()
+
+	// Seed with a live entry, then several already-expired ones. Each Issue
+	// sweeps before inserting, so prior expired entries should already be gone
+	// by the time the next call adds its own. The final state is the most
+	// recent expired entry plus the original live one.
+	live := s.Issue(AuthCodeData{Subject: "live"}, time.Hour)
+	for range 5 {
+		s.Issue(AuthCodeData{Subject: "stale"}, -time.Second)
+	}
+
+	if len(s.codes) != 2 {
+		t.Fatalf("after expired Issues: codes=%d, want 2 (1 live + 1 most-recent expired)", len(s.codes))
+	}
+
+	// A fresh Issue sweeps the one remaining expired entry, leaving the live
+	// and fresh ones.
+	s.Issue(AuthCodeData{Subject: "fresh"}, time.Hour)
+	if len(s.codes) != 2 {
+		t.Errorf("after fresh Issue: codes=%d, want 2 (live + fresh, stale swept)", len(s.codes))
+	}
+
+	// Live code still redeems.
+	if _, ok := s.Redeem(live); !ok {
+		t.Error("live code must still be redeemable after sweeps")
+	}
+}
