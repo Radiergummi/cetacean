@@ -111,6 +111,29 @@ func TestRefreshTokenRotation(t *testing.T) {
 	}
 }
 
+// TestRefreshTokenGrantFamilyAbsoluteExpiry covers M-19: rotation extends the
+// per-token TTL but never pushes the grant past its absolute expiry. A token
+// rotated with a long TTL after the family expires must fail to validate.
+func TestRefreshTokenGrantFamilyAbsoluteExpiry(t *testing.T) {
+	s := NewRefreshTokenStore()
+
+	original := s.Issue(RefreshTokenData{Subject: "u", ClientID: "c"}, 10*time.Millisecond)
+	res := s.Rotate(original, 24*time.Hour)
+	if !res.OK {
+		t.Fatal("first rotation should succeed")
+	}
+
+	// Wait past the original family TTL.
+	time.Sleep(20 * time.Millisecond)
+
+	// The new token should be expired even though it was minted with a 24h TTL,
+	// because grantExpiresAt carried forward from Issue and clamps the per-token
+	// expiry.
+	if _, ok := s.Validate(res.NewToken); ok {
+		t.Fatal("rotated token must respect grant-family absolute expiry")
+	}
+}
+
 func TestRefreshTokenTheftDetection(t *testing.T) {
 	s := NewRefreshTokenStore()
 	original := s.Issue(RefreshTokenData{Subject: "u", ClientID: "c"}, 720*time.Hour)

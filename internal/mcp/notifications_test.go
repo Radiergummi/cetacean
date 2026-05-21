@@ -148,6 +148,22 @@ func TestNotification_SubscribeCapturesIdentity(t *testing.T) {
 	}
 }
 
+// TestCanReadAnyOfType_HonorsGrants covers M-22's helper: list_changed
+// broadcasts skip sessions whose identity can't read the affected type.
+func TestCanReadAnyOfType_HonorsGrants(t *testing.T) {
+	c := cache.New(nil)
+	e := aclEvaluatorWithGrants("read", "service:*")
+	srv := newToolTestServer(t, c, nil, config.OpsReadOnly, func(o *Options) { o.ACL = e })
+
+	id := &auth.Identity{Subject: "tester"}
+	if !srv.canReadAnyOfType(id, "service") {
+		t.Error("identity with service:* grant must pass canReadAnyOfType(service)")
+	}
+	if srv.canReadAnyOfType(id, "node") {
+		t.Error("identity without node grant must fail canReadAnyOfType(node)")
+	}
+}
+
 func TestEventACLResource(t *testing.T) {
 	tests := []struct {
 		name  string

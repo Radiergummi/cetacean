@@ -27,6 +27,15 @@ var (
 // precomputed once at package init.
 var jwtHeader = base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))
 
+// jwtHeaderClaims is the minimal subset of a JWT header we inspect on verify.
+// alg=none / alg=RS256 substitution attacks are blocked by recomputing HMAC
+// with our key; this extra check provides defence-in-depth and a clearer
+// contract for future maintainers.
+type jwtHeaderClaims struct {
+	Alg string `json:"alg"`
+	Typ string `json:"typ"`
+}
+
 // AccessTokenClaims holds the application-level claims carried by the JWT.
 // Standard claims (iss, aud, exp, iat, jti) are managed internally.
 type AccessTokenClaims struct {
@@ -50,8 +59,8 @@ type jwtPayload struct {
 // TokenIssuer issues and verifies HMAC-SHA256 JWTs.
 type TokenIssuer struct {
 	SigningKey []byte
-	Issuer    string
-	Audience  string
+	Issuer     string
+	Audience   string
 }
 
 // IssueAccessToken mints a signed compact JWT for the given claims with the
@@ -68,14 +77,14 @@ func (t *TokenIssuer) IssueAccessToken(claims AccessTokenClaims, ttl time.Durati
 
 	now := time.Now()
 	payload := jwtPayload{
-		Issuer:   t.Issuer,
-		Audience: t.Audience,
-		IssuedAt: now.Unix(),
+		Issuer:    t.Issuer,
+		Audience:  t.Audience,
+		IssuedAt:  now.Unix(),
 		ExpiresAt: now.Add(ttl).Unix(),
-		JTIID:    base64.RawURLEncoding.EncodeToString(jtiBytes),
-		Subject:  claims.Subject,
-		Groups:   claims.Groups,
-		ClientID: claims.ClientID,
+		JTIID:     base64.RawURLEncoding.EncodeToString(jtiBytes),
+		Subject:   claims.Subject,
+		Groups:    claims.Groups,
+		ClientID:  claims.ClientID,
 	}
 
 	payloadJSON, err := json.Marshal(payload)
@@ -101,6 +110,21 @@ func (t *TokenIssuer) VerifyAccessToken(token string) (*AccessTokenClaims, error
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("%w: expected 3 segments, got %d", ErrMalformedToken, len(parts))
+	}
+
+	headerJSON, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return nil, fmt.Errorf("%w: base64 decode header: %w", ErrMalformedToken, err)
+	}
+	var hdr jwtHeaderClaims
+	if err := json.Unmarshal(headerJSON, &hdr); err != nil {
+		return nil, fmt.Errorf("%w: JSON decode header: %w", ErrMalformedToken, err)
+	}
+	if hdr.Alg != "HS256" {
+		return nil, fmt.Errorf("%w: unexpected alg %q", ErrMalformedToken, hdr.Alg)
+	}
+	if hdr.Typ != "" && hdr.Typ != "JWT" {
+		return nil, fmt.Errorf("%w: unexpected typ %q", ErrMalformedToken, hdr.Typ)
 	}
 
 	signingInput := parts[0] + "." + parts[1]

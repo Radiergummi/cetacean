@@ -270,7 +270,6 @@ func TestCIMDFetchNonOKStatus(t *testing.T) {
 	}
 }
 
-
 func TestCIMDFetchBlocksCGNAT(t *testing.T) {
 	f := &CIMDFetcher{}
 	if err := f.checkIP(net.ParseIP("100.64.1.1")); !errors.Is(err, ErrCIMDSSRFBlocked) {

@@ -9,6 +9,12 @@ import (
 	"time"
 )
 
+// dcrMaxBodyBytes caps the size of a DCR registration request body. RFC 7591
+// places no normative limit, but real registration metadata fits in a few KiB;
+// 64 KiB leaves comfortable headroom for unusual but legitimate inputs while
+// preventing a single client from forcing the server to buffer megabytes.
+const dcrMaxBodyBytes = 64 * 1024
+
 // ClientRegistration holds a dynamically registered OAuth client.
 type ClientRegistration struct {
 	ClientID                string   `json:"client_id"`
@@ -43,16 +49,16 @@ type ClientRegistry struct {
 	order      []string // insertion-order for LRU eviction (oldest first)
 	maxClients int
 
-	rateMu   sync.Mutex
-	buckets  map[string]*ipBucket
+	rateMu    sync.Mutex
+	buckets   map[string]*ipBucket
 	rateLimit int // requests per hour per IP
 }
 
 // newClientRegistry creates a new registry with the given capacity and rate limit.
 func newClientRegistry(maxClients, rateLimit int) *ClientRegistry {
 	return &ClientRegistry{
-		clients:   make(map[string]*ClientRegistration),
-		buckets:   make(map[string]*ipBucket),
+		clients:    make(map[string]*ClientRegistration),
+		buckets:    make(map[string]*ipBucket),
 		maxClients: maxClients,
 		rateLimit:  rateLimit,
 	}
@@ -146,7 +152,11 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Per-IP rate limiting.
+	// Per-IP rate limiting. r.RemoteAddr is the real client IP when the
+	// server.trusted_proxies allowlist is configured — the realIP middleware
+	// (internal/api/realip.go) rewrites it from X-Forwarded-For before this
+	// handler runs. Behind a reverse proxy with no trusted_proxies set, every
+	// caller shares the proxy's bucket; document this dependency for operators.
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		ip = r.RemoteAddr
@@ -156,6 +166,10 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		writeDCRError(w, http.StatusTooManyRequests, "too_many_requests", "registration rate limit exceeded")
 		return
 	}
+
+	// Bound the request body to keep this public endpoint from buffering
+	// arbitrarily large payloads (trivial DoS otherwise).
+	r.Body = http.MaxBytesReader(w, r.Body, dcrMaxBodyBytes)
 
 	// RFC 7591: unknown fields MUST be ignored.
 	var req dcrRequest
@@ -225,14 +239,16 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		ClientIDIssuedAt:        time.Now().Unix(),
 	}
 
+	body, err := json.Marshal(reg)
+	if err != nil {
+		writeDCRError(w, http.StatusInternalServerError, "server_error", "failed to encode registration")
+		return
+	}
 	s.clients.register(reg)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(reg); err != nil {
-		// Headers already sent; nothing we can do.
-		return
-	}
+	_, _ = w.Write(body)
 }
 
 // dcrErrorResponse is the RFC 7591 error response format.

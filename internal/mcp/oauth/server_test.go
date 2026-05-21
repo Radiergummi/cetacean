@@ -397,6 +397,33 @@ func TestRevocationUnknownToken(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// TestCodeVerifier_RFC7636Length covers M-18: PKCE verifier length and
+// alphabet enforcement against RFC 7636 §4.1.
+func TestCodeVerifier_RFC7636Length(t *testing.T) {
+	cases := []struct {
+		name     string
+		verifier string
+		ok       bool
+	}{
+		{"too short (42 chars)", strings.Repeat("a", 42), false},
+		{"at minimum (43)", strings.Repeat("a", 43), true},
+		{"at maximum (128)", strings.Repeat("a", 128), true},
+		{"too long (129)", strings.Repeat("a", 129), false},
+		{"empty", "", false},
+		{"illegal character", strings.Repeat("a", 42) + "!", false},
+		{"all unreserved", "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmno-._~0123", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := validateCodeVerifier(c.verifier)
+			if (err == nil) != c.ok {
+				t.Errorf("ok=%v, got err=%v", c.ok, err)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
 // TestTokenExchangeRefreshMismatchedResource
 // ---------------------------------------------------------------------------
 
@@ -426,10 +453,11 @@ func TestTokenExchangeRefreshMismatchedResource(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "invalid_target") {
 		t.Errorf("body must mention invalid_target: %s", rec.Body.String())
 	}
-	// Critical: the family should be revoked, so the original refresh token
-	// is no longer valid.
-	if _, ok := srv.refreshTokens.Validate(rt); ok {
-		t.Errorf("refresh token must be revoked after a resource-mismatched rotate")
+	// Per M-20: a resource-indicator typo must NOT burn the grant family —
+	// the bound resource validation runs before consuming the refresh token,
+	// so the original token must still be live.
+	if _, ok := srv.refreshTokens.Validate(rt); !ok {
+		t.Errorf("refresh token must remain valid after a non-rotating mismatch")
 	}
 }
 

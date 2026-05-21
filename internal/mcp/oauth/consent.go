@@ -123,10 +123,16 @@ func renderErrorPage(w http.ResponseWriter, status int, message string) {
 	_ = errorTemplate.Execute(w, map[string]string{"Message": message})
 }
 
-// setConsentHeaders sets security headers that prevent framing.
+// setConsentHeaders sets security headers that prevent framing and caching.
+// The consent page carries the CSRF token, OAuth state, code_challenge,
+// redirect_uri and authenticated user identity in hidden form fields — any
+// shared cache or browser back-button cache would replay that to a different
+// user. Cache-Control: no-store matches the token-response handler.
 func setConsentHeaders(w http.ResponseWriter) {
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
 }
 
 // issueCSRFNonce generates a random nonce, sets a short-lived signed cookie,

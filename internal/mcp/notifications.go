@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
@@ -247,10 +248,52 @@ func (s *Server) dispatchCacheEvent(event cache.Event) {
 	}
 
 	if s.notifications.IsListChange(event) {
-		// list_changed is a coarse signal — broadcast to all initialized
-		// clients and let each refilter on the next list call.
-		s.mcpServer.SendNotificationToAllClients("notifications/resources/list_changed", nil)
+		// list_changed is a coarse "go refetch" signal. When ACL is in play,
+		// don't broadcast it to sessions whose identity can't read any
+		// resource of the affected type — otherwise the notification leaks
+		// activity timing across tenancy boundaries.
+		aclType := eventTypeToACLPrefix(event.Type)
+		aclType = strings.TrimSuffix(aclType, ":")
+		if aclType == "" || s.acl == nil {
+			s.mcpServer.SendNotificationToAllClients("notifications/resources/list_changed", nil)
+			return
+		}
+		for _, sid := range s.notifications.sessionIDs() {
+			id := s.notifications.IdentityFor(sid)
+			if !s.canReadAnyOfType(id, aclType) {
+				continue
+			}
+			_ = s.mcpServer.SendNotificationToSpecificClient(sid, "notifications/resources/list_changed", nil)
+		}
 	}
+}
+
+// canReadAnyOfType returns true when the identity has at least one read grant
+// on a resource of the given type. Mirrors the logic in filterToolsForIdentity
+// — a write grant implies read.
+func (s *Server) canReadAnyOfType(identity *auth.Identity, resourceType string) bool {
+	if s.acl == nil {
+		return true
+	}
+	perms := s.acl.PermissionsFor(identity)
+	if perms == nil {
+		return true
+	}
+	for pattern, granted := range perms {
+		resType, _, ok := splitResourceType(pattern)
+		if !ok {
+			continue
+		}
+		if resType != "*" && resType != resourceType {
+			continue
+		}
+		for _, p := range granted {
+			if p == "read" || p == "write" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // canRead returns true when identity is allowed to read aclResource (or when

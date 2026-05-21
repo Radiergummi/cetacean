@@ -25,9 +25,14 @@ func (s *Server) HandleProtectedResourceMetadata(w http.ResponseWriter, r *http.
 		doc.ResourceDocumentation = s.cfg.Issuer + s.cfg.BasePath + "/api"
 	}
 
+	// Marshal first so an encoding failure doesn't write partial headers
+	// followed by a 500 status.
+	body, err := json.Marshal(doc)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "max-age=3600")
-	if err := json.NewEncoder(w).Encode(doc); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-	}
+	_, _ = w.Write(body)
 }

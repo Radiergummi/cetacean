@@ -640,9 +640,10 @@ func (c *Cache) GetStackDetail(name string) (StackDetail, bool) {
 			detail.Volumes = append(detail.Volumes, vol)
 		}
 	}
-	for i := range detail.Secrets {
-		detail.Secrets[i].Spec.Data = nil
-	}
+	// Secret data is nilled by the secrets map's onSet hook (see secret
+	// ResourceMap above), so detail.Secrets[*].Spec.Data is already nil here.
+	// Don't re-walk to be defensive — that duplicates the redaction contract
+	// and invites it to drift apart.
 	return detail, true
 }
 

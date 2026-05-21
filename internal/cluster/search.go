@@ -445,6 +445,11 @@ func SegmentPrefixMatch(targetLower, queryLower string) bool {
 		return false
 	}
 
+	// TODO(perf): this allocates a fresh memo map per call on a hot path —
+	// SegmentPrefixMatch runs against every label key/value of every resource
+	// across parallel search goroutines. Benchmark and, if the GC pressure is
+	// material, replace recursive memoised backtracking with an iterative DP
+	// using a preallocated [len(query)+1][len(segments)+1]bool array.
 	type key struct{ qi, si int }
 	memo := map[key]bool{}
 

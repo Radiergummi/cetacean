@@ -14,52 +14,95 @@ import (
 
 const mcpMIMEType = "application/json"
 
-// resourceTemplate describes a templated cetacean:// resource. The URI template
-// follows RFC 6570 — mcp-go parses it and dispatches reads through the matching
-// handler.
-type resourceTemplate struct {
+// namedResource describes a cetacean:// resource — either a fixed singleton
+// (cluster, recommendations, history) or an RFC 6570 URI template that mcp-go
+// dispatches via its template router. `name` is the programmatic MCP resource
+// name (stable, used by clients as a key); `title` is the human-readable label
+// MCP clients prefer for display.
+type namedResource struct {
 	uri         string
 	name        string
-	description string
-}
-
-// staticResource describes a non-templated cetacean:// resource that exists in
-// a single instance (cluster, recommendations, history).
-type staticResource struct {
-	uri         string
-	name        string
+	title       string
 	description string
 }
 
 var (
-	staticResources = []staticResource{
-		{uri: "cetacean://cluster", name: "Cluster", description: "Swarm cluster info"},
+	staticResources = []namedResource{
+		{
+			uri:         "cetacean://cluster",
+			name:        "cluster",
+			title:       "Swarm cluster overview",
+			description: "High-level cluster facts: swarm ID, raft state, CA config, orchestration defaults, manager and worker counts, installed plugins. Returns a single JSON document; updates push via notifications/resources/updated when any of those fields change.",
+		},
 		{
 			uri:         "cetacean://recommendations",
-			name:        "Recommendations",
-			description: "Current cluster recommendations",
+			name:        "recommendations",
+			title:       "Cluster recommendations",
+			description: "Currently surfaced recommendations from the built-in engine: right-sizing, missing health checks or restart policies, flaky services, single-replica risks, manager workload imbalance, uneven node distribution. Each entry includes severity, category, target resource, and rationale.",
 		},
-		{uri: "cetacean://history", name: "History", description: "Recent change history"},
+		{
+			uri:         "cetacean://history",
+			name:        "history",
+			title:       "Recent change history",
+			description: "Ring buffer (up to 10,000 entries) of recent create/update/delete events across every cluster resource type, newest first. Useful for incident triage and 'what changed' questions.",
+		},
 	}
 
-	resourceTemplates = []resourceTemplate{
-		{uri: "cetacean://nodes/{id}", name: "Node", description: "Node detail"},
-		{uri: "cetacean://services/{id}", name: "Service", description: "Service detail"},
+	resourceTemplates = []namedResource{
+		{
+			uri:         "cetacean://nodes/{id}",
+			name:        "node",
+			title:       "Node detail",
+			description: "Full node detail by ID or hostname: role, availability, engine version, platform, labels, manager status, resource totals, and the services currently scheduled onto it.",
+		},
+		{
+			uri:         "cetacean://services/{id}",
+			name:        "service",
+			title:       "Service detail",
+			description: "Full service detail by ID or name: spec (image, env, labels, resources, placement, ports, update/rollback policy, log driver), running and desired task counts, derived state, and the configs/secrets/networks/volumes it references.",
+		},
 		{
 			uri:         "cetacean://services/{id}/logs",
-			name:        "Service Logs",
-			description: "Service log stream",
+			name:        "service_logs",
+			title:       "Service logs (streaming)",
+			description: "Live log stream for a service, merged across replicas. Subscribe via resources/subscribe to receive new log lines as notifications/resources/updated events. For a one-shot fetch of recent lines use the get_logs tool.",
 		},
-		{uri: "cetacean://tasks/{id}", name: "Task", description: "Task detail"},
-		{uri: "cetacean://stacks/{name}", name: "Stack", description: "Stack detail"},
-		{uri: "cetacean://configs/{id}", name: "Config", description: "Config detail"},
+		{
+			uri:         "cetacean://tasks/{id}",
+			name:        "task",
+			title:       "Task detail",
+			description: "Full task detail by ID, enriched with the parent service name and assigned node hostname. Includes desired and current state, status timestamps, the container spec the task ran from, and any failure messages.",
+		},
+		{
+			uri:         "cetacean://stacks/{name}",
+			name:        "stack",
+			title:       "Stack detail",
+			description: "Stack detail by name. Stacks are derived from the com.docker.stack.namespace label, so this rolls up every service, network, config, and secret tagged with the stack name. Secret payloads are redacted.",
+		},
+		{
+			uri:         "cetacean://configs/{id}",
+			name:        "config",
+			title:       "Config detail",
+			description: "Full Docker config by ID: name, labels, creation/update timestamps, and the base64-encoded data payload.",
+		},
 		{
 			uri:         "cetacean://secrets/{id}",
-			name:        "Secret",
-			description: "Secret metadata (data redacted)",
+			name:        "secret",
+			title:       "Secret metadata (data redacted)",
+			description: "Docker secret metadata by ID: name, labels, driver, creation/update timestamps. The data field is always zeroed before serialization — secret payloads are never exposed through MCP.",
 		},
-		{uri: "cetacean://networks/{id}", name: "Network", description: "Network detail"},
-		{uri: "cetacean://volumes/{name}", name: "Volume", description: "Volume detail"},
+		{
+			uri:         "cetacean://networks/{id}",
+			name:        "network",
+			title:       "Network detail",
+			description: "Overlay network detail by ID: driver, scope, IPAM configuration, attachable flag, ingress flag, labels, and the services currently attached.",
+		},
+		{
+			uri:         "cetacean://volumes/{name}",
+			name:        "volume",
+			title:       "Volume detail",
+			description: "Volume detail by name (volumes are keyed by name, not ID): driver, mountpoint, options, labels, scope, and the services that mount it.",
+		},
 	}
 )
 
@@ -67,6 +110,7 @@ func (s *Server) registerResources() {
 	for _, r := range staticResources {
 		s.mcpServer.AddResource(
 			mcplib.NewResource(r.uri, r.name,
+				mcplib.WithResourceTitle(r.title),
 				mcplib.WithResourceDescription(r.description),
 				mcplib.WithMIMEType(mcpMIMEType),
 			),
@@ -77,6 +121,7 @@ func (s *Server) registerResources() {
 	for _, t := range resourceTemplates {
 		s.mcpServer.AddResourceTemplate(
 			mcplib.NewResourceTemplate(t.uri, t.name,
+				mcplib.WithTemplateTitle(t.title),
 				mcplib.WithTemplateDescription(t.description),
 				mcplib.WithTemplateMIMEType(mcpMIMEType),
 			),
@@ -201,12 +246,15 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return s.filterStacks(ctx, s.cache.ListStacks()), nil
 		}
-		if err := s.checkRead(ctx, "stack", resourceID); err != nil {
-			return nil, err
-		}
+		// Look up first, then ACL — keeps "exists but denied" indistinguishable
+		// from "not found" so callers can't probe stack existence via error
+		// classes. Matches the order used for every other resource type.
 		stack, ok := s.cache.GetStackDetail(resourceID)
 		if !ok {
 			return nil, notFound(uri)
+		}
+		if err := s.checkRead(ctx, "stack", resourceID); err != nil {
+			return nil, err
 		}
 		return stack, nil
 
@@ -253,12 +301,13 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return s.filterVolumes(ctx, s.cache.ListVolumes()), nil
 		}
-		if err := s.checkRead(ctx, "volume", resourceID); err != nil {
-			return nil, err
-		}
+		// Look up first, then ACL — see the "stacks" case for rationale.
 		vol, ok := s.cache.GetVolume(resourceID)
 		if !ok {
 			return nil, notFound(uri)
+		}
+		if err := s.checkRead(ctx, "volume", resourceID); err != nil {
+			return nil, err
 		}
 		return vol, nil
 

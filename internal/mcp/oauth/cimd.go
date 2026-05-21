@@ -14,6 +14,14 @@ import (
 	"time"
 )
 
+// cimdDialer is the shared net.Dialer used by the default CIMD transport for
+// individual IP dials. The transport's per-host timeout caps total connect
+// time, so the dialer just needs reasonable per-attempt budgets.
+var cimdDialer = &net.Dialer{
+	Timeout:   2 * time.Second,
+	KeepAlive: 30 * time.Second,
+}
+
 // cimdCacheTTL is how long a successfully fetched metadata document is cached.
 // Expired entries are evicted on the next read; there is no background sweep.
 const cimdCacheTTL = time.Hour
@@ -105,46 +113,124 @@ type CIMDFetcher struct {
 	cache map[string]cachedEntry
 }
 
-// defaultCIMDClient is used when CIMDFetcher.Client is nil. The matching
-// per-fetch context.WithTimeout sets the same upper bound so the two
-// mechanisms agree and neither extends the other.
-var defaultCIMDClient = &http.Client{
-	Timeout: cimdFetchTimeout,
-}
-
-// httpClient returns an HTTP client with the SSRF-aware redirect policy applied.
-// It shallow-copies the base client so the caller's client is not mutated.
-// The Transport is shared (intentional — preserves TLS session caching).
+// httpClient returns an HTTP client suitable for fetching CIMD documents.
+//
+// When f.Client is nil (the production path) the returned client uses a
+// Transport whose DialContext resolves the host, validates the resulting IP
+// against the SSRF block-list, and connects to that exact IP — collapsing the
+// previous "pre-flight LookupIP + transport LookupIP" pair into a single
+// resolution so a DNS-rebinding attacker cannot return a public IP for the
+// validation lookup and a private IP for the actual connect.
+//
+// When f.Client is non-nil (tests inject httptest.Server.Client()) the caller's
+// client is shallow-copied. Tests that need to reach loopback set
+// AllowLoopback=true to skip the IP check; in production that flag should
+// remain false.
+//
+// CheckRedirect re-runs URL-structure validation (https, no userinfo, no
+// fragment, non-trivial path). DNS validation for the redirect target happens
+// in the same DialContext on the follow-up request.
 func (f *CIMDFetcher) httpClient() *http.Client {
-	base := f.Client
-	if base == nil {
-		base = defaultCIMDClient
+	var c http.Client
+	if f.Client != nil {
+		c = *f.Client
+		if c.Transport == nil {
+			c.Transport = f.ssrfTransport(http.DefaultTransport)
+		} else {
+			c.Transport = f.ssrfTransport(c.Transport)
+		}
+	} else {
+		c = http.Client{
+			Timeout:   cimdFetchTimeout,
+			Transport: f.ssrfTransport(nil),
+		}
 	}
-
-	c := *base // shallow copy
 	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if len(via) >= cimdMaxRedirects {
 			return fmt.Errorf("CIMD: exceeded %d redirects", cimdMaxRedirects)
 		}
-		// Re-validate every redirect target through the full URL + SSRF pipeline.
-		// NOTE: DNS resolution here uses the live hostname from the redirect
-		// Location header, so an attacker cannot sneak in a private IP via a
-		// redirect chain.
-		if err := f.validateURL(req.URL.String()); err != nil {
-			return err
-		}
-		if err := f.checkSSRF(req.URL.Hostname()); err != nil {
-			return err
-		}
-		return nil
+		return f.validateURL(req.URL.String())
 	}
 	return &c
 }
 
+// ssrfTransport returns an http.RoundTripper that performs SSRF-aware dialing.
+// If base is an *http.Transport, it is shallow-cloned so we don't mutate the
+// caller's transport. If base is nil, a fresh Transport is built with the
+// same defaults net/http uses.
+//
+// The custom DialContext resolves the host, screens every returned IP through
+// checkIP, and dials the first survivor — pinning the connection to the
+// validated address so net/http cannot perform a second, unvalidated DNS
+// lookup.
+func (f *CIMDFetcher) ssrfTransport(base http.RoundTripper) http.RoundTripper {
+	var t *http.Transport
+	if base == nil {
+		t = &http.Transport{
+			TLSHandshakeTimeout:   2 * time.Second,
+			ResponseHeaderTimeout: 3 * time.Second,
+			MaxIdleConns:          16,
+			IdleConnTimeout:       30 * time.Second,
+		}
+	} else if existing, ok := base.(*http.Transport); ok {
+		clone := existing.Clone()
+		t = clone
+	} else {
+		// Non-transport RoundTripper (e.g. test stub) — return it unchanged.
+		// Such callers are responsible for their own SSRF protections.
+		return base
+	}
+	t.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(address)
+		if err != nil {
+			return nil, fmt.Errorf("CIMD dial: invalid address %q: %w", address, err)
+		}
+		// If the host is already an IP literal, validate it directly.
+		if ip := net.ParseIP(host); ip != nil {
+			if err := f.checkIP(ip); err != nil {
+				return nil, err
+			}
+			return cimdDialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+		}
+		ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+		if err != nil {
+			return nil, fmt.Errorf("CIMD dial: lookup %q: %w", host, err)
+		}
+		if len(ips) == 0 {
+			return nil, fmt.Errorf("%w: no addresses resolved for %q", ErrCIMDSSRFBlocked, host)
+		}
+		var firstErr error
+		for _, ip := range ips {
+			if err := f.checkIP(ip); err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
+				continue
+			}
+			conn, dialErr := cimdDialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+			if dialErr == nil {
+				return conn, nil
+			}
+			if firstErr == nil {
+				firstErr = dialErr
+			}
+		}
+		if firstErr != nil {
+			return nil, firstErr
+		}
+		return nil, fmt.Errorf("CIMD dial: no usable addresses for %q", host)
+	}
+	return t
+}
+
 // Fetch retrieves the Client ID Metadata Document for the given client_id URL.
-// It validates the URL, applies SSRF guards, enforces a size cap, and checks
-// structural invariants in the returned document. Successful results are cached
-// for cimdCacheTTL; failed fetches are never cached.
+// It validates the URL, applies SSRF guards in the dialer, enforces a size cap,
+// and checks structural invariants in the returned document. Successful results
+// are cached for cimdCacheTTL; failed fetches are never cached.
+//
+// SSRF protection runs in the HTTP client's DialContext (see httpClient /
+// ssrfTransport) so DNS resolution and IP validation happen as a single atomic
+// step — no pre-flight LookupIP + transport LookupIP TOCTOU window.
 func (f *CIMDFetcher) Fetch(ctx context.Context, clientID string) (*ClientMetadata, error) {
 	// Step 1–2: validate URL structure (scheme, path, fragment, userinfo).
 	if err := f.validateURL(clientID); err != nil {
@@ -156,13 +242,7 @@ func (f *CIMDFetcher) Fetch(ctx context.Context, clientID string) (*ClientMetada
 		return meta, nil
 	}
 
-	// Step 4: SSRF DNS guard — resolve before any TCP connection is made.
-	u, _ := parseHTTPSURL(clientID) // already validated above; error is impossible here
-	if err := f.checkSSRF(u.Hostname()); err != nil {
-		return nil, err
-	}
-
-	// Step 5: build the request with a 5-second per-fetch timeout layered on
+	// Step 4: build the request with a 5-second per-fetch timeout layered on
 	// top of any parent context deadline.
 	fetchCtx, cancel := context.WithTimeout(ctx, cimdFetchTimeout)
 	defer cancel()
@@ -173,7 +253,9 @@ func (f *CIMDFetcher) Fetch(ctx context.Context, clientID string) (*ClientMetada
 	}
 	req.Header.Set("Accept", "application/json")
 
-	// Steps 5–6: execute (redirect SSRF re-validation is wired in httpClient()).
+	// Steps 5–6: execute. SSRF block-list enforcement happens inside the
+	// transport's DialContext; redirects re-run URL-structure validation in
+	// CheckRedirect and then dial through the same SSRF-aware path.
 	resp, err := f.httpClient().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("CIMD fetch: HTTP request: %w", err)
@@ -220,6 +302,27 @@ func (f *CIMDFetcher) Fetch(ctx context.Context, clientID string) (*ClientMetada
 		return nil, fmt.Errorf("%w: %q", ErrCIMDSymmetricAuth, meta.TokenEndpointAuthMethod)
 	}
 
+	// Step 13: validate redirect_uris. Reuse the DCR validator so CIMD and
+	// dynamically-registered clients converge on the same allowed shapes
+	// (https or loopback http). Rejects schemes like "javascript:" that
+	// would otherwise pass HasRedirectURI's string-equality match.
+	for _, uri := range meta.RedirectURIs {
+		if !isValidRedirectURI(uri) {
+			return nil, fmt.Errorf("%w: invalid redirect_uri %q (must be https or loopback http)",
+				ErrCIMDInvalidURL, uri)
+		}
+	}
+
+	// Step 14: logo_uri must be https when present — it's rendered on the
+	// consent page so other schemes are an XSS / data-exfil vector.
+	if meta.LogoURI != "" {
+		u, err := url.Parse(meta.LogoURI)
+		if err != nil || u.Scheme != "https" {
+			return nil, fmt.Errorf("%w: logo_uri must be https, got %q",
+				ErrCIMDInvalidURL, meta.LogoURI)
+		}
+	}
+
 	// Cache on success only. Negative results are never cached so an attacker
 	// cannot poison the cache with a single failed fetch.
 	f.cachePut(clientID, &meta)
@@ -256,23 +359,6 @@ func parseHTTPSURL(rawURL string) (*url.URL, error) {
 		return nil, fmt.Errorf("scheme must be https, got %q", u.Scheme)
 	}
 	return u, nil
-}
-
-// checkSSRF resolves hostname and rejects addresses in the SSRF block-list.
-func (f *CIMDFetcher) checkSSRF(hostname string) error {
-	ips, err := net.LookupIP(hostname)
-	if err != nil {
-		return fmt.Errorf("CIMD fetch: DNS lookup %q: %w", hostname, err)
-	}
-	if len(ips) == 0 {
-		return fmt.Errorf("%w: no addresses resolved for %q", ErrCIMDSSRFBlocked, hostname)
-	}
-	for _, ip := range ips {
-		if err := f.checkIP(ip); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // checkIP validates a single resolved IP against the SSRF block-list.

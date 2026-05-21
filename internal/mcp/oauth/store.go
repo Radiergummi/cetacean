@@ -47,8 +47,8 @@ type authCodeEntry struct {
 // AuthCodeStore is a short-lived, single-use authorization code store.
 // Raw codes are never persisted; only their SHA-256 hashes are stored.
 type AuthCodeStore struct {
-	mu     sync.Mutex
-	codes  map[string]authCodeEntry // hash → entry
+	mu    sync.Mutex
+	codes map[string]authCodeEntry // hash → entry
 }
 
 // NewAuthCodeStore returns a ready-to-use AuthCodeStore.
@@ -120,15 +120,22 @@ type RefreshTokenData struct {
 
 // RotateResult is returned by RefreshTokenStore.Rotate.
 type RotateResult struct {
-	NewToken string          // empty when OK is false
+	NewToken string // empty when OK is false
 	Data     RefreshTokenData
 	OK       bool
 	Theft    bool // true when a previously-consumed token was re-presented
 }
 
 type refreshTokenEntry struct {
-	data      RefreshTokenData
+	data RefreshTokenData
+	// expiresAt is the per-token expiry. Set on every rotation; capped by
+	// grantExpiresAt so sliding refresh cannot extend the grant family past
+	// the absolute lifetime set at Issue time.
 	expiresAt time.Time
+	// grantExpiresAt is the absolute expiry of the grant family. Set once on
+	// Issue and carried forward unchanged by Rotate so a daily refresher
+	// cannot hold the grant indefinitely.
+	grantExpiresAt time.Time
 }
 
 // maxGrantHistorySize caps the per-grant rotation history. Theft detection
@@ -157,7 +164,9 @@ func NewRefreshTokenStore() *RefreshTokenStore {
 }
 
 // Issue mints a new refresh token for a fresh grant family and returns the
-// raw token. A unique grantID is stamped onto a copy of data.
+// raw token. A unique grantID is stamped onto a copy of data, and the grant's
+// absolute expiry is set to now+ttl — subsequent rotations refresh the
+// per-token expiry but never extend the grant past this point.
 func (s *RefreshTokenStore) Issue(data RefreshTokenData, ttl time.Duration) string {
 	raw := generateOpaqueToken()
 	h := hashToken(raw)
@@ -165,10 +174,13 @@ func (s *RefreshTokenStore) Issue(data RefreshTokenData, ttl time.Duration) stri
 	grantID := generateOpaqueToken()
 	data.grantID = grantID
 
+	expires := time.Now().Add(ttl)
+
 	s.mu.Lock()
 	s.tokens[h] = refreshTokenEntry{
-		data:      data,
-		expiresAt: time.Now().Add(ttl),
+		data:           data,
+		expiresAt:      expires,
+		grantExpiresAt: expires,
 	}
 	s.grants[grantID] = []string{h}
 	s.mu.Unlock()
@@ -244,14 +256,21 @@ func (s *RefreshTokenStore) Rotate(oldToken string, ttl time.Duration) RotateRes
 		return RotateResult{}
 	}
 
-	// Step 5: rotate.
+	// Step 5: rotate. Per-token expiry refreshes, but grantExpiresAt carries
+	// forward unchanged so a long-lived refresher cannot extend the family
+	// past its absolute lifetime.
 	grantID := entry.data.grantID
 	delete(s.tokens, oldHash)
 	s.consumed[oldHash] = grantID
 
+	newExpiry := time.Now().Add(ttl)
+	if entry.grantExpiresAt.Before(newExpiry) {
+		newExpiry = entry.grantExpiresAt
+	}
 	s.tokens[newHash] = refreshTokenEntry{
-		data:      entry.data,
-		expiresAt: time.Now().Add(ttl),
+		data:           entry.data,
+		expiresAt:      newExpiry,
+		grantExpiresAt: entry.grantExpiresAt,
 	}
 	history := append(s.grants[grantID], newHash)
 	if overflow := len(history) - maxGrantHistorySize; overflow > 0 {

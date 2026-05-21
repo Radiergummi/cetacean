@@ -192,7 +192,7 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) bearerAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.bypassActive() {
-			if id, err := s.authProvider.Authenticate(discardingResponseWriter{}, r); err == nil && id != nil {
+			if id, err := s.authProvider.Authenticate(newDiscardingResponseWriter(), r); err == nil && id != nil {
 				ctx := auth.ContextWithIdentity(r.Context(), id)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
@@ -235,18 +235,152 @@ func (s *Server) bypassActive() bool {
 // or partial body (OIDC) end up with their output dropped — callers should
 // only list providers that don't write on the success path (cert, headers,
 // tailscale) in AuthBypass.
-type discardingResponseWriter struct{}
+//
+// Header() returns a persistent http.Header so a provider that sets a header
+// then reads it back (e.g. setting WWW-Authenticate and checking the value
+// before WriteHeader) sees consistent state. The zero value is unusable; call
+// newDiscardingResponseWriter.
+type discardingResponseWriter struct{ h http.Header }
 
-func (discardingResponseWriter) Header() http.Header         { return http.Header{} }
+func newDiscardingResponseWriter() discardingResponseWriter {
+	return discardingResponseWriter{h: make(http.Header)}
+}
+
+func (d discardingResponseWriter) Header() http.Header       { return d.h }
 func (discardingResponseWriter) Write(p []byte) (int, error) { return len(p), nil }
 func (discardingResponseWriter) WriteHeader(int)             {}
 
 // filterToolsForIdentity is wired as a WithToolFilter for tools/list. Tier
-// gating already happened at registration, and per-resource ACL is enforced
-// inside each handler at call time, so this is a pass-through. Refinements
-// (e.g. hiding write tools from identities with no write grants at all) can
-// add filtering here without widening access — returning the full slice
-// cannot grant anything the call-time ACL check would otherwise deny.
-func (s *Server) filterToolsForIdentity(_ context.Context, tools []mcplib.Tool) []mcplib.Tool {
-	return tools
+// gating already happened at registration; this filter additionally hides
+// tools whose primary resource type the identity has zero grants on, so the
+// catalog reflects what the caller can actually invoke. The filter is
+// advisory — call-time ACL still enforces, so returning the full slice would
+// never grant anything; the goal here is a truthful list.
+func (s *Server) filterToolsForIdentity(ctx context.Context, tools []mcplib.Tool) []mcplib.Tool {
+	if s.acl == nil {
+		return tools
+	}
+	identity := auth.IdentityFromContext(ctx)
+	if identity == nil {
+		return tools
+	}
+	perms := s.acl.PermissionsFor(identity)
+	if perms == nil {
+		// nil policy = allow all (mirrors acl.Evaluator.Can).
+		return tools
+	}
+	if len(perms) == 0 {
+		// Identity has zero grants. Drop everything except tools that don't
+		// require any ACL check (none today, but kept defensive).
+		return filterToolsByACLSpec(tools, func(name string) bool {
+			_, gated := toolACLSpecs[name]
+			return !gated
+		})
+	}
+	allowedByType := make(map[string]map[string]bool, 2) // permission → type → bool
+	for pattern, perms := range perms {
+		resType, _, ok := splitResourceType(pattern)
+		if !ok {
+			continue
+		}
+		for _, perm := range perms {
+			byType, ok := allowedByType[perm]
+			if !ok {
+				byType = make(map[string]bool)
+				allowedByType[perm] = byType
+			}
+			byType[resType] = true
+		}
+	}
+	// "write" implies "read" — mirror Evaluator.hasPermission.
+	if writers, ok := allowedByType["write"]; ok {
+		readers := allowedByType["read"]
+		if readers == nil {
+			readers = make(map[string]bool, len(writers))
+			allowedByType["read"] = readers
+		}
+		for t := range writers {
+			readers[t] = true
+		}
+	}
+	return filterToolsByACLSpec(tools, func(name string) bool {
+		spec, gated := toolACLSpecs[name]
+		if !gated {
+			return true
+		}
+		if spec.resourceType == "*" {
+			// Tool acts across all types — visible if any grant exists.
+			return true
+		}
+		byType := allowedByType[spec.permission]
+		if byType == nil {
+			return false
+		}
+		return byType[spec.resourceType] || byType["*"]
+	})
+}
+
+// toolACLSpec describes the resource type and permission required to call a
+// tool. Used by filterToolsForIdentity to decide whether to surface the tool
+// in tools/list. Tools not present in toolACLSpecs are always visible.
+type toolACLSpec struct {
+	resourceType string
+	permission   string
+}
+
+// toolACLSpecs maps tool names to the ACL key they evaluate at call time.
+// Keep aligned with the handlers in tools.go — adding a tool without an
+// entry here defaults to "always visible", which is safe (call-time ACL still
+// enforces) but means tools/list may advertise tools the caller cannot use.
+var toolACLSpecs = map[string]toolACLSpec{
+	"get_logs":                       {"service", "read"},
+	"scale_service":                  {"service", "write"},
+	"update_service_image":           {"service", "write"},
+	"rollback_service":               {"service", "write"},
+	"restart_service":                {"service", "write"},
+	"remove_task":                    {"service", "write"}, // task ACL delegates to parent service
+	"update_service_env":             {"service", "write"},
+	"update_service_labels":          {"service", "write"},
+	"update_node_labels":             {"node", "write"},
+	"update_service_resources":       {"service", "write"},
+	"update_service_placement":       {"service", "write"},
+	"update_service_ports":           {"service", "write"},
+	"update_service_update_policy":   {"service", "write"},
+	"update_service_rollback_policy": {"service", "write"},
+	"update_service_log_driver":      {"service", "write"},
+	"update_node_availability":       {"node", "write"},
+	"update_node_role":               {"node", "write"},
+	"remove_service":                 {"service", "write"},
+	"remove_config":                  {"config", "write"},
+	"remove_secret":                  {"secret", "write"},
+	"remove_network":                 {"network", "write"},
+	"remove_volume":                  {"volume", "write"},
+	// "search" is intentionally absent — it returns hits across many types,
+	// each individually ACL-filtered, so it should remain visible even to
+	// callers with grants on only a subset.
+}
+
+func filterToolsByACLSpec(tools []mcplib.Tool, allow func(name string) bool) []mcplib.Tool {
+	out := make([]mcplib.Tool, 0, len(tools))
+	for _, t := range tools {
+		if allow(t.Name) {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// splitResourceType pulls the type prefix from a grant resource pattern such
+// as "service:web-*" → ("service", "web-*", true). Patterns like "*" or
+// "*:*" yield ("*", ..., true) so callers can treat them as wildcards.
+func splitResourceType(pattern string) (string, string, bool) {
+	if pattern == "*" {
+		return "*", "*", true
+	}
+	for i := 0; i < len(pattern); i++ {
+		if pattern[i] == ':' {
+			return pattern[:i], pattern[i+1:], true
+		}
+	}
+	return "", "", false
 }

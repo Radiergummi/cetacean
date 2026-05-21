@@ -118,11 +118,11 @@ func TestJWTMalformedToken(t *testing.T) {
 		token string
 		want  error
 	}{
-		{"", ErrMalformedToken},           // empty
-		{"not-a-jwt", ErrMalformedToken},  // single segment
-		{"only.two", ErrMalformedToken},   // two segments
-		{"a.b.c.d", ErrMalformedToken},    // four segments
-		{"!!.!!.!!", ErrInvalidSig},       // three segments but sig won't match
+		{"", ErrMalformedToken},          // empty
+		{"not-a-jwt", ErrMalformedToken}, // single segment
+		{"only.two", ErrMalformedToken},  // two segments
+		{"a.b.c.d", ErrMalformedToken},   // four segments
+		{"!!.!!.!!", ErrMalformedToken},  // three segments but header isn't valid base64
 	}
 	for _, c := range cases {
 		_, err := issuer.VerifyAccessToken(c.token)

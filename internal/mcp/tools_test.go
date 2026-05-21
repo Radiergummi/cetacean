@@ -11,6 +11,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 )
@@ -239,15 +240,20 @@ func newToolTestServer(
 	c *cache.Cache,
 	wc DockerWriteClient,
 	opsLevel config.OperationsLevel,
+	overrides ...func(*Options),
 ) *Server {
 	t.Helper()
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
-	srv, err := New(c, Options{
+	o := Options{
 		Config:         cfg,
 		GlobalOpsLevel: opsLevel,
 		WriteClient:    wc,
-	})
+	}
+	for _, fn := range overrides {
+		fn(&o)
+	}
+	srv, err := New(c, o)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -287,6 +293,58 @@ func TestTierThreeNodeToolsCarryDestructiveHint(t *testing.T) {
 		if hint == nil || !*hint {
 			t.Errorf("%s: destructiveHint = %v, want true", name, hint)
 		}
+	}
+}
+
+// TestToolAnnotationsCompleteness pins the catalog against Anthropic's
+// pre-submission checklist: every tool needs a human-readable title, every
+// read tool needs readOnlyHint=true, every write needs an explicit
+// destructiveHint, and tools that interrupt running tasks (restart, rollback,
+// remove, port/placement updates, node drain) need destructiveHint=true.
+func TestToolAnnotationsCompleteness(t *testing.T) {
+	srv := newToolTestServer(t, cache.New(nil), &fakeWriteClient{}, config.OpsImpactful)
+
+	readOnly := map[string]bool{"get_logs": true, "search": true}
+	destructive := map[string]bool{
+		"update_service_image":     true,
+		"rollback_service":         true,
+		"restart_service":          true,
+		"remove_task":              true,
+		"update_service_placement": true,
+		"update_service_ports":     true,
+		"update_node_availability": true,
+		"update_node_role":         true,
+		"remove_service":           true,
+		"remove_config":            true,
+		"remove_secret":            true,
+		"remove_network":           true,
+		"remove_volume":            true,
+	}
+
+	for _, td := range srv.registeredTools {
+		name := td.tool.Name
+		t.Run(name, func(t *testing.T) {
+			if td.tool.Title == "" {
+				t.Errorf("missing Title — every tool needs a human-readable title")
+			}
+			if td.tool.Description == "" {
+				t.Errorf("missing Description")
+			}
+			ann := td.tool.Annotations
+			if ann.ReadOnlyHint == nil {
+				t.Errorf("readOnlyHint not set explicitly")
+			} else if *ann.ReadOnlyHint != readOnly[name] {
+				t.Errorf("readOnlyHint = %v, want %v", *ann.ReadOnlyHint, readOnly[name])
+			}
+			if ann.DestructiveHint == nil {
+				t.Errorf("destructiveHint not set explicitly")
+			} else if *ann.DestructiveHint != destructive[name] {
+				t.Errorf("destructiveHint = %v, want %v", *ann.DestructiveHint, destructive[name])
+			}
+			if ann.OpenWorldHint == nil || *ann.OpenWorldHint {
+				t.Errorf("openWorldHint should be set to false for closed cluster-management tools, got %v", ann.OpenWorldHint)
+			}
+		})
 	}
 }
 
@@ -445,6 +503,17 @@ func TestToolRemoveTask(t *testing.T) {
 
 func TestToolUpdateServiceEnv(t *testing.T) {
 	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "web"},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{
+					Env: []string{"DEBUG=false", "STALE=keep"},
+				},
+			},
+		},
+	})
 	var got map[string]string
 	wc := &fakeWriteClient{
 		updateServiceEnvFn: func(_ context.Context, _ string, env map[string]string) (swarm.Service, error) {
@@ -465,13 +534,58 @@ func TestToolUpdateServiceEnv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
-	if got["DEBUG"] != "true" || got["PORT"] != "8080" {
-		t.Errorf("got env = %v", got)
+	if got["DEBUG"] != "true" || got["PORT"] != "8080" || got["STALE"] != "keep" {
+		t.Errorf("got env = %v (expected merge with current spec)", got)
+	}
+}
+
+func TestToolUpdateServiceEnvMergePatchDeletesNull(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "web"},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{
+					Env: []string{"DEBUG=true", "DROP_ME=present"},
+				},
+			},
+		},
+	})
+	var got map[string]string
+	wc := &fakeWriteClient{
+		updateServiceEnvFn: func(_ context.Context, _ string, env map[string]string) (swarm.Service, error) {
+			got = env
+			return swarm.Service{}, nil
+		},
+	}
+	srv := newToolTestServer(t, c, wc, config.OpsConfiguration)
+	td, _ := srv.findTool("update_service_env")
+
+	_, err := td.handler(
+		context.Background(),
+		newCallToolRequest("update_service_env", map[string]any{
+			"id":  "svc1",
+			"env": map[string]any{"DROP_ME": nil, "ADDED": "yes"},
+		}),
+	)
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if _, present := got["DROP_ME"]; present {
+		t.Errorf("DROP_ME should have been deleted; got %v", got)
+	}
+	if got["DEBUG"] != "true" || got["ADDED"] != "yes" {
+		t.Errorf("merge incorrect; got %v", got)
 	}
 }
 
 func TestToolUpdateServiceEnvRejectsNonStringValues(t *testing.T) {
 	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
 	srv := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsConfiguration)
 	td, _ := srv.findTool("update_service_env")
 
@@ -608,6 +722,180 @@ func TestToolListRegisteredCountMatchesTier(t *testing.T) {
 		t.Errorf("T3 registered %d tools, T1 registered %d — expected T3 strictly greater",
 			len(srvT3.registeredTools), len(srvT1.registeredTools))
 	}
+}
+
+// TestToolGetLogs_ACL covers M-15: the get_logs tool must run the read ACL
+// check against the resolved service name, not bypass it on the tool path.
+func TestToolGetLogs_ACL(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "production-db"}},
+	})
+	c.SetService(swarm.Service{
+		ID:   "svc2",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "public-api"}},
+	})
+
+	e := aclEvaluatorWithGrants("read", "service:public-*")
+	srv := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsReadOnly,
+		func(o *Options) { o.ACL = e })
+	td, _ := srv.findTool("get_logs")
+
+	_, err := td.handler(ctxWithIdentity(),
+		newCallToolRequest("get_logs", map[string]any{"service": "svc1"}))
+	if err == nil {
+		t.Fatal("expected ACL denial for service:production-db")
+	}
+
+	if _, err := td.handler(ctxWithIdentity(),
+		newCallToolRequest("get_logs", map[string]any{"service": "svc2"})); err != nil {
+		t.Fatalf("expected allow for service:public-api, got %v", err)
+	}
+}
+
+// TestToolRemoveConfig_ACLKeyResolvesToName covers M-16: remove_config must
+// run the ACL check against the config's Spec.Name, not its Docker ID.
+func TestToolRemoveConfig_ACLKeyResolvesToName(t *testing.T) {
+	c := cache.New(nil)
+	c.SetConfig(swarm.Config{
+		ID:   "cfg-abc",
+		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "db-password"}},
+	})
+
+	e := aclEvaluatorWithGrants("write", "config:db-*")
+	wc := &fakeWriteClient{removeConfigFn: func(context.Context, string) error { return nil }}
+	srv := newToolTestServer(t, c, wc, config.OpsImpactful,
+		func(o *Options) { o.ACL = e })
+	td, _ := srv.findTool("remove_config")
+
+	if _, err := td.handler(ctxWithIdentity(),
+		newCallToolRequest("remove_config", map[string]any{"id": "cfg-abc"})); err != nil {
+		t.Fatalf("expected allow with config:db-* grant, got %v", err)
+	}
+
+	// A grant on config:<id> must NOT match — REST keys on names.
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+		Resources:   []string{"config:cfg-abc"},
+		Audience:    []string{"*"},
+		Permissions: []string{"write"},
+	}}})
+	if _, err := td.handler(ctxWithIdentity(),
+		newCallToolRequest("remove_config", map[string]any{"id": "cfg-abc"})); err == nil {
+		t.Fatal("expected denial when grant uses ID instead of name")
+	}
+}
+
+// TestToolRemoveSecret_ACLKeyResolvesToName covers M-16 for secrets.
+func TestToolRemoveSecret_ACLKeyResolvesToName(t *testing.T) {
+	c := cache.New(nil)
+	c.SetSecret(swarm.Secret{
+		ID:   "sec-xyz",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "api-key"}},
+	})
+
+	e := aclEvaluatorWithGrants("write", "secret:api-*")
+	wc := &fakeWriteClient{removeSecretFn: func(context.Context, string) error { return nil }}
+	srv := newToolTestServer(t, c, wc, config.OpsImpactful,
+		func(o *Options) { o.ACL = e })
+	td, _ := srv.findTool("remove_secret")
+
+	if _, err := td.handler(ctxWithIdentity(),
+		newCallToolRequest("remove_secret", map[string]any{"id": "sec-xyz"})); err != nil {
+		t.Fatalf("expected allow with secret:api-* grant, got %v", err)
+	}
+}
+
+// TestToolRemoveTask_ACLKeyDelegatesToService covers M-24: REST routes task
+// DELETE through service ACL; MCP must do the same.
+func TestToolRemoveTask_ACLKeyDelegatesToService(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+	c.SetTask(swarm.Task{ID: "task1", ServiceID: "svc1"})
+
+	e := aclEvaluatorWithGrants("write", "service:web")
+	wc := &fakeWriteClient{removeTaskFn: func(context.Context, string) error { return nil }}
+	srv := newToolTestServer(t, c, wc, config.OpsOperational,
+		func(o *Options) { o.ACL = e })
+	td, _ := srv.findTool("remove_task")
+
+	if _, err := td.handler(ctxWithIdentity(),
+		newCallToolRequest("remove_task", map[string]any{"id": "task1"})); err != nil {
+		t.Fatalf("expected allow with service:web grant, got %v", err)
+	}
+}
+
+func TestToolUpdateServiceImage_RejectsBlankImage(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+	srv := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsOperational)
+	td, _ := srv.findTool("update_service_image")
+
+	for _, image := range []string{"", "   ", "\t\n"} {
+		_, err := td.handler(context.Background(),
+			newCallToolRequest("update_service_image", map[string]any{
+				"id":    "svc1",
+				"image": image,
+			}))
+		if err == nil {
+			t.Errorf("image %q: expected error, got nil", image)
+		}
+	}
+}
+
+// TestFilterToolsForIdentity_HidesWritesWithoutGrants covers M-21: tools/list
+// must drop tools the identity has no chance of using, so the catalog reflects
+// the caller's actual surface.
+func TestFilterToolsForIdentity_HidesWritesWithoutGrants(t *testing.T) {
+	c := cache.New(nil)
+	e := aclEvaluatorWithGrants("read", "service:*")
+	srv := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsImpactful,
+		func(o *Options) { o.ACL = e })
+
+	all := make([]mcplib.Tool, 0, len(srv.registeredTools))
+	for _, td := range srv.registeredTools {
+		all = append(all, td.tool)
+	}
+
+	ctx := ctxWithIdentity()
+	visible := srv.filterToolsForIdentity(ctx, all)
+
+	names := make(map[string]bool, len(visible))
+	for _, t := range visible {
+		names[t.Name] = true
+	}
+
+	if !names["get_logs"] {
+		t.Error("get_logs should be visible with service:read grant")
+	}
+	if names["scale_service"] {
+		t.Error("scale_service must be hidden — identity has no write grant")
+	}
+	if names["remove_config"] {
+		t.Error("remove_config must be hidden — identity has no config write grant")
+	}
+	if !names["search"] {
+		t.Error("search is unconditionally visible (cross-type tool)")
+	}
+}
+
+// aclEvaluatorWithGrants returns an evaluator with a single grant for the
+// given permission against the given resource pattern, available to any
+// identity. Used by tool ACL tests above.
+func aclEvaluatorWithGrants(permission string, resources ...string) *acl.Evaluator {
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+		Resources:   resources,
+		Audience:    []string{"*"},
+		Permissions: []string{permission},
+	}}})
+	return e
 }
 
 // Sanity check on JSON shape — ensures we don't accidentally double-encode.

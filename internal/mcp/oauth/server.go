@@ -59,8 +59,8 @@ type Server struct {
 func NewServer(cfg ServerConfig) *Server {
 	issuer := &TokenIssuer{
 		SigningKey: cfg.SigningKey,
-		Issuer:    cfg.Issuer,
-		Audience:  cfg.MCPResource,
+		Issuer:     cfg.Issuer,
+		Audience:   cfg.MCPResource,
 	}
 
 	cimd := &CIMDFetcher{
@@ -116,24 +116,29 @@ type asMetadata struct {
 func (s *Server) HandleMetadata(w http.ResponseWriter, r *http.Request) {
 	base := s.cfg.Issuer + s.cfg.BasePath
 	doc := asMetadata{
-		Issuer:                        s.cfg.Issuer,
-		AuthorizationEndpoint:         base + "/oauth/authorize",
-		TokenEndpoint:                 base + "/oauth/token",
-		RevocationEndpoint:            base + "/oauth/revoke",
-		CodeChallengeMethodsSupported: []string{"S256"},
-		GrantTypesSupported:           []string{"authorization_code", "refresh_token"},
-		ResponseTypesSupported:        []string{"code"},
+		Issuer:                            s.cfg.Issuer,
+		AuthorizationEndpoint:             base + "/oauth/authorize",
+		TokenEndpoint:                     base + "/oauth/token",
+		RevocationEndpoint:                base + "/oauth/revoke",
+		CodeChallengeMethodsSupported:     []string{"S256"},
+		GrantTypesSupported:               []string{"authorization_code", "refresh_token"},
+		ResponseTypesSupported:            []string{"code"},
 		TokenEndpointAuthMethodsSupported: []string{"none"},
 	}
 	if s.cfg.MCP.DCREnabled {
 		doc.RegistrationEndpoint = base + "/oauth/register"
 	}
 
+	// Marshal first so an encoding failure doesn't write partial headers
+	// followed by a 500 status (which would corrupt the response).
+	body, err := json.Marshal(doc)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "max-age=3600")
-	if err := json.NewEncoder(w).Encode(doc); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-	}
+	_, _ = w.Write(body)
 }
 
 // ---------------------------------------------------------------------------
@@ -211,7 +216,15 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Verify PKCE S256.
+	// Verify PKCE S256. RFC 7636 §4.1 requires 43–128 characters from the
+	// unreserved set (ALPHA / DIGIT / "-" / "." / "_" / "~"). Enforce the
+	// length and alphabet here — a 1-character verifier brute-forces in
+	// milliseconds against a 43-char base64url challenge, which defeats the
+	// point of PKCE.
+	if err := validateCodeVerifier(codeVerifier); err != nil {
+		writeTokenError(w, http.StatusBadRequest, "invalid_grant", err.Error())
+		return
+	}
 	if !verifySHA256Challenge(codeVerifier, codeData.CodeChallenge) {
 		writeTokenError(w, http.StatusBadRequest, "invalid_grant", "code_verifier does not match code_challenge")
 		return
@@ -248,8 +261,31 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	refreshTokenRaw := r.FormValue("refresh_token")
 	resourceForm := r.FormValue("resource")
 
-	// Rotate the refresh token FIRST so it is consumed before any validation
-	// that might need to revoke the grant family (e.g. resource mismatch).
+	// RFC 8707 resource indicator validation against the server's resource.
+	// Run BEFORE consuming the refresh token: a malformed resource parameter
+	// (which is almost always a client typo) should not burn the grant family.
+	// Theft detection still works because a replay of an already-rotated token
+	// triggers Rotate's Theft branch on its second presentation.
+	if _, err := ValidateResourceIndicator(resourceForm, s.cfg.MCPResource, s.cfg.MCP.RequireResourceIndicator); err != nil {
+		writeTokenError(w, http.StatusBadRequest, "invalid_target", err.Error())
+		return
+	}
+
+	// Confirm the bound resource matches BEFORE rotation, again so a client
+	// typo doesn't revoke the entire family.
+	if resourceForm != "" {
+		bound, ok := s.refreshTokens.Validate(refreshTokenRaw)
+		if !ok {
+			writeTokenError(w, http.StatusBadRequest, "invalid_grant", "refresh token is invalid or expired")
+			return
+		}
+		if resourceForm != bound.Resource {
+			writeTokenError(w, http.StatusBadRequest, "invalid_target", "resource does not match this grant")
+			return
+		}
+	}
+
+	// Now consume (rotate) the token. Theft detection runs inside Rotate.
 	result := s.refreshTokens.Rotate(refreshTokenRaw, s.cfg.MCP.RefreshTokenTTL)
 	if result.Theft {
 		// Per RFC 6749 §5.2: don't leak that it was theft.
@@ -258,22 +294,6 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	}
 	if !result.OK {
 		writeTokenError(w, http.StatusBadRequest, "invalid_grant", "refresh token is invalid or expired")
-		return
-	}
-
-	// RFC 8707 resource indicator validation against the server's resource.
-	// Validate after rotation so a mismatched resource triggers grant revocation.
-	if _, err := ValidateResourceIndicator(resourceForm, s.cfg.MCPResource, s.cfg.MCP.RequireResourceIndicator); err != nil {
-		s.refreshTokens.RevokeGrant(result.NewToken)
-		writeTokenError(w, http.StatusBadRequest, "invalid_target", err.Error())
-		return
-	}
-
-	// Match resource to the grant's bound resource.
-	if resourceForm != "" && resourceForm != result.Data.Resource {
-		// Resource mismatch: revoke the family and return error.
-		s.refreshTokens.RevokeGrant(result.NewToken)
-		writeTokenError(w, http.StatusBadRequest, "invalid_target", "resource does not match this grant")
 		return
 	}
 
@@ -306,6 +326,26 @@ func verifySHA256Challenge(verifier, challenge string) bool {
 	return hmac.Equal([]byte(computed), []byte(challenge))
 }
 
+// validateCodeVerifier enforces the RFC 7636 §4.1 shape: 43–128 characters
+// from the unreserved alphabet.
+func validateCodeVerifier(v string) error {
+	if n := len(v); n < 43 || n > 128 {
+		return fmt.Errorf("code_verifier length %d outside RFC 7636 range [43,128]", n)
+	}
+	for i := 0; i < len(v); i++ {
+		c := v[i]
+		switch {
+		case c >= 'A' && c <= 'Z':
+		case c >= 'a' && c <= 'z':
+		case c >= '0' && c <= '9':
+		case c == '-', c == '.', c == '_', c == '~':
+		default:
+			return fmt.Errorf("code_verifier contains illegal character at byte %d", i)
+		}
+	}
+	return nil
+}
+
 func writeTokenError(w http.ResponseWriter, status int, code, desc string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
@@ -325,7 +365,15 @@ func writeTokenResponse(w http.ResponseWriter, resp tokenResponse) {
 // Revocation endpoint (RFC 7009)
 // ---------------------------------------------------------------------------
 
-// HandleRevoke handles POST {base}/oauth/revoke.
+// HandleRevoke handles POST {base}/oauth/revoke (RFC 7009).
+//
+// Limitation: revocation only applies to refresh tokens. Access tokens are
+// stateless HMAC JWTs and continue to validate until their `exp` claim
+// (default 1h via CETACEAN_MCP_ACCESS_TOKEN_TTL). Per RFC 7009 §2.2 the
+// server still returns 200 OK regardless of token type so the client cannot
+// distinguish "unknown token" from "no-op". Adding real access-token
+// revocation would require a JTI denylist sized to AccessTokenTTL — not
+// implemented today because short-lived tokens make this acceptable.
 func (s *Server) HandleRevoke(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		// RFC 7009: always 200 even on malformed requests.

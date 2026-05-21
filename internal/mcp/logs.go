@@ -38,10 +38,10 @@ type LogResourceResponse struct {
 }
 
 const (
-	defaultLogTail    = 100
-	maxLogTail        = 1000
-	logFetchTimeout   = 5 * time.Second
-	cursorTimeFormat  = time.RFC3339Nano
+	defaultLogTail   = 100
+	maxLogTail       = 1000
+	logFetchTimeout  = 5 * time.Second
+	cursorTimeFormat = time.RFC3339Nano
 )
 
 // readServiceLogsImpl drives both the cetacean://services/{id}/logs read and
@@ -70,7 +70,11 @@ func (s *Server) readServiceLogsImpl(ctx context.Context, serviceID string, opts
 	}
 	defer reader.Close()
 
-	lines, err := api.ParseDockerLogs(reader)
+	// Use the idle-cancel variant: Docker's ServiceLogs with Follow=false
+	// often leaves the stream open until the deadline expires. Cancelling
+	// the fetch context 250ms after the last frame returns control without
+	// waiting out the full logFetchTimeout. Mirrors REST log_handlers.go.
+	lines, err := api.ParseDockerLogsWithIdleCancel(reader, cancel, 250*time.Millisecond)
 	if err != nil {
 		return LogResourceResponse{}, fmt.Errorf("parse logs: %w", err)
 	}
