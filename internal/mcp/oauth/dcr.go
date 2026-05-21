@@ -195,9 +195,24 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	if len(grantTypes) == 0 {
 		grantTypes = []string{"authorization_code", "refresh_token"}
 	}
+	for _, gt := range grantTypes {
+		if gt != "authorization_code" && gt != "refresh_token" {
+			writeDCRError(w, http.StatusBadRequest, "invalid_client_metadata",
+				"grant_types must be a subset of [authorization_code, refresh_token]")
+			return
+		}
+	}
+
 	responseTypes := req.ResponseTypes
 	if len(responseTypes) == 0 {
 		responseTypes = []string{"code"}
+	}
+	for _, rt := range responseTypes {
+		if rt != "code" {
+			writeDCRError(w, http.StatusBadRequest, "invalid_client_metadata",
+				"response_types must be a subset of [code]")
+			return
+		}
 	}
 
 	reg := &ClientRegistration{

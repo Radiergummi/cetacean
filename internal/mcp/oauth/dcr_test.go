@@ -89,6 +89,58 @@ func TestDCRRejectsSymmetricAuth(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// TestDCRRejectsUnsupportedGrantType
+// ---------------------------------------------------------------------------
+
+func TestDCRRejectsUnsupportedGrantType(t *testing.T) {
+	s := newTestServer(t)
+
+	body := `{
+		"redirect_uris": ["http://localhost/cb"],
+		"grant_types": ["authorization_code", "client_credentials"]
+	}`
+	rec := httptest.NewRecorder()
+	s.HandleRegister(rec, newDCRRequest(t, body))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var errResp dcrErrorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if errResp.Error != "invalid_client_metadata" {
+		t.Errorf("error = %q, want invalid_client_metadata", errResp.Error)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestDCRRejectsUnsupportedResponseType
+// ---------------------------------------------------------------------------
+
+func TestDCRRejectsUnsupportedResponseType(t *testing.T) {
+	s := newTestServer(t)
+
+	body := `{
+		"redirect_uris": ["http://localhost/cb"],
+		"response_types": ["token"]
+	}`
+	rec := httptest.NewRecorder()
+	s.HandleRegister(rec, newDCRRequest(t, body))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var errResp dcrErrorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if errResp.Error != "invalid_client_metadata" {
+		t.Errorf("error = %q, want invalid_client_metadata", errResp.Error)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // TestDCRMissingRedirectURIs
 // ---------------------------------------------------------------------------
 
