@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
@@ -356,6 +357,7 @@ func (s *Server) toolCatalog() []toolDef {
 		{
 			tool: mcplib.NewTool("update_node_availability",
 				mcplib.WithDescription("Set a node's availability (active/pause/drain)"),
+				mcplib.WithDestructiveHintAnnotation(true),
 				mcplib.WithString("id", mcplib.Required(), mcplib.Description("Node ID")),
 				mcplib.WithString("availability", mcplib.Required(),
 					mcplib.Description("Availability state"),
@@ -368,6 +370,7 @@ func (s *Server) toolCatalog() []toolDef {
 		{
 			tool: mcplib.NewTool("update_node_role",
 				mcplib.WithDescription("Promote or demote a node (worker/manager)"),
+				mcplib.WithDestructiveHintAnnotation(true),
 				mcplib.WithString("id", mcplib.Required(), mcplib.Description("Node ID")),
 				mcplib.WithString("role", mcplib.Required(),
 					mcplib.Description("Node role"),
@@ -493,6 +496,10 @@ func (s *Server) toolSearch(ctx context.Context, req mcplib.CallToolRequest) (st
 	query, err := req.RequireString("query")
 	if err != nil {
 		return "", err
+	}
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return "", fmt.Errorf("query must not be empty")
 	}
 	limit := req.GetInt("limit", 3)
 
