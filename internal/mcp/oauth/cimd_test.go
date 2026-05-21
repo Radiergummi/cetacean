@@ -134,17 +134,18 @@ func TestCIMDFetchResponseTooLarge(t *testing.T) {
 // TestCIMDFetchSymmetricAuthRejected ensures symmetric auth methods are refused.
 func TestCIMDFetchSymmetricAuthRejected(t *testing.T) {
 	for _, method := range []string{"client_secret_post", "client_secret_basic"} {
-		method := method
 		t.Run(method, func(t *testing.T) {
 			var serverURL string
-			srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				meta := ClientMetadata{
-					ClientID:                serverURL + r.URL.Path,
-					TokenEndpointAuthMethod: method,
-				}
-				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(meta)
-			}))
+			srv := httptest.NewTLSServer(
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					meta := ClientMetadata{
+						ClientID:                serverURL + r.URL.Path,
+						TokenEndpointAuthMethod: method,
+					}
+					w.Header().Set("Content-Type", "application/json")
+					json.NewEncoder(w).Encode(meta)
+				}),
+			)
 			defer srv.Close()
 			serverURL = srv.URL
 

@@ -48,7 +48,11 @@ const (
 // the get_logs tool so they produce identical output. Returns an empty
 // response (not an error) when no LogStreamer is wired — keeps unit tests
 // that don't need a Docker client working.
-func (s *Server) readServiceLogsImpl(ctx context.Context, serviceID string, opts logOptions) (LogResourceResponse, error) {
+func (s *Server) readServiceLogsImpl(
+	ctx context.Context,
+	serviceID string,
+	opts logOptions,
+) (LogResourceResponse, error) {
 	if s.logs == nil {
 		return LogResourceResponse{Lines: []api.LogLine{}}, nil
 	}
@@ -64,7 +68,15 @@ func (s *Server) readServiceLogsImpl(ctx context.Context, serviceID string, opts
 	fetchCtx, cancel := context.WithTimeout(ctx, logFetchTimeout)
 	defer cancel()
 
-	reader, err := s.logs.Logs(fetchCtx, docker.ServiceLog, serviceID, strconv.Itoa(tail), false, opts.since, "")
+	reader, err := s.logs.Logs(
+		fetchCtx,
+		docker.ServiceLog,
+		serviceID,
+		strconv.Itoa(tail),
+		false,
+		opts.since,
+		"",
+	)
 	if err != nil {
 		return LogResourceResponse{}, fmt.Errorf("fetch logs: %w", err)
 	}

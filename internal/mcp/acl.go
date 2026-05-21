@@ -42,7 +42,10 @@ func searchResultACLResource(resourceType string, sr cluster.SearchResult) strin
 // filterSearchResults runs cluster.Search through ACL. The returned
 // SearchResults reflect post-filter Hits and per-type Counts (adjusted by the
 // observed denial rate, matching REST behaviour).
-func (s *Server) filterSearchResults(ctx context.Context, raw cluster.SearchResults) cluster.SearchResults {
+func (s *Server) filterSearchResults(
+	ctx context.Context,
+	raw cluster.SearchResults,
+) cluster.SearchResults {
 	if s.acl == nil {
 		return raw
 	}
@@ -99,51 +102,102 @@ func nodeACLName(n swarm.Node) string {
 }
 
 func (s *Server) filterNodes(ctx context.Context, items []swarm.Node) []swarm.Node {
-	return acl.Filter(s.acl, auth.IdentityFromContext(ctx), "read", items, func(n swarm.Node) string {
-		return "node:" + nodeACLName(n)
-	})
+	return acl.Filter(
+		s.acl,
+		auth.IdentityFromContext(ctx),
+		"read",
+		items,
+		func(n swarm.Node) string {
+			return "node:" + nodeACLName(n)
+		},
+	)
 }
 
 func (s *Server) filterServices(ctx context.Context, items []swarm.Service) []swarm.Service {
-	return acl.Filter(s.acl, auth.IdentityFromContext(ctx), "read", items, func(svc swarm.Service) string {
-		return "service:" + svc.Spec.Name
-	})
+	return acl.Filter(
+		s.acl,
+		auth.IdentityFromContext(ctx),
+		"read",
+		items,
+		func(svc swarm.Service) string {
+			return "service:" + svc.Spec.Name
+		},
+	)
 }
 
-func (s *Server) filterTasks(ctx context.Context, items []cluster.EnrichedTask) []cluster.EnrichedTask {
-	return acl.Filter(s.acl, auth.IdentityFromContext(ctx), "read", items, func(t cluster.EnrichedTask) string {
-		return "task:" + t.ID
-	})
+func (s *Server) filterTasks(
+	ctx context.Context,
+	items []cluster.EnrichedTask,
+) []cluster.EnrichedTask {
+	return acl.Filter(
+		s.acl,
+		auth.IdentityFromContext(ctx),
+		"read",
+		items,
+		func(t cluster.EnrichedTask) string {
+			return "task:" + t.ID
+		},
+	)
 }
 
 func (s *Server) filterStacks(ctx context.Context, items []cache.Stack) []cache.Stack {
-	return acl.Filter(s.acl, auth.IdentityFromContext(ctx), "read", items, func(st cache.Stack) string {
-		return "stack:" + st.Name
-	})
+	return acl.Filter(
+		s.acl,
+		auth.IdentityFromContext(ctx),
+		"read",
+		items,
+		func(st cache.Stack) string {
+			return "stack:" + st.Name
+		},
+	)
 }
 
 func (s *Server) filterConfigs(ctx context.Context, items []swarm.Config) []swarm.Config {
-	return acl.Filter(s.acl, auth.IdentityFromContext(ctx), "read", items, func(c swarm.Config) string {
-		return "config:" + c.Spec.Name
-	})
+	return acl.Filter(
+		s.acl,
+		auth.IdentityFromContext(ctx),
+		"read",
+		items,
+		func(c swarm.Config) string {
+			return "config:" + c.Spec.Name
+		},
+	)
 }
 
 func (s *Server) filterSecrets(ctx context.Context, items []swarm.Secret) []swarm.Secret {
-	return acl.Filter(s.acl, auth.IdentityFromContext(ctx), "read", items, func(sec swarm.Secret) string {
-		return "secret:" + sec.Spec.Name
-	})
+	return acl.Filter(
+		s.acl,
+		auth.IdentityFromContext(ctx),
+		"read",
+		items,
+		func(sec swarm.Secret) string {
+			return "secret:" + sec.Spec.Name
+		},
+	)
 }
 
 func (s *Server) filterNetworks(ctx context.Context, items []network.Summary) []network.Summary {
-	return acl.Filter(s.acl, auth.IdentityFromContext(ctx), "read", items, func(n network.Summary) string {
-		return "network:" + n.Name
-	})
+	return acl.Filter(
+		s.acl,
+		auth.IdentityFromContext(ctx),
+		"read",
+		items,
+		func(n network.Summary) string {
+			return "network:" + n.Name
+		},
+	)
 }
 
 func (s *Server) filterVolumes(ctx context.Context, items []volume.Volume) []volume.Volume {
-	return acl.Filter(s.acl, auth.IdentityFromContext(ctx), "read", items, func(v volume.Volume) string {
-		return "volume:" + v.Name
-	})
+	return acl.Filter(
+		s.acl,
+		auth.IdentityFromContext(ctx),
+		"read",
+		items,
+		func(v volume.Volume) string {
+			return "volume:" + v.Name
+		},
+	)
 }
 
 // filterRecommendations mirrors api/recommendation_handlers.go.
@@ -151,7 +205,13 @@ func (s *Server) filterRecommendations(
 	ctx context.Context,
 	items []recommendations.Recommendation,
 ) []recommendations.Recommendation {
-	return acl.Filter(s.acl, auth.IdentityFromContext(ctx), "read", items, recommendationACLResource)
+	return acl.Filter(
+		s.acl,
+		auth.IdentityFromContext(ctx),
+		"read",
+		items,
+		recommendationACLResource,
+	)
 }
 
 func recommendationACLResource(rec recommendations.Recommendation) string {
@@ -167,7 +227,10 @@ func recommendationACLResource(rec recommendations.Recommendation) string {
 
 // filterHistory mirrors api/history_handlers.go: drop entries whose resource
 // the identity can't read.
-func (s *Server) filterHistory(ctx context.Context, entries []cache.HistoryEntry) []cache.HistoryEntry {
+func (s *Server) filterHistory(
+	ctx context.Context,
+	entries []cache.HistoryEntry,
+) []cache.HistoryEntry {
 	if s.acl == nil {
 		return entries
 	}

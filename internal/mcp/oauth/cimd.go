@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -83,12 +84,7 @@ type ClientMetadata struct {
 // Comparison is exact (byte-for-byte); no canonicalization is performed beyond
 // what the JSON decoder already applied.
 func (m *ClientMetadata) HasRedirectURI(uri string) bool {
-	for _, registered := range m.RedirectURIs {
-		if registered == uri {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(m.RedirectURIs, uri)
 }
 
 // cachedEntry is a single in-memory cache slot.
@@ -352,7 +348,7 @@ func (f *CIMDFetcher) Fetch(ctx context.Context, clientID string) (*ClientMetada
 func (f *CIMDFetcher) validateURL(rawURL string) error {
 	u, err := parseHTTPSURL(rawURL)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrCIMDInvalidURL, err)
+		return fmt.Errorf("%w: %w", ErrCIMDInvalidURL, err)
 	}
 	if u.Fragment != "" {
 		return fmt.Errorf("%w: URL must not contain a fragment", ErrCIMDInvalidURL)
@@ -370,7 +366,7 @@ func (f *CIMDFetcher) validateURL(rawURL string) error {
 func parseHTTPSURL(rawURL string) (*url.URL, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
-		return nil, fmt.Errorf("parse: %v", err)
+		return nil, fmt.Errorf("parse: %w", err)
 	}
 	if u.Scheme != "https" {
 		return nil, fmt.Errorf("scheme must be https, got %q", u.Scheme)

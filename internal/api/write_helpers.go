@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"strings"
 
@@ -319,9 +320,7 @@ func parsePatchMutator(
 	}
 	return func(current map[string]string) (map[string]string, error) {
 		out := make(map[string]string, len(current)+len(mergePatch))
-		for k, v := range current {
-			out[k] = v
-		}
+		maps.Copy(out, current)
 		for k, v := range mergePatch {
 			if v == nil {
 				delete(out, k)

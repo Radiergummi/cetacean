@@ -179,7 +179,7 @@ func TestDCRRateLimit(t *testing.T) {
 	validBody := `{"client_name":"App","redirect_uris":["http://localhost/cb"]}`
 
 	// First 3 requests should succeed.
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		req := newDCRRequest(t, validBody)
 		rec := httptest.NewRecorder()
 		s.HandleRegister(rec, req)
@@ -223,7 +223,7 @@ func TestDCRLRUEviction(t *testing.T) {
 	validBody := `{"client_name":"App","redirect_uris":["http://localhost/cb"]}`
 	var ids []string
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		req := newDCRRequest(t, validBody)
 		req.RemoteAddr = "10.0.0.1:1234" // same IP, high rate limit
 		rec := httptest.NewRecorder()

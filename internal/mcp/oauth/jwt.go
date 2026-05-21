@@ -65,7 +65,10 @@ type TokenIssuer struct {
 
 // IssueAccessToken mints a signed compact JWT for the given claims with the
 // specified TTL. A unique 128-bit jti is generated for each token.
-func (t *TokenIssuer) IssueAccessToken(claims AccessTokenClaims, ttl time.Duration) (string, error) {
+func (t *TokenIssuer) IssueAccessToken(
+	claims AccessTokenClaims,
+	ttl time.Duration,
+) (string, error) {
 	if len(t.SigningKey) == 0 {
 		return "", ErrMissingKey
 	}
@@ -136,12 +139,12 @@ func (t *TokenIssuer) VerifyAccessToken(token string) (*AccessTokenClaims, error
 
 	payloadJSON, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
-		return nil, fmt.Errorf("%w: base64 decode payload: %v", ErrMalformedToken, err)
+		return nil, fmt.Errorf("%w: base64 decode payload: %w", ErrMalformedToken, err)
 	}
 
 	var payload jwtPayload
 	if err := json.Unmarshal(payloadJSON, &payload); err != nil {
-		return nil, fmt.Errorf("%w: JSON decode payload: %v", ErrMalformedToken, err)
+		return nil, fmt.Errorf("%w: JSON decode payload: %w", ErrMalformedToken, err)
 	}
 
 	if payload.Issuer != t.Issuer {
@@ -149,11 +152,20 @@ func (t *TokenIssuer) VerifyAccessToken(token string) (*AccessTokenClaims, error
 	}
 
 	if payload.Audience != t.Audience {
-		return nil, fmt.Errorf("%w: got %q, want %q", ErrAudienceMismatch, payload.Audience, t.Audience)
+		return nil, fmt.Errorf(
+			"%w: got %q, want %q",
+			ErrAudienceMismatch,
+			payload.Audience,
+			t.Audience,
+		)
 	}
 
 	if time.Unix(payload.ExpiresAt, 0).Before(time.Now()) {
-		return nil, fmt.Errorf("%w: expired at %v", ErrTokenExpired, time.Unix(payload.ExpiresAt, 0))
+		return nil, fmt.Errorf(
+			"%w: expired at %v",
+			ErrTokenExpired,
+			time.Unix(payload.ExpiresAt, 0),
+		)
 	}
 
 	return &AccessTokenClaims{

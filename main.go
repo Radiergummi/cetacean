@@ -639,7 +639,9 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 				slog.Error("MCP signing key generation failed", "error", err)
 				os.Exit(1)
 			}
-			slog.Warn("MCP signing key auto-generated; tokens won't survive restarts. Set CETACEAN_MCP_SIGNING_KEY for stable tokens.")
+			slog.Warn(
+				"MCP signing key auto-generated; tokens won't survive restarts. Set CETACEAN_MCP_SIGNING_KEY for stable tokens.",
+			)
 		}
 		oauthSrv = oauth.NewServer(oauth.ServerConfig{
 			Issuer:      issuer,

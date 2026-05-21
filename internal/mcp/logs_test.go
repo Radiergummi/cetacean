@@ -36,7 +36,13 @@ type fakeLogStreamer struct {
 	calledSince string
 }
 
-func (f *fakeLogStreamer) Logs(_ context.Context, _ docker.LogKind, id, tail string, _ bool, since, _ string) (io.ReadCloser, error) {
+func (f *fakeLogStreamer) Logs(
+	_ context.Context,
+	_ docker.LogKind,
+	id, tail string,
+	_ bool,
+	since, _ string,
+) (io.ReadCloser, error) {
 	f.calledID = id
 	f.calledTail = tail
 	f.calledSince = since

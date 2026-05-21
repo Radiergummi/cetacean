@@ -169,7 +169,10 @@ func (nm *NotificationManager) matchingDeliveries(event cache.Event) []delivery 
 		}
 		if logURI != "" {
 			if _, ok := st.uris[logURI]; ok {
-				out = append(out, delivery{sessionID: sessionID, uri: logURI, identity: st.identity})
+				out = append(
+					out,
+					delivery{sessionID: sessionID, uri: logURI, identity: st.identity},
+				)
 			}
 		}
 	}
@@ -242,9 +245,13 @@ func (s *Server) dispatchCacheEvent(event cache.Event) {
 		if aclResource != "" && !s.canRead(d.identity, aclResource) {
 			continue
 		}
-		_ = s.mcpServer.SendNotificationToSpecificClient(d.sessionID, "notifications/resources/updated", map[string]any{
-			"uri": d.uri,
-		})
+		_ = s.mcpServer.SendNotificationToSpecificClient(
+			d.sessionID,
+			"notifications/resources/updated",
+			map[string]any{
+				"uri": d.uri,
+			},
+		)
 	}
 
 	if s.notifications.IsListChange(event) {
@@ -263,7 +270,11 @@ func (s *Server) dispatchCacheEvent(event cache.Event) {
 			if !s.canReadAnyOfType(id, aclType) {
 				continue
 			}
-			_ = s.mcpServer.SendNotificationToSpecificClient(sid, "notifications/resources/list_changed", nil)
+			_ = s.mcpServer.SendNotificationToSpecificClient(
+				sid,
+				"notifications/resources/list_changed",
+				nil,
+			)
 		}
 	}
 }
@@ -358,17 +369,21 @@ func eventTypeToACLPrefix(t cache.EventType) string {
 func (s *Server) installSubscriptionHooks() *mcpserver.Hooks {
 	h := &mcpserver.Hooks{}
 
-	h.AddAfterSubscribe(func(ctx context.Context, _ any, msg *mcplib.SubscribeRequest, _ *mcplib.EmptyResult) {
-		if sid := sessionIDFromContext(ctx); sid != "" {
-			s.notifications.Subscribe(sid, msg.Params.URI, auth.IdentityFromContext(ctx))
-		}
-	})
+	h.AddAfterSubscribe(
+		func(ctx context.Context, _ any, msg *mcplib.SubscribeRequest, _ *mcplib.EmptyResult) {
+			if sid := sessionIDFromContext(ctx); sid != "" {
+				s.notifications.Subscribe(sid, msg.Params.URI, auth.IdentityFromContext(ctx))
+			}
+		},
+	)
 
-	h.AddAfterUnsubscribe(func(ctx context.Context, _ any, msg *mcplib.UnsubscribeRequest, _ *mcplib.EmptyResult) {
-		if sid := sessionIDFromContext(ctx); sid != "" {
-			s.notifications.Unsubscribe(sid, msg.Params.URI)
-		}
-	})
+	h.AddAfterUnsubscribe(
+		func(ctx context.Context, _ any, msg *mcplib.UnsubscribeRequest, _ *mcplib.EmptyResult) {
+			if sid := sessionIDFromContext(ctx); sid != "" {
+				s.notifications.Unsubscribe(sid, msg.Params.URI)
+			}
+		},
+	)
 
 	h.AddOnUnregisterSession(func(_ context.Context, session mcpserver.ClientSession) {
 		s.notifications.RemoveSession(session.SessionID())

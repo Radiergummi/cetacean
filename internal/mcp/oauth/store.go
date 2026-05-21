@@ -272,14 +272,13 @@ func (s *RefreshTokenStore) Rotate(oldToken string, ttl time.Duration) RotateRes
 		expiresAt:      newExpiry,
 		grantExpiresAt: entry.grantExpiresAt,
 	}
-	history := append(s.grants[grantID], newHash)
-	if overflow := len(history) - maxGrantHistorySize; overflow > 0 {
-		for _, evicted := range history[:overflow] {
+	s.grants[grantID] = append(s.grants[grantID], newHash)
+	if overflow := len(s.grants[grantID]) - maxGrantHistorySize; overflow > 0 {
+		for _, evicted := range s.grants[grantID][:overflow] {
 			delete(s.consumed, evicted)
 		}
-		history = history[overflow:]
+		s.grants[grantID] = s.grants[grantID][overflow:]
 	}
-	s.grants[grantID] = history
 
 	out := entry.data
 	out.Groups = append([]string(nil), entry.data.Groups...)

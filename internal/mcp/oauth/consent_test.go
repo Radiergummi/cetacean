@@ -55,7 +55,13 @@ func TestConsentPageRender(t *testing.T) {
 	challenge := computeS256Challenge("verifier")
 	clientID := registeredClient(t, s, []string{"http://localhost:9999/cb"})
 
-	rawURL := authorizeURL(clientID, "http://localhost:9999/cb", challenge, "state123", s.cfg.MCPResource)
+	rawURL := authorizeURL(
+		clientID,
+		"http://localhost:9999/cb",
+		challenge,
+		"state123",
+		s.cfg.MCPResource,
+	)
 	req := httptest.NewRequest(http.MethodGet, rawURL, nil)
 	req = withIdentity(req, "alice", "alice@example.com")
 	rec := httptest.NewRecorder()
@@ -94,7 +100,13 @@ func TestConsentPageRejectsInvalidRedirectURI(t *testing.T) {
 	clientID := registeredClient(t, s, []string{"http://localhost:9999/cb"})
 
 	// Use a redirect_uri NOT in the registered set.
-	rawURL := authorizeURL(clientID, "http://attacker.example.com/steal", challenge, "state", s.cfg.MCPResource)
+	rawURL := authorizeURL(
+		clientID,
+		"http://attacker.example.com/steal",
+		challenge,
+		"state",
+		s.cfg.MCPResource,
+	)
 	req := httptest.NewRequest(http.MethodGet, rawURL, nil)
 	req = withIdentity(req, "alice", "")
 	rec := httptest.NewRecorder()
@@ -131,7 +143,13 @@ func TestConsentApproveProducesCode(t *testing.T) {
 	clientID := registeredClient(t, s, []string{"http://localhost:7777/cb"})
 
 	// Step 1: GET the consent page to get the CSRF token and nonce cookie.
-	rawURL := authorizeURL(clientID, "http://localhost:7777/cb", challenge, "stateXYZ", s.cfg.MCPResource)
+	rawURL := authorizeURL(
+		clientID,
+		"http://localhost:7777/cb",
+		challenge,
+		"stateXYZ",
+		s.cfg.MCPResource,
+	)
 	getReq := httptest.NewRequest(http.MethodGet, rawURL, nil)
 	getReq = withIdentity(getReq, "bob", "bob@example.com")
 	getRec := httptest.NewRecorder()
@@ -172,7 +190,11 @@ func TestConsentApproveProducesCode(t *testing.T) {
 		"resource":              {s.cfg.MCPResource},
 		"csrf_token":            {csrfToken},
 	}
-	postReq := httptest.NewRequest(http.MethodPost, "/oauth/authorize", strings.NewReader(form.Encode()))
+	postReq := httptest.NewRequest(
+		http.MethodPost,
+		"/oauth/authorize",
+		strings.NewReader(form.Encode()),
+	)
 	postReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	postReq.AddCookie(nonceCookie)
 	postReq = withIdentity(postReq, "bob", "bob@example.com")
@@ -220,22 +242,19 @@ func extractHiddenField(html, name string) string {
 			return ""
 		}
 		// Look for value=" after the name attr.
-		rest := html[idx:]
-		vidx := strings.Index(rest, `value="`)
-		if vidx == -1 {
+		_, after, ok := strings.Cut(html[idx:], `value="`)
+		if !ok {
 			return ""
 		}
-		rest = rest[vidx+7:]
-		end := strings.Index(rest, `"`)
-		if end == -1 {
+		val, _, ok := strings.Cut(after, `"`)
+		if !ok {
 			return ""
 		}
-		return rest[:end]
+		return val
 	}
-	rest := html[idx+len(marker):]
-	end := strings.Index(rest, `"`)
-	if end == -1 {
+	val, _, ok := strings.Cut(html[idx+len(marker):], `"`)
+	if !ok {
 		return ""
 	}
-	return rest[:end]
+	return val
 }

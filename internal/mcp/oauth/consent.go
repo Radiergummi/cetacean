@@ -139,7 +139,12 @@ func setConsentHeaders(w http.ResponseWriter) {
 // and returns the CSRF token (HMAC of nonce+state). The cookie is HttpOnly
 // and SameSite=Strict. When secure is true (issuer is HTTPS) the cookie is
 // also marked Secure.
-func issueCSRFNonce(w http.ResponseWriter, signingKey []byte, state string, secure bool) (token string, nonce string) {
+func issueCSRFNonce(
+	w http.ResponseWriter,
+	signingKey []byte,
+	state string,
+	secure bool,
+) (token string, nonce string) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
 		panic("mcp/oauth: crypto/rand failure: " + err.Error())

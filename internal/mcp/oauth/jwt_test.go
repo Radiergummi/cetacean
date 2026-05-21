@@ -142,7 +142,13 @@ func TestJWTMissingSigningKey(t *testing.T) {
 		Audience: "mcp",
 		// SigningKey deliberately zero
 	}
-	if _, err := issuer.IssueAccessToken(AccessTokenClaims{Subject: "u@e"}, time.Hour); !errors.Is(err, ErrMissingKey) {
+	if _, err := issuer.IssueAccessToken(
+		AccessTokenClaims{Subject: "u@e"},
+		time.Hour,
+	); !errors.Is(
+		err,
+		ErrMissingKey,
+	) {
 		t.Errorf("IssueAccessToken with empty key: got %v, want ErrMissingKey", err)
 	}
 	if _, err := issuer.VerifyAccessToken("a.b.c"); !errors.Is(err, ErrMissingKey) {

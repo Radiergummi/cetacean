@@ -83,7 +83,8 @@ func TestASMetadata(t *testing.T) {
 	if doc.RevocationEndpoint != "https://cetacean.test/oauth/revoke" {
 		t.Errorf("revocation_endpoint = %q", doc.RevocationEndpoint)
 	}
-	if len(doc.CodeChallengeMethodsSupported) != 1 || doc.CodeChallengeMethodsSupported[0] != "S256" {
+	if len(doc.CodeChallengeMethodsSupported) != 1 ||
+		doc.CodeChallengeMethodsSupported[0] != "S256" {
 		t.Errorf("code_challenge_methods_supported = %v", doc.CodeChallengeMethodsSupported)
 	}
 	if len(doc.ResponseTypesSupported) != 1 || doc.ResponseTypesSupported[0] != "code" {
@@ -100,13 +101,19 @@ func TestASMetadata(t *testing.T) {
 	s2.cfg.MCP.DCREnabled = false
 	s2.clients = nil
 	rec2 := httptest.NewRecorder()
-	s2.HandleMetadata(rec2, httptest.NewRequest(http.MethodGet, "/.well-known/oauth-authorization-server", nil))
+	s2.HandleMetadata(
+		rec2,
+		httptest.NewRequest(http.MethodGet, "/.well-known/oauth-authorization-server", nil),
+	)
 	var doc2 asMetadata
 	if err := json.NewDecoder(rec2.Body).Decode(&doc2); err != nil {
 		t.Fatalf("decode doc2: %v", err)
 	}
 	if doc2.RegistrationEndpoint != "" {
-		t.Errorf("expected no registration_endpoint when DCR disabled, got %q", doc2.RegistrationEndpoint)
+		t.Errorf(
+			"expected no registration_endpoint when DCR disabled, got %q",
+			doc2.RegistrationEndpoint,
+		)
 	}
 }
 

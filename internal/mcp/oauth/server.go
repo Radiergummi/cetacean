@@ -164,8 +164,18 @@ type tokenResponse struct {
 	RefreshToken string `json:"refresh_token,omitempty"`
 }
 
+// tokenEndpointMaxBytes caps the request body on the token endpoint. RFC 6749
+// is silent on size; real grants fit in well under 8 KiB. The cap stops a
+// rogue caller from forcing the server to buffer megabytes via ParseForm.
+const tokenEndpointMaxBytes = 8 * 1024
+
+// authorizeEndpointMaxBytes caps the form body on POST /oauth/authorize.
+// Slightly larger to leave room for redirect_uri and PKCE challenge.
+const authorizeEndpointMaxBytes = 16 * 1024
+
 // HandleToken handles POST {base}/oauth/token.
 func (s *Server) HandleToken(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, tokenEndpointMaxBytes)
 	if err := r.ParseForm(); err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_request", "cannot parse form body")
 		return
@@ -184,11 +194,14 @@ func (s *Server) HandleToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Request) {
-	code := r.FormValue("code")
-	redirectURI := r.FormValue("redirect_uri")
-	clientID := r.FormValue("client_id")
-	codeVerifier := r.FormValue("code_verifier")
-	resourceForm := r.FormValue("resource")
+	// Body size is already capped in HandleToken before ParseForm runs; the
+	// values below come from r.PostForm so no further reads of r.Body happen
+	// here. Annotated for gosec G120, which inspects callers in isolation.
+	code := r.FormValue("code")                  // #nosec G120 -- bounded in HandleToken
+	redirectURI := r.FormValue("redirect_uri")   // #nosec G120 -- bounded in HandleToken
+	clientID := r.FormValue("client_id")         // #nosec G120 -- bounded in HandleToken
+	codeVerifier := r.FormValue("code_verifier") // #nosec G120 -- bounded in HandleToken
+	resourceForm := r.FormValue("resource")      // #nosec G120 -- bounded in HandleToken
 
 	// RFC 8707 resource indicator validation.
 	if _, err := ValidateResourceIndicator(
@@ -287,8 +300,10 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 }
 
 func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request) {
-	refreshTokenRaw := r.FormValue("refresh_token")
-	resourceForm := r.FormValue("resource")
+	// Body bounded by HandleToken; comments suppress gosec G120's
+	// per-function analysis.
+	refreshTokenRaw := r.FormValue("refresh_token") // #nosec G120 -- bounded in HandleToken
+	resourceForm := r.FormValue("resource")         // #nosec G120 -- bounded in HandleToken
 
 	// RFC 8707 resource indicator validation against the server's resource.
 	// Run BEFORE consuming the refresh token: a malformed resource parameter
@@ -411,6 +426,9 @@ func writeTokenResponse(w http.ResponseWriter, resp tokenResponse) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
+	// The whole point of this endpoint is to return the access token; gosec
+	// G117 flags the field name as a "secret in JSON" pattern.
+	// #nosec G117 -- RFC 6749 §5.1 token response shape, intentional
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
@@ -428,12 +446,13 @@ func writeTokenResponse(w http.ResponseWriter, resp tokenResponse) {
 // revocation would require a JTI denylist sized to AccessTokenTTL — not
 // implemented today because short-lived tokens make this acceptable.
 func (s *Server) HandleRevoke(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, tokenEndpointMaxBytes)
 	if err := r.ParseForm(); err != nil {
 		// RFC 7009: always 200 even on malformed requests.
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	token := r.FormValue("token")
+	token := r.FormValue("token") // #nosec G120 -- bounded above
 	if token != "" {
 		s.refreshTokens.RevokeGrant(token)
 	}
@@ -542,6 +561,7 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, authorizeEndpointMaxBytes)
 	if err := r.ParseForm(); err != nil {
 		renderErrorPage(w, http.StatusBadRequest, "invalid form submission")
 		return

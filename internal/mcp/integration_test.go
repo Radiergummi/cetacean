@@ -38,23 +38,41 @@ func readSSEResponse(t *testing.T, body io.Reader) []byte {
 	if err != nil {
 		t.Fatalf("read body: %v", err)
 	}
-	for _, line := range bytes.Split(raw, []byte("\n")) {
-		if bytes.HasPrefix(line, []byte("data: ")) {
-			return bytes.TrimPrefix(line, []byte("data: "))
+	for line := range bytes.SplitSeq(raw, []byte("\n")) {
+		if rest, ok := bytes.CutPrefix(line, []byte("data: ")); ok {
+			return rest
 		}
 	}
 	// Not SSE — assume raw JSON.
 	return raw
 }
 
-func mcpJSONRPC(t *testing.T, handler http.Handler, sessionID, body string) (*http.Response, jsonrpcEnvelope) {
+// mcpJSONRPCResult captures the subset of the *http.Response the integration
+// tests actually look at. Returning a value type instead of *http.Response
+// keeps the response body lifecycle inside the helper (which always drains
+// and closes it) and stops golangci-lint's bodyclose from flagging every
+// caller.
+type mcpJSONRPCResult struct {
+	StatusCode int
+	Header     http.Header
+}
+
+func mcpJSONRPC(
+	t *testing.T,
+	handler http.Handler,
+	sessionID, body string,
+) (mcpJSONRPCResult, jsonrpcEnvelope) {
 	t.Helper()
 	return mcpJSONRPCWithToken(t, handler, sessionID, "", body)
 }
 
 // mcpJSONRPCWithToken is the bearer-aware variant used by integration tests
 // that drive the OAuth-protected /mcp handler.
-func mcpJSONRPCWithToken(t *testing.T, handler http.Handler, sessionID, bearer, body string) (*http.Response, jsonrpcEnvelope) {
+func mcpJSONRPCWithToken(
+	t *testing.T,
+	handler http.Handler,
+	sessionID, bearer, body string,
+) (mcpJSONRPCResult, jsonrpcEnvelope) {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -70,6 +88,7 @@ func mcpJSONRPCWithToken(t *testing.T, handler http.Handler, sessionID, bearer, 
 
 	resp := rec.Result()
 	payload := readSSEResponse(t, resp.Body)
+	_ = resp.Body.Close()
 
 	var env jsonrpcEnvelope
 	if len(payload) > 0 {
@@ -77,7 +96,7 @@ func mcpJSONRPCWithToken(t *testing.T, handler http.Handler, sessionID, bearer, 
 			t.Fatalf("unmarshal JSON-RPC payload %q: %v", string(payload), err)
 		}
 	}
-	return resp, env
+	return mcpJSONRPCResult{StatusCode: resp.StatusCode, Header: resp.Header}, env
 }
 
 // TestMCPEndToEnd drives the MCP HTTP handler through the same JSON-RPC
@@ -223,7 +242,11 @@ func TestMCPEndToEnd(t *testing.T) {
 // newOAuthIntegrationServer wires an MCP server with OAuth + ACL identical to
 // production. Returns the handler, a TokenIssuer for minting bearer tokens, and
 // the OAuth server (kept for cleanup / future assertions).
-func newOAuthIntegrationServer(t *testing.T, c *cache.Cache, e *acl.Evaluator) (http.Handler, *oauth.TokenIssuer) {
+func newOAuthIntegrationServer(
+	t *testing.T,
+	c *cache.Cache,
+	e *acl.Evaluator,
+) (http.Handler, *oauth.TokenIssuer) {
 	t.Helper()
 
 	cfg := config.DefaultMCPConfig()
@@ -301,7 +324,10 @@ func TestMCPIntegration_ResourcesReadHonoursACL(t *testing.T) {
 
 	handler, issuer := newOAuthIntegrationServer(t, c, e)
 
-	token, err := issuer.IssueAccessToken(oauth.AccessTokenClaims{Subject: "agent@example.com"}, 5*time.Minute)
+	token, err := issuer.IssueAccessToken(
+		oauth.AccessTokenClaims{Subject: "agent@example.com"},
+		5*time.Minute,
+	)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
@@ -325,7 +351,10 @@ func TestMCPIntegration_ResourcesReadHonoursACL(t *testing.T) {
 		"params":{"uri":"cetacean://services/svc-secret"}
 	}`)
 	if env.Error == nil {
-		t.Fatalf("denied read should have returned a JSON-RPC error, got result %s", string(env.Result))
+		t.Fatalf(
+			"denied read should have returned a JSON-RPC error, got result %s",
+			string(env.Result),
+		)
 	}
 	if !strings.Contains(env.Error.Message, "denied") {
 		t.Errorf("error = %q, want a denial message", env.Error.Message)
@@ -355,7 +384,10 @@ func TestMCPIntegration_SearchToolFiltersByACL(t *testing.T) {
 
 	handler, issuer := newOAuthIntegrationServer(t, c, e)
 
-	token, err := issuer.IssueAccessToken(oauth.AccessTokenClaims{Subject: "agent@example.com"}, 5*time.Minute)
+	token, err := issuer.IssueAccessToken(
+		oauth.AccessTokenClaims{Subject: "agent@example.com"},
+		5*time.Minute,
+	)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}

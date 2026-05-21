@@ -170,9 +170,21 @@ func TestEventACLResource(t *testing.T) {
 		event cache.Event
 		want  string
 	}{
-		{"service uses Name", cache.Event{Type: cache.EventService, ID: "svc1", Name: "web"}, "service:web"},
-		{"task uses ID", cache.Event{Type: cache.EventTask, ID: "task1", Name: "ignored"}, "task:task1"},
-		{"node uses Name", cache.Event{Type: cache.EventNode, ID: "node1", Name: "worker-1"}, "node:worker-1"},
+		{
+			"service uses Name",
+			cache.Event{Type: cache.EventService, ID: "svc1", Name: "web"},
+			"service:web",
+		},
+		{
+			"task uses ID",
+			cache.Event{Type: cache.EventTask, ID: "task1", Name: "ignored"},
+			"task:task1",
+		},
+		{
+			"node uses Name",
+			cache.Event{Type: cache.EventNode, ID: "node1", Name: "worker-1"},
+			"node:worker-1",
+		},
 		{"missing name → empty", cache.Event{Type: cache.EventService, ID: "svc1"}, ""},
 		{"missing task id → empty", cache.Event{Type: cache.EventTask, Name: "x"}, ""},
 		{"sync → empty", cache.Event{Type: cache.EventSync}, ""},
@@ -241,7 +253,12 @@ func TestStartNotificationsCancelDetachesListener(t *testing.T) {
 	// by setting an event and confirming sessionIDs survives.
 	c.SetService(swarm.Service{ID: "svc1"})
 	srv.Close()
-	c.SetService(swarm.Service{ID: "svc1", Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "updated"}}})
+	c.SetService(
+		swarm.Service{
+			ID:   "svc1",
+			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "updated"}},
+		},
+	)
 
 	// After Close, manager state is untouched (sessions stay until the
 	// session itself is gone) but no listener should fire. We assert the

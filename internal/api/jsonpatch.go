@@ -4,14 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-
-	json "github.com/goccy/go-json"
 )
 
 // errPatchApply is the sentinel wrapping every patch-application failure
-// from applyJSONPatch / applyMergePatchStringMap. Callers use errors.Is to
-// distinguish them from writer-side (Docker) errors so the HTTP layer can
-// pick the right status code (400/409 vs 500).
+// from applyJSONPatch and the merge-patch closure built in
+// parsePatchMutator. Callers use errors.Is to distinguish them from
+// writer-side (Docker) errors so the HTTP layer can pick the right status
+// code (400/409 vs 500).
 var errPatchApply = errors.New("patch apply")
 
 // PatchOp represents a single RFC 6902 JSON Patch operation.
@@ -100,27 +99,5 @@ func applyJSONPatch(m map[string]string, ops []PatchOp) (map[string]string, erro
 			)
 		}
 	}
-	return result, nil
-}
-
-// applyMergePatchStringMap applies RFC 7396 JSON Merge Patch to a flat string map.
-// Keys with null values are deleted; keys with string values are set/overwritten.
-func applyMergePatchStringMap(m map[string]string, body []byte) (map[string]string, error) {
-	var patch map[string]*string
-	if err := json.Unmarshal(body, &patch); err != nil {
-		return nil, fmt.Errorf("invalid JSON: %w", err)
-	}
-
-	result := make(map[string]string, len(m))
-	maps.Copy(result, m)
-
-	for k, v := range patch {
-		if v == nil {
-			delete(result, k)
-		} else {
-			result[k] = *v
-		}
-	}
-
 	return result, nil
 }

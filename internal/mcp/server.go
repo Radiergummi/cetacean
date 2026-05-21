@@ -192,7 +192,11 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) bearerAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.bypassActive() {
-			if id, err := s.authProvider.Authenticate(newDiscardingResponseWriter(), r); err == nil && id != nil {
+			if id, err := s.authProvider.Authenticate(
+				newDiscardingResponseWriter(),
+				r,
+			); err == nil &&
+				id != nil {
 				ctx := auth.ContextWithIdentity(r.Context(), id)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return

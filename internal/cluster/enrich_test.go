@@ -124,7 +124,12 @@ func TestEnrichTasksSlice(t *testing.T) {
 			t.Errorf("[%d] ServiceName = %q, want %q", i, enriched[i].ServiceName, tc.serviceName)
 		}
 		if enriched[i].NodeHostname != tc.nodeHostname {
-			t.Errorf("[%d] NodeHostname = %q, want %q", i, enriched[i].NodeHostname, tc.nodeHostname)
+			t.Errorf(
+				"[%d] NodeHostname = %q, want %q",
+				i,
+				enriched[i].NodeHostname,
+				tc.nodeHostname,
+			)
 		}
 	}
 }

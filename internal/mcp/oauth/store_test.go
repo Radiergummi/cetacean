@@ -271,7 +271,10 @@ func TestAuthCodeIssueSweepsExpired(t *testing.T) {
 	}
 
 	if len(s.codes) != 2 {
-		t.Fatalf("after expired Issues: codes=%d, want 2 (1 live + 1 most-recent expired)", len(s.codes))
+		t.Fatalf(
+			"after expired Issues: codes=%d, want 2 (1 live + 1 most-recent expired)",
+			len(s.codes),
+		)
 	}
 
 	// A fresh Issue sweeps the one remaining expired entry, leaving the live
