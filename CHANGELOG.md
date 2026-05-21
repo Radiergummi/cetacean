@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - Service detail page no longer crashes when a service's task template is absent from the response
+- MCP refresh-token store no longer accumulates rotation history indefinitely; theft detection keeps a bounded recent window and grants are cleaned up when tokens expire
+- MCP authorization codes are swept on each new issue so abandoned consent flows can no longer fill memory
+- MCP `search` tool now rejects empty queries instead of returning every cached resource
+- `CETACEAN_MCP_AUTH_BYPASS` now takes effect: when the active Cetacean auth mode is listed (typically `cert`), MCP clients can reach `/mcp` using upstream identity (e.g. mTLS) without an OAuth bearer token
+- MCP `update_node_availability` and `update_node_role` tools advertise the `destructiveHint` annotation so MCP-aware clients can gate them behind a confirmation prompt
+- MCP PKCE verifier comparison uses constant-time equality
+- MCP `WWW-Authenticate` header now uses RFC 7230 quoted-string escaping instead of Go-syntax quoting (correct for values containing backticks or non-ASCII characters)
+- MCP server's `Close` is now safe under concurrent callers
+- MCP Dynamic Client Registration rejects unsupported `grant_types` and `response_types` per RFC 7591 §3.2 instead of silently storing them
+- MCP consent error page no longer surfaces raw CIMD fetcher errors (DNS, SSRF block reasons, connection failures); operators still get the details in the server log
 
 ## [0.11.2] - 2026-05-20
 

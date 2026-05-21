@@ -10,17 +10,17 @@ Each issue carries an ID, severity, confidence, file:line citation, summary, and
 | M-01 | Critical | fixed | MCP `resources/read` skips ACL entirely |
 | M-02 | Critical | fixed | `toolSearch` skips ACL filtering |
 | M-03 | Critical | fixed | Notifications dispatched without ACL recheck |
-| M-04 | Important | open | Refresh-token store leaks `consumed` / `grants` unboundedly |
-| M-05 | Important | open | Authorization codes never expire from store |
-| M-06 | Important | open | `toolSearch` accepts empty query → cluster dump |
-| M-07 | Important | open | `CETACEAN_MCP_AUTH_BYPASS` is dead config |
-| M-08 | Important | open | Missing `destructiveHint` on tier-3 node mutations |
-| M-09 | Important | open | PKCE verifier uses `==` instead of `hmac.Equal` |
-| M-10 | Important | open | `WWW-Authenticate` header built with Go `%q` |
-| M-11 | Important | open | `Server.Close()` not concurrency-safe despite comment |
-| M-12 | Minor | open | DCR doesn't validate `grant_types` / `response_types` |
-| M-13 | Minor | open | Integration test misses the riskiest paths |
-| M-14 | Minor | open | CIMD fetcher errors leak to consent error page |
+| M-04 | Important | fixed | Refresh-token store leaks `consumed` / `grants` unboundedly |
+| M-05 | Important | fixed | Authorization codes never expire from store |
+| M-06 | Important | fixed | `toolSearch` accepts empty query → cluster dump |
+| M-07 | Important | fixed | `CETACEAN_MCP_AUTH_BYPASS` is dead config |
+| M-08 | Important | fixed | Missing `destructiveHint` on tier-3 node mutations |
+| M-09 | Important | fixed | PKCE verifier uses `==` instead of `hmac.Equal` |
+| M-10 | Important | fixed | `WWW-Authenticate` header built with Go `%q` |
+| M-11 | Important | fixed | `Server.Close()` not concurrency-safe despite comment |
+| M-12 | Minor | fixed | DCR doesn't validate `grant_types` / `response_types` |
+| M-13 | Minor | fixed | Integration test misses the riskiest paths |
+| M-14 | Minor | fixed | CIMD fetcher errors leak to consent error page |
 
 ---
 
@@ -189,6 +189,8 @@ RFC 7591 §3.2 requires `invalid_client_metadata` for unsupported values. No sec
 - CIMD path end-to-end (unit-tested in `cimd_test.go`, never wired)
 
 **Fix:** Extend the integration test with each scenario, or add focused tests in `internal/mcp/` and `internal/mcp/oauth/`. The ACL scenarios pair naturally with the M-01 / M-02 / M-03 fixes.
+
+**Resolved:** `integration_test.go` now drives an OAuth-protected handler through the full bearer-auth + JSON-RPC pipeline in three new tests — `TestMCPIntegration_ResourcesReadHonoursACL` (M-01 at HTTP level), `TestMCPIntegration_SearchToolFiltersByACL` (M-02 at HTTP level), and `TestMCPIntegration_UnauthorizedHeaderUsesRFC7230Quoting` (M-10 at HTTP level). The remaining items — subscribe-notification round-trip, refresh-token rotation, and CIMD end-to-end — stayed at package level (`notifications_test.go`, `oauth/server_test.go::TestTokenExchangeRefreshHappy`, `oauth/cimd_test.go`) because the marginal value of a third-layer integration test is small relative to its setup cost (mcp-go SSE subscriber stream / HTTPS test server).
 
 ---
 
