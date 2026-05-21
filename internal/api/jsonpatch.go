@@ -1,11 +1,18 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 
 	json "github.com/goccy/go-json"
 )
+
+// errPatchApply is the sentinel wrapping every patch-application failure
+// from applyJSONPatch / applyMergePatchStringMap. Callers use errors.Is to
+// distinguish them from writer-side (Docker) errors so the HTTP layer can
+// pick the right status code (400/409 vs 500).
+var errPatchApply = errors.New("patch apply")
 
 // PatchOp represents a single RFC 6902 JSON Patch operation.
 type PatchOp struct {
@@ -46,19 +53,29 @@ func applyJSONPatch(m map[string]string, ops []PatchOp) (map[string]string, erro
 	for i, op := range ops {
 		key := normalizePath(op.Path)
 		if key == "" {
-			return nil, fmt.Errorf("operation %d: empty path", i)
+			return nil, fmt.Errorf("%w: operation %d: empty path", errPatchApply, i)
 		}
 		switch op.Op {
 		case "add":
 			result[key] = op.Value
 		case "remove":
 			if _, ok := result[key]; !ok {
-				return nil, fmt.Errorf("operation %d: key %q does not exist", i, key)
+				return nil, fmt.Errorf(
+					"%w: operation %d: key %q does not exist",
+					errPatchApply,
+					i,
+					key,
+				)
 			}
 			delete(result, key)
 		case "replace":
 			if _, ok := result[key]; !ok {
-				return nil, fmt.Errorf("operation %d: key %q does not exist", i, key)
+				return nil, fmt.Errorf(
+					"%w: operation %d: key %q does not exist",
+					errPatchApply,
+					i,
+					key,
+				)
 			}
 			result[key] = op.Value
 		case "test":
@@ -71,12 +88,16 @@ func applyJSONPatch(m map[string]string, ops []PatchOp) (map[string]string, erro
 			}
 		case "move", "copy":
 			return nil, fmt.Errorf(
-				"operation %d: %q is not supported for flat key-value maps",
+				"%w: operation %d: %q is not supported for flat key-value maps",
+				errPatchApply, i, op.Op,
+			)
+		default:
+			return nil, fmt.Errorf(
+				"%w: operation %d: unknown operation %q",
+				errPatchApply,
 				i,
 				op.Op,
 			)
-		default:
-			return nil, fmt.Errorf("operation %d: unknown operation %q", i, op.Op)
 		}
 	}
 	return result, nil

@@ -90,13 +90,25 @@ func (r *ClientRegistry) register(reg *ClientRegistration) {
 }
 
 // checkRateLimit returns true if the IP is allowed to make a registration request.
+//
+// Inline sweep: every call evicts expired buckets while the lock is already
+// held. Without this, the map grows unbounded for the lifetime of the process —
+// every distinct source IP (scanners, NATed clients, rotating proxies) leaves
+// a permanent entry. The sweep is O(n) per call but the map stays bounded to
+// the active-IP working set.
 func (r *ClientRegistry) checkRateLimit(ip string) bool {
 	r.rateMu.Lock()
 	defer r.rateMu.Unlock()
 
 	now := time.Now()
+	for k, b := range r.buckets {
+		if now.After(b.resetAt) {
+			delete(r.buckets, k)
+		}
+	}
+
 	bucket, ok := r.buckets[ip]
-	if !ok || now.After(bucket.resetAt) {
+	if !ok {
 		r.buckets[ip] = &ipBucket{
 			tokens:    r.rateLimit - 1,
 			resetAt:   now.Add(time.Hour),
@@ -163,7 +175,12 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	if !s.clients.checkRateLimit(ip) {
 		w.Header().Set("Retry-After", "3600")
-		writeDCRError(w, http.StatusTooManyRequests, "too_many_requests", "registration rate limit exceeded")
+		writeDCRError(
+			w,
+			http.StatusTooManyRequests,
+			"too_many_requests",
+			"registration rate limit exceeded",
+		)
 		return
 	}
 
@@ -174,13 +191,23 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	// RFC 7591: unknown fields MUST be ignored.
 	var req dcrRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeDCRError(w, http.StatusBadRequest, "invalid_client_metadata", "invalid JSON: "+err.Error())
+		writeDCRError(
+			w,
+			http.StatusBadRequest,
+			"invalid_client_metadata",
+			"invalid JSON: "+err.Error(),
+		)
 		return
 	}
 
 	// Validate redirect_uris.
 	if len(req.RedirectURIs) == 0 {
-		writeDCRError(w, http.StatusBadRequest, "invalid_client_metadata", "redirect_uris is required")
+		writeDCRError(
+			w,
+			http.StatusBadRequest,
+			"invalid_client_metadata",
+			"redirect_uris is required",
+		)
 		return
 	}
 	for _, uri := range req.RedirectURIs {
@@ -241,7 +268,12 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 
 	body, err := json.Marshal(reg)
 	if err != nil {
-		writeDCRError(w, http.StatusInternalServerError, "server_error", "failed to encode registration")
+		writeDCRError(
+			w,
+			http.StatusInternalServerError,
+			"server_error",
+			"failed to encode registration",
+		)
 		return
 	}
 	s.clients.register(reg)

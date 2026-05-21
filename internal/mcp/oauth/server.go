@@ -85,7 +85,10 @@ func NewServer(cfg ServerConfig) *Server {
 // RegisterRoutes attaches all OAuth endpoints to mux under basePath.
 func (s *Server) RegisterRoutes(mux *http.ServeMux, basePath string) {
 	mux.HandleFunc("GET "+basePath+"/.well-known/oauth-authorization-server", s.HandleMetadata)
-	mux.HandleFunc("GET "+basePath+"/.well-known/oauth-protected-resource", s.HandleProtectedResourceMetadata)
+	mux.HandleFunc(
+		"GET "+basePath+"/.well-known/oauth-protected-resource",
+		s.HandleProtectedResourceMetadata,
+	)
 	mux.HandleFunc("GET "+basePath+"/oauth/authorize", s.HandleAuthorize)
 	mux.HandleFunc("POST "+basePath+"/oauth/authorize", s.HandleAuthorize)
 	mux.HandleFunc("POST "+basePath+"/oauth/token", s.HandleToken)
@@ -101,29 +104,31 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux, basePath string) {
 
 // asMetadata is the RFC 8414 Authorization Server Metadata document.
 type asMetadata struct {
-	Issuer                            string   `json:"issuer"`
-	AuthorizationEndpoint             string   `json:"authorization_endpoint"`
-	TokenEndpoint                     string   `json:"token_endpoint"`
-	RevocationEndpoint                string   `json:"revocation_endpoint"`
-	RegistrationEndpoint              string   `json:"registration_endpoint,omitempty"`
-	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported"`
-	GrantTypesSupported               []string `json:"grant_types_supported"`
-	ResponseTypesSupported            []string `json:"response_types_supported"`
-	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported"`
+	Issuer                                 string   `json:"issuer"`
+	AuthorizationEndpoint                  string   `json:"authorization_endpoint"`
+	TokenEndpoint                          string   `json:"token_endpoint"`
+	RevocationEndpoint                     string   `json:"revocation_endpoint"`
+	RegistrationEndpoint                   string   `json:"registration_endpoint,omitempty"`
+	CodeChallengeMethodsSupported          []string `json:"code_challenge_methods_supported"`
+	GrantTypesSupported                    []string `json:"grant_types_supported"`
+	ResponseTypesSupported                 []string `json:"response_types_supported"`
+	TokenEndpointAuthMethodsSupported      []string `json:"token_endpoint_auth_methods_supported"`
+	RevocationEndpointAuthMethodsSupported []string `json:"revocation_endpoint_auth_methods_supported"`
 }
 
 // HandleMetadata serves the RFC 8414 AS metadata document.
 func (s *Server) HandleMetadata(w http.ResponseWriter, r *http.Request) {
 	base := s.cfg.Issuer + s.cfg.BasePath
 	doc := asMetadata{
-		Issuer:                            s.cfg.Issuer,
-		AuthorizationEndpoint:             base + "/oauth/authorize",
-		TokenEndpoint:                     base + "/oauth/token",
-		RevocationEndpoint:                base + "/oauth/revoke",
-		CodeChallengeMethodsSupported:     []string{"S256"},
-		GrantTypesSupported:               []string{"authorization_code", "refresh_token"},
-		ResponseTypesSupported:            []string{"code"},
-		TokenEndpointAuthMethodsSupported: []string{"none"},
+		Issuer:                                 s.cfg.Issuer,
+		AuthorizationEndpoint:                  base + "/oauth/authorize",
+		TokenEndpoint:                          base + "/oauth/token",
+		RevocationEndpoint:                     base + "/oauth/revoke",
+		CodeChallengeMethodsSupported:          []string{"S256"},
+		GrantTypesSupported:                    []string{"authorization_code", "refresh_token"},
+		ResponseTypesSupported:                 []string{"code"},
+		TokenEndpointAuthMethodsSupported:      []string{"none"},
+		RevocationEndpointAuthMethodsSupported: []string{"none"},
 	}
 	if s.cfg.MCP.DCREnabled {
 		doc.RegistrationEndpoint = base + "/oauth/register"
@@ -186,7 +191,11 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 	resourceForm := r.FormValue("resource")
 
 	// RFC 8707 resource indicator validation.
-	if _, err := ValidateResourceIndicator(resourceForm, s.cfg.MCPResource, s.cfg.MCP.RequireResourceIndicator); err != nil {
+	if _, err := ValidateResourceIndicator(
+		resourceForm,
+		s.cfg.MCPResource,
+		s.cfg.MCP.RequireResourceIndicator,
+	); err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_target", err.Error())
 		return
 	}
@@ -194,7 +203,12 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 	// Redeem the authorization code.
 	codeData, ok := s.authCodes.Redeem(code)
 	if !ok {
-		writeTokenError(w, http.StatusBadRequest, "invalid_grant", "authorization code is invalid or expired")
+		writeTokenError(
+			w,
+			http.StatusBadRequest,
+			"invalid_grant",
+			"authorization code is invalid or expired",
+		)
 		return
 	}
 
@@ -212,7 +226,12 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 
 	// Match resource.
 	if resourceForm != "" && resourceForm != codeData.Resource {
-		writeTokenError(w, http.StatusBadRequest, "invalid_target", "resource does not match authorization code")
+		writeTokenError(
+			w,
+			http.StatusBadRequest,
+			"invalid_target",
+			"resource does not match authorization code",
+		)
 		return
 	}
 
@@ -226,7 +245,12 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if !verifySHA256Challenge(codeVerifier, codeData.CodeChallenge) {
-		writeTokenError(w, http.StatusBadRequest, "invalid_grant", "code_verifier does not match code_challenge")
+		writeTokenError(
+			w,
+			http.StatusBadRequest,
+			"invalid_grant",
+			"code_verifier does not match code_challenge",
+		)
 		return
 	}
 
@@ -237,7 +261,12 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 		ClientID: codeData.ClientID,
 	}, s.cfg.MCP.AccessTokenTTL)
 	if err != nil {
-		writeTokenError(w, http.StatusInternalServerError, "server_error", "failed to issue access token")
+		writeTokenError(
+			w,
+			http.StatusInternalServerError,
+			"server_error",
+			"failed to issue access token",
+		)
 		return
 	}
 
@@ -266,7 +295,11 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	// (which is almost always a client typo) should not burn the grant family.
 	// Theft detection still works because a replay of an already-rotated token
 	// triggers Rotate's Theft branch on its second presentation.
-	if _, err := ValidateResourceIndicator(resourceForm, s.cfg.MCPResource, s.cfg.MCP.RequireResourceIndicator); err != nil {
+	if _, err := ValidateResourceIndicator(
+		resourceForm,
+		s.cfg.MCPResource,
+		s.cfg.MCP.RequireResourceIndicator,
+	); err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_target", err.Error())
 		return
 	}
@@ -276,11 +309,21 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 	if resourceForm != "" {
 		bound, ok := s.refreshTokens.Validate(refreshTokenRaw)
 		if !ok {
-			writeTokenError(w, http.StatusBadRequest, "invalid_grant", "refresh token is invalid or expired")
+			writeTokenError(
+				w,
+				http.StatusBadRequest,
+				"invalid_grant",
+				"refresh token is invalid or expired",
+			)
 			return
 		}
 		if resourceForm != bound.Resource {
-			writeTokenError(w, http.StatusBadRequest, "invalid_target", "resource does not match this grant")
+			writeTokenError(
+				w,
+				http.StatusBadRequest,
+				"invalid_target",
+				"resource does not match this grant",
+			)
 			return
 		}
 	}
@@ -293,7 +336,12 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if !result.OK {
-		writeTokenError(w, http.StatusBadRequest, "invalid_grant", "refresh token is invalid or expired")
+		writeTokenError(
+			w,
+			http.StatusBadRequest,
+			"invalid_grant",
+			"refresh token is invalid or expired",
+		)
 		return
 	}
 
@@ -304,7 +352,12 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 		ClientID: result.Data.ClientID,
 	}, s.cfg.MCP.AccessTokenTTL)
 	if err != nil {
-		writeTokenError(w, http.StatusInternalServerError, "server_error", "failed to issue access token")
+		writeTokenError(
+			w,
+			http.StatusInternalServerError,
+			"server_error",
+			"failed to issue access token",
+		)
 		return
 	}
 
@@ -446,7 +499,11 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := ValidateResourceIndicator(resourceParam, s.cfg.MCPResource, s.cfg.MCP.RequireResourceIndicator); err != nil {
+	if _, err := ValidateResourceIndicator(
+		resourceParam,
+		s.cfg.MCPResource,
+		s.cfg.MCP.RequireResourceIndicator,
+	); err != nil {
 		redirectWithError(w, r, redirectURIRaw, state, "invalid_target", err.Error())
 		return
 	}
@@ -458,7 +515,12 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	csrfToken, _ := issueCSRFNonce(w, s.cfg.SigningKey, state, strings.HasPrefix(s.cfg.Issuer, "https://"))
+	csrfToken, _ := issueCSRFNonce(
+		w,
+		s.cfg.SigningKey,
+		state,
+		strings.HasPrefix(s.cfg.Issuer, "https://"),
+	)
 
 	actionURL := s.cfg.BasePath + "/oauth/authorize"
 
@@ -535,7 +597,11 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	effectiveResource, err := ValidateResourceIndicator(resourceParam, s.cfg.MCPResource, s.cfg.MCP.RequireResourceIndicator)
+	effectiveResource, err := ValidateResourceIndicator(
+		resourceParam,
+		s.cfg.MCPResource,
+		s.cfg.MCP.RequireResourceIndicator,
+	)
 	if err != nil {
 		clearCSRFCookie(w, secure)
 		redirectWithError(w, r, redirectURIRaw, state, "invalid_target", err.Error())
@@ -568,7 +634,10 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 
 // resolveClientMeta returns ClientMetadata and verified=true (CIMD) or
 // false (DCR), or an error message string if the client cannot be resolved.
-func (s *Server) resolveClientMeta(r *http.Request, clientID string) (meta *ClientMetadata, verified bool, errMsg string) {
+func (s *Server) resolveClientMeta(
+	r *http.Request,
+	clientID string,
+) (meta *ClientMetadata, verified bool, errMsg string) {
 	if strings.HasPrefix(clientID, "https://") {
 		// CIMD path. Don't surface the raw fetcher error to the browser —
 		// it can include DNS lookups, SSRF block reasons, "connection refused",
@@ -601,7 +670,11 @@ func (s *Server) resolveClientMeta(r *http.Request, clientID string) (meta *Clie
 }
 
 // redirectWithError sends an OAuth error redirect to redirect_uri.
-func redirectWithError(w http.ResponseWriter, r *http.Request, redirectURIRaw, state, code, desc string) {
+func redirectWithError(
+	w http.ResponseWriter,
+	r *http.Request,
+	redirectURIRaw, state, code, desc string,
+) {
 	u, err := url.Parse(redirectURIRaw)
 	if err != nil {
 		http.Error(w, "invalid redirect_uri", http.StatusBadRequest)

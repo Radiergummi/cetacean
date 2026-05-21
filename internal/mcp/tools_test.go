@@ -20,6 +20,12 @@ import (
 // for table-driven tool tests. Individual tests override the specific method
 // they exercise so unrelated tools can panic if they're ever called.
 type fakeWriteClient struct {
+	// simulated* stand in for the "fresh inspect" that the real writer would
+	// do against Docker; the env/labels mutator is applied to these before
+	// the *Fn callback receives the resolved map (M-42).
+	simulatedEnv          map[string]string
+	simulatedLabels       map[string]string
+	simulatedNodeLabels   map[string]string
 	scaleServiceFn        func(ctx context.Context, id string, replicas uint64) (swarm.Service, error)
 	updateServiceImageFn  func(ctx context.Context, id, image string) (swarm.Service, error)
 	rollbackServiceFn     func(ctx context.Context, id string) (swarm.Service, error)
@@ -87,8 +93,16 @@ func (f *fakeWriteClient) RemoveService(ctx context.Context, id string) error {
 func (f *fakeWriteClient) UpdateServiceEnv(
 	ctx context.Context,
 	id string,
-	env map[string]string,
+	mutate func(map[string]string) (map[string]string, error),
 ) (swarm.Service, error) {
+	current := f.simulatedEnv
+	if current == nil {
+		current = map[string]string{}
+	}
+	env, err := mutate(current)
+	if err != nil {
+		return swarm.Service{}, err
+	}
 	if f.updateServiceEnvFn != nil {
 		return f.updateServiceEnvFn(ctx, id, env)
 	}
@@ -98,8 +112,16 @@ func (f *fakeWriteClient) UpdateServiceEnv(
 func (f *fakeWriteClient) UpdateServiceLabels(
 	ctx context.Context,
 	id string,
-	labels map[string]string,
+	mutate func(map[string]string) (map[string]string, error),
 ) (swarm.Service, error) {
+	current := f.simulatedLabels
+	if current == nil {
+		current = map[string]string{}
+	}
+	labels, err := mutate(current)
+	if err != nil {
+		return swarm.Service{}, err
+	}
 	if f.updateServiceLabelsFn != nil {
 		return f.updateServiceLabelsFn(ctx, id, labels)
 	}
@@ -186,8 +208,16 @@ func (f *fakeWriteClient) UpdateNodeAvailability(
 func (f *fakeWriteClient) UpdateNodeLabels(
 	ctx context.Context,
 	id string,
-	labels map[string]string,
+	mutate func(map[string]string) (map[string]string, error),
 ) (swarm.Node, error) {
+	current := f.simulatedNodeLabels
+	if current == nil {
+		current = map[string]string{}
+	}
+	labels, err := mutate(current)
+	if err != nil {
+		return swarm.Node{}, err
+	}
 	if f.updateNodeLabelsFn != nil {
 		return f.updateNodeLabelsFn(ctx, id, labels)
 	}
@@ -342,7 +372,10 @@ func TestToolAnnotationsCompleteness(t *testing.T) {
 				t.Errorf("destructiveHint = %v, want %v", *ann.DestructiveHint, destructive[name])
 			}
 			if ann.OpenWorldHint == nil || *ann.OpenWorldHint {
-				t.Errorf("openWorldHint should be set to false for closed cluster-management tools, got %v", ann.OpenWorldHint)
+				t.Errorf(
+					"openWorldHint should be set to false for closed cluster-management tools, got %v",
+					ann.OpenWorldHint,
+				)
 			}
 		})
 	}
@@ -516,6 +549,10 @@ func TestToolUpdateServiceEnv(t *testing.T) {
 	})
 	var got map[string]string
 	wc := &fakeWriteClient{
+		// Simulate Docker's fresh inspect — the merge now happens inside the
+		// writer (M-42), so the test seeds the writer's view rather than
+		// relying on the cache.
+		simulatedEnv: map[string]string{"DEBUG": "false", "STALE": "keep"},
 		updateServiceEnvFn: func(_ context.Context, _ string, env map[string]string) (swarm.Service, error) {
 			got = env
 			return swarm.Service{}, nil
@@ -554,6 +591,7 @@ func TestToolUpdateServiceEnvMergePatchDeletesNull(t *testing.T) {
 	})
 	var got map[string]string
 	wc := &fakeWriteClient{
+		simulatedEnv: map[string]string{"DEBUG": "true", "DROP_ME": "present"},
 		updateServiceEnvFn: func(_ context.Context, _ string, env map[string]string) (swarm.Service, error) {
 			got = env
 			return swarm.Service{}, nil
@@ -577,6 +615,57 @@ func TestToolUpdateServiceEnvMergePatchDeletesNull(t *testing.T) {
 	}
 	if got["DEBUG"] != "true" || got["ADDED"] != "yes" {
 		t.Errorf("merge incorrect; got %v", got)
+	}
+}
+
+// TestToolUpdateServiceEnvMergesAgainstFreshSpec locks in the M-42 contract:
+// the merge happens against the live (writer-side) view of the env, not
+// against an in-memory cache snapshot. Here the cache is *deliberately stale*
+// (missing CONCURRENT_NEW), but simulatedEnv reflects Docker's actual current
+// state. The resulting merge must preserve CONCURRENT_NEW even though no
+// caller ever saw it through the cache.
+func TestToolUpdateServiceEnvMergesAgainstFreshSpec(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "web"},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{
+					Env: []string{"FOO=stale"},
+				},
+			},
+		},
+	})
+	var got map[string]string
+	wc := &fakeWriteClient{
+		simulatedEnv: map[string]string{
+			"FOO":            "stale",
+			"CONCURRENT_NEW": "added-by-other-writer",
+		},
+		updateServiceEnvFn: func(_ context.Context, _ string, env map[string]string) (swarm.Service, error) {
+			got = env
+			return swarm.Service{}, nil
+		},
+	}
+	srv := newToolTestServer(t, c, wc, config.OpsConfiguration)
+	td, _ := srv.findTool("update_service_env")
+
+	_, err := td.handler(
+		context.Background(),
+		newCallToolRequest("update_service_env", map[string]any{
+			"id":  "svc1",
+			"env": map[string]any{"FOO": "fresh"},
+		}),
+	)
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if got["FOO"] != "fresh" {
+		t.Errorf("FOO = %q, want fresh", got["FOO"])
+	}
+	if got["CONCURRENT_NEW"] != "added-by-other-writer" {
+		t.Errorf("concurrent writer's CONCURRENT_NEW was lost: got=%v", got)
 	}
 }
 

@@ -28,11 +28,15 @@ type ServiceLifecycleWriter interface {
 // ServiceSpecWriter is the subset of Docker service-spec operations exposed via
 // Tier 2 (Configuration) MCP tools.
 type ServiceSpecWriter interface {
-	UpdateServiceEnv(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
+	UpdateServiceEnv(
+		ctx context.Context,
+		id string,
+		mutate func(current map[string]string) (map[string]string, error),
+	) (swarm.Service, error)
 	UpdateServiceLabels(
 		ctx context.Context,
 		id string,
-		labels map[string]string,
+		mutate func(current map[string]string) (map[string]string, error),
 	) (swarm.Service, error)
 	UpdateServiceResources(
 		ctx context.Context,
@@ -74,7 +78,11 @@ type NodeWriter interface {
 		id string,
 		availability swarm.NodeAvailability,
 	) (swarm.Node, error)
-	UpdateNodeLabels(ctx context.Context, id string, labels map[string]string) (swarm.Node, error)
+	UpdateNodeLabels(
+		ctx context.Context,
+		id string,
+		mutate func(current map[string]string) (map[string]string, error),
+	) (swarm.Node, error)
 	UpdateNodeRole(ctx context.Context, id string, role swarm.NodeRole) (swarm.Node, error)
 }
 
@@ -148,14 +156,23 @@ func (s *Server) toolCatalog() []toolDef {
 					mcplib.Required(),
 					mcplib.Description("Service ID or name to read logs from."),
 				),
-				mcplib.WithNumber("tail",
-					mcplib.Description("Number of recent log lines to return per replica. Default 100."),
+				mcplib.WithNumber(
+					"tail",
+					mcplib.Description(
+						"Number of recent log lines to return per replica. Default 100.",
+					),
 				),
-				mcplib.WithString("since",
-					mcplib.Description("RFC 3339 timestamp; only return lines emitted at or after this time."),
+				mcplib.WithString(
+					"since",
+					mcplib.Description(
+						"RFC 3339 timestamp; only return lines emitted at or after this time.",
+					),
 				),
-				mcplib.WithString("level",
-					mcplib.Description("Minimum log level (debug, info, warn, error). Best-effort — depends on the service emitting structured levels."),
+				mcplib.WithString(
+					"level",
+					mcplib.Description(
+						"Minimum log level (debug, info, warn, error). Best-effort — depends on the service emitting structured levels.",
+					),
 				),
 			),
 			tier:    config.OpsReadOnly,
@@ -172,9 +189,12 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDestructiveHintAnnotation(false),
 				mcplib.WithIdempotentHintAnnotation(true),
 				mcplib.WithOpenWorldHintAnnotation(false),
-				mcplib.WithString("query",
+				mcplib.WithString(
+					"query",
 					mcplib.Required(),
-					mcplib.Description("Substring to match against resource names, labels, and (for services) image references. Case-insensitive."),
+					mcplib.Description(
+						"Substring to match against resource names, labels, and (for services) image references. Case-insensitive.",
+					),
 				),
 				mcplib.WithNumber("limit",
 					mcplib.Description("Maximum results per resource type. Default 3."),
@@ -223,9 +243,12 @@ func (s *Server) toolCatalog() []toolDef {
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
 				),
-				mcplib.WithString("image",
+				mcplib.WithString(
+					"image",
 					mcplib.Required(),
-					mcplib.Description("Container image reference including tag or digest (e.g. \"nginx:1.27\" or \"nginx@sha256:...\"). Must not be empty."),
+					mcplib.Description(
+						"Container image reference including tag or digest (e.g. \"nginx:1.27\" or \"nginx@sha256:...\"). Must not be empty.",
+					),
 				),
 			),
 			tier:    config.OpsOperational,
@@ -305,9 +328,12 @@ func (s *Server) toolCatalog() []toolDef {
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
 				),
-				mcplib.WithObject("env",
+				mcplib.WithObject(
+					"env",
 					mcplib.Required(),
-					mcplib.Description("Merge-patch object mapping env-var names to a string value (set) or null (delete). Example: {\"LOG_LEVEL\":\"debug\",\"DEPRECATED_FLAG\":null}."),
+					mcplib.Description(
+						"Merge-patch object mapping env-var names to a string value (set) or null (delete). Example: {\"LOG_LEVEL\":\"debug\",\"DEPRECATED_FLAG\":null}.",
+					),
 				),
 			),
 			tier:    config.OpsConfiguration,
@@ -327,9 +353,12 @@ func (s *Server) toolCatalog() []toolDef {
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
 				),
-				mcplib.WithObject("labels",
+				mcplib.WithObject(
+					"labels",
 					mcplib.Required(),
-					mcplib.Description("Merge-patch object mapping label keys to a string value (set) or null (delete)."),
+					mcplib.Description(
+						"Merge-patch object mapping label keys to a string value (set) or null (delete).",
+					),
 				),
 			),
 			tier:    config.OpsConfiguration,
@@ -349,9 +378,12 @@ func (s *Server) toolCatalog() []toolDef {
 					mcplib.Required(),
 					mcplib.Description("Node ID or hostname."),
 				),
-				mcplib.WithObject("labels",
+				mcplib.WithObject(
+					"labels",
 					mcplib.Required(),
-					mcplib.Description("Merge-patch object mapping label keys to a string value (set) or null (delete)."),
+					mcplib.Description(
+						"Merge-patch object mapping label keys to a string value (set) or null (delete).",
+					),
 				),
 			),
 			tier:    config.OpsConfiguration,
@@ -372,16 +404,22 @@ func (s *Server) toolCatalog() []toolDef {
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
 				),
-				mcplib.WithObject("resources",
+				mcplib.WithObject(
+					"resources",
 					mcplib.Required(),
-					mcplib.Description("Full ResourceRequirements object: {\"Limits\":{\"NanoCPUs\":int,\"MemoryBytes\":int},\"Reservations\":{\"NanoCPUs\":int,\"MemoryBytes\":int}}. NanoCPUs are in 1e-9 of a CPU; MemoryBytes is in bytes."),
+					mcplib.Description(
+						"Full ResourceRequirements object: {\"Limits\":{\"NanoCPUs\":int,\"MemoryBytes\":int},\"Reservations\":{\"NanoCPUs\":int,\"MemoryBytes\":int}}. NanoCPUs are in 1e-9 of a CPU; MemoryBytes is in bytes.",
+					),
 				),
 			),
 			tier: config.OpsConfiguration,
-			handler: updateServiceHandler(s, "resources",
+			handler: updateServiceHandler(
+				s,
+				"resources",
 				func(wc DockerWriteClient, ctx context.Context, id string, r swarm.ResourceRequirements) (swarm.Service, error) {
 					return wc.UpdateServiceResources(ctx, id, &r)
-				}),
+				},
+			),
 		},
 		{
 			tool: mcplib.NewTool(
@@ -398,16 +436,22 @@ func (s *Server) toolCatalog() []toolDef {
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
 				),
-				mcplib.WithObject("placement",
+				mcplib.WithObject(
+					"placement",
 					mcplib.Required(),
-					mcplib.Description("Full Placement object. Constraints use Docker Swarm syntax (e.g. \"node.role==worker\", \"node.labels.zone==eu-west\")."),
+					mcplib.Description(
+						"Full Placement object. Constraints use Docker Swarm syntax (e.g. \"node.role==worker\", \"node.labels.zone==eu-west\").",
+					),
 				),
 			),
 			tier: config.OpsConfiguration,
-			handler: updateServiceHandler(s, "placement",
+			handler: updateServiceHandler(
+				s,
+				"placement",
 				func(wc DockerWriteClient, ctx context.Context, id string, p swarm.Placement) (swarm.Service, error) {
 					return wc.UpdateServicePlacement(ctx, id, &p)
-				}),
+				},
+			),
 		},
 		{
 			tool: mcplib.NewTool(
@@ -424,16 +468,22 @@ func (s *Server) toolCatalog() []toolDef {
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
 				),
-				mcplib.WithArray("ports",
+				mcplib.WithArray(
+					"ports",
 					mcplib.Required(),
-					mcplib.Description("Array of PortConfig objects: {\"Protocol\":\"tcp|udp|sctp\",\"TargetPort\":int,\"PublishedPort\":int,\"PublishMode\":\"ingress|host\"}."),
+					mcplib.Description(
+						"Array of PortConfig objects: {\"Protocol\":\"tcp|udp|sctp\",\"TargetPort\":int,\"PublishedPort\":int,\"PublishMode\":\"ingress|host\"}.",
+					),
 				),
 			),
 			tier: config.OpsConfiguration,
-			handler: updateServiceHandler(s, "ports",
+			handler: updateServiceHandler(
+				s,
+				"ports",
 				func(wc DockerWriteClient, ctx context.Context, id string, ports []swarm.PortConfig) (swarm.Service, error) {
 					return wc.UpdateServicePorts(ctx, id, ports)
-				}),
+				},
+			),
 		},
 		{
 			tool: mcplib.NewTool(
@@ -450,16 +500,22 @@ func (s *Server) toolCatalog() []toolDef {
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
 				),
-				mcplib.WithObject("policy",
+				mcplib.WithObject(
+					"policy",
 					mcplib.Required(),
-					mcplib.Description("Full UpdateConfig object: {\"Parallelism\":int,\"Delay\":nanoseconds,\"FailureAction\":\"pause|continue|rollback\",\"Monitor\":nanoseconds,\"MaxFailureRatio\":float,\"Order\":\"stop-first|start-first\"}."),
+					mcplib.Description(
+						"Full UpdateConfig object: {\"Parallelism\":int,\"Delay\":nanoseconds,\"FailureAction\":\"pause|continue|rollback\",\"Monitor\":nanoseconds,\"MaxFailureRatio\":float,\"Order\":\"stop-first|start-first\"}.",
+					),
 				),
 			),
 			tier: config.OpsConfiguration,
-			handler: updateServiceHandler(s, "policy",
+			handler: updateServiceHandler(
+				s,
+				"policy",
 				func(wc DockerWriteClient, ctx context.Context, id string, p swarm.UpdateConfig) (swarm.Service, error) {
 					return wc.UpdateServiceUpdatePolicy(ctx, id, &p)
-				}),
+				},
+			),
 		},
 		{
 			tool: mcplib.NewTool(
@@ -476,16 +532,22 @@ func (s *Server) toolCatalog() []toolDef {
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
 				),
-				mcplib.WithObject("policy",
+				mcplib.WithObject(
+					"policy",
 					mcplib.Required(),
-					mcplib.Description("Full UpdateConfig object (same shape as the rolling-update policy): {\"Parallelism\":int,\"Delay\":nanoseconds,\"FailureAction\":\"pause|continue\",\"Monitor\":nanoseconds,\"MaxFailureRatio\":float,\"Order\":\"stop-first|start-first\"}."),
+					mcplib.Description(
+						"Full UpdateConfig object (same shape as the rolling-update policy): {\"Parallelism\":int,\"Delay\":nanoseconds,\"FailureAction\":\"pause|continue\",\"Monitor\":nanoseconds,\"MaxFailureRatio\":float,\"Order\":\"stop-first|start-first\"}.",
+					),
 				),
 			),
 			tier: config.OpsConfiguration,
-			handler: updateServiceHandler(s, "policy",
+			handler: updateServiceHandler(
+				s,
+				"policy",
 				func(wc DockerWriteClient, ctx context.Context, id string, p swarm.UpdateConfig) (swarm.Service, error) {
 					return wc.UpdateServiceRollbackPolicy(ctx, id, &p)
-				}),
+				},
+			),
 		},
 		{
 			tool: mcplib.NewTool(
@@ -502,16 +564,22 @@ func (s *Server) toolCatalog() []toolDef {
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
 				),
-				mcplib.WithObject("driver",
+				mcplib.WithObject(
+					"driver",
 					mcplib.Required(),
-					mcplib.Description("Driver object: {\"Name\":\"json-file|syslog|journald|gelf|fluentd|awslogs|...\",\"Options\":{\"key\":\"value\"}}."),
+					mcplib.Description(
+						"Driver object: {\"Name\":\"json-file|syslog|journald|gelf|fluentd|awslogs|...\",\"Options\":{\"key\":\"value\"}}.",
+					),
 				),
 			),
 			tier: config.OpsConfiguration,
-			handler: updateServiceHandler(s, "driver",
+			handler: updateServiceHandler(
+				s,
+				"driver",
 				func(wc DockerWriteClient, ctx context.Context, id string, d swarm.Driver) (swarm.Service, error) {
 					return wc.UpdateServiceLogDriver(ctx, id, &d)
-				}),
+				},
+			),
 		},
 
 		// Tier 3 — Impactful.
@@ -659,8 +727,11 @@ func (s *Server) toolCatalog() []toolDef {
 					mcplib.Required(),
 					mcplib.Description("Volume name."),
 				),
-				mcplib.WithBoolean("force",
-					mcplib.Description("Force removal even if the volume is in use. Default false."),
+				mcplib.WithBoolean(
+					"force",
+					mcplib.Description(
+						"Force removal even if the volume is in use. Default false.",
+					),
 				),
 			),
 			tier:    config.OpsImpactful,
@@ -957,18 +1028,11 @@ func (s *Server) toolUpdateServiceEnv(
 		return "", err
 	}
 
-	svc, ok := s.cache.GetService(id)
-	if !ok {
-		return "", fmt.Errorf("service %q not found", id)
-	}
-	current := serviceEnvMap(svc)
-	merged := applyMergePatch(current, patch)
-
 	wc, err := s.requireWriteClient()
 	if err != nil {
 		return "", err
 	}
-	updated, err := wc.UpdateServiceEnv(ctx, id, merged)
+	updated, err := wc.UpdateServiceEnv(ctx, id, mergePatchMutator(patch))
 	if err != nil {
 		return "", err
 	}
@@ -991,17 +1055,11 @@ func (s *Server) toolUpdateServiceLabels(
 		return "", err
 	}
 
-	svc, ok := s.cache.GetService(id)
-	if !ok {
-		return "", fmt.Errorf("service %q not found", id)
-	}
-	merged := applyMergePatch(copyStringMap(svc.Spec.Labels), patch)
-
 	wc, err := s.requireWriteClient()
 	if err != nil {
 		return "", err
 	}
-	updated, err := wc.UpdateServiceLabels(ctx, id, merged)
+	updated, err := wc.UpdateServiceLabels(ctx, id, mergePatchMutator(patch))
 	if err != nil {
 		return "", err
 	}
@@ -1024,17 +1082,11 @@ func (s *Server) toolUpdateNodeLabels(
 		return "", err
 	}
 
-	node, ok := s.cache.GetNode(id)
-	if !ok {
-		return "", fmt.Errorf("node %q not found", id)
-	}
-	merged := applyMergePatch(copyStringMap(node.Spec.Labels), patch)
-
 	wc, err := s.requireWriteClient()
 	if err != nil {
 		return "", err
 	}
-	updated, err := wc.UpdateNodeLabels(ctx, id, merged)
+	updated, err := wc.UpdateNodeLabels(ctx, id, mergePatchMutator(patch))
 	if err != nil {
 		return "", err
 	}
@@ -1200,46 +1252,26 @@ func requireStringMapPatch(req mcplib.CallToolRequest, key string) (map[string]*
 	}
 }
 
-// applyMergePatch merges patch into base, returning a new map. Nil values in
-// patch delete the corresponding key (RFC 7396 merge semantics).
-func applyMergePatch(base map[string]string, patch map[string]*string) map[string]string {
-	out := make(map[string]string, len(base)+len(patch))
-	maps.Copy(out, base)
-	for k, v := range patch {
-		if v == nil {
-			delete(out, k)
-			continue
+// mergePatchMutator returns a MapMutator that applies a JSON Merge Patch
+// (RFC 7396) to the live map handed to it by the writer. Nil entries delete,
+// non-nil entries set. The mutator runs against the freshly-inspected spec
+// inside the Docker writer, so concurrent third-party mutations to other keys
+// are preserved.
+func mergePatchMutator(
+	patch map[string]*string,
+) func(map[string]string) (map[string]string, error) {
+	return func(current map[string]string) (map[string]string, error) {
+		out := make(map[string]string, len(current)+len(patch))
+		maps.Copy(out, current)
+		for k, v := range patch {
+			if v == nil {
+				delete(out, k)
+				continue
+			}
+			out[k] = *v
 		}
-		out[k] = *v
+		return out, nil
 	}
-	return out
-}
-
-// copyStringMap returns an independent copy of m. Nil input yields an empty
-// (non-nil) map so callers can apply patches without nil-checks.
-func copyStringMap(m map[string]string) map[string]string {
-	out := make(map[string]string, len(m))
-	maps.Copy(out, m)
-	return out
-}
-
-// serviceEnvMap converts a service's `KEY=VALUE` env slice to a string map.
-// Bare-key entries (no `=`) map to the empty string. Matches REST's
-// envSliceToMap so the merge semantics are identical.
-func serviceEnvMap(svc swarm.Service) map[string]string {
-	out := map[string]string{}
-	if svc.Spec.TaskTemplate.ContainerSpec == nil {
-		return out
-	}
-	for _, e := range svc.Spec.TaskTemplate.ContainerSpec.Env {
-		k, v, ok := strings.Cut(e, "=")
-		if !ok {
-			out[e] = ""
-			continue
-		}
-		out[k] = v
-	}
-	return out
 }
 
 // decodeArgInto round-trips the named argument through JSON into target. The

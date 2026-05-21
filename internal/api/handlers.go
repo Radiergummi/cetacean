@@ -81,11 +81,15 @@ type ServiceLifecycleWriter interface {
 }
 
 type ServiceSpecWriter interface {
-	UpdateServiceEnv(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
+	UpdateServiceEnv(
+		ctx context.Context,
+		id string,
+		mutate func(current map[string]string) (map[string]string, error),
+	) (swarm.Service, error)
 	UpdateServiceLabels(
 		ctx context.Context,
 		id string,
-		labels map[string]string,
+		mutate func(current map[string]string) (map[string]string, error),
 	) (swarm.Service, error)
 	UpdateServiceResources(
 		ctx context.Context,
@@ -161,7 +165,11 @@ type NodeWriter interface {
 		id string,
 		availability swarm.NodeAvailability,
 	) (swarm.Node, error)
-	UpdateNodeLabels(ctx context.Context, id string, labels map[string]string) (swarm.Node, error)
+	UpdateNodeLabels(
+		ctx context.Context,
+		id string,
+		mutate func(current map[string]string) (map[string]string, error),
+	) (swarm.Node, error)
 	UpdateNodeRole(ctx context.Context, id string, role swarm.NodeRole) (swarm.Node, error)
 	RemoveNode(ctx context.Context, id string, force bool) error
 }
@@ -172,7 +180,7 @@ type ConfigWriter interface {
 	UpdateConfigLabels(
 		ctx context.Context,
 		id string,
-		labels map[string]string,
+		mutate func(current map[string]string) (map[string]string, error),
 	) (swarm.Config, error)
 }
 
@@ -182,7 +190,7 @@ type SecretWriter interface {
 	UpdateSecretLabels(
 		ctx context.Context,
 		id string,
-		labels map[string]string,
+		mutate func(current map[string]string) (map[string]string, error),
 	) (swarm.Secret, error)
 }
 

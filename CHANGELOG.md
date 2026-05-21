@@ -48,6 +48,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Service state derivation reports `updating` for rollback-started and rollback-paused states, not just forward updates
 - PRM, AS-metadata, and DCR responses marshal before writing so an encoding failure cannot emit a partial body followed by a 500 status
 - Stack secret redaction is now centralised in the cache invariant; the redundant inline loop in `GetStackDetail` has been removed
+- Env and label patch handlers no longer lose concurrent writes — the merge runs against a fresh Docker inspect inside the writer, so other writers' updates to unrelated keys are preserved
+- MCP OAuth DCR rate-limit map is swept on every request; previously every distinct source IP left a bucket behind for the lifetime of the process
+- MCP OAuth authorization-server metadata advertises `revocation_endpoint_auth_methods_supported` per RFC 7009
+- MCP CIMD fetcher reuses its HTTP client (with the SSRF-aware transport) across fetches instead of rebuilding the transport per request
 
 ## [0.11.2] - 2026-05-20
 

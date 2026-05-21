@@ -36,6 +36,11 @@ Each issue has an ID, severity, file:line citation, summary, and a proposed fix.
 | M-38 | Low      | fixed | Tier-1/2 write tools missing `readOnlyHint:false` / `idempotentHint` annotations |
 | M-39 | Low      | fixed | `SegmentPrefixMatch` allocates memo map per call (hot path) — TODO marker added pending benchmark |
 | M-40 | Low      | fixed | Stale doc comment in `internal/cluster/state.go` |
+| M-41 | Medium   | fixed | DCR rate-limit bucket map grows unbounded |
+| M-42 | Medium   | fixed | `update_service_env` / `update_service_labels` / `update_node_labels` lost-update window |
+| M-43 | Low      | fixed | `AuthCodeStore.Issue` for-range variable shadows outer `h` (readability landmine) |
+| M-44 | Low      | fixed | `CIMDFetcher.httpClient()` rebuilds transport per fetch (no connection pooling) |
+| M-45 | Low      | fixed | AS metadata omits `revocation_endpoint_auth_methods_supported` (RFC 7009 §2) |
 
 ---
 
@@ -214,6 +219,51 @@ These materially break authorization or violate a security RFC. Land before merg
 - **File:** `internal/cluster/state.go:6`
 - **Symptom:** comment says "Mirrors the inlined logic in `internal/api/search_handlers.go`" — that file no longer has inline logic; it calls `DeriveServiceState`. Confuses future readers.
 - **Fix:** rewrite as "Used by both REST (`internal/api/search_handlers.go`) and MCP (`internal/mcp/tools.go`) search to report identical service state."
+
+---
+
+## Round 3 — found during M-15..M-40 verification
+
+A fresh review pass after commit `2aeaf6e` landed turned up five additional issues. Severities are calibrated to the round-2 scale.
+
+### M-41 — DCR rate-limit bucket map grows unbounded
+
+- **File:** `internal/mcp/oauth/dcr.go:93-113`
+- **Symptom:** `checkRateLimit` creates a `*ipBucket` entry per source IP and only ever replaces it in-place when the entry exists; the map is never swept. A long-running server hit from many IPs (background scanners, legitimate churn behind NAT, or rotating proxies) accumulates entries indefinitely. Each bucket is tiny, but there's no upper bound — pair with `dcrMaxBodyBytes` being public and you have a slow memory leak that can be driven externally.
+- **Fix:** sweep expired buckets inside `checkRateLimit` while the lock is already held (mirror the inline sweep `AuthCodeStore.Issue` already does). The sweep is `O(n)` per call but the map stays bounded to the active-IP working set.
+
+### M-42 — env / labels merge-patch lost-update window
+
+- **File:** `internal/mcp/tools.go:960-975` (env), `:994-1008` (service labels), `:1025-1041` (node labels); `internal/api/write_helpers.go:300+`, `internal/api/write_labels.go:81-92` (REST counterparts); `internal/docker/client.go:647-718` (writer).
+- **Symptom:** the merge-patch handlers read the current env/labels map from the in-memory cache, compute `merged = applyMergePatch(current, patch)`, then call `wc.UpdateServiceEnv(ctx, id, merged)`. The Docker writer does a fresh `ServiceInspectWithRaw`, overwrites the entire env slice with `merged`, then `ServiceUpdate`s with the freshly-inspected `Version`. If another writer (REST agent, second MCP agent, `docker service update` from the CLI) mutates the same field between the handler's cache read and the writer's inspect, that change is silently clobbered because the merge happened against the stale snapshot. Docker's `Version`-based concurrency check doesn't help — the version it compares against is the one the writer just inspected, not the one the handler observed.
+- **Fix:** change the writer signature to accept a patch directly (`patch map[string]*string` where `nil` deletes, non-nil sets) and apply the merge against the *fresh* inspect inside the writer. Handlers stop pre-merging — they just hand the parsed patch through. Closes the lost-update window without adding a new round-trip.
+
+### M-43 — `AuthCodeStore.Issue` for-range variable shadows outer hash
+
+- **File:** `internal/mcp/oauth/store.go:64-82`
+- **Symptom:** the outer `h := hashToken(raw)` and the inner `for h, entry := range s.codes` use the same name. Go's loop-variable scoping does preserve the outer `h` after the loop exits (verified in round 2), so the code is correct — but two independent reviewers tripped on it and assumed a bug. Defuse the landmine.
+- **Fix:** rename the inner loop var (`for hash, entry := range s.codes`). Pure cosmetic; no behaviour change.
+
+### M-44 — `CIMDFetcher.httpClient()` rebuilds transport per fetch
+
+- **File:** `internal/mcp/oauth/cimd.go:133-155`
+- **Symptom:** every call to `Fetch` invokes `httpClient()`, which constructs a fresh `http.Client` and (when `f.Client == nil`) a fresh `http.Transport` with its own connection pool. No connections are reused across fetches — every CIMD fetch starts with a cold dial and TLS handshake. The pool's `MaxIdleConns: 16` is wasted.
+- **Fix:** build the transport (and the `CheckRedirect` closure) once per fetcher and cache it on the struct, behind a `sync.Once`. Validate-once instead of allocate-per-call.
+
+### M-45 — AS metadata omits `revocation_endpoint_auth_methods_supported`
+
+- **File:** `internal/mcp/oauth/server.go:103-130`
+- **Symptom:** the RFC 8414 metadata advertises a `revocation_endpoint` but doesn't say which auth methods it accepts. RFC 7009 §2 says servers "SHOULD provide" `revocation_endpoint_auth_methods_supported`; absence forces strict clients to assume `client_secret_basic` is required, which we don't accept. Same omission as `token_endpoint_auth_methods_supported` was before it was added.
+- **Fix:** add the field to `asMetadata`, populate with `["none"]` (matching our token endpoint policy).
+
+---
+
+## Notes from the round 3 implementation
+
+- **M-42 (lost-update)** turned out to touch the writer interface contract. Rather than thread a per-key patch through (which would need separate set/delete signatures across services/configs/secrets/nodes), the three label/env writer methods now accept a `MapMutator` — a `func(current map[string]string) (map[string]string, error)`. The handler parses the JSON Patch / Merge Patch once and hands the writer a closure that knows how to apply it; the writer invokes the closure against the freshly-inspected spec. The same mutator type is reused for `UpdateConfigLabels` / `UpdateSecretLabels` even though those weren't called out in the symptom — REST patched configs/secrets through the same `handlePatchLabels` helper and inherited the same race. Patch-application errors (RFC 6902 `test` mismatches, missing keys on `replace`/`remove`) now surface from the writer; a new `errPatchApply` sentinel plus `isPatchApplyError` in the REST layer keeps the 400/409 mapping intact. Test mocks gained a `simulatedEnv` / `simulatedLabels` field to stand in for the writer's "fresh inspect"; existing assertions still match the resolved map handed to their `*Fn` callbacks.
+- **M-44 (transport reuse)** was simpler than first sketched: a single `sync.Once` builds the `*http.Client` (with its SSRF-aware Transport and CheckRedirect closure) on first fetch and reuses it thereafter. Mutating `Client` or `AllowLoopback` after the first fetch has no effect — the once-only init is documented inline.
+- **M-43 (loop var)** is a pure cosmetic rename in `AuthCodeStore.Issue`. Round 2 confirmed there was no behaviour bug; the change just removes the trip wire that has now caught two independent reviewers.
+- **M-41 (DCR sweep)** sweeps inline under the existing lock — adding a background goroutine for this would dwarf the cost it eliminates. The map is now bounded by the active-IP working set in any rate-limit window, not by all-time unique sources.
 
 ---
 

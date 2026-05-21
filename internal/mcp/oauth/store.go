@@ -67,9 +67,9 @@ func (s *AuthCodeStore) Issue(data AuthCodeData, ttl time.Duration) string {
 	now := time.Now()
 
 	s.mu.Lock()
-	for h, entry := range s.codes {
+	for hash, entry := range s.codes {
 		if now.After(entry.expiresAt) {
-			delete(s.codes, h)
+			delete(s.codes, hash)
 		}
 	}
 	s.codes[h] = authCodeEntry{

@@ -109,6 +109,13 @@ type CIMDFetcher struct {
 	// Set to true only in tests (httptest servers bind to 127.0.0.1).
 	AllowLoopback bool
 
+	// clientOnce builds the SSRF-aware http.Client lazily on first fetch.
+	// Once built it is reused across every Fetch call so connection pooling,
+	// idle timeouts, and the DialContext closure aren't rebuilt per request.
+	// Mutating Client / AllowLoopback after the first Fetch has no effect.
+	clientOnce sync.Once
+	cachedHTTP *http.Client
+
 	mu    sync.RWMutex
 	cache map[string]cachedEntry
 }
@@ -131,27 +138,30 @@ type CIMDFetcher struct {
 // fragment, non-trivial path). DNS validation for the redirect target happens
 // in the same DialContext on the follow-up request.
 func (f *CIMDFetcher) httpClient() *http.Client {
-	var c http.Client
-	if f.Client != nil {
-		c = *f.Client
-		if c.Transport == nil {
-			c.Transport = f.ssrfTransport(http.DefaultTransport)
+	f.clientOnce.Do(func() {
+		var c http.Client
+		if f.Client != nil {
+			c = *f.Client
+			if c.Transport == nil {
+				c.Transport = f.ssrfTransport(http.DefaultTransport)
+			} else {
+				c.Transport = f.ssrfTransport(c.Transport)
+			}
 		} else {
-			c.Transport = f.ssrfTransport(c.Transport)
+			c = http.Client{
+				Timeout:   cimdFetchTimeout,
+				Transport: f.ssrfTransport(nil),
+			}
 		}
-	} else {
-		c = http.Client{
-			Timeout:   cimdFetchTimeout,
-			Transport: f.ssrfTransport(nil),
+		c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			if len(via) >= cimdMaxRedirects {
+				return fmt.Errorf("CIMD: exceeded %d redirects", cimdMaxRedirects)
+			}
+			return f.validateURL(req.URL.String())
 		}
-	}
-	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		if len(via) >= cimdMaxRedirects {
-			return fmt.Errorf("CIMD: exceeded %d redirects", cimdMaxRedirects)
-		}
-		return f.validateURL(req.URL.String())
-	}
-	return &c
+		f.cachedHTTP = &c
+	})
+	return f.cachedHTTP
 }
 
 // ssrfTransport returns an http.RoundTripper that performs SSRF-aware dialing.
@@ -207,7 +217,11 @@ func (f *CIMDFetcher) ssrfTransport(base http.RoundTripper) http.RoundTripper {
 				}
 				continue
 			}
-			conn, dialErr := cimdDialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+			conn, dialErr := cimdDialer.DialContext(
+				ctx,
+				network,
+				net.JoinHostPort(ip.String(), port),
+			)
 			if dialErr == nil {
 				return conn, nil
 			}
@@ -270,7 +284,10 @@ func (f *CIMDFetcher) Fetch(ctx context.Context, clientID string) (*ClientMetada
 	// Step 9: content-type advisory check.
 	if ct := resp.Header.Get("Content-Type"); ct != "" {
 		if strings.HasPrefix(ct, "text/html") {
-			return nil, fmt.Errorf("CIMD fetch: unexpected Content-Type %q (expected application/json)", ct)
+			return nil, fmt.Errorf(
+				"CIMD fetch: unexpected Content-Type %q (expected application/json)",
+				ct,
+			)
 		}
 	}
 

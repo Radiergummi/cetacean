@@ -33,6 +33,12 @@ type mockServiceLifecycleWriter struct {
 }
 
 type mockServiceSpecWriter struct {
+	// simulatedEnv / simulatedLabels stand in for the "fresh inspect" that
+	// the real writer would do against Docker. The mutator passed into
+	// UpdateServiceEnv / UpdateServiceLabels is applied to these so the
+	// resolved map handed to the Fn callback reflects M-42's contract.
+	simulatedEnv                  map[string]string
+	simulatedLabels               map[string]string
 	updateServiceEnvFn            func(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
 	updateServiceLabelsFn         func(ctx context.Context, id string, labels map[string]string) (swarm.Service, error)
 	updateServiceResourcesFn      func(ctx context.Context, id string, resources *swarm.ResourceRequirements) (swarm.Service, error)
@@ -53,6 +59,7 @@ type mockServiceAttachmentWriter struct {
 }
 
 type mockNodeWriter struct {
+	simulatedNodeLabels      map[string]string
 	updateNodeAvailabilityFn func(ctx context.Context, id string, availability swarm.NodeAvailability) (swarm.Node, error)
 	updateNodeLabelsFn       func(ctx context.Context, id string, labels map[string]string) (swarm.Node, error)
 	updateNodeRoleFn         func(ctx context.Context, id string, role swarm.NodeRole) (swarm.Node, error)
@@ -60,15 +67,17 @@ type mockNodeWriter struct {
 }
 
 type mockConfigWriter struct {
-	createConfigFn       func(ctx context.Context, spec swarm.ConfigSpec) (string, error)
-	removeConfigFn       func(ctx context.Context, id string) error
-	updateConfigLabelsFn func(ctx context.Context, id string, labels map[string]string) (swarm.Config, error)
+	simulatedConfigLabels map[string]string
+	createConfigFn        func(ctx context.Context, spec swarm.ConfigSpec) (string, error)
+	removeConfigFn        func(ctx context.Context, id string) error
+	updateConfigLabelsFn  func(ctx context.Context, id string, labels map[string]string) (swarm.Config, error)
 }
 
 type mockSecretWriter struct {
-	createSecretFn       func(ctx context.Context, spec swarm.SecretSpec) (string, error)
-	removeSecretFn       func(ctx context.Context, id string) error
-	updateSecretLabelsFn func(ctx context.Context, id string, labels map[string]string) (swarm.Secret, error)
+	simulatedSecretLabels map[string]string
+	createSecretFn        func(ctx context.Context, spec swarm.SecretSpec) (string, error)
+	removeSecretFn        func(ctx context.Context, id string) error
+	updateSecretLabelsFn  func(ctx context.Context, id string, labels map[string]string) (swarm.Secret, error)
 }
 
 type mockResourceRemover struct {
@@ -150,8 +159,16 @@ func (m *mockResourceRemover) RemoveTask(ctx context.Context, id string) error {
 func (m *mockServiceSpecWriter) UpdateServiceEnv(
 	ctx context.Context,
 	id string,
-	env map[string]string,
+	mutate func(map[string]string) (map[string]string, error),
 ) (swarm.Service, error) {
+	current := m.simulatedEnv
+	if current == nil {
+		current = map[string]string{}
+	}
+	env, err := mutate(current)
+	if err != nil {
+		return swarm.Service{}, err
+	}
 	if m.updateServiceEnvFn != nil {
 		return m.updateServiceEnvFn(ctx, id, env)
 	}
@@ -161,8 +178,16 @@ func (m *mockServiceSpecWriter) UpdateServiceEnv(
 func (m *mockNodeWriter) UpdateNodeLabels(
 	ctx context.Context,
 	id string,
-	labels map[string]string,
+	mutate func(map[string]string) (map[string]string, error),
 ) (swarm.Node, error) {
+	current := m.simulatedNodeLabels
+	if current == nil {
+		current = map[string]string{}
+	}
+	labels, err := mutate(current)
+	if err != nil {
+		return swarm.Node{}, err
+	}
 	if m.updateNodeLabelsFn != nil {
 		return m.updateNodeLabelsFn(ctx, id, labels)
 	}
@@ -231,8 +256,16 @@ func (m *mockSecretWriter) CreateSecret(
 func (m *mockConfigWriter) UpdateConfigLabels(
 	ctx context.Context,
 	id string,
-	labels map[string]string,
+	mutate func(map[string]string) (map[string]string, error),
 ) (swarm.Config, error) {
+	current := m.simulatedConfigLabels
+	if current == nil {
+		current = map[string]string{}
+	}
+	labels, err := mutate(current)
+	if err != nil {
+		return swarm.Config{}, err
+	}
 	if m.updateConfigLabelsFn != nil {
 		return m.updateConfigLabelsFn(ctx, id, labels)
 	}
@@ -242,8 +275,16 @@ func (m *mockConfigWriter) UpdateConfigLabels(
 func (m *mockSecretWriter) UpdateSecretLabels(
 	ctx context.Context,
 	id string,
-	labels map[string]string,
+	mutate func(map[string]string) (map[string]string, error),
 ) (swarm.Secret, error) {
+	current := m.simulatedSecretLabels
+	if current == nil {
+		current = map[string]string{}
+	}
+	labels, err := mutate(current)
+	if err != nil {
+		return swarm.Secret{}, err
+	}
 	if m.updateSecretLabelsFn != nil {
 		return m.updateSecretLabelsFn(ctx, id, labels)
 	}
@@ -260,8 +301,16 @@ func (m *mockResourceRemover) RemoveVolume(ctx context.Context, name string, for
 func (m *mockServiceSpecWriter) UpdateServiceLabels(
 	ctx context.Context,
 	id string,
-	labels map[string]string,
+	mutate func(map[string]string) (map[string]string, error),
 ) (swarm.Service, error) {
+	current := m.simulatedLabels
+	if current == nil {
+		current = map[string]string{}
+	}
+	labels, err := mutate(current)
+	if err != nil {
+		return swarm.Service{}, err
+	}
 	if m.updateServiceLabelsFn != nil {
 		return m.updateServiceLabelsFn(ctx, id, labels)
 	}

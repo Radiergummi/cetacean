@@ -260,25 +260,27 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
-	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
-	if !ok {
+	// Cache lookup is for ACL + 404 only — the actual merge runs against the
+	// freshly-inspected service spec inside the writer (M-42). Pre-merging
+	// against the cache would race third-party writers and silently drop
+	// concurrent changes to other env keys.
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
-	var env []string
-	if svc.Spec.TaskTemplate.ContainerSpec != nil {
-		env = svc.Spec.TaskTemplate.ContainerSpec.Env
-	}
-
-	updated, ok := patchStringMap(w, r, envSliceToMap(env))
+	mutate, ok := parsePatchMutator(w, r)
 	if !ok {
 		return
 	}
 
 	slog.Info("patching service env", "service", id)
 
-	result, err := h.serviceSpec.UpdateServiceEnv(r.Context(), id, updated)
+	result, err := h.serviceSpec.UpdateServiceEnv(r.Context(), id, mutate)
 	if err != nil {
+		if isPatchApplyError(err) {
+			writePatchError(w, r, err)
+			return
+		}
 		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
 	}

@@ -21,12 +21,16 @@ type getLabelsSpec[T any] struct {
 
 // patchLabelsSpec describes how to patch labels for a resource type.
 type patchLabelsSpec[T any] struct {
-	resource     string // e.g. "node", "service"
-	pathKey      string // path value key: "id" or "name"
-	typeName     string // JSON-LD type: "NodeLabels", "ServiceLabels", etc.
-	getter       func(string) (T, bool)
-	getLabels    func(T) map[string]string
-	update       func(ctx context.Context, id string, labels map[string]string) (T, error)
+	resource  string // e.g. "node", "service"
+	pathKey   string // path value key: "id" or "name"
+	typeName  string // JSON-LD type: "NodeLabels", "ServiceLabels", etc.
+	getter    func(string) (T, bool)
+	getLabels func(T) map[string]string
+	update    func(
+		ctx context.Context,
+		id string,
+		mutate func(current map[string]string) (map[string]string, error),
+	) (T, error)
 	conflictCode string
 }
 
@@ -73,20 +77,25 @@ func handlePatchLabels[T any](
 	key := r.PathValue(spec.pathKey)
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	item, ok := lookupOr404(w, r, spec.resource, key, spec.getter)
-	if !ok {
+	// Cache lookup is for the 404 only — the merge runs against the
+	// freshly-inspected spec inside the writer (M-42).
+	if _, ok := lookupOr404(w, r, spec.resource, key, spec.getter); !ok {
 		return
 	}
 
-	updated, ok := patchStringMap(w, r, spec.getLabels(item))
+	mutate, ok := parsePatchMutator(w, r)
 	if !ok {
 		return
 	}
 
 	slog.Info("patching "+spec.resource+" labels", spec.resource, key)
 
-	result, err := spec.update(r.Context(), key, updated)
+	result, err := spec.update(r.Context(), key, mutate)
 	if err != nil {
+		if isPatchApplyError(err) {
+			writePatchError(w, r, err)
+			return
+		}
 		writeResourceError(w, r, err, spec.resource, key, spec.conflictCode)
 		return
 	}
