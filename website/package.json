@@ -23,7 +23,7 @@
     "@scalar/api-reference": "^1.57.5",
     "@tailwindcss/vite": "^4.3.0",
     "astro": "^6.3.7",
-    "marked": "^17.0.5",
+    "marked": "^18.0.4",
     "pagefind": "^1.5.0",
     "sirv": "^3.0.2",
     "tailwindcss": "^4.2.2",
