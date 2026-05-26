@@ -171,18 +171,21 @@ export function useServiceDetail(id: string | undefined) {
       return;
     }
 
-    if (event.resource) {
-      const svc = event.resource as Service;
-      setService(svc);
-      applyDerivedState(svc);
-    }
-
     sseAbortRef.current?.abort();
     const controller = new AbortController();
     sseAbortRef.current = controller;
     fetchSideData(controller.signal);
 
-    if (!event.resource) {
+    // The per-service stream also delivers task events for this service's
+    // tasks, so only treat `resource` as a Service when the event is actually
+    // a service event — otherwise we'd clobber state with a Task.
+    if (event.type === "service" && event.resource) {
+      const svc = event.resource as Service;
+      setService(svc);
+      applyDerivedState(svc);
+    } else if (event.type === "service" || event.type === "sync") {
+      // Service deletions and full syncs come without a payload — refetch to
+      // pick up the new state (or surface 404 on delete).
       fetchService(controller.signal);
     }
   });

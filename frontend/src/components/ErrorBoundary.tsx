@@ -45,13 +45,32 @@ export default class ErrorBoundary extends Component<Props, State> {
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <AlertTriangle className="mb-4 size-12 text-red-500" />
           <h2 className="mb-2 text-lg font-semibold">Something went wrong</h2>
-          <p className="mb-4 max-w-md text-sm text-muted-foreground">{this.state.error.message}</p>
-          <button
-            onClick={() => this.setState({ error: null })}
-            className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
-          >
-            Try again
-          </button>
+          <p className="mb-4 max-w-md text-sm text-muted-foreground">
+            This view couldn&apos;t be displayed. The cluster data may have changed unexpectedly
+            while the page was open. Reloading usually resolves it.
+          </p>
+          <div className="mb-4 flex gap-2">
+            <button
+              onClick={() => this.setState({ error: null })}
+              className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
+            >
+              Try again
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
+            >
+              Reload page
+            </button>
+          </div>
+          <details className="max-w-md text-left text-xs text-muted-foreground">
+            <summary className="cursor-pointer select-none hover:text-foreground">
+              Technical details
+            </summary>
+            <pre className="mt-2 overflow-x-auto rounded-md border bg-muted/30 p-3 font-mono break-words whitespace-pre-wrap">
+              {this.state.error.message}
+            </pre>
+          </details>
         </div>
       );
     }
