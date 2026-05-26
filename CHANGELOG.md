@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - Service detail page no longer crashes after a task update arrives over the live stream (a stale page left open would occasionally throw "undefined is not an object")
 - Unexpected errors now show a clearer recovery screen with reload and try-again actions; technical details are tucked into a collapsible section
+- Confirmation dialogs (restart service, rollback, drain node, remove resource, rotate unlock key, …) now dismiss themselves after the action is confirmed instead of staying open
 - Service detail page no longer crashes when a service's task template is absent from the response
 
 ## [0.11.2] - 2026-05-20
