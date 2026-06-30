@@ -55,7 +55,7 @@ jobs:
         with:
           name: frontend-dist
           path: frontend/dist
-      - uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
+      - uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee # v9.2.1
         with:
           # Pinned deliberately. `latest` silently drifts and breaks CI
           # when a new release ships stricter rules (e.g. 2.12.0 added

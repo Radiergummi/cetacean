@@ -613,9 +613,7 @@ export interface PrometheusResponse {
 
 type TaskTemplate = NonNullable<Service["Spec"]["TaskTemplate"]>;
 
-export type Healthcheck = NonNullable<
-  NonNullable<TaskTemplate["ContainerSpec"]>["Healthcheck"]
->;
+export type Healthcheck = NonNullable<NonNullable<TaskTemplate["ContainerSpec"]>["Healthcheck"]>;
 
 export type Placement = NonNullable<TaskTemplate["Placement"]>;
 export type PortConfig = NonNullable<
