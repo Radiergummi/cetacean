@@ -70,6 +70,7 @@ profile:
 |---|---|
 | `GET {base}/.well-known/oauth-protected-resource` | Protected Resource Metadata (RFC 9728) — advertises the AS |
 | `GET {base}/.well-known/oauth-authorization-server` | Authorization Server Metadata (RFC 8414) |
+| `GET {base}/.well-known/openid-configuration` | Same metadata at the OpenID Connect Discovery 1.0 location (for clients that discover the AS that way) |
 | `GET {base}/oauth/authorize` | Authorization endpoint (renders the consent screen) |
 | `POST {base}/oauth/token` | Token endpoint |
 | `POST {base}/oauth/revoke` | Token revocation (RFC 7009) |
@@ -149,6 +150,13 @@ Tools are gated by operations level (`CETACEAN_MCP_OPERATIONS_LEVEL`, defaulting
 by per-resource ACL write permission. A tool above the configured tier is not registered at all; a tool the identity
 lacks grants for is hidden from `tools/list` and refused at call time. Each tool advertises the behavioural hints
 (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) that clients use to gate confirmation prompts.
+On connect, the server also sends top-level usage `instructions` (read-mostly model, resolve IDs via `search` first,
+writes gated by tier + ACL) so agents know how to drive it.
+
+Tool results carry machine-readable `structuredContent` (the parsed JSON object) alongside the text form. The
+`search`, `get_logs`, and `remove_*` tools additionally advertise an output schema that the server validates results
+against. An input-validation failure comes back as a tool result with `isError: true` (so the model can self-correct),
+not a protocol error.
 
 **Tier 0 — reads** (always available): `get_logs`, `search`.
 
@@ -193,7 +201,10 @@ are derived from it, and a wrong value breaks the OAuth flow.
 
 - Run MCP behind TLS in production. Cetacean logs a warning at startup if MCP is enabled without TLS and auth mode is
   not `none`.
-- `CETACEAN_CORS_ORIGINS` applies to the OAuth browser redirects; set it when the consent flow crosses origins.
+- `CETACEAN_CORS_ORIGINS` applies to the OAuth browser redirects; set it when the consent flow crosses origins. It is
+  also the allowlist for the `/mcp` endpoint's `Origin` check: a request carrying an `Origin` that isn't listed (and
+  isn't `*`) is rejected with `403` — a DNS-rebinding defense required by the Streamable HTTP transport. Non-browser
+  clients send no `Origin` and are unaffected.
 - CIMD fetches are SSRF-guarded: `https`-only, private/reserved/CGNAT IP ranges blocked, DNS pinned to the validated
   address through connect, 5 KB / 5 s limits.
 
