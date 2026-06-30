@@ -31,6 +31,16 @@ import (
 // MCP identities from regular Cetacean auth provider identities.
 const ProviderName = "mcp-oauth"
 
+// mcpInstructions and mcpDescription are the server-level usage contract sent
+// to clients in the initialize response (WithInstructions/WithDescription).
+// Kept as package constants so the contract has a single source of truth
+// shared with the test that asserts it surfaces.
+const (
+	mcpInstructions = "Cetacean is a read-mostly observability and operations interface for a Docker Swarm cluster. Resolve a resource's ID or name with the search tool before reading its details or applying a write. Reads (the cetacean:// resources and the get_logs/search tools) are always available; mutating tools are gated by an operations tier and per-resource ACL, and may be hidden from tools/list or rejected at call time. Prefer the cetacean:// resources for detail and cross-references; use tools to change cluster state. Tool results include structuredContent you can parse directly."
+
+	mcpDescription = "Read and safely operate a Docker Swarm cluster."
+)
+
 // DockerWriteClient is the narrow surface of Docker write operations the MCP
 // tools invoke. The concrete docker.Client and the existing api.DockerWriteClient
 // both satisfy it via Go's structural typing.
@@ -129,10 +139,8 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		mcpserver.WithToolCapabilities(true),
 		mcpserver.WithToolFilter(srv.filterToolsForIdentity),
 		mcpserver.WithHooks(srv.installSubscriptionHooks()),
-		mcpserver.WithInstructions(
-			"Cetacean is a read-mostly observability and operations interface for a Docker Swarm cluster. Resolve a resource's ID or name with the search tool before reading its details or applying a write. Reads (the cetacean:// resources and the get_logs/search tools) are always available; mutating tools are gated by an operations tier and per-resource ACL, and may be hidden from tools/list or rejected at call time. Prefer the cetacean:// resources for detail and cross-references; use tools to change cluster state. Tool results include structuredContent you can parse directly.",
-		),
-		mcpserver.WithDescription("Read and safely operate a Docker Swarm cluster."),
+		mcpserver.WithInstructions(mcpInstructions),
+		mcpserver.WithDescription(mcpDescription),
 		// Enforce advertised output schemas: a tool result whose
 		// structuredContent does not conform to its declared outputSchema is
 		// rejected. Only the curated-shape tools (search, get_logs, remove_*)
