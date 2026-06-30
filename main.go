@@ -674,6 +674,12 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 		"operations_level", d.cfg.MCP.EffectiveOperationsLevel(d.cfg.OperationsLevel),
 		"max_sessions", d.cfg.MCP.MaxSessions)
 
+	if len(d.cfg.CORSOrigins) == 0 {
+		slog.Warn(
+			"MCP Origin guard active with no allowlist: browser-based MCP clients (e.g. MCP Inspector) will be rejected with 403. Set CETACEAN_CORS_ORIGINS to the allowed origins (or '*' for any). Non-browser MCP clients send no Origin and are unaffected.",
+		)
+	}
+
 	if oauthSrv == nil {
 		return mcpSrv.Handler(), nil, mcpSrv.Close
 	}
