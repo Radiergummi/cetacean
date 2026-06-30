@@ -157,6 +157,7 @@ func issueCSRFNonce(
 	mac.Write([]byte(state))
 	token = base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 
+	//nolint:gosec // G124: cookie is HttpOnly + SameSite=Strict; Secure is true on HTTPS issuers and intentionally off only for loopback HTTP dev, which gosec can't prove from the variable.
 	http.SetCookie(w, &http.Cookie{
 		Name:     csrfCookieName,
 		Value:    nonce,
@@ -174,6 +175,7 @@ func issueCSRFNonce(
 // start of the consent flow. Called whenever the flow terminates so a stale
 // cookie cannot survive past its useful life.
 func clearCSRFCookie(w http.ResponseWriter, secure bool) {
+	//nolint:gosec // G124: cookie is HttpOnly + SameSite=Strict; Secure is true on HTTPS issuers and intentionally off only for loopback HTTP dev, which gosec can't prove from the variable.
 	http.SetCookie(w, &http.Cookie{
 		Name:     csrfCookieName,
 		Value:    "",

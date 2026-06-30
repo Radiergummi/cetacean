@@ -660,6 +660,7 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		q.Set("state", state)
 	}
 	redirectURI.RawQuery = q.Encode()
+	//nolint:gosec // G710: redirectURIRaw was exact-matched against the client's registered redirect_uris (HasRedirectURI) earlier in handleAuthorizePOST; this is a pre-validated URI, not open redirect.
 	http.Redirect(w, r, redirectURI.String(), http.StatusFound)
 }
 
@@ -720,6 +721,7 @@ func redirectWithError(
 		q.Set("state", state)
 	}
 	u.RawQuery = q.Encode()
+	//nolint:gosec // G710: callers (handleAuthorizePOST) exact-match redirectURIRaw against the client's registered redirect_uris before invoking this; the target is a pre-validated URI, not open redirect.
 	http.Redirect(w, r, u.String(), http.StatusFound)
 }
 
