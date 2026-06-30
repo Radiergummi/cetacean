@@ -129,6 +129,12 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		mcpserver.WithToolCapabilities(true),
 		mcpserver.WithToolFilter(srv.filterToolsForIdentity),
 		mcpserver.WithHooks(srv.installSubscriptionHooks()),
+		// Enforce advertised output schemas: a tool result whose
+		// structuredContent does not conform to its declared outputSchema is
+		// rejected. Only the curated-shape tools (search, get_logs, remove_*)
+		// declare a schema; Docker-passthrough mutations carry none and skip
+		// validation.
+		mcpserver.WithOutputSchemaValidation(),
 	)
 	srv.mcpServer = mcpSrv
 

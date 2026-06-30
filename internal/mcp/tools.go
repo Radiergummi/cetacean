@@ -124,7 +124,7 @@ func (s *Server) registerTools() {
 				if err != nil {
 					return mcplib.NewToolResultError(err.Error()), nil
 				}
-				return mcplib.NewToolResultText(text), nil
+				return structuredToolResult(text), nil
 			},
 		)
 	}
@@ -148,6 +148,7 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDescription(
 					"Fetch recent log lines for a Swarm service, merged across every replica task. Returns the most recent `tail` lines (default 100), optionally filtered by start time and minimum severity. This is a one-shot read; for live tails subscribe to the cetacean://services/{id}/logs resource.",
 				),
+				mcplib.WithOutputSchema[LogResourceResponse](),
 				mcplib.WithReadOnlyHintAnnotation(true),
 				mcplib.WithDestructiveHintAnnotation(false),
 				mcplib.WithIdempotentHintAnnotation(true),
@@ -185,6 +186,7 @@ func (s *Server) toolCatalog() []toolDef {
 				mcplib.WithDescription(
 					"Search across every cluster resource (nodes, services, tasks, stacks, configs, secrets, networks, volumes) by name, label, or image reference. Returns ranked matches grouped by resource type. Use this to locate a resource before fetching its details or applying a write.",
 				),
+				mcplib.WithOutputSchema[cluster.SearchResults](),
 				mcplib.WithReadOnlyHintAnnotation(true),
 				mcplib.WithDestructiveHintAnnotation(false),
 				mcplib.WithIdempotentHintAnnotation(true),
@@ -293,6 +295,7 @@ func (s *Server) toolCatalog() []toolDef {
 		{
 			tool: mcplib.NewTool("remove_task",
 				mcplib.WithToolTitle("Remove (reschedule) task"),
+				mcplib.WithOutputSchema[removalResult](),
 				mcplib.WithDescription(
 					"Delete a task by ID. Swarm immediately reschedules a replacement on the parent service's behalf, so this is a forced reschedule rather than a permanent removal. Use this to evict a misbehaving task without scaling the whole service.",
 				),
@@ -632,6 +635,7 @@ func (s *Server) toolCatalog() []toolDef {
 		{
 			tool: mcplib.NewTool("remove_service",
 				mcplib.WithToolTitle("Remove service"),
+				mcplib.WithOutputSchema[removalResult](),
 				mcplib.WithDescription(
 					"Delete a service and stop every task it owns. Does not delete the volumes, networks, configs, or secrets it referenced. Irreversible — no spec history is retained after removal.",
 				),
@@ -653,6 +657,7 @@ func (s *Server) toolCatalog() []toolDef {
 		{
 			tool: mcplib.NewTool("remove_config",
 				mcplib.WithToolTitle("Remove config"),
+				mcplib.WithOutputSchema[removalResult](),
 				mcplib.WithDescription(
 					"Delete a Docker config object. Fails if any service still references it. Irreversible — the config payload cannot be recovered.",
 				),
@@ -674,6 +679,7 @@ func (s *Server) toolCatalog() []toolDef {
 		{
 			tool: mcplib.NewTool("remove_secret",
 				mcplib.WithToolTitle("Remove secret"),
+				mcplib.WithOutputSchema[removalResult](),
 				mcplib.WithDescription(
 					"Delete a Docker secret. Fails if any service still references it. Irreversible — the secret payload cannot be recovered.",
 				),
@@ -695,6 +701,7 @@ func (s *Server) toolCatalog() []toolDef {
 		{
 			tool: mcplib.NewTool("remove_network",
 				mcplib.WithToolTitle("Remove network"),
+				mcplib.WithOutputSchema[removalResult](),
 				mcplib.WithDescription(
 					"Delete an overlay network. Fails if any service is still attached. Built-in networks (`ingress`, `docker_gwbridge`) cannot be removed.",
 				),
@@ -716,6 +723,7 @@ func (s *Server) toolCatalog() []toolDef {
 		{
 			tool: mcplib.NewTool("remove_volume",
 				mcplib.WithToolTitle("Remove volume"),
+				mcplib.WithOutputSchema[removalResult](),
 				mcplib.WithDescription(
 					"Delete a Docker volume by name. Fails if any container is currently using it unless `force` is set. Volume contents are irrecoverable.",
 				),
@@ -1008,7 +1016,7 @@ func (s *Server) removeHandler(
 		if err := remove(wc, ctx, id); err != nil {
 			return "", err
 		}
-		return `{"removed":true}`, nil
+		return marshalResult(removalResult{Removed: true})
 	}
 }
 
@@ -1204,7 +1212,7 @@ func (s *Server) toolRemoveVolume(ctx context.Context, req mcplib.CallToolReques
 	if err := wc.RemoveVolume(ctx, name, force); err != nil {
 		return "", err
 	}
-	return `{"removed":true}`, nil
+	return marshalResult(removalResult{Removed: true})
 }
 
 // --- argument helpers ---
@@ -1215,6 +1223,27 @@ func marshalResult(v any) (string, error) {
 		return "", fmt.Errorf("marshal result: %w", err)
 	}
 	return string(b), nil
+}
+
+// removalResult is the result shape of the remove_* tools — a single source of
+// truth for both the emitted `{"removed":true}` JSON and the advertised
+// outputSchema (WithOutputSchema[removalResult]).
+type removalResult struct {
+	Removed bool `json:"removed"`
+}
+
+// structuredToolResult wraps a handler's JSON text into a tool result that
+// carries both the text representation (a fallback for clients negotiating a
+// pre-2025-06-18 protocol revision) and machine-parseable structuredContent
+// (the parsed JSON object, per the 2025-06-18+ structured-output contract).
+// Every MCP tool marshals a JSON object today; if the text is not a JSON object
+// the result degrades to text-only, since structuredContent must be an object.
+func structuredToolResult(text string) *mcplib.CallToolResult {
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(text), &obj); err != nil {
+		return mcplib.NewToolResultText(text)
+	}
+	return mcplib.NewToolResultStructured(obj, text)
 }
 
 // requireStringMapPatch extracts a JSON Merge Patch (RFC 7396) of string keys
