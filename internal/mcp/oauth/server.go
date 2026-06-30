@@ -54,12 +54,22 @@ type Server struct {
 	clients       *ClientRegistry // nil when DCREnabled is false
 }
 
+// issuerID is the external base URL clients discover this authorization server
+// at — Issuer plus any base path. It is the single source of truth for the
+// advertised `issuer` (AS metadata), the PRM `authorization_servers` entry, and
+// the token `iss` claim, so all three agree with the path the well-known
+// documents and OAuth endpoints are actually served under. With an empty base
+// path it is just Issuer.
+func (c ServerConfig) issuerID() string {
+	return c.Issuer + c.BasePath
+}
+
 // NewServer constructs a fully wired Server from cfg. No separate init step
 // is required; call RegisterRoutes to attach handlers to a mux.
 func NewServer(cfg ServerConfig) *Server {
 	issuer := &TokenIssuer{
 		SigningKey: cfg.SigningKey,
-		Issuer:     cfg.Issuer,
+		Issuer:     cfg.issuerID(),
 		Audience:   cfg.MCPResource,
 	}
 
@@ -119,9 +129,9 @@ type asMetadata struct {
 
 // HandleMetadata serves the RFC 8414 AS metadata document.
 func (s *Server) HandleMetadata(w http.ResponseWriter, r *http.Request) {
-	base := s.cfg.Issuer + s.cfg.BasePath
+	base := s.cfg.issuerID()
 	doc := asMetadata{
-		Issuer:                                 s.cfg.Issuer,
+		Issuer:                                 base,
 		AuthorizationEndpoint:                  base + "/oauth/authorize",
 		TokenEndpoint:                          base + "/oauth/token",
 		RevocationEndpoint:                     base + "/oauth/revoke",
@@ -729,7 +739,7 @@ func (s *Server) VerifyAccessToken(token string) (*AccessTokenClaims, error) {
 // that includes the protected resource metadata URL and the error code.
 // Used by the MCP HTTP handler when a bearer token is missing or invalid.
 func (s *Server) WriteUnauthorized(w http.ResponseWriter, errorCode string) {
-	prmURL := s.cfg.Issuer + s.cfg.BasePath + "/.well-known/oauth-protected-resource"
+	prmURL := s.cfg.issuerID() + "/.well-known/oauth-protected-resource"
 	w.Header().Set("WWW-Authenticate", fmt.Sprintf(
 		`Bearer realm="mcp", resource_metadata=%s, error=%s`,
 		httpQuotedString(prmURL), httpQuotedString(errorCode),

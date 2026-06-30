@@ -18,11 +18,11 @@ type protectedResourceMetadata struct {
 func (s *Server) HandleProtectedResourceMetadata(w http.ResponseWriter, r *http.Request) {
 	doc := protectedResourceMetadata{
 		Resource:               s.cfg.MCPResource,
-		AuthorizationServers:   []string{s.cfg.Issuer},
+		AuthorizationServers:   []string{s.cfg.issuerID()},
 		BearerMethodsSupported: []string{"header"},
 	}
-	if s.cfg.BasePath != "" || s.cfg.Issuer != "" {
-		doc.ResourceDocumentation = s.cfg.Issuer + s.cfg.BasePath + "/api"
+	if s.cfg.issuerID() != "" {
+		doc.ResourceDocumentation = s.cfg.issuerID() + "/api"
 	}
 
 	// Marshal first so an encoding failure doesn't write partial headers

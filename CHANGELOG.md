@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - MCP server now advertises usage instructions and a description when a client connects, so AI agents understand the read-mostly model, that writes are gated by operations tier and ACL, and to resolve a resource via `search` before acting on it
 
 ### Fixed
+- MCP OAuth discovery now works when Cetacean runs under a base path: the authorization-server `issuer`, the protected-resource metadata `authorization_servers`, and the access-token `iss` claim now include `CETACEAN_BASE_PATH`, matching where the `.well-known` documents are actually served. Previously a client that derived the metadata URL from the issuer got a 404 whenever a base path was configured (default deployments without a base path were unaffected)
 - Service detail page no longer crashes when a service's task template is absent from the response
 - MCP refresh-token store no longer accumulates rotation history indefinitely; theft detection keeps a bounded recent window and grants are cleaned up when tokens expire
 - MCP authorization codes are swept on each new issue so abandoned consent flows can no longer fill memory
