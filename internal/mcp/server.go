@@ -77,6 +77,11 @@ type Server struct {
 	httpServer     *mcpserver.StreamableHTTPServer
 	recEngine      RecommendationEngine
 
+	// allowedOrigins is the set of Origin header values the streamable HTTP
+	// endpoint accepts. originGuard rejects any other non-empty Origin with
+	// 403 (DNS-rebinding defense). "*" disables the check.
+	allowedOrigins []string
+
 	// registeredTools is the subset of toolCatalog() the server actually wired
 	// into mcp-go after applying the operations-level tier filter. The
 	// per-identity tools/list filter (filterToolsForIdentity) inspects this
@@ -107,6 +112,7 @@ type Options struct {
 	AuthMode        string
 	AuthProvider    auth.Provider
 	Recommendations RecommendationEngine
+	AllowedOrigins  []string
 }
 
 // New constructs an MCP server. The returned *Server exposes Handler() for
@@ -129,6 +135,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		authMode:       opts.AuthMode,
 		authProvider:   opts.AuthProvider,
 		recEngine:      opts.Recommendations,
+		allowedOrigins: opts.AllowedOrigins,
 		notifications:  NewNotificationManager(),
 	}
 
@@ -192,10 +199,33 @@ func (s *Server) Close() {
 // otherwise it serves the raw mcp-go handler unguarded (only safe with auth
 // mode "none").
 func (s *Server) Handler() http.Handler {
-	if s.oauth == nil {
-		return s.httpServer
+	var h http.Handler = s.httpServer
+	if s.oauth != nil {
+		h = s.bearerAuth(h)
 	}
-	return s.bearerAuth(s.httpServer)
+	return s.originGuard(h)
+}
+
+// originGuard rejects requests bearing a forged Origin header with 403, a
+// DNS-rebinding defense the MCP Streamable HTTP transport requires (mcp-go
+// does not enforce it). Requests with no Origin (non-browser agents) pass
+// through unaffected, as does any Origin when AllowedOrigins contains "*".
+// Kept self-contained (exact match + wildcard) to avoid importing internal/api.
+func (s *Server) originGuard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		for _, allowed := range s.allowedOrigins {
+			if allowed == "*" || allowed == origin {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+		http.Error(w, "forbidden origin", http.StatusForbidden)
+	})
 }
 
 // bearerAuth validates Authorization: Bearer <jwt> on each request, populates
