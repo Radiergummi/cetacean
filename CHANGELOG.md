@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - OAuth 2.1 authorization server for MCP clients implementing the MCP 2025-06-18 authorization profile — Dynamic Client Registration (RFC 7591), Client ID Metadata Documents, RFC 8707 resource indicators, PKCE-only flows, and refresh token theft detection
 - `CETACEAN_MCP_ISSUER` (and `[mcp].issuer`) for setting the canonical OAuth issuer URL when Cetacean runs behind a reverse proxy
 - MCP tools now return structured, machine-readable results (`structuredContent`) alongside the text form, so AI agents can parse tool output without scraping JSON out of a text blob. The `search`, `get_logs`, and `remove_*` tools additionally advertise an output schema, which the server validates results against
+- MCP server now advertises usage instructions and a description when a client connects, so AI agents understand the read-mostly model, that writes are gated by operations tier and ACL, and to resolve a resource via `search` before acting on it
 
 ### Fixed
 - Service detail page no longer crashes when a service's task template is absent from the response

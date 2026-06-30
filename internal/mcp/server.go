@@ -129,6 +129,10 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		mcpserver.WithToolCapabilities(true),
 		mcpserver.WithToolFilter(srv.filterToolsForIdentity),
 		mcpserver.WithHooks(srv.installSubscriptionHooks()),
+		mcpserver.WithInstructions(
+			"Cetacean is a read-mostly observability and operations interface for a Docker Swarm cluster. Resolve a resource's ID or name with the search tool before reading its details or applying a write. Reads (the cetacean:// resources and the get_logs/search tools) are always available; mutating tools are gated by an operations tier and per-resource ACL, and may be hidden from tools/list or rejected at call time. Prefer the cetacean:// resources for detail and cross-references; use tools to change cluster state. Tool results include structuredContent you can parse directly.",
+		),
+		mcpserver.WithDescription("Read and safely operate a Docker Swarm cluster."),
 		// Enforce advertised output schemas: a tool result whose
 		// structuredContent does not conform to its declared outputSchema is
 		// rejected. Only the curated-shape tools (search, get_logs, remove_*)
