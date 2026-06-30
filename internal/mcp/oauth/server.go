@@ -85,6 +85,7 @@ func NewServer(cfg ServerConfig) *Server {
 // RegisterRoutes attaches all OAuth endpoints to mux under basePath.
 func (s *Server) RegisterRoutes(mux *http.ServeMux, basePath string) {
 	mux.HandleFunc("GET "+basePath+"/.well-known/oauth-authorization-server", s.HandleMetadata)
+	mux.HandleFunc("GET "+basePath+"/.well-known/openid-configuration", s.HandleMetadata)
 	mux.HandleFunc(
 		"GET "+basePath+"/.well-known/oauth-protected-resource",
 		s.HandleProtectedResourceMetadata,
