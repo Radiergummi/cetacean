@@ -1235,15 +1235,17 @@ type removalResult struct {
 // structuredToolResult wraps a handler's JSON text into a tool result that
 // carries both the text representation (a fallback for clients negotiating a
 // pre-2025-06-18 protocol revision) and machine-parseable structuredContent
-// (the parsed JSON object, per the 2025-06-18+ structured-output contract).
-// Every MCP tool marshals a JSON object today; if the text is not a JSON object
-// the result degrades to text-only, since structuredContent must be an object.
+// (per the 2025-06-18+ structured-output contract). Every MCP tool marshals a
+// JSON object; the bytes are passed through as json.RawMessage rather than
+// decoded into a map and re-encoded — that round-trip is wasted work and
+// silently rewrites the payload (e.g. integers above 2^53 lose precision once
+// decoded into float64). If the text is not a JSON object the result degrades
+// to text-only, since structuredContent must be an object.
 func structuredToolResult(text string) *mcplib.CallToolResult {
-	var obj map[string]any
-	if err := json.Unmarshal([]byte(text), &obj); err != nil {
+	if trimmed := strings.TrimLeft(text, " \t\r\n"); trimmed == "" || trimmed[0] != '{' {
 		return mcplib.NewToolResultText(text)
 	}
-	return mcplib.NewToolResultStructured(obj, text)
+	return mcplib.NewToolResultStructured(json.RawMessage(text), text)
 }
 
 // requireStringMapPatch extracts a JSON Merge Patch (RFC 7396) of string keys

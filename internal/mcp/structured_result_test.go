@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"encoding/json"
 	"testing"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
@@ -13,9 +14,16 @@ func TestStructuredToolResultCarriesParsedObject(t *testing.T) {
 		t.Fatal("expected StructuredContent to be set")
 	}
 
-	obj, ok := res.StructuredContent.(map[string]any)
+	// structuredContent is carried as raw JSON bytes (no lossy map round-trip);
+	// it must serialize to the original object.
+	raw, ok := res.StructuredContent.(json.RawMessage)
 	if !ok {
-		t.Fatalf("StructuredContent type = %T, want map[string]any", res.StructuredContent)
+		t.Fatalf("StructuredContent type = %T, want json.RawMessage", res.StructuredContent)
+	}
+
+	var obj map[string]any
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		t.Fatalf("structuredContent is not valid JSON: %v", err)
 	}
 	if obj["removed"] != true {
 		t.Errorf("removed = %v, want true", obj["removed"])

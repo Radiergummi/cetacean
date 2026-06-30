@@ -16,13 +16,14 @@ type protectedResourceMetadata struct {
 // HandleProtectedResourceMetadata serves the RFC 9728 protected resource
 // metadata document at GET {base}/.well-known/oauth-protected-resource.
 func (s *Server) HandleProtectedResourceMetadata(w http.ResponseWriter, r *http.Request) {
+	iss := s.cfg.issuerID()
 	doc := protectedResourceMetadata{
 		Resource:               s.cfg.MCPResource,
-		AuthorizationServers:   []string{s.cfg.issuerID()},
+		AuthorizationServers:   []string{iss},
 		BearerMethodsSupported: []string{"header"},
 	}
-	if s.cfg.issuerID() != "" {
-		doc.ResourceDocumentation = s.cfg.issuerID() + "/api"
+	if iss != "" {
+		doc.ResourceDocumentation = iss + "/api"
 	}
 
 	// Marshal first so an encoding failure doesn't write partial headers
