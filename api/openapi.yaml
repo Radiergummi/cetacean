@@ -377,7 +377,7 @@ paths:
         "200":
           description: CycloneDX JSON document
           content:
-            application/vnd.cyclonedx+json:
+            application/vnd.cyclonedx+json; version=1.6:
               schema:
                 type: object
 
