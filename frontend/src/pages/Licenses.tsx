@@ -2,11 +2,12 @@ import { api } from "@/api/client";
 import type { LicenseComponent } from "@/api/types";
 import EmptyState from "@/components/EmptyState";
 import FetchError from "@/components/FetchError";
+import { LoadingDetail } from "@/components/LoadingSkeleton";
 import PageHeader from "@/components/PageHeader";
 import { SearchInput } from "@/components/search";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { getErrorMessage } from "@/lib/utils";
+import { cn, getErrorMessage } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -23,7 +24,7 @@ export default function Licenses() {
   const [query, setQuery] = useState("");
   const [ecosystem, setEcosystem] = useState<EcosystemFilter>("all");
 
-  const { data, error: queryError, refetch } = useQuery({
+  const { data, error: queryError, isLoading, refetch } = useQuery({
     queryKey: ["licenses"],
     queryFn: ({ signal }) => api.licenses(signal),
   });
@@ -68,6 +69,14 @@ export default function Licenses() {
     );
   }
 
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <LoadingDetail />
+      </div>
+    );
+  }
+
   const ecosystems: EcosystemFilter[] = ["all", "go", "npm"];
 
   if (counts.other) {
@@ -95,11 +104,12 @@ export default function Licenses() {
               key={value}
               type="button"
               onClick={() => setEcosystem(value)}
-              className={
+              className={cn(
+                "rounded-md px-3 py-1 text-xs",
                 value === ecosystem
-                  ? "rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground"
-                  : "rounded-md border px-3 py-1 text-xs text-muted-foreground transition hover:text-foreground"
-              }
+                  ? "bg-primary font-medium text-primary-foreground"
+                  : "border text-muted-foreground transition hover:text-foreground",
+              )}
             >
               {value === "all" ? "All" : ecosystemLabels[value]}
               <span className="ml-1.5 opacity-60">{counts[value] ?? 0}</span>

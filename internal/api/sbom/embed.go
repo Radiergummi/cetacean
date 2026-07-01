@@ -24,12 +24,9 @@ func init() {
 		doc.GeneratedAt = version.Date
 	}
 
-	body, err := json.Marshal(doc)
-	if err != nil {
-		slog.Warn("sbom: could not marshal projected document", "error", err)
-		body = []byte(`{"components":[]}`)
-	}
-	projectedJSON = body
+	// Document holds only strings and slices of structs, so marshaling cannot
+	// fail; the error is discarded rather than handled with an unreachable path.
+	projectedJSON, _ = json.Marshal(doc)
 }
 
 // Raw returns the embedded CycloneDX SBOM bytes.

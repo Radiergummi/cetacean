@@ -4,8 +4,9 @@
 package sbom
 
 import (
+	"cmp"
 	"encoding/json"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -82,8 +83,11 @@ func Project(raw []byte) (Document, error) {
 	var walk func(in []cdxComponent)
 	walk = func(in []cdxComponent) {
 		for _, component := range in {
-			key := component.Name + "@" + component.Version
-			if ecosystem := ecosystemFromPurl(component.Purl); ecosystem != "" && !seen[key] {
+			ecosystem := ecosystemFromPurl(component.Purl)
+			// Key on ecosystem too: a Go module and an npm package can share a
+			// name@version, and they are distinct components.
+			key := ecosystem + ":" + component.Name + "@" + component.Version
+			if ecosystem != "" && !seen[key] {
 				seen[key] = true
 				components = append(components, Component{
 					Name:        component.Name,
@@ -101,12 +105,12 @@ func Project(raw []byte) (Document, error) {
 	}
 	walk(cdx.Components)
 
-	sort.Slice(components, func(i, j int) bool {
-		if components[i].Ecosystem != components[j].Ecosystem {
-			return components[i].Ecosystem < components[j].Ecosystem
+	slices.SortFunc(components, func(a, b Component) int {
+		if a.Ecosystem != b.Ecosystem {
+			return cmp.Compare(a.Ecosystem, b.Ecosystem)
 		}
 
-		return strings.ToLower(components[i].Name) < strings.ToLower(components[j].Name)
+		return cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
 	})
 
 	return Document{Components: components}, nil
@@ -114,12 +118,17 @@ func Project(raw []byte) (Document, error) {
 
 func ecosystemFromPurl(purl string) string {
 	switch {
+	case purl == "":
+		// No package URL — a synthetic container/application component, not a
+		// dependency. Skip it.
+		return ""
 	case strings.HasPrefix(purl, "pkg:golang/"):
 		return "go"
 	case strings.HasPrefix(purl, "pkg:npm/"):
 		return "npm"
 	default:
-		return ""
+		// A package with a purl of some other type (pkg:cargo/, pkg:pypi/, …).
+		return "other"
 	}
 }
 

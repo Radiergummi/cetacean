@@ -65,6 +65,48 @@ func TestProjectDeduplicates(t *testing.T) {
 	}
 }
 
+func TestProjectOtherEcosystemAndCrossEcosystemDedup(t *testing.T) {
+	// A cargo component must be bucketed as "other" (not dropped); a Go module
+	// and an npm package that share the same name@version must both survive
+	// (dedup is ecosystem-scoped); the purl-less container must be skipped.
+	raw := []byte(`{
+		"bomFormat": "CycloneDX",
+		"specVersion": "1.6",
+		"components": [
+			{"name": "serde", "version": "1.0.0", "purl": "pkg:cargo/serde@1.0.0"},
+			{"name": "shared", "version": "1.0.0", "purl": "pkg:golang/example.com/shared@1.0.0"},
+			{"name": "shared", "version": "1.0.0", "purl": "pkg:npm/shared@1.0.0"},
+			{"name": "no-purl-container"}
+		]
+	}`)
+
+	doc, err := Project(raw)
+	if err != nil {
+		t.Fatalf("Project: %v", err)
+	}
+
+	byEcosystem := map[string]int{}
+	shared := 0
+	for _, component := range doc.Components {
+		byEcosystem[component.Ecosystem]++
+		if component.Name == "shared" && component.Version == "1.0.0" {
+			shared++
+		}
+	}
+
+	if byEcosystem["other"] != 1 {
+		t.Errorf("cargo component: ecosystem \"other\" count = %d, want 1 (%+v)", byEcosystem["other"], doc.Components)
+	}
+
+	if shared != 2 {
+		t.Errorf("shared@1.0.0 across go+npm: got %d, want 2 (ecosystem-scoped dedup)", shared)
+	}
+
+	if len(doc.Components) != 3 {
+		t.Errorf("got %d components, want 3 (cargo + go-shared + npm-shared; container skipped)", len(doc.Components))
+	}
+}
+
 func TestProjectInvalidJSON(t *testing.T) {
 	if _, err := Project([]byte("not json")); err == nil {
 		t.Fatal("expected error for invalid JSON")
