@@ -6,7 +6,7 @@
     "component": {
       "type": "application",
       "name": "cetacean",
-      "version": "v0.11.2-50-g29e5939-dirty"
+      "version": "v0.11.2"
     }
   },
   "components": [

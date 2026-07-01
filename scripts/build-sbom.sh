@@ -12,7 +12,7 @@ out="$repo_root/internal/api/sbom/sbom.cdx.json"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-version="$(git -C "$repo_root" describe --tags --always --dirty 2>/dev/null || echo dev)"
+version="$(git -C "$repo_root" describe --tags --abbrev=0 2>/dev/null || echo 0.0.0)"
 
 command -v jq >/dev/null 2>&1 || {
   echo "error: 'jq' not found (system prerequisite). Install: https://jqlang.github.io/jq/" >&2
