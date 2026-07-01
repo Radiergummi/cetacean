@@ -22,7 +22,7 @@
     "@fontsource-variable/geist": "^5.2.9",
     "@scalar/api-reference": "^1.62.1",
     "@tailwindcss/vite": "^4.3.2",
-    "astro": "^6.3.7",
+    "astro": "^7.0.4",
     "marked": "^18.0.5",
     "pagefind": "^1.5.0",
     "sirv": "^3.0.2",
