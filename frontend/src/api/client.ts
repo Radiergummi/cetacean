@@ -9,6 +9,7 @@ import type {
   HistoryEntry,
   Identity,
   JGFDocument,
+  LicensesResponse,
   LogDriver,
   MonitoringStatus,
   Network,
@@ -774,6 +775,9 @@ export const api = {
 
   health: (signal?: AbortSignal) =>
     fetchJSON<HealthInfo>(`/-/health`, signal).then(({ data }) => data),
+
+  licenses: (signal?: AbortSignal) =>
+    fetchJSON<LicensesResponse>(`/-/licenses`, signal).then(({ data }) => data),
 };
 
 export interface HealthInfo {

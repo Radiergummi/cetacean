@@ -763,3 +763,24 @@ export interface JGFHyperedge {
   nodes: string[];
   metadata: JGFMetadata;
 }
+
+export interface LicenseEntry {
+  id?: string;
+  name?: string;
+  url?: string;
+}
+
+export interface LicenseComponent {
+  name: string;
+  version?: string;
+  description?: string;
+  ecosystem: string;
+  licenses: LicenseEntry[];
+  homepage?: string;
+  repository?: string;
+}
+
+export interface LicensesResponse {
+  generatedAt?: string;
+  components: LicenseComponent[];
+}
