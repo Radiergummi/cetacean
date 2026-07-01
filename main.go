@@ -665,6 +665,7 @@ func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string
 		AuthProvider:    d.authProvider,
 		Recommendations: d.rec,
 		AllowedOrigins:  d.cfg.CORSOrigins,
+		IconBaseURL:     issuer + d.cfg.BasePath,
 	})
 	if err != nil {
 		slog.Error("MCP server setup failed", "error", err)

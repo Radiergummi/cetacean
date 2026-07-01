@@ -109,3 +109,7 @@ make build    # frontend build + go build
 ## License
 
 [GNU General Public License v3.0](LICENSE)
+
+Third-party components bundled with Cetacean are listed in
+[THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES) (includes the Lucide/Feather icon
+set used for the UI and the embedded MCP tool and resource icons).

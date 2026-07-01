@@ -107,12 +107,17 @@ var (
 )
 
 func (s *Server) registerResources() {
+	// Each resource's icon file is named after its MCP resource name, served
+	// under the un-authed /assets/mcp-icons/resources/ prefix. icon() returns
+	// nil when no external base URL is configured, which NewResource treats as
+	// "no icons".
 	for _, r := range staticResources {
 		s.mcpServer.AddResource(
 			mcplib.NewResource(r.uri, r.name,
 				mcplib.WithResourceTitle(r.title),
 				mcplib.WithResourceDescription(r.description),
 				mcplib.WithMIMEType(mcpMIMEType),
+				mcplib.WithResourceIcons(s.icon("resources", r.name)...),
 			),
 			s.handleReadResource,
 		)
@@ -124,6 +129,7 @@ func (s *Server) registerResources() {
 				mcplib.WithTemplateTitle(t.title),
 				mcplib.WithTemplateDescription(t.description),
 				mcplib.WithTemplateMIMEType(mcpMIMEType),
+				mcplib.WithTemplateIcons(s.icon("resources", t.name)...),
 			),
 			s.handleReadResource,
 		)

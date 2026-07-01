@@ -13,6 +13,7 @@ import (
 	"errors"
 	"net/http"
 	"slices"
+	"strings"
 	"sync"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
@@ -82,6 +83,11 @@ type Server struct {
 	// 403 (DNS-rebinding defense). "*" disables the check.
 	allowedOrigins []string
 
+	// iconBaseURL is the canonical external base (issuer + base path) that tool
+	// icon `src` values are built from, e.g. "https://cetacean.example.com".
+	// Icons live under the un-authed /assets/ prefix. Empty disables icons.
+	iconBaseURL string
+
 	// registeredTools is the subset of toolCatalog() the server actually wired
 	// into mcp-go after applying the operations-level tier filter. The
 	// per-identity tools/list filter (filterToolsForIdentity) inspects this
@@ -113,6 +119,11 @@ type Options struct {
 	AuthProvider    auth.Provider
 	Recommendations RecommendationEngine
 	AllowedOrigins  []string
+
+	// IconBaseURL is the canonical external base URL (issuer + base path) used
+	// to build absolute tool-icon `src` values. Icons are served from the
+	// embedded frontend under /assets/mcp-icons/. Empty disables tool icons.
+	IconBaseURL string
 }
 
 // New constructs an MCP server. The returned *Server exposes Handler() for
@@ -136,6 +147,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		authProvider:   opts.AuthProvider,
 		recEngine:      opts.Recommendations,
 		allowedOrigins: opts.AllowedOrigins,
+		iconBaseURL:    strings.TrimRight(opts.IconBaseURL, "/"),
 		notifications:  NewNotificationManager(),
 	}
 

@@ -104,6 +104,65 @@ type toolDef struct {
 	handler func(ctx context.Context, req mcplib.CallToolRequest) (string, error)
 }
 
+// toolIconCategory maps each tool to one of six verb-category icons served
+// from the embedded frontend under /assets/mcp-icons/<category>.svg. Tools not
+// listed here (there are none currently) are served without an icon.
+var toolIconCategory = map[string]string{
+	"get_logs": "read",
+	"search":   "search",
+
+	"scale_service": "scale",
+
+	"update_service_image":           "edit",
+	"rollback_service":               "edit",
+	"restart_service":                "edit",
+	"update_service_env":             "edit",
+	"update_service_labels":          "edit",
+	"update_service_resources":       "edit",
+	"update_service_placement":       "edit",
+	"update_service_ports":           "edit",
+	"update_service_update_policy":   "edit",
+	"update_service_rollback_policy": "edit",
+	"update_service_log_driver":      "edit",
+
+	"update_node_labels":       "node",
+	"update_node_availability": "node",
+	"update_node_role":         "node",
+
+	"remove_task":    "remove",
+	"remove_service": "remove",
+	"remove_config":  "remove",
+	"remove_secret":  "remove",
+	"remove_network": "remove",
+	"remove_volume":  "remove",
+}
+
+// icon builds a single-element icon set pointing at
+// {base}/assets/mcp-icons/{group}/{name}.svg, or nil when icons are disabled
+// (no base URL). The `src` is an absolute URL under the un-authed /assets/
+// prefix so MCP clients can fetch it without a bearer token; per the MCP spec
+// icons must be an HTTPS or data URI, never relative.
+func (s *Server) icon(group, name string) []mcplib.Icon {
+	if s.iconBaseURL == "" {
+		return nil
+	}
+	return []mcplib.Icon{{
+		Src:      s.iconBaseURL + "/assets/mcp-icons/" + group + "/" + name + ".svg",
+		MIMEType: "image/svg+xml",
+		Sizes:    []string{"any"},
+	}}
+}
+
+// iconsForTool returns the verb-category icon for a tool, or nil when the tool
+// has no category mapping (there are none currently).
+func (s *Server) iconsForTool(name string) []mcplib.Icon {
+	category, ok := toolIconCategory[name]
+	if !ok {
+		return nil
+	}
+	return s.icon("tools", category)
+}
+
 func (s *Server) registerTools() {
 	tools := s.toolCatalog()
 
@@ -114,6 +173,8 @@ func (s *Server) registerTools() {
 		if opsLevel < td.tier {
 			continue
 		}
+
+		td.tool.Icons = s.iconsForTool(td.tool.Name)
 		s.registeredTools = append(s.registeredTools, td)
 
 		handler := td.handler

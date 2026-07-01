@@ -974,6 +974,54 @@ func TestFilterToolsForIdentity_HidesWritesWithoutGrants(t *testing.T) {
 	}
 }
 
+// TestToolIconsAttachedFromBaseURL verifies every registered tool carries a
+// single verb-category icon whose src is an absolute URL under the un-authed
+// /assets/mcp-icons/ prefix, built from the configured IconBaseURL.
+func TestToolIconsAttachedFromBaseURL(t *testing.T) {
+	srv := newToolTestServer(t, cache.New(nil), &fakeWriteClient{}, config.OpsImpactful,
+		func(o *Options) { o.IconBaseURL = "https://cetacean.example.com/base/" })
+
+	for _, td := range srv.registeredTools {
+		if len(td.tool.Icons) != 1 {
+			t.Errorf("%s: got %d icons, want 1", td.tool.Name, len(td.tool.Icons))
+			continue
+		}
+
+		icon := td.tool.Icons[0]
+		category, ok := toolIconCategory[td.tool.Name]
+		if !ok {
+			t.Errorf("%s: not present in toolIconCategory map", td.tool.Name)
+			continue
+		}
+
+		// Trailing slash on the base URL must be normalised away.
+		want := "https://cetacean.example.com/base/assets/mcp-icons/tools/" + category + ".svg"
+		if icon.Src != want {
+			t.Errorf("%s: src = %q, want %q", td.tool.Name, icon.Src, want)
+		}
+		if icon.MIMEType != "image/svg+xml" {
+			t.Errorf("%s: mimeType = %q, want image/svg+xml", td.tool.Name, icon.MIMEType)
+		}
+	}
+}
+
+// TestToolIconsDisabledWithoutBaseURL verifies icons are omitted entirely when
+// no external base URL is configured, since the MCP spec forbids relative
+// icon srcs.
+func TestToolIconsDisabledWithoutBaseURL(t *testing.T) {
+	srv := newToolTestServer(t, cache.New(nil), &fakeWriteClient{}, config.OpsImpactful)
+
+	for _, td := range srv.registeredTools {
+		if td.tool.Icons != nil {
+			t.Errorf(
+				"%s: expected no icons without a base URL, got %v",
+				td.tool.Name,
+				td.tool.Icons,
+			)
+		}
+	}
+}
+
 // aclEvaluatorWithGrants returns an evaluator with a single grant for the
 // given permission against the given resource pattern, available to any
 // identity. Used by tool ACL tests above.
