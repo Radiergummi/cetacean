@@ -39,23 +39,21 @@ These were settled during brainstorming and are fixed for this spec:
 ## SBOM generation
 
 A shell script `scripts/build-sbom.sh` produces the committed artifact
-`internal/api/sbom/sbom.cdx.json` (CycloneDX JSON):
+`internal/api/sbom/sbom.cdx.json` (CycloneDX JSON). The generators are declared as normal project dependencies
+(not ad-hoc installs): `cyclonedx-gomod` is a `go.mod` tool directive, `cyclonedx-npm` a frontend devDependency.
 
-1. **Go modules** — `cyclonedx-gomod mod -json -licenses -output <tmp>/sbom-go.cdx.json`.
-   The `mod` subcommand (not `app`) avoids requiring a git-tagged version.
-   Installed via `go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@<pinned>`.
-2. **npm packages** — `cyclonedx-npm --omit dev --output-file <tmp>/sbom-npm.cdx.json`, run in `frontend/`
-   (requires `node_modules` present). Installed via `npm install -g @cyclonedx/cyclonedx-npm@<pinned>` or run
-   through `npx`.
-3. **Merge** — `cyclonedx merge --hierarchical --name cetacean --version <version> --output-file …`, from
-   `cyclonedx-cli`. In CI this binary is fetched from the CycloneDX GitHub releases (linux-x64/-musl), **not**
-   Homebrew, so the step is portable on Linux runners.
-4. **Determinism** — strip volatile fields so the committed file only changes when dependencies actually change:
-   remove the random `serialNumber` and the `metadata.timestamp` (via `jq`). Without this the file would diff on
-   every regeneration and defeat the `sbom-check` gate.
+1. **Go modules** — `go tool cyclonedx-gomod app -main . -json -licenses`. The `app` subcommand inventories only
+   what the `cetacean` binary actually imports, which keeps the tool directive's own dependency tree off the
+   licenses page.
+2. **npm packages** — `npx --no-install cyclonedx-npm --omit dev`, run in `frontend/` (uses the declared
+   devDependency; requires `node_modules` present).
+3. **Merge + determinism** — the two CycloneDX documents are merged with `jq` into a fresh envelope that omits the
+   volatile `serialNumber` and `metadata.timestamp` fields, so the committed file only changes when dependencies
+   change (and the `sbom-check` gate doesn't fire on every regeneration). `jq` is the only system prerequisite;
+   there is no `cyclonedx-cli` dependency.
 
-Tool versions are pinned in the script (and referenced from `tools.go` for the Go tool where practical) so
-generation is reproducible.
+Tool versions are pinned via the `go.mod` tool directive and `frontend/package.json`, so generation is
+reproducible.
 
 ## Lifecycle: commit + CI gate + git hook
 

@@ -6,11 +6,13 @@
 
 **Architecture:** A build-time shell script generates a merged CycloneDX SBOM committed at `internal/api/sbom/sbom.cdx.json`. A dedicated `internal/api/sbom` package `//go:embed`s it, and at init projects the CycloneDX into a flat licenses `Document`. Two free handlers in `internal/api` serve the raw CycloneDX and the projected JSON under the auth-exempt `/-/` prefix. A React page fetches the projected JSON and renders a filterable/searchable card grid, linked from the footer. Freshness is guaranteed by a CI `make sbom-check` gate and kept low-friction by an opt-in pre-commit hook.
 
-**Tech Stack:** Go 1.26, `cyclonedx-gomod` + `cyclonedx-npm` + `cyclonedx-cli` + `jq`, React 19 + TypeScript + Vite + Tailwind v4 + shadcn/ui, vitest.
+**Tech Stack:** Go 1.26, `cyclonedx-gomod` (Go tool dependency) + `cyclonedx-npm` (frontend devDependency) + `jq` (system), React 19 + TypeScript + Vite + Tailwind v4 + shadcn/ui, vitest.
 
 ## Global Constraints
 
 - Go module path: `github.com/radiergummi/cetacean`.
+- **Toolchain as declared dependencies:** `cyclonedx-gomod` is a Go `tool` directive in `go.mod` (invoked `go tool cyclonedx-gomod`); `cyclonedx-npm` is a `frontend` devDependency (invoked `npx --no-install cyclonedx-npm`). No ad-hoc `go install` / `npm -g`. `jq` is the only system prerequisite (used for the merge + strip; preinstalled on GitHub `ubuntu-latest`). There is no `cyclonedx-cli` dependency — the merge is done with `jq`.
+- **Go generator uses `app`, not `mod`:** invoke `cyclonedx-gomod app -main . -json -licenses` so the SBOM reflects only what the `cetacean` binary actually imports. This excludes the `cyclonedx-gomod` tool's own dependency tree (which the `tool` directive adds to `go.mod`), keeping the licenses page accurate.
 - **Scope:** Go modules + frontend npm production deps only (`--omit dev`). No OS/base-image scan.
 - **Visibility:** data endpoints are public, served under the auth-exempt `/-/` prefix (no `isExempt` change).
 - **Determinism:** the committed SBOM must have `serialNumber` and `metadata.timestamp` stripped (via `jq`) so it only diffs on real dependency changes.
@@ -343,9 +345,11 @@ git commit -m "feat(sbom): CycloneDX projection to flat licenses document"
 
 ---
 
-## Task 2: Generator script, Makefile targets, and the committed SBOM
+## Task 2: Toolchain dependencies, generator script, Makefile targets, and the committed SBOM
 
 **Files:**
+- Modify: `go.mod`, `go.sum` (add the `cyclonedx-gomod` tool directive)
+- Modify: `frontend/package.json`, `frontend/package-lock.json` (add `@cyclonedx/cyclonedx-npm` devDependency)
 - Create: `scripts/build-sbom.sh`
 - Create: `internal/api/sbom/sbom.cdx.json` (generated, committed)
 - Modify: `Makefile`
@@ -353,16 +357,50 @@ git commit -m "feat(sbom): CycloneDX projection to flat licenses document"
 **Interfaces:**
 - Produces: `internal/api/sbom/sbom.cdx.json` (the file Task 3 embeds); `make sbom`, `make sbom-check`, `make hooks`.
 
-- [ ] **Step 1: Write the generator script**
+- [ ] **Step 1: Register the Go generator as a tool dependency**
 
-Create `scripts/build-sbom.sh`:
+Run (from the repo root; verify the version against the latest release and pin it):
+
+```bash
+go get -tool github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.9.0
+```
+
+Expected: `go.mod` gains a `tool github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod` directive (plus `require` entries), and `go.sum` is updated. Verify the tool resolves:
+
+```bash
+go tool cyclonedx-gomod version
+```
+
+Expected: prints a version, compiling the tool from the module cache on first run.
+
+- [ ] **Step 2: Register the npm generator as a frontend devDependency**
+
+Run (verify/pin the version):
+
+```bash
+cd frontend && npm install --save-dev @cyclonedx/cyclonedx-npm@^5 && cd ..
+```
+
+Expected: `frontend/package.json` `devDependencies` gains `@cyclonedx/cyclonedx-npm`; `frontend/package-lock.json` is updated. Verify it resolves locally:
+
+```bash
+cd frontend && npx --no-install cyclonedx-npm --version && cd ..
+```
+
+Expected: prints a version (no network fetch, because `--no-install` uses the declared dependency).
+
+- [ ] **Step 3: Write the generator script**
+
+Create `scripts/build-sbom.sh`. It invokes the tools through their declared-dependency entry points (`go tool …`, `npx --no-install …`) and merges + strips volatile fields with `jq` (no `cyclonedx-cli`):
 
 ```bash
 #!/usr/bin/env bash
 # Generates the CycloneDX SBOM embedded into the binary and consumed by the
-# open-source licenses page. Covers Go modules and frontend npm production
-# dependencies. Volatile fields are stripped so the committed file only changes
-# when dependencies change.
+# open-source licenses page. Covers what the cetacean binary imports (Go, via
+# `cyclonedx-gomod app`) plus frontend npm production dependencies. The two
+# CycloneDX documents are merged with jq into a fresh envelope with no volatile
+# fields (serialNumber, timestamp) so the committed file only changes when
+# dependencies change.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -372,36 +410,36 @@ trap 'rm -rf "$tmp"' EXIT
 
 version="$(git -C "$repo_root" describe --tags --always --dirty 2>/dev/null || echo dev)"
 
-need() {
-  command -v "$1" >/dev/null 2>&1 || { echo "error: '$1' not found. $2" >&2; exit 1; }
+command -v jq >/dev/null 2>&1 || {
+  echo "error: 'jq' not found (system prerequisite). Install: https://jqlang.github.io/jq/" >&2
+  exit 1
 }
-need cyclonedx-gomod "Install: go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest"
-need cyclonedx-npm   "Install: npm install -g @cyclonedx/cyclonedx-npm"
-need cyclonedx       "Install cyclonedx-cli: https://github.com/CycloneDX/cyclonedx-cli/releases"
-need jq              "Install jq: https://jqlang.github.io/jq/"
 
-echo "==> Go modules"
-( cd "$repo_root" && cyclonedx-gomod mod -json -licenses -output "$tmp/go.cdx.json" )
+echo "==> Go modules (binary imports only)"
+( cd "$repo_root" && go tool cyclonedx-gomod app -main . -json -licenses -output "$tmp/go.cdx.json" . )
 
 echo "==> npm packages (production only)"
-( cd "$repo_root/frontend" && cyclonedx-npm --omit dev --output-file "$tmp/npm.cdx.json" )
+( cd "$repo_root/frontend" && npx --no-install cyclonedx-npm --omit dev --output-file "$tmp/npm.cdx.json" )
 
-echo "==> merge"
-cyclonedx merge --hierarchical --name cetacean --version "$version" \
-  --input-files "$tmp/go.cdx.json" "$tmp/npm.cdx.json" \
-  --output-file "$tmp/merged.cdx.json"
-
-echo "==> strip volatile fields for deterministic output"
-jq 'del(.serialNumber) | del(.metadata.timestamp)' "$tmp/merged.cdx.json" > "$out"
+echo "==> merge + strip volatile fields (deterministic output)"
+jq -s --arg version "$version" '
+  {
+    bomFormat: "CycloneDX",
+    specVersion: (.[0].specVersion // "1.6"),
+    version: 1,
+    metadata: { component: { type: "application", name: "cetacean", version: $version } },
+    components: ((.[0].components // []) + (.[1].components // []))
+  }
+' "$tmp/go.cdx.json" "$tmp/npm.cdx.json" > "$out"
 
 echo "wrote $out"
 ```
 
-- [ ] **Step 2: Make it executable**
+- [ ] **Step 4: Make it executable**
 
 Run: `chmod +x scripts/build-sbom.sh`
 
-- [ ] **Step 3: Add Makefile targets**
+- [ ] **Step 5: Add Makefile targets**
 
 In `Makefile`, add `sbom sbom-check hooks` to the `.PHONY` line, and append these targets:
 
@@ -423,34 +461,23 @@ hooks:
 
 Note: `make check` is intentionally left unchanged (it must not require the SBOM toolchain for every local run); `sbom-check` runs as a dedicated CI job (Task 8).
 
-- [ ] **Step 4: Install the generator tools**
+- [ ] **Step 6: Generate the SBOM**
 
-Run:
-```bash
-go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest
-npm install -g @cyclonedx/cyclonedx-npm
-# cyclonedx-cli: download the release binary for your OS from
-#   https://github.com/CycloneDX/cyclonedx-cli/releases  (name it `cyclonedx` on PATH)
-# jq: brew install jq  (or your package manager)
-cd frontend && npm ci && cd ..
-```
-Expected: `cyclonedx-gomod`, `cyclonedx-npm`, `cyclonedx`, and `jq` all resolve on `PATH`.
-
-- [ ] **Step 5: Generate the SBOM**
-
-Run: `make sbom`
-Expected: `wrote .../internal/api/sbom/sbom.cdx.json`; the file is valid JSON containing `pkg:golang/...` and `pkg:npm/...` components. Verify quickly:
+Ensure frontend deps are installed (`cd frontend && npm ci && cd ..`), then run: `make sbom`
+Expected: `wrote .../internal/api/sbom/sbom.cdx.json`. Verify:
 ```bash
 jq '.components | length' internal/api/sbom/sbom.cdx.json
 grep -c 'pkg:npm/' internal/api/sbom/sbom.cdx.json
+grep -c 'pkg:golang/' internal/api/sbom/sbom.cdx.json
 ```
-Expected: non-zero counts.
+Expected: non-zero counts for all three. **Accuracy check:** confirm the SBOM does *not* list `cyclonedx-gomod`'s own toolchain dependencies (e.g. `grep -c 'cyclonedx-gomod' internal/api/sbom/sbom.cdx.json` should be 0). If tool deps leak in, the `app -main .` invocation is not scoping correctly — stop and report before committing.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add scripts/build-sbom.sh Makefile internal/api/sbom/sbom.cdx.json
-git commit -m "build(sbom): generator script, make targets, committed SBOM"
+git add go.mod go.sum frontend/package.json frontend/package-lock.json \
+        scripts/build-sbom.sh Makefile internal/api/sbom/sbom.cdx.json
+git commit -m "build(sbom): declare cyclonedx tools as deps, generator, committed SBOM"
 ```
 
 ---
@@ -1177,12 +1204,20 @@ case "$staged" in
   *) exit 0 ;;
 esac
 
-for tool in cyclonedx-gomod cyclonedx-npm cyclonedx jq; do
+# The generators are declared deps (go tool cyclonedx-gomod; npx cyclonedx-npm),
+# so we only need go, node/npx, jq, and installed frontend deps. Skip (don't
+# block) when anything is missing — CI is the real gate.
+for tool in go npx jq; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "pre-commit: '$tool' missing; skipping SBOM regeneration (CI will verify)." >&2
     exit 0
   fi
 done
+
+if [ ! -d frontend/node_modules ]; then
+  echo "pre-commit: frontend/node_modules missing; run 'cd frontend && npm ci'. Skipping SBOM regeneration (CI will verify)." >&2
+  exit 0
+fi
 
 echo "pre-commit: dependency manifest changed, regenerating SBOM…"
 make sbom
@@ -1210,18 +1245,11 @@ In `.github/workflows/ci.yml`, add a new job (reuse the pinned action SHAs alrea
           node-version: 24
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - run: go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.9.0
-      - run: npm install -g @cyclonedx/cyclonedx-npm@5
-      - name: Install cyclonedx-cli
-        run: |
-          curl -sSL -o /usr/local/bin/cyclonedx \
-            https://github.com/CycloneDX/cyclonedx-cli/releases/download/v0.27.2/cyclonedx-linux-x64
-          chmod +x /usr/local/bin/cyclonedx
       - run: cd frontend && npm ci
       - run: make sbom-check
 ```
 
-Note: verify these tool versions against current releases when implementing; pin to the latest stable rather than `@latest` so CI is reproducible.
+Both generators are declared dependencies — `cyclonedx-gomod` resolves via the `go.mod` tool directive (`go tool cyclonedx-gomod`), and `cyclonedx-npm` is installed by `npm ci` (frontend devDependency). `jq` is preinstalled on `ubuntu-latest`. No ad-hoc installs or binary downloads are needed.
 
 - [ ] **Step 4: Verify the hook locally**
 
@@ -1288,6 +1316,7 @@ git commit -m "docs: changelog for open-source licenses page"
 
 ## Notes / intentional deviations from the spec
 
+- **Toolchain declared as dependencies (post-spec refinement).** Per the go-ahead to install the toolchain as normal dependencies: `cyclonedx-gomod` is a `go.mod` tool directive and `cyclonedx-npm` a frontend devDependency, replacing the spec's ad-hoc `go install` / `npm -g`. The spec's `cyclonedx-cli` merge step is **dropped** — the merge is done with `jq` (already required for the strip), removing the one tool that fit neither Go nor npm. Consequently the Go generator uses `cyclonedx-gomod app -main .` (binary imports only) instead of `mod`, so the tool directive's own dependency tree does not appear on the licenses page.
 - **`make check` is not extended with `sbom-check`.** The spec mentioned folding it in; doing so would force the SBOM toolchain onto every local `make check`. Instead the gate runs as a dedicated CI job (`sbom-check`), which is the part that actually enforces freshness. Local devs get the opt-in pre-commit hook.
 - **Handlers reuse `writeRawWithETag`** (existing helper) rather than introducing custom `Cache-Control: public, max-age=300` headers. The helper sets `Cache-Control: no-cache` + `ETag`, giving conditional-revalidation caching, which is the right fit for a versioned artifact and keeps the code consistent with the rest of `internal/api`.
 - **`generatedAt`** is populated from `internal/version.Date` at init (omitted when `unknown`), since the SBOM's own timestamp is stripped for deterministic diffs. `Project()` itself stays pure (leaves `GeneratedAt` empty) so it is trivially testable.
