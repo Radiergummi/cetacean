@@ -18,7 +18,16 @@ command -v jq >/dev/null 2>&1 || {
 }
 
 echo "==> Go modules (binary imports only)"
-( cd "$repo_root" && go tool cyclonedx-gomod app -main . -json -licenses -output "$tmp/go.cdx.json" . )
+# cyclonedx-gomod embeds GOOS/GOARCH into every purl and selects
+# platform-specific imports (netlink, dbus, …) accordingly, so the output is
+# host-dependent. Pin it to the shipped target (linux/amd64, the Docker
+# `scratch` image) so generation is reproducible on any developer machine and
+# the CI sbom-check gate is stable. `go tool` can't be used with a cross GOOS
+# (it would cross-compile the tool itself and fail to exec), so build a
+# host-native tool binary from the pinned tool-directive version and run that.
+toolbin="$tmp/cyclonedx-gomod"
+( cd "$repo_root" && go build -o "$toolbin" github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod )
+( cd "$repo_root" && GOOS=linux GOARCH=amd64 "$toolbin" app -main . -json -licenses -output "$tmp/go.cdx.json" . )
 
 echo "==> npm packages (production only)"
 ( cd "$repo_root/frontend" && npx --no-install cyclonedx-npm --omit dev --output-file "$tmp/npm.cdx.json" )
