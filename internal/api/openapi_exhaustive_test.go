@@ -172,6 +172,14 @@ func skipEndpoint(path string) bool {
 		return true
 	}
 
+	// The SBOM endpoint's canonical URL ends in .json. The negotiate middleware
+	// strips that suffix before dispatch, mutating r.URL.Path in place, so the
+	// request object seen by FindRoute no longer matches the spec path. Covered
+	// by TestHandleSBOMServesCycloneDXWithETag304.
+	if path == "/-/sbom.cdx.json" {
+		return true
+	}
+
 	return false
 }
 
