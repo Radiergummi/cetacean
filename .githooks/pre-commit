@@ -26,6 +26,13 @@ if [ ! -d frontend/node_modules ]; then
   exit 0
 fi
 
+# cyclonedx-gomod compiles the package, so main.go's //go:embed frontend/dist/*
+# needs a built frontend. Skip (don't block) when it's absent — CI is the gate.
+if [ -z "$(ls -A frontend/dist 2>/dev/null)" ]; then
+  echo "pre-commit: frontend/dist missing; run 'cd frontend && npm run build'. Skipping SBOM regeneration (CI will verify)." >&2
+  exit 0
+fi
+
 echo "pre-commit: dependency manifest changed, regenerating SBOM…"
 make sbom
 git add internal/api/sbom/sbom.cdx.json
