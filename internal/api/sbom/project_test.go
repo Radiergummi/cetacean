@@ -41,6 +41,30 @@ func TestProjectFlattensAndMaps(t *testing.T) {
 	}
 }
 
+func TestProjectDeduplicates(t *testing.T) {
+	raw, err := os.ReadFile("testdata/example.cdx.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	doc, err := Project(raw)
+	if err != nil {
+		t.Fatalf("Project: %v", err)
+	}
+
+	// The fixture contains two identical react@19.0.0 entries; only one should appear.
+	count := 0
+	for _, component := range doc.Components {
+		if component.Name == "react" && component.Version == "19.0.0" {
+			count++
+		}
+	}
+
+	if count != 1 {
+		t.Fatalf("react@19.0.0 appears %d times, want exactly 1", count)
+	}
+}
+
 func TestProjectInvalidJSON(t *testing.T) {
 	if _, err := Project([]byte("not json")); err == nil {
 		t.Fatal("expected error for invalid JSON")

@@ -167,7 +167,7 @@ function LicenseCard({ component }: { component: LicenseComponent }) {
       <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
         {component.licenses.map((license, index) => (
           <Badge
-            key={index}
+            key={license.id || license.name || String(index)}
             variant="secondary"
           >
             {license.id || license.name || "Unknown"}

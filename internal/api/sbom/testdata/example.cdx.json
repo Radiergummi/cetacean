@@ -31,6 +31,13 @@
           "version": "19.0.0",
           "purl": "pkg:npm/react@19.0.0",
           "licenses": [{ "expression": "MIT" }]
+        },
+        {
+          "type": "library",
+          "name": "react",
+          "version": "19.0.0",
+          "purl": "pkg:npm/react@19.0.0",
+          "licenses": [{ "expression": "MIT" }]
         }
       ]
     },

@@ -77,7 +77,7 @@ func Project(raw []byte) (Document, error) {
 	}
 
 	seen := make(map[string]struct{})
-	components := make([]Component, 0, len(cdx.Components))
+	var components []Component
 
 	var walk func(in []cdxComponent)
 	walk = func(in []cdxComponent) {

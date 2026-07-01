@@ -12,8 +12,6 @@ out="$repo_root/internal/api/sbom/sbom.cdx.json"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-version="$(git -C "$repo_root" describe --tags --abbrev=0 2>/dev/null || echo 0.0.0)"
-
 command -v jq >/dev/null 2>&1 || {
   echo "error: 'jq' not found (system prerequisite). Install: https://jqlang.github.io/jq/" >&2
   exit 1
@@ -26,12 +24,14 @@ echo "==> npm packages (production only)"
 ( cd "$repo_root/frontend" && npx --no-install cyclonedx-npm --omit dev --output-file "$tmp/npm.cdx.json" )
 
 echo "==> merge + strip volatile fields (deterministic output)"
-jq -s --arg version "$version" '
+# Version is intentionally omitted from the envelope so the committed file
+# only diffs when dependencies change, not when a release tag is cut.
+jq -s '
   {
     bomFormat: "CycloneDX",
     specVersion: (.[0].specVersion // "1.6"),
     version: 1,
-    metadata: { component: { type: "application", name: "cetacean", version: $version } },
+    metadata: { component: { type: "application", name: "cetacean" } },
     components: ((.[0].components // []) + (.[1].components // []))
   }
 ' "$tmp/go.cdx.json" "$tmp/npm.cdx.json" > "$out"
