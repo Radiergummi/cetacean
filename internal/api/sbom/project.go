@@ -4,10 +4,12 @@
 package sbom
 
 import (
+	"bytes"
 	"cmp"
-	"encoding/json"
 	"slices"
 	"strings"
+
+	cyclonedx "github.com/CycloneDX/cyclonedx-go"
 )
 
 // Document is the projected licenses view served at GET /-/licenses.
@@ -34,56 +36,28 @@ type License struct {
 	URL  string `json:"url,omitempty"`
 }
 
-// Minimal CycloneDX subset needed for projection.
-
-type cycloneDX struct {
-	Components []cdxComponent `json:"components"`
-}
-
-type cdxComponent struct {
-	Name               string         `json:"name"`
-	Version            string         `json:"version"`
-	Description        string         `json:"description"`
-	Purl               string         `json:"purl"`
-	Licenses           []cdxLicense   `json:"licenses"`
-	ExternalReferences []cdxExtRef    `json:"externalReferences"`
-	Components         []cdxComponent `json:"components"`
-}
-
-type cdxLicense struct {
-	License    *cdxLicenseChoice `json:"license"`
-	Expression string            `json:"expression"`
-}
-
-type cdxLicenseChoice struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	URL  string `json:"url"`
-}
-
-type cdxExtRef struct {
-	Type string `json:"type"`
-	URL  string `json:"url"`
-}
-
 // Project parses a CycloneDX JSON document and flattens it into a Document.
 // Components lacking a recognized package URL (e.g. the synthetic container
 // components a hierarchical merge produces) are skipped; nested components are
 // walked recursively. Output is sorted by ecosystem, then name, so the
 // projection is deterministic.
 func Project(raw []byte) (Document, error) {
-	var cdx cycloneDX
-	if err := json.Unmarshal(raw, &cdx); err != nil {
+	var bom cyclonedx.BOM
+	if err := cyclonedx.NewBOMDecoder(bytes.NewReader(raw), cyclonedx.BOMFileFormatJSON).Decode(&bom); err != nil {
 		return Document{}, err
 	}
 
 	seen := make(map[string]bool)
 	var components []Component
 
-	var walk func(in []cdxComponent)
-	walk = func(in []cdxComponent) {
-		for _, component := range in {
-			ecosystem := ecosystemFromPurl(component.Purl)
+	var walk func(in *[]cyclonedx.Component)
+	walk = func(in *[]cyclonedx.Component) {
+		if in == nil {
+			return
+		}
+
+		for _, component := range *in {
+			ecosystem := ecosystemFromPurl(component.PackageURL)
 			// Key on ecosystem too: a Go module and an npm package can share a
 			// name@version, and they are distinct components.
 			key := ecosystem + ":" + component.Name + "@" + component.Version
@@ -95,15 +69,15 @@ func Project(raw []byte) (Document, error) {
 					Description: component.Description,
 					Ecosystem:   ecosystem,
 					Licenses:    projectLicenses(component.Licenses),
-					Homepage:    externalReference(component.ExternalReferences, "website"),
-					Repository:  externalReference(component.ExternalReferences, "vcs"),
+					Homepage:    externalReference(component.ExternalReferences, cyclonedx.ERTypeWebsite),
+					Repository:  externalReference(component.ExternalReferences, cyclonedx.ERTypeVCS),
 				})
 			}
 
 			walk(component.Components)
 		}
 	}
-	walk(cdx.Components)
+	walk(bom.Components)
 
 	slices.SortFunc(components, func(a, b Component) int {
 		if a.Ecosystem != b.Ecosystem {
@@ -132,26 +106,36 @@ func ecosystemFromPurl(purl string) string {
 	}
 }
 
-func projectLicenses(in []cdxLicense) []License {
-	out := make([]License, 0, len(in))
-	for _, license := range in {
+func projectLicenses(in *cyclonedx.Licenses) []License {
+	// Always return a non-nil slice: the licenses field is a required array in
+	// the API schema, so a nil slice (which marshals to null) would be invalid.
+	out := []License{}
+	if in == nil {
+		return out
+	}
+
+	for _, choice := range *in {
 		switch {
-		case license.License != nil:
+		case choice.License != nil:
 			out = append(out, License{
-				ID:   license.License.ID,
-				Name: license.License.Name,
-				URL:  license.License.URL,
+				ID:   choice.License.ID,
+				Name: choice.License.Name,
+				URL:  choice.License.URL,
 			})
-		case license.Expression != "":
-			out = append(out, License{ID: license.Expression})
+		case choice.Expression != "":
+			out = append(out, License{ID: choice.Expression})
 		}
 	}
 
 	return out
 }
 
-func externalReference(refs []cdxExtRef, kind string) string {
-	for _, ref := range refs {
+func externalReference(refs *[]cyclonedx.ExternalReference, kind cyclonedx.ExternalReferenceType) string {
+	if refs == nil {
+		return ""
+	}
+
+	for _, ref := range *refs {
 		if ref.Type == kind {
 			return ref.URL
 		}

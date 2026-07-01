@@ -4,6 +4,7 @@ go 1.26.4
 
 require (
 	github.com/BurntSushi/toml v1.6.0
+	github.com/CycloneDX/cyclonedx-go v0.9.2
 	github.com/containerd/errdefs v1.0.0
 	github.com/coreos/go-oidc/v3 v3.19.0
 	github.com/docker/docker v28.5.2+incompatible
@@ -23,7 +24,6 @@ require (
 require (
 	dario.cat/mergo v1.0.1 // indirect
 	filippo.io/edwards25519 v1.2.0 // indirect
-	github.com/CycloneDX/cyclonedx-go v0.9.2 // indirect
 	github.com/CycloneDX/cyclonedx-gomod v1.9.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.1.6 // indirect

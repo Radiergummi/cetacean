@@ -62,6 +62,35 @@
       }
     },
     {
+      "bom-ref": "pkg:golang/github.com/CycloneDX/cyclonedx-go@v0.9.2?type=module",
+      "type": "library",
+      "name": "github.com/CycloneDX/cyclonedx-go",
+      "version": "v0.9.2",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ebcf101e7d97ff99d17b329edae788542b7e351a9fedf977015424faf685708a"
+        }
+      ],
+      "purl": "pkg:golang/github.com/CycloneDX/cyclonedx-go@v0.9.2?type=module&goos=darwin&goarch=arm64",
+      "externalReferences": [
+        {
+          "url": "https://github.com/CycloneDX/cyclonedx-go",
+          "type": "vcs"
+        }
+      ],
+      "evidence": {
+        "licenses": [
+          {
+            "license": {
+              "id": "Apache-2.0"
+            }
+          }
+        ]
+      }
+    },
+    {
       "bom-ref": "pkg:golang/github.com/beorn7/perks@v1.0.1?type=module",
       "type": "library",
       "name": "github.com/beorn7/perks",
