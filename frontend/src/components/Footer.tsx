@@ -1,6 +1,7 @@
 import { api, type HealthInfo } from "@/api/client";
 import { apiPath } from "@/lib/basePath";
-import { Book, ExternalLink } from "lucide-react";
+import { Book, ExternalLink, Scale } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 
 function Footer() {
@@ -42,6 +43,13 @@ function Footer() {
           className="flex items-center gap-4"
           aria-label="Footer"
         >
+          <Link
+            to="/licenses"
+            className="inline-flex items-center gap-1 transition hover:text-foreground"
+          >
+            <Scale className="size-3.5" />
+            Licenses
+          </Link>
           <a
             href="https://github.com/radiergummi/cetacean"
             target="_blank"

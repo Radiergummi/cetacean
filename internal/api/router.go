@@ -133,6 +133,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	mux.HandleFunc("GET /-/health", h.HandleHealth)
 	mux.HandleFunc("GET /-/ready", h.HandleReady)
 	mux.HandleFunc("GET /-/docker-latest-version", h.HandleDockerLatestVersion)
+	mux.HandleFunc("GET /-/licenses", HandleLicenses)
+	// Canonical URL is /-/sbom.cdx.json; the negotiate middleware strips the
+	// .json suffix before dispatch, so the mux route omits it.
+	mux.HandleFunc("GET /-/sbom.cdx", HandleSBOM)
 	if cfg.EnableSelfMetrics {
 		mux.Handle("GET /-/metrics", metrics.Handler())
 	}

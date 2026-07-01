@@ -1,4 +1,4 @@
-.PHONY: lint fmt fmt-check build test test-e2e check
+.PHONY: lint fmt fmt-check build test test-e2e check sbom sbom-check hooks
 
 ## Lint all code
 lint:
@@ -40,3 +40,17 @@ test-e2e:
 
 ## Run all checks (lint + format check + test)
 check: lint fmt-check test
+
+## Generate the CycloneDX SBOM (Go + frontend npm) embedded into the binary
+sbom:
+	./scripts/build-sbom.sh
+
+## Verify the committed SBOM is up to date (CI gate)
+sbom-check: sbom
+	@git diff --exit-code -- internal/api/sbom/sbom.cdx.json \
+	  || { echo "ERROR: internal/api/sbom/sbom.cdx.json is stale. Run 'make sbom' and commit." >&2; exit 1; }
+
+## Install the repository git hooks (opt-in)
+hooks:
+	git config core.hooksPath .githooks
+	@echo "git hooks installed (core.hooksPath=.githooks)"

@@ -51,6 +51,7 @@ const RecommendationsPage = lazy(() => import("./pages/RecommendationsPage"));
 const VolumeDetail = lazy(() => import("./pages/VolumeDetail"));
 const VolumeList = lazy(() => import("./pages/VolumeList"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const Licenses = lazy(() => import("./pages/Licenses"));
 
 function Layout({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -386,6 +387,10 @@ export default function App() {
                   <Route
                     path="/search"
                     element={<SearchPage />}
+                  />
+                  <Route
+                    path="/licenses"
+                    element={<Licenses />}
                   />
                   <Route
                     path="/api/errors"
