@@ -17,7 +17,7 @@
     "lint": "oxlint"
   },
   "dependencies": {
-    "@astrojs/mdx": "^5.0.6",
+    "@astrojs/mdx": "^7.0.0",
     "@astrojs/sitemap": "^3.7.3",
     "@fontsource-variable/geist": "^5.2.9",
     "@scalar/api-reference": "^1.62.1",
