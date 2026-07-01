@@ -15,18 +15,14 @@ updates:
     labels:
       - dependencies
       - github-actions
-    # Bundle related actions into a single PR so a routine bump doesn't
-    # land 5 separate reviews. Dependabot reads the trailing `# v…`
-    # comment on each pinned SHA to figure out the current version, so
-    # the SHA-pinning convention in ci.yml/pages.yml/release.yml still
-    # works here.
+    # One PR for every action bump, including majors. Dependabot reads the
+    # trailing `# v…` comment on each pinned SHA to figure out the current
+    # version, so the SHA-pinning convention in ci.yml/pages.yml/release.yml
+    # still works here.
     groups:
-      actions-core:
+      github-actions:
         patterns:
-          - "actions/*"
-      docker:
-        patterns:
-          - "docker/*"
+          - "*"
 
   - package-ecosystem: gomod
     directory: /
@@ -42,15 +38,11 @@ updates:
     labels:
       - dependencies
       - go
-    # Bundle minor + patch into a single PR per group; major bumps still
-    # come through as individual PRs so they get a proper review.
+    # One PR for every Go module bump, including majors.
     groups:
       go-deps:
         patterns:
           - "*"
-        update-types:
-          - minor
-          - patch
     ignore:
       # docker/docker periodically ships advisories (docker cp races, etc.)
       # that target the daemon, not SDK consumers. Cetacean uses the SDK
@@ -61,9 +53,7 @@ updates:
         update-types:
           - version-update:semver-patch
 
-  # Dashboard SPA. Production deps shipped to users — keep on a faster
-  # cadence and don't group across major bumps, since UI deps tend to
-  # have visible behavior changes.
+  # Dashboard SPA. Production deps shipped to users.
   - package-ecosystem: npm
     directory: /frontend
     schedule:
@@ -79,44 +69,12 @@ updates:
       - dependencies
       - frontend
     groups:
-      # Group routine minor/patch bumps for related families so we don't
-      # drown in 30 individual PRs.
-      react-ecosystem:
+      # One PR for every frontend dependency bump, including majors.
+      frontend:
         patterns:
-          - "react"
-          - "react-*"
-          - "@tanstack/*"
-        update-types:
-          - minor
-          - patch
-      tailwind:
-        patterns:
-          - "tailwindcss"
-          - "@tailwindcss/*"
-          - "tw-*"
-        update-types:
-          - minor
-          - patch
-      types:
-        patterns:
-          - "@types/*"
-      tooling:
-        patterns:
-          - "vite"
-          - "vitest"
-          - "@vitejs/*"
-          - "oxlint"
-          - "oxfmt"
-          - "typescript"
-          - "msw"
-          - "jsdom"
-          - "@testing-library/*"
-        update-types:
-          - minor
-          - patch
+          - "*"
 
-  # Marketing/docs site (Astro). Lower stakes than the dashboard, so
-  # group aggressively.
+  # Marketing/docs site (Astro).
   - package-ecosystem: npm
     directory: /website
     schedule:
@@ -135,6 +93,3 @@ updates:
       website-all:
         patterns:
           - "*"
-        update-types:
-          - minor
-          - patch
