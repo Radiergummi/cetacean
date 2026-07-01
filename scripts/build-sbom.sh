@@ -17,6 +17,14 @@ command -v jq >/dev/null 2>&1 || {
   exit 1
 }
 
+# `cyclonedx-gomod app` compiles the main package, which requires the embedded
+# frontend (`//go:embed frontend/dist/*`). Fail early with a clear message
+# instead of a confusing embed compile error when the frontend isn't built.
+if [ -z "$(ls -A "$repo_root/frontend/dist" 2>/dev/null)" ]; then
+  echo "error: frontend/dist is empty or missing. Run 'make build' (or 'cd frontend && npm run build') first." >&2
+  exit 1
+fi
+
 echo "==> Go modules (binary imports only)"
 # cyclonedx-gomod embeds GOOS/GOARCH into every purl and selects
 # platform-specific imports (netlink, dbus, …) accordingly, so the output is

@@ -372,12 +372,15 @@ paths:
   /-/sbom.cdx.json:
     get:
       summary: Software Bill of Materials (CycloneDX)
-      description: Raw CycloneDX SBOM for Go and frontend npm dependencies. Public.
+      description: >-
+        Raw CycloneDX SBOM for Go and frontend npm dependencies. Public. The
+        response is served with a `version=1.6` media-type parameter
+        (`application/vnd.cyclonedx+json; version=1.6`).
       responses:
         "200":
           description: CycloneDX JSON document
           content:
-            application/vnd.cyclonedx+json; version=1.6:
+            application/vnd.cyclonedx+json:
               schema:
                 type: object
 

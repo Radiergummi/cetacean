@@ -22,12 +22,16 @@ const ecosystemLabels: Record<string, string> = {
 
 /**
  * Applies basic heuristics to try and convert VCS URLs targeting git to HTTP
- * (e.g., "git://…" or "git+https://…"), so the link opens in a browser.
+ * (e.g., "git://…" or "git+https://…"), so the link opens in a browser. SBOM
+ * URLs are untrusted input, so anything that does not normalize to http(s)
+ * (e.g. a "javascript:" scheme) returns null and is not rendered as a link.
  */
-function browserUrl(url: string): string {
-  return url
+function browserUrl(url: string): string | null {
+  const normalized = url
     .replace(/^git(\+https)?:\/\//, "https://")
     .replace(/\.git$/, "");
+
+  return /^https?:\/\//i.test(normalized) ? normalized : null;
 }
 
 export default function Licenses() {
@@ -145,12 +149,15 @@ export default function Licenses() {
 }
 
 function LicenseCard({ component }: { component: LicenseComponent }) {
+  const homepageUrl = component.homepage ? browserUrl(component.homepage) : null;
+  const repositoryUrl = component.repository ? browserUrl(component.repository) : null;
+
   return (
     <Card className="flex flex-col gap-2 p-4">
       <div className="flex items-start justify-between gap-2">
-        {component.homepage ? (
+        {homepageUrl ? (
           <a
-            href={browserUrl(component.homepage)}
+            href={homepageUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="truncate font-medium transition hover:text-primary"
@@ -184,9 +191,9 @@ function LicenseCard({ component }: { component: LicenseComponent }) {
           </Badge>
         ))}
 
-        {component.repository && (
+        {repositoryUrl && (
           <a
-            href={browserUrl(component.repository)}
+            href={repositoryUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground transition hover:text-foreground"

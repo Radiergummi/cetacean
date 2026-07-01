@@ -69,7 +69,7 @@ func Project(raw []byte) (Document, error) {
 					Version:     component.Version,
 					Description: component.Description,
 					Ecosystem:   ecosystem,
-					Licenses:    projectLicenses(component.Licenses),
+					Licenses:    projectLicenses(componentLicenses(component)),
 					Homepage: externalReference(
 						component.ExternalReferences,
 						cyclonedx.ERTypeWebsite,
@@ -91,7 +91,13 @@ func Project(raw []byte) (Document, error) {
 			return cmp.Compare(a.Ecosystem, b.Ecosystem)
 		}
 
-		return cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+		if byName := cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)); byName != 0 {
+			return byName
+		}
+
+		// Same ecosystem and name: fall back to version so components that share
+		// a name (distinct versions) get a stable, total ordering.
+		return cmp.Compare(a.Version, b.Version)
 	})
 
 	return Document{Components: components}, nil
@@ -111,6 +117,22 @@ func ecosystemFromPurl(purl string) string {
 		// A package with a purl of some other type (pkg:cargo/, pkg:pypi/, …).
 		return "other"
 	}
+}
+
+// componentLicenses returns the component's declared licenses, falling back to
+// evidence.licenses when the top-level field is absent. cyclonedx-gomod records
+// detected Go module licenses under component.evidence.licenses rather than
+// component.licenses, so without this the Go modules would show no license.
+func componentLicenses(component cyclonedx.Component) *cyclonedx.Licenses {
+	if component.Licenses != nil && len(*component.Licenses) > 0 {
+		return component.Licenses
+	}
+
+	if component.Evidence != nil {
+		return component.Evidence.Licenses
+	}
+
+	return component.Licenses
 }
 
 func projectLicenses(in *cyclonedx.Licenses) []License {
