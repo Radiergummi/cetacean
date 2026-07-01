@@ -76,32 +76,27 @@ func Project(raw []byte) (Document, error) {
 		return Document{}, err
 	}
 
-	seen := make(map[string]struct{})
+	seen := make(map[string]bool)
 	var components []Component
 
 	var walk func(in []cdxComponent)
 	walk = func(in []cdxComponent) {
 		for _, component := range in {
-			ecosystem := ecosystemFromPurl(component.Purl)
-			if ecosystem != "" {
-				key := component.Name + "@" + component.Version
-				if _, duplicate := seen[key]; !duplicate {
-					seen[key] = struct{}{}
-					components = append(components, Component{
-						Name:        component.Name,
-						Version:     component.Version,
-						Description: component.Description,
-						Ecosystem:   ecosystem,
-						Licenses:    projectLicenses(component.Licenses),
-						Homepage:    externalReference(component.ExternalReferences, "website"),
-						Repository:  externalReference(component.ExternalReferences, "vcs"),
-					})
-				}
+			key := component.Name + "@" + component.Version
+			if ecosystem := ecosystemFromPurl(component.Purl); ecosystem != "" && !seen[key] {
+				seen[key] = true
+				components = append(components, Component{
+					Name:        component.Name,
+					Version:     component.Version,
+					Description: component.Description,
+					Ecosystem:   ecosystem,
+					Licenses:    projectLicenses(component.Licenses),
+					Homepage:    externalReference(component.ExternalReferences, "website"),
+					Repository:  externalReference(component.ExternalReferences, "vcs"),
+				})
 			}
 
-			if len(component.Components) > 0 {
-				walk(component.Components)
-			}
+			walk(component.Components)
 		}
 	}
 	walk(cdx.Components)

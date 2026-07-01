@@ -1,13 +1,15 @@
 import { api } from "@/api/client";
-import type { LicenseComponent, LicensesResponse } from "@/api/types";
+import type { LicenseComponent } from "@/api/types";
+import EmptyState from "@/components/EmptyState";
 import FetchError from "@/components/FetchError";
 import PageHeader from "@/components/PageHeader";
+import { SearchInput } from "@/components/search";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { getErrorMessage } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 type EcosystemFilter = "all" | "go" | "npm" | "other";
 
@@ -18,29 +20,15 @@ const ecosystemLabels: Record<string, string> = {
 };
 
 export default function Licenses() {
-  const [data, setData] = useState<LicensesResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [ecosystem, setEcosystem] = useState<EcosystemFilter>("all");
 
-  useEffect(() => {
-    const controller = new AbortController();
+  const { data, error: queryError, refetch } = useQuery({
+    queryKey: ["licenses"],
+    queryFn: ({ signal }) => api.licenses(signal),
+  });
 
-    api
-      .licenses(controller.signal)
-      .then((response) => {
-        setData(response);
-        setError(null);
-      })
-      .catch((caught) => {
-        if (!controller.signal.aborted) {
-          setError(getErrorMessage(caught, "Failed to load licenses"));
-        }
-      });
-
-    return () => controller.abort();
-  }, []);
-
+  const error = queryError ? getErrorMessage(queryError, "Failed to load licenses") : null;
   const components = useMemo(() => data?.components ?? [], [data]);
 
   const counts = useMemo(() => {
@@ -72,7 +60,10 @@ export default function Licenses() {
   if (error) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <FetchError message={error} />
+        <FetchError
+          message={error}
+          onRetry={() => refetch()}
+        />
       </div>
     );
   }
@@ -91,11 +82,10 @@ export default function Licenses() {
       />
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Input
-          type="search"
-          placeholder="Search by name…"
+        <SearchInput
           value={query}
-          onChange={({ target }) => setQuery(target.value)}
+          onChange={setQuery}
+          placeholder="Search by name…"
           className="sm:max-w-xs"
         />
 
@@ -127,9 +117,7 @@ export default function Licenses() {
         ))}
       </div>
 
-      {data && filtered.length === 0 && (
-        <p className="py-12 text-center text-sm text-muted-foreground">No matching components.</p>
-      )}
+      {data && filtered.length === 0 && <EmptyState message="No matching components." />}
     </div>
   );
 }

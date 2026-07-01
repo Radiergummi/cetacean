@@ -1,7 +1,7 @@
 import { api } from "@/api/client";
 import type { LicensesResponse } from "@/api/types";
+import { createTestQueryClient, createWrapper } from "@/test/mocks";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Licenses from "./Licenses";
 
@@ -23,7 +23,7 @@ describe("Licenses", () => {
   });
 
   it("renders all components then filters by ecosystem", async () => {
-    render(<MemoryRouter><Licenses /></MemoryRouter>);
+    render(<Licenses />, { wrapper: createWrapper(createTestQueryClient()) });
 
     await waitFor(() => expect(screen.getByText("react")).toBeInTheDocument());
     expect(screen.getByText("github.com/foo/bar")).toBeInTheDocument();
@@ -35,7 +35,7 @@ describe("Licenses", () => {
   });
 
   it("filters by search query", async () => {
-    render(<MemoryRouter><Licenses /></MemoryRouter>);
+    render(<Licenses />, { wrapper: createWrapper(createTestQueryClient()) });
 
     await waitFor(() => expect(screen.getByText("react-dom")).toBeInTheDocument());
 
