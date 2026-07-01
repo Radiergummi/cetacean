@@ -34,7 +34,10 @@ echo "==> Go modules (binary imports only)"
 # (it would cross-compile the tool itself and fail to exec), so build a
 # host-native tool binary from the pinned tool-directive version and run that.
 toolbin="$tmp/cyclonedx-gomod"
-( cd "$repo_root" && go build -o "$toolbin" github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod )
+# -mod=readonly: the tool version is pinned via go.mod's tool directive, so
+# building it must not mutate go.mod/go.sum as a side-effect (keeps `make sbom`
+# from dirtying module files and fails fast if the module graph is incomplete).
+( cd "$repo_root" && go build -mod=readonly -o "$toolbin" github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod )
 ( cd "$repo_root" && GOOS=linux GOARCH=amd64 "$toolbin" app -main . -json -licenses -output "$tmp/go.cdx.json" . )
 
 echo "==> npm packages (production only)"

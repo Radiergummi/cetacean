@@ -49,7 +49,9 @@ func Project(raw []byte) (Document, error) {
 	}
 
 	seen := make(map[string]bool)
-	var components []Component
+	// Non-nil so an empty/edge-case BOM still marshals components as [] rather
+	// than null; the API schema requires an array.
+	components := []Component{}
 
 	var walk func(in *[]cyclonedx.Component)
 	walk = func(in *[]cyclonedx.Component) {
