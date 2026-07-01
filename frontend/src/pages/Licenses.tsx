@@ -20,6 +20,14 @@ const ecosystemLabels: Record<string, string> = {
   other: "Other",
 };
 
+/**
+ * Strips the "git+" prefix that npm packages often carry on their VCS URLs
+ * (e.g. "git+https://…"), so the link opens in a browser.
+ */
+function browserUrl(url: string): string {
+  return url.replace(/^git\+/, "");
+}
+
 export default function Licenses() {
   const [query, setQuery] = useState("");
   const [ecosystem, setEcosystem] = useState<EcosystemFilter>("all");
@@ -138,7 +146,7 @@ function LicenseCard({ component }: { component: LicenseComponent }) {
       <div className="flex items-start justify-between gap-2">
         {component.homepage ? (
           <a
-            href={component.homepage}
+            href={browserUrl(component.homepage)}
             target="_blank"
             rel="noopener noreferrer"
             className="truncate font-medium transition hover:text-primary"
@@ -174,7 +182,7 @@ function LicenseCard({ component }: { component: LicenseComponent }) {
 
         {component.repository && (
           <a
-            href={component.repository}
+            href={browserUrl(component.repository)}
             target="_blank"
             rel="noopener noreferrer"
             className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground transition hover:text-foreground"
