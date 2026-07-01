@@ -12,6 +12,45 @@
 
 ---
 
+## Implementation Status
+
+Worked on branch `feat/mcp-server` (off `main`). Each task lands as one or more commits; review fixes are subsequent commits, not amends. As of the last update:
+
+| Task | Status | Landing commits | Notes |
+|------|--------|----------------|-------|
+| 0 — Cache multi-listener refactor | ✅ done | `f462706`, `d8fdc1d` | Listener mutex separated from data mutex; broadcaster wired in `main.go` (sse.go untouched — plan had wrong file). |
+| 0.5 — mcp-go pin + audit | ✅ done | `e50276c`, `8bb9de6`, `0008652` | Pinned `v0.54.0`. Found `WithToolFilter` ServerOption — eliminates the original plan's speculative `SetListToolsFilter` probe. Server struct + plan reconciled. |
+| 1 — MCP configuration | ✅ done | `ef41fa7`, `9ee7dc4` | `MCPConfig` integrated into existing `Load()` (no standalone `LoadMCP`). `OpsInherit = -1` sentinel. |
+| 2 — JWT library | ✅ done | `1609c05`, `a8507b7` | HS256, 5 sentinel errors + `ErrMissingKey` guard. |
+| 3 — CIMD fetcher | ✅ done | `54cbe46`, `acc354f` | SSRF block-list also covers RFC 6598 CGNAT (Tailscale relevance). |
+| 4 — Token stores | ✅ done | `f7added`, `3a56a78` | Theft-detection invariant; `Groups` cloned on return; `crypto/rand` outside lock. |
+| 5 — OAuth 2.1 endpoints | ✅ done | `6bbad08`, `8982000` | AS metadata, PRM, authorize+consent, token, revoke, DCR. Resource-mismatch on refresh-token grant revokes the family (Rotate first, then validate). |
+| 6 — Shared cluster layer | ✅ done | `2bb4ec3`, `f550d1f` | `internal/cluster/` with `EnrichTask`, `RedactSecret`, `DeriveServiceState`, `Search`. Helpers **copied** from `api/handlers.go`; originals stay until Task 7. |
+| 7 — REST handler refactor | ✅ done | `b45bcf6` | Picked **Option B** — `cluster.Search` now returns `SearchResults{Hits, Counts, Total}` so REST keeps the pre-cap `Counts`/`Total` exercised by `TestHandleSearch_CapsAtThreePerType`. `api.EnrichedTask` is a type alias to `cluster.EnrichedTask`. Helpers `containsFold`/`segmentPrefixMatch`/`labelsMatch` and `isSeparator`/`separatorReplacer` deleted from `api/handlers.go`; call sites use `cluster.ContainsFold` / `cluster.SegmentPrefixMatch`. |
+| 8 — MCP server core + router wiring | ✅ done | `5ff0f55`, `c3dd833`, `fb554a5` | `internal/mcp/server.go` wires `mcp-go` v0.54.0 with `WithToolFilter`/`WithHTTPContextFunc`. Bearer-token middleware delegates to `oauth.Server.VerifyAccessToken` and emits RFC 6750 `WWW-Authenticate` on failure. Router gained `MCPHandler` + `OAuthRoutes` fields (api stays decoupled from mcp-go). `auth.isExempt` now allows `/mcp`, `/.well-known/*`, and machine OAuth endpoints; `/oauth/authorize` still goes through Cetacean auth so the consent screen knows the user. `recommendations.Engine` satisfies the narrow `RecommendationEngine` surface via `Results() []recommendations.Recommendation`. |
+| 9 — MCP resources | ✅ done | `0059c4d` | Three static resources (cluster, recommendations, history) + nine templated resources mounted via `AddResource`/`AddResourceTemplate`. Read dispatch goes through `cluster.EnrichTask*` and `cluster.RedactSecret*`. Service logs templated read returns `[]` as a stub for Task 12. ACL deferred to Task 11. |
+| 10 — MCP tools | ✅ done | `f57ac79` | Catalog with 19 tools across tiers 0–3 (reads, ops, config, impactful). `DockerWriteClient` upgraded from `any` to a composite of four narrow interfaces (`ServiceLifecycleWriter`, `ServiceSpecWriter`, `NodeWriter`, `ResourceRemover`) — concrete `docker.Client` satisfies it via structural typing. Tier gating at registration; per-resource ACL `Can("write", "<type>:<name>")` at call time. Object arguments are JSON-round-tripped into typed Docker structs via `decodeArgInto`. `get_logs` is stubbed for Task 12. |
+| 11 — Notifications / subscriptions | ✅ done | `af09a94` | `NotificationManager` keyed by session ID, populated via mcp-go `OnAfterSubscribe`/`OnAfterUnsubscribe` hooks and cleaned by `OnUnregisterSession`. Cache event listener fans out per-session `notifications/resources/updated` (using `SendNotificationToSpecificClient`) and broadcasts `notifications/resources/list_changed` on create/remove. Service-detail subscriptions also match the `/logs` URI so log-tail subscribers get pinged. `mcpSrv.Close()` detaches the cache listener; wired through `setupMCP` and a deferred call in `main`. |
+| 12 — Log resource + tool | ✅ done | `7dfe116` | `LogStreamer` interface added to `Options` (concrete `docker.Client` satisfies it). `readServiceLogs` and `toolGetLogs` share `readServiceLogsImpl`, which calls Docker, parses frames via `api.ParseDockerLogs`, and returns `LogResourceResponse{Lines, Cursor}`. Cursor is the RFC3339Nano timestamp of the last line plus one nanosecond — pass back as `since` for resumable pagination. Optional level filter best-effort matches DEBUG/INFO/WARN/ERROR/FATAL within the message body. |
+| 13 — End-to-end integration test | ✅ done | `01f4988` | `internal/mcp/integration_test.go` drives the real HTTP handler through initialize → resources/list → resources/read → tools/list → tools/call. Helper parses SSE-wrapped JSON-RPC payloads (`data:` line) so the test works against the streamable HTTP transport. Confirms tier filter strips `scale_service` at OpsReadOnly. |
+| 14 — Documentation | ✅ done | `d5a2c77` | CLAUDE.md env-var table extended with `CETACEAN_MCP*`; new `internal/cluster/` and `internal/mcp/`/`internal/mcp/oauth/` architecture entries. `docs/api.md` gets an MCP section covering OAuth endpoints, client identification paths, the resource URI table, the tier-organized tool table, and log cursor semantics. `docs/config.reference.toml` gains an `[mcp]` block. CHANGELOG `[Unreleased]` lists the user-facing additions. |
+
+### Notes from implementation (forward-relevant)
+
+- **`WithToolFilter` exists** in `mcp-go v0.54.0` — use it at `NewMCPServer` construction (already reflected in Task 8). The original plan's speculative duck-typed `SetListToolsFilter` probe is replaced.
+- **`Server` struct fields** (Task 8/10): includes `globalOpsLevel config.OperationsLevel`, `registeredTools []toolDef`, `recEngine recEngine`. `recEngine` is a narrow interface defined in Task 8's snippet; Task 9 audits the real recommendations API.
+- **`handleReadResource`** must match `mcp-go`'s `ResourceHandlerFunc` signature `func(ctx, mcp.ReadResourceRequest) ([]mcp.ResourceContents, error)` — already updated in Task 9 snippet.
+- **`filterToolsForIdentity`** is wired but a pass-through by default; refinements that hide write tools from no-write-grant identities are a follow-up. Tier and ACL are already enforced at registration and call time respectively.
+- **`cluster.Search` returns `SearchResults{Hits, Counts, Total}`** (Task 7 picked Option B). The existing REST test `TestHandleSearch_CapsAtThreePerType` asserts the pre-cap `Counts` semantic; keeping it required a struct return rather than a bare map. MCP callers should treat `Counts` as informational.
+- **`internal/api/` helpers `containsFold`, `containsFoldNoAlloc`, `segmentPrefixMatch`, `labelsMatch`, `isSeparator`, `separatorReplacer`** were duplicated in `internal/cluster/` (exported as `ContainsFold`, `SegmentPrefixMatch`; `labelsMatch` is unexported). Task 7 deleted the originals in `api/`; remaining call sites (`searchFilter` in `handlers.go`, `TestSegmentPrefixMatch` in `handlers_test.go`) now use the cluster names. `BenchmarkLabelsMatch` in `handlers_bench_test.go` was removed (it benchmarked deleted code; equivalent coverage belongs in `internal/cluster/`).
+- **`api.EnrichedTask` is a type alias** to `cluster.EnrichedTask` (Task 7). The struct definition moved to the cluster package; the alias keeps `responses.go` and existing test imports working without churn.
+- **OAuth tests** rely on `newTestServer(t)` defined in `server_test.go` and reused across the four `_test.go` files in the package. If Task 8 introduces fixtures, follow the same single-helper pattern.
+- **`oauth.Server.VerifyAccessToken`** was added during Task 8 so the MCP HTTP middleware can validate bearer tokens without depending on `*oauth.TokenIssuer` directly.
+- **MCP issuer URL** override shipped via `CETACEAN_MCP_ISSUER` (or `[mcp].issuer`). When unset, the issuer continues to derive from listen address + TLS scheme. Validation rejects non-http(s) schemes, missing hosts, fragments, and query strings; trailing slashes are trimmed.
+- **DCR rate limit doc resolved**: the implementation in `dcr.go` uses a 1-hour window, matching the design and the CLAUDE.md env var description; the stale "per minute" comment on `MCPConfig.DCRRateLimit` was corrected.
+
+---
+
 ### File Map
 
 | Action | File | Responsibility |
@@ -59,7 +98,7 @@
 
 ---
 
-### Task 0: Cache Multi-Listener Refactor
+### Task 0: Cache Multi-Listener Refactor ✅
 
 **Why first:** the MCP notification bridge needs to subscribe to cache changes without displacing the existing SSE broadcaster. Today `cache.Cache` exposes a single `SetOnChange(fn)` slot. This task replaces it with a multi-listener registry, migrates the broadcaster, and lands as a standalone PR before any MCP work begins.
 
@@ -145,7 +184,7 @@ git commit -m "refactor(cache): replace SetOnChange with multi-listener registry
 
 ---
 
-### Task 0.5: mcp-go API Surface Audit
+### Task 0.5: mcp-go API Surface Audit ✅
 
 **Why:** the design references `mcp-go` function names and option types from the original spec date. Before any MCP code is written, we pin a specific version and audit the current API.
 
@@ -193,7 +232,7 @@ git commit -m "chore(mcp): pin mcp-go and audit API surface"
 
 ---
 
-### Task 1: MCP Configuration
+### Task 1: MCP Configuration ✅
 
 **Files:**
 - Create: `internal/config/mcp.go`
@@ -384,7 +423,7 @@ git commit -m "feat(config): add MCP server configuration"
 
 ---
 
-### Task 2: JWT Token Library
+### Task 2: JWT Token Library ✅
 
 **Files:**
 - Create: `internal/mcp/oauth/jwt.go`
@@ -638,7 +677,7 @@ git commit -m "feat(mcp): add JWT token issuer and verifier"
 
 ---
 
-### Task 3: CIMD Fetcher
+### Task 3: CIMD Fetcher ✅
 
 **Files:**
 - Create: `internal/mcp/oauth/cimd.go`
@@ -949,7 +988,7 @@ git commit -m "feat(mcp): add CIMD fetcher with SSRF protections"
 
 ---
 
-### Task 4: Authorization Code and Refresh Token Stores
+### Task 4: Authorization Code and Refresh Token Stores ✅
 
 **Files:**
 - Create: `internal/mcp/oauth/store.go`
@@ -1343,7 +1382,7 @@ git commit -m "feat(mcp): add auth code and refresh token stores"
 
 ---
 
-### Task 5: OAuth 2.1 Server Endpoints
+### Task 5: OAuth 2.1 Server Endpoints ✅
 
 **Files:**
 - Create: `internal/mcp/oauth/server.go`
@@ -1888,7 +1927,7 @@ git commit -m "feat(mcp): add OAuth 2.1 authorization server with DCR, CIMD, PRM
 
 ---
 
-### Task 6: Extract Shared Domain Layer
+### Task 6: Extract Shared Domain Layer ✅
 
 **Files:**
 - Create: `internal/cluster/enrich.go`
@@ -2267,8 +2306,15 @@ Expected: PASS
 
 In `internal/api/search_handlers.go`:
 - Replace the inline service state derivation with `cluster.DeriveServiceState(svc, running)`.
-- Move the `containsFold`, `segmentPrefixMatch`, and `labelsMatch` helpers from `handlers.go` to `internal/cluster/search.go` (already done in Task 6). Update imports in `handlers.go` to call `cluster.ContainsFold`, etc.
+- Delete the `containsFold`, `containsFoldNoAlloc`, `segmentPrefixMatch` helpers from `handlers.go` (the duplicates landed in `internal/cluster/search.go` during Task 6 with capitalized exports). Update remaining call sites to use `cluster.ContainsFold` / `cluster.SegmentPrefixMatch`. Delete `labelsMatch` if no `api/` caller remains; otherwise leave it alone — the cluster package has its own internal copy.
 - The `HandleSearch` handler itself stays in `api/` because it handles HTTP concerns (query params, response formatting, ACL filtering). It calls `cluster` functions for the matching logic.
+
+**Count handling — REQUIRED decision:** `cluster.Search` returns `map[string][]SearchResult` only; it does NOT carry the `Counts` per type or `Total` that REST's existing `CollectionResponse`-wrapped search response includes. The current REST behaviour is documented in CLAUDE.md and exercised by frontend tests, so it MUST be preserved. Two options — pick (A) unless there's a reason not to:
+
+- **(A) Count at the REST wrapper layer.** Call `cluster.Search` with the requested per-type cap; then iterate the returned map to compute `Counts` (sum of len per type) and `Total`. This loses the "total matches before cap" semantic, so make the cap large enough (or unbounded with a separate ceiling) that the displayed totals stay meaningful. Document the new semantic in the handler.
+- **(B) Extend `cluster.Search`'s return type** to include pre-cap counts. Change the signature to return a struct like `{Hits, Counts, Total}` and update both the API handler and any future MCP caller. Heavier change but preserves exact behaviour.
+
+Whichever you pick, add a regression test in `internal/api/` that confirms the existing search response shape (presence and correctness of `Counts` and `Total`) is preserved after the refactor.
 
 - [ ] **Step 6: Run search handler tests**
 
@@ -2363,8 +2409,11 @@ type Server struct {
 	writeClient     DockerWriteClient
 	acl             *acl.Evaluator
 	config          config.MCPConfig
+	globalOpsLevel  config.OperationsLevel // fallback for cfg.OperationsLevel == OpsInherit
 	mcpServer       *mcpserver.MCPServer
 	httpServer      *mcpserver.StreamableHTTPServer
+	registeredTools []toolDef              // tier-filtered, populated in Task 10
+	recEngine       recEngine              // narrow interface; nil when disabled (Task 9)
 }
 
 // DockerWriteClient defines the write operations available to MCP tools.
@@ -2374,25 +2423,42 @@ type DockerWriteClient interface {
 	// that the MCP tools need access to.
 }
 
-// New creates a new MCP server.
+// recEngine is the narrow surface from internal/recommendations that the MCP
+// server consumes. Audit the engine's real API in Task 9 and refine.
+type recEngine interface {
+	Snapshot() any
+}
+
+// New creates a new MCP server. globalOpsLevel is the top-level
+// CETACEAN_OPERATIONS_LEVEL — used when cfg.OperationsLevel is OpsInherit.
+// recommendations may be nil (CETACEAN_RECOMMENDATIONS=false).
 func New(
 	c *cache.Cache,
 	writeClient DockerWriteClient,
 	aclEval *acl.Evaluator,
 	cfg config.MCPConfig,
+	globalOpsLevel config.OperationsLevel,
+	recommendations recEngine,
 ) (*Server, error) {
 	srv := &Server{
-		cache:       c,
-		writeClient: writeClient,
-		acl:         aclEval,
-		config:      cfg,
+		cache:          c,
+		writeClient:    writeClient,
+		acl:            aclEval,
+		config:         cfg,
+		globalOpsLevel: globalOpsLevel,
+		recEngine:      recommendations,
 	}
 
+	// Per-identity tools/list filtering (see Design § Per-Request Tool Filtering).
+	// WithToolFilter receives the identity-bearing context populated by
+	// WithHTTPContextFunc below and returns a filtered slice. filterToolsForIdentity
+	// is implemented in Task 10.
 	mcpSrv := mcpserver.NewMCPServer(
 		"Cetacean",
 		"1.0.0",
 		mcpserver.WithResourceCapabilities(true, true), // subscribe + listChanged
 		mcpserver.WithToolCapabilities(true),
+		mcpserver.WithToolFilter(srv.filterToolsForIdentity),
 	)
 
 	srv.mcpServer = mcpSrv
@@ -2635,8 +2701,18 @@ func (s *Server) registerResources() {
 	}
 }
 
-func (s *Server) handleReadResource(ctx context.Context, uri string) (string, error) {
-	return s.readResource(ctx, uri)
+// handleReadResource implements mcp-go's ResourceHandlerFunc:
+//   func(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error)
+// It delegates URI parsing and dispatch to readResource and wraps the JSON
+// body in a single TextResourceContents entry.
+func (s *Server) handleReadResource(ctx context.Context, req mcplib.ReadResourceRequest) ([]mcplib.ResourceContents, error) {
+	body, err := s.readResource(ctx, req.Params.URI)
+	if err != nil {
+		return nil, err
+	}
+	return []mcplib.ResourceContents{
+		mcplib.TextResourceContents{URI: req.Params.URI, MIMEType: "application/json", Text: body},
+	}, nil
 }
 
 func (s *Server) readResource(ctx context.Context, uri string) (string, error) {
@@ -2963,15 +3039,22 @@ func (s *Server) registerTools() {
 		})
 	}
 
-	// Per-identity filtering of tools/list (see Design § Per-Request Tool Filtering).
-	// If Task 0.5's audit found an mcp-go hook for this, wire it here. Otherwise
-	// fall back to ACL enforcement at call time only (tools/list over-reports for
-	// identities with no write permission) and open a tracking issue.
-	if hook, ok := s.mcpServer.(interface {
-		SetListToolsFilter(func(ctx context.Context, all []mcplib.Tool) []mcplib.Tool)
-	}); ok {
-		hook.SetListToolsFilter(s.filterToolsForIdentity)
-	}
+	// Per-identity tools/list filtering is wired in Task 8 via
+	// mcpserver.WithToolFilter at NewMCPServer construction. The filter callback
+	// dispatches to s.filterToolsForIdentity, which is defined here:
+}
+
+// filterToolsForIdentity is the mcp-go ToolFilterFunc: given the per-call
+// context (with auth identity populated by WithHTTPContextFunc) and the
+// globally-registered tool slice, return only the tools the identity is
+// permitted to invoke. Tier was already enforced at registration; ACL is
+// evaluated per call site against the specific resource being acted on,
+// so this filter is a pass-through by default. Implementers may refine it
+// to hide write tools from identities with no write grants at all — but
+// the initial cut MUST NOT widen access (returning the full slice cannot
+// grant anything, because every handler re-checks ACL at call time).
+func (s *Server) filterToolsForIdentity(ctx context.Context, tools []mcplib.Tool) []mcplib.Tool {
+	return tools
 }
 
 func (s *Server) toolScaleService(ctx context.Context, args map[string]any) (string, error) {

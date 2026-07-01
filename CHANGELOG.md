@@ -7,11 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Embedded Model Context Protocol (MCP) server (opt-in via `CETACEAN_MCP=true`) — exposes cluster state to AI agents over streamable HTTP at `/mcp`, with twelve resources (services, nodes, tasks, stacks, configs, secrets, networks, volumes, plus cluster, recommendations, and history) and twenty-three tools spanning read, operational, configuration, and impactful tiers
+- Every MCP tool and resource now advertises a human-readable title, a fuller description of what it does and when to use it, and all four behavioural hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) so MCP clients can render confirmation UI accurately
+- OAuth 2.1 authorization server for MCP clients implementing the MCP 2025-11-25 authorization profile — Dynamic Client Registration (RFC 7591), Client ID Metadata Documents, RFC 8707 resource indicators, PKCE-only flows, and refresh token theft detection
+- MCP authorization-server metadata is now also served at the OpenID Connect discovery path (`/.well-known/openid-configuration`), so clients that locate the authorization server via OIDC Discovery 1.0 (per the 2025-11-25 spec) find the same endpoints as via RFC 8414
+- MCP endpoint now rejects requests carrying a disallowed `Origin` header with HTTP 403 — a DNS-rebinding defense required by the 2025-11-25 Streamable HTTP transport. The allowlist is `CETACEAN_CORS_ORIGINS` (`*` allows any); non-browser clients, which send no `Origin`, are unaffected
+- `CETACEAN_MCP_ISSUER` (and `[mcp].issuer`) for setting the canonical OAuth issuer URL when Cetacean runs behind a reverse proxy
+- MCP tools now return structured, machine-readable results (`structuredContent`) alongside the text form, so AI agents can parse tool output without scraping JSON out of a text blob. The `search`, `get_logs`, and `remove_*` tools additionally advertise an output schema, which the server validates results against
+- MCP server now advertises usage instructions and a description when a client connects, so AI agents understand the read-mostly model, that writes are gated by operations tier and ACL, and to resolve a resource via `search` before acting on it
+
 ### Fixed
+- MCP OAuth discovery now works when Cetacean runs under a base path: the authorization-server `issuer`, the protected-resource metadata `authorization_servers`, and the access-token `iss` claim now include `CETACEAN_BASE_PATH`, matching where the `.well-known` documents are actually served. Previously a client that derived the metadata URL from the issuer got a 404 whenever a base path was configured (default deployments without a base path were unaffected)
 - Service detail page no longer crashes after a task update arrives over the live stream (a stale page left open would occasionally throw "undefined is not an object")
 - Unexpected errors now show a clearer recovery screen with reload and try-again actions; technical details are tucked into a collapsible section
 - Confirmation dialogs (restart service, rollback, drain node, remove resource, rotate unlock key, …) now dismiss themselves after the action is confirmed instead of staying open
 - Service detail page no longer crashes when a service's task template is absent from the response
+- MCP refresh-token store no longer accumulates rotation history indefinitely; theft detection keeps a bounded recent window and grants are cleaned up when tokens expire
+- MCP authorization codes are swept on each new issue so abandoned consent flows can no longer fill memory
+- MCP `search` tool now rejects empty queries instead of returning every cached resource
+- `CETACEAN_MCP_AUTH_BYPASS` now takes effect: when the active Cetacean auth mode is listed (typically `cert`), MCP clients can reach `/mcp` using upstream identity (e.g. mTLS) without an OAuth bearer token
+- MCP `update_node_availability` and `update_node_role` tools advertise the `destructiveHint` annotation so MCP-aware clients can gate them behind a confirmation prompt
+- MCP `restart_service` and `rollback_service` now carry `destructiveHint: true` (rolling restart interrupts tasks; rollback discards the current spec)
+- MCP `search` tool no longer advertises a `types` parameter it doesn't honour — the field was always ignored by the handler
+- MCP PKCE verifier comparison uses constant-time equality
+- MCP `WWW-Authenticate` header now uses RFC 7230 quoted-string escaping instead of Go-syntax quoting (correct for values containing backticks or non-ASCII characters)
+- MCP server's `Close` is now safe under concurrent callers
+- MCP Dynamic Client Registration rejects unsupported `grant_types` and `response_types` per RFC 7591 §3.2 instead of silently storing them
+- MCP consent error page no longer surfaces raw CIMD fetcher errors (DNS, SSRF block reasons, connection failures); operators still get the details in the server log
+- MCP `get_logs` tool now enforces the same read ACL as the service log resource
+- MCP `remove_config` / `remove_secret` / `remove_network` ACL checks now key on the resource name from cache rather than the Docker ID, matching REST policy semantics
+- MCP `remove_task` ACL delegates to the parent service (`service:<name>`) like REST does instead of keying on `task:<id>`
+- MCP CIMD fetcher closes the DNS-rebinding TOCTOU window by resolving and validating IPs inside a custom dial that pins the connection to the validated address
+- MCP CIMD validates `redirect_uris` and `logo_uri` from the fetched document so a malicious metadata host cannot inject `javascript:` redirects or non-HTTPS logos
+- MCP token endpoint enforces RFC 7636 §4.1 PKCE verifier length (43–128 chars) and unreserved alphabet
+- MCP refresh-token grants respect an absolute grant-family lifetime — rotating with a long TTL no longer extends the family past the original 30-day window
+- MCP refresh-token resource-indicator mismatch no longer burns the grant family on a client typo; validation runs before token consumption
+- MCP `tools/list` hides write tools the caller's identity has no grants for, so the catalog matches the surface the call-time ACL would actually allow
+- MCP `notifications/resources/list_changed` skips sessions whose identity can't read any resource of the affected type, removing cross-tenant activity timing leaks
+- MCP stack and volume detail reads check the cache before evaluating ACL so `denied` and `not found` are indistinguishable from outside
+- MCP `update_service_env` / `update_service_labels` / `update_node_labels` now correctly merge against the current spec (string sets, `null` deletes) instead of replacing the whole map
+- MCP `update_service_image` rejects empty / whitespace-only image strings
+- MCP logs tool uses Docker's idle-cancel parser, matching the REST log handler and returning promptly when Docker leaves the non-follow stream open
+- MCP consent page sets `Cache-Control: no-store` so shared caches and back-button replays can't surface another user's CSRF / state / identity
+- MCP DCR endpoint caps request bodies at 64 KiB to block trivial DoS via oversized JSON payloads
+- MCP JWT verify rejects tokens whose header `alg` is not `HS256` (defense-in-depth)
+- All tier-1/2 MCP write tools now advertise `readOnlyHint:false`; idempotent updates carry `idempotentHint:true` so MCP-aware clients can render correct confirmation prompts
+- Service state derivation reports `updating` for rollback-started and rollback-paused states, not just forward updates
+- PRM, AS-metadata, and DCR responses marshal before writing so an encoding failure cannot emit a partial body followed by a 500 status
+- Stack secret redaction is now centralised in the cache invariant; the redundant inline loop in `GetStackDetail` has been removed
+- Env and label patch handlers no longer lose concurrent writes — the merge runs against a fresh Docker inspect inside the writer, so other writers' updates to unrelated keys are preserved
+- MCP OAuth DCR rate-limit map is swept on every request; previously every distinct source IP left a bucket behind for the lifetime of the process
+- MCP OAuth authorization-server metadata advertises `revocation_endpoint_auth_methods_supported` per RFC 7009
+- MCP CIMD fetcher reuses its HTTP client (with the SSRF-aware transport) across fetches instead of rebuilding the transport per request
 
 ## [0.11.2] - 2026-05-20
 

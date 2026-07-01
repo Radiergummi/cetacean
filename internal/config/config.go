@@ -12,6 +12,12 @@ import (
 type OperationsLevel int
 
 const (
+	// OpsInherit is a sentinel value (-1) used only in MCPConfig.OperationsLevel
+	// to indicate that the MCP server should inherit the global operations level.
+	// It is not a real tier and must not be used in permission checks directly;
+	// call MCPConfig.EffectiveOperationsLevel to resolve the actual level.
+	OpsInherit OperationsLevel = -1
+
 	// OpsReadOnly disables all write operations.
 	OpsReadOnly OperationsLevel = 0
 
@@ -45,6 +51,7 @@ type Config struct {
 	OperationsLevel  OperationsLevel // CETACEAN_OPERATIONS_LEVEL
 	CORSOrigins      []string        // CETACEAN_CORS_ORIGINS, default empty (disabled)
 	TrustedProxies   []netip.Prefix  // CETACEAN_TRUSTED_PROXIES
+	MCP              MCPConfig       // [mcp] section / CETACEAN_MCP_* env vars
 }
 
 // Load merges configuration from flags, environment variables, a TOML
@@ -168,6 +175,16 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 	if err := ValidateBasePath(cfg.BasePath); err != nil {
 		return nil, err
 	}
+
+	var fMCP *fileMCP
+	if fc != nil {
+		fMCP = fc.MCP
+	}
+	mcpCfg, err := loadMCP(fMCP)
+	if err != nil {
+		return nil, err
+	}
+	cfg.MCP = mcpCfg
 
 	trustedProxiesRaw := resolve(
 		flags.TrustedProxies,

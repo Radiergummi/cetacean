@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"strings"
 
@@ -261,14 +262,21 @@ func requireMergePatch(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-// patchStringMap reads a JSON Patch or Merge Patch body, applies it to
-// current, and returns the updated map. Returns nil and false (and writes
-// the error response) on any failure.
-func patchStringMap(
+// parsePatchMutator validates Content-Type, reads the request body, and
+// returns a MapMutator that applies the parsed JSON Patch (RFC 6902) or JSON
+// Merge Patch (RFC 7396) to whatever fresh current-state map the writer hands
+// it. The mutator is invoked inside the Docker writer against a live inspect
+// — pre-merging against the in-memory cache would race third-party writers
+// and silently drop their concurrent changes.
+//
+// Content-type and body-read failures are written to w and ok=false is
+// returned. Patch *application* failures (test-failed, unknown op, replace
+// of a missing key) bubble up from the mutator so the caller can decide the
+// HTTP status — see writePatchError.
+func parsePatchMutator(
 	w http.ResponseWriter,
 	r *http.Request,
-	current map[string]string,
-) (map[string]string, bool) {
+) (func(map[string]string) (map[string]string, error), bool) {
 	ct := r.Header.Get("Content-Type")
 	isJSONPatch := strings.HasPrefix(ct, "application/json-patch+json")
 	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")
@@ -289,28 +297,53 @@ func patchStringMap(
 		return nil, false
 	}
 
-	if current == nil {
-		current = map[string]string{}
-	}
-
-	var updated map[string]string
 	if isJSONPatch {
 		var ops []PatchOp
 		if err := json.Unmarshal(body, &ops); err != nil {
 			writeErrorCode(w, r, "API006", "invalid request body")
 			return nil, false
 		}
-		updated, err = applyJSONPatch(current, ops)
-	} else {
-		updated, err = applyMergePatchStringMap(current, body)
+		return func(current map[string]string) (map[string]string, error) {
+			if current == nil {
+				current = map[string]string{}
+			}
+			return applyJSONPatch(current, ops)
+		}, true
 	}
 
-	if err != nil {
-		writePatchError(w, r, err)
+	// Merge Patch (RFC 7396): unmarshal the patch document upfront so invalid
+	// JSON surfaces as a 400 before the writer even runs an inspect.
+	var mergePatch map[string]*string
+	if err := json.Unmarshal(body, &mergePatch); err != nil {
+		writeErrorCode(w, r, "API006", "invalid request body")
 		return nil, false
 	}
+	return func(current map[string]string) (map[string]string, error) {
+		out := make(map[string]string, len(current)+len(mergePatch))
+		maps.Copy(out, current)
+		for k, v := range mergePatch {
+			if v == nil {
+				delete(out, k)
+				continue
+			}
+			out[k] = *v
+		}
+		return out, nil
+	}, true
+}
 
-	return updated, true
+// isPatchApplyError reports whether err originated from patch application
+// inside the writer-side mutator. These errors map to 400/409 rather than
+// the writer's usual 500 / SVC001 / NODE001 codes.
+func isPatchApplyError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var tfe *testFailedError
+	if errors.As(err, &tfe) {
+		return true
+	}
+	return errors.Is(err, errPatchApply)
 }
 
 // writePatchError maps JSON Patch application errors to error codes.

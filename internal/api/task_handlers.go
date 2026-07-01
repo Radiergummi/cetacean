@@ -6,36 +6,16 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/filter"
 )
 
 // --- Tasks ---
 
-type EnrichedTask struct {
-	swarm.Task
-	ServiceName  string `json:"ServiceName,omitempty"`
-	NodeHostname string `json:"NodeHostname,omitempty"`
-}
-
-func (h *Handlers) enrichTask(t swarm.Task) EnrichedTask {
-	et := EnrichedTask{Task: t}
-	if svc, ok := h.cache.GetService(t.ServiceID); ok {
-		et.ServiceName = svc.Spec.Name
-	}
-	if node, ok := h.cache.GetNode(t.NodeID); ok {
-		et.NodeHostname = node.Description.Hostname
-	}
-	return et
-}
-
-func (h *Handlers) enrichTasks(tasks []swarm.Task) []EnrichedTask {
-	out := make([]EnrichedTask, len(tasks))
-	for i, t := range tasks {
-		out[i] = h.enrichTask(t)
-	}
-	return out
-}
+// EnrichedTask is an alias for cluster.EnrichedTask, kept for the REST
+// response and test imports that referenced the api-local name historically.
+type EnrichedTask = cluster.EnrichedTask
 
 // enrichedTaskID extracts the JSON-LD @id for an enriched task. Shared across
 // task list handlers and service/node task sub-collections.
@@ -77,7 +57,7 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	paged := applyPagination(r.Context(), tasks, p)
-	enriched := h.enrichTasks(paged.Items)
+	enriched := cluster.EnrichTasks(h.cache, paged.Items)
 	writeLinkTemplate(w, r, "/tasks/{id}")
 	writeCollectionResponse(
 		w,
@@ -101,7 +81,7 @@ func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	et := h.enrichTask(task)
+	et := cluster.EnrichTask(h.cache, task)
 	h.setAllow(w, r, "task", id)
 	writeCachedJSONTimed(w, r, NewDetailResponse(r.Context(), "/tasks/"+id, "Task", TaskResponse{
 		Task:    et,

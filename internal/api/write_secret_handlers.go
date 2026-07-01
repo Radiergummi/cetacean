@@ -7,6 +7,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 func (h *Handlers) HandleRemoveSecret(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +48,7 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 				return nil, false
 			}
 
-			sec.Spec.Data = nil
+			sec = cluster.RedactSecret(sec)
 
 			return SecretResponse{
 				Secret:   sec,

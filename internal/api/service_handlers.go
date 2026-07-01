@@ -6,6 +6,7 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/filter"
 	"github.com/radiergummi/cetacean/internal/integrations"
@@ -114,7 +115,7 @@ func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	tasks := h.enrichTasks(h.cache.ListTasksByService(r.PathValue("id")))
+	tasks := cluster.EnrichTasks(h.cache, h.cache.ListTasksByService(r.PathValue("id")))
 	writeCachedJSON(
 		w,
 		r,

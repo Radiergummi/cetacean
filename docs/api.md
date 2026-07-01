@@ -495,6 +495,66 @@ SSE, log stream, and metrics stream connections are capped. When a limit is reac
 
 For the complete endpoint reference with request/response schemas and try-it-out, see the interactive [API Reference](api/explorer).
 
+## MCP Server
+
+Cetacean optionally exposes a Model Context Protocol server for AI agents. Enable with `CETACEAN_MCP=true` (or `[mcp].enabled = true` in TOML). The protocol is mounted at `{base_path}/mcp` over streamable HTTP — a single endpoint accepting JSON-RPC requests with optional SSE upgrades for server notifications.
+
+### Authorization
+
+When auth mode is anything other than `none`, the MCP endpoint is bearer-protected and Cetacean exposes an OAuth 2.1 authorization server alongside it. The protocol implements the MCP 2025-06-18 authorization profile (RFC 8414 AS metadata, RFC 9728 protected-resource metadata, RFC 8707 resource indicators, PKCE-only with S256).
+
+| Endpoint | Purpose |
+|---|---|
+| `GET {base_path}/.well-known/oauth-authorization-server` | AS metadata (RFC 8414) |
+| `GET {base_path}/.well-known/oauth-protected-resource` | Protected Resource Metadata (RFC 9728) |
+| `GET\|POST {base_path}/oauth/authorize` | Authorization endpoint + consent page |
+| `POST {base_path}/oauth/token` | Token endpoint (`authorization_code`, `refresh_token`) |
+| `POST {base_path}/oauth/revoke` | Token revocation (RFC 7009) |
+| `POST {base_path}/oauth/register` | Dynamic Client Registration (RFC 7591) |
+
+Unauthenticated MCP requests get `401 Unauthorized` with a `WWW-Authenticate: Bearer realm="mcp", resource_metadata="..."` header pointing the client at the PRM document — modern MCP clients chase this chain to discover the AS automatically.
+
+Two client identification paths are supported in parallel:
+
+- **DCR (Dynamic Client Registration):** anyone can POST to `/oauth/register` and receive a generated `client_id`. The consent screen shows a "Self-reported identity" badge so users know to scrutinize the redirect URI. Per-IP rate limit (default 10/hour) and global cap (default 1000, LRU-evicted) gate abuse.
+- **CIMD (Client ID Metadata Documents):** clients publish their metadata at an `https://` URL and pass that URL as `client_id`. Cetacean fetches and validates the document (5KB cap, 5s timeout, SSRF blocklist for private/loopback/CGNAT ranges) and renders a "Verified via published metadata" badge.
+
+Tokens are HS256 JWTs (signed with the configured `CETACEAN_MCP_SIGNING_KEY` or an auto-generated key) with `aud` = canonical MCP endpoint URL. Refresh tokens rotate single-use; presenting a previously-consumed refresh token revokes the entire grant family.
+
+### Resources
+
+Resources are addressed by `cetacean://` URIs. Reading a resource returns `application/json` text content matching the corresponding REST shape (with the same secret redaction and task enrichment).
+
+| URI | Description |
+|---|---|
+| `cetacean://cluster` | Cluster snapshot |
+| `cetacean://recommendations` | Current recommendation findings |
+| `cetacean://history` | Last 100 cache change history entries |
+| `cetacean://nodes/{id}` | Node detail |
+| `cetacean://services/{id}` | Service detail |
+| `cetacean://services/{id}/logs` | Service log stream (subscribable) |
+| `cetacean://tasks/{id}` | Enriched task (adds ServiceName, NodeHostname) |
+| `cetacean://stacks/{name}` | Stack detail with member resources |
+| `cetacean://configs/{id}` | Config metadata + base64 data |
+| `cetacean://secrets/{id}` | Secret metadata (data nilled) |
+| `cetacean://networks/{id}` | Network detail |
+| `cetacean://volumes/{name}` | Volume detail |
+
+Clients subscribe with `resources/subscribe`. Detail subscriptions receive `notifications/resources/updated` whenever the underlying cache entry changes; create/remove events additionally broadcast `notifications/resources/list_changed` to all sessions.
+
+### Tools
+
+Tools are gated by the MCP operations level (`CETACEAN_MCP_OPERATIONS_LEVEL`, falls back to `CETACEAN_OPERATIONS_LEVEL`). Each call additionally runs through the ACL evaluator (`Can("write", "<type>:<name>")`).
+
+| Tier | Tools |
+|---|---|
+| 0 — Read | `get_logs`, `search` |
+| 1 — Operational | `scale_service`, `update_service_image`, `rollback_service`, `restart_service`, `remove_task` |
+| 2 — Configuration | `update_service_env`, `update_service_labels`, `update_node_labels`, `update_service_resources`, `update_service_placement`, `update_service_ports`, `update_service_update_policy`, `update_service_rollback_policy`, `update_service_log_driver` |
+| 3 — Impactful | `update_node_availability`, `update_node_role`, `remove_service`, `remove_config`, `remove_secret`, `remove_network`, `remove_volume` |
+
+`get_logs` returns `{lines: LogLine[], cursor: string}`. Pass `cursor` back as `since` on the next call to receive only newer lines. The cursor is the RFC3339Nano timestamp of the last line, advanced by one nanosecond.
+
 ## Rate Limits
 
 There is no general rate limiting. The only limits are on concurrent streaming connections:

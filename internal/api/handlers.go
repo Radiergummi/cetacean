@@ -20,6 +20,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/filter"
@@ -80,11 +81,15 @@ type ServiceLifecycleWriter interface {
 }
 
 type ServiceSpecWriter interface {
-	UpdateServiceEnv(ctx context.Context, id string, env map[string]string) (swarm.Service, error)
+	UpdateServiceEnv(
+		ctx context.Context,
+		id string,
+		mutate func(current map[string]string) (map[string]string, error),
+	) (swarm.Service, error)
 	UpdateServiceLabels(
 		ctx context.Context,
 		id string,
-		labels map[string]string,
+		mutate func(current map[string]string) (map[string]string, error),
 	) (swarm.Service, error)
 	UpdateServiceResources(
 		ctx context.Context,
@@ -160,7 +165,11 @@ type NodeWriter interface {
 		id string,
 		availability swarm.NodeAvailability,
 	) (swarm.Node, error)
-	UpdateNodeLabels(ctx context.Context, id string, labels map[string]string) (swarm.Node, error)
+	UpdateNodeLabels(
+		ctx context.Context,
+		id string,
+		mutate func(current map[string]string) (map[string]string, error),
+	) (swarm.Node, error)
 	UpdateNodeRole(ctx context.Context, id string, role swarm.NodeRole) (swarm.Node, error)
 	RemoveNode(ctx context.Context, id string, force bool) error
 }
@@ -171,7 +180,7 @@ type ConfigWriter interface {
 	UpdateConfigLabels(
 		ctx context.Context,
 		id string,
-		labels map[string]string,
+		mutate func(current map[string]string) (map[string]string, error),
 	) (swarm.Config, error)
 }
 
@@ -181,7 +190,7 @@ type SecretWriter interface {
 	UpdateSecretLabels(
 		ctx context.Context,
 		id string,
-		labels map[string]string,
+		mutate func(current map[string]string) (map[string]string, error),
 	) (swarm.Secret, error)
 }
 
@@ -305,133 +314,11 @@ func searchFilter[T any](items []T, query string, name func(T) string) []T {
 	q := strings.ToLower(query)
 	var filtered []T
 	for _, item := range items {
-		if containsFold(name(item), q) {
+		if cluster.ContainsFold(name(item), q) {
 			filtered = append(filtered, item)
 		}
 	}
 	return filtered
-}
-
-// containsFold reports whether s contains substr using case-insensitive
-// comparison, or whether the query matches segment prefixes of s.
-// substr must already be lowercased.
-func containsFold(s, substrLower string) bool {
-	if containsFoldNoAlloc(s, substrLower) {
-		return true
-	}
-
-	// Segment-prefix matching requires lowercased input; only allocate if
-	// the string actually contains separators (otherwise segmentPrefixMatch
-	// returns false for single-segment targets anyway).
-	if !strings.ContainsAny(s, "_-") {
-		return false
-	}
-
-	return segmentPrefixMatch(strings.ToLower(s), substrLower)
-}
-
-// containsFoldNoAlloc reports whether s contains substr (which must be
-// lowercased) using case-insensitive comparison without allocating.
-// Only handles ASCII case folding; non-ASCII letters are compared as-is.
-func containsFoldNoAlloc(s, substrLower string) bool {
-	if len(substrLower) == 0 {
-		return true
-	}
-
-	if len(substrLower) > len(s) {
-		return false
-	}
-
-	for i := 0; i <= len(s)-len(substrLower); i++ {
-		match := true
-
-		for j := 0; j < len(substrLower); j++ {
-			c := s[i+j]
-			if c >= 'A' && c <= 'Z' {
-				c += 'a' - 'A'
-			}
-
-			if c != substrLower[j] {
-				match = false
-				break
-			}
-		}
-
-		if match {
-			return true
-		}
-	}
-
-	return false
-}
-
-var separatorReplacer = strings.NewReplacer("_", "", "-", "")
-
-func isSeparator(r rune) bool { return r == '_' || r == '-' }
-
-// segmentPrefixMatch checks if query matches target using segment-prefix
-// matching. The target is split by '_' and '-' into segments, and each group
-// of query characters must match the prefix of a segment, in order, with
-// segments skippable. Uses memoized backtracking for ambiguous boundaries.
-//
-// Both arguments must already be lowercased.
-func segmentPrefixMatch(targetLower, queryLower string) bool {
-	if len(queryLower) == 0 {
-		return true
-	}
-
-	// Strip separators from query (user may type "go_gc" meaning "go" + "gc")
-	query := separatorReplacer.Replace(queryLower)
-	if len(query) == 0 {
-		return true
-	}
-
-	segments := strings.FieldsFunc(targetLower, isSeparator)
-
-	// Single-segment targets are already covered by substring match in containsFold
-	if len(segments) <= 1 {
-		return false
-	}
-
-	type key struct{ qi, si int }
-	memo := map[key]bool{}
-
-	var match func(qi, si int) bool
-	match = func(qi, si int) bool {
-		if qi >= len(query) {
-			return true
-		}
-
-		if si >= len(segments) {
-			return false
-		}
-
-		k := key{qi, si}
-		if v, ok := memo[k]; ok {
-			return v
-		}
-
-		result := false
-		for s := si; s < len(segments) && !result; s++ {
-			seg := segments[s]
-			maxMatch := 0
-
-			for maxMatch < len(seg) && qi+maxMatch < len(query) && query[qi+maxMatch] == seg[maxMatch] {
-				maxMatch++
-			}
-
-			for take := maxMatch; take >= 1 && !result; take-- {
-				if match(qi+take, s+1) {
-					result = true
-				}
-			}
-		}
-
-		memo[k] = result
-		return result
-	}
-
-	return match(0, 0)
 }
 
 const maxFilterLen = 512

@@ -609,13 +609,17 @@ func (c *Client) CreateSecret(ctx context.Context, spec swarm.SecretSpec) (strin
 func (c *Client) UpdateConfigLabels(
 	ctx context.Context,
 	id string,
-	labels map[string]string,
+	mutate MapMutator,
 ) (swarm.Config, error) {
 	cfg, _, err := c.docker.ConfigInspectWithRaw(ctx, id)
 	if err != nil {
 		return swarm.Config{}, err
 	}
-	cfg.Spec.Labels = labels
+	updated, err := mutate(cfg.Spec.Labels)
+	if err != nil {
+		return swarm.Config{}, err
+	}
+	cfg.Spec.Labels = updated
 	err = c.docker.ConfigUpdate(ctx, cfg.ID, cfg.Version, cfg.Spec)
 	if err != nil {
 		return swarm.Config{}, err
@@ -626,13 +630,17 @@ func (c *Client) UpdateConfigLabels(
 func (c *Client) UpdateSecretLabels(
 	ctx context.Context,
 	id string,
-	labels map[string]string,
+	mutate MapMutator,
 ) (swarm.Secret, error) {
 	sec, _, err := c.docker.SecretInspectWithRaw(ctx, id)
 	if err != nil {
 		return swarm.Secret{}, err
 	}
-	sec.Spec.Labels = labels
+	updated, err := mutate(sec.Spec.Labels)
+	if err != nil {
+		return swarm.Secret{}, err
+	}
+	sec.Spec.Labels = updated
 	err = c.docker.SecretUpdate(ctx, sec.ID, sec.Version, sec.Spec)
 	if err != nil {
 		return swarm.Secret{}, err
@@ -644,10 +652,39 @@ func (c *Client) RemoveVolume(ctx context.Context, name string, force bool) erro
 	return c.docker.VolumeRemove(ctx, name, force)
 }
 
+// MapMutator transforms a string map. It is applied to a freshly-inspected
+// snapshot of the target spec's env or labels — the caller passes a closure
+// that already knows the requested patch (JSON Merge Patch or RFC 6902), and
+// the writer hands it the live state read straight from Docker. This closes
+// the lost-update window that existed when handlers pre-merged against an
+// in-memory cache snapshot.
+type MapMutator = func(current map[string]string) (map[string]string, error)
+
+func envSliceToMap(env []string) map[string]string {
+	out := make(map[string]string, len(env))
+	for _, e := range env {
+		k, v, ok := splitEnvEntry(e)
+		if !ok {
+			continue
+		}
+		out[k] = v
+	}
+	return out
+}
+
+func splitEnvEntry(s string) (string, string, bool) {
+	for i := 0; i < len(s); i++ {
+		if s[i] == '=' {
+			return s[:i], s[i+1:], true
+		}
+	}
+	return "", "", false
+}
+
 func (c *Client) UpdateServiceEnv(
 	ctx context.Context,
 	id string,
-	env map[string]string,
+	mutate MapMutator,
 ) (swarm.Service, error) {
 	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
 	if err != nil {
@@ -658,8 +695,13 @@ func (c *Client) UpdateServiceEnv(
 			fmt.Errorf("service has no container spec"),
 		)
 	}
-	envSlice := make([]string, 0, len(env))
-	for k, v := range env {
+	current := envSliceToMap(svc.Spec.TaskTemplate.ContainerSpec.Env)
+	updated, err := mutate(current)
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	envSlice := make([]string, 0, len(updated))
+	for k, v := range updated {
 		envSlice = append(envSlice, k+"="+v)
 	}
 	sort.Strings(envSlice)
@@ -680,13 +722,17 @@ func (c *Client) UpdateServiceEnv(
 func (c *Client) UpdateNodeLabels(
 	ctx context.Context,
 	id string,
-	labels map[string]string,
+	mutate MapMutator,
 ) (swarm.Node, error) {
 	node, _, err := c.docker.NodeInspectWithRaw(ctx, id)
 	if err != nil {
 		return swarm.Node{}, err
 	}
-	node.Spec.Labels = labels
+	updated, err := mutate(node.Spec.Labels)
+	if err != nil {
+		return swarm.Node{}, err
+	}
+	node.Spec.Labels = updated
 	err = c.docker.NodeUpdate(ctx, node.ID, node.Version, node.Spec)
 	if err != nil {
 		return swarm.Node{}, err
@@ -697,13 +743,17 @@ func (c *Client) UpdateNodeLabels(
 func (c *Client) UpdateServiceLabels(
 	ctx context.Context,
 	id string,
-	labels map[string]string,
+	mutate MapMutator,
 ) (swarm.Service, error) {
 	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
 	if err != nil {
 		return swarm.Service{}, err
 	}
-	svc.Spec.Labels = labels
+	updated, err := mutate(svc.Spec.Labels)
+	if err != nil {
+		return swarm.Service{}, err
+	}
+	svc.Spec.Labels = updated
 	_, err = c.docker.ServiceUpdate(
 		ctx,
 		svc.ID,

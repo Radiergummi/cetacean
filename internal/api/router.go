@@ -41,6 +41,15 @@ type RouterConfig struct {
 	TLSEnabled        bool
 	TrustedProxies    []netip.Prefix
 	Resyncer          Resyncer
+
+	// MCPHandler, when non-nil, is mounted at {BasePath}/mcp. main.go builds
+	// it from internal/mcp; the api package stays decoupled from mcp-go.
+	MCPHandler http.Handler
+
+	// OAuthRoutes, when non-nil, registers the OAuth 2.1 authorization server
+	// endpoints (/.well-known/*, /oauth/*) on the mux. Wired by main.go from
+	// internal/mcp/oauth.
+	OAuthRoutes func(mux *http.ServeMux, basePath string)
 }
 
 // listFeeds builds feedHandlers for a resource list endpoint.
@@ -623,6 +632,18 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
 		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	}
+
+	// MCP server (mounted before SPA fallback so /mcp doesn't fall through).
+	if cfg.MCPHandler != nil {
+		mux.Handle("/mcp", cfg.MCPHandler)
+	}
+
+	// OAuth 2.1 authorization server endpoints. Wired by main.go when MCP is
+	// enabled and an auth provider is configured; the api package itself
+	// doesn't reach into mcp/oauth.
+	if cfg.OAuthRoutes != nil {
+		cfg.OAuthRoutes(mux, "")
 	}
 
 	// SPA fallback (must be last)

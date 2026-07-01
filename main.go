@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"embed"
@@ -24,6 +25,8 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/docker"
+	"github.com/radiergummi/cetacean/internal/mcp"
+	"github.com/radiergummi/cetacean/internal/mcp/oauth"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 	"github.com/radiergummi/cetacean/internal/version"
 	"tailscale.com/tsnet"
@@ -195,8 +198,11 @@ func main() {
 	)
 	defer broadcaster.Close()
 
-	// Wire cache changes to SSE broadcaster
-	stateCache.SetOnChange(func(e cache.Event) {
+	// Wire cache changes to SSE broadcaster.
+	// The cancel function is intentionally dropped: the broadcaster and cache
+	// share the process lifetime, so there is no window in which detaching the
+	// listener would matter.
+	stateCache.AddOnChangeListener(func(e cache.Event) {
 		broadcaster.Broadcast(e)
 	})
 
@@ -377,6 +383,19 @@ func main() {
 		slog.Info("CORS enabled", "origins", cfg.CORSOrigins)
 	}
 
+	mcpHandler, oauthRoutes, closeMCP := setupMCP(mcpDeps{
+		cfg:          cfg,
+		authMode:     authCfg.Mode,
+		authProvider: authProvider,
+		tlsEnabled:   tlsCfg.Enabled(),
+		cache:        stateCache,
+		writeClient:  dockerClient,
+		logs:         dockerClient,
+		acl:          aclEval,
+		rec:          recEngine,
+	})
+	defer closeMCP()
+
 	router := api.NewRouter(api.RouterConfig{
 		Handlers:          handlers,
 		Broadcaster:       broadcaster,
@@ -392,6 +411,8 @@ func main() {
 		TLSEnabled:        tlsCfg.Enabled(),
 		TrustedProxies:    cfg.TrustedProxies,
 		Resyncer:          watcher,
+		MCPHandler:        mcpHandler,
+		OAuthRoutes:       oauthRoutes,
 	})
 
 	var serverTLSConfig *tls.Config
@@ -566,4 +587,101 @@ func serveDualListeners(
 		slog.Error("tsnet server error", "error", err)
 		os.Exit(1)
 	}
+}
+
+// mcpDeps bundles the runtime objects setupMCP needs. The split between
+// config sources (cfg/authMode/tlsEnabled — each loaded separately in main)
+// and runtime objects is preserved so callers don't have to wedge unrelated
+// runtime state onto config structs.
+type mcpDeps struct {
+	cfg          *config.Config
+	authMode     string
+	authProvider auth.Provider
+	tlsEnabled   bool
+	cache        *cache.Cache
+	writeClient  mcp.DockerWriteClient
+	logs         mcp.LogStreamer
+	acl          *acl.Evaluator
+	rec          mcp.RecommendationEngine
+}
+
+// setupMCP builds the MCP HTTP handler and the OAuth route registrar when
+// CETACEAN_MCP=true. The first two return values are nil when MCP is
+// disabled; the OAuth registrar is also nil when auth mode is "none" (no
+// token issuance is possible without a user identity). The third return is
+// a cleanup function the caller must invoke at shutdown so the MCP server's
+// cache change listener detaches before the cache itself is torn down.
+//
+// The issuer defaults to the listen address + TLS scheme, which only works
+// when no reverse proxy is in front. Behind a proxy, set CETACEAN_MCP_ISSUER
+// (or [mcp].issuer) to the canonical external URL.
+func setupMCP(d mcpDeps) (http.Handler, func(mux *http.ServeMux, basePath string), func()) {
+	if !d.cfg.MCP.Enabled {
+		return nil, nil, func() {}
+	}
+
+	issuer := d.cfg.MCP.Issuer
+	if issuer == "" {
+		scheme := "http"
+		if d.tlsEnabled {
+			scheme = "https"
+		}
+		issuer = scheme + "://" + d.cfg.ListenAddr
+	}
+	mcpResource := issuer + d.cfg.BasePath + "/mcp"
+
+	var oauthSrv *oauth.Server
+	if d.authMode != "none" {
+		signingKey := []byte(d.cfg.MCP.SigningKey)
+		if len(signingKey) == 0 {
+			signingKey = make([]byte, 32)
+			if _, err := rand.Read(signingKey); err != nil {
+				slog.Error("MCP signing key generation failed", "error", err)
+				os.Exit(1)
+			}
+			slog.Warn(
+				"MCP signing key auto-generated; tokens won't survive restarts. Set CETACEAN_MCP_SIGNING_KEY for stable tokens.",
+			)
+		}
+		oauthSrv = oauth.NewServer(oauth.ServerConfig{
+			Issuer:      issuer,
+			BasePath:    d.cfg.BasePath,
+			MCPResource: mcpResource,
+			MCP:         d.cfg.MCP,
+			SigningKey:  signingKey,
+		})
+		slog.Info("MCP OAuth 2.1 authorization server enabled",
+			"issuer", issuer, "resource", mcpResource)
+	}
+
+	mcpSrv, err := mcp.New(d.cache, mcp.Options{
+		WriteClient:     d.writeClient,
+		Logs:            d.logs,
+		ACL:             d.acl,
+		Config:          d.cfg.MCP,
+		GlobalOpsLevel:  d.cfg.OperationsLevel,
+		OAuth:           oauthSrv,
+		AuthMode:        d.authMode,
+		AuthProvider:    d.authProvider,
+		Recommendations: d.rec,
+		AllowedOrigins:  d.cfg.CORSOrigins,
+	})
+	if err != nil {
+		slog.Error("MCP server setup failed", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("MCP server enabled",
+		"operations_level", d.cfg.MCP.EffectiveOperationsLevel(d.cfg.OperationsLevel),
+		"max_sessions", d.cfg.MCP.MaxSessions)
+
+	if len(d.cfg.CORSOrigins) == 0 {
+		slog.Warn(
+			"MCP Origin guard active with no allowlist: browser-based MCP clients (e.g. MCP Inspector) will be rejected with 403. Set CETACEAN_CORS_ORIGINS to the allowed origins (or '*' for any). Non-browser MCP clients send no Origin and are unaffected.",
+		)
+	}
+
+	if oauthSrv == nil {
+		return mcpSrv.Handler(), nil, mcpSrv.Close
+	}
+	return mcpSrv.Handler(), oauthSrv.RegisterRoutes, mcpSrv.Close
 }
