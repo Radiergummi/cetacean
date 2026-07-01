@@ -32,5 +32,8 @@
   "devDependencies": {
     "oxfmt": "^0.51.0",
     "oxlint": "^1.66.0"
+  },
+  "overrides": {
+    "vite": "^7.3.5"
   }
 }
