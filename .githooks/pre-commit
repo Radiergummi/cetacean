@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Regenerate the committed SBOM when a dependency manifest is staged, so it
+# never drifts from the lockfiles. No-ops for commits that don't touch
+# dependencies, and skips gracefully when the SBOM toolchain is absent (CI is
+# the real gate). Install with: make hooks
+set -euo pipefail
+
+staged="$(git diff --cached --name-only)"
+case "$staged" in
+  *go.mod*|*go.sum*|*frontend/package.json*|*frontend/package-lock.json*) ;;
+  *) exit 0 ;;
+esac
+
+# The generators are declared deps (go tool cyclonedx-gomod; npx cyclonedx-npm),
+# so we only need go, node/npx, jq, and installed frontend deps. Skip (don't
+# block) when anything is missing — CI is the real gate.
+for tool in go npx jq; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "pre-commit: '$tool' missing; skipping SBOM regeneration (CI will verify)." >&2
+    exit 0
+  fi
+done
+
+if [ ! -d frontend/node_modules ]; then
+  echo "pre-commit: frontend/node_modules missing; run 'cd frontend && npm ci'. Skipping SBOM regeneration (CI will verify)." >&2
+  exit 0
+fi
+
+echo "pre-commit: dependency manifest changed, regenerating SBOM…"
+make sbom
+git add internal/api/sbom/sbom.cdx.json
