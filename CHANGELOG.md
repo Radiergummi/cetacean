@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `CETACEAN_MCP_ISSUER` (and `[mcp].issuer`) for setting the canonical OAuth issuer URL when Cetacean runs behind a reverse proxy
 - MCP tools now return structured, machine-readable results (`structuredContent`) alongside the text form, so AI agents can parse tool output without scraping JSON out of a text blob. The `search`, `get_logs`, and `remove_*` tools additionally advertise an output schema, which the server validates results against
 - MCP server now advertises usage instructions and a description when a client connects, so AI agents understand the read-mostly model, that writes are gated by operations tier and ACL, and to resolve a resource via `search` before acting on it
+- MCP tools and resources now carry icons (per the 2025-11-25 spec), so MCP clients can display a glyph next to each one. Tool icons are grouped by what the tool does (read, search, scale, edit, node, remove) and resource icons reflect the resource type (node, service, stack, config, secret, …); both are served from Cetacean itself
 
 ### Fixed
 - MCP OAuth discovery now works when Cetacean runs under a base path: the authorization-server `issuer`, the protected-resource metadata `authorization_servers`, and the access-token `iss` claim now include `CETACEAN_BASE_PATH`, matching where the `.well-known` documents are actually served. Previously a client that derived the metadata URL from the issuer got a 404 whenever a base path was configured (default deployments without a base path were unaffected)

@@ -144,6 +144,18 @@ Clients call `resources/subscribe` with a URI. When the underlying cluster state
 when resources are created or removed. Both are ACL-filtered per notification: a client is only notified about
 resources its identity can read.
 
+## Icons
+
+Every tool and resource advertises an `icon` that MCP clients can render beside it. Tool icons are grouped by verb
+category (read, search, scale, edit, node, remove); resource icons reflect the resource type (node, service, stack,
+config, secret, network, volume, task, service logs, cluster, recommendations, history).
+
+The icons are plain SVGs served by Cetacean itself under the unauthenticated `/assets/mcp-icons/` prefix, so a client
+loads them without a bearer token in every auth mode. Their URLs are absolute and derived from the canonical external
+base URL — so when Cetacean runs behind a reverse proxy, **set `CETACEAN_MCP_ISSUER`** (the same value the OAuth
+issuer and token audience use) or the icon URLs will point at the wrong host. If no external base URL can be resolved,
+icons are omitted rather than advertised as broken relative links.
+
 ## Tools
 
 Tools are gated by operations level (`CETACEAN_MCP_OPERATIONS_LEVEL`, defaulting to `CETACEAN_OPERATIONS_LEVEL`) and
@@ -151,7 +163,8 @@ by per-resource ACL write permission. A tool above the configured tier is not re
 lacks grants for is hidden from `tools/list` and refused at call time. Each tool advertises the behavioural hints
 (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) that clients use to gate confirmation prompts.
 On connect, the server also sends top-level usage `instructions` (read-mostly model, resolve IDs via `search` first,
-writes gated by tier + ACL) so agents know how to drive it.
+writes gated by tier + ACL) so agents know how to drive it. Each tool also advertises an `icon` grouped by verb
+category (read, search, scale, edit, node, remove) that clients can render (see [Icons](#icons)).
 
 Tool results carry machine-readable `structuredContent` (the parsed JSON object) alongside the text form. The
 `search`, `get_logs`, and `remove_*` tools additionally advertise an output schema that the server validates results
