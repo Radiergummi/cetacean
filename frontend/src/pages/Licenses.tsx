@@ -21,11 +21,13 @@ const ecosystemLabels: Record<string, string> = {
 };
 
 /**
- * Strips the "git+" prefix that npm packages often carry on their VCS URLs
- * (e.g. "git+https://…"), so the link opens in a browser.
+ * Applies basic heuristics to try and convert VCS URLs targeting git to HTTP
+ * (e.g., "git://…" or "git+https://…"), so the link opens in a browser.
  */
 function browserUrl(url: string): string {
-  return url.replace(/^git\+/, "");
+  return url
+    .replace(/^git(\+https)?:\/\//, "https://")
+    .replace(/\.git$/, "");
 }
 
 export default function Licenses() {
@@ -53,17 +55,19 @@ export default function Licenses() {
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
 
-    return components.filter((component) => {
-      if (ecosystem !== "all" && component.ecosystem !== ecosystem) {
-        return false;
-      }
+    return components
+      .filter((component) => {
+        if (ecosystem !== "all" && component.ecosystem !== ecosystem) {
+          return false;
+        }
 
-      if (needle && !component.name.toLowerCase().includes(needle)) {
-        return false;
-      }
+        if (needle && !component.name.toLowerCase().includes(needle)) {
+          return false;
+        }
 
-      return true;
-    });
+        return true;
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [components, query, ecosystem]);
 
   if (error) {

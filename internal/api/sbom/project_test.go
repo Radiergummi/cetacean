@@ -17,7 +17,10 @@ func TestProjectFlattensAndMaps(t *testing.T) {
 	}
 
 	if len(doc.Components) != 2 {
-		t.Fatalf("got %d components, want 2 (container without purl must be skipped)", len(doc.Components))
+		t.Fatalf(
+			"got %d components, want 2 (container without purl must be skipped)",
+			len(doc.Components),
+		)
 	}
 
 	// Sorted: ecosystem "go" before "npm".
@@ -95,7 +98,11 @@ func TestProjectOtherEcosystemAndCrossEcosystemDedup(t *testing.T) {
 	}
 
 	if byEcosystem["other"] != 1 {
-		t.Errorf("cargo component: ecosystem \"other\" count = %d, want 1 (%+v)", byEcosystem["other"], doc.Components)
+		t.Errorf(
+			"cargo component: ecosystem \"other\" count = %d, want 1 (%+v)",
+			byEcosystem["other"],
+			doc.Components,
+		)
 	}
 
 	if shared != 2 {
@@ -103,7 +110,10 @@ func TestProjectOtherEcosystemAndCrossEcosystemDedup(t *testing.T) {
 	}
 
 	if len(doc.Components) != 3 {
-		t.Errorf("got %d components, want 3 (cargo + go-shared + npm-shared; container skipped)", len(doc.Components))
+		t.Errorf(
+			"got %d components, want 3 (cargo + go-shared + npm-shared; container skipped)",
+			len(doc.Components),
+		)
 	}
 }
 

@@ -16,7 +16,11 @@ var projectedJSON []byte
 func init() {
 	doc, err := Project(raw)
 	if err != nil {
-		slog.Warn("sbom: could not project embedded CycloneDX; licenses page will be empty", "error", err)
+		slog.Warn(
+			"sbom: could not project embedded CycloneDX; licenses page will be empty",
+			"error",
+			err,
+		)
 		doc = Document{Components: []Component{}}
 	}
 

@@ -43,7 +43,8 @@ type License struct {
 // projection is deterministic.
 func Project(raw []byte) (Document, error) {
 	var bom cyclonedx.BOM
-	if err := cyclonedx.NewBOMDecoder(bytes.NewReader(raw), cyclonedx.BOMFileFormatJSON).Decode(&bom); err != nil {
+	if err := cyclonedx.NewBOMDecoder(bytes.NewReader(raw), cyclonedx.BOMFileFormatJSON).
+		Decode(&bom); err != nil {
 		return Document{}, err
 	}
 
@@ -69,8 +70,14 @@ func Project(raw []byte) (Document, error) {
 					Description: component.Description,
 					Ecosystem:   ecosystem,
 					Licenses:    projectLicenses(component.Licenses),
-					Homepage:    externalReference(component.ExternalReferences, cyclonedx.ERTypeWebsite),
-					Repository:  externalReference(component.ExternalReferences, cyclonedx.ERTypeVCS),
+					Homepage: externalReference(
+						component.ExternalReferences,
+						cyclonedx.ERTypeWebsite,
+					),
+					Repository: externalReference(
+						component.ExternalReferences,
+						cyclonedx.ERTypeVCS,
+					),
 				})
 			}
 
@@ -130,7 +137,10 @@ func projectLicenses(in *cyclonedx.Licenses) []License {
 	return out
 }
 
-func externalReference(refs *[]cyclonedx.ExternalReference, kind cyclonedx.ExternalReferenceType) string {
+func externalReference(
+	refs *[]cyclonedx.ExternalReference,
+	kind cyclonedx.ExternalReferenceType,
+) string {
 	if refs == nil {
 		return ""
 	}

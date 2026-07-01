@@ -41,7 +41,11 @@ func TestHandleSBOMServesCycloneDXWithETag304(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
-	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/vnd.cyclonedx+json") {
+	if ct := rec.Header().
+		Get("Content-Type"); !strings.HasPrefix(
+		ct,
+		"application/vnd.cyclonedx+json",
+	) {
 		t.Errorf("content-type = %q, want prefix application/vnd.cyclonedx+json", ct)
 	}
 	etag := rec.Header().Get("ETag")
@@ -82,7 +86,11 @@ func TestLicensesEndpointsRouteThroughNegotiate(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status = %d, want 200", rec.Code)
 		}
-		if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/vnd.cyclonedx+json") {
+		if ct := rec.Header().
+			Get("Content-Type"); !strings.HasPrefix(
+			ct,
+			"application/vnd.cyclonedx+json",
+		) {
 			t.Errorf("content-type = %q, want prefix application/vnd.cyclonedx+json", ct)
 		}
 	})
