@@ -1,0 +1,191 @@
+import { api } from "@/api/client";
+import type { LicenseComponent, LicensesResponse } from "@/api/types";
+import FetchError from "@/components/FetchError";
+import PageHeader from "@/components/PageHeader";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { getErrorMessage } from "@/lib/utils";
+import { ExternalLink } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+
+type EcosystemFilter = "all" | "go" | "npm" | "other";
+
+const ecosystemLabels: Record<string, string> = {
+  go: "Go",
+  npm: "npm",
+  other: "Other",
+};
+
+export default function Licenses() {
+  const [data, setData] = useState<LicensesResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [ecosystem, setEcosystem] = useState<EcosystemFilter>("all");
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    api
+      .licenses(controller.signal)
+      .then((response) => {
+        setData(response);
+        setError(null);
+      })
+      .catch((caught) => {
+        if (!controller.signal.aborted) {
+          setError(getErrorMessage(caught, "Failed to load licenses"));
+        }
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  const components = useMemo(() => data?.components ?? [], [data]);
+
+  const counts = useMemo(() => {
+    const result: Record<string, number> = { all: components.length };
+
+    for (const component of components) {
+      result[component.ecosystem] = (result[component.ecosystem] ?? 0) + 1;
+    }
+
+    return result;
+  }, [components]);
+
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+
+    return components.filter((component) => {
+      if (ecosystem !== "all" && component.ecosystem !== ecosystem) {
+        return false;
+      }
+
+      if (needle && !component.name.toLowerCase().includes(needle)) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [components, query, ecosystem]);
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <FetchError message={error} />
+      </div>
+    );
+  }
+
+  const ecosystems: EcosystemFilter[] = ["all", "go", "npm"];
+
+  if (counts.other) {
+    ecosystems.push("other");
+  }
+
+  return (
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <PageHeader
+        title="Open-source licenses"
+        subtitle="Every open-source project bundled into Cetacean."
+      />
+
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <Input
+          type="search"
+          placeholder="Search by name…"
+          value={query}
+          onChange={({ target }) => setQuery(target.value)}
+          className="sm:max-w-xs"
+        />
+
+        <div className="flex flex-wrap gap-2">
+          {ecosystems.map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setEcosystem(value)}
+              className={
+                value === ecosystem
+                  ? "rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground"
+                  : "rounded-md border px-3 py-1 text-xs text-muted-foreground transition hover:text-foreground"
+              }
+            >
+              {value === "all" ? "All" : ecosystemLabels[value]}
+              <span className="ml-1.5 opacity-60">{counts[value] ?? 0}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {filtered.map((component) => (
+          <LicenseCard
+            key={`${component.ecosystem}:${component.name}@${component.version ?? ""}`}
+            component={component}
+          />
+        ))}
+      </div>
+
+      {data && filtered.length === 0 && (
+        <p className="py-12 text-center text-sm text-muted-foreground">No matching components.</p>
+      )}
+    </div>
+  );
+}
+
+function LicenseCard({ component }: { component: LicenseComponent }) {
+  return (
+    <Card className="flex flex-col gap-2 p-4">
+      <div className="flex items-start justify-between gap-2">
+        {component.homepage ? (
+          <a
+            href={component.homepage}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="truncate font-medium transition hover:text-primary"
+          >
+            {component.name}
+          </a>
+        ) : (
+          <span className="truncate font-medium">{component.name}</span>
+        )}
+
+        <Badge variant="outline">
+          {ecosystemLabels[component.ecosystem] ?? component.ecosystem}
+        </Badge>
+      </div>
+
+      {component.version && (
+        <span className="font-mono text-xs text-muted-foreground">{component.version}</span>
+      )}
+
+      {component.description && (
+        <p className="line-clamp-2 text-xs text-muted-foreground">{component.description}</p>
+      )}
+
+      <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
+        {component.licenses.map((license, index) => (
+          <Badge
+            key={index}
+            variant="secondary"
+          >
+            {license.id || license.name || "Unknown"}
+          </Badge>
+        ))}
+
+        {component.repository && (
+          <a
+            href={component.repository}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground transition hover:text-foreground"
+          >
+            <ExternalLink className="size-3" />
+            Source
+          </a>
+        )}
+      </div>
+    </Card>
+  );
+}
