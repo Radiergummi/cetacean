@@ -147,7 +147,10 @@ export default defineConfig({
   trailingSlash: "never",
   build: { format: "file" },
   prefetch: true,
-  integrations: [sitemap(), mdx()],
+  integrations: [
+    sitemap(),
+    mdx({ remarkPlugins: [remarkCodeTabs, remarkDocsLinks, remarkStripTitle] }),
+  ],
   vite: {
     plugins: [tailwindcss(), pagefindDevPlugin()],
   },
