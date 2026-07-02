@@ -152,8 +152,7 @@ export default defineConfig({
     plugins: [tailwindcss(), pagefindDevPlugin()],
   },
   markdown: {
-    processor: unified(),
-    remarkPlugins: [remarkCodeTabs, remarkDocsLinks, remarkStripTitle],
+    processor: unified({ remarkPlugins: [remarkCodeTabs, remarkDocsLinks, remarkStripTitle] }),
     shikiConfig: {
       themes: {
         light: "github-light",
