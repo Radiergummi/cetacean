@@ -4,7 +4,7 @@ go 1.26.4
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/CycloneDX/cyclonedx-go v0.9.2
+	github.com/CycloneDX/cyclonedx-go v0.11.0
 	github.com/containerd/errdefs v1.0.0
 	github.com/coreos/go-oidc/v3 v3.19.0
 	github.com/docker/docker v28.5.2+incompatible
