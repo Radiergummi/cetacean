@@ -2660,19 +2660,17 @@
     {
       "type": "library",
       "name": "elkjs",
-      "version": "0.11.1",
-      "bom-ref": "frontend@0.0.0|elkjs@0.11.1",
+      "version": "0.12.0",
+      "bom-ref": "frontend@0.0.0|elkjs@0.12.0",
       "author": "Ulf Rüegg",
       "description": "Automatic graph layout based on Sugiyama's algorithm. Specialized for data flow diagrams and ports.",
       "licenses": [
         {
-          "license": {
-            "id": "EPL-2.0",
-            "acknowledgement": "declared"
-          }
+          "expression": "EPL-2.0 OR GPL-3.0-or-later",
+          "acknowledgement": "declared"
         }
       ],
-      "purl": "pkg:npm/elkjs@0.11.1",
+      "purl": "pkg:npm/elkjs@0.12.0",
       "externalReferences": [
         {
           "url": "git+https://github.com/kieler/elkjs.git",
@@ -2690,12 +2688,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/elkjs/-/elkjs-0.11.1.tgz",
+          "url": "https://registry.npmjs.org/elkjs/-/elkjs-0.12.0.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "cf1c51f64fabc7992d3304ff170c8b74f0ababbc4de9ee151861c7f21034d6f5582a34c58a4ee71cec419c062dae06140754690222ef035fd4d98ada5b1c8a2a"
+              "content": "61970aca7c55c58a0a20e129cb010fc0215d83e0536f141135fde96f07430af73c3b79100fc6e62304b1294d5e39355ce17a3e546f537bee7be6695fbceae111"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
