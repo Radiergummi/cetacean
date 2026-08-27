@@ -62,6 +62,11 @@ jobs:
           # govet/inline, modernize/slicesbackward, broader gosec/G124).
           # Bump in lockstep with the local Homebrew formula.
           version: v2.12.2
+      # `golangci-lint run` does not evaluate the `formatters:` section of
+      # .golangci.yml (gofmt/goimports/golines) — only `golangci-lint fmt`
+      # does. Without this step misformatted Go passes CI and is caught only
+      # by a local `make fmt-check`.
+      - run: golangci-lint fmt --diff ./... 2>&1 | diff /dev/null -
 
   lint-frontend:
     runs-on: ubuntu-latest
@@ -74,7 +79,21 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: cd frontend && npm ci
       - run: cd frontend && npx oxlint
+      - run: cd frontend && npx oxfmt --check .
       - run: cd frontend && npx tsc -b --noEmit
+
+  lint-website:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - run: cd website && npm ci
+      - run: cd website && npx oxlint
+      - run: cd website && npx oxfmt --check .
 
   test-frontend:
     runs-on: ubuntu-latest
