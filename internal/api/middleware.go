@@ -25,20 +25,38 @@ func RequestIDFrom(ctx context.Context) string {
 	return ""
 }
 
+// maxRequestIDLength bounds the request ID a proxy may forward.
+const maxRequestIDLength = 64
+
+// safeRequestID reports whether an incoming request ID is safe to echo back.
+// The value is reflected in the Request-Id response header and in problem
+// responses, so it is restricted to characters that carry no meaning in any
+// of those contexts.
+func safeRequestID(id string) bool {
+	if id == "" || len(id) > maxRequestIDLength {
+		return false
+	}
+	for _, c := range []byte(id) {
+		switch {
+		case c >= 'a' && c <= 'z',
+			c >= 'A' && c <= 'Z',
+			c >= '0' && c <= '9',
+			c == '-', c == '_', c == '.':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func requestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := r.Header.Get("Request-Id")
-		if id == "" || len(id) > 64 || strings.ContainsAny(id, "\r\n") {
+		if !safeRequestID(id) {
 			var buf [8]byte
 			_, _ = rand.Read(buf[:])
 			id = hex.EncodeToString(buf[:])
 		}
-		id = strings.Map(func(r rune) rune {
-			if r >= 0x20 && r < 0x7f {
-				return r
-			}
-			return -1
-		}, id)
 		ctx := context.WithValue(r.Context(), reqIDKey{}, id)
 		w.Header().Set("Request-Id", id)
 		next.ServeHTTP(w, r.WithContext(ctx))

@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -317,5 +318,73 @@ func TestNewRouter_Smoke(t *testing.T) {
 	// Verify request ID is set
 	if got := w.Header().Get("Request-Id"); got == "" {
 		t.Error("expected Request-Id header from middleware chain")
+	}
+}
+
+func TestRequestID_RejectsUnsafeCharacters(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{"angle brackets", `<script>alert(1)</script>`},
+		{"quotes", `id"with'quotes`},
+		{"semicolon", "id;other=value"},
+		{"whitespace", "id with spaces"},
+		{"control characters only", "\x00\x01\x02"},
+		{"carriage return", "id\r\nX-Injected: yes"},
+		{"too long", strings.Repeat("a", 65)},
+		{"empty", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := requestID(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Write([]byte(RequestIDFrom(r.Context())))
+			}))
+
+			req := httptest.NewRequest("GET", "/test", nil)
+			if tt.input != "" {
+				req.Header.Set("Request-Id", tt.input)
+			}
+
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+
+			got := w.Header().Get("Request-Id")
+			if got == tt.input {
+				t.Errorf("Request-Id=%q, want a generated ID instead of the client value", got)
+			}
+			if len(got) != 16 {
+				t.Errorf("Request-Id=%q (length %d), want a generated 16-char ID", got, len(got))
+			}
+			if body := w.Body.String(); body != got {
+				t.Errorf("context ID=%q, want it to match the header %q", body, got)
+			}
+		})
+	}
+}
+
+func TestRequestID_AcceptsSafeCharacters(t *testing.T) {
+	for _, input := range []string{
+		"from-proxy-123",
+		"01JGXYZABCDEF0123456789",
+		"trace.span_42",
+		"a",
+		strings.Repeat("a", 64),
+	} {
+		t.Run(input, func(t *testing.T) {
+			handler := requestID(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Write([]byte(RequestIDFrom(r.Context())))
+			}))
+
+			req := httptest.NewRequest("GET", "/test", nil)
+			req.Header.Set("Request-Id", input)
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+
+			if got := w.Header().Get("Request-Id"); got != input {
+				t.Errorf("Request-Id=%q, want %q", got, input)
+			}
+		})
 	}
 }
