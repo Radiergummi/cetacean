@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Updated Go, dashboard, and marketing-site dependencies to clear every outstanding security advisory, including a critical advisory in the OpenAPI parser (GHSA-r277-6w6q-xmqw) and high-severity advisories in `react-router`, `undici`, `go-git`, `go-billy`, `grpc`, `postcss`, `js-yaml`, `nanoid`, and `svgo`
 - Rejected OIDC bearer tokens no longer reach the server log. An invalid or expired token's contents could previously be written out as part of the authentication-failure message
 
+### Changed
+- Updated Go and dashboard dependencies to their latest releases, including major upgrades to the TypeScript compiler and the test toolchain. No change to how the dashboard looks or behaves.
+
 ### Added
 - Embedded Model Context Protocol (MCP) server (opt-in via `CETACEAN_MCP=true`) — exposes cluster state to AI agents over streamable HTTP at `/mcp`, with twelve resources (services, nodes, tasks, stacks, configs, secrets, networks, volumes, plus cluster, recommendations, and history) and twenty-three tools spanning read, operational, configuration, and impactful tiers
 - Every MCP tool and resource now advertises a human-readable title, a fuller description of what it does and when to use it, and all four behavioural hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) so MCP clients can render confirmation UI accurately

@@ -31,8 +31,8 @@
     "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
-    "oxfmt": "^0.57.0",
-    "oxlint": "^1.72.0"
+    "oxfmt": "^0.65.0",
+    "oxlint": "^1.80.0"
   },
   "overrides": {
     "vite": "^8.0.0"
