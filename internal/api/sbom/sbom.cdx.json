@@ -2097,8 +2097,8 @@
       "type": "library",
       "name": "react",
       "group": "@base-ui",
-      "version": "1.6.0",
-      "bom-ref": "frontend@0.0.0|@base-ui/react@1.6.0",
+      "version": "1.7.0",
+      "bom-ref": "frontend@0.0.0|@base-ui/react@1.7.0",
       "author": "MUI Team",
       "description": "Base UI is a library of headless ('unstyled') React components and low-level hooks. You gain complete control over your app's CSS and accessibility features.",
       "licenses": [
@@ -2109,7 +2109,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40base-ui/react@1.6.0",
+      "purl": "pkg:npm/%40base-ui/react@1.7.0",
       "externalReferences": [
         {
           "url": "git+https://github.com/mui/base-ui.git#packages/react",
@@ -2127,12 +2127,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@base-ui/react/-/react-1.6.0.tgz",
+          "url": "https://registry.npmjs.org/@base-ui/react/-/react-1.7.0.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "fe3ce34d62585e14453b8e417aff657377076e68f308ca54a9b319d8080acbfcf6e6663d07ab2119235c5dc8d06abf67e5da0cd0a616d56f1f705bf68d906e33"
+              "content": "8fef108d7e380b7da3ad70ffab21001a916bef4151a462f6098eb599077d9c13d637bdfb08ad31c43d5c789d39e6b5b846d76f1434f57bba2dcdd95fc6fb18ba"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -2149,8 +2149,8 @@
       "type": "library",
       "name": "geist",
       "group": "@fontsource-variable",
-      "version": "5.2.9",
-      "bom-ref": "frontend@0.0.0|@fontsource-variable/geist@5.2.9",
+      "version": "5.3.0",
+      "bom-ref": "frontend@0.0.0|@fontsource-variable/geist@5.3.0",
       "author": "Google Inc.",
       "description": "Self-host the Geist font in a neatly bundled NPM package.",
       "licenses": [
@@ -2161,7 +2161,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40fontsource-variable/geist@5.2.9",
+      "purl": "pkg:npm/%40fontsource-variable/geist@5.3.0",
       "externalReferences": [
         {
           "url": "git+https://github.com/fontsource/font-files.git#fonts/variable/geist",
@@ -2179,12 +2179,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@fontsource-variable/geist/-/geist-5.2.9.tgz",
+          "url": "https://registry.npmjs.org/@fontsource-variable/geist/-/geist-5.3.0.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "4cff904811b7c312863c4df709b332fcbd0dbb7aaf27a172f3561ce0b9d0f79c47fa2f9c7c4a7c7f253cfe47d5d78630b33c4814f867a0c4db8cbef5c1a569c9"
+              "content": "8f49bebcb42e1b95c06281ed18256ed2ca6f946ade477133a44094573905988d664d59c03b7f25fcd10f0c2160675efb271cd82422d29934226c88983e2946ac"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -2201,8 +2201,8 @@
       "type": "library",
       "name": "react-query-devtools",
       "group": "@tanstack",
-      "version": "5.101.2",
-      "bom-ref": "frontend@0.0.0|@tanstack/react-query-devtools@5.101.2",
+      "version": "5.102.7",
+      "bom-ref": "frontend@0.0.0|@tanstack/react-query-devtools@5.102.7",
       "author": "tannerlinsley",
       "description": "Developer tools to interact with and visualize the TanStack/react-query cache",
       "licenses": [
@@ -2213,7 +2213,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.101.2",
+      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.102.7",
       "externalReferences": [
         {
           "url": "git+https://github.com/TanStack/query.git#packages/react-query-devtools",
@@ -2231,12 +2231,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@tanstack/react-query-devtools/-/react-query-devtools-5.101.2.tgz",
+          "url": "https://registry.npmjs.org/@tanstack/react-query-devtools/-/react-query-devtools-5.102.7.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "794ec772d740f600e3aa8111a047732dbc3d0e2aa70437e1e7e1eed2edba823aa81c97b33a9400ba27ac0cbd95be453ed9c3d5eface0bf4b4c66c3ab2382e39d"
+              "content": "5abdc18af63b2db85bf6147db36f07fac5ebee883771d3ad995b45cf39fdb3b6c64217559a16e289b3fb340d1cce0c00d4d23ed81865537a0039cbb2be48bef2"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -2253,8 +2253,8 @@
       "type": "library",
       "name": "react-query",
       "group": "@tanstack",
-      "version": "5.101.2",
-      "bom-ref": "frontend@0.0.0|@tanstack/react-query@5.101.2",
+      "version": "5.102.7",
+      "bom-ref": "frontend@0.0.0|@tanstack/react-query@5.102.7",
       "author": "tannerlinsley",
       "description": "Hooks for managing, caching and syncing asynchronous and remote data in React",
       "licenses": [
@@ -2265,7 +2265,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query@5.101.2",
+      "purl": "pkg:npm/%40tanstack/react-query@5.102.7",
       "externalReferences": [
         {
           "url": "git+https://github.com/TanStack/query.git#packages/react-query",
@@ -2283,12 +2283,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@tanstack/react-query/-/react-query-5.101.2.tgz",
+          "url": "https://registry.npmjs.org/@tanstack/react-query/-/react-query-5.102.7.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "b1e0e4afa9331b35f5a2469a4ed64fb6003af3c0833e55d4cf50bac52834112aa7d3856e73cb65ad89acd6cddd7bece706a84f5711517e901f51ffba5ef7cf5a"
+              "content": "6db77c4f88c3223f5a3db367d754ac8cd1fc6a9298e33b2992bc3adc946c3435e3a56e52445ed7d22a62ef2ac677c0c2b3c42161f85024aa848f560baeed436d"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -2305,8 +2305,8 @@
       "type": "library",
       "name": "react-virtual",
       "group": "@tanstack",
-      "version": "3.14.5",
-      "bom-ref": "frontend@0.0.0|@tanstack/react-virtual@3.14.5",
+      "version": "3.14.10",
+      "bom-ref": "frontend@0.0.0|@tanstack/react-virtual@3.14.10",
       "author": "Tanner Linsley",
       "description": "Headless UI for virtualizing scrollable elements in React",
       "licenses": [
@@ -2317,7 +2317,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-virtual@3.14.5",
+      "purl": "pkg:npm/%40tanstack/react-virtual@3.14.10",
       "externalReferences": [
         {
           "url": "git+https://github.com/TanStack/virtual.git#packages/react-virtual",
@@ -2335,12 +2335,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@tanstack/react-virtual/-/react-virtual-3.14.5.tgz",
+          "url": "https://registry.npmjs.org/@tanstack/react-virtual/-/react-virtual-3.14.10.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "e042915e1ef304b91b29b1661b70145648ab72e1ddfbb39d4f5a6870949ea71b5f05ddea9eb260279aed3e4458ca8f5f9b255bdbea48db13f2e6862f30b432e8"
+              "content": "491ca851b7453111ee6173228d5e47e196ab416a57923de200dabc385adefa9c9b7956a9f19263677373f5b563c7877c3dfa1b55441474acb2c87624dc4f9d8f"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -2357,8 +2357,8 @@
       "type": "library",
       "name": "react",
       "group": "@xyflow",
-      "version": "12.11.1",
-      "bom-ref": "frontend@0.0.0|@xyflow/react@12.11.1",
+      "version": "12.11.5",
+      "bom-ref": "frontend@0.0.0|@xyflow/react@12.11.5",
       "description": "React Flow - A highly customizable React library for building node-based editors and interactive flow charts.",
       "licenses": [
         {
@@ -2368,7 +2368,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40xyflow/react@12.11.1",
+      "purl": "pkg:npm/%40xyflow/react@12.11.5",
       "externalReferences": [
         {
           "url": "git+https://github.com/xyflow/xyflow.git#packages/react",
@@ -2386,12 +2386,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@xyflow/react/-/react-12.11.1.tgz",
+          "url": "https://registry.npmjs.org/@xyflow/react/-/react-12.11.5.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "2fecc1a0b1925e16a6d0c9e563c42a8df47bfc2e49370d33c6469ecb9699e57982809040747e3e59122ef02478d1dde5fc1754eb7e55e986e104ad63328f3fe9"
+              "content": "42aa2bc8692a121581b9037d6d95912a1c2bdd4a23f650868ffb60d0d9c85871c439757ee5cf1c62c73b43d4d24fadd5f76947a9c355f4fe5c8ef27d64099b95"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -2609,8 +2609,8 @@
     {
       "type": "library",
       "name": "cron-parser",
-      "version": "5.6.1",
-      "bom-ref": "frontend@0.0.0|cron-parser@5.6.1",
+      "version": "5.10.0",
+      "bom-ref": "frontend@0.0.0|cron-parser@5.10.0",
       "author": "Harri Siirak",
       "description": "Node.js library for parsing crontab instructions",
       "licenses": [
@@ -2621,7 +2621,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/cron-parser@5.6.1",
+      "purl": "pkg:npm/cron-parser@5.10.0",
       "externalReferences": [
         {
           "url": "git+https://github.com/harrisiirak/cron-parser.git",
@@ -2639,12 +2639,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/cron-parser/-/cron-parser-5.6.1.tgz",
+          "url": "https://registry.npmjs.org/cron-parser/-/cron-parser-5.10.0.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "4019b8a353f0662b98eca15b56f5bb14b0bc6e8cf2ed85b3bfe173e8a452eec42087371b0d9086c6bfc17396fa4d0ade0284b0b9654fe3dd5d21c2b44c7097e8"
+              "content": "8b3340c49c915943fc9630680d2b9be56cab54e5254f848b19286cc04edea11069a7a414b12c9c6312c130995bb2180f04c70f4ff9eb7e08cd636f75f1acafd8"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -2711,8 +2711,8 @@
     {
       "type": "library",
       "name": "lucide-react",
-      "version": "1.23.0",
-      "bom-ref": "frontend@0.0.0|lucide-react@1.23.0",
+      "version": "1.34.0",
+      "bom-ref": "frontend@0.0.0|lucide-react@1.34.0",
       "author": "Eric Fennis",
       "description": "A Lucide icon library package for React applications.",
       "licenses": [
@@ -2723,7 +2723,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/lucide-react@1.23.0",
+      "purl": "pkg:npm/lucide-react@1.34.0",
       "externalReferences": [
         {
           "url": "git+https://github.com/lucide-icons/lucide.git#packages/lucide-react",
@@ -2741,12 +2741,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/lucide-react/-/lucide-react-1.23.0.tgz",
+          "url": "https://registry.npmjs.org/lucide-react/-/lucide-react-1.34.0.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "dfc06925c0f4261168b311c0a4ffc162c05eb4ba50151a13473133b2d33f5c27378ec006ef0a9a635960570c6251edf1a9813e94dc68d8f902998c175abc3023"
+              "content": "be78c624d23b1ed939fa8596f205c6b9a2e0c2001bd13ebf8996c1ae9f4909f445c1d3566746139b77b2c6338b83037aafc8b201fdd403bd3336605104dbfbca"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -2862,8 +2862,8 @@
     {
       "type": "library",
       "name": "react-dom",
-      "version": "19.2.7",
-      "bom-ref": "frontend@0.0.0|react-dom@19.2.7",
+      "version": "19.2.8",
+      "bom-ref": "frontend@0.0.0|react-dom@19.2.8",
       "description": "React package for working with the DOM.",
       "licenses": [
         {
@@ -2873,10 +2873,10 @@
           }
         }
       ],
-      "purl": "pkg:npm/react-dom@19.2.7",
+      "purl": "pkg:npm/react-dom@19.2.8",
       "externalReferences": [
         {
-          "url": "git+https://github.com/facebook/react.git#packages/react-dom",
+          "url": "git+https://github.com/react/react.git#packages/react-dom",
           "type": "vcs",
           "comment": "as detected from PackageJson property \"repository.url\" and \"repository.directory\""
         },
@@ -2886,17 +2886,17 @@
           "comment": "as detected from PackageJson property \"homepage\""
         },
         {
-          "url": "https://github.com/facebook/react/issues",
+          "url": "https://github.com/react/react/issues",
           "type": "issue-tracker",
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/react-dom/-/react-dom-19.2.7.tgz",
+          "url": "https://registry.npmjs.org/react-dom/-/react-dom-19.2.8.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "b74051557bdb884fe8db41dfc3aebdacb6cc0835ad6192ef9898a0cb67f4331b1717eef5a71851df13a4b299ac3bc877665373ca26c09ad09ade5e2560a93a81"
+              "content": "ad5a6b8a67c6046dc347e4ead08406d834f93f12ad8755881839a3e723e6973af86017bbbb213e0eee2856a4c35d948718619746d4c910649278fc9008c06095"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -2963,8 +2963,8 @@
     {
       "type": "library",
       "name": "react",
-      "version": "19.2.7",
-      "bom-ref": "frontend@0.0.0|react@19.2.7",
+      "version": "19.2.8",
+      "bom-ref": "frontend@0.0.0|react@19.2.8",
       "description": "React is a JavaScript library for building user interfaces.",
       "licenses": [
         {
@@ -2974,10 +2974,10 @@
           }
         }
       ],
-      "purl": "pkg:npm/react@19.2.7",
+      "purl": "pkg:npm/react@19.2.8",
       "externalReferences": [
         {
-          "url": "git+https://github.com/facebook/react.git#packages/react",
+          "url": "git+https://github.com/react/react.git#packages/react",
           "type": "vcs",
           "comment": "as detected from PackageJson property \"repository.url\" and \"repository.directory\""
         },
@@ -2987,17 +2987,17 @@
           "comment": "as detected from PackageJson property \"homepage\""
         },
         {
-          "url": "https://github.com/facebook/react/issues",
+          "url": "https://github.com/react/react/issues",
           "type": "issue-tracker",
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/react/-/react-19.2.7.tgz",
+          "url": "https://registry.npmjs.org/react/-/react-19.2.8.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "1cd7bd5ac9536d79852bca3c726c2001e245481bedd5b3dd1c254ab5a695f96940377ea6a53e21711a706dfddf639e9aaf6a085f3b01a4e0222111c0758d0e95"
+              "content": "3d66980352ffabdbb6bbbc58422f98dcbdd87e789eed7c8b79a248095d4c183e8ba6bb01c5c02a1a3632af4798de9f9076c03ec7f22b92de1089ff03eb7f926f"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -3013,8 +3013,8 @@
     {
       "type": "library",
       "name": "sonner",
-      "version": "2.0.7",
-      "bom-ref": "frontend@0.0.0|sonner@2.0.7",
+      "version": "2.0.8",
+      "bom-ref": "frontend@0.0.0|sonner@2.0.8",
       "author": "Emil Kowalski",
       "description": "An opinionated toast component for React.",
       "licenses": [
@@ -3025,7 +3025,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/sonner@2.0.7",
+      "purl": "pkg:npm/sonner@2.0.8",
       "externalReferences": [
         {
           "url": "git+https://github.com/emilkowalski/sonner.git",
@@ -3043,12 +3043,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/sonner/-/sonner-2.0.7.tgz",
+          "url": "https://registry.npmjs.org/sonner/-/sonner-2.0.8.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "5ba64de29e7c93c683280e173dcc768692105c14408328965646214fb0af2ba0f7880bbbc63bd5ca1407836fe268a259d57549e2bed7bb018bf961842b7ee2f7"
+              "content": "50cfc1c88a05adaf32cd5ef99f5a343eebb46f0e54ffd50d9c369cac936ca5e9017b021fb10dc3e9ecf59ef956a6deda4ec3baaee8d0b627c1a72730222bea96"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -3219,8 +3219,8 @@
       "type": "library",
       "name": "utils",
       "group": "@base-ui",
-      "version": "0.3.1",
-      "bom-ref": "frontend@0.0.0|@base-ui/utils@0.3.1",
+      "version": "0.3.2",
+      "bom-ref": "frontend@0.0.0|@base-ui/utils@0.3.2",
       "author": "MUI Team",
       "description": "A collection of React utility functions for Base UI.",
       "licenses": [
@@ -3231,7 +3231,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40base-ui/utils@0.3.1",
+      "purl": "pkg:npm/%40base-ui/utils@0.3.2",
       "externalReferences": [
         {
           "url": "git+https://github.com/mui/base-ui.git#packages/utils",
@@ -3249,12 +3249,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@base-ui/utils/-/utils-0.3.1.tgz",
+          "url": "https://registry.npmjs.org/@base-ui/utils/-/utils-0.3.2.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "80516296d3915665bf37a2082d31b18b33f73c1a55a72b2a30bd402d8e55934987fbb7da5640a49ce537d60a181cde40a1e9367648f1bdad57383d827bd5ae22"
+              "content": "a16cb56aafc8d869988e99783e11008737e517c54f18a8197aad310164db7c3e4a056cb170dd193f6f961d2526ff967a9553010cb45e2dca17c1262845cff335"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -3271,8 +3271,8 @@
       "type": "library",
       "name": "react-dom",
       "group": "@floating-ui",
-      "version": "2.1.8",
-      "bom-ref": "frontend@0.0.0|@floating-ui/react-dom@2.1.8",
+      "version": "2.1.9",
+      "bom-ref": "frontend@0.0.0|@floating-ui/react-dom@2.1.9",
       "author": "atomiks",
       "description": "Floating UI for React DOM",
       "licenses": [
@@ -3283,7 +3283,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40floating-ui/react-dom@2.1.8",
+      "purl": "pkg:npm/%40floating-ui/react-dom@2.1.9",
       "externalReferences": [
         {
           "url": "git+https://github.com/floating-ui/floating-ui.git#packages/react-dom",
@@ -3301,12 +3301,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@floating-ui/react-dom/-/react-dom-2.1.8.tgz",
+          "url": "https://registry.npmjs.org/@floating-ui/react-dom/-/react-dom-2.1.9.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "702e766c7c0cfe7fc2c52f3b147d3259d9e0119ae376d2d6fea56bba8ebcaa0fa9acaed943860676eb761b20d5a6819e0187bf87cf7dad578e566e8e8b8d24d8"
+              "content": "2438c41460a9226c43080ec924abe203433df91b6625d8f49bf35553920c8012be026668b80410efffb618b1f41975d8d18330f685cf07c84a75b3d883940b62"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -3323,8 +3323,8 @@
       "type": "library",
       "name": "utils",
       "group": "@floating-ui",
-      "version": "0.2.11",
-      "bom-ref": "frontend@0.0.0|@floating-ui/utils@0.2.11",
+      "version": "0.2.12",
+      "bom-ref": "frontend@0.0.0|@floating-ui/utils@0.2.12",
       "author": "atomiks",
       "description": "Utilities for Floating UI",
       "licenses": [
@@ -3335,7 +3335,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40floating-ui/utils@0.2.11",
+      "purl": "pkg:npm/%40floating-ui/utils@0.2.12",
       "externalReferences": [
         {
           "url": "git+https://github.com/floating-ui/floating-ui.git#packages/utils",
@@ -3353,12 +3353,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@floating-ui/utils/-/utils-0.2.11.tgz",
+          "url": "https://registry.npmjs.org/@floating-ui/utils/-/utils-0.2.12.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "46207fc8887bf29708c65ea52cc1b40a0057019d98d1e547a8c3d8ba0bbef54d00793e9805e889a5fee56dd24d22e8053f94888f0351828e03851d50c62dba1a"
+              "content": "1e90a8f2d996ccb55a779b36775f44840cf9ceaaeb43ab3af6a77a9a83cc42f90eb92c034f562045f59256e7387a79eaae0bf7387a6988e18c43ba02d77c88c3"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -3375,8 +3375,8 @@
       "type": "library",
       "name": "react",
       "group": "@types",
-      "version": "19.2.17",
-      "bom-ref": "frontend@0.0.0|@types/react@19.2.17",
+      "version": "19.2.18",
+      "bom-ref": "frontend@0.0.0|@types/react@19.2.18",
       "description": "TypeScript definitions for react",
       "licenses": [
         {
@@ -3386,7 +3386,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40types/react@19.2.17",
+      "purl": "pkg:npm/%40types/react@19.2.18",
       "externalReferences": [
         {
           "url": "git+https://github.com/DefinitelyTyped/DefinitelyTyped.git#types/react",
@@ -3404,12 +3404,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@types/react/-/react-19.2.17.tgz",
+          "url": "https://registry.npmjs.org/@types/react/-/react-19.2.18.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "3177e6a9a54f115824053fda6346860a44565ad072898417a37c5d43caf9473b85acf8919fc19aaf6b5075749443618a5776e45dc91e93cf55f3040163643f03"
+              "content": "027cdb04446cacb2ad9365d27d36d844b8d03ddcb5d7a4adcb8abe4fe069dc80b897a8cd06fade54f0079a9abdaa15d033b09764f8cb56618cc3db32fa1c50df"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -3480,8 +3480,8 @@
       "type": "library",
       "name": "query-devtools",
       "group": "@tanstack",
-      "version": "5.101.2",
-      "bom-ref": "frontend@0.0.0|@tanstack/query-devtools@5.101.2",
+      "version": "5.102.7",
+      "bom-ref": "frontend@0.0.0|@tanstack/query-devtools@5.102.7",
       "author": "tannerlinsley",
       "description": "Developer tools to interact with and visualize the TanStack Query cache",
       "licenses": [
@@ -3492,7 +3492,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40tanstack/query-devtools@5.101.2",
+      "purl": "pkg:npm/%40tanstack/query-devtools@5.102.7",
       "externalReferences": [
         {
           "url": "git+https://github.com/TanStack/query.git#packages/query-devtools",
@@ -3510,12 +3510,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@tanstack/query-devtools/-/query-devtools-5.101.2.tgz",
+          "url": "https://registry.npmjs.org/@tanstack/query-devtools/-/query-devtools-5.102.7.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "a3ec0772a80decfa74b3cbf58b4506abf66bac42abc5d22231098a45d61bdb0ecd3edca5612278fb083fb489fbd66f432ecb70530744180bd139d972e875cfeb"
+              "content": "f4b3af758b8dcc856e9a6865112d6b4f119fe99ff1ab4e36559de67e67ab23e83def872c9f5f8ae58ecbc8f81236fb64b863d06bb51a128b4abfcb7369d8e7ae"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -3532,8 +3532,8 @@
       "type": "library",
       "name": "query-core",
       "group": "@tanstack",
-      "version": "5.101.2",
-      "bom-ref": "frontend@0.0.0|@tanstack/query-core@5.101.2",
+      "version": "5.102.7",
+      "bom-ref": "frontend@0.0.0|@tanstack/query-core@5.102.7",
       "author": "tannerlinsley",
       "description": "The framework agnostic core that powers TanStack Query",
       "licenses": [
@@ -3544,7 +3544,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40tanstack/query-core@5.101.2",
+      "purl": "pkg:npm/%40tanstack/query-core@5.102.7",
       "externalReferences": [
         {
           "url": "git+https://github.com/TanStack/query.git#packages/query-core",
@@ -3562,12 +3562,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@tanstack/query-core/-/query-core-5.101.2.tgz",
+          "url": "https://registry.npmjs.org/@tanstack/query-core/-/query-core-5.102.7.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "847e4c2e826117b29a20677bab7c535c65efb2523e19894cd59ff7e5a4871d668225607b5ef4d21d8b95dde33bb70f9a134993ff132ba3833843dac21874f497"
+              "content": "e131fc290ac22e836cf59be5d4b5b589a67d719c777464e07d9d419cbadc47130d9d7feda1efdd19b7ef17f0e4bdbcd1c9f2dfa4c29991e99bcf7a34ae7ba0b7"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -3584,8 +3584,8 @@
       "type": "library",
       "name": "virtual-core",
       "group": "@tanstack",
-      "version": "3.17.3",
-      "bom-ref": "frontend@0.0.0|@tanstack/virtual-core@3.17.3",
+      "version": "3.17.8",
+      "bom-ref": "frontend@0.0.0|@tanstack/virtual-core@3.17.8",
       "author": "Tanner Linsley",
       "description": "Headless UI for virtualizing scrollable elements in TS/JS + Frameworks",
       "licenses": [
@@ -3596,7 +3596,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40tanstack/virtual-core@3.17.3",
+      "purl": "pkg:npm/%40tanstack/virtual-core@3.17.8",
       "externalReferences": [
         {
           "url": "git+https://github.com/TanStack/virtual.git#packages/virtual-core",
@@ -3614,12 +3614,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@tanstack/virtual-core/-/virtual-core-3.17.3.tgz",
+          "url": "https://registry.npmjs.org/@tanstack/virtual-core/-/virtual-core-3.17.8.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "f0da7f4c510ba48d324ae2685668ef3ab4185c7ffcb135f4062bfdb33845858dfdc4e740018fac9ab3318f13ae9bfbb1dde33c314250b04274fd1d14a6f0bc77"
+              "content": "05f12f7a1369393ef9af92ac739c56e8d66e5ee8d37dbee795213256ee171c6de0771360d4aa97aee59b0dec17394694608a38a116d27e48c86a3cf83004fcb4"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -3636,8 +3636,8 @@
       "type": "library",
       "name": "react-dom",
       "group": "@types",
-      "version": "19.2.3",
-      "bom-ref": "frontend@0.0.0|@types/react-dom@19.2.3",
+      "version": "19.2.5",
+      "bom-ref": "frontend@0.0.0|@types/react-dom@19.2.5",
       "description": "TypeScript definitions for react-dom",
       "licenses": [
         {
@@ -3647,7 +3647,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40types/react-dom@19.2.3",
+      "purl": "pkg:npm/%40types/react-dom@19.2.5",
       "externalReferences": [
         {
           "url": "git+https://github.com/DefinitelyTyped/DefinitelyTyped.git#types/react-dom",
@@ -3665,12 +3665,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@types/react-dom/-/react-dom-19.2.3.tgz",
+          "url": "https://registry.npmjs.org/@types/react-dom/-/react-dom-19.2.5.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "8e9d8bfde63a7e7f8a81555000ea9822d6c5d1563f600a5ee4ccf61746b29123bc831df56d8099caf49e6310872afcc71b97998dcfb3c9a4b906b056c9adbe91"
+              "content": "7cc3f01fdbfbaffa69e37c94776fcc6e27b1e4aa2e270c11dddcc79212d11140baefae15c83b2ac61031bfa3851184754618cec83d676aa6daf0408305eed942"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -3691,8 +3691,8 @@
       "type": "library",
       "name": "system",
       "group": "@xyflow",
-      "version": "0.0.78",
-      "bom-ref": "frontend@0.0.0|@xyflow/system@0.0.78",
+      "version": "0.0.81",
+      "bom-ref": "frontend@0.0.0|@xyflow/system@0.0.81",
       "description": "xyflow core system that powers React Flow and Svelte Flow.",
       "licenses": [
         {
@@ -3702,7 +3702,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40xyflow/system@0.0.78",
+      "purl": "pkg:npm/%40xyflow/system@0.0.81",
       "externalReferences": [
         {
           "url": "git+https://github.com/xyflow/xyflow.git#packages/system",
@@ -3720,12 +3720,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@xyflow/system/-/system-0.0.78.tgz",
+          "url": "https://registry.npmjs.org/@xyflow/system/-/system-0.0.81.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "958d33daa3f7ddf5214ef6bd55ac6b93496a66d6b6a646f1075b6b1c0c75a269c9a91b4fbc3940418576af97e14ba01da64ba56266cd5b4b2fcbe038fede01fe"
+              "content": "85f6da7d6e22eee2eaec82e893c4161459b828c170db695b64d24729f1ce31238ea029397b99bcc9fafce1457d35a25a8e6a2059a2d59e9d97154f4941e8e5aa"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -4202,8 +4202,8 @@
     {
       "type": "library",
       "name": "reselect",
-      "version": "5.2.0",
-      "bom-ref": "frontend@0.0.0|reselect@5.2.0",
+      "version": "5.3.0",
+      "bom-ref": "frontend@0.0.0|reselect@5.3.0",
       "description": "Selectors for Redux.",
       "licenses": [
         {
@@ -4213,7 +4213,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/reselect@5.2.0",
+      "purl": "pkg:npm/reselect@5.3.0",
       "externalReferences": [
         {
           "url": "git+https://github.com/reduxjs/reselect.git",
@@ -4231,12 +4231,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/reselect/-/reselect-5.2.0.tgz",
+          "url": "https://registry.npmjs.org/reselect/-/reselect-5.3.0.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "02067750e666dd89dd7eb2783988e0ad3edb9829bfd62aa48ef11f1ffa188f387a3c3daac3842e4f78e39d722ba5db78313a4c5dc94c4f79576e6458f9745a93"
+              "content": "5c6a0b791015cd44dc275aa4c4f4210c9c8867977acf3643f674fb00464e69a53d51b59c961c9c1259a13be543e5b15e2eece13c168e576a170bcb86df9652a6"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -4253,8 +4253,8 @@
       "type": "library",
       "name": "dom",
       "group": "@floating-ui",
-      "version": "1.7.6",
-      "bom-ref": "frontend@0.0.0|@floating-ui/dom@1.7.6",
+      "version": "1.8.0",
+      "bom-ref": "frontend@0.0.0|@floating-ui/dom@1.8.0",
       "author": "atomiks",
       "description": "Floating UI for the web",
       "licenses": [
@@ -4265,7 +4265,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40floating-ui/dom@1.7.6",
+      "purl": "pkg:npm/%40floating-ui/dom@1.8.0",
       "externalReferences": [
         {
           "url": "git+https://github.com/floating-ui/floating-ui.git#packages/dom",
@@ -4283,12 +4283,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@floating-ui/dom/-/dom-1.7.6.tgz",
+          "url": "https://registry.npmjs.org/@floating-ui/dom/-/dom-1.8.0.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "f60652008e57337ebcf343cf326ffff5d7e2127818a02e809b68b3112d45178d3a605b23bf204c99e2768384808eedf15b0b6eca735114bdacf61831a4b23949"
+              "content": "c974abcde1d905365a74b3a57f28429091cd78b2671d19d1227c1d678d0bed989a02dac1c28625b03ad7defe7307552d93b08b7f370e5675555a85c4932ec27a"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -4870,8 +4870,8 @@
       "type": "library",
       "name": "core",
       "group": "@floating-ui",
-      "version": "1.7.5",
-      "bom-ref": "frontend@0.0.0|@floating-ui/core@1.7.5",
+      "version": "1.8.0",
+      "bom-ref": "frontend@0.0.0|@floating-ui/core@1.8.0",
       "author": "atomiks",
       "description": "Positioning library for floating elements: tooltips, popovers, dropdowns, and more",
       "licenses": [
@@ -4882,7 +4882,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40floating-ui/core@1.7.5",
+      "purl": "pkg:npm/%40floating-ui/core@1.8.0",
       "externalReferences": [
         {
           "url": "git+https://github.com/floating-ui/floating-ui.git#packages/core",
@@ -4900,12 +4900,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@floating-ui/core/-/core-1.7.5.tgz",
+          "url": "https://registry.npmjs.org/@floating-ui/core/-/core-1.8.0.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "d488785935b2c34fa52b214c7011c66dbe54e45b6e1c9bae8e8cb2af9cd36964b911831e4fa25bd80b8379fb6c0ac12e7213be98cda28f9faaf5cae1c9dccb85"
+              "content": "d02219e62b69b3ff31ec11bc744221b39dc1bc2507d8f0a8a20b5a930453badf80ae6e7cb09a2827402e6612f0d87258211e5c30b34f0524bbdbcb0f868da485"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
