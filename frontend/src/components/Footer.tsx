@@ -1,8 +1,8 @@
 import { api, type HealthInfo } from "@/api/client";
 import { apiPath } from "@/lib/basePath";
 import { Book, ExternalLink, Scale } from "lucide-react";
-import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 function Footer() {
   const [health, setHealth] = useState<HealthInfo | null>(null);

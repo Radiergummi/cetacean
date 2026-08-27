@@ -27,9 +27,7 @@ const ecosystemLabels: Record<string, string> = {
  * (e.g. a "javascript:" scheme) returns null and is not rendered as a link.
  */
 function browserUrl(url: string): string | null {
-  const normalized = url
-    .replace(/^git(\+https)?:\/\//, "https://")
-    .replace(/\.git$/, "");
+  const normalized = url.replace(/^git(\+https)?:\/\//, "https://").replace(/\.git$/, "");
 
   return /^https?:\/\//i.test(normalized) ? normalized : null;
 }
@@ -38,7 +36,12 @@ export default function Licenses() {
   const [query, setQuery] = useState("");
   const [ecosystem, setEcosystem] = useState<EcosystemFilter>("all");
 
-  const { data, error: queryError, isLoading, refetch } = useQuery({
+  const {
+    data,
+    error: queryError,
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ["licenses"],
     queryFn: ({ signal }) => api.licenses(signal),
   });

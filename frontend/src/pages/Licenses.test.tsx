@@ -1,9 +1,9 @@
+import Licenses from "./Licenses";
 import { api } from "@/api/client";
 import type { LicensesResponse } from "@/api/types";
 import { createTestQueryClient, createWrapper } from "@/test/mocks";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import Licenses from "./Licenses";
 
 vi.mock("@/api/client", () => ({
   api: { licenses: vi.fn<() => Promise<LicensesResponse>>() },
