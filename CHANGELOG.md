@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+- Updated Go, dashboard, and marketing-site dependencies to clear every outstanding security advisory, including a critical advisory in the OpenAPI parser (GHSA-r277-6w6q-xmqw) and high-severity advisories in `react-router`, `undici`, `go-git`, `go-billy`, `grpc`, `postcss`, `js-yaml`, `nanoid`, and `svgo`
+- Rejected OIDC bearer tokens no longer reach the server log. An invalid or expired token's contents could previously be written out as part of the authentication-failure message
+
 ### Added
 - Embedded Model Context Protocol (MCP) server (opt-in via `CETACEAN_MCP=true`) — exposes cluster state to AI agents over streamable HTTP at `/mcp`, with twelve resources (services, nodes, tasks, stacks, configs, secrets, networks, volumes, plus cluster, recommendations, and history) and twenty-three tools spanning read, operational, configuration, and impactful tiers
 - Every MCP tool and resource now advertises a human-readable title, a fuller description of what it does and when to use it, and all four behavioural hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) so MCP clients can render confirmation UI accurately
@@ -20,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Open-source licenses page (linked from the footer) listing every Go module and frontend dependency bundled into Cetacean, with search and per-ecosystem filtering. The underlying software bill of materials is available as CycloneDX at `/-/sbom.cdx.json`.
 
 ### Fixed
+- Marketing-site dependencies could not be installed or updated at all — an unresolvable Astro peer-dependency conflict made every `npm install` in `website/` fail
 - MCP OAuth discovery now works when Cetacean runs under a base path: the authorization-server `issuer`, the protected-resource metadata `authorization_servers`, and the access-token `iss` claim now include `CETACEAN_BASE_PATH`, matching where the `.well-known` documents are actually served. Previously a client that derived the metadata URL from the issuer got a 404 whenever a base path was configured (default deployments without a base path were unaffected)
 - Service detail page no longer crashes after a task update arrives over the live stream (a stale page left open would occasionally throw "undefined is not an object")
 - Unexpected errors now show a clearer recovery screen with reload and try-again actions; technical details are tucked into a collapsible section
