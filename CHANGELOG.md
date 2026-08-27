@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Security
 - Updated Go, dashboard, and marketing-site dependencies to clear every outstanding security advisory, including a critical advisory in the OpenAPI parser (GHSA-r277-6w6q-xmqw) and high-severity advisories in `react-router`, `undici`, `go-git`, `go-billy`, `grpc`, `postcss`, `js-yaml`, `nanoid`, and `svgo`
 - Rejected OIDC bearer tokens no longer reach the server log. An invalid or expired token's contents could previously be written out as part of the authentication-failure message
+- A `Request-Id` header forwarded by a proxy is only echoed back when it consists of letters, digits, dashes, underscores, and dots; anything else is replaced with a freshly generated ID
 
 ### Changed
 - Updated Go and dashboard dependencies to their latest releases, including major upgrades to the TypeScript compiler and the test toolchain. No change to how the dashboard looks or behaves.
