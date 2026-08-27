@@ -319,7 +319,9 @@ export function ResourcesEditor({
       <footer className="flex items-center justify-end gap-2">
         <Button
           size="sm"
-          onClick={() => void save()}
+          onClick={() => {
+            void save();
+          }}
           disabled={saving}
         >
           {saving && <Spinner className="size-3" />}

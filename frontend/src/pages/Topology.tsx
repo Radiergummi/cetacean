@@ -1,7 +1,7 @@
 import { api } from "../api/client";
 import type { JGFGraph } from "../api/types";
-import "@xyflow/react/dist/style.css";
 import EmptyState from "../components/EmptyState";
+import "@xyflow/react/dist/style.css";
 import { LoadingPage } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import SegmentedControl from "../components/SegmentedControl";
@@ -19,10 +19,11 @@ import {
   hashColor,
 } from "../lib/topologyTransform";
 import { getErrorMessage } from "../lib/utils";
+import { useLatestRef } from "@/hooks/useLatestRef";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ReactFlow, ReactFlowProvider, Background, type Node, type Edge } from "@xyflow/react";
 import { Info, Network, Server, X } from "lucide-react";
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 const logicalNodeTypes = {
   stackGroup: GroupNode,
@@ -98,10 +99,8 @@ function useElkLayout(rawNodes: Node[], rawEdges: Edge[]) {
   const [ready, setReady] = useState(false);
 
   // Keep refs so layout effect always uses latest data
-  const nodesRef = useRef(rawNodes);
-  const edgesRef = useRef(rawEdges);
-  nodesRef.current = rawNodes;
-  edgesRef.current = rawEdges;
+  const nodesRef = useLatestRef(rawNodes);
+  const edgesRef = useLatestRef(rawEdges);
 
   // Structural fingerprint: only changes when nodes/edges are added/removed
   const structureKey = useMemo(() => {
@@ -287,7 +286,9 @@ export default function Topology() {
           <p className="text-sm text-destructive">{error}</p>
           <button
             className="rounded-md bg-muted px-3 py-1.5 text-sm hover:bg-muted/80"
-            onClick={() => void queryClient.invalidateQueries({ queryKey: ["topology"] })}
+            onClick={() => {
+              void queryClient.invalidateQueries({ queryKey: ["topology"] });
+            }}
           >
             Retry
           </button>

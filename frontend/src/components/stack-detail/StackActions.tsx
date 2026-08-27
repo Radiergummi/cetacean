@@ -125,7 +125,7 @@ export function StackActions({ stackName, allowedMethods, resourceCounts }: Stac
             <AlertDialogAction
               variant="destructive"
               disabled={!canRemove || remove.loading}
-              onClick={() =>
+              onClick={() => {
                 void remove.execute(async () => {
                   const result = await api.removeStack(stackName);
 
@@ -135,8 +135,8 @@ export function StackActions({ stackName, allowedMethods, resourceCounts }: Stac
                   }
 
                   navigate("/stacks", { replace: true });
-                }, "Failed to remove stack")
-              }
+                }, "Failed to remove stack");
+              }}
             >
               {remove.loading ? "Removing…" : "Remove"}
             </AlertDialogAction>

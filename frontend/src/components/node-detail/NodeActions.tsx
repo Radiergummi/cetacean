@@ -85,12 +85,12 @@ export function NodeActions({ node, allowedMethods }: { node: Node; allowedMetho
               variant="destructive"
               size="sm"
               disabled={remove.loading}
-              onClick={() =>
+              onClick={() => {
                 void remove.execute(async () => {
                   await api.removeNode(node.ID, true);
                   navigate("/nodes", { replace: true });
-                }, "Failed to force remove node")
-              }
+                }, "Failed to force remove node");
+              }}
             >
               Force remove
             </Button>
@@ -131,12 +131,12 @@ export function NodeActions({ node, allowedMethods }: { node: Node; allowedMetho
             <AlertDialogAction
               variant="destructive"
               disabled={!canRemove || remove.loading}
-              onClick={() =>
+              onClick={() => {
                 void remove.execute(async () => {
                   await api.removeNode(node.ID);
                   navigate("/nodes", { replace: true });
-                }, "Failed to remove node")
-              }
+                }, "Failed to remove node");
+              }}
             >
               {remove.loading ? "Removing…" : "Remove"}
             </AlertDialogAction>

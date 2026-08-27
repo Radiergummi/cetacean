@@ -68,7 +68,9 @@ export default function PluginList() {
       <InstallPluginDialog
         open={installOpen}
         onOpenChange={setInstallOpen}
-        onInstalled={() => void queryClientInstance.invalidateQueries({ queryKey: ["plugins"] })}
+        onInstalled={() => {
+          void queryClientInstance.invalidateQueries({ queryKey: ["plugins"] });
+        }}
       />
     </div>
   );

@@ -1,3 +1,4 @@
+import { useLatestRef } from "./useLatestRef";
 import { useEffect, useRef } from "react";
 
 type HotkeyMap = Record<string, () => void>;
@@ -19,8 +20,7 @@ function isEditing(event: KeyboardEvent): boolean {
  * Chord timeout is 1 second.
  */
 export function useHotkeys(hotkeys: HotkeyMap) {
-  const hotkeysRef = useRef(hotkeys);
-  hotkeysRef.current = hotkeys;
+  const hotkeysRef = useLatestRef(hotkeys);
 
   const pendingRef = useRef<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

@@ -1,3 +1,8 @@
+// oxlint-disable react/refs -- Chart.js plugins are memoized once and read
+// live state through refs so their callbacks never close over a stale render.
+// That is the documented architecture for this chart (crosshair sync,
+// click-to-isolate, brush-to-zoom); the reads happen inside plugin callbacks
+// that Chart.js invokes outside React's render, not during render itself.
 import { useChartSync } from "./ChartSyncProvider";
 import ChartTooltipOverlay, { type TooltipData } from "./ChartTooltipOverlay";
 import { useMetricsPanelContext } from "./MetricsPanelContext";

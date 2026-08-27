@@ -106,12 +106,12 @@ export default function PluginDetail() {
                 variant="secondary"
                 size="sm"
                 disabled={enableAction.loading}
-                onClick={() =>
+                onClick={() => {
                   void enableAction.execute(async () => {
                     await api.enablePlugin(name);
                     fetchPlugin();
-                  }, "Failed to enable plugin")
-                }
+                  }, "Failed to enable plugin");
+                }}
               >
                 {enableAction.loading ? (
                   <Spinner className="size-3" />
@@ -151,12 +151,12 @@ export default function PluginDetail() {
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
-                      onClick={() =>
+                      onClick={() => {
                         void enableAction.execute(async () => {
                           await api.disablePlugin(name);
                           fetchPlugin();
-                        }, "Failed to disable plugin")
-                      }
+                        }, "Failed to disable plugin");
+                      }}
                     >
                       Disable
                     </AlertDialogAction>
@@ -206,12 +206,12 @@ export default function PluginDetail() {
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
                       variant="destructive"
-                      onClick={() =>
+                      onClick={() => {
                         void removeAction.execute(async () => {
                           await api.removePlugin(name, true);
                           navigate("/plugins");
-                        }, "Failed to remove plugin")
-                      }
+                        }, "Failed to remove plugin");
+                      }}
                     >
                       Remove
                     </AlertDialogAction>

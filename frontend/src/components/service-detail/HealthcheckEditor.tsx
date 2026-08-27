@@ -197,7 +197,9 @@ export function HealthcheckEditor({
             updateForm={updateForm}
             saving={saving}
             saveError={saveError}
-            onSave={() => void save()}
+            onSave={() => {
+              void save();
+            }}
             onCancel={cancelEdit}
           />
         </div>

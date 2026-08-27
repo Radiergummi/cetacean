@@ -1,3 +1,7 @@
+// oxlint-disable react/refs -- `close` only dereferences the menu actions ref
+// when invoked as an event handler. The rule flags it because the callback is
+// handed to an `overflowContent` render prop, but the ref is never read during
+// render.
 import { Menu } from "@base-ui/react/menu";
 import { Toggle } from "@base-ui/react/toggle";
 import { ToggleGroup } from "@base-ui/react/toggle-group";

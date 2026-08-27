@@ -1,3 +1,5 @@
+// oxlint-disable react/refs -- the tooltip position is read through a ref by
+// an imperative Chart.js tooltip handler, which runs outside React's render.
 import { chartTooltipClasses } from "@/lib/chartTooltip.ts";
 import { useRef } from "react";
 

@@ -277,7 +277,9 @@ export function ReplicaCard({
           <Button
             size="sm"
             className="flex-1"
-            onClick={() => void submit()}
+            onClick={() => {
+              void submit();
+            }}
             disabled={action.loading}
           >
             {action.loading && <Spinner className="size-3" />}

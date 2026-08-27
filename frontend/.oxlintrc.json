@@ -21,6 +21,20 @@
     "react/no-this-in-sfc": "error",
     "react/no-array-index-key": "off",
     "react-hooks/rules-of-hooks": "error",
+    "react/refs": "error",
+    // React Compiler rules, added to oxlint's `correctness` category in 1.7x
+    // and therefore auto-promoted to errors by the category setting above.
+    // They flag real smells, but each needs an individual behavioural fix
+    // rather than a mechanical one, so they run as warnings until worked down.
+    // `refs` is deliberately kept at "error" above: the render-phase ref
+    // writes it found are fixed (see hooks/useLatestRef.ts), and the few
+    // remaining sites carry file-level `oxlint-disable` comments explaining
+    // why they are intentional. New ones should not slip in.
+    "react/set-state-in-effect": "warn",
+    "react/static-components": "warn",
+    "react/purity": "warn",
+    "react/preserve-manual-memoization": "warn",
+    "react/incompatible-library": "warn",
     "react-perf/jsx-no-new-object-as-prop": "off",
     "react-perf/jsx-no-new-array-as-prop": "off",
     "react-perf/jsx-no-new-function-as-prop": "off",

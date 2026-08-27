@@ -87,7 +87,9 @@ export function EndpointModeEditor({
           <footer className="flex items-center justify-end gap-2">
             <Button
               size="sm"
-              onClick={() => void save()}
+              onClick={() => {
+                void save();
+              }}
               disabled={action.loading}
             >
               {action.loading && <Spinner className="size-3" />}

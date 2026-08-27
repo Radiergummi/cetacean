@@ -1,3 +1,4 @@
+import { useLatestRef } from "./useLatestRef";
 import { useResourceStream } from "./useResourceStream";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
@@ -14,8 +15,7 @@ export function useDebouncedInvalidation(
 ) {
   const queryClient = useQueryClient();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const queryKeysRef = useRef(queryKeys);
-  queryKeysRef.current = queryKeys;
+  const queryKeysRef = useLatestRef(queryKeys);
 
   useResourceStream(
     ssePath,

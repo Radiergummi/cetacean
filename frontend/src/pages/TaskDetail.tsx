@@ -177,7 +177,9 @@ export default function TaskDetail() {
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
-                      onClick={() => void executeRemove()}
+                      onClick={() => {
+                        void executeRemove();
+                      }}
                       variant="destructive"
                     >
                       Remove

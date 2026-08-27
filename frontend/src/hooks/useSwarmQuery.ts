@@ -1,10 +1,11 @@
 import type { FetchResult } from "../api/client";
-import { emptyMethods, setsEqual } from "../api/client";
+import { emptyMethods } from "../api/client";
 import type { CollectionResponse } from "../api/types";
+import { useLatestRef } from "./useLatestRef";
 import { useResourceStream } from "./useResourceStream";
 import type { InfiniteData } from "@tanstack/react-query";
 import { keepPreviousData, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useRef } from "react";
+import { useCallback, useMemo } from "react";
 
 const ssePathMap: Record<string, string> = {
   node: "/nodes",
@@ -27,10 +28,8 @@ export function useSwarmQuery<T>(
   getId: (item: T) => string,
 ) {
   const queryClient = useQueryClient();
-  const getIdRef = useRef(getId);
-  getIdRef.current = getId;
-  const queryKeyRef = useRef(queryKey);
-  queryKeyRef.current = queryKey;
+  const getIdRef = useLatestRef(getId);
+  const queryKeyRef = useLatestRef(queryKey);
 
   const query = useInfiniteQuery({
     queryKey: [...queryKey],
@@ -50,14 +49,16 @@ export function useSwarmQuery<T>(
   const lastPage = query.data?.pages[query.data.pages.length - 1];
   const total = lastPage?.data.total ?? 0;
 
-  const rawMethods = lastPage?.allowedMethods ?? emptyMethods;
-  const methodsRef = useRef<Set<string>>(emptyMethods);
-
-  if (!setsEqual(methodsRef.current, rawMethods)) {
-    methodsRef.current = rawMethods;
-  }
-
-  const allowedMethods = methodsRef.current;
+  // Stabilize allowedMethods by reference — the Set is recreated on every
+  // fetch response, but its contents rarely change. Without this, every SSE
+  // refetch would cause unnecessary re-renders in consumers. Keying a memo on
+  // the sorted contents gives a stable identity without reading a ref during
+  // render.
+  const methodsKey = [...(lastPage?.allowedMethods ?? emptyMethods)].sort().join(",");
+  const allowedMethods = useMemo(
+    () => new Set(methodsKey === "" ? [] : methodsKey.split(",")),
+    [methodsKey],
+  );
 
   const ssePath = ssePathMap[sseType] ?? `/events?types=${sseType}`;
 

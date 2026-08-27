@@ -72,12 +72,12 @@ export function CAConfigPanel({
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction
-                onClick={() =>
+                onClick={() => {
                   void forceRotateCA.execute(async () => {
                     await api.forceRotateCA();
                     onSaved();
-                  }, "Failed to force CA rotation")
-                }
+                  }, "Failed to force CA rotation");
+                }}
               >
                 Rotate
               </AlertDialogAction>
