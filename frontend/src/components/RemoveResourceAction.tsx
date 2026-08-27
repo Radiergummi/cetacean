@@ -89,12 +89,12 @@ export function RemoveResourceAction({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              onClick={() =>
+              onClick={() => {
                 void remove.execute(async () => {
                   await onRemove();
                   navigate(listPath, { replace: true });
-                }, `Failed to remove ${resourceType.toLowerCase()}`)
-              }
+                }, `Failed to remove ${resourceType.toLowerCase()}`);
+              }}
             >
               Remove
             </AlertDialogAction>
@@ -111,12 +111,12 @@ export function RemoveResourceAction({
               variant="destructive"
               size="sm"
               disabled={remove.loading}
-              onClick={() =>
+              onClick={() => {
                 void remove.execute(async () => {
                   await onForceRemove();
                   navigate(listPath, { replace: true });
-                }, `Failed to force remove ${resourceType.toLowerCase()}`)
-              }
+                }, `Failed to force remove ${resourceType.toLowerCase()}`);
+              }}
             >
               Force remove
             </Button>

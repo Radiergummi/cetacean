@@ -69,10 +69,22 @@ updates:
       - dependencies
       - frontend
     groups:
-      # One PR for every frontend dependency bump, including majors.
+      # Lint/format tooling gets its own PR. A new oxlint release can promote
+      # fresh rules into the `correctness` category, which fails lint-frontend
+      # on code that was green before. Kept separate so that never blocks the
+      # security updates in the group below. oxlint/oxfmt are pinned to exact
+      # versions in package.json for the same reason.
+      frontend-lint:
+        patterns:
+          - "oxlint"
+          - "oxfmt"
+      # One PR for every other frontend dependency bump, including majors.
       frontend:
         patterns:
           - "*"
+        exclude-patterns:
+          - "oxlint"
+          - "oxfmt"
 
   # Marketing/docs site (Astro).
   - package-ecosystem: npm

@@ -140,7 +140,9 @@ export function RoleEditor({
                     <Button
                       size="sm"
                       disabled={value === currentRole || action.loading}
-                      onClick={() => void save()}
+                      onClick={() => {
+                        void save();
+                      }}
                     >
                       {action.loading ? "Applying…" : "Apply"}
                     </Button>

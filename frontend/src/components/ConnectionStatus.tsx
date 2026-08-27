@@ -90,7 +90,9 @@ export default function ConnectionStatus() {
       <Button
         variant="ghost"
         size="icon-xs"
-        onClick={() => void handleResync()}
+        onClick={() => {
+          void handleResync();
+        }}
         disabled={resyncing}
         title="Force a full re-sync from Docker. Use when the dashboard appears to be showing stale state."
         aria-label="Resync from Docker"

@@ -1,3 +1,4 @@
+import { useLatestRef } from "@/hooks/useLatestRef";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   type KeyboardEvent,
@@ -180,8 +181,7 @@ export default function DataTable<T>({
     row?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex, useVirtual]);
 
-  const onLoadMoreRef = useRef(onLoadMore);
-  onLoadMoreRef.current = onLoadMore;
+  const onLoadMoreRef = useLatestRef(onLoadMore);
 
   useEffect(() => {
     if (!hasMore || !onLoadMoreRef.current || !sentinelRef.current) {

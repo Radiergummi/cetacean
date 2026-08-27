@@ -85,12 +85,12 @@ export function SwarmActions({
         title="Rotate worker join token?"
         description="This will invalidate the current worker join token. Existing workers are not affected."
         loading={rotateWorker.loading}
-        onConfirm={() =>
+        onConfirm={() => {
           void rotateWorker.execute(async () => {
             await api.rotateToken("worker");
             onRotated();
-          }, "Failed to rotate worker token")
-        }
+          }, "Failed to rotate worker token");
+        }}
       />
 
       <ConfirmAction
@@ -99,12 +99,12 @@ export function SwarmActions({
         title="Rotate manager join token?"
         description="This will invalidate the current manager join token. Existing managers are not affected."
         loading={rotateManager.loading}
-        onConfirm={() =>
+        onConfirm={() => {
           void rotateManager.execute(async () => {
             await api.rotateToken("manager");
             onRotated();
-          }, "Failed to rotate manager token")
-        }
+          }, "Failed to rotate manager token");
+        }}
       />
     </div>
   );

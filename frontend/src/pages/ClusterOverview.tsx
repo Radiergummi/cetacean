@@ -1,3 +1,7 @@
+// oxlint-disable react/refs -- `prevRef` holds the previous cluster snapshot
+// to render deltas against. It is written in an effect cleanup and read during
+// render, which is the flagged pattern; replacing it with the state-adjustment
+// idiom changes when deltas reset, so it is left as-is deliberately.
 import { api, type ClusterSnapshot } from "../api/client";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";

@@ -1,8 +1,8 @@
 import type { FetchResult } from "../api/client";
-import { api, emptyMethods, setsEqual } from "../api/client";
+import { api, emptyMethods } from "../api/client";
 import { useDebouncedInvalidation } from "./useDebouncedInvalidation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useRef } from "react";
+import { useCallback, useMemo } from "react";
 
 export interface DetailResourceOptions {
   /** Fetch history for this resource (default: true). */
@@ -50,15 +50,14 @@ export function useDetailResource<T>(
 
   // Stabilize allowedMethods by reference — the Set is recreated on every
   // fetch response, but its contents rarely change. Without this, every SSE
-  // Refetch would cause unnecessary re-renders in consumers.
-  const rawMethods = resourceQuery.data?.allowedMethods ?? emptyMethods;
-  const methodsRef = useRef<Set<string>>(emptyMethods);
-
-  if (!setsEqual(methodsRef.current, rawMethods)) {
-    methodsRef.current = rawMethods;
-  }
-
-  const allowedMethods = methodsRef.current;
+  // refetch would cause unnecessary re-renders in consumers. Keying a memo on
+  // the sorted contents gives a stable identity without reading a ref during
+  // render.
+  const methodsKey = [...(resourceQuery.data?.allowedMethods ?? emptyMethods)].sort().join(",");
+  const allowedMethods = useMemo(
+    () => new Set(methodsKey === "" ? [] : methodsKey.split(",")),
+    [methodsKey],
+  );
 
   const retry = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ["detail", ssePath] });

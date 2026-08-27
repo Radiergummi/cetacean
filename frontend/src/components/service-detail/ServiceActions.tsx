@@ -119,9 +119,9 @@ export function ServiceActions({
           disabled={!service.PreviousSpec}
           disabledTitle="No previous spec available"
           loading={rollback.loading}
-          onConfirm={() =>
-            void rollback.execute(() => api.rollbackService(serviceId), "Failed to rollback")
-          }
+          onConfirm={() => {
+            void rollback.execute(() => api.rollbackService(serviceId), "Failed to rollback");
+          }}
         />
       )}
 
@@ -132,9 +132,9 @@ export function ServiceActions({
           title="Restart service?"
           description="This triggers a rolling restart of all tasks."
           loading={restart.loading}
-          onConfirm={() =>
-            void restart.execute(() => api.restartService(serviceId), "Failed to restart")
-          }
+          onConfirm={() => {
+            void restart.execute(() => api.restartService(serviceId), "Failed to restart");
+          }}
         />
       )}
 
@@ -146,13 +146,13 @@ export function ServiceActions({
           description="This will permanently remove the service and all its tasks. This action cannot be undone."
           loading={remove.loading}
           variant="destructive"
-          onConfirm={() =>
+          onConfirm={() => {
             void remove.execute(async () => {
               await api.removeService(serviceId);
               const stackName = service.Spec?.Labels?.[stackNamespaceLabel];
               navigate(stackName ? `/stacks/${stackName}` : "/services", { replace: true });
-            }, "Failed to remove service")
-          }
+            }, "Failed to remove service");
+          }}
         />
       )}
     </div>

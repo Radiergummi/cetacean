@@ -1,5 +1,6 @@
+import { useLatestRef } from "./useLatestRef";
 import { apiPath } from "@/lib/basePath";
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 interface SSEEvent {
   type: string;
@@ -28,8 +29,7 @@ export const sseEventTypes = [
  */
 export function useResourceStream(path: string, listener: SSEListener) {
   const [connected, setConnected] = useState(true);
-  const listenerRef = useRef(listener);
-  listenerRef.current = listener;
+  const listenerRef = useLatestRef(listener);
 
   useEffect(() => {
     const eventSource = new EventSource(apiPath(path));

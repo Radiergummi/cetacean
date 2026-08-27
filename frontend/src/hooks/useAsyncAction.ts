@@ -1,3 +1,4 @@
+import { useLatestRef } from "./useLatestRef";
 import { showErrorToast } from "@/lib/showErrorToast";
 import { getErrorMessage } from "@/lib/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -19,8 +20,7 @@ export function useAsyncAction(options?: AsyncActionOptions) {
     };
   }, []);
 
-  const toastRef = useRef(options?.toast);
-  toastRef.current = options?.toast;
+  const toastRef = useLatestRef(options?.toast);
 
   const execute = useCallback(async (action: () => Promise<unknown>, errorMessage: string) => {
     setLoading(true);

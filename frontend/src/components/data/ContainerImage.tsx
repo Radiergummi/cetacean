@@ -121,7 +121,9 @@ function ImageUpdatePopover({
         )}
         <div className="flex gap-2">
           <Button
-            onClick={() => void submit()}
+            onClick={() => {
+              void submit();
+            }}
             disabled={update.loading}
             size="sm"
             className="flex-1"

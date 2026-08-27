@@ -133,14 +133,14 @@ export function EncryptionPanel({ spec, canEdit, onSaved }: EncryptionPanelProps
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction
-                  onClick={() =>
+                  onClick={() => {
                     void rotateUnlockKey.execute(async () => {
                       await api.rotateUnlockKey();
                       setShowUnlockKey(false);
                       setUnlockKeyValue(null);
                       onSaved();
-                    }, "Failed to rotate unlock key")
-                  }
+                    }, "Failed to rotate unlock key");
+                  }}
                 >
                   Rotate
                 </AlertDialogAction>
@@ -190,14 +190,14 @@ export function EncryptionPanel({ spec, canEdit, onSaved }: EncryptionPanelProps
               <DialogFooter>
                 <Button
                   disabled={unlockSwarm.loading || !unlockInput.trim()}
-                  onClick={() =>
+                  onClick={() => {
                     void unlockSwarm.execute(async () => {
                       await api.unlockSwarm(unlockInput.trim());
                       setUnlockOpen(false);
                       setUnlockInput("");
                       onSaved();
-                    }, "Failed to unlock swarm")
-                  }
+                    }, "Failed to unlock swarm");
+                  }}
                 >
                   {unlockSwarm.loading ? <Spinner className="size-3" /> : null}
                   Unlock

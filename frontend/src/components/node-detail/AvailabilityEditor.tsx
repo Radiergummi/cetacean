@@ -156,7 +156,9 @@ export function AvailabilityEditor({
               <Button
                 size="sm"
                 className="flex-1"
-                onClick={() => void save()}
+                onClick={() => {
+                  void save();
+                }}
                 disabled={action.loading}
               >
                 {action.loading && <Spinner className="size-3" />}
@@ -197,7 +199,13 @@ export function AvailabilityEditor({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void confirmDrain()}>Drain</AlertDialogAction>
+            <AlertDialogAction
+              onClick={() => {
+                void confirmDrain();
+              }}
+            >
+              Drain
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

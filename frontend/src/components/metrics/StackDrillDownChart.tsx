@@ -1,3 +1,6 @@
+// oxlint-disable react/refs -- see TimeSeriesChart.tsx: the drill-down state
+// is read through refs by memoized Chart.js plugin callbacks, which run
+// outside React's render pass.
 import { useMetricsPanelContext } from "./MetricsPanelContext";
 import type { Threshold } from "./TimeSeriesChart";
 import TimeSeriesChart from "./TimeSeriesChart";

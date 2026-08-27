@@ -1,12 +1,12 @@
-import { useEffect, useRef } from "react";
+import { useLatestRef } from "./useLatestRef";
+import { useEffect } from "react";
 
 /**
  * When `active` is true, intercepts the Escape key (capture phase) and
  * calls `onCancel` instead of letting the global hotkey handler navigate away.
  */
 export function useEscapeCancel(active: boolean, onCancel: () => void) {
-  const callbackRef = useRef(onCancel);
-  callbackRef.current = onCancel;
+  const callbackRef = useLatestRef(onCancel);
 
   useEffect(() => {
     if (!active) {
