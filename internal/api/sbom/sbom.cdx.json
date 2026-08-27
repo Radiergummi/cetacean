@@ -62,18 +62,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/github.com/CycloneDX/cyclonedx-go@v0.11.0?type=module",
+      "bom-ref": "pkg:golang/github.com/CycloneDX/cyclonedx-go@v0.12.0?type=module",
       "type": "library",
       "name": "github.com/CycloneDX/cyclonedx-go",
-      "version": "v0.11.0",
+      "version": "v0.12.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "1a890ff058910be7e88aec1685248ba520f91f88525ad1a7477c28edaa640452"
+          "content": "ffb26e9b7e9403a574e37b5067f7c4de37fe35ff609ffab15057dded045e332f"
         }
       ],
-      "purl": "pkg:golang/github.com/CycloneDX/cyclonedx-go@v0.11.0?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/github.com/CycloneDX/cyclonedx-go@v0.12.0?type=module&goos=linux&goarch=amd64",
       "externalReferences": [
         {
           "url": "https://github.com/CycloneDX/cyclonedx-go",
@@ -961,18 +961,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/github.com/mark3labs/mcp-go@v0.57.0?type=module",
+      "bom-ref": "pkg:golang/github.com/mark3labs/mcp-go@v0.58.0?type=module",
       "type": "library",
       "name": "github.com/mark3labs/mcp-go",
-      "version": "v0.57.0",
+      "version": "v0.58.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "8f358ac82cdd5a7c2766dd3972f71043e9e08949764678b15c96bb2a3e2a3f51"
+          "content": "0167c193c960451d0a658bdeecf68b6d1d8c223a70d682b6786a4102968d4be4"
         }
       ],
-      "purl": "pkg:golang/github.com/mark3labs/mcp-go@v0.57.0?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/github.com/mark3labs/mcp-go@v0.58.0?type=module&goos=linux&goarch=amd64",
       "externalReferences": [
         {
           "url": "https://github.com/mark3labs/mcp-go",
@@ -2071,18 +2071,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/tailscale.com@v1.102.0?type=module",
+      "bom-ref": "pkg:golang/tailscale.com@v1.102.3?type=module",
       "type": "library",
       "name": "tailscale.com",
-      "version": "v1.102.0",
+      "version": "v1.102.3",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "c8062bca43195a5829ed0ab61020eb0e7c5ec9258184d5cd3245dd0e654ccab1"
+          "content": "335733080b4cb88720fb667e1413db272024dd911018414a9ef1ed86d13573a3"
         }
       ],
-      "purl": "pkg:golang/tailscale.com@v1.102.0?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/tailscale.com@v1.102.3?type=module&goos=linux&goarch=amd64",
       "evidence": {
         "licenses": [
           {
