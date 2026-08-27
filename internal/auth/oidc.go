@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -112,8 +113,19 @@ func (p *OIDCProvider) Authenticate(w http.ResponseWriter, r *http.Request) (*Id
 	if token := ExtractBearerToken(r); token != "" {
 		idToken, err := p.verifier.Verify(r.Context(), token)
 		if err != nil {
+			// The verifier error can embed the raw token or its decoded
+			// claims, and the auth middleware writes AuthError.Msg to the
+			// log. Report a classified reason instead of interpolating the
+			// error, so a rejected credential never reaches the log.
+			reason := "invalid bearer token"
+
+			var expired *oidc.TokenExpiredError
+			if errors.As(err, &expired) {
+				reason = "expired bearer token"
+			}
+
 			return nil, &AuthError{
-				Msg:             fmt.Sprintf("invalid bearer token: %v", err),
+				Msg:             reason,
 				WWWAuthenticate: `Bearer error="invalid_token"`,
 			}
 		}
