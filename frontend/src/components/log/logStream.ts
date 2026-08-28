@@ -1,5 +1,6 @@
 import type { ApiError, LogLine } from "../../api/client";
 import { problemFromResponse } from "../../api/client";
+import { backoffDelay } from "../../lib/backoff";
 
 /**
  * Why this reads SSE through fetch instead of using EventSource:
@@ -283,7 +284,7 @@ export async function streamLogsWithRetry(
 
     const delay =
       outcome.failure.retryAfterMilliseconds ??
-      Math.min(baseReconnectDelay * 2 ** (attempt - 1), maxReconnectDelay);
+      backoffDelay(attempt, { base: baseReconnectDelay, max: maxReconnectDelay });
 
     handlers.onRetrying({
       attempt,

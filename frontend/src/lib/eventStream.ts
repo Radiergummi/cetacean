@@ -19,6 +19,8 @@
  * they retry indefinitely and report nothing but a connected flag.
  */
 
+import { backoffDelay } from "./backoff";
+
 /** `EventSource.CLOSED`, read as a literal so a stubbed global can't shift it. */
 const closedReadyState = 2;
 
@@ -74,7 +76,7 @@ export function openEventStream(url: string, options: EventStreamOptions): Event
       attempt += 1;
       retryTimer = setTimeout(
         connect,
-        Math.min(baseReconnectDelay * 2 ** (attempt - 1), maxReconnectDelay),
+        backoffDelay(attempt, { base: baseReconnectDelay, max: maxReconnectDelay }),
       );
     };
 
