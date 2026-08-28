@@ -5620,6 +5620,8 @@ components:
       description: |
         Return lines after this timestamp (RFC 3339 or Go duration).
         For SSE, Last-Event-ID header is used as fallback.
+        On an SSE stream this resumes from the cursor, replaying at most
+        500 lines missed while disconnected; older overflow is dropped.
       schema:
         type: string
 

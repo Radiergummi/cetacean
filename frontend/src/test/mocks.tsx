@@ -11,19 +11,20 @@ export class MockEventSource {
   static readonly OPEN = 1;
   static readonly CLOSED = 2;
 
-  static instance: MockEventSource;
   /** Every instance constructed since the last reset, oldest first. */
   static instances: MockEventSource[] = [];
+
+  /** The most recently constructed instance. */
+  static get instance(): MockEventSource {
+    return this.instances[this.instances.length - 1]!;
+  }
   onopen: (() => void) | null = null;
   onerror: (() => void) | null = null;
   listeners = new Map<string, ((e: MessageEvent) => void)[]>();
   closed = false;
   readyState: number = MockEventSource.CONNECTING;
-  readonly url: string;
 
-  constructor(url: string) {
-    this.url = url;
-    MockEventSource.instance = this;
+  constructor(_url: string) {
     MockEventSource.instances.push(this);
   }
 

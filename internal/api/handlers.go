@@ -31,6 +31,11 @@ const defaultLogLimit = 500
 const maxLogLimit = 10000
 const maxLogSSEConns = 128
 
+// logResumeTail bounds how far back a resumed SSE stream reaches for the lines
+// it missed while the client was disconnected. A client away for longer than
+// this loses the overflow, which beats replaying an entire log.
+const logResumeTail = 500
+
 type DockerLogStreamer interface {
 	Logs(
 		ctx context.Context,

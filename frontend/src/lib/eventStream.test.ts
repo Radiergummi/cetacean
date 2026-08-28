@@ -13,10 +13,9 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/** The most recently constructed connection. */
-function current(): MockEventSource {
-  return MockEventSource.instances[MockEventSource.instances.length - 1]!;
-}
+// The backoff curve: the first retry waits the interval the server asks for
+// in its Retry-After, and each subsequent one doubles up to a 30s ceiling.
+const firstRetryDelay = 5000;
 
 describe("openEventStream", () => {
   it("dispatches named events to their listeners", () => {
@@ -27,7 +26,7 @@ describe("openEventStream", () => {
       },
     });
 
-    current().simulateEvent("service", { id: "abc" });
+    MockEventSource.instance.simulateEvent("service", { id: "abc" });
 
     expect(received).toEqual([{ id: "abc" }]);
     handle.close();
@@ -37,7 +36,7 @@ describe("openEventStream", () => {
     let opens = 0;
     const handle = openEventStream("/events", { listeners: {}, onOpen: () => (opens += 1) });
 
-    current().simulateOpen();
+    MockEventSource.instance.simulateOpen();
 
     expect(opens).toBe(1);
     handle.close();
@@ -50,7 +49,7 @@ describe("openEventStream", () => {
       onDisconnected: () => (disconnects += 1),
     });
 
-    current().simulateError();
+    MockEventSource.instance.simulateError();
 
     expect(disconnects).toBe(1);
     handle.close();
@@ -59,7 +58,7 @@ describe("openEventStream", () => {
   it("leaves the browser alone while it is retrying on its own", async () => {
     const handle = openEventStream("/events", { listeners: {} });
 
-    current().simulateError();
+    MockEventSource.instance.simulateError();
     await vi.advanceTimersByTimeAsync(60_000);
 
     expect(MockEventSource.instances).toHaveLength(1);
@@ -69,8 +68,8 @@ describe("openEventStream", () => {
   it("reopens after the browser gives up for good", async () => {
     const handle = openEventStream("/events", { listeners: {} });
 
-    current().simulateError(true);
-    await vi.advanceTimersByTimeAsync(1000);
+    MockEventSource.instance.simulateError(true);
+    await vi.advanceTimersByTimeAsync(firstRetryDelay);
 
     expect(MockEventSource.instances).toHaveLength(2);
     handle.close();
@@ -84,9 +83,9 @@ describe("openEventStream", () => {
       },
     });
 
-    current().simulateError(true);
-    await vi.advanceTimersByTimeAsync(1000);
-    current().simulateEvent("service", { id: "after-reconnect" });
+    MockEventSource.instance.simulateError(true);
+    await vi.advanceTimersByTimeAsync(firstRetryDelay);
+    MockEventSource.instance.simulateEvent("service", { id: "after-reconnect" });
 
     expect(received).toEqual([{ id: "after-reconnect" }]);
     handle.close();
@@ -95,15 +94,16 @@ describe("openEventStream", () => {
   it("backs off exponentially across repeated permanent failures", async () => {
     const handle = openEventStream("/events", { listeners: {} });
 
-    current().simulateError(true);
-    await vi.advanceTimersByTimeAsync(1000);
+    MockEventSource.instance.simulateError(true);
+    await vi.advanceTimersByTimeAsync(firstRetryDelay);
     expect(MockEventSource.instances).toHaveLength(2);
 
-    current().simulateError(true);
-    await vi.advanceTimersByTimeAsync(1000);
+    // The second wait is twice the first, so half of it is not yet enough.
+    MockEventSource.instance.simulateError(true);
+    await vi.advanceTimersByTimeAsync(firstRetryDelay);
     expect(MockEventSource.instances).toHaveLength(2);
 
-    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(firstRetryDelay);
     expect(MockEventSource.instances).toHaveLength(3);
 
     handle.close();
@@ -112,15 +112,15 @@ describe("openEventStream", () => {
   it("restarts the backoff once a connection opens", async () => {
     const handle = openEventStream("/events", { listeners: {} });
 
-    current().simulateError(true);
-    await vi.advanceTimersByTimeAsync(1000);
-    current().simulateError(true);
-    await vi.advanceTimersByTimeAsync(2000);
+    MockEventSource.instance.simulateError(true);
+    await vi.advanceTimersByTimeAsync(firstRetryDelay);
+    MockEventSource.instance.simulateError(true);
+    await vi.advanceTimersByTimeAsync(firstRetryDelay * 2);
     expect(MockEventSource.instances).toHaveLength(3);
 
-    current().simulateOpen();
-    current().simulateError(true);
-    await vi.advanceTimersByTimeAsync(1000);
+    MockEventSource.instance.simulateOpen();
+    MockEventSource.instance.simulateError(true);
+    await vi.advanceTimersByTimeAsync(firstRetryDelay);
 
     expect(MockEventSource.instances).toHaveLength(4);
     handle.close();
@@ -130,7 +130,7 @@ describe("openEventStream", () => {
     const handle = openEventStream("/events", { listeners: {} });
 
     for (let attempt = 0; attempt < 12; attempt++) {
-      current().simulateError(true);
+      MockEventSource.instance.simulateError(true);
       // eslint-disable-next-line no-await-in-loop
       await vi.advanceTimersByTimeAsync(30_000);
     }
@@ -143,13 +143,13 @@ describe("openEventStream", () => {
     const handle = openEventStream("/events", { listeners: {} });
 
     for (let attempt = 0; attempt < 8; attempt++) {
-      current().simulateError(true);
+      MockEventSource.instance.simulateError(true);
       // eslint-disable-next-line no-await-in-loop
       await vi.advanceTimersByTimeAsync(60_000);
     }
 
     const opened = MockEventSource.instances.length;
-    current().simulateError(true);
+    MockEventSource.instance.simulateError(true);
     await vi.advanceTimersByTimeAsync(30_000);
 
     expect(MockEventSource.instances).toHaveLength(opened + 1);
@@ -158,7 +158,7 @@ describe("openEventStream", () => {
 
   it("closes the connection and cancels a pending retry", async () => {
     const handle = openEventStream("/events", { listeners: {} });
-    const first = current();
+    const first = MockEventSource.instance;
 
     first.simulateError(true);
     handle.close();

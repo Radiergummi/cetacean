@@ -1,6 +1,6 @@
-import { openEventStream } from "./eventStream";
 import { useLatestRef } from "./useLatestRef";
 import { apiPath } from "@/lib/basePath";
+import { openEventStream } from "@/lib/eventStream";
 import { createContext, useContext, useEffect, useState } from "react";
 
 interface SSEEvent {

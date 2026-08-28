@@ -9,12 +9,12 @@ import ShortcutTooltip from "./components/ShortcutTooltip";
 import ThemeToggle from "./components/ThemeToggle";
 import { Toaster } from "./components/ui/sonner";
 import { AuthProvider } from "./hooks/AuthProvider";
-import { openEventStream } from "./hooks/eventStream";
 import { useAuth } from "./hooks/useAuth";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { useRecommendations } from "./hooks/useRecommendations";
 import { ConnectionProvider, sseEventTypes } from "./hooks/useResourceStream";
 import { apiPath, basePath } from "./lib/basePath";
+import { openEventStream } from "./lib/eventStream";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
@@ -261,10 +261,7 @@ function ConnectionTracker({ children }: { children: React.ReactNode }) {
     };
 
     const stream = openEventStream(apiPath("/events"), {
-      listeners: {
-        ...Object.fromEntries(sseEventTypes.map((type) => [type, touch])),
-        batch: touch,
-      },
+      listeners: Object.fromEntries([...sseEventTypes, "batch"].map((type) => [type, touch])),
       onOpen: () => setConnected(true),
       onDisconnected: () => setConnected(false),
     });

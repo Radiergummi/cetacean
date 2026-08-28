@@ -324,7 +324,7 @@ func TestHandleServiceLogs_SSE_LastEventID(t *testing.T) {
 	var capturedSince string
 	mock := &capturingLogStreamer{
 		data:   frames.Bytes(),
-		onCall: func(since string) { capturedSince = since },
+		onCall: func(_, since string) { capturedSince = since },
 	}
 	h := newTestHandlers(t, withCache(c), withDockerClient(mock))
 
@@ -349,7 +349,7 @@ func TestHandleServiceLogs_SSE_LastEventID_OverriddenByAfter(t *testing.T) {
 	var capturedSince string
 	mock := &capturingLogStreamer{
 		data:   buildFrame(1, "2024-01-01T00:00:05.000000000Z line\n"),
-		onCall: func(since string) { capturedSince = since },
+		onCall: func(_, since string) { capturedSince = since },
 	}
 	h := newTestHandlers(t, withCache(c), withDockerClient(mock))
 
@@ -367,22 +367,22 @@ func TestHandleServiceLogs_SSE_LastEventID_OverriddenByAfter(t *testing.T) {
 	}
 }
 
-// capturingLogStreamer captures the since param passed to log calls.
+// capturingLogStreamer captures the tail and since params passed to log calls.
 type capturingLogStreamer struct {
 	data   []byte
-	onCall func(since string)
+	onCall func(tail, since string)
 }
 
 func (m *capturingLogStreamer) Logs(
 	_ context.Context,
 	_ docker.LogKind,
 	_ string,
-	_ string,
+	tail string,
 	_ bool,
 	since, _ string,
 ) (io.ReadCloser, error) {
 	if m.onCall != nil {
-		m.onCall(since)
+		m.onCall(tail, since)
 	}
 	return io.NopCloser(bytes.NewReader(m.data)), nil
 }
@@ -412,26 +412,6 @@ func TestHandleServiceLogs_SSE_StreamFilter(t *testing.T) {
 	if !strings.Contains(events[0], "stderr line") {
 		t.Errorf("expected stderr line in event:\n%s", events[0])
 	}
-}
-
-// capturingTailStreamer captures the tail and since params passed to Docker.
-type capturingTailStreamer struct {
-	data   []byte
-	onCall func(tail, since string)
-}
-
-func (m *capturingTailStreamer) Logs(
-	_ context.Context,
-	_ docker.LogKind,
-	_ string,
-	tail string,
-	_ bool,
-	since, _ string,
-) (io.ReadCloser, error) {
-	if m.onCall != nil {
-		m.onCall(tail, since)
-	}
-	return io.NopCloser(bytes.NewReader(m.data)), nil
 }
 
 // A client reconnecting a dropped stream passes the last line it saw as
@@ -498,7 +478,7 @@ func TestHandleServiceLogs_SSE_RequestsBacklogOnlyWhenResuming(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			var capturedTail string
-			mock := &capturingTailStreamer{
+			mock := &capturingLogStreamer{
 				onCall: func(tail, _ string) { capturedTail = tail },
 			}
 			h := newTestHandlers(t, withCache(c), withDockerClient(mock))

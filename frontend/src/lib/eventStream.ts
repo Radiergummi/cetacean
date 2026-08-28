@@ -10,17 +10,23 @@
  * So this intervenes in exactly one case: the browser has given up. While it
  * is still retrying by itself, its schedule is left untouched.
  *
- * Unlike the log tail (see components/log/logStream.ts), these are background
- * streams that nobody is watching, so they retry indefinitely rather than
- * surfacing a "give up" state, and they cannot read the server's Retry-After —
- * that needs fetch, which costs a rewrite of the named-event dispatch these
- * streams rely on.
+ * Why these streams keep EventSource while the log tail
+ * (components/log/logStream.ts) reads SSE through fetch: EventSource gives
+ * them native backoff and Last-Event-ID resume for free, and they want both.
+ * The log tail can use neither — it rebuilds its cursor into the request URL
+ * on every attempt, and it needs a give-up state and the server's Retry-After
+ * to show a person why their tail stopped. These have no per-stream UI, so
+ * they retry indefinitely and report nothing but a connected flag.
  */
 
 /** `EventSource.CLOSED`, read as a literal so a stubbed global can't shift it. */
 const closedReadyState = 2;
 
-const baseReconnectDelay = 1000;
+// The capped streams answer 429 with Retry-After: 5, and this helper exists
+// mainly for that case. Starting below the interval the server asked for only
+// buys two rejected requests, each costing it a full auth and ACL pass at the
+// moment it is already at capacity.
+const baseReconnectDelay = 5000;
 const maxReconnectDelay = 30_000;
 
 export interface EventStreamOptions {
@@ -48,10 +54,6 @@ export function openEventStream(url: string, options: EventStreamOptions): Event
   let closed = false;
 
   const connect = () => {
-    if (closed) {
-      return;
-    }
-
     const source = new EventSource(url);
     eventSource = source;
 

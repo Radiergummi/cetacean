@@ -10,12 +10,14 @@ import { problemFromResponse } from "../../api/client";
  * event indistinguishable from a dropped connection, and a non-2xx response
  * makes EventSource fail permanently rather than retry.
  *
- * The same blindness applies to the resource stream (`useResourceStream`) and
- * the metrics stream, which are capped the same way and still use EventSource;
- * the log tail is where it was noticed, not the only endpoint affected. Those
- * two dispatch named events and rely on EventSource's built-in reconnect, so
- * converting them is a larger job than this module covers. Promote this file
- * out of `components/log/` when a second consumer actually arrives.
+ * The resource and metrics streams are capped the same way and share the
+ * blindness; they keep EventSource and recover via lib/eventStream.ts, which
+ * reopens a permanently-failed connection without being able to say why it
+ * failed. That is enough for them — see the rationale in that file. This
+ * module exists because the log tail is watched by a person who deserves the
+ * reason, and because it resumes from a cursor in the URL rather than from
+ * Last-Event-ID. Promote it out of `components/log/` if a second consumer
+ * ever needs the same treatment.
  */
 
 export const maxReconnectAttempts = 5;
