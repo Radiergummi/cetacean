@@ -155,7 +155,7 @@ describe("useSwarmQuery", () => {
 
     await waitFor(() => expect(result.current.total).toBe(6));
     expect(result.current.data).toHaveLength(1);
-    expect(result.current.data[0].ID).toBe("1");
+    expect(result.current.data[0]?.ID).toBe("1");
   });
 
   it("SSE removes item", async () => {

@@ -91,14 +91,14 @@ describe("networkGraphToReactFlow", () => {
     const groups = nodes.filter(({ type }) => type === "stackGroup");
     const services = nodes.filter(({ type }) => type === "serviceCard");
     expect(groups.length).toBe(1);
-    expect(groups[0].data.label).toBe("app");
+    expect(groups[0]?.data.label).toBe("app");
     expect(services.length).toBe(3);
     expect(services.filter(({ parentId }) => parentId === "stack:app").length).toBe(2);
     expect(services.find(({ id }) => id === "s3")?.parentId).toBeUndefined();
 
     // One edge with all networks collapsed
     expect(edges.length).toBe(1);
-    expect((edges[0].data as { networks: Array<{ name: string }> }).networks[0].name).toBe(
+    expect((edges[0]!.data as { networks: Array<{ name: string }> }).networks[0]?.name).toBe(
       "app_net",
     );
   });
@@ -144,7 +144,7 @@ describe("networkGraphToReactFlow", () => {
 
     const { edges } = networkGraphToReactFlow(graph);
     expect(edges.length).toBe(1);
-    const names = (edges[0].data as { networks: Array<{ name: string }> }).networks
+    const names = (edges[0]!.data as { networks: Array<{ name: string }> }).networks
       .map(({ name }) => name)
       .sort();
     expect(names).toEqual(["backend", "frontend"]);
@@ -246,9 +246,9 @@ describe("placementGraphToReactFlow", () => {
     const { nodes } = placementGraphToReactFlow(graph);
 
     expect(nodes.length).toBe(2);
-    expect(nodes[0].type).toBe("physicalNode");
+    expect(nodes[0]?.type).toBe("physicalNode");
 
-    const n1Data = nodes[0].data as {
+    const n1Data = nodes[0]?.data as {
       services: { serviceId: string; running: number; total: number }[];
     };
     expect(n1Data.services.length).toBe(2);
@@ -256,9 +256,9 @@ describe("placementGraphToReactFlow", () => {
     expect(webSvc!.running).toBe(2);
     expect(webSvc!.total).toBe(2);
 
-    const n2Data = nodes[1].data as { services: { total: number }[] };
+    const n2Data = nodes[1]?.data as { services: { total: number }[] };
     expect(n2Data.services.length).toBe(1);
-    expect(n2Data.services[0].total).toBe(1);
+    expect(n2Data.services[0]?.total).toBe(1);
   });
 });
 
@@ -328,7 +328,7 @@ describe("network alias extraction", () => {
     const { edges } = networkGraphToReactFlow(graph);
     expect(edges.length).toBe(1);
 
-    const data = edges[0].data as {
+    const data = edges[0]?.data as {
       sourceAliases?: string[];
       targetAliases?: string[];
     };

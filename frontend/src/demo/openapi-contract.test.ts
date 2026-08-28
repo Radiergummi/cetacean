@@ -90,7 +90,7 @@ function findOperation(
   method: string,
   path: string,
 ): { pathTemplate: string; operation: OpenAPIOperation } | null {
-  const pathOnly = path.split("?")[0];
+  const pathOnly = path.split("?")[0] ?? path;
   const methodLower = method.toLowerCase();
 
   const direct = spec.paths[pathOnly]?.[methodLower];

@@ -209,10 +209,10 @@ describe("LogViewer", () => {
 
     expect(screen.getByText("Live")).toBeInTheDocument();
     expect(MockEventSource.instances).toHaveLength(1);
-    expect(MockEventSource.instances[0].url).toContain("/services/svc1/logs");
+    expect(MockEventSource.instances[0]?.url).toContain("/services/svc1/logs");
 
     // Simulate receiving an SSE event
-    MockEventSource.instances[0].emit(
+    MockEventSource.instances[0]?.emit(
       JSON.stringify({
         timestamp: "2024-01-01T00:00:01Z",
         message: "streamed line",
@@ -254,11 +254,11 @@ describe("LogViewer", () => {
 
     fireEvent.click(screen.getByTitle("Live tail"));
     expect(screen.getByText("Live")).toBeInTheDocument();
-    expect(MockEventSource.instances[0].closed).toBe(false);
+    expect(MockEventSource.instances[0]?.closed).toBe(false);
 
     fireEvent.click(screen.getByTitle("Stop live"));
     expect(screen.queryByText("Live")).not.toBeInTheDocument();
-    expect(MockEventSource.instances[0].closed).toBe(true);
+    expect(MockEventSource.instances[0]?.closed).toBe(true);
   });
 
   it("filters logs by level", async () => {
@@ -290,7 +290,7 @@ describe("LogViewer", () => {
     await waitFor(() => expect(screen.getByText(/initial/)).toBeInTheDocument());
 
     fireEvent.click(screen.getByTitle("Live tail"));
-    const es = MockEventSource.instances[0];
+    const es = MockEventSource.instances[0]!;
 
     for (let i = 0; i < 5; i++) {
       es.emit(
@@ -347,7 +347,7 @@ describe("LogViewer", () => {
     await waitFor(() => {
       expect(mockServiceLogs).toHaveBeenCalledWith(
         "svc1",
-        expect.objectContaining({ before: initialLines[0].timestamp }),
+        expect.objectContaining({ before: initialLines[0]?.timestamp }),
       );
     });
   });

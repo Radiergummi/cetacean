@@ -73,9 +73,9 @@ describe("parseRangeResult", () => {
     expect(parsed!.timestamps).toEqual([1000, 1015]);
     expect(parsed!.labels).toHaveLength(2);
     expect(parsed!.series).toHaveLength(1);
-    expect(parsed!.series[0].label).toBe("cpu_usage");
-    expect(parsed!.series[0].data).toEqual([0.5, 0.7]);
-    expect(parsed!.series[0].color).toBe("color-0");
+    expect(parsed!.series[0]?.label).toBe("cpu_usage");
+    expect(parsed!.series[0]?.data).toEqual([0.5, 0.7]);
+    expect(parsed!.series[0]?.color).toBe("color-0");
   });
 
   it("uses metric labels for multi-series", () => {
@@ -97,10 +97,10 @@ describe("parseRangeResult", () => {
 
     const parsed = parseRangeResult(response, "CPU");
 
-    expect(parsed!.series[0].label).toBe("node1");
-    expect(parsed!.series[1].label).toBe("node2");
-    expect(parsed!.series[0].color).toBe("color-0");
-    expect(parsed!.series[1].color).toBe("color-1");
+    expect(parsed!.series[0]?.label).toBe("node1");
+    expect(parsed!.series[1]?.label).toBe("node2");
+    expect(parsed!.series[0]?.color).toBe("color-0");
+    expect(parsed!.series[1]?.color).toBe("color-1");
   });
 
   it("applies color override to all series", () => {
@@ -116,8 +116,8 @@ describe("parseRangeResult", () => {
 
     const parsed = parseRangeResult(response, "CPU", "#ff0000");
 
-    expect(parsed!.series[0].color).toBe("#ff0000");
-    expect(parsed!.series[1].color).toBe("#ff0000");
+    expect(parsed!.series[0]?.color).toBe("#ff0000");
+    expect(parsed!.series[1]?.color).toBe("#ff0000");
   });
 });
 
@@ -195,8 +195,8 @@ describe("normalizePrometheusRows", () => {
     };
     const rows = normalizePrometheusRows(data);
     expect(rows).toHaveLength(1);
-    expect(rows[0].value).toBe("0.7");
-    expect(rows[0].timestamp).toBe(1015);
+    expect(rows[0]?.value).toBe("0.7");
+    expect(rows[0]?.timestamp).toBe(1015);
   });
 
   it("filters out results with no data points", () => {
