@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- Live pages, charts, and the connection indicator no longer stop updating for good when the server is momentarily at its connection limit. Resource streams and metrics charts now re-establish themselves after a rejected connection instead of staying silent until the page is reloaded; metrics charts additionally recover from ordinary network interruptions, which previously killed them outright
 - Live log tail no longer switches itself off without explanation when its connection drops. It now reconnects on its own with a growing delay between attempts, resumes from the last line it received so nothing is replayed or skipped, and shows what it is doing while it retries. If the server is at its log-streaming connection limit, the viewer says so and counts down to the next attempt instead of showing a cryptic error, and waits as long as the server asks. After several failed attempts it stops and offers to resume.
 
 ## [0.12.0] - 2026-08-28

@@ -7,14 +7,39 @@ import { vi } from "vitest";
  * Minimal EventSource mock for tests that use SSE subscriptions.
  */
 export class MockEventSource {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSED = 2;
+
   static instance: MockEventSource;
+  /** Every instance constructed since the last reset, oldest first. */
+  static instances: MockEventSource[] = [];
   onopen: (() => void) | null = null;
   onerror: (() => void) | null = null;
   listeners = new Map<string, ((e: MessageEvent) => void)[]>();
   closed = false;
+  readyState: number = MockEventSource.CONNECTING;
+  readonly url: string;
 
-  constructor(_url: string) {
+  constructor(url: string) {
+    this.url = url;
     MockEventSource.instance = this;
+    MockEventSource.instances.push(this);
+  }
+
+  /** Simulates the browser accepting the connection. */
+  simulateOpen() {
+    this.readyState = MockEventSource.OPEN;
+    this.onopen?.();
+  }
+
+  /**
+   * Simulates a failure. `permanent` mirrors a non-2xx response, after which
+   * the browser closes the connection and stops retrying by itself.
+   */
+  simulateError(permanent = false) {
+    this.readyState = permanent ? MockEventSource.CLOSED : MockEventSource.CONNECTING;
+    this.onerror?.();
   }
 
   addEventListener(type: string, handler: (e: MessageEvent) => void) {
@@ -25,6 +50,7 @@ export class MockEventSource {
 
   close() {
     this.closed = true;
+    this.readyState = MockEventSource.CLOSED;
   }
 
   simulateEvent(type: string, data: unknown) {

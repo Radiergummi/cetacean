@@ -8,6 +8,7 @@ import ChartTooltipOverlay, { type TooltipData } from "./ChartTooltipOverlay";
 import { useMetricsPanelContext } from "./MetricsPanelContext";
 import { api } from "@/api/client.ts";
 import type { PrometheusResponse } from "@/api/types.ts";
+import { openEventStream } from "@/hooks/eventStream.ts";
 import { useMatchesBreakpoint } from "@/hooks/useMatchesBreakpoint.ts";
 import { getSemanticChartColor } from "@/lib/chartColors.ts";
 import { formatMetricValue } from "@/lib/format.ts";
@@ -325,74 +326,72 @@ export default function TimeSeriesChart({
     const rangeSec = rangeIntervals[range] || 3600;
     const step = Math.max(Math.floor(rangeSec / 300), 15);
     const url = api.metricsStreamURL(query, step, rangeSec);
-    const eventSource = new EventSource(url);
+    const stream = openEventStream(url, {
+      listeners: {
+        initial: (event: MessageEvent) => {
+          try {
+            const response = JSON.parse(event.data) as PrometheusResponse;
+            const parsed = parseRangeResult(response, titleRef.current, colorOverrideRef.current);
 
-    eventSource.addEventListener("initial", (event: MessageEvent) => {
-      try {
-        const response = JSON.parse(event.data) as PrometheusResponse;
-        const parsed = parseRangeResult(response, titleRef.current, colorOverrideRef.current);
+            if (!parsed) {
+              return;
+            }
 
-        if (!parsed) {
-          return;
-        }
-
-        setParsedMetrics(parsed);
-        onSeriesInfoRef.current?.(parsed.series.map(({ color, label }) => ({ color, label })));
-        setState("data");
-      } catch {
-        /* ignore parse errors */
-      }
-    });
-
-    eventSource.addEventListener("point", (event: MessageEvent) => {
-      try {
-        const response = JSON.parse(event.data) as PrometheusResponse;
-
-        const result = response.data?.result?.filter(({ value }) => value);
-
-        if (!result?.length) {
-          return;
-        }
-
-        setParsedMetrics((previous) => {
-          if (!previous) {
-            return previous;
+            setParsedMetrics(parsed);
+            onSeriesInfoRef.current?.(parsed.series.map(({ color, label }) => ({ color, label })));
+            setState("data");
+          } catch {
+            /* ignore parse errors */
           }
+        },
 
-          const timestamp = Number(result[0]?.value?.[0]);
-          const timeLabel = new Date(timestamp * 1000).toLocaleTimeString();
-          const newTimestamps = [...previous.timestamps.slice(1), timestamp];
-          const newLabels = [...previous.labels.slice(1), timeLabel];
-          const newSeries = previous.series.map((series) => {
-            const match = result.find(({ metric }) => seriesLabel(metric) === series.label);
-            const value = match ? Number(match.value?.[1]) : 0;
+        point: (event: MessageEvent) => {
+          try {
+            const response = JSON.parse(event.data) as PrometheusResponse;
 
-            return { ...series, data: [...series.data.slice(1), value] };
-          });
+            const result = response.data?.result?.filter(({ value }) => value);
 
-          return {
-            labels: newLabels,
-            timestamps: newTimestamps,
-            series: newSeries,
-          };
-        });
-      } catch {
-        /* ignore parse errors */
-      }
+            if (!result?.length) {
+              return;
+            }
+
+            setParsedMetrics((previous) => {
+              if (!previous) {
+                return previous;
+              }
+
+              const timestamp = Number(result[0]?.value?.[0]);
+              const timeLabel = new Date(timestamp * 1000).toLocaleTimeString();
+              const newTimestamps = [...previous.timestamps.slice(1), timestamp];
+              const newLabels = [...previous.labels.slice(1), timeLabel];
+              const newSeries = previous.series.map((series) => {
+                const match = result.find(({ metric }) => seriesLabel(metric) === series.label);
+                const value = match ? Number(match.value?.[1]) : 0;
+
+                return { ...series, data: [...series.data.slice(1), value] };
+              });
+
+              return {
+                labels: newLabels,
+                timestamps: newTimestamps,
+                series: newSeries,
+              };
+            });
+          } catch {
+            /* ignore parse errors */
+          }
+        },
+
+        query_error: (event: MessageEvent) => {
+          console.warn("[metrics stream] Prometheus error:", event.data); // eslint-disable-line no-console
+        },
+      },
     });
-
-    eventSource.addEventListener("query_error", (event: MessageEvent) => {
-      console.warn("[metrics stream] Prometheus error:", event.data); // eslint-disable-line no-console
-    });
-
-    eventSource.onerror = () => {
-      eventSource.close();
-    };
 
     // Close SSE on tab hide; tab show triggers a re-run via sseKey
     const visibilityHandler = () => {
       if (document.visibilityState === "hidden") {
-        eventSource.close();
+        stream.close();
       } else {
         hasOpenedRef.current = false;
         dataSnapRef.current = fetchedDataRef.current;
@@ -405,7 +404,7 @@ export default function TimeSeriesChart({
     document.addEventListener("visibilitychange", visibilityHandler);
 
     return () => {
-      eventSource.close();
+      stream.close();
       document.removeEventListener("visibilitychange", visibilityHandler);
     };
   }, [query, range, from, to, streaming, sseKey]);

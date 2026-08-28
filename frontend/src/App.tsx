@@ -9,6 +9,7 @@ import ShortcutTooltip from "./components/ShortcutTooltip";
 import ThemeToggle from "./components/ThemeToggle";
 import { Toaster } from "./components/ui/sonner";
 import { AuthProvider } from "./hooks/AuthProvider";
+import { openEventStream } from "./hooks/eventStream";
 import { useAuth } from "./hooks/useAuth";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { useRecommendations } from "./hooks/useRecommendations";
@@ -253,21 +254,22 @@ function ConnectionTracker({ children }: { children: React.ReactNode }) {
   const lastEventAtRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const es = new EventSource(apiPath("/events"));
-    es.onopen = () => setConnected(true);
-    es.onerror = () => setConnected(false);
-
     const touch = () => {
       const now = Date.now();
       lastEventAtRef.current = now;
       setLastEventAt(now);
     };
 
-    for (const type of sseEventTypes) {
-      es.addEventListener(type, touch);
-    }
-    es.addEventListener("batch", touch);
-    return () => es.close();
+    const stream = openEventStream(apiPath("/events"), {
+      listeners: {
+        ...Object.fromEntries(sseEventTypes.map((type) => [type, touch])),
+        batch: touch,
+      },
+      onOpen: () => setConnected(true),
+      onDisconnected: () => setConnected(false),
+    });
+
+    return () => stream.close();
   }, []);
 
   return <ConnectionProvider value={{ connected, lastEventAt }}>{children}</ConnectionProvider>;
