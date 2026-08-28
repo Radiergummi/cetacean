@@ -379,7 +379,7 @@ func TestHandleMonitoringStatus_WithPrometheus(t *testing.T) {
 		query := r.URL.Query().Get("query")
 		var body string
 		switch {
-		case strings.Contains(query, "node-exporter"):
+		case strings.Contains(query, "node_uname_info"):
 			body = `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"instance":"host1:9100"},"value":[1,"1"]},{"metric":{"instance":"host2:9100"},"value":[1,"1"]}]}}`
 		case strings.Contains(query, "cadvisor"):
 			body = `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"instance":"host1:8080"},"value":[1,"1"]},{"metric":{"instance":"host2:8080"},"value":[1,"1"]}]}}`
