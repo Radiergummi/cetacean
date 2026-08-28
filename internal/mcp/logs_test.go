@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -296,5 +298,49 @@ func TestReadServiceLogsCursorFallsBackToIncomingSinceWhenNoneTimestamped(t *tes
 	}
 	if got.Cursor != "2024-01-01T00:00:00.000000000Z" {
 		t.Errorf("cursor = %q, want the incoming since unchanged", got.Cursor)
+	}
+}
+
+// A pathological tail must never reach Docker. The since-widening multiply
+// used to run before the clamp, so a huge tail overflowed to a negative
+// number that slipped past both min() and the upper bound — and moby reads a
+// negative tail as "every line ever logged".
+func TestReadServiceLogsClampsPathologicalTail(t *testing.T) {
+	c := cache.New(nil)
+	streamer := &fakeLogStreamer{
+		frames: buildLogFrame(1, "2024-01-01T00:00:02.000000000Z line\n"),
+	}
+	srv := newLogTestServer(t, c, streamer)
+
+	_, err := srv.readServiceLogsImpl(context.Background(), "svc1", logOptions{
+		tail:  math.MaxInt,
+		since: "2024-01-01T00:00:01.000000000Z",
+	})
+	if err != nil {
+		t.Fatalf("readServiceLogsImpl: %v", err)
+	}
+
+	tail, err := strconv.Atoi(streamer.calledTail)
+	if err != nil {
+		t.Fatalf("streamer tail %q is not a number: %v", streamer.calledTail, err)
+	}
+	if tail <= 0 || tail > maxLogTail {
+		t.Errorf("streamer tail = %d, want a positive value no larger than %d", tail, maxLogTail)
+	}
+}
+
+// A cursor the server cannot compare is worse than no cursor: every line
+// filters out, the response echoes the same unusable value back, and the
+// client pages forever on an empty result. Reject it up front instead.
+func TestReadServiceLogsRejectsUnparseableSince(t *testing.T) {
+	c := cache.New(nil)
+	srv := newLogTestServer(t, c, &fakeLogStreamer{})
+
+	_, err := srv.readServiceLogsImpl(context.Background(), "svc1", logOptions{since: "5m"})
+	if err == nil {
+		t.Fatal("expected an error for a since value that is not an RFC 3339 timestamp")
+	}
+	if !strings.Contains(err.Error(), "since") {
+		t.Errorf("error = %q, want it to name the offending argument", err)
 	}
 }

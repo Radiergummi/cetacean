@@ -557,4 +557,25 @@ describe("LogViewer live tail resilience", () => {
     expect(streams.length).toBe(attemptsBeforeResume + 1);
     expect(screen.getByText("Live")).toBeInTheDocument();
   });
+
+  it("resumes from the last line actually streamed, not the initial fetch cursor", async () => {
+    await startLiveTail();
+
+    currentStream().emit({ timestamp: "2024-01-01T00:05:00Z", message: "streamed line" });
+    await flush();
+
+    for (const delay of [1000, 2000, 4000, 8000, 16_000]) {
+      currentStream().drop();
+      await flush(delay);
+    }
+
+    currentStream().drop();
+    await flush(32_000);
+
+    fireEvent.click(screen.getByRole("button", { name: /resume/i }));
+    await flush();
+
+    expect(currentStream().url).toContain("after=2024-01-01T00:05:00Z");
+    expect(currentStream().url).not.toContain("after=2024-01-01T00:00:00Z");
+  });
 });

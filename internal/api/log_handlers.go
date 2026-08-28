@@ -249,9 +249,11 @@ func (h *Handlers) serveLogsSSE(
 			if streamFilter != "" && line.Stream != streamFilter {
 				continue
 			}
-			// The per-line form of logs.FilterSince; Docker ignores since for
-			// service logs, so a resumed stream has to enforce its own cursor.
-			if since != "" && line.Timestamp <= since {
+			// The per-line form of logs.FilterSince: keep lines strictly newer
+			// than the cursor, but keep untimestamped lines too, since they
+			// cannot be placed relative to it and dropping them would
+			// silently lose output.
+			if since != "" && line.Timestamp != "" && line.Timestamp <= since {
 				continue
 			}
 			data, _ := json.Marshal(line)

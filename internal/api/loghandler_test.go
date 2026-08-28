@@ -567,3 +567,40 @@ func TestHandleServiceLogs_JSON_AfterKeepsUntimestampedLines(t *testing.T) {
 		t.Errorf("lines = %+v, want the line before the cursor filtered out", resp.Lines)
 	}
 }
+
+// TestHandleServiceLogs_SSE_AfterKeepsUntimestampedLines pins the SSE path to
+// the same cursor semantic as logs.FilterSince: a line with no timestamp
+// cannot be placed relative to the cursor, so it survives a resumed stream.
+// A log frame containing embedded newlines yields exactly such continuation
+// lines — dropping them would make an automatic reconnect silently change
+// what the viewer displays.
+func TestHandleServiceLogs_SSE_AfterKeepsUntimestampedLines(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	var frames bytes.Buffer
+	frames.Write(buildFrame(1, "2024-01-01T00:00:00.000000000Z before\n"))
+	frames.Write(buildFrame(1, "2024-01-01T00:00:02.000000000Z after\n"))
+	frames.Write(buildFrame(1, "no timestamp survives\n"))
+
+	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{data: frames.Bytes()}))
+
+	req := httptest.NewRequest(
+		"GET",
+		"/services/svc1/logs?after=2024-01-01T00:00:01.000000000Z",
+		nil,
+	)
+	req.SetPathValue("id", "svc1")
+	req.Header.Set("Accept", "text/event-stream")
+	req = withContentType(req, ContentTypeSSE)
+	w := httptest.NewRecorder()
+	h.HandleServiceLogs(w, req)
+
+	body := w.Body.String()
+	if !strings.Contains(body, "no timestamp survives") {
+		t.Errorf("resumed stream dropped the untimestamped line:\n%s", body)
+	}
+	if strings.Contains(body, "before") {
+		t.Errorf("resumed stream replayed a line at or before the cursor:\n%s", body)
+	}
+}

@@ -31,8 +31,8 @@ type LogStreamer interface {
 // LogResourceResponse is the body returned by reading
 // cetacean://services/<id>/logs and the get_logs tool. Lines are time-ordered
 // (oldest first). Cursor is opaque to clients but in practice is the
-// RFC3339 timestamp of the last emitted line — pass it back as `since` on
-// the next read to receive only newer lines.
+// RFC3339 timestamp of the last emitted line plus one nanosecond — pass it
+// back as `since` on the next read to receive only newer lines.
 type LogResourceResponse struct {
 	Lines  []logs.LogLine `json:"lines"`
 	Cursor string         `json:"cursor,omitempty"`
@@ -58,15 +58,21 @@ func (s *Server) readServiceLogsImpl(
 		return LogResourceResponse{Lines: []logs.LogLine{}}, nil
 	}
 
+	if opts.since != "" {
+		if _, err := time.Parse(time.RFC3339Nano, opts.since); err != nil {
+			return LogResourceResponse{}, fmt.Errorf("since: %w", err)
+		}
+	}
+
 	tail := opts.tail
 	if tail <= 0 {
 		tail = defaultLogTail
 	}
-	if opts.since != "" {
-		tail = min(tail*10, maxLogTail)
-	}
 	if tail > maxLogTail {
 		tail = maxLogTail
+	}
+	if opts.since != "" {
+		tail = min(tail*10, maxLogTail)
 	}
 
 	fetchCtx, cancel := context.WithTimeout(ctx, logFetchTimeout)

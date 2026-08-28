@@ -173,6 +173,14 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
       newestRef.current || new Date().toISOString(),
       {
         onLine: (line) => {
+          // Keep the live cursor advancing so a manual Live toggle, a Resume
+          // after giving up, or a filter change reconnects from the last
+          // line actually received — not from the initial fetch's cursor,
+          // which would replay everything streamed since.
+          if (line.timestamp) {
+            newestRef.current = line.timestamp;
+          }
+
           buffer.push(line);
 
           if (!animationFrameId) {
