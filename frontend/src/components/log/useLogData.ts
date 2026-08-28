@@ -146,6 +146,18 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
       animationFrameId = 0;
       if (buffer.length === 0) return;
       const batch = buffer.splice(0);
+
+      // Advance the live cursor only for lines that reach the view. Teardown
+      // cancels a pending flush, so a cursor advanced on arrival could move
+      // past lines the user never saw — and resuming would then ask the
+      // server for lines after those, losing them. Held back to here, an
+      // uncommitted batch is merely redelivered on the next connection.
+      for (const line of batch) {
+        if (line.timestamp) {
+          newestRef.current = line.timestamp;
+        }
+      }
+
       setLines((current) => {
         const appended = current.concat(
           batch.map((line, index) => toLogLine(line, current.length + index)),
@@ -173,14 +185,6 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
       newestRef.current || new Date().toISOString(),
       {
         onLine: (line) => {
-          // Keep the live cursor advancing so a manual Live toggle, a Resume
-          // after giving up, or a filter change reconnects from the last
-          // line actually received — not from the initial fetch's cursor,
-          // which would replay everything streamed since.
-          if (line.timestamp) {
-            newestRef.current = line.timestamp;
-          }
-
           buffer.push(line);
 
           if (!animationFrameId) {

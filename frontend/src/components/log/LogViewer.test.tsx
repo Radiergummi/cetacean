@@ -578,4 +578,31 @@ describe("LogViewer live tail resilience", () => {
     expect(currentStream().url).toContain("after=2024-01-01T00:05:00Z");
     expect(currentStream().url).not.toContain("after=2024-01-01T00:00:00Z");
   });
+
+  it("does not skip lines that were still buffered when the tail was stopped", async () => {
+    await startLiveTail();
+
+    currentStream().emit({ timestamp: "2024-01-01T00:05:00Z", message: "rendered line" });
+    // Let the animation frame commit this one, so the cursor legitimately
+    // advances to it.
+    await flush(20);
+
+    expect(screen.getByText(/rendered line/)).toBeInTheDocument();
+
+    // A burst arrives and is buffered, but the tail is stopped before the
+    // animation frame that would commit it — so these lines never reach the
+    // view. The cursor must not move past them, or resuming would ask the
+    // server for lines after ones the user never saw.
+    currentStream().emit({ timestamp: "2024-01-01T00:09:00Z", message: "buffered, never shown" });
+    fireEvent.click(screen.getByTitle("Stop live"));
+    await flush();
+
+    expect(screen.queryByText(/buffered, never shown/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle("Live tail"));
+    await flush();
+
+    expect(currentStream().url).toContain("after=2024-01-01T00:05:00Z");
+    expect(currentStream().url).not.toContain("after=2024-01-01T00:09:00Z");
+  });
 });
