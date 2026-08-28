@@ -811,12 +811,20 @@ function buildTasks(services: Service[], nodesByID: Map<string, Node>): Task[] {
   let workerIndex = 0;
 
   const nextWorker = (): string => {
-    const node = workerNodes[workerIndex % workerNodes.length];
+    const node = workerNodes[workerIndex % workerNodes.length] ?? idNodeWorker1;
     workerIndex++;
     return node;
   };
 
-  const serviceByIndex = (index: number): Service => services[index];
+  const serviceByIndex = (index: number): Service => {
+    const service = services[index];
+
+    if (!service) {
+      throw new Error(`demo dataset has no service at index ${index}`);
+    }
+
+    return service;
+  };
 
   const makeRunningTask = (
     serviceID: string,
@@ -952,7 +960,7 @@ function buildTasks(services: Service[], nodesByID: Map<string, Node>): Task[] {
         ContainerSpec: { Image: getImage(9) },
       },
       ServiceName: "infra_proxy",
-      NodeHostname: nodesByID.get(workerNodes[(slot - 1) % workerNodes.length])?.Description
+      NodeHostname: nodesByID.get(workerNodes[(slot - 1) % workerNodes.length] ?? "")?.Description
         .Hostname,
     });
   }

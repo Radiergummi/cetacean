@@ -203,7 +203,7 @@ export function nanosToSeconds(nanoseconds: number | undefined): number | undefi
  * "node.example.com:9100, node-exporter" into just "node.example.com".
  */
 export function instanceToHostname(label: string): string {
-  const instance = label.split(", ")[0];
+  const instance = label.split(", ")[0] ?? label;
 
   return instance.replace(/:\d+$/, "");
 }

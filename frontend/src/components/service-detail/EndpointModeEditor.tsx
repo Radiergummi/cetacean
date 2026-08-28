@@ -17,7 +17,7 @@ export function EndpointModeEditor({
 }: {
   serviceId: string;
   currentMode: EndpointMode;
-  canEdit?: boolean;
+  canEdit?: boolean | undefined;
 }) {
   const [editing, setEditing] = useState(false);
   const [mode, setMode] = useState<EndpointMode>(currentMode);

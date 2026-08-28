@@ -6,17 +6,17 @@ import { useRef, useState, type KeyboardEvent } from "react";
 interface MultiComboboxOption {
   value: string;
   label: string;
-  description?: string;
+  description?: string | undefined;
 }
 
 interface MultiComboboxProps {
   values: string[];
   onChange: (values: string[]) => void;
   options: MultiComboboxOption[];
-  placeholder?: string;
-  className?: string;
+  placeholder?: string | undefined;
+  className?: string | undefined;
   /** Transform custom input before adding (e.g., toUpperCase for capabilities) */
-  transformInput?: (value: string) => string;
+  transformInput?: ((value: string) => string) | undefined;
 }
 
 function Chips({ values, onRemove }: { values: string[]; onRemove: (value: string) => void }) {
@@ -72,8 +72,10 @@ export function MultiCombobox({
       add(transform(input.trim()));
     }
 
-    if (event.key === "Backspace" && input === "" && values.length > 0) {
-      remove(values[values.length - 1]);
+    const last = values[values.length - 1];
+
+    if (event.key === "Backspace" && input === "" && last !== undefined) {
+      remove(last);
     }
   }
 

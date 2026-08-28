@@ -29,9 +29,9 @@ const defaultHeight = 400;
 const minHeight = 150;
 
 interface Props {
-  serviceId?: string;
-  taskId?: string;
-  header?: React.ReactNode;
+  serviceId?: string | undefined;
+  taskId?: string | undefined;
+  header?: React.ReactNode | undefined;
 }
 
 export default function LogViewer({ serviceId, taskId, header }: Props) {

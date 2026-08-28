@@ -4,7 +4,7 @@ import { getErrorMessage } from "@/lib/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface AsyncActionOptions {
-  toast?: boolean;
+  toast?: boolean | undefined;
 }
 
 export function useAsyncAction(options?: AsyncActionOptions) {

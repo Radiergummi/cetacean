@@ -49,7 +49,7 @@ export function CapabilitiesEditor({
   serviceId: string;
   config: ContainerConfig;
   onSaved: (updated: ContainerConfig) => void;
-  canEdit?: boolean;
+  canEdit?: boolean | undefined;
 }) {
   const [addList, setAddList] = useState<string[]>([]);
   const [dropList, setDropList] = useState<string[]>([]);

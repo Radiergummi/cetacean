@@ -16,7 +16,7 @@ interface Props {
   onChange: (value: string) => void;
   onRun: () => void;
   loading: boolean;
-  completion?: QueryCompletion;
+  completion?: QueryCompletion | undefined;
 }
 
 const typeBadgeStyles: Record<Suggestion["type"], string> = {
@@ -156,8 +156,14 @@ export function QueryInput({ value, onChange, onRun, loading, completion }: Prop
     }
 
     if (event.key === "Enter" || event.key === "Tab") {
+      const suggestion = suggestions[highlightIndex];
+
       event.preventDefault();
-      selectSuggestion(suggestions[highlightIndex]);
+
+      if (suggestion) {
+        selectSuggestion(suggestion);
+      }
+
       return;
     }
 

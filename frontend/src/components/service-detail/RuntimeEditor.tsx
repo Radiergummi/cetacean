@@ -50,7 +50,7 @@ export function RuntimeEditor({
   serviceId: string;
   config: ContainerConfig;
   onSaved: (updated: ContainerConfig) => void;
-  canEdit?: boolean;
+  canEdit?: boolean | undefined;
 }) {
   const [hostnameInput, setHostnameInput] = useState("");
   const [initValue, setInitValue] = useState<boolean | undefined>(undefined);

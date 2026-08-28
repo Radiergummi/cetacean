@@ -70,6 +70,11 @@ export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck 
     regularChecks.push(firstCheck + i * effectiveInterval);
   }
 
+  const firstTick = intervalTicks[0] ?? 0;
+  const lastStartCheck = startChecks[startChecks.length - 1] ?? 0;
+  const firstRegularCheck = regularChecks[0] ?? 0;
+  const lastRegularCheck = regularChecks[regularChecks.length - 1] ?? 0;
+
   const showFailed = hoverGroup === "failed";
   const showGhost = hoverGroup === "ghost";
 
@@ -167,26 +172,26 @@ export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck 
             {startChecks.length > 0 && (
               <>
                 <rect
-                  x={x(intervalTicks[0])}
+                  x={x(firstTick)}
                   y={axisY - 1}
-                  width={x(startChecks[startChecks.length - 1]) - x(intervalTicks[0])}
+                  width={x(lastStartCheck) - x(firstTick)}
                   height={2}
                   rx={1}
                   className="fill-amber-300 dark:fill-amber-800"
                 />
                 <rect
-                  x={x(startChecks[startChecks.length - 1])}
+                  x={x(lastStartCheck)}
                   y={axisY - 1}
-                  width={x(firstCheck) - x(startChecks[startChecks.length - 1])}
+                  width={x(firstCheck) - x(lastStartCheck)}
                   height={2}
                   rx={1}
                   fill={`url(#${gradientId}-amber-light)`}
                   className="dark:hidden"
                 />
                 <rect
-                  x={x(startChecks[startChecks.length - 1])}
+                  x={x(lastStartCheck)}
                   y={axisY - 1}
-                  width={x(firstCheck) - x(startChecks[startChecks.length - 1])}
+                  width={x(firstCheck) - x(lastStartCheck)}
                   height={2}
                   rx={1}
                   fill={`url(#${gradientId}-amber-dark)`}
@@ -212,7 +217,7 @@ export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck 
             <rect
               x={x(firstCheck)}
               y={axisY - 1}
-              width={x(regularChecks[0]) - x(firstCheck)}
+              width={x(firstRegularCheck) - x(firstCheck)}
               height={2}
               rx={1}
               fill={`url(#${gradientId}-red-light)`}
@@ -221,16 +226,16 @@ export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck 
             <rect
               x={x(firstCheck)}
               y={axisY - 1}
-              width={x(regularChecks[0]) - x(firstCheck)}
+              width={x(firstRegularCheck) - x(firstCheck)}
               height={2}
               rx={1}
               fill={`url(#${gradientId}-red-dark)`}
               className="hidden dark:block"
             />
             <rect
-              x={x(regularChecks[0])}
+              x={x(firstRegularCheck)}
               y={axisY - 1}
-              width={x(regularChecks[regularChecks.length - 1]) - x(regularChecks[0])}
+              width={x(lastRegularCheck) - x(firstRegularCheck)}
               height={2}
               rx={1}
               className="fill-red-400 dark:fill-red-900"
@@ -357,10 +362,10 @@ export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck 
             className="pointer-events-none transition-opacity"
             opacity={showGhost ? 1 : 0}
           >
-            {intervalTicks[0] > 0 &&
+            {firstTick > 0 &&
               (() => {
-                const midX = (x(0) + x(intervalTicks[0])) / 2;
-                const inStartPeriod = intervalTicks[0] <= startPeriod;
+                const midX = (x(0) + x(firstTick)) / 2;
+                const inStartPeriod = firstTick <= startPeriod;
 
                 return (
                   <g>
@@ -383,17 +388,19 @@ export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck 
                       dominantBaseline="central"
                       style={{ ...labelStyle, fontWeight: 500, fill: "var(--background)" }}
                     >
-                      +{Math.round(intervalTicks[0] / 1e9)}s
+                      +{Math.round(firstTick / 1e9)}s
                     </text>
                   </g>
                 );
               })()}
             {intervalTicks.map((t, i) => {
-              if (i >= intervalTicks.length - 1) {
+              const nextTick = intervalTicks[i + 1];
+
+              if (nextTick === undefined) {
                 return null;
               }
 
-              const midX = (x(t) + x(intervalTicks[i + 1])) / 2;
+              const midX = (x(t) + x(nextTick)) / 2;
               const inStartPeriod = t < startPeriod;
 
               return (
@@ -417,7 +424,7 @@ export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck 
                     dominantBaseline="central"
                     style={{ ...labelStyle, fontWeight: 500, fill: "var(--background)" }}
                   >
-                    +{Math.round((intervalTicks[i + 1] - t) / 1e9)}s
+                    +{Math.round((nextTick - t) / 1e9)}s
                   </text>
                 </g>
               );
@@ -430,11 +437,13 @@ export function HealthcheckTimeline({ healthcheck }: { healthcheck: Healthcheck 
             opacity={showFailed ? 1 : 0}
           >
             {[firstCheck, ...regularChecks].map((t, i, all) => {
-              if (i >= all.length - 1) {
+              const next = all[i + 1];
+
+              if (next === undefined) {
                 return null;
               }
 
-              const midX = (x(t) + x(all[i + 1])) / 2;
+              const midX = (x(t) + x(next)) / 2;
 
               return (
                 <g key={`fo${t}`}>

@@ -6,8 +6,8 @@ export default function KeyValuePills({
   onCopy,
 }: {
   entries: [string, string][];
-  renderValue?: (value: string) => React.ReactNode;
-  onCopy?: React.ClipboardEventHandler;
+  renderValue?: ((value: string) => React.ReactNode) | undefined;
+  onCopy?: React.ClipboardEventHandler | undefined;
 }) {
   return (
     <ul

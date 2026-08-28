@@ -7,11 +7,11 @@ export default function SimpleTable<T>({
   renderRow,
   maxHeight,
 }: {
-  columns?: string[];
+  columns?: string[] | undefined;
   items: T[];
   keyFn: (item: T, index: number) => string | number;
   renderRow: (item: T, index: number) => React.ReactNode;
-  maxHeight?: boolean;
+  maxHeight?: boolean | undefined;
 }) {
   return (
     <div

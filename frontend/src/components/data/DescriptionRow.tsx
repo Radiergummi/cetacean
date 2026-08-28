@@ -5,7 +5,7 @@ export function DescriptionRow({
 }: {
   label: string;
   value: string | undefined;
-  mono?: boolean;
+  mono?: boolean | undefined;
 }) {
   return (
     <div className="grid grid-cols-[8rem_1fr] items-baseline gap-x-2">

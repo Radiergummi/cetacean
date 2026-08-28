@@ -15,7 +15,7 @@ export function CommandEditor({
   serviceId: string;
   config: ContainerConfig;
   onSaved: (updated: ContainerConfig) => void;
-  canEdit?: boolean;
+  canEdit?: boolean | undefined;
 }) {
   const [commandInput, setCommandInput] = useState("");
   const [argsInput, setArgsInput] = useState("");

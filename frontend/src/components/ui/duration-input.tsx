@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 interface DurationInputProps {
   value: number;
   onChange: (nanoseconds: number) => void;
-  disabled?: boolean;
+  disabled?: boolean | undefined;
 }
 
 export function DurationInput({ value, onChange, disabled }: DurationInputProps) {

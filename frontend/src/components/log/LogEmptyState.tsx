@@ -9,7 +9,7 @@ interface LogEmptyStateProps {
   hasFiltered: boolean;
   onRetry: () => void;
   className: string;
-  style?: React.CSSProperties;
+  style?: React.CSSProperties | undefined;
 }
 
 export function LogEmptyState({

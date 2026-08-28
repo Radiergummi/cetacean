@@ -4,8 +4,8 @@ import { Switch as SwitchPrimitive } from "@base-ui/react/switch";
 interface SwitchProps {
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
-  disabled?: boolean;
-  className?: string;
+  disabled?: boolean | undefined;
+  className?: string | undefined;
 }
 
 export function Switch({ checked, onCheckedChange, disabled, className }: SwitchProps) {

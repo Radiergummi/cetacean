@@ -11,7 +11,7 @@ interface ResourceRangeSliderProps {
   onChange: (values: { reservation: number | undefined; limit: number | undefined }) => void;
   max: number;
   step: number;
-  unit?: string;
+  unit?: string | undefined;
   formatLabel: (value: number) => string;
 }
 
@@ -46,10 +46,9 @@ export function ResourceRangeSlider({
   const isLimitActive = limit !== undefined;
 
   function handleSliderChange(positions: number[]) {
-    const reservation =
-      positions[0] <= step / 2 ? undefined : Math.round(positions[0] / step) * step;
-    const newLimit =
-      positions[1] >= max + step / 2 ? undefined : Math.round(positions[1] / step) * step;
+    const [low = 0, high = max] = positions;
+    const reservation = low <= step / 2 ? undefined : Math.round(low / step) * step;
+    const newLimit = high >= max + step / 2 ? undefined : Math.round(high / step) * step;
 
     onChange({ reservation, limit: newLimit });
   }
@@ -190,7 +189,7 @@ function CompactStepper({
   min: number;
   max: number;
   step: number;
-  unit?: string;
+  unit?: string | undefined;
 }) {
   if (value === undefined) {
     return (
@@ -227,7 +226,7 @@ function CompactStepper({
 interface Tick {
   value: number;
   tall: boolean;
-  label?: string;
+  label?: string | undefined;
 }
 
 export function computeTicks(

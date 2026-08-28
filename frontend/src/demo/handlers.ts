@@ -93,8 +93,8 @@ function parseRange(request: Request): { offset: number; limit: number } {
     const match = range.match(/^items\s+(\d+)-(\d+)$/);
 
     if (match) {
-      const start = parseInt(match[1], 10);
-      const end = parseInt(match[2], 10);
+      const start = parseInt(match[1] ?? "", 10);
+      const end = parseInt(match[2] ?? "", 10);
       return { offset: start, limit: end - start + 1 };
     }
   }
@@ -390,11 +390,15 @@ function searchDataset(
         const image = service.Spec.TaskTemplate!.ContainerSpec?.Image ?? "";
         return matches(service.Spec.Name) || matches(image);
       })
-      .map((service) => ({
-        id: service.ID,
-        name: service.Spec.Name,
-        detail: (service.Spec.TaskTemplate!.ContainerSpec?.Image ?? "").split("@")[0],
-      })),
+      .map((service) => {
+        const image = service.Spec.TaskTemplate!.ContainerSpec?.Image ?? "";
+
+        return {
+          id: service.ID,
+          name: service.Spec.Name,
+          detail: image.split("@")[0] ?? image,
+        };
+      }),
   );
 
   collect(
@@ -1275,6 +1279,11 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         for (let slot = oldReplicas + 1; slot <= body.replicas; slot++) {
           const workers = dataset.nodes.filter((node) => node.Spec.Role === "worker");
           const node = workers[slot % workers.length] ?? dataset.nodes[0];
+
+          if (!node) {
+            continue;
+          }
+
           const task = createTask(service, slot, node);
           dataset.tasks.push(task);
           dataset.tasksByID.set(task.ID, task);

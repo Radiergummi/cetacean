@@ -37,10 +37,10 @@ export function IntegrationSection({
   rawLabels: [string, string][];
   docsUrl: string;
   children: ReactNode;
-  editable?: boolean;
-  editContent?: ReactNode;
-  onEditStart?: () => void;
-  onSave?: () => Promise<void>;
+  editable?: boolean | undefined;
+  editContent?: ReactNode | undefined;
+  onEditStart?: (() => void) | undefined;
+  onSave?: (() => Promise<void>) | undefined;
   serviceId: string;
   onRawSave: (updated: Record<string, string>) => void;
 }) {

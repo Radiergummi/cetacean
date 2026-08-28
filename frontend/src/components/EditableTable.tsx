@@ -9,32 +9,32 @@ import { useState } from "react";
 
 interface EditableTableProps<T> {
   title: string;
-  titleExtra?: ReactNode;
+  titleExtra?: ReactNode | undefined;
   items: T[];
   columns: [string, string];
-  defaultOpen?: boolean;
-  editDisabled?: boolean;
+  defaultOpen?: boolean | undefined;
+  editDisabled?: boolean | undefined;
   /** Render without a CollapsibleSection wrapper (no title, no collapse toggle). */
-  bare?: boolean;
+  bare?: boolean | undefined;
   /** Start in edit mode. */
-  defaultEditing?: boolean;
+  defaultEditing?: boolean | undefined;
 
   // Read-only view
   renderReadOnly: (items: T[]) => ReactNode;
   emptyLabel: string;
-  emptyHint?: string;
+  emptyHint?: string | undefined;
 
   // Edit mode — existing rows
   keyFn: (item: T, index: number) => string | number;
   renderKeyCell: (item: T, index: number) => ReactNode;
   renderValueCell: (item: T, index: number, update: (next: T) => void) => ReactNode;
   /** Return false to hide the remove button for a specific row. Defaults to true. */
-  canRemove?: (item: T, index: number) => boolean;
+  canRemove?: ((item: T, index: number) => boolean) | undefined;
 
   // Edit mode — add row
   renderAddKeyCell: (draft: T[]) => ReactNode;
   renderAddValueCell: (draft: T[]) => ReactNode;
-  renderAddError?: () => ReactNode;
+  renderAddError?: (() => ReactNode) | undefined;
   canAdd: boolean;
   onAddCommit: () => T | null;
   onAddReset: () => void;
@@ -42,9 +42,9 @@ interface EditableTableProps<T> {
   // Lifecycle
   onSave: (items: T[]) => Promise<void>;
   /** Called when the user opens edit mode. Use for lazy data fetching. */
-  onEditStart?: () => void;
+  onEditStart?: (() => void) | undefined;
   /** Called when the user cancels editing. */
-  onCancel?: () => void;
+  onCancel?: (() => void) | undefined;
 }
 
 export function EditableTable<T>({

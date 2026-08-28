@@ -6,8 +6,8 @@ export default function ResourceId({
   truncate,
 }: {
   label: string;
-  id?: string;
-  truncate?: number;
+  id?: string | undefined;
+  truncate?: number | undefined;
 }) {
   if (!id) {
     return null;

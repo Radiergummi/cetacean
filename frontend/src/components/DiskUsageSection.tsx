@@ -94,7 +94,7 @@ function externalTooltipHandler(context: {
   chart: ChartJS;
   tooltip: {
     opacity: number;
-    dataPoints?: { dataIndex: number; datasetIndex: number }[];
+    dataPoints?: { dataIndex: number; datasetIndex: number }[] | undefined;
     caretX: number;
     caretY: number;
   };
@@ -117,8 +117,10 @@ function externalTooltipHandler(context: {
     return;
   }
 
-  const index = model.dataPoints[0].dataIndex;
-  const rawData = (chart.data.datasets[0] as unknown as { _rawData: DiskUsageSummary[] })._rawData;
+  const index = model.dataPoints[0]?.dataIndex ?? -1;
+  const rawData = (
+    chart.data.datasets[0] as unknown as { _rawData: DiskUsageSummary[] } | undefined
+  )?._rawData;
 
   if (!rawData?.[index]) {
     return;

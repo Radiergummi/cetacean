@@ -13,18 +13,18 @@ import {
 interface Column<T> {
   header: ReactNode;
   cell: (item: T) => ReactNode;
-  className?: string;
-  onHeaderClick?: () => void;
+  className?: string | undefined;
+  onHeaderClick?: (() => void) | undefined;
 }
 
 interface Props<T> {
   columns: Column<T>[];
   data: T[];
   keyFn: (item: T) => string;
-  rowClassName?: (item: T) => string;
-  onRowClick?: (item: T) => void;
-  hasMore?: boolean;
-  onLoadMore?: () => void;
+  rowClassName?: ((item: T) => string) | undefined;
+  onRowClick?: ((item: T) => void) | undefined;
+  hasMore?: boolean | undefined;
+  onLoadMore?: (() => void) | undefined;
 }
 
 const VIRTUAL_THRESHOLD = 100;
@@ -91,18 +91,25 @@ function VirtualBody<T>({
     }
   }, [selectedIndex, virtualizer]);
 
+  const firstVirtualItem = virtualItems[0];
+  const lastVirtualItem = virtualItems[virtualItems.length - 1];
+
   return (
     <tbody>
-      {virtualItems.length > 0 && (
+      {firstVirtualItem && (
         <tr>
           <td
-            style={{ height: virtualItems[0].start, padding: 0 }}
+            style={{ height: firstVirtualItem.start, padding: 0 }}
             colSpan={columns.length}
           />
         </tr>
       )}
       {virtualItems.map(({ index }) => {
         const item = data[index];
+
+        if (!item) {
+          return null;
+        }
 
         return (
           <tr
@@ -129,11 +136,11 @@ function VirtualBody<T>({
           </tr>
         );
       })}
-      {virtualItems.length > 0 && (
+      {lastVirtualItem && (
         <tr>
           <td
             style={{
-              height: Math.max(0, totalSize - virtualItems[virtualItems.length - 1].end),
+              height: Math.max(0, totalSize - lastVirtualItem.end),
               padding: 0,
             }}
             colSpan={columns.length}
@@ -224,9 +231,13 @@ export default function DataTable<T>({
           break;
 
         case "Enter":
-          if (selectedIndex >= 0 && selectedIndex < data.length && onRowClick) {
-            event.preventDefault();
-            onRowClick(data[selectedIndex]);
+          {
+            const selected = data[selectedIndex];
+
+            if (selected && onRowClick) {
+              event.preventDefault();
+              onRowClick(selected);
+            }
           }
 
           break;

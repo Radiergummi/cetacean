@@ -34,7 +34,7 @@ export function seriesLabel(metric: Record<string, string> | undefined, fallback
 export function parseRangeResult(
   response: PrometheusResponse,
   title: string,
-  colorOverride?: string,
+  colorOverride?: string | undefined,
 ): ParsedMetrics | null {
   const result = response.data?.result?.filter(({ values }) => values?.length);
 
@@ -42,7 +42,7 @@ export function parseRangeResult(
     return null;
   }
 
-  const timestamps = (result[0].values ?? []).map(([value]) => Number(value));
+  const timestamps = (result[0]?.values ?? []).map(([value]) => Number(value));
   const labels = timestamps.map((timestamp) => new Date(timestamp * 1_000).toLocaleTimeString());
   const series = result.map(({ metric, values }, index) => ({
     label: seriesLabel(metric, result.length === 1 ? title : undefined),
@@ -114,5 +114,5 @@ export function seriesChanged(previous: ParsedMetrics | null, next: ParsedMetric
     return true;
   }
 
-  return previous.series.some(({ label }, index) => label !== next.series[index].label);
+  return previous.series.some(({ label }, index) => label !== next.series[index]?.label);
 }

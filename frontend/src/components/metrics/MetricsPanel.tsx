@@ -44,18 +44,18 @@ export type { MetricsPanelContextValue } from "./MetricsPanelContext";
 interface ChartDef {
   title: string;
   query: string;
-  unit?: string;
-  thresholds?: Threshold[];
-  yMin?: number;
-  color?: string;
-  labelTransform?: (label: string) => string;
+  unit?: string | undefined;
+  thresholds?: Threshold[] | undefined;
+  yMin?: number | undefined;
+  color?: string | undefined;
+  labelTransform?: ((label: string) => string) | undefined;
 }
 
 interface Props {
-  charts?: ChartDef[];
-  children?: React.ReactNode;
-  header?: React.ReactNode;
-  stackable?: boolean;
+  charts?: ChartDef[] | undefined;
+  children?: React.ReactNode | undefined;
+  header?: React.ReactNode | undefined;
+  stackable?: boolean | undefined;
 }
 
 const ranges = ["1h", "6h", "24h", "7d"] as const;

@@ -23,10 +23,10 @@ interface RemoveResourceActionProps {
   resourceName: string;
   listPath: string;
   onRemove: () => Promise<void>;
-  onForceRemove?: () => Promise<void>;
-  canDelete?: boolean;
-  disabled?: boolean;
-  disabledTitle?: string;
+  onForceRemove?: (() => Promise<void>) | undefined;
+  canDelete?: boolean | undefined;
+  disabled?: boolean | undefined;
+  disabledTitle?: string | undefined;
 }
 
 export function RemoveResourceAction({

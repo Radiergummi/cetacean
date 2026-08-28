@@ -10,7 +10,7 @@ export function DockerDocsLink({
   variant = "icon",
 }: {
   href: string;
-  variant?: "icon" | "label";
+  variant?: "icon" | "label" | undefined;
 }) {
   if (variant === "label") {
     return (

@@ -46,7 +46,7 @@ const gauges: GaugeDef[] = [
 
 interface Props {
   /** Prometheus instance label (e.g. "10.100.9.27:9100"). Omit for cluster-wide. */
-  instance?: string;
+  instance?: string | undefined;
 }
 
 export default function NodeResourceGauges({ instance }: Props) {
@@ -76,7 +76,7 @@ export default function NodeResourceGauges({ instance }: Props) {
         <ResourceGauge
           key={label}
           label={label}
-          value={values[index]}
+          value={values[index] ?? null}
         />
       ))}
     </div>

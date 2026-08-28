@@ -87,6 +87,11 @@ export function MountsEditor({
 
   function handleTypeChange(index: number, newType: string) {
     const mount = draft[index];
+
+    if (!mount) {
+      return;
+    }
+
     const updated: ServiceMount = {
       Type: newType,
       Source: newType === "tmpfs" ? "" : mount.Source,
@@ -462,7 +467,7 @@ export function MountsEditor({
   );
 }
 
-function MountTypeBadge({ type }: { type?: string }) {
+function MountTypeBadge({ type }: { type?: string | undefined }) {
   return (
     <span
       data-type={type}

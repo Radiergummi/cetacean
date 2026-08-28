@@ -8,30 +8,32 @@ type NetworkInfo = {
   name: string;
   driver: string;
   scope: string;
-  stack?: string;
-  color?: string;
+  stack?: string | undefined;
+  color?: string | undefined;
 };
+
+type Point = { x: number; y: number };
 
 type NetworkEdgeData = {
   networks: NetworkInfo[];
-  bendPoints?: Array<{ x: number; y: number }>;
-  sourceAliases?: string[];
-  targetAliases?: string[];
+  bendPoints?: Array<{ x: number; y: number }> | undefined;
+  sourceAliases?: string[] | undefined;
+  targetAliases?: string[] | undefined;
 };
 
 /** Snap points so each segment is strictly horizontal or vertical */
-function snapToOrthogonal(
-  points: Array<{ x: number; y: number }>,
-): Array<{ x: number; y: number }> {
-  if (points.length < 2) {
+function snapToOrthogonal(points: Point[]): Point[] {
+  const [first, ...rest] = points;
+
+  if (!first || rest.length === 0) {
     return points;
   }
 
-  const result = [{ ...points[0] }];
+  let previous: Point = { ...first };
+  const result: Point[] = [previous];
 
-  for (let index = 1; index < points.length; index++) {
-    const previous = result[result.length - 1];
-    const current = { ...points[index] };
+  for (const point of rest) {
+    const current = { ...point };
     const dx = Math.abs(current.x - previous.x);
     const dy = Math.abs(current.y - previous.y);
 
@@ -42,26 +44,34 @@ function snapToOrthogonal(
     }
 
     result.push(current);
+    previous = current;
   }
+
   return result;
 }
 
 /** Build an SVG path from orthogonal bend points with rounded corners */
-function buildOrthogonalPath(points: Array<{ x: number; y: number }>, radius = 6): string {
-  if (points.length < 2) {
+function buildOrthogonalPath(points: Point[], radius = 6): string {
+  const [first, second] = points;
+
+  if (!first || !second) {
     return "";
   }
 
   if (points.length === 2) {
-    return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
+    return `M ${first.x} ${first.y} L ${second.x} ${second.y}`;
   }
 
-  let d = `M ${points[0].x} ${points[0].y}`;
+  let d = `M ${first.x} ${first.y}`;
 
   for (let index = 1; index < points.length - 1; index++) {
     const prev = points[index - 1];
     const curr = points[index];
     const next = points[index + 1];
+
+    if (!prev || !curr || !next) {
+      continue;
+    }
 
     const dPrev = Math.max(Math.abs(curr.x - prev.x), Math.abs(curr.y - prev.y));
     const dNext = Math.max(Math.abs(next.x - curr.x), Math.abs(next.y - curr.y));
@@ -82,7 +92,10 @@ function buildOrthogonalPath(points: Array<{ x: number; y: number }>, radius = 6
   }
 
   const last = points[points.length - 1];
-  d += ` L ${last.x} ${last.y}`;
+
+  if (last) {
+    d += ` L ${last.x} ${last.y}`;
+  }
 
   return d;
 }
@@ -107,9 +120,9 @@ export default function NetworkEdge({
   const dimmed = hoveredId != null && !highlighted;
 
   const isStackNetwork = data.networks.some(({ color: colorCode }) => colorCode != null);
-  const color = isStackNetwork
-    ? data.networks.find((n) => n.color)!.color!
-    : "var(--color-muted-foreground)";
+  const color =
+    data.networks.find(({ color: colorCode }) => colorCode)?.color ??
+    "var(--color-muted-foreground)";
 
   const baseWidth = isStackNetwork ? 1.5 : 1;
   const strokeWidth = highlighted ? 2.5 : hovered ? 2 : baseWidth;
@@ -118,14 +131,16 @@ export default function NetworkEdge({
   let labelX: number;
   let labelY: number;
 
-  if (data.bendPoints && data.bendPoints.length >= 2) {
-    const snapped = snapToOrthogonal(data.bendPoints);
+  const snapped =
+    data.bendPoints && data.bendPoints.length >= 2 ? snapToOrthogonal(data.bendPoints) : null;
+  const mid = snapped?.[Math.floor(snapped.length / 2)];
+
+  if (snapped && mid) {
     edgePath = buildOrthogonalPath(snapped, 8);
-    const mid = snapped[Math.floor(snapped.length / 2)];
     labelX = mid.x;
     labelY = mid.y;
   } else {
-    const result = getSmoothStepPath({
+    const [path, x, y] = getSmoothStepPath({
       sourceX,
       sourceY,
       targetX,
@@ -134,9 +149,9 @@ export default function NetworkEdge({
       targetPosition,
       borderRadius: 8,
     });
-    edgePath = result[0];
-    labelX = result[1];
-    labelY = result[2];
+    edgePath = path;
+    labelX = x;
+    labelY = y;
   }
 
   return (

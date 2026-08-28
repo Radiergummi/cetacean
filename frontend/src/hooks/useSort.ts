@@ -8,7 +8,7 @@ type Accessor<T> = (item: T) => string | number | undefined;
 export function useSort<T>(
   items: T[],
   accessors: Record<string, Accessor<T>>,
-  defaultKey?: string,
+  defaultKey?: string | undefined,
   defaultDirection: SortDir = "asc",
 ) {
   const { sortKey, sortDir, toggle } = useSortParams(defaultKey, defaultDirection);

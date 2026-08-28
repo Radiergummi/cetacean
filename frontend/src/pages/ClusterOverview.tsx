@@ -166,7 +166,7 @@ function HealthCard({
   primary: string;
   secondary: string;
   status: "green" | "amber" | "red" | "neutral";
-  delta?: number;
+  delta?: number | undefined;
   to: string;
 }) {
   return (

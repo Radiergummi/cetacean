@@ -10,11 +10,11 @@ export default function ResourceCard({
   meta,
 }: {
   title: React.ReactNode;
-  to?: string;
-  badge?: React.ReactNode;
-  subtitle?: React.ReactNode;
-  children?: React.ReactNode;
-  meta?: React.ReactNode[];
+  to?: string | undefined;
+  badge?: React.ReactNode | undefined;
+  subtitle?: React.ReactNode | undefined;
+  children?: React.ReactNode | undefined;
+  meta?: React.ReactNode[] | undefined;
 }) {
   const hasBody = subtitle || children || meta;
   const content = (

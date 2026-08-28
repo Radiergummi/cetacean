@@ -50,9 +50,15 @@ export function SizingBadge({ hints }: { hints: Recommendation[] }) {
     );
   }
 
-  let top = hints[0];
+  const [first, ...rest] = hints;
 
-  for (const hint of hints) {
+  if (!first) {
+    return null;
+  }
+
+  let top = first;
+
+  for (const hint of rest) {
     if (severityRank[hint.severity] > severityRank[top.severity]) {
       top = hint;
     }

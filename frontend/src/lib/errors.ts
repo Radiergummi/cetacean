@@ -7,7 +7,7 @@
 interface ErrorInfo {
   title: string;
   suggestion: string;
-  action?: "force-remove" | "retry";
+  action?: "force-remove" | "retry" | undefined;
 }
 
 const errorDictionary: Record<string, ErrorInfo> = {

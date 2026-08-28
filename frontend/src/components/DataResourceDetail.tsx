@@ -25,7 +25,7 @@ interface DataResourceDetailProps {
   allowedMethods: Set<string>;
   onRemove: () => Promise<void>;
   onPatchLabels: (ops: PatchOp[]) => Promise<Record<string, string>>;
-  children?: ReactNode;
+  children?: ReactNode | undefined;
 }
 
 /**

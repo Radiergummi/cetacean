@@ -3,8 +3,8 @@ import { profileFor, generateTimeSeries, generateInstantValue } from "./timeseri
 
 interface MetricResult {
   metric: Record<string, string>;
-  value?: [number, string];
-  values?: [number, string][];
+  value?: [number, string] | undefined;
+  values?: [number, string][] | undefined;
 }
 
 /**

@@ -12,6 +12,11 @@ export function humanizeConstraint(raw: string): { label: string; exclude: boole
   }
 
   const [, field, op, value] = match;
+
+  if (field === undefined) {
+    return null;
+  }
+
   const exclude = op === "!=";
 
   if (field === "node.role") {

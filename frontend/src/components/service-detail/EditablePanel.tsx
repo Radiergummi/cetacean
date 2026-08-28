@@ -17,19 +17,19 @@ interface EditablePanelProps {
   /** Called when the user clicks Save — throw to show an error */
   onSave: () => Promise<void>;
   /** Optional title shown above content in both modes */
-  title?: string;
+  title?: string | undefined;
   /** Extra buttons rendered on the left side of the edit footer (e.g. "Add option") */
-  actions?: ReactNode;
+  actions?: ReactNode | undefined;
   /** When true, shows the empty state instead of display content */
-  empty?: boolean;
+  empty?: boolean | undefined;
   /** Description shown in the empty state when canEdit is true */
-  emptyDescription?: string;
+  emptyDescription?: string | undefined;
   /** Whether to wrap in a bordered div (default true) */
-  bordered?: boolean;
+  bordered?: boolean | undefined;
   /** Whether editing is allowed (default false) */
-  canEdit?: boolean;
+  canEdit?: boolean | undefined;
   /** Extra buttons rendered next to Edit in the title row (only shown when not editing) */
-  headerActions?: ReactNode;
+  headerActions?: ReactNode | undefined;
 }
 
 export function EditablePanel({

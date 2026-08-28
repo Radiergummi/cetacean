@@ -9,7 +9,7 @@ interface CreateDataResourceFormProps {
   resourceType: string;
   onCreate: (name: string, data: string) => Promise<{ id: string }>;
   basePath: string;
-  canCreate?: boolean;
+  canCreate?: boolean | undefined;
 }
 
 /**
@@ -42,7 +42,7 @@ export default function CreateDataResourceForm({
 
     reader.onload = () => {
       const result = reader.result as string;
-      const base64 = result.includes(",") ? result.split(",")[1] : result;
+      const base64 = result.split(",")[1] ?? result;
       setFileData(base64);
     };
 

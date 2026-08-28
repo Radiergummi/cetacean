@@ -5,9 +5,9 @@ import ViewToggle from "./ViewToggle";
 interface Props {
   search: string;
   onSearchChange: (value: string) => void;
-  placeholder?: string;
-  viewMode?: ViewMode;
-  onViewModeChange?: (mode: ViewMode) => void;
+  placeholder?: string | undefined;
+  viewMode?: ViewMode | undefined;
+  onViewModeChange?: ((mode: ViewMode) => void) | undefined;
 }
 
 export default function ListToolbar({

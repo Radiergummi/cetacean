@@ -15,7 +15,7 @@ import { useState } from "react";
 
 function normalizeReference(ref: string): string {
   const trimmed = ref.trim();
-  const namePart = trimmed.split(":")[0].split("@")[0];
+  const namePart = trimmed.split(":")[0]?.split("@")[0] ?? trimmed;
   const hasRegistry = namePart.includes(".") || namePart.includes(":");
 
   if (hasRegistry) {
@@ -29,9 +29,9 @@ interface InstallPluginDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onInstalled: () => void;
-  mode?: "install" | "upgrade";
-  pluginName?: string;
-  currentReference?: string;
+  mode?: "install" | "upgrade" | undefined;
+  pluginName?: string | undefined;
+  currentReference?: string | undefined;
 }
 
 export default function InstallPluginDialog({

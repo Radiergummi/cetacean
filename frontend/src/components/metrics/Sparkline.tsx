@@ -1,8 +1,8 @@
 interface Props {
   data: number[];
-  width?: number;
-  height?: number;
-  className?: string;
+  width?: number | undefined;
+  height?: number | undefined;
+  className?: string | undefined;
 }
 
 export default function Sparkline({

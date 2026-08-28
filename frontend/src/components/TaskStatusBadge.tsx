@@ -1,4 +1,4 @@
-export default function TaskStatusBadge({ state }: { state?: string }) {
+export default function TaskStatusBadge({ state }: { state?: string | undefined }) {
   return (
     <span
       data-state={state || "unknown"}

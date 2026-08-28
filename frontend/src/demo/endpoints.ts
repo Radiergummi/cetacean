@@ -8,6 +8,16 @@
 import type { Dataset } from "./dataset";
 
 export function buildDemoEndpoints(dataset: Dataset): string[] {
+  // The demo dataset is always fully populated; the fallbacks only exist so
+  // the list stays well-typed under noUncheckedIndexedAccess.
+  const nodeId = dataset.nodes[0]?.ID ?? "";
+  const serviceId = dataset.services[0]?.ID ?? "";
+  const taskId = dataset.tasks[0]?.ID ?? "";
+  const configId = dataset.configs[0]?.ID ?? "";
+  const secretId = dataset.secrets[0]?.ID ?? "";
+  const networkId = dataset.networks[0]?.Id ?? "";
+  const volumeName = dataset.volumes[0]?.Name ?? "";
+
   return [
     // Meta
     "/-/health",
@@ -34,34 +44,34 @@ export function buildDemoEndpoints(dataset: Dataset): string[] {
     "/volumes",
 
     // Resource details (first item from dataset)
-    `/nodes/${dataset.nodes[0].ID}`,
-    `/nodes/${dataset.nodes[0].ID}/tasks`,
-    `/nodes/${dataset.nodes[0].ID}/labels`,
-    `/nodes/${dataset.nodes[0].ID}/role`,
-    `/services/${dataset.services[0].ID}`,
-    `/services/${dataset.services[0].ID}/tasks`,
-    `/services/${dataset.services[0].ID}/env`,
-    `/services/${dataset.services[0].ID}/labels`,
-    `/services/${dataset.services[0].ID}/resources`,
-    `/services/${dataset.services[0].ID}/healthcheck`,
-    `/services/${dataset.services[0].ID}/configs`,
-    `/services/${dataset.services[0].ID}/secrets`,
-    `/services/${dataset.services[0].ID}/networks`,
-    `/services/${dataset.services[0].ID}/mounts`,
-    `/services/${dataset.services[0].ID}/ports`,
-    `/services/${dataset.services[0].ID}/placement`,
-    `/services/${dataset.services[0].ID}/update-policy`,
-    `/services/${dataset.services[0].ID}/rollback-policy`,
-    `/services/${dataset.services[0].ID}/log-driver`,
-    `/services/${dataset.services[0].ID}/container-config`,
-    `/services/${dataset.services[0].ID}/logs`,
-    `/tasks/${dataset.tasks[0].ID}`,
-    `/tasks/${dataset.tasks[0].ID}/logs`,
+    `/nodes/${nodeId}`,
+    `/nodes/${nodeId}/tasks`,
+    `/nodes/${nodeId}/labels`,
+    `/nodes/${nodeId}/role`,
+    `/services/${serviceId}`,
+    `/services/${serviceId}/tasks`,
+    `/services/${serviceId}/env`,
+    `/services/${serviceId}/labels`,
+    `/services/${serviceId}/resources`,
+    `/services/${serviceId}/healthcheck`,
+    `/services/${serviceId}/configs`,
+    `/services/${serviceId}/secrets`,
+    `/services/${serviceId}/networks`,
+    `/services/${serviceId}/mounts`,
+    `/services/${serviceId}/ports`,
+    `/services/${serviceId}/placement`,
+    `/services/${serviceId}/update-policy`,
+    `/services/${serviceId}/rollback-policy`,
+    `/services/${serviceId}/log-driver`,
+    `/services/${serviceId}/container-config`,
+    `/services/${serviceId}/logs`,
+    `/tasks/${taskId}`,
+    `/tasks/${taskId}/logs`,
     `/stacks/webshop`,
-    `/configs/${dataset.configs[0].ID}`,
-    `/secrets/${dataset.secrets[0].ID}`,
-    `/networks/${dataset.networks[0].Id}`,
-    `/volumes/${dataset.volumes[0].Name}`,
+    `/configs/${configId}`,
+    `/secrets/${secretId}`,
+    `/networks/${networkId}`,
+    `/volumes/${volumeName}`,
 
     // Search
     "/search?q=web",
@@ -99,7 +109,7 @@ export const nonContractEndpoints = new Set<string>([
  * `/services/{id}/logs` and `/tasks/{id}/logs` are matched by suffix.
  */
 export function shouldSkipContract(path: string): boolean {
-  const pathOnly = path.split("?")[0];
+  const pathOnly = path.split("?")[0] ?? path;
 
   if (nonContractEndpoints.has(pathOnly)) {
     return true;

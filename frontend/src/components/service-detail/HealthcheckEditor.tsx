@@ -128,7 +128,7 @@ export function HealthcheckEditor({
   serviceId: string;
   healthcheck: Healthcheck | null;
   onSaved: (updated: Healthcheck | null) => void;
-  canEdit?: boolean;
+  canEdit?: boolean | undefined;
 }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -300,7 +300,7 @@ function ToggleButton({
   label: string;
   pressed: boolean;
   onToggle: (value: boolean) => void;
-  className?: string;
+  className?: string | undefined;
 }) {
   return (
     <button

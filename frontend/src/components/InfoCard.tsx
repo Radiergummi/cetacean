@@ -9,10 +9,10 @@ export default function InfoCard({
   right,
 }: {
   label: string;
-  value?: React.ReactNode | string;
-  href?: string;
-  className?: string;
-  right?: React.ReactNode;
+  value?: React.ReactNode | string | undefined;
+  href?: string | undefined;
+  className?: string | undefined;
+  right?: React.ReactNode | undefined;
 }) {
   const isExternal = href?.startsWith("http");
   const isString = typeof value === "string";

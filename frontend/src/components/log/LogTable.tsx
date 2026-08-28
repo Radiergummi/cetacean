@@ -22,15 +22,15 @@ export interface LogTableProps {
   search: string;
   caseSensitive: boolean;
   useRegex: boolean;
-  highlightIndex?: number;
-  scrollToFiltered?: number;
-  following?: boolean;
-  onTaskFilter?: (taskId: string | null) => void;
-  pinnedKeys?: Set<string>;
-  pinnedLines?: LogLine[];
-  onTogglePin?: (line: LogLine) => void;
-  height?: number;
-  fillHeight?: boolean;
+  highlightIndex?: number | undefined;
+  scrollToFiltered?: number | undefined;
+  following?: boolean | undefined;
+  onTaskFilter?: ((taskId: string | null) => void) | undefined;
+  pinnedKeys?: Set<string> | undefined;
+  pinnedLines?: LogLine[] | undefined;
+  onTogglePin?: ((line: LogLine) => void) | undefined;
+  height?: number | undefined;
+  fillHeight?: boolean | undefined;
 }
 
 function LogRow({
@@ -59,12 +59,12 @@ function LogRow({
   useRegex: boolean;
   isExpanded: boolean;
   onToggle: ((index: number) => void) | undefined;
-  highlight?: boolean;
-  onTaskFilter?: (taskId: string) => void;
-  measureRef?: (el: HTMLElement | null) => void;
-  dataIndex?: number;
-  isPinned?: boolean;
-  onTogglePin?: (line: LogLine) => void;
+  highlight?: boolean | undefined;
+  onTaskFilter?: ((taskId: string) => void) | undefined;
+  measureRef?: ((el: HTMLElement | null) => void) | undefined;
+  dataIndex?: number | undefined;
+  isPinned?: boolean | undefined;
+  onTogglePin?: ((line: LogLine) => void) | undefined;
 }) {
   const jsonLine = isJSON(line.message);
   const prettyPrint = jsonLine && (wrapLines || isExpanded);
@@ -305,12 +305,12 @@ function VirtualLogBody({
   useRegex: boolean;
   expanded: Set<number>;
   toggleExpanded: (index: number) => void;
-  highlightIndex?: number;
-  scrollToFiltered?: number;
-  following?: boolean;
-  onTaskFilter?: (taskId: string | null) => void;
-  pinnedKeys?: Set<string>;
-  onTogglePin?: (line: LogLine) => void;
+  highlightIndex?: number | undefined;
+  scrollToFiltered?: number | undefined;
+  following?: boolean | undefined;
+  onTaskFilter?: ((taskId: string | null) => void) | undefined;
+  pinnedKeys?: Set<string> | undefined;
+  onTogglePin?: ((line: LogLine) => void) | undefined;
 }) {
   // Track when the scroll container ref becomes available so we can
   // force a re-render — the virtualizer gets null from getScrollElement
@@ -344,12 +344,15 @@ function VirtualLogBody({
   const totalSize = virtualizer.getTotalSize();
   const colCount = showAttrs && !isMobile ? 4 : 3;
 
+  const firstVirtualItem = virtualItems[0];
+  const lastVirtualItem = virtualItems[virtualItems.length - 1];
+
   return (
     <tbody>
-      {virtualItems.length > 0 && (
+      {firstVirtualItem && (
         <tr>
           <td
-            style={{ height: virtualItems[0].start, padding: 0 }}
+            style={{ height: firstVirtualItem.start, padding: 0 }}
             colSpan={colCount}
           />
         </tr>
@@ -357,6 +360,10 @@ function VirtualLogBody({
 
       {virtualItems.map((virtualRow) => {
         const line = filtered[virtualRow.index];
+
+        if (!line) {
+          return null;
+        }
 
         return (
           <LogRow
@@ -380,11 +387,11 @@ function VirtualLogBody({
         );
       })}
 
-      {virtualItems.length > 0 && (
+      {lastVirtualItem && (
         <tr>
           <td
             style={{
-              height: Math.max(0, totalSize - virtualItems[virtualItems.length - 1].end),
+              height: Math.max(0, totalSize - lastVirtualItem.end),
               padding: 0,
             }}
             colSpan={colCount}

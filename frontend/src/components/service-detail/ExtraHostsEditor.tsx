@@ -55,7 +55,7 @@ export function ExtraHostsEditor({
   serviceId: string;
   config: ContainerConfig;
   onSaved: (updated: ContainerConfig) => void;
-  canEdit?: boolean;
+  canEdit?: boolean | undefined;
 }) {
   const [rows, setRows] = useState<HostRow[]>([]);
 

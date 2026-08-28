@@ -8,8 +8,8 @@ export default function SearchInput({
 }: {
   value: string;
   onChange: (value: string) => void;
-  placeholder?: string;
-  className?: string;
+  placeholder?: string | undefined;
+  className?: string | undefined;
 }) {
   return (
     <div className={`relative w-full ${className}`}>

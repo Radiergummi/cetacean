@@ -7,7 +7,7 @@ const DISMISS_KEY = "cetacean:dismiss-monitoring-banner";
 
 interface Props {
   status: Status;
-  source?: "nodeExporter" | "cadvisor";
+  source?: "nodeExporter" | "cadvisor" | undefined;
 }
 
 export default function MonitoringStatus({ status, source }: Props) {
@@ -130,8 +130,8 @@ function Banner({
   children,
 }: {
   icon: React.ReactNode;
-  variant?: "info" | "warn";
-  onDismiss?: () => void;
+  variant?: "info" | "warn" | undefined;
+  onDismiss?: (() => void) | undefined;
   children: React.ReactNode;
 }) {
   return (

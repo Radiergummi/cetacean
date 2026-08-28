@@ -9,12 +9,12 @@ type ServiceCardData = {
   mode: string;
   image: string;
   replicas: number;
-  runningReplicas?: number;
-  ports?: string[];
-  updateStatus?: string;
-  stackColor?: string;
-  hasSourceEdge?: boolean;
-  hasTargetEdge?: boolean;
+  runningReplicas?: number | undefined;
+  ports?: string[] | undefined;
+  updateStatus?: string | undefined;
+  stackColor?: string | undefined;
+  hasSourceEdge?: boolean | undefined;
+  hasTargetEdge?: boolean | undefined;
 };
 
 export default function ServiceCardNode({ data }: NodeProps & { data: ServiceCardData }) {

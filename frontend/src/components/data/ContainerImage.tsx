@@ -16,8 +16,8 @@ import { useState } from "react";
  * the browser blocked.
  */
 function registryIcon(image: string): LucideIcon | null {
-  const namePart = image.split("@")[0].split(":")[0];
-  const first = namePart.split("/")[0];
+  const namePart = image.split("@")[0]?.split(":")[0] ?? image;
+  const first = namePart.split("/")[0] ?? namePart;
 
   // Bare names like "nginx" or "library/nginx" implicitly resolve to Docker Hub.
   if (!first.includes(".") && !first.includes(":")) {
@@ -152,16 +152,19 @@ export default function ContainerImage({
   serviceId,
   canEdit = false,
 }: {
-  image?: string;
-  label?: string;
-  serviceId?: string;
-  canEdit?: boolean;
+  image?: string | undefined;
+  label?: string | undefined;
+  serviceId?: string | undefined;
+  canEdit?: boolean | undefined;
 }) {
   if (!image) {
     return null;
   }
 
-  const display = image.split("@")[0].replace(/^(docker\.io|registry-1\.docker\.io)\//, "");
+  const display = (image.split("@")[0] ?? image).replace(
+    /^(docker\.io|registry-1\.docker\.io)\//,
+    "",
+  );
   const href = imageRegistryUrl(image);
   const Icon = registryIcon(image);
 

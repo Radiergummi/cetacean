@@ -81,7 +81,7 @@ export function useNodeMetrics() {
           return metrics;
         }
 
-        const host = key.split(":")[0];
+        const host = key.split(":")[0] ?? key;
 
         if (host === hostname || host === short || host.split(".")[0] === short) {
           return metrics;

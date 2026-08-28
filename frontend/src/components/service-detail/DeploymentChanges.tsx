@@ -8,7 +8,7 @@ export function DeploymentChanges({
   updateStatus,
 }: {
   changes: SpecChange[];
-  updateStatus?: Service["UpdateStatus"];
+  updateStatus?: Service["UpdateStatus"] | undefined;
 }) {
   const timestamp = updateStatus?.CompletedAt || updateStatus?.StartedAt;
   const deploymentLabels: Record<string, string> = {

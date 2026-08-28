@@ -36,6 +36,8 @@ export default function ConnectionStatus() {
 
       return () => clearTimeout(timeout);
     }
+
+    return undefined;
   }, [lastEventAt]);
 
   // Update relative time every second

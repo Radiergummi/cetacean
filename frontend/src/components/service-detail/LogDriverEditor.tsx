@@ -47,10 +47,18 @@ export function LogDriverEditor({
   }
 
   function updateOption(index: number, part: 0 | 1, value: string) {
-    const updated = [...options];
-    updated[index] = [...updated[index]] as [string, string];
-    updated[index][part] = value;
-    setOptions(updated);
+    setOptions((previous) =>
+      previous.map((option, optionIndex) => {
+        if (optionIndex !== index) {
+          return option;
+        }
+
+        const next: [string, string] = [...option];
+        next[part] = value;
+
+        return next;
+      }),
+    );
   }
 
   async function save() {

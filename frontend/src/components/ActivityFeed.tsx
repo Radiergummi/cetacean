@@ -6,8 +6,8 @@ import { Link } from "react-router-dom";
 
 interface ActivityFeedProps {
   entries: HistoryEntry[];
-  loading?: boolean;
-  hideType?: boolean;
+  loading?: boolean | undefined;
+  hideType?: boolean | undefined;
 }
 
 export default function ActivityFeed({ entries, loading, hideType }: ActivityFeedProps) {

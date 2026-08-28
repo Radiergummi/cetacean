@@ -10,7 +10,7 @@ export function generateMockSeries(
   start: number,
   end: number,
   step: number,
-  colorOverride?: string,
+  colorOverride?: string | undefined,
 ): {
   labels: string[];
   timestamps: number[];
@@ -56,7 +56,7 @@ export function generateMockSeries(
     });
 
     return {
-      label: mockNames[index % mockNames.length],
+      label: mockNames[index % mockNames.length] ?? `series-${index}`,
       color: colorOverride ?? getChartColor(index),
       data,
     };
