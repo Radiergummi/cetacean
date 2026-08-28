@@ -12,6 +12,8 @@ import (
 	"time"
 
 	json "github.com/goccy/go-json"
+
+	"github.com/radiergummi/cetacean/internal/logs"
 )
 
 // LogStream is an alias for the io.ReadCloser returned by Docker log APIs.
@@ -107,19 +109,19 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	logs, err := fetch(ctx, strconv.Itoa(tail), false, since, until)
+	stream, err := fetch(ctx, strconv.Itoa(tail), false, since, until)
 	if err != nil {
 		slog.Error("failed to get logs", "error", err)
 		writeErrorCode(w, r, "LOG006", "failed to get logs")
 		return
 	}
-	defer logs.Close() //nolint:errcheck
+	defer stream.Close() //nolint:errcheck
 
 	// Docker's ServiceLogs with Follow=false may not close the stream
 	// after sending all data. Use an idle cancel: once we've received
 	// some data, if no new data arrives within 2s, cancel the context
 	// so the blocked read unblocks immediately.
-	lines, err := ParseDockerLogsWithIdleCancel(logs, cancel, 2*time.Second)
+	lines, err := logs.ParseDockerLogsWithIdleCancel(stream, cancel, 2*time.Second)
 	if err != nil {
 		slog.Error("failed to parse logs", "error", err)
 		writeErrorCode(w, r, "LOG007", "failed to parse logs")
@@ -215,13 +217,13 @@ func (h *Handlers) serveLogsSSE(
 		tail = strconv.Itoa(logResumeTail)
 	}
 
-	logs, err := fetch(r.Context(), tail, true, since, "")
+	stream, err := fetch(r.Context(), tail, true, since, "")
 	if err != nil {
 		slog.Error("failed to stream logs", "error", err)
 		writeErrorCode(w, r, "LOG008", "failed to stream logs")
 		return
 	}
-	defer logs.Close() //nolint:errcheck
+	defer stream.Close() //nolint:errcheck
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -231,7 +233,7 @@ func (h *Handlers) serveLogsSSE(
 	ch := make(chan LogLine, 64)
 	done := make(chan error, 1)
 	go func() {
-		done <- StreamDockerLogs(logs, ch)
+		done <- logs.StreamDockerLogs(stream, ch)
 		close(ch)
 	}()
 
@@ -262,7 +264,7 @@ func (h *Handlers) serveLogsSSE(
 			fmt.Fprint(w, ": keepalive\n\n")
 			flusher.Flush()
 		case <-r.Context().Done():
-			logs.Close() // unblocks StreamDockerLogs's io.Read
+			stream.Close() // unblocks StreamDockerLogs's io.Read
 			for range ch {
 			}
 			<-done

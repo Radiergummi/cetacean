@@ -10,8 +10,8 @@ import (
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/radiergummi/cetacean/internal/api"
 	"github.com/radiergummi/cetacean/internal/docker"
+	"github.com/radiergummi/cetacean/internal/logs"
 )
 
 // LogStreamer is the subset of the docker.Client log API the MCP server needs.
@@ -33,8 +33,8 @@ type LogStreamer interface {
 // RFC3339 timestamp of the last emitted line — pass it back as `since` on
 // the next read to receive only newer lines.
 type LogResourceResponse struct {
-	Lines  []api.LogLine `json:"lines"`
-	Cursor string        `json:"cursor,omitempty"`
+	Lines  []logs.LogLine `json:"lines"`
+	Cursor string         `json:"cursor,omitempty"`
 }
 
 const (
@@ -54,7 +54,7 @@ func (s *Server) readServiceLogsImpl(
 	opts logOptions,
 ) (LogResourceResponse, error) {
 	if s.logs == nil {
-		return LogResourceResponse{Lines: []api.LogLine{}}, nil
+		return LogResourceResponse{Lines: []logs.LogLine{}}, nil
 	}
 
 	tail := opts.tail
@@ -86,7 +86,7 @@ func (s *Server) readServiceLogsImpl(
 	// often leaves the stream open until the deadline expires. Cancelling
 	// the fetch context 250ms after the last frame returns control without
 	// waiting out the full logFetchTimeout. Mirrors REST log_handlers.go.
-	lines, err := api.ParseDockerLogsWithIdleCancel(reader, cancel, 250*time.Millisecond)
+	lines, err := logs.ParseDockerLogsWithIdleCancel(reader, cancel, 250*time.Millisecond)
 	if err != nil {
 		return LogResourceResponse{}, fmt.Errorf("parse logs: %w", err)
 	}
@@ -128,7 +128,7 @@ func nextCursor(ts string) string {
 // returns the input unchanged. The level comparison is best-effort: Docker
 // log lines don't carry a structured level, so we match common prefixes
 // (DEBUG/INFO/WARN/ERROR/FATAL) anywhere in the message text.
-func filterLogLines(lines []api.LogLine, level string) []api.LogLine {
+func filterLogLines(lines []logs.LogLine, level string) []logs.LogLine {
 	if level == "" {
 		return lines
 	}
@@ -136,7 +136,7 @@ func filterLogLines(lines []api.LogLine, level string) []api.LogLine {
 	if !ok {
 		return lines
 	}
-	out := make([]api.LogLine, 0, len(lines))
+	out := make([]logs.LogLine, 0, len(lines))
 	for _, l := range lines {
 		if lineLevelRank(l.Message) >= minRank {
 			out = append(out, l)

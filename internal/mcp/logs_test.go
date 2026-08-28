@@ -10,14 +10,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/radiergummi/cetacean/internal/api"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/docker"
+	"github.com/radiergummi/cetacean/internal/logs"
 )
 
 // buildLogFrame mirrors the Docker multiplexed log frame format used by
-// api.ParseDockerLogs: [stream(1)][padding(3)][size(4 BE)][payload].
+// logs.ParseDockerLogs: [stream(1)][padding(3)][size(4 BE)][payload].
 func buildLogFrame(stream byte, payload string) []byte {
 	var buf bytes.Buffer
 	buf.WriteByte(stream)
@@ -142,7 +142,7 @@ func TestNextCursorReturnsRawOnParseFailure(t *testing.T) {
 }
 
 func TestFilterLogLinesByLevel(t *testing.T) {
-	lines := []api.LogLine{
+	lines := []logs.LogLine{
 		{Message: "DEBUG something happened"},
 		{Message: "INFO request handled"},
 		{Message: "WARN slow response"},

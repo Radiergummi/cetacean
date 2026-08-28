@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -494,4 +495,14 @@ func TestHandleServiceLogs_SSE_RequestsBacklogOnlyWhenResuming(t *testing.T) {
 			}
 		})
 	}
+}
+
+// buildFrame writes one Docker multiplexed log frame. The logs package has its
+// own copy; Go test helpers do not cross package boundaries.
+func buildFrame(streamType byte, payload string) []byte {
+	header := make([]byte, 8)
+	header[0] = streamType
+	binary.BigEndian.PutUint32(header[4:], uint32(len(payload)))
+
+	return append(header, []byte(payload)...)
 }
