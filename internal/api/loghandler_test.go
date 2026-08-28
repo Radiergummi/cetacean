@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -410,5 +411,107 @@ func TestHandleServiceLogs_SSE_StreamFilter(t *testing.T) {
 	}
 	if !strings.Contains(events[0], "stderr line") {
 		t.Errorf("expected stderr line in event:\n%s", events[0])
+	}
+}
+
+// capturingTailStreamer captures the tail and since params passed to Docker.
+type capturingTailStreamer struct {
+	data   []byte
+	onCall func(tail, since string)
+}
+
+func (m *capturingTailStreamer) Logs(
+	_ context.Context,
+	_ docker.LogKind,
+	_ string,
+	tail string,
+	_ bool,
+	since, _ string,
+) (io.ReadCloser, error) {
+	if m.onCall != nil {
+		m.onCall(tail, since)
+	}
+	return io.NopCloser(bytes.NewReader(m.data)), nil
+}
+
+// A client reconnecting a dropped stream passes the last line it saw as
+// ?after=. Docker ignores since for service logs, so the handler has to
+// enforce the cursor itself — otherwise every reconnect silently drops the
+// lines emitted while the client was away.
+func TestHandleServiceLogs_SSE_ReplaysLinesAfterCursor(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	var frames bytes.Buffer
+	frames.Write(buildFrame(1, "2024-01-01T00:00:00.000000000Z before\n"))
+	frames.Write(buildFrame(1, "2024-01-01T00:00:01.000000000Z at cursor\n"))
+	frames.Write(buildFrame(1, "2024-01-01T00:00:02.000000000Z missed\n"))
+	frames.Write(buildFrame(1, "2024-01-01T00:00:03.000000000Z also missed\n"))
+
+	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{data: frames.Bytes()}))
+
+	req := httptest.NewRequest(
+		"GET",
+		"/services/svc1/logs?after=2024-01-01T00:00:01.000000000Z",
+		nil,
+	)
+	req.SetPathValue("id", "svc1")
+	req.Header.Set("Accept", "text/event-stream")
+	req = withContentType(req, ContentTypeSSE)
+	w := httptest.NewRecorder()
+	h.HandleServiceLogs(w, req)
+
+	body := w.Body.String()
+	for _, want := range []string{"missed", "also missed"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body missing %q line emitted after the cursor:\n%s", want, body)
+		}
+	}
+	for _, unwanted := range []string{"before", "at cursor"} {
+		if strings.Contains(body, unwanted) {
+			t.Errorf("body replayed %q, which is at or before the cursor:\n%s", unwanted, body)
+		}
+	}
+}
+
+func TestHandleServiceLogs_SSE_RequestsBacklogOnlyWhenResuming(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	cases := []struct {
+		name     string
+		target   string
+		wantTail string
+	}{
+		{
+			name:     "fresh stream takes no history",
+			target:   "/services/svc1/logs",
+			wantTail: "0",
+		},
+		{
+			name:     "resumed stream asks for a bounded backlog",
+			target:   "/services/svc1/logs?after=2024-01-01T00:00:01Z",
+			wantTail: strconv.Itoa(logResumeTail),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var capturedTail string
+			mock := &capturingTailStreamer{
+				onCall: func(tail, _ string) { capturedTail = tail },
+			}
+			h := newTestHandlers(t, withCache(c), withDockerClient(mock))
+
+			req := httptest.NewRequest("GET", tc.target, nil)
+			req.SetPathValue("id", "svc1")
+			req.Header.Set("Accept", "text/event-stream")
+			req = withContentType(req, ContentTypeSSE)
+			h.HandleServiceLogs(httptest.NewRecorder(), req)
+
+			if capturedTail != tc.wantTail {
+				t.Errorf("tail = %q, want %q", capturedTail, tc.wantTail)
+			}
+		})
 	}
 }

@@ -27,6 +27,12 @@ type LogResponse struct {
 
 type logFetcher func(ctx context.Context, tail string, follow bool, since, until string) (LogStream, error)
 
+// logResumeTail bounds how far back a resumed stream reaches for the lines it
+// missed. Docker ignores since for service logs, so the backlog has to be
+// requested as a line count and filtered here; a client away for longer than
+// this still loses the overflow, which beats replaying an entire log.
+const logResumeTail = 500
+
 func validLogTimestamp(s string) bool {
 	if s == "" {
 		return true
@@ -207,7 +213,15 @@ func (h *Handlers) serveLogsSSE(
 		return
 	}
 
-	logs, err := fetch(r.Context(), "0", true, since, "")
+	// A fresh stream starts at "now"; a resumed one reaches back for the lines
+	// it missed while disconnected. Docker ignores since for service logs, so
+	// the backlog is requested as a line count and the cursor is enforced below.
+	tail := "0"
+	if since != "" {
+		tail = strconv.Itoa(logResumeTail)
+	}
+
+	logs, err := fetch(r.Context(), tail, true, since, "")
 	if err != nil {
 		slog.Error("failed to stream logs", "error", err)
 		writeErrorCode(w, r, "LOG008", "failed to stream logs")
@@ -238,6 +252,12 @@ func (h *Handlers) serveLogsSSE(
 				return
 			}
 			if streamFilter != "" && line.Stream != streamFilter {
+				continue
+			}
+			// Enforce the cursor the same way the paginated path does, so a
+			// resumed stream neither replays what the client already has nor
+			// drops what it missed.
+			if since != "" && line.Timestamp <= since {
 				continue
 			}
 			data, _ := json.Marshal(line)
