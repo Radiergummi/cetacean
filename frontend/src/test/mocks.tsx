@@ -81,3 +81,22 @@ export function createWrapper(
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
   };
 }
+
+/**
+ * Encodes one log SSE frame the way the backend does: an `id:` line carrying
+ * the timestamp, then the JSON payload.
+ */
+export function encodeLogFrame(
+  timestamp: string,
+  message: string,
+  stream: "stdout" | "stderr" = "stdout",
+): string {
+  const data = JSON.stringify({ timestamp, message, stream });
+
+  return `id: ${timestamp}\ndata: ${data}\n\n`;
+}
+
+/** The keepalive comment the backend emits every 15 seconds. */
+export function keepaliveFrame(): string {
+  return ": keepalive\n\n";
+}

@@ -90,7 +90,11 @@ function redirectToLogin(): never {
   throw new Error("redirecting to login");
 }
 
-async function throwResponseError(res: Response): Promise<never> {
+/**
+ * Reads an RFC 9457 problem body into an ApiError, falling back to the status
+ * text when the response carries no problem document.
+ */
+export async function problemFromResponse(res: Response): Promise<ApiError> {
   let type = "about:blank";
   let title = res.statusText;
   let detail = "";
@@ -110,7 +114,11 @@ async function throwResponseError(res: Response): Promise<never> {
     // response wasn't JSON
   }
 
-  throw new ApiError(type, title, res.status, detail);
+  return new ApiError(type, title, res.status, detail);
+}
+
+async function throwResponseError(res: Response): Promise<never> {
+  throw await problemFromResponse(res);
 }
 
 /** Default request timeout in milliseconds. */

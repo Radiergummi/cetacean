@@ -5,7 +5,13 @@ import { LogEmptyState } from "./LogEmptyState";
 import { LogOverlays } from "./LogOverlays";
 import { LogSearch } from "./LogSearch";
 import { LogTable } from "./LogTable";
-import { LevelFilter, StreamFilterToggle, TimeRangeSelector, ToolbarButton } from "./LogToolbar";
+import {
+  LevelFilter,
+  LiveStatus,
+  StreamFilterToggle,
+  TimeRangeSelector,
+  ToolbarButton,
+} from "./LogToolbar";
 import { useLogData } from "./useLogData";
 import { useLogFilter } from "./useLogFilter";
 import { useLogTimeRange } from "./useLogTimeRange";
@@ -187,12 +193,11 @@ export default function LogViewer({ serviceId, taskId, header }: Props) {
     >
       {!isFullscreen && toggle}
 
-      {data.live && (
-        <span className="me-2 flex items-center gap-1.5 text-xs text-green-500 opacity-100 transition starting:opacity-0">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-500" />
-          Live
-        </span>
-      )}
+      <LiveStatus
+        live={data.live}
+        status={data.liveStatus}
+        onResume={data.resumeLive}
+      />
 
       <TimeRangeSelector
         value={timeRange}

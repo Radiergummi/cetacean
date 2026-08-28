@@ -1,9 +1,38 @@
 import type { LogLine as ApiLogLine } from "../../api/client";
 import { api } from "../../api/client";
+import { getErrorInfo } from "../../lib/errors";
 import { getErrorMessage } from "../../lib/utils";
 import type { LogLine, TimeRange } from "./log-utils";
 import { maxLiveLines, toLogLine } from "./log-utils";
+import type { LogStreamFailure } from "./logStream";
+import { maxReconnectAttempts, streamLogsWithRetry } from "./logStream";
 import { useCallback, useEffect, useRef, useState } from "react";
+
+/**
+ * The live tail's state, prepared for display. The toolbar renders this
+ * directly and never sees the transport's types.
+ */
+export interface LiveTailStatus {
+  state: "streaming" | "retrying" | "stopped";
+  attempt: number;
+  maxAttempts: number;
+  /** Epoch milliseconds of the next attempt; set only while retrying. */
+  retryAt?: number | undefined;
+  /** What the server said, when it said anything. */
+  reason?: string | undefined;
+}
+
+/**
+ * Prefers the shared error dictionary's wording for a known error code so the
+ * log tail says the same thing about a failure as the rest of the dashboard.
+ */
+function describeFailure({ error }: LogStreamFailure): string | undefined {
+  if (!error) {
+    return undefined;
+  }
+
+  return getErrorInfo(error.code)?.title ?? error.title;
+}
 
 interface UseLogDataOptions {
   logId: string;
@@ -23,13 +52,13 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
   const [following, setFollowing] = useState(true);
   const [atTop, setAtTop] = useState(false);
   const [live, setLive] = useState(false);
+  const [liveStatus, setLiveStatus] = useState<LiveTailStatus | null>(null);
 
   const limit = 500;
   const oldestRef = useRef<string | undefined>(undefined);
   const newestRef = useRef<string | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
   const fetchAbortRef = useRef<AbortController | null>(null);
-  const sseRef = useRef<EventSource | null>(null);
   const scrollRafRef = useRef(0);
   // Tracks programmatic scroll-to-bottom so the resulting scroll event
   // doesn't disable follow-mode. Under high log rates the virtualizer
@@ -104,18 +133,12 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
     };
   }, [fetchLogs]);
 
-  // Live-streaming via SSE
+  // Live-streaming via SSE. The transport owns reconnection and backoff; this
+  // effect only wires it to React state.
   useEffect(() => {
     if (!live) return;
 
-    const after = newestRef.current || new Date().toISOString();
-    const streamOptions = { after, stream: streamParam };
-    const url = isTask
-      ? api.taskLogsStreamURL(logId, streamOptions)
-      : api.serviceLogsStreamURL(logId, streamOptions);
-
-    const eventSource = new EventSource(url);
-    sseRef.current = eventSource;
+    const abortController = new AbortController();
     const buffer: ApiLogLine[] = [];
     let animationFrameId = 0;
 
@@ -137,24 +160,53 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
       });
     };
 
-    eventSource.onmessage = (event) => {
-      try {
-        buffer.push(JSON.parse(event.data));
-        if (!animationFrameId) animationFrameId = requestAnimationFrame(flush);
-      } catch {
-        /* skip malformed events */
-      }
+    const urlFor = (cursor: string) => {
+      const streamOptions = { after: cursor, stream: streamParam };
+
+      return isTask
+        ? api.taskLogsStreamURL(logId, streamOptions)
+        : api.serviceLogsStreamURL(logId, streamOptions);
     };
 
-    eventSource.onerror = () => {
-      eventSource.close();
-      setLive(false);
-    };
+    void streamLogsWithRetry(
+      urlFor,
+      newestRef.current || new Date().toISOString(),
+      {
+        onLine: (line) => {
+          buffer.push(line);
+
+          if (!animationFrameId) {
+            animationFrameId = requestAnimationFrame(flush);
+          }
+        },
+        onStreaming: () => {
+          setLiveStatus({ state: "streaming", attempt: 0, maxAttempts: maxReconnectAttempts });
+        },
+        onRetrying: ({ attempt, maxAttempts, retryAt, failure }) => {
+          setLiveStatus({
+            state: "retrying",
+            attempt,
+            maxAttempts,
+            retryAt,
+            reason: describeFailure(failure),
+          });
+        },
+        onGaveUp: (failure) => {
+          setLiveStatus({
+            state: "stopped",
+            attempt: maxReconnectAttempts,
+            maxAttempts: maxReconnectAttempts,
+            reason: describeFailure(failure),
+          });
+          setLive(false);
+        },
+      },
+      abortController.signal,
+    );
 
     return () => {
-      eventSource.close();
+      abortController.abort();
       cancelAnimationFrame(animationFrameId);
-      sseRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live, logId, isTask, streamParam]);
@@ -292,20 +344,25 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
     setAtTop(element.scrollTop < 50);
   }, []);
 
+  // Tearing down the effect aborts the stream, so there is nothing to close
+  // here beyond flipping the flag.
+  const stopLive = useCallback(() => {
+    setLive(false);
+    setLiveStatus(null);
+  }, []);
+
+  const resumeLive = useCallback(() => {
+    setFollowing(true);
+    setLive(true);
+  }, []);
+
   const toggleLive = useCallback(() => {
     if (live) {
-      sseRef.current?.close();
-      setLive(false);
+      stopLive();
     } else {
-      setFollowing(true);
-      setLive(true);
+      resumeLive();
     }
-  }, [live]);
-
-  const stopLive = useCallback(() => {
-    sseRef.current?.close();
-    setLive(false);
-  }, []);
+  }, [live, stopLive, resumeLive]);
 
   return {
     lines,
@@ -320,8 +377,10 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
     atTop,
     setFollowing,
     live,
+    liveStatus,
     toggleLive,
     stopLive,
+    resumeLive,
     containerRef,
     fetchLogs,
     loadOlder,
