@@ -2,7 +2,17 @@ import { MockEventSource } from "../test/mocks";
 import { openEventStream } from "./eventStream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+/** Drives document.visibilityState, which jsdom leaves read-only. */
+function setVisibility(state: "visible" | "hidden") {
+  Object.defineProperty(document, "visibilityState", {
+    value: state,
+    configurable: true,
+  });
+  document.dispatchEvent(new Event("visibilitychange"));
+}
+
 beforeEach(() => {
+  setVisibility("visible");
   MockEventSource.instances = [];
   vi.stubGlobal("EventSource", MockEventSource);
   vi.useFakeTimers();
@@ -170,6 +180,45 @@ describe("openEventStream", () => {
     await vi.advanceTimersByTimeAsync(60_000);
 
     expect(first.closed).toBe(true);
+    expect(MockEventSource.instances).toHaveLength(1);
+  });
+
+  it("does not reconnect while the tab is hidden", async () => {
+    setVisibility("hidden");
+    const handle = openEventStream("/events", { listeners: {} });
+
+    MockEventSource.instance.simulateError(true);
+    await vi.advanceTimersByTimeAsync(120_000);
+
+    expect(MockEventSource.instances).toHaveLength(1);
+    handle.close();
+    setVisibility("visible");
+  });
+
+  it("reconnects as soon as a hidden tab is shown again", async () => {
+    setVisibility("hidden");
+    const handle = openEventStream("/events", { listeners: {} });
+
+    MockEventSource.instance.simulateError(true);
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(MockEventSource.instances).toHaveLength(1);
+
+    setVisibility("visible");
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(MockEventSource.instances).toHaveLength(2);
+    handle.close();
+  });
+
+  it("leaves no visibility listener behind after close", async () => {
+    setVisibility("hidden");
+    const handle = openEventStream("/events", { listeners: {} });
+
+    MockEventSource.instance.simulateError(true);
+    handle.close();
+    setVisibility("visible");
+    await vi.advanceTimersByTimeAsync(120_000);
+
     expect(MockEventSource.instances).toHaveLength(1);
   });
 });

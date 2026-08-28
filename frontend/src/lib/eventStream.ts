@@ -54,6 +54,20 @@ export function openEventStream(url: string, options: EventStreamOptions): Event
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
   let attempt = 0;
   let closed = false;
+  let awaitingVisibility = false;
+
+  // A hidden tab retrying into a capped server holds a connection slot for a
+  // view nobody is looking at. Wait for the tab to come back instead, then
+  // reconnect at once — the person is looking now.
+  const reconnectWhenVisible = () => {
+    if (document.visibilityState !== "visible" || closed) {
+      return;
+    }
+
+    document.removeEventListener("visibilitychange", reconnectWhenVisible);
+    awaitingVisibility = false;
+    connect();
+  };
 
   const connect = () => {
     const source = new EventSource(url);
@@ -74,6 +88,14 @@ export function openEventStream(url: string, options: EventStreamOptions): Event
 
       source.close();
       attempt += 1;
+
+      if (document.visibilityState === "hidden") {
+        awaitingVisibility = true;
+        document.addEventListener("visibilitychange", reconnectWhenVisible);
+
+        return;
+      }
+
       retryTimer = setTimeout(
         connect,
         backoffDelay(attempt, { base: baseReconnectDelay, max: maxReconnectDelay }),
@@ -91,6 +113,12 @@ export function openEventStream(url: string, options: EventStreamOptions): Event
     close: () => {
       closed = true;
       clearTimeout(retryTimer);
+
+      if (awaitingVisibility) {
+        document.removeEventListener("visibilitychange", reconnectWhenVisible);
+        awaitingVisibility = false;
+      }
+
       eventSource?.close();
     },
   };
