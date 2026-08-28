@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-08-28
+
 ### Security
 - Updated Go, dashboard, and marketing-site dependencies to clear every outstanding security advisory, including a critical advisory in the OpenAPI parser (GHSA-r277-6w6q-xmqw) and high-severity advisories in `react-router`, `undici`, `go-git`, `go-billy`, `grpc`, `postcss`, `js-yaml`, `nanoid`, and `svgo`
 - Rejected OIDC bearer tokens no longer reach the server log. An invalid or expired token's contents could previously be written out as part of the authentication-failure message
@@ -38,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Swarm CA and Raft panels no longer show `undefined` for settings Docker omits when they are left at their default
 - Plugin type now displays as `docker.volumedriver/1.0` rather than `[object Object]`
 - Metrics charts and the metrics console no longer break on Prometheus responses that carry no samples, and the console now renders scalar and string query results (e.g. `time()`) instead of reporting "No results"
+- node-exporter is detected by the presence of its metrics rather than by a Prometheus job literally named `node-exporter`. A deployment whose scrape config names that job anything else reported "node-exporter not detected" and hid the node CPU, memory and disk columns while the exporter was running and healthy. A target that is configured but unreachable now reports as undetected too, rather than reporting as present and then rendering empty panels
 - Fixed latent crashes in the disk-usage chart tooltip, the log-driver options editor, and keyboard navigation on empty radio-card groups
 - MCP refresh-token store no longer accumulates rotation history indefinitely; theft detection keeps a bounded recent window and grants are cleaned up when tokens expire
 - MCP authorization codes are swept on each new issue so abandoned consent flows can no longer fill memory
