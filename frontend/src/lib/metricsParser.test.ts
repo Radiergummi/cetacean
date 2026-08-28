@@ -1,4 +1,5 @@
 import {
+  appendMetricPoint,
   formatMetricIdentifier,
   normalizePrometheusRows,
   parseRangeResult,
@@ -206,5 +207,71 @@ describe("normalizePrometheusRows", () => {
     };
     const rows = normalizePrometheusRows(data);
     expect(rows).toHaveLength(0);
+  });
+});
+
+describe("appendMetricPoint", () => {
+  const previous = {
+    labels: ["10:00:00", "10:00:15"],
+    timestamps: [1000, 1015],
+    series: [
+      { label: "web", color: "#111", data: [1, 2] },
+      { label: "api", color: "#222", data: [3, 4] },
+    ],
+  };
+
+  function pointResponse(samples: [string, string][]) {
+    return {
+      data: {
+        resultType: "vector",
+        result: samples.map(([job, value]) => ({
+          metric: { job },
+          value: [1030, value] as [number, string],
+        })),
+      },
+    } as unknown as PrometheusResponse;
+  }
+
+  it("drops the oldest sample and appends the newest", () => {
+    const next = appendMetricPoint(previous, pointResponse([["web", "9"]]));
+
+    expect(next?.timestamps).toEqual([1015, 1030]);
+    expect(next?.series[0]?.data).toEqual([2, 9]);
+  });
+
+  it("keeps each series matched to its own label", () => {
+    const next = appendMetricPoint(
+      previous,
+      pointResponse([
+        ["api", "8"],
+        ["web", "7"],
+      ]),
+    );
+
+    expect(next?.series[0]?.data).toEqual([2, 7]);
+    expect(next?.series[1]?.data).toEqual([4, 8]);
+  });
+
+  it("appends a zero for a series the response omits", () => {
+    const next = appendMetricPoint(previous, pointResponse([["web", "9"]]));
+
+    expect(next?.series[1]?.data).toEqual([4, 0]);
+  });
+
+  it("preserves series colour and label", () => {
+    const next = appendMetricPoint(previous, pointResponse([["web", "9"]]));
+
+    expect(next?.series[0]).toMatchObject({ label: "web", color: "#111" });
+  });
+
+  it("returns null when the response carries no samples", () => {
+    expect(appendMetricPoint(previous, pointResponse([]))).toBeNull();
+  });
+
+  it("does not mutate the previous window", () => {
+    appendMetricPoint(previous, pointResponse([["web", "9"]]));
+
+    expect(previous.timestamps).toEqual([1000, 1015]);
+    expect(previous.series[0]?.data).toEqual([1, 2]);
   });
 });

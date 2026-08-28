@@ -13,10 +13,10 @@ import { getSemanticChartColor } from "@/lib/chartColors.ts";
 import { openEventStream } from "@/lib/eventStream.ts";
 import { formatMetricValue } from "@/lib/format.ts";
 import {
+  appendMetricPoint,
   type ParsedMetrics,
   parseRangeResult,
   seriesChanged,
-  seriesLabel,
 } from "@/lib/metricsParser.ts";
 import { generateMockSeries } from "@/lib/mockChartData.ts";
 import { getErrorMessage } from "@/lib/utils";
@@ -347,34 +347,9 @@ export default function TimeSeriesChart({
       try {
         const response = JSON.parse(event.data) as PrometheusResponse;
 
-        const result = response.data?.result?.filter(({ value }) => value);
-
-        if (!result?.length) {
-          return;
-        }
-
-        setParsedMetrics((previous) => {
-          if (!previous) {
-            return previous;
-          }
-
-          const timestamp = Number(result[0]?.value?.[0]);
-          const timeLabel = new Date(timestamp * 1000).toLocaleTimeString();
-          const newTimestamps = [...previous.timestamps.slice(1), timestamp];
-          const newLabels = [...previous.labels.slice(1), timeLabel];
-          const newSeries = previous.series.map((series) => {
-            const match = result.find(({ metric }) => seriesLabel(metric) === series.label);
-            const value = match ? Number(match.value?.[1]) : 0;
-
-            return { ...series, data: [...series.data.slice(1), value] };
-          });
-
-          return {
-            labels: newLabels,
-            timestamps: newTimestamps,
-            series: newSeries,
-          };
-        });
+        setParsedMetrics((previous) =>
+          previous ? (appendMetricPoint(previous, response) ?? previous) : previous,
+        );
       } catch {
         /* ignore parse errors */
       }
