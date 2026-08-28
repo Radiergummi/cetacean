@@ -211,14 +211,28 @@ describe("openEventStream", () => {
   });
 
   it("leaves no visibility listener behind after close", async () => {
+    const addSpy = vi.spyOn(document, "addEventListener");
+    const removeSpy = vi.spyOn(document, "removeEventListener");
+
     setVisibility("hidden");
     const handle = openEventStream("/events", { listeners: {} });
 
     MockEventSource.instance.simulateError(true);
+
+    const addCall = addSpy.mock.calls.find(([type]) => type === "visibilitychange");
+    expect(addCall).toBeDefined();
+    const handler = addCall?.[1];
+
     handle.close();
+
+    expect(removeSpy).toHaveBeenCalledWith("visibilitychange", handler);
+
     setVisibility("visible");
     await vi.advanceTimersByTimeAsync(120_000);
 
     expect(MockEventSource.instances).toHaveLength(1);
+
+    addSpy.mockRestore();
+    removeSpy.mockRestore();
   });
 });
