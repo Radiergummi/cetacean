@@ -8,14 +8,14 @@ import { Link, useLocation } from "react-router-dom";
 
 interface Crumb {
   label: React.ReactNode;
-  to?: string;
+  to?: string | undefined;
 }
 
 interface Props {
   title: React.ReactNode;
-  subtitle?: string;
-  breadcrumbs?: Crumb[];
-  actions?: React.ReactNode;
+  subtitle?: string | undefined;
+  breadcrumbs?: Crumb[] | undefined;
+  actions?: React.ReactNode | undefined;
 }
 
 export default function PageHeader({ title, subtitle, breadcrumbs, actions }: Props) {

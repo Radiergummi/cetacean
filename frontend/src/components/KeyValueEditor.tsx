@@ -8,27 +8,27 @@ import { useMemo, useState } from "react";
 interface KeyValueEditorProps {
   title: string;
   /** Optional extra element rendered inline after the section title (e.g., a help link). */
-  titleExtra?: React.ReactNode;
+  titleExtra?: React.ReactNode | undefined;
   entries: Record<string, string>;
-  keyLabel?: string;
-  valueLabel?: string;
-  keyPlaceholder?: string;
-  valuePlaceholder?: string;
+  keyLabel?: string | undefined;
+  valueLabel?: string | undefined;
+  keyPlaceholder?: string | undefined;
+  valuePlaceholder?: string | undefined;
   onSave: (ops: PatchOp[]) => Promise<Record<string, string>>;
-  defaultOpen?: boolean;
-  renderValue?: (value: string) => React.ReactNode;
-  onCopyValue?: React.ClipboardEventHandler;
-  editDisabled?: boolean;
+  defaultOpen?: boolean | undefined;
+  renderValue?: ((value: string) => React.ReactNode) | undefined;
+  onCopyValue?: React.ClipboardEventHandler | undefined;
+  editDisabled?: boolean | undefined;
   /** Return true if this key should be read-only (no edit, no delete). */
-  isKeyReadOnly?: (key: string) => boolean;
+  isKeyReadOnly?: ((key: string) => boolean) | undefined;
   /** Validate a new key. Return an error message, or null if valid. */
-  validateKey?: (key: string) => string | null;
+  validateKey?: ((key: string) => string | null) | undefined;
   /** Render without a CollapsibleSection wrapper. */
-  bare?: boolean;
+  bare?: boolean | undefined;
   /** Start in edit mode. */
-  defaultEditing?: boolean;
+  defaultEditing?: boolean | undefined;
   /** Called when the user cancels editing. */
-  onCancel?: () => void;
+  onCancel?: (() => void) | undefined;
 }
 
 export function KeyValueEditor({

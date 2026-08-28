@@ -10,14 +10,14 @@ import { useState } from "react";
 interface NumberFieldProps {
   value: number | undefined;
   onChange: (value: number | undefined) => void;
-  min?: number;
-  max?: number;
-  step?: number;
+  min?: number | undefined;
+  max?: number | undefined;
+  step?: number | undefined;
   label: React.ReactNode;
-  tooltip?: string;
-  clearable?: boolean;
+  tooltip?: string | undefined;
+  clearable?: boolean | undefined;
   /** Intl.NumberFormat options (e.g. { useGrouping: false } to disable thousands separators). */
-  format?: Intl.NumberFormatOptions;
+  format?: Intl.NumberFormatOptions | undefined;
 }
 
 export function NumberField({

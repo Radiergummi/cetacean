@@ -33,17 +33,17 @@ function sliderMax(
 }
 
 export interface ServiceResourceShape {
-  Limits?: { NanoCPUs?: number; MemoryBytes?: number; Pids?: number };
-  Reservations?: { NanoCPUs?: number; MemoryBytes?: number };
+  Limits?: { NanoCPUs?: number; MemoryBytes?: number; Pids?: number } | undefined;
+  Reservations?: { NanoCPUs?: number; MemoryBytes?: number } | undefined;
 }
 
 export interface AllocationData {
-  cpuReserved?: number;
-  cpuLimit?: number;
-  cpuActual?: number;
-  memReserved?: number;
-  memLimit?: number;
-  memActual?: number;
+  cpuReserved?: number | undefined;
+  cpuLimit?: number | undefined;
+  cpuActual?: number | undefined;
+  memReserved?: number | undefined;
+  memLimit?: number | undefined;
+  memActual?: number | undefined;
 }
 
 export function ResourcesEditor({
@@ -56,10 +56,10 @@ export function ResourcesEditor({
 }: {
   serviceId: string;
   resources: ServiceResourceShape;
-  pids?: number;
-  allocation?: AllocationData;
+  pids?: number | undefined;
+  allocation?: AllocationData | undefined;
   onSaved: (updated: ServiceResourceShape) => void;
-  canEdit?: boolean;
+  canEdit?: boolean | undefined;
 }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -348,9 +348,9 @@ function AllocationBar({
   formatValue,
 }: {
   label: string;
-  reserved?: number;
-  actual?: number;
-  limit?: number;
+  reserved?: number | undefined;
+  actual?: number | undefined;
+  limit?: number | undefined;
   formatValue: (value: number) => string;
 }) {
   const maxValue = Math.max(reserved ?? 0, actual ?? 0, limit ?? 0) * 1.15;

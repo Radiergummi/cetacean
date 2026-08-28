@@ -17,9 +17,9 @@ describe("flattenSearchResults", () => {
     const flat = flattenSearchResults(response);
 
     expect(flat.map(({ type }) => type)).toEqual(["services", "nodes", "tasks"]);
-    expect(flat[0].result.id).toBe("s1");
-    expect(flat[1].result.id).toBe("n1");
-    expect(flat[2].result.id).toBe("t1");
+    expect(flat[0]?.result.id).toBe("s1");
+    expect(flat[1]?.result.id).toBe("n1");
+    expect(flat[2]?.result.id).toBe("t1");
   });
 
   it("restricts to single type when filterType is provided", () => {
@@ -32,8 +32,8 @@ describe("flattenSearchResults", () => {
     const flat = flattenSearchResults(response, "nodes");
 
     expect(flat).toHaveLength(1);
-    expect(flat[0].type).toBe("nodes");
-    expect(flat[0].result.id).toBe("n1");
+    expect(flat[0]?.type).toBe("nodes");
+    expect(flat[0]?.result.id).toBe("n1");
   });
 
   it("skips missing types gracefully", () => {
@@ -45,7 +45,7 @@ describe("flattenSearchResults", () => {
     const flat = flattenSearchResults(response);
 
     expect(flat).toHaveLength(1);
-    expect(flat[0].type).toBe("services");
+    expect(flat[0]?.type).toBe("services");
   });
 });
 

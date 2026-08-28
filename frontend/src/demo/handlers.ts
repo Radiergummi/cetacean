@@ -93,8 +93,8 @@ function parseRange(request: Request): { offset: number; limit: number } {
     const match = range.match(/^items\s+(\d+)-(\d+)$/);
 
     if (match) {
-      const start = parseInt(match[1], 10);
-      const end = parseInt(match[2], 10);
+      const start = parseInt(match[1] ?? "", 10);
+      const end = parseInt(match[2] ?? "", 10);
       return { offset: start, limit: end - start + 1 };
     }
   }
@@ -214,8 +214,8 @@ function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
   let nodesDraining = 0;
 
   for (const node of dataset.nodes) {
-    totalCPU += node.Description.Resources.NanoCPUs;
-    totalMemory += node.Description.Resources.MemoryBytes;
+    totalCPU += node.Description.Resources.NanoCPUs ?? 0;
+    totalMemory += node.Description.Resources.MemoryBytes ?? 0;
 
     if (node.Status.State === "ready") {
       nodesReady++;
@@ -390,11 +390,15 @@ function searchDataset(
         const image = service.Spec.TaskTemplate!.ContainerSpec?.Image ?? "";
         return matches(service.Spec.Name) || matches(image);
       })
-      .map((service) => ({
-        id: service.ID,
-        name: service.Spec.Name,
-        detail: (service.Spec.TaskTemplate!.ContainerSpec?.Image ?? "").split("@")[0],
-      })),
+      .map((service) => {
+        const image = service.Spec.TaskTemplate!.ContainerSpec?.Image ?? "";
+
+        return {
+          id: service.ID,
+          name: service.Spec.Name,
+          detail: image.split("@")[0] ?? image,
+        };
+      }),
   );
 
   collect(
@@ -407,10 +411,10 @@ function searchDataset(
   collect(
     "nodes",
     dataset.nodes
-      .filter((node) => matches(node.Description.Hostname))
+      .filter((node) => matches(node.Description.Hostname ?? ""))
       .map((node) => ({
         id: node.ID,
-        name: node.Description.Hostname,
+        name: node.Description.Hostname ?? node.ID,
         detail: `${node.Spec.Role} (${node.Status.State})`,
       })),
   );
@@ -563,7 +567,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       const serviceNetworks = new Map<string, string[]>();
 
       for (const service of dataset.services) {
-        const targets = (service.Spec.TaskTemplate!.Networks ?? []).map(({ Target }) => Target);
+        const targets = (service.Spec.TaskTemplate!.Networks ?? []).flatMap(({ Target }) =>
+          Target ? [Target] : [],
+        );
         serviceNetworks.set(service.ID, targets);
       }
 
@@ -783,10 +789,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      const networks = (service.Spec.TaskTemplate!.Networks ?? []).map(({ Target, Aliases }) => ({
-        target: Target,
-        aliases: Aliases ?? undefined,
-      }));
+      const networks = (service.Spec.TaskTemplate!.Networks ?? []).flatMap(({ Target, Aliases }) =>
+        Target ? [{ target: Target, aliases: Aliases ?? undefined }] : [],
+      );
       return jsonResponse<{ networks: ServiceNetworkRef[] }>({ networks });
     }),
 
@@ -1197,7 +1202,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         name: dataset.services.map((service) => service.Spec.Name),
         instance: dataset.nodes.map((node) => `${node.Description.Hostname}:9100`),
         job: ["cadvisor", "node-exporter", "prometheus"],
-        nodename: dataset.nodes.map((node) => node.Description.Hostname),
+        nodename: dataset.nodes.map((node) => node.Description.Hostname ?? ""),
       };
       return jsonResponse<{ data: string[] }>({ data: valueMap[name] ?? [] });
     }),
@@ -1274,6 +1279,11 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         for (let slot = oldReplicas + 1; slot <= body.replicas; slot++) {
           const workers = dataset.nodes.filter((node) => node.Spec.Role === "worker");
           const node = workers[slot % workers.length] ?? dataset.nodes[0];
+
+          if (!node) {
+            continue;
+          }
+
           const task = createTask(service, slot, node);
           dataset.tasks.push(task);
           dataset.tasksByID.set(task.ID, task);

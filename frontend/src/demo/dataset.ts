@@ -75,7 +75,8 @@ export interface SwarmData {
   CreatedAt: string;
   UpdatedAt: string;
   Spec: {
-    Annotations: { Name: string; Labels: Record<string, string> };
+    Name: string;
+    Labels: Record<string, string>;
     Orchestration: { TaskHistoryRetentionLimit: number };
     Raft: {
       SnapshotInterval: number;
@@ -278,7 +279,8 @@ function buildSwarm(): SwarmData {
     CreatedAt: ago4d,
     UpdatedAt: ago3d,
     Spec: {
-      Annotations: { Name: "default", Labels: {} },
+      Name: "default",
+      Labels: {},
       Orchestration: { TaskHistoryRetentionLimit: 5 },
       Raft: {
         SnapshotInterval: 10000,
@@ -809,12 +811,20 @@ function buildTasks(services: Service[], nodesByID: Map<string, Node>): Task[] {
   let workerIndex = 0;
 
   const nextWorker = (): string => {
-    const node = workerNodes[workerIndex % workerNodes.length];
+    const node = workerNodes[workerIndex % workerNodes.length] ?? idNodeWorker1;
     workerIndex++;
     return node;
   };
 
-  const serviceByIndex = (index: number): Service => services[index];
+  const serviceByIndex = (index: number): Service => {
+    const service = services[index];
+
+    if (!service) {
+      throw new Error(`demo dataset has no service at index ${index}`);
+    }
+
+    return service;
+  };
 
   const makeRunningTask = (
     serviceID: string,
@@ -950,7 +960,7 @@ function buildTasks(services: Service[], nodesByID: Map<string, Node>): Task[] {
         ContainerSpec: { Image: getImage(9) },
       },
       ServiceName: "infra_proxy",
-      NodeHostname: nodesByID.get(workerNodes[(slot - 1) % workerNodes.length])?.Description
+      NodeHostname: nodesByID.get(workerNodes[(slot - 1) % workerNodes.length] ?? "")?.Description
         .Hostname,
     });
   }

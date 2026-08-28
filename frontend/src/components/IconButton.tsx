@@ -11,8 +11,8 @@ export function IconButton({
   onClick: () => void;
   title: string;
   icon: React.ReactNode;
-  active?: boolean;
-  className?: string;
+  active?: boolean | undefined;
+  className?: string | undefined;
 }) {
   return (
     <button

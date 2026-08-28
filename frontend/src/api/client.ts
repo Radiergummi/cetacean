@@ -64,7 +64,7 @@ export class ApiError extends Error {
     this.detail = detail;
 
     const match = type.match(/\/api\/errors\/([A-Z]{3}\d{3})$/);
-    this.code = match ? match[1] : null;
+    this.code = match?.[1] ?? null;
   }
 }
 
@@ -168,19 +168,24 @@ async function fetchJGF<T>(path: string, signal?: AbortSignal): Promise<T> {
 async function mutationFetch<T>(
   path: string,
   method: string,
-  body?: unknown,
-  contentType?: string,
+  body?: unknown | undefined,
+  contentType?: string | undefined,
 ): Promise<T> {
   const h: Record<string, string> = { Accept: "application/json" };
   if (contentType) {
     h["Content-Type"] = contentType;
   }
-  const res = await fetch(apiPath(path), {
+  const init: RequestInit = {
     method,
     headers: h,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(defaultTimeoutMilliseconds),
-  });
+  };
+
+  if (body !== undefined) {
+    init.body = JSON.stringify(body);
+  }
+
+  const res = await fetch(apiPath(path), init);
 
   if (!res.ok) {
     if (res.status === 401 && res.headers.get("WWW-Authenticate")?.startsWith("Bearer")) {
@@ -247,7 +252,7 @@ export interface LogLine {
   timestamp: string;
   message: string;
   stream: "stdout" | "stderr";
-  attrs?: Record<string, string>;
+  attrs?: Record<string, string> | undefined;
 }
 
 export interface LogResponse {
@@ -273,7 +278,7 @@ export interface ClusterSnapshot {
   totalCPU: number;
   totalMemory: number;
   prometheusConfigured: boolean;
-  localNodeID?: string;
+  localNodeID?: string | undefined;
 }
 
 export interface ClusterMetrics {
@@ -283,11 +288,11 @@ export interface ClusterMetrics {
 }
 
 export interface LogOptions {
-  limit?: number;
-  after?: string;
-  before?: string;
-  stream?: string;
-  signal?: AbortSignal;
+  limit?: number | undefined;
+  after?: string | undefined;
+  before?: string | undefined;
+  stream?: string | undefined;
+  signal?: AbortSignal | undefined;
 }
 
 function buildLogParams(options?: LogOptions): URLSearchParams {
@@ -307,7 +312,10 @@ function buildLogParams(options?: LogOptions): URLSearchParams {
   return params;
 }
 
-function buildLogStreamURL(path: string, options?: { after?: string; stream?: string }): string {
+function buildLogStreamURL(
+  path: string,
+  options?: { after?: string | undefined; stream?: string | undefined },
+): string {
   const params = new URLSearchParams();
 
   if (options?.after) {
@@ -324,11 +332,11 @@ function buildLogStreamURL(path: string, options?: { after?: string; stream?: st
 }
 
 export interface ListParams {
-  offset?: number;
-  sort?: string;
-  dir?: "asc" | "desc";
-  search?: string;
-  filter?: string;
+  offset?: number | undefined;
+  sort?: string | undefined;
+  dir?: "asc" | "desc" | undefined;
+  search?: string | undefined;
+  filter?: string | undefined;
 }
 
 /** Items per Range request page. Backend default is also 50; the max is 200. */
@@ -360,8 +368,8 @@ function buildListQueryString(params?: ListParams): string {
 
 async function fetchRange<T>(
   path: string,
-  params?: ListParams,
-  signal?: AbortSignal,
+  params?: ListParams | undefined,
+  signal?: AbortSignal | undefined,
 ): Promise<FetchResult<CollectionResponse<T>>> {
   const offset = params?.offset ?? 0;
   const end = offset + pageSize - 1;
@@ -499,13 +507,17 @@ export const api = {
     fetchJSON<LogResponse>(`/services/${id}/logs?${buildLogParams(options)}`, options?.signal).then(
       ({ data }) => data,
     ),
-  serviceLogsStreamURL: (id: string, options?: { after?: string; stream?: string }) =>
-    buildLogStreamURL(`/services/${id}/logs`, options),
-  taskLogsStreamURL: (id: string, options?: { after?: string; stream?: string }) =>
-    buildLogStreamURL(`/tasks/${id}/logs`, options),
+  serviceLogsStreamURL: (
+    id: string,
+    options?: { after?: string | undefined; stream?: string | undefined },
+  ) => buildLogStreamURL(`/services/${id}/logs`, options),
+  taskLogsStreamURL: (
+    id: string,
+    options?: { after?: string | undefined; stream?: string | undefined },
+  ) => buildLogStreamURL(`/tasks/${id}/logs`, options),
   history: async (
-    params?: { type?: string; resourceId?: string; limit?: number },
-    signal?: AbortSignal,
+    params?: { type?: string; resourceId?: string; limit?: number } | undefined,
+    signal?: AbortSignal | undefined,
   ) => {
     const queryParams = new URLSearchParams();
 
@@ -603,7 +615,7 @@ export const api = {
   removeStack: (name: string) =>
     mutationFetch<{
       removed: { services: number; networks: number; configs: number; secrets: number };
-      errors?: { type: string; id: string; error: string }[];
+      errors?: { type: string; id: string; error: string }[] | undefined;
     }>(`/stacks/${name}`, "DELETE"),
   removeConfig: (id: string) => del(`/configs/${id}`),
   removeSecret: (id: string) => del(`/secrets/${id}`),

@@ -7,17 +7,17 @@ export interface PaletteAction {
   keywords: string[];
   steps: PaletteStep[];
   execute: (...args: any[]) => Promise<void>;
-  destructive?: boolean;
+  destructive?: boolean | undefined;
   /** HTTP method required to execute this action (checked via HEAD). */
-  requiredMethod?: string;
+  requiredMethod?: string | undefined;
 }
 
 export interface PaletteStep {
   type: "resource" | "number" | "text" | "choice";
-  resourceType?: string;
+  resourceType?: string | undefined;
   label: string;
-  placeholder?: string;
-  choices?: { label: string; value: string }[];
+  placeholder?: string | undefined;
+  choices?: { label: string; value: string }[] | undefined;
 }
 
 const removeTargets = [

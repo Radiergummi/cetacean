@@ -115,8 +115,10 @@ export default function ServiceSubResource() {
 function unwrapResponse(object: Record<string, unknown>): unknown {
   const entries = Object.entries(object).filter(([key]) => !key.startsWith("@"));
 
-  if (entries.length === 1) {
-    return entries[0][1];
+  const [single] = entries;
+
+  if (entries.length === 1 && single) {
+    return single[1];
   }
 
   return Object.fromEntries(entries);

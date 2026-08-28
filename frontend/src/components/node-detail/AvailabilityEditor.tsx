@@ -48,7 +48,7 @@ export function AvailabilityEditor({
 }: {
   nodeId: string;
   current: string;
-  canEdit?: boolean;
+  canEdit?: boolean | undefined;
 }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState<Availability>(current as Availability);

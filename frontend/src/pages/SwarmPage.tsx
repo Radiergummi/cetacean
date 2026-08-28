@@ -171,12 +171,15 @@ export default function SwarmPage() {
           display={
             <KVTable
               rows={[
-                ["Snapshot Interval", String(spec.Raft.SnapshotInterval)],
+                ["Snapshot Interval", String(spec.Raft.SnapshotInterval ?? 0)],
                 spec.Raft.KeepOldSnapshots != null && [
                   "Keep Old Snapshots",
                   String(spec.Raft.KeepOldSnapshots),
                 ],
-                ["Log Entries for Slow Followers", String(spec.Raft.LogEntriesForSlowFollowers)],
+                [
+                  "Log Entries for Slow Followers",
+                  String(spec.Raft.LogEntriesForSlowFollowers ?? 0),
+                ],
                 ["Election Tick", `${spec.Raft.ElectionTick} ticks`],
                 ["Heartbeat Tick", `${spec.Raft.HeartbeatTick} ticks`],
               ]}
@@ -217,8 +220,8 @@ export default function SwarmPage() {
             </div>
           }
           onOpen={() => {
-            page.setDraftSnapshotInterval(spec.Raft.SnapshotInterval);
-            page.setDraftLogEntries(spec.Raft.LogEntriesForSlowFollowers);
+            page.setDraftSnapshotInterval(spec.Raft.SnapshotInterval ?? 0);
+            page.setDraftLogEntries(spec.Raft.LogEntriesForSlowFollowers ?? 0);
             page.setDraftKeepOldSnapshots(spec.Raft.KeepOldSnapshots ?? 0);
           }}
           onSave={async () => {
@@ -282,7 +285,7 @@ export default function SwarmPage() {
           display={
             <KVTable
               rows={[
-                spec.Dispatcher.HeartbeatPeriod !== 0 && [
+                !!spec.Dispatcher.HeartbeatPeriod && [
                   "Heartbeat Period",
                   formatDuration(spec.Dispatcher.HeartbeatPeriod),
                 ],
@@ -299,7 +302,7 @@ export default function SwarmPage() {
             </label>
           }
           onOpen={() => {
-            page.setDraftHeartbeatPeriod(spec.Dispatcher.HeartbeatPeriod);
+            page.setDraftHeartbeatPeriod(spec.Dispatcher.HeartbeatPeriod ?? 0);
           }}
           onSave={async () => {
             await api.patchSwarmDispatcher({ HeartbeatPeriod: page.draftHeartbeatPeriod });

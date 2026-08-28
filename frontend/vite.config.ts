@@ -27,6 +27,8 @@ export default defineConfig({
           if (id.includes("node_modules/@xyflow/") || id.includes("node_modules/elkjs/")) {
             return "vendor-topology";
           }
+
+          return undefined;
         },
       },
     },
@@ -46,6 +48,8 @@ export default defineConfig({
             if (req.headers.accept?.includes("text/html")) {
               return "/index.html";
             }
+
+            return undefined;
           },
         },
     },

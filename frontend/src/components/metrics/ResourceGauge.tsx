@@ -1,8 +1,8 @@
 interface Props {
   label: string;
   value: number | null; // 0-100 percentage
-  subtitle?: string;
-  size?: "sm" | "md";
+  subtitle?: string | undefined;
+  size?: "sm" | "md" | undefined;
 }
 
 const sizes = {

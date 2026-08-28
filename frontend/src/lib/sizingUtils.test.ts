@@ -7,7 +7,9 @@ import {
 import type { Recommendation } from "@/api/types";
 import { describe, it, expect } from "vitest";
 
-function hint(overrides: Partial<Recommendation>): Recommendation {
+function hint(overrides: {
+  [K in keyof Recommendation]?: Recommendation[K] | undefined;
+}): Recommendation {
   return {
     targetId: "svc1",
     targetName: "web",

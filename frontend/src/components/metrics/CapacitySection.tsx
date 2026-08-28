@@ -30,7 +30,7 @@ function Bar({
   percent: number;
   detail: string;
   isReservation: boolean;
-  onClick?: () => void;
+  onClick?: (() => void) | undefined;
 }) {
   const clamped = Math.min(100, Math.max(0, percent));
   const Component = onClick ? "button" : "div";

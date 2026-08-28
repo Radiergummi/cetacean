@@ -8,8 +8,8 @@ export interface LogLine extends ApiLogLine {
 export type Level = "error" | "warn" | "info" | "debug" | "default";
 
 export interface TimeRange {
-  since?: string;
-  until?: string;
+  since?: string | undefined;
+  until?: string | undefined;
   label: string;
 }
 

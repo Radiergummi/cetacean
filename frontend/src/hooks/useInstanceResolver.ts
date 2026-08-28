@@ -23,9 +23,9 @@ export function useInstanceResolver() {
       const response = await api.metricsQuery("node_uname_info");
       const map: Record<string, string> = {};
 
-      for (const result of response.data.result) {
-        const nodename = result.metric.nodename;
-        const instance = result.metric.instance;
+      for (const { metric } of response.data?.result ?? []) {
+        const nodename = metric?.["nodename"];
+        const instance = metric?.["instance"];
 
         if (nodename && instance) {
           map[nodename] = instance;

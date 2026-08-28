@@ -7,7 +7,7 @@ export default function ActivitySection({
   hideType,
 }: {
   entries: HistoryEntry[];
-  hideType?: boolean;
+  hideType?: boolean | undefined;
 }) {
   if (entries.length === 0) {
     return null;

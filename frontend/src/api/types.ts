@@ -4,144 +4,145 @@ export interface Node {
   ID: string;
   Version: { Index: number };
   Spec: {
-    Role: "worker" | "manager";
-    Availability: string;
+    Role?: "worker" | "manager" | undefined;
+    Availability?: string | undefined;
     Labels: Record<string, string> | null;
   };
   Description: {
-    Hostname: string;
-    Platform: { Architecture: string; OS: string };
-    Resources: { NanoCPUs: number; MemoryBytes: number };
-    Engine: { EngineVersion: string };
+    Hostname?: string | undefined;
+    Platform: { Architecture?: string; OS?: string };
+    Resources: { NanoCPUs?: number; MemoryBytes?: number };
+    Engine: { EngineVersion?: string };
   };
   Status: {
-    State: string;
-    Addr: string;
+    State?: string | undefined;
+    Message?: string | undefined;
+    Addr?: string | undefined;
   };
   ManagerStatus?: {
-    Leader: boolean;
-    Reachability: string;
-    Addr: string;
+    Leader?: boolean | undefined;
+    Reachability?: string | undefined;
+    Addr?: string | undefined;
   };
 }
 
 export interface Service {
   ID: string;
   Version: { Index: number };
-  CreatedAt?: string;
-  UpdatedAt?: string;
+  CreatedAt?: string | undefined;
+  UpdatedAt?: string | undefined;
   Spec: {
     Name: string;
     Labels: Record<string, string> | null;
     TaskTemplate?: {
       ContainerSpec?: {
-        Image: string;
-        Command?: string[] | null;
-        Args?: string[] | null;
-        Env?: string[] | null;
-        Dir?: string;
-        User?: string;
-        Hostname?: string;
-        Init?: boolean;
-        StopSignal?: string;
-        StopGracePeriod?: number;
-        ReadOnly?: boolean;
-        TTY?: boolean;
-        Groups?: string[] | null;
-        Hosts?: string[] | null;
+        Image?: string | undefined;
+        Command?: string[] | null | undefined;
+        Args?: string[] | null | undefined;
+        Env?: string[] | null | undefined;
+        Dir?: string | undefined;
+        User?: string | undefined;
+        Hostname?: string | undefined;
+        Init?: boolean | undefined;
+        StopSignal?: string | undefined;
+        StopGracePeriod?: number | undefined;
+        ReadOnly?: boolean | undefined;
+        TTY?: boolean | undefined;
+        Groups?: string[] | null | undefined;
+        Hosts?: string[] | null | undefined;
         DNSConfig?: {
-          Nameservers?: string[] | null;
-          Search?: string[] | null;
-          Options?: string[] | null;
+          Nameservers?: string[] | null | undefined;
+          Search?: string[] | null | undefined;
+          Options?: string[] | null | undefined;
         };
-        CapabilityAdd?: string[] | null;
-        CapabilityDrop?: string[] | null;
+        CapabilityAdd?: string[] | null | undefined;
+        CapabilityDrop?: string[] | null | undefined;
         Healthcheck?: {
-          Test?: string[] | null;
-          Interval?: number;
-          Timeout?: number;
-          Retries?: number;
-          StartPeriod?: number;
-          StartInterval?: number;
+          Test?: string[] | null | undefined;
+          Interval?: number | undefined;
+          Timeout?: number | undefined;
+          Retries?: number | undefined;
+          StartPeriod?: number | undefined;
+          StartInterval?: number | undefined;
         };
         Configs?: Array<{
           ConfigID: string;
           ConfigName: string;
-          File?: { Name: string; UID: string; GID: string; Mode: number };
+          File?: { Name: string; UID: string; GID: string; Mode: number } | undefined;
         }> | null;
         Secrets?: Array<{
           SecretID: string;
           SecretName: string;
-          File?: { Name: string; UID: string; GID: string; Mode: number };
+          File?: { Name: string; UID: string; GID: string; Mode: number } | undefined;
         }> | null;
-        Mounts?: ServiceMount[] | null;
+        Mounts?: ServiceMount[] | null | undefined;
       } | null;
       Resources?: {
-        Limits?: { NanoCPUs?: number; MemoryBytes?: number; Pids?: number };
-        Reservations?: { NanoCPUs?: number; MemoryBytes?: number };
+        Limits?: { NanoCPUs?: number; MemoryBytes?: number; Pids?: number } | undefined;
+        Reservations?: { NanoCPUs?: number; MemoryBytes?: number } | undefined;
       };
       RestartPolicy?: {
-        Condition?: string;
-        Delay?: number;
-        MaxAttempts?: number;
-        Window?: number;
+        Condition?: string | undefined;
+        Delay?: number | undefined;
+        MaxAttempts?: number | undefined;
+        Window?: number | undefined;
       };
       Placement?: {
-        Constraints?: string[] | null;
-        Preferences?: Array<{ Spread?: { SpreadDescriptor: string } }> | null;
-        MaxReplicas?: number;
+        Constraints?: string[] | null | undefined;
+        Preferences?: Array<{ Spread?: { SpreadDescriptor: string } }> | null | undefined;
+        MaxReplicas?: number | undefined;
       };
-      LogDriver?: { Name: string; Options?: Record<string, string> };
-      Networks?: Array<{ Target: string; Aliases?: string[] | null }> | null;
+      LogDriver?: { Name?: string; Options?: Record<string, string> } | undefined;
+      Networks?: Array<{ Target?: string; Aliases?: string[] | null }> | null | undefined;
     };
     Mode: {
-      Replicated?: { Replicas?: number };
-      Global?: Record<string, never>;
+      Replicated?: { Replicas?: number } | undefined;
+      Global?: Record<string, never> | undefined;
     };
     UpdateConfig?: {
       Parallelism: number;
-      Delay?: number;
-      FailureAction?: string;
-      Monitor?: number;
-      MaxFailureRatio?: number;
-      Order?: string;
+      Delay?: number | undefined;
+      FailureAction?: string | undefined;
+      Monitor?: number | undefined;
+      MaxFailureRatio?: number | undefined;
+      Order?: string | undefined;
     };
     RollbackConfig?: {
       Parallelism: number;
-      Delay?: number;
-      FailureAction?: string;
-      Monitor?: number;
-      MaxFailureRatio?: number;
-      Order?: string;
+      Delay?: number | undefined;
+      FailureAction?: string | undefined;
+      Monitor?: number | undefined;
+      MaxFailureRatio?: number | undefined;
+      Order?: string | undefined;
     };
     EndpointSpec?: {
-      Mode?: string;
+      Mode?: string | undefined;
       Ports?: Array<{
-        Protocol: string;
-        TargetPort: number;
-        PublishedPort: number;
-        PublishMode: string;
+        Protocol?: string | undefined;
+        TargetPort?: number | undefined;
+        PublishedPort?: number | undefined;
+        PublishMode?: string | undefined;
       }> | null;
     };
   };
   Endpoint?: {
     Ports?: Array<{
-      Protocol: string;
-      TargetPort: number;
-      PublishedPort: number;
-      PublishMode: string;
+      Protocol?: string | undefined;
+      TargetPort?: number | undefined;
+      PublishedPort?: number | undefined;
+      PublishMode?: string | undefined;
     }> | null;
     VirtualIPs?: Array<{
-      NetworkID: string;
-      Addr: string;
+      NetworkID?: string | undefined;
+      Addr?: string | undefined;
     }> | null;
   };
-  PreviousSpec?: Service["Spec"];
+  PreviousSpec?: Service["Spec"] | undefined;
   UpdateStatus?: {
-    State?: string;
-    StartedAt?: string;
-    CompletedAt?: string;
-    Message?: string;
+    State?: string | undefined;
+    StartedAt?: string | undefined;
+    CompletedAt?: string | undefined;
+    Message?: string | undefined;
   };
 }
 
@@ -157,15 +158,15 @@ export interface Task {
   ID: string;
   Version: { Index: number };
   ServiceID: string;
-  NodeID?: string;
-  ServiceName?: string;
-  NodeHostname?: string;
-  Slot?: number;
+  NodeID?: string | undefined;
+  ServiceName?: string | undefined;
+  NodeHostname?: string | undefined;
+  Slot?: number | undefined;
   Status: {
     Timestamp: string;
     State: string;
-    Message: string;
-    Err?: string;
+    Message?: string | undefined;
+    Err?: string | undefined;
     ContainerStatus?: {
       ContainerID: string;
       ExitCode: number;
@@ -174,7 +175,7 @@ export interface Task {
   DesiredState: string;
   Spec: {
     ContainerSpec?: {
-      Image: string;
+      Image?: string | undefined;
     } | null;
   };
 }
@@ -189,7 +190,7 @@ export interface Config {
   Spec: {
     Name: string;
     Labels: Record<string, string> | null;
-    Data?: string;
+    Data?: string | undefined;
   };
 }
 
@@ -219,8 +220,8 @@ export interface Network {
   Attachable: boolean;
   Ingress: boolean;
   IPAM: {
-    Driver?: string;
-    Config: Array<{ Subnet: string; Gateway: string; IPRange?: string }> | null;
+    Driver?: string | undefined;
+    Config: Array<{ Subnet?: string; Gateway?: string; IPRange?: string }> | null;
   };
   Options: Record<string, string> | null;
   Labels: Record<string, string> | null;
@@ -235,7 +236,7 @@ export interface Volume {
   Mountpoint: string;
   Scope: string;
   Options: Record<string, string> | null;
-  CreatedAt?: string;
+  CreatedAt?: string | undefined;
 }
 
 export interface Stack {
@@ -270,7 +271,7 @@ export interface HistoryEntry {
   action: string;
   resourceId: string;
   name: string;
-  summary?: string;
+  summary?: string | undefined;
 }
 
 export interface StackDetail {
@@ -284,8 +285,8 @@ export interface StackDetail {
 
 export interface SpecChange {
   field: string;
-  old?: string;
-  new?: string;
+  old?: string | undefined;
+  new?: string | undefined;
 }
 
 export interface ServiceRef {
@@ -295,72 +296,72 @@ export interface ServiceRef {
 
 export interface TraefikTLSDomain {
   main: string;
-  sans?: string[];
+  sans?: string[] | undefined;
 }
 
 export interface TraefikRouter {
   name: string;
-  rule?: string;
-  entrypoints?: string[];
+  rule?: string | undefined;
+  entrypoints?: string[] | undefined;
   tls?: {
-    certResolver?: string;
-    domains?: TraefikTLSDomain[];
-    options?: string;
+    certResolver?: string | undefined;
+    domains?: TraefikTLSDomain[] | undefined;
+    options?: string | undefined;
   };
-  middlewares?: string[];
-  service?: string;
-  priority?: number;
+  middlewares?: string[] | undefined;
+  service?: string | undefined;
+  priority?: number | undefined;
 }
 
 export interface TraefikService {
   name: string;
-  port?: number;
-  scheme?: string;
+  port?: number | undefined;
+  scheme?: string | undefined;
 }
 
 export interface TraefikMiddleware {
   name: string;
   type: string;
-  config?: Record<string, string>;
+  config?: Record<string, string> | undefined;
 }
 
 export interface TraefikIntegration {
   name: "traefik";
   enabled: boolean;
-  routers?: TraefikRouter[];
-  services?: TraefikService[];
-  middlewares?: TraefikMiddleware[];
+  routers?: TraefikRouter[] | undefined;
+  services?: TraefikService[] | undefined;
+  middlewares?: TraefikMiddleware[] | undefined;
 }
 
 export interface ShepherdIntegration {
   name: "shepherd";
   enabled: boolean;
-  authConfig?: string;
+  authConfig?: string | undefined;
 }
 
 export interface CronjobIntegration {
   name: "swarm-cronjob";
   enabled: boolean;
-  schedule?: string;
-  skipRunning?: boolean;
-  replicas?: number;
-  registryAuth?: boolean;
-  queryRegistry?: boolean;
+  schedule?: string | undefined;
+  skipRunning?: boolean | undefined;
+  replicas?: number | undefined;
+  registryAuth?: boolean | undefined;
+  queryRegistry?: boolean | undefined;
 }
 
 export interface DiunIntegration {
   name: "diun";
   enabled: boolean;
-  watchRepo?: boolean;
-  notifyOn?: string;
-  maxTags?: number;
-  includeTags?: string;
-  excludeTags?: string;
-  sortTags?: string;
-  regopt?: string;
-  hubLink?: string;
-  platform?: string;
-  metadata?: Record<string, string>;
+  watchRepo?: boolean | undefined;
+  notifyOn?: string | undefined;
+  maxTags?: number | undefined;
+  includeTags?: string | undefined;
+  excludeTags?: string | undefined;
+  sortTags?: string | undefined;
+  regopt?: string | undefined;
+  hubLink?: string | undefined;
+  platform?: string | undefined;
+  metadata?: Record<string, string> | undefined;
 }
 
 export type Integration =
@@ -371,8 +372,8 @@ export type Integration =
 
 export interface ServiceDetail {
   service: Service;
-  changes?: SpecChange[];
-  integrations?: Integration[];
+  changes?: SpecChange[] | undefined;
+  integrations?: Integration[] | undefined;
 }
 
 export interface ConfigDetail {
@@ -428,7 +429,7 @@ export interface SearchResult {
   id: string;
   name: string;
   detail: string;
-  state?: string;
+  state?: string | undefined;
 }
 
 export interface SearchResponse {
@@ -444,34 +445,35 @@ export interface SwarmInfo {
     CreatedAt: string;
     UpdatedAt: string;
     Spec: {
-      Annotations: { Name: string; Labels: Record<string, string> | null };
+      Name?: string | undefined;
+      Labels: Record<string, string> | null;
       Orchestration: { TaskHistoryRetentionLimit?: number };
       Raft: {
-        SnapshotInterval: number;
-        KeepOldSnapshots?: number;
-        LogEntriesForSlowFollowers: number;
+        SnapshotInterval?: number | undefined;
+        KeepOldSnapshots?: number | undefined;
+        LogEntriesForSlowFollowers?: number | undefined;
         ElectionTick: number;
         HeartbeatTick: number;
       };
-      Dispatcher: { HeartbeatPeriod: number };
+      Dispatcher: { HeartbeatPeriod?: number };
       CAConfig: {
-        NodeCertExpiry: number;
+        NodeCertExpiry?: number | undefined;
         ExternalCAs?: Array<{
           Protocol: string;
           URL: string;
-          Options?: Record<string, string>;
+          Options?: Record<string, string> | undefined;
         }> | null;
-        ForceRotate: number;
+        ForceRotate?: number | undefined;
       };
       TaskDefaults: {
-        LogDriver?: { Name: string; Options?: Record<string, string> };
+        LogDriver?: { Name?: string; Options?: Record<string, string> } | undefined;
       };
       EncryptionConfig: { AutoLockManagers: boolean };
     };
     TLSInfo: {
-      TrustRoot: string;
-      CertIssuerSubject: string;
-      CertIssuerPublicKey: string;
+      TrustRoot?: string | undefined;
+      CertIssuerSubject?: string | undefined;
+      CertIssuerPublicKey?: string | undefined;
     };
     RootRotationInProgress: boolean;
     DefaultAddrPool: string[] | null;
@@ -480,6 +482,12 @@ export interface SwarmInfo {
     JoinTokens: { Worker: string; Manager: string };
   };
   managerAddr: string;
+}
+
+export interface PluginInterfaceType {
+  Capability: string;
+  Prefix: string;
+  Version: string;
 }
 
 export interface PluginPrivilege {
@@ -515,10 +523,10 @@ export interface PluginEnv {
 export interface Plugin {
   "@id"?: string;
   "@type"?: string;
-  Id?: string;
+  Id?: string | undefined;
   Name: string;
   Enabled: boolean;
-  PluginReference?: string;
+  PluginReference?: string | undefined;
   Settings: {
     Mounts: PluginMount[] | null;
     Env: string[] | null;
@@ -526,14 +534,14 @@ export interface Plugin {
     Devices: PluginDevice[] | null;
   };
   Config: {
-    DockerVersion?: string;
+    DockerVersion?: string | undefined;
     Description: string;
-    Documentation?: string;
+    Documentation?: string | undefined;
     Entrypoint: string[] | null;
     WorkDir: string;
-    User?: { UID: number; GID: number };
+    User?: { UID?: number; GID?: number } | undefined;
     Interface: {
-      Types: string[] | null;
+      Types: PluginInterfaceType[] | null;
       Socket: string;
     };
     Network: { Type: string };
@@ -571,7 +579,7 @@ export interface TargetStatus {
 export interface MonitoringStatus {
   prometheusConfigured: boolean;
   prometheusReachable: boolean;
-  error?: string;
+  error?: string | undefined;
   nodeExporter: TargetStatus | null;
   cadvisor: TargetStatus | null;
 }
@@ -579,11 +587,11 @@ export interface MonitoringStatus {
 export interface Identity {
   subject: string;
   displayName: string;
-  email?: string;
-  groups?: string[];
+  email?: string | undefined;
+  groups?: string[] | undefined;
   provider: string;
-  raw?: Record<string, unknown>;
-  permissions?: Record<string, string[]>;
+  raw?: Record<string, unknown> | undefined;
+  permissions?: Record<string, string[]> | undefined;
 }
 
 export interface ClusterCapacity {
@@ -597,17 +605,32 @@ export interface ClusterCapacity {
 export interface PatchOp {
   op: string;
   path: string;
-  value?: string;
+  value?: string | undefined;
 }
 
+/** One series of a Prometheus `vector` or `matrix` result. */
+export interface PrometheusSeries {
+  /** Absent on `scalar` and `string` results, which carry no labels. */
+  metric?: Record<string, string> | undefined;
+  /** Present on `vector` results (a single sample). */
+  value?: [number, string] | undefined;
+  /** Present on `matrix` results (a sample list). */
+  values?: [number, string][] | undefined;
+}
+
+/**
+ * The Prometheus HTTP API envelope, proxied verbatim through `/metrics`.
+ *
+ * `data` is absent when Prometheus answers with an error envelope
+ * (`{"status":"error","errorType":...,"error":...}`).
+ */
 export interface PrometheusResponse {
-  data: {
+  status?: "success" | "error" | undefined;
+  errorType?: string | undefined;
+  error?: string | undefined;
+  data?: {
     resultType: "vector" | "matrix" | "scalar" | "string";
-    result: Array<{
-      metric: Record<string, string>;
-      value?: [number, string];
-      values?: [number, string][];
-    }>;
+    result: PrometheusSeries[];
   };
 }
 
@@ -623,25 +646,28 @@ export type UpdateConfig = NonNullable<Service["Spec"]["UpdateConfig"]>;
 export type LogDriver = NonNullable<TaskTemplate["LogDriver"]>;
 
 export interface ContainerConfig {
-  command?: string[];
-  args?: string[];
+  command?: string[] | null | undefined;
+  args?: string[] | null | undefined;
   dir: string;
   user: string;
   hostname: string;
-  init?: boolean;
+  init?: boolean | null | undefined;
   tty: boolean;
   readOnly: boolean;
   stopSignal: string;
-  stopGracePeriod?: number;
-  capabilityAdd?: string[];
-  capabilityDrop?: string[];
-  groups?: string[];
-  hosts?: string[];
-  dnsConfig?: {
-    nameservers?: string[];
-    search?: string[];
-    options?: string[];
-  };
+  stopGracePeriod?: number | null | undefined;
+  capabilityAdd?: string[] | null | undefined;
+  capabilityDrop?: string[] | null | undefined;
+  groups?: string[] | null | undefined;
+  hosts?: string[] | null | undefined;
+  dnsConfig?:
+    | {
+        nameservers?: string[] | null | undefined;
+        search?: string[] | null | undefined;
+        options?: string[] | null | undefined;
+      }
+    | null
+    | undefined;
 }
 
 export interface ServiceConfigRef {
@@ -658,32 +684,32 @@ export interface ServiceSecretRef {
 
 export interface ServiceNetworkRef {
   target: string;
-  aliases?: string[];
+  aliases?: string[] | undefined;
 }
 
 export interface ServiceMount {
-  Type: string;
-  Source: string;
-  Target: string;
-  ReadOnly?: boolean;
+  Type?: string | undefined;
+  Source?: string | undefined;
+  Target?: string | undefined;
+  ReadOnly?: boolean | undefined;
   BindOptions?: {
-    Propagation?: string;
-    NonRecursive?: boolean;
-    CreateMountpoint?: boolean;
+    Propagation?: string | undefined;
+    NonRecursive?: boolean | undefined;
+    CreateMountpoint?: boolean | undefined;
   };
   VolumeOptions?: {
-    NoCopy?: boolean;
-    Labels?: Record<string, string>;
-    Subpath?: string;
+    NoCopy?: boolean | undefined;
+    Labels?: Record<string, string> | undefined;
+    Subpath?: string | undefined;
   };
   TmpfsOptions?: {
-    SizeBytes?: number;
-    Mode?: number;
+    SizeBytes?: number | undefined;
+    Mode?: number | undefined;
   };
   ImageOptions?: {
-    Subpath?: string;
+    Subpath?: string | undefined;
   };
-  ClusterOptions?: Record<string, unknown>;
+  ClusterOptions?: Record<string, unknown> | undefined;
 }
 
 export type RecommendationCategory =
@@ -714,8 +740,8 @@ export interface Recommendation {
   message: string;
   current: number;
   configured: number;
-  suggested?: number;
-  fixAction?: string;
+  suggested?: number | undefined;
+  fixAction?: string | undefined;
 }
 
 export interface RecommendationSummary {
@@ -742,8 +768,8 @@ export interface JGFGraph {
   directed: boolean;
   metadata: JGFMetadata;
   nodes: Record<string, JGFNode>;
-  edges?: JGFEdge[];
-  hyperedges?: JGFHyperedge[];
+  edges?: JGFEdge[] | undefined;
+  hyperedges?: JGFHyperedge[] | undefined;
 }
 
 export type JGFMetadata = Record<string, unknown> & { "@context": string };
@@ -765,22 +791,22 @@ export interface JGFHyperedge {
 }
 
 export interface LicenseEntry {
-  id?: string;
-  name?: string;
-  url?: string;
+  id?: string | undefined;
+  name?: string | undefined;
+  url?: string | undefined;
 }
 
 export interface LicenseComponent {
   name: string;
-  version?: string;
-  description?: string;
+  version?: string | undefined;
+  description?: string | undefined;
   ecosystem: string;
   licenses: LicenseEntry[];
-  homepage?: string;
-  repository?: string;
+  homepage?: string | undefined;
+  repository?: string | undefined;
 }
 
 export interface LicensesResponse {
-  generatedAt?: string;
+  generatedAt?: string | undefined;
   components: LicenseComponent[];
 }

@@ -12,8 +12,8 @@ import { useRef } from "react";
 export interface Segment<T extends string> {
   value: T;
   label: string;
-  badge?: number;
-  disabled?: boolean;
+  badge?: number | undefined;
+  disabled?: boolean | undefined;
 }
 
 export default function SegmentedControl<T extends string>({
@@ -29,15 +29,15 @@ export default function SegmentedControl<T extends string>({
   segments: Segment<T>[];
   value: T;
   onChange: (value: T) => void;
-  max?: number;
+  max?: number | undefined;
   /** Replace the default chevron icon on the overflow button. */
-  overflowIcon?: ReactNode;
+  overflowIcon?: ReactNode | undefined;
   /** Label shown next to the icon when the overflow is active. */
-  overflowLabel?: ReactNode;
+  overflowLabel?: ReactNode | undefined;
   /** Whether the overflow button should appear in the active style. */
-  overflowActive?: boolean;
+  overflowActive?: boolean | undefined;
   /** Custom popover content. Receives a `close` callback. When provided, the overflow button is always shown. */
-  overflowContent?: (close: () => void) => ReactNode;
+  overflowContent?: ((close: () => void) => ReactNode) | undefined;
 }) {
   const actionsRef = useRef<Menu.Root.Actions>(null);
 

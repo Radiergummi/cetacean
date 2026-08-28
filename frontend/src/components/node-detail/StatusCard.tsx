@@ -64,7 +64,7 @@ const statuses: Record<string, { fill: string; icon: React.ReactNode }> = {
 };
 
 export function StatusCard({ state }: { state: string }) {
-  const status = statuses[state] ?? statuses.unknown;
+  const status = statuses[state] ?? statuses["unknown"] ?? { fill: "", icon: null };
 
   return (
     <InfoCard

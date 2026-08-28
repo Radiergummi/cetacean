@@ -1,8 +1,8 @@
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
 interface Props {
-  message?: string;
-  onRetry?: () => void;
+  message?: string | undefined;
+  onRetry?: (() => void) | undefined;
 }
 
 export default function FetchError({ message, onRetry }: Props) {

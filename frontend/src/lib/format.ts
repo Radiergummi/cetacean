@@ -1,3 +1,5 @@
+import type { PluginInterfaceType } from "../api/types";
+
 /**
  *  Locale-aware number formatting with N decimal places.
  */
@@ -201,7 +203,7 @@ export function nanosToSeconds(nanoseconds: number | undefined): number | undefi
  * "node.example.com:9100, node-exporter" into just "node.example.com".
  */
 export function instanceToHostname(label: string): string {
-  const instance = label.split(", ")[0];
+  const instance = label.split(", ")[0] ?? label;
 
   return instance.replace(/:\d+$/, "");
 }
@@ -216,4 +218,16 @@ function formatUnit(value: number, unit: string, maximumFractionDigits = 0): str
     unitDisplay: "narrow",
     maximumFractionDigits,
   }).format(value);
+}
+
+/**
+ * Formats a Docker plugin interface type as its canonical
+ * `prefix.capability/version` string (e.g. `docker.volumedriver/1.0`).
+ */
+export function formatPluginInterfaceType({
+  Prefix,
+  Capability,
+  Version,
+}: PluginInterfaceType): string {
+  return `${Prefix}.${Capability}/${Version}`;
 }

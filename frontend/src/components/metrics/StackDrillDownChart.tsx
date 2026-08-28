@@ -11,15 +11,15 @@ interface Props {
   title: string;
   stackQuery: string;
   serviceQueryTemplate: string;
-  unit?: string;
-  yMin?: number;
-  range?: string;
-  from?: number;
-  to?: number;
-  refreshKey?: number;
-  onRangeSelect?: (from: number, to: number) => void;
-  thresholds?: Threshold[];
-  stackable?: boolean;
+  unit?: string | undefined;
+  yMin?: number | undefined;
+  range?: string | undefined;
+  from?: number | undefined;
+  to?: number | undefined;
+  refreshKey?: number | undefined;
+  onRangeSelect?: ((from: number, to: number) => void) | undefined;
+  thresholds?: Threshold[] | undefined;
+  stackable?: boolean | undefined;
 }
 
 export default function StackDrillDownChart({

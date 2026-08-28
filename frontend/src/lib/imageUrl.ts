@@ -5,18 +5,18 @@
  */
 export function imageRegistryUrl(image: string): string | null {
   // Strip digest (`@sha256:...`) and tag (`:tag`)
-  const withoutDigest = image.split("@")[0];
-  const [namePart] = withoutDigest.split(":");
+  const withoutDigest = image.split("@")[0] ?? image;
+  const namePart = withoutDigest.split(":")[0] ?? withoutDigest;
 
   const segments = namePart.split("/");
+  const firstSegment = segments[0] ?? "";
 
   // No slashes or "library/x" → Docker Hub official image
   if (segments.length === 1) {
-    return `https://hub.docker.com/_/${segments[0]}`;
+    return `https://hub.docker.com/_/${firstSegment}`;
   }
 
   // Check if first segment looks like a registry hostname (contains a dot or port)
-  const firstSegment = segments[0];
   const isRegistry = firstSegment.includes(".") || firstSegment.includes(":");
 
   if (!isRegistry) {

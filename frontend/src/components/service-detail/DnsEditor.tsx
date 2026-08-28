@@ -15,7 +15,7 @@ export function DnsEditor({
   serviceId: string;
   config: ContainerConfig;
   onSaved: (updated: ContainerConfig) => void;
-  canEdit?: boolean;
+  canEdit?: boolean | undefined;
 }) {
   const [nameservers, setNameservers] = useState<string[]>([]);
   const [searchDomains, setSearchDomains] = useState<string[]>([]);

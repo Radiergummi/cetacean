@@ -95,39 +95,39 @@ describe("collection response shapes", () => {
 
 describe("detail response shapes", () => {
   it("GET /nodes/:id has node with ID and Hostname", async () => {
-    const data = await fetchJSON(`/nodes/${dataset.nodes[0].ID}`);
+    const data = await fetchJSON(`/nodes/${dataset.nodes[0]?.ID}`);
     expect(data).toHaveProperty("node");
     expect(data.node).toHaveProperty("ID");
     expect(data.node.Description).toHaveProperty("Hostname");
   });
 
   it("GET /services/:id has service, changes, integrations", async () => {
-    const data = await fetchJSON(`/services/${dataset.services[0].ID}`);
+    const data = await fetchJSON(`/services/${dataset.services[0]?.ID}`);
     expect(data).toHaveProperty("service");
     expect(Array.isArray(data.changes)).toBe(true);
     expect(Array.isArray(data.integrations)).toBe(true);
   });
 
   it("GET /configs/:id has config and services", async () => {
-    const data = await fetchJSON(`/configs/${dataset.configs[0].ID}`);
+    const data = await fetchJSON(`/configs/${dataset.configs[0]?.ID}`);
     expect(data).toHaveProperty("config");
     expect(Array.isArray(data.services)).toBe(true);
   });
 
   it("GET /secrets/:id has secret and services", async () => {
-    const data = await fetchJSON(`/secrets/${dataset.secrets[0].ID}`);
+    const data = await fetchJSON(`/secrets/${dataset.secrets[0]?.ID}`);
     expect(data).toHaveProperty("secret");
     expect(Array.isArray(data.services)).toBe(true);
   });
 
   it("GET /networks/:id has network and services", async () => {
-    const data = await fetchJSON(`/networks/${dataset.networks[0].Id}`);
+    const data = await fetchJSON(`/networks/${dataset.networks[0]?.Id}`);
     expect(data).toHaveProperty("network");
     expect(Array.isArray(data.services)).toBe(true);
   });
 
   it("GET /volumes/:name has volume and services", async () => {
-    const data = await fetchJSON(`/volumes/${dataset.volumes[0].Name}`);
+    const data = await fetchJSON(`/volumes/${dataset.volumes[0]?.Name}`);
     expect(data).toHaveProperty("volume");
     expect(Array.isArray(data.services)).toBe(true);
   });

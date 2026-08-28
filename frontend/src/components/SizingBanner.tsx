@@ -16,7 +16,7 @@ import { useState } from "react";
 interface Props {
   hints: Recommendation[];
   canFix: boolean;
-  onFixed?: () => void;
+  onFixed?: (() => void) | undefined;
 }
 
 /**

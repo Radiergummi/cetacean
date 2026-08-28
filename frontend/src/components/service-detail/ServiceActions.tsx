@@ -35,10 +35,10 @@ function ConfirmAction({
   label: string;
   title: string;
   description: string;
-  disabled?: boolean;
-  disabledTitle?: string;
+  disabled?: boolean | undefined;
+  disabledTitle?: string | undefined;
   loading: boolean;
-  variant?: "default" | "destructive";
+  variant?: "default" | "destructive" | undefined;
   onConfirm: () => void;
 }) {
   const trigger = (

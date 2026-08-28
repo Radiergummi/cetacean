@@ -41,7 +41,7 @@ function resolveColors(): string[] {
 export function getChartColor(index: number): string {
   const colors = resolveColors();
 
-  return colors[index % colors.length];
+  return colors[index % colors.length] ?? "#648FFF";
 }
 
 /** Cached semantic color resolutions. */

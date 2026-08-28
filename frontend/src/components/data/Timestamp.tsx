@@ -8,8 +8,8 @@ export default function Timestamp({
   relative = true,
 }: {
   label: string;
-  date?: string;
-  relative?: boolean;
+  date?: string | undefined;
+  relative?: boolean | undefined;
 }) {
   if (!date) {
     return null;

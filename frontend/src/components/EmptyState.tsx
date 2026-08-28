@@ -2,8 +2,8 @@ import { Inbox } from "lucide-react";
 import type React from "react";
 
 interface Props {
-  message?: string;
-  icon?: React.ReactNode;
+  message?: string | undefined;
+  icon?: React.ReactNode | undefined;
 }
 
 export default function EmptyState({ message = "No results found", icon }: Props) {

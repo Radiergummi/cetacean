@@ -3,7 +3,7 @@ import { type KeyboardEvent, type ReactNode, useCallback, useRef } from "react";
 
 interface RadioCardGroupProps {
   children: ReactNode;
-  className?: string;
+  className?: string | undefined;
 }
 
 /**
@@ -42,10 +42,12 @@ export function RadioCardGroup({ children, className }: RadioCardGroupProps) {
       nextIndex = (currentIndex - 1 + cards.length) % cards.length;
     }
 
-    if (nextIndex !== null) {
+    const next = nextIndex === null ? undefined : cards[nextIndex];
+
+    if (next) {
       event.preventDefault();
-      cards[nextIndex].focus();
-      cards[nextIndex].click();
+      next.focus();
+      next.click();
     }
   }, []);
 
@@ -64,10 +66,10 @@ export function RadioCardGroup({ children, className }: RadioCardGroupProps) {
 interface RadioCardProps {
   selected: boolean;
   onClick: () => void;
-  icon?: ReactNode;
+  icon?: ReactNode | undefined;
   title: string;
   description: string;
-  disabled?: boolean;
+  disabled?: boolean | undefined;
 }
 
 export function RadioCard({

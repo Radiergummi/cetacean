@@ -15,8 +15,8 @@ interface RangeField<T> {
 export interface MetricsMapSpec<T> {
   labelKey: string;
   empty: () => T;
-  instant?: readonly InstantField<T>[];
-  range?: readonly RangeField<T>[];
+  instant?: readonly InstantField<T>[] | undefined;
+  range?: readonly RangeField<T>[] | undefined;
 }
 
 /**
@@ -69,16 +69,18 @@ export function useMetricsMap<T>(
       };
 
       instantResponses.forEach((response, index) => {
-        const field = spec.instant![index];
+        const field = spec.instant?.[index];
+
         parseInstant(response, spec.labelKey)?.forEach(([key, value]) => {
-          field.assign(ensure(key), value);
+          field?.assign(ensure(key), value);
         });
       });
 
       rangeResponses.forEach((response, index) => {
-        const field = spec.range![index];
+        const field = spec.range?.[index];
+
         parseRange(response, spec.labelKey)?.forEach(([key, values]) => {
-          field.assign(ensure(key), values);
+          field?.assign(ensure(key), values);
         });
       });
 

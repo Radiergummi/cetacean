@@ -47,11 +47,13 @@ export function feedForPath(
   // Check resource routes: /nodes, /nodes/:id, /services/:id, etc.
   const segments = pathname.split("/").filter(Boolean);
 
-  if (segments.length >= 1 && feedResources.has(segments[0])) {
+  const [resource, resourceId] = segments;
+
+  if (resource && feedResources.has(resource)) {
     const title =
       segments.length === 1
-        ? capitalize(segments[0])
-        : `${capitalize(segments[0]).replace(/s$/, "")} ${segments[1]}`;
+        ? capitalize(resource)
+        : `${capitalize(resource).replace(/s$/, "")} ${resourceId}`;
 
     return { href: apiPath(pathname), title };
   }

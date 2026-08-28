@@ -21,9 +21,9 @@ interface ResourceListConfig<T> extends UseListPageConfig<T> {
   ) => Column<T>[];
   renderCard: (item: T) => ReactNode;
   emptyMessage: (hasSearch: boolean) => string;
-  headerContent?: ReactNode;
-  actions?: (allowedMethods: Set<string>) => ReactNode;
-  skeletonColumns?: number;
+  headerContent?: ReactNode | undefined;
+  actions?: ((allowedMethods: Set<string>) => ReactNode) | undefined;
+  skeletonColumns?: number | undefined;
 }
 
 export default function ResourceListPage<T>(config: ResourceListConfig<T>) {

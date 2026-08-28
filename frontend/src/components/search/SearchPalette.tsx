@@ -230,7 +230,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
               const freshItems = fresh.results[type];
 
               // Build lookup from fresh data
-              const freshMap = new Map<string, { detail: string; state?: string }>();
+              const freshMap = new Map<string, { detail: string; state?: string | undefined }>();
 
               if (freshItems) {
                 for (const item of freshItems) {

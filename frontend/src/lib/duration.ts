@@ -12,11 +12,10 @@ export type DurationUnit = (typeof durationUnits)[number];
  */
 export function bestDurationUnit(nanoseconds: number): DurationUnit {
   for (let index = durationUnits.length - 1; index > 0; index--) {
-    if (
-      nanoseconds >= durationUnits[index].factor &&
-      nanoseconds % durationUnits[index].factor === 0
-    ) {
-      return durationUnits[index];
+    const unit = durationUnits[index];
+
+    if (unit && nanoseconds >= unit.factor && nanoseconds % unit.factor === 0) {
+      return unit;
     }
   }
 

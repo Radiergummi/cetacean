@@ -50,32 +50,32 @@ export interface Threshold {
   label: string;
   value: number;
   color: string;
-  dash?: number[];
+  dash?: number[] | undefined;
 }
 
 interface Props {
   title: string;
   query: string;
   range: string;
-  unit?: string;
-  refreshKey?: number;
-  thresholds?: Threshold[];
+  unit?: string | undefined;
+  refreshKey?: number | undefined;
+  thresholds?: Threshold[] | undefined;
   /** Force y-axis minimum value (e.g., 0 to always start at zero). */
-  yMin?: number;
+  yMin?: number | undefined;
   /** Override the default series color. */
-  color?: string;
-  from?: number;
-  to?: number;
-  onRangeSelect?: (from: number, to: number) => void;
-  onSeriesDoubleClick?: (seriesLabel: string) => void;
-  onSeriesInfo?: (series: { label: string; color: string }[]) => void;
-  stackable?: boolean;
+  color?: string | undefined;
+  from?: number | undefined;
+  to?: number | undefined;
+  onRangeSelect?: ((from: number, to: number) => void) | undefined;
+  onSeriesDoubleClick?: ((seriesLabel: string) => void) | undefined;
+  onSeriesInfo?: ((series: { label: string; color: string }[]) => void) | undefined;
+  stackable?: boolean | undefined;
   /** Controlled isolation: label of the isolated series, or null for none. */
-  isolatedLabel?: string | null;
+  isolatedLabel?: string | null | undefined;
   /** Fires when isolation changes (from chart clicks or sync). */
-  onIsolationChange?: (label: string | null) => void;
+  onIsolationChange?: ((label: string | null) => void) | undefined;
   /** Transform series labels for display (tooltips, legend). Raw labels are still used for identification. */
-  labelTransform?: (label: string) => string;
+  labelTransform?: ((label: string) => string) | undefined;
 }
 
 type State = "loading" | "data" | "empty" | "error";
@@ -348,7 +348,9 @@ export default function TimeSeriesChart({
       try {
         const response = JSON.parse(event.data) as PrometheusResponse;
 
-        if (!response.data?.result?.length) {
+        const result = response.data?.result?.filter(({ value }) => value);
+
+        if (!result?.length) {
           return;
         }
 
@@ -357,15 +359,13 @@ export default function TimeSeriesChart({
             return previous;
           }
 
-          const timestamp = Number(response.data.result[0].value![0]);
+          const timestamp = Number(result[0]?.value?.[0]);
           const timeLabel = new Date(timestamp * 1000).toLocaleTimeString();
           const newTimestamps = [...previous.timestamps.slice(1), timestamp];
           const newLabels = [...previous.labels.slice(1), timeLabel];
           const newSeries = previous.series.map((series) => {
-            const match = response.data.result.find(
-              ({ metric }) => seriesLabel(metric) === series.label,
-            );
-            const value = match ? Number(match.value![1]) : 0;
+            const match = result.find(({ metric }) => seriesLabel(metric) === series.label);
+            const value = match ? Number(match.value?.[1]) : 0;
 
             return { ...series, data: [...series.data.slice(1), value] };
           });
@@ -545,8 +545,10 @@ export default function TimeSeriesChart({
             false,
           );
 
-          if (elements.length > 0 && onSeriesDoubleClickRef.current) {
-            const label = chart.data.datasets[elements[0].datasetIndex]?.label;
+          const doubleClicked = elements[0];
+
+          if (doubleClicked && onSeriesDoubleClickRef.current) {
+            const label = chart.data.datasets[doubleClicked.datasetIndex]?.label;
 
             if (label) {
               onSeriesDoubleClickRef.current(label);
@@ -582,8 +584,10 @@ export default function TimeSeriesChart({
           clickTimerRef.current = setTimeout(() => {
             clickTimerRef.current = null;
 
-            if (elements.length > 0) {
-              const clickedIdx = elements[0].datasetIndex;
+            const clicked = elements[0];
+
+            if (clicked) {
+              const clickedIdx = clicked.datasetIndex;
               const wasIsolated = isolatedIndexRef.current === clickedIdx;
               const newIndex = wasIsolated ? null : clickedIdx;
 
@@ -631,7 +635,7 @@ export default function TimeSeriesChart({
         const index = Math.round(xValue);
         const datasets = chart.data.datasets;
 
-        if (index < 0 || !datasets.length || index >= (datasets[0].data?.length ?? 0)) {
+        if (index < 0 || index >= (datasets[0]?.data?.length ?? 0)) {
           return;
         }
 
@@ -708,8 +712,10 @@ export default function TimeSeriesChart({
         // Draw crosshair line at cursor position
         const active = chart.getActiveElements();
 
-        if (active.length) {
-          const x = active[0].element.x;
+        const activeElement = active[0];
+
+        if (activeElement) {
+          const x = activeElement.element.x;
 
           ctx.save();
           ctx.beginPath();
@@ -741,19 +747,21 @@ export default function TimeSeriesChart({
 
             const datasets = chart.data.datasets;
 
-            for (let seriesIndex = 0; seriesIndex < datasets.length; seriesIndex++) {
-              const value = datasets[seriesIndex].data[syncIndex] as number;
+            const yScale = chart.scales["y"];
 
-              if (value == null) {
+            for (const dataset of datasets) {
+              const value = dataset.data[syncIndex] as number | null | undefined;
+
+              if (value == null || !yScale) {
                 continue;
               }
 
-              const yPixel = chart.scales.y.getPixelForValue(value);
+              const yPixel = yScale.getPixelForValue(value);
 
               ctx.beginPath();
               ctx.arc(xPixel, yPixel, 3, 0, Math.PI * 2);
 
-              ctx.fillStyle = datasets[seriesIndex].borderColor as string;
+              ctx.fillStyle = dataset.borderColor as string;
 
               ctx.fill();
             }
@@ -779,7 +787,7 @@ export default function TimeSeriesChart({
         "dblclick",
         "touchstart",
         "touchmove",
-      ] as unknown as ChartOptions<"line">["events"],
+      ] as unknown as NonNullable<ChartOptions<"line">["events"]>,
       interaction: {
         mode: "index",
         intersect: false,
@@ -807,7 +815,12 @@ export default function TimeSeriesChart({
                 return;
               }
 
-              const xScale = chart.scales.x;
+              const xScale = chart.scales["x"];
+
+              if (!xScale) {
+                return;
+              }
+
               const minIndex = Math.max(0, Math.floor(xScale.min));
               const maxIndex = Math.min(data.timestamps.length - 1, Math.ceil(xScale.max));
               const fromTimestamp = data.timestamps[minIndex];

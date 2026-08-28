@@ -6,17 +6,17 @@ import { useRef, useState } from "react";
 export interface ComboboxOption {
   value: string;
   label: string;
-  description?: string;
+  description?: string | undefined;
 }
 
 interface ComboboxProps {
   value: string;
   onChange: (value: string) => void;
   options: ComboboxOption[];
-  placeholder?: string;
-  className?: string;
+  placeholder?: string | undefined;
+  className?: string | undefined;
   /** Allow typing custom values not in the option list (default true) */
-  allowCustom?: boolean;
+  allowCustom?: boolean | undefined;
 }
 
 export function Combobox({

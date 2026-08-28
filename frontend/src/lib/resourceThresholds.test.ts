@@ -69,23 +69,23 @@ describe("cpuThresholds", () => {
     );
 
     expect(result).toHaveLength(2);
-    expect(result[0].label).toBe("Reserved");
-    expect(result[0].value).toBe(50);
-    expect(result[1].label).toBe("Limit");
-    expect(result[1].value).toBe(100);
+    expect(result[0]?.label).toBe("Reserved");
+    expect(result[0]?.value).toBe(50);
+    expect(result[1]?.label).toBe("Limit");
+    expect(result[1]?.value).toBe(100);
   });
 
   it("converts NanoCPUs correctly (1e9 nano = 100%)", () => {
     const result = cpuThresholds(makeService({ reservations: { NanoCPUs: 2.5e8 } }));
 
-    expect(result[0].value).toBe(25);
+    expect(result[0]?.value).toBe(25);
   });
 
   it("scales thresholds by replica count to match service-wide sum() query", () => {
     const result = cpuThresholds(makeService({ limits: { NanoCPUs: 1e9 } }), 3);
 
     // 1 vCPU/task * 3 replicas = 300% on a sum(rate(...)) chart.
-    expect(result[0].value).toBe(300);
+    expect(result[0]?.value).toBe(300);
   });
 
   it("returns empty when replicas is zero", () => {
@@ -128,8 +128,8 @@ describe("memoryThresholds", () => {
     );
 
     expect(result).toHaveLength(2);
-    expect(result[0].label).toBe("Reserved");
-    expect(result[1].label).toBe("Limit");
+    expect(result[0]?.label).toBe("Reserved");
+    expect(result[1]?.label).toBe("Limit");
   });
 
   it("scales memory thresholds by replica count", () => {
@@ -138,6 +138,6 @@ describe("memoryThresholds", () => {
       3,
     );
 
-    expect(result[0].value).toBe(3 * 1024 * 1024 * 1024);
+    expect(result[0]?.value).toBe(3 * 1024 * 1024 * 1024);
   });
 });

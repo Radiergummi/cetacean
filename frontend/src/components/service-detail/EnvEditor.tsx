@@ -13,7 +13,7 @@ export function EnvEditor({
   serviceId: string;
   envVars: Record<string, string>;
   onSaved: (updated: Record<string, string>) => void;
-  canEdit?: boolean;
+  canEdit?: boolean | undefined;
 }) {
   async function handleSave(operations: PatchOp[]) {
     const updated = await api.patchServiceEnv(serviceId, operations);

@@ -65,7 +65,7 @@ export function useNodeMetrics() {
   const instanceEntries = useMemo(() => Object.entries(byInstance), [byInstance]);
 
   const getForNode = useCallback(
-    (hostname: string, address: string): NodeMetrics => {
+    (hostname: string, address: string | undefined): NodeMetrics => {
       // Resolve hostname → instance via node_uname_info mapping
       const instance = resolve(hostname);
 
@@ -77,11 +77,11 @@ export function useNodeMetrics() {
       const short = hostname.split(".")[0];
 
       for (const [key, metrics] of instanceEntries) {
-        if (key.startsWith(address + ":") || key === address) {
+        if (address && (key.startsWith(address + ":") || key === address)) {
           return metrics;
         }
 
-        const host = key.split(":")[0];
+        const host = key.split(":")[0] ?? key;
 
         if (host === hostname || host === short || host.split(".")[0] === short) {
           return metrics;

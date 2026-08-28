@@ -6,7 +6,7 @@ interface SSEEvent {
   type: string;
   action: string;
   id: string;
-  resource?: unknown;
+  resource?: unknown | undefined;
 }
 
 type SSEListener = (event: SSEEvent) => void;

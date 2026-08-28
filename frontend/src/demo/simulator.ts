@@ -11,7 +11,7 @@ function nextContainerID(): string {
   return randomHex(64);
 }
 
-function pickRandom<T>(array: T[]): T {
+function pickRandom<T>(array: T[]): T | undefined {
   return array[Math.floor(Math.random() * array.length)];
 }
 
@@ -62,7 +62,12 @@ function broadcastTask(clients: SSEClients, action: string, task: Task) {
 
 function makeTask(dataset: Dataset, service: Service, slot: number): Task {
   const workers = getWorkerNodes(dataset);
-  const node = workers.length > 0 ? pickRandom(workers) : dataset.nodes[0];
+  const node = pickRandom(workers) ?? dataset.nodes[0];
+
+  if (!node) {
+    throw new Error("demo dataset has no nodes");
+  }
+
   return {
     ID: nextTaskID(),
     Version: { Index: Math.floor(Math.random() * 10000) },
@@ -111,6 +116,10 @@ function scenarioTaskRestart(dataset: Dataset, clients: SSEClients) {
   }
 
   const service = pickRandom(services);
+
+  if (!service) {
+    return;
+  }
   const runningTasks = getRunningTasks(dataset, service.ID);
 
   if (runningTasks.length === 0) {
@@ -118,6 +127,10 @@ function scenarioTaskRestart(dataset: Dataset, clients: SSEClients) {
   }
 
   const task = pickRandom(runningTasks);
+
+  if (!task) {
+    return;
+  }
 
   // Mark the task as failed
   task.Status.State = "failed";
@@ -151,6 +164,10 @@ function scenarioServiceScale(dataset: Dataset, clients: SSEClients) {
   }
 
   const service = pickRandom(services);
+
+  if (!service) {
+    return;
+  }
   const replicated = service.Spec.Mode.Replicated!;
   const originalReplicas = replicated.Replicas ?? 1;
 
@@ -193,6 +210,10 @@ function scenarioRollingUpdate(dataset: Dataset, clients: SSEClients) {
 
   const service = pickRandom(services);
 
+  if (!service) {
+    return;
+  }
+
   // Start the update
   service.UpdateStatus = {
     State: "updating",
@@ -228,6 +249,10 @@ function scenarioTaskFail(dataset: Dataset, clients: SSEClients) {
   }
 
   const service = pickRandom(services);
+
+  if (!service) {
+    return;
+  }
   const runningTasks = getRunningTasks(dataset, service.ID);
 
   if (runningTasks.length === 0) {
@@ -235,6 +260,10 @@ function scenarioTaskFail(dataset: Dataset, clients: SSEClients) {
   }
 
   const task = pickRandom(runningTasks);
+
+  if (!task) {
+    return;
+  }
 
   const errors = [
     "task: non-zero exit (137): OOM killed",
@@ -245,7 +274,7 @@ function scenarioTaskFail(dataset: Dataset, clients: SSEClients) {
 
   // Fail the task
   task.Status.State = "failed";
-  task.Status.Err = pickRandom(errors);
+  task.Status.Err = pickRandom(errors) ?? "task: non-zero exit (1)";
   task.Status.Message = "started";
   task.Status.Timestamp = new Date().toISOString();
 
@@ -278,6 +307,10 @@ function scenarioNodePressure(dataset: Dataset, clients: SSEClients) {
   }
 
   const node = pickRandom(workers);
+
+  if (!node) {
+    return;
+  }
 
   // Mark node as down
   node.Status.State = "down";

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export interface Suggestion {
   label: string;
   type: "metric" | "function" | "label" | "value";
-  detail?: string;
+  detail?: string | undefined;
 }
 
 export interface QueryCompletion {
@@ -157,7 +157,7 @@ export function getCursorContext(query: string, cursor: number): CursorContext {
   const valueMatch = insideBraces.match(/(\w+)\s*=~?\s*"[^"]*$/);
 
   if (valueMatch) {
-    return { type: "value", metricName, labelName: valueMatch[1] };
+    return { type: "value", metricName, labelName: valueMatch[1] ?? "" };
   }
 
   // Otherwise we're typing a label name
@@ -209,7 +209,7 @@ export function segmentPrefixMatch(target: string, query: string): boolean {
     let result = false;
 
     for (let s = segmentIndex; s < segments.length && !result; s++) {
-      const segment = segments[s];
+      const segment = segments[s] ?? "";
 
       // Find how many query chars match this segment's prefix
       let maxMatch = 0;
@@ -243,13 +243,13 @@ export function segmentPrefixMatch(target: string, query: string): boolean {
 export function getTokenBounds(text: string, cursor: number): { start: number; end: number } {
   let start = cursor;
 
-  while (start > 0 && /[a-zA-Z0-9_:]/.test(text[start - 1])) {
+  while (start > 0 && /[a-zA-Z0-9_:]/.test(text[start - 1] ?? "")) {
     start--;
   }
 
   let end = cursor;
 
-  while (end < text.length && /[a-zA-Z0-9_:]/.test(text[end])) {
+  while (end < text.length && /[a-zA-Z0-9_:]/.test(text[end] ?? "")) {
     end++;
   }
 
@@ -299,7 +299,7 @@ export function useQueryCompletion(enabled: boolean): QueryCompletion {
       fetcher: () => Promise<string[]>,
       prefix: string,
       suggestionType: Suggestion["type"],
-      exclude?: string,
+      exclude?: string | undefined,
     ) => {
       let items = cache.get(cacheKey);
 

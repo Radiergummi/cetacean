@@ -5,7 +5,7 @@ import { Component } from "react";
 interface Props {
   children: ReactNode;
   /** When true, renders a compact inline fallback instead of the full-page one. */
-  inline?: boolean;
+  inline?: boolean | undefined;
 }
 
 interface State {
@@ -13,18 +13,18 @@ interface State {
 }
 
 export default class ErrorBoundary extends Component<Props, State> {
-  state: State = { error: null };
+  override state: State = { error: null };
 
   static getDerivedStateFromError(error: Error) {
     return { error };
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo) {
+  override componentDidCatch(error: Error, info: ErrorInfo) {
     // eslint-disable-next-line no-console
     console.error("ErrorBoundary caught:", error, info.componentStack);
   }
 
-  render() {
+  override render() {
     if (this.state.error) {
       if (this.props.inline) {
         return (

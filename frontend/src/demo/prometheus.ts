@@ -3,8 +3,8 @@ import { profileFor, generateTimeSeries, generateInstantValue } from "./timeseri
 
 interface MetricResult {
   metric: Record<string, string>;
-  value?: [number, string];
-  values?: [number, string][];
+  value?: [number, string] | undefined;
+  values?: [number, string][] | undefined;
 }
 
 /**
@@ -72,7 +72,7 @@ function matchQuery(
           __name__: "up",
           job: "node-exporter",
           instance: `${node.Description.Hostname}:9100`,
-          nodename: node.Description.Hostname,
+          nodename: node.Description.Hostname ?? "",
         },
       ),
     );
@@ -124,7 +124,7 @@ function matchQuery(
         {
           __name__: "node_filesystem_avail_bytes",
           instance: `${node.Description.Hostname}:9100`,
-          nodename: node.Description.Hostname,
+          nodename: node.Description.Hostname ?? "",
           mountpoint: "/",
           device: "/dev/sda1",
         },
@@ -140,7 +140,7 @@ function matchQuery(
         {
           __name__: "node_memory_MemAvailable_bytes",
           instance: `${node.Description.Hostname}:9100`,
-          nodename: node.Description.Hostname,
+          nodename: node.Description.Hostname ?? "",
         },
       );
     });

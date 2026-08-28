@@ -6,16 +6,16 @@ import { useCallback, useMemo } from "react";
 
 export interface DetailResourceOptions {
   /** Fetch history for this resource (default: true). */
-  history?: boolean;
+  history?: boolean | undefined;
   /** Additional React Query keys to invalidate on SSE events. */
-  extraQueryKeys?: readonly (readonly unknown[])[];
+  extraQueryKeys?: readonly (readonly unknown[])[] | undefined;
 }
 
 export function useDetailResource<T>(
   key: string | undefined,
   fetchFn: (key: string, signal?: AbortSignal) => Promise<FetchResult<T>>,
   ssePath: string,
-  options?: DetailResourceOptions,
+  options?: DetailResourceOptions | undefined,
 ) {
   const queryClient = useQueryClient();
   const fetchHistory = options?.history !== false;

@@ -147,7 +147,7 @@ export function networkGraphToReactFlow(graph: JGFGraph): { nodes: Node[]; edges
       name: string;
       driver: string;
       scope: string;
-      aliases?: Record<string, string[]>;
+      aliases?: Record<string, string[]> | undefined;
     }[];
 
     const networks = edgeNetworks
@@ -226,6 +226,11 @@ export function placementGraphToReactFlow(graph: JGFGraph): { nodes: Node[] } {
     }
 
     const serviceUrn = hyperedge.nodes[0];
+
+    if (serviceUrn === undefined) {
+      continue;
+    }
+
     const serviceName = graph.nodes[serviceUrn]?.label ?? serviceUrn;
     const tasks = (hyperedge.metadata.tasks ?? []) as {
       id: string;

@@ -79,7 +79,7 @@ export interface FlatSearchItem {
  */
 export function flattenSearchResults(
   response: { results: Partial<Record<SearchResourceType, SearchResult[]>> },
-  filterType?: SearchResourceType,
+  filterType?: SearchResourceType | undefined,
 ): FlatSearchItem[] {
   const items: FlatSearchItem[] = [];
   const types = filterType ? [filterType] : typeOrder;

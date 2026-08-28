@@ -82,7 +82,7 @@ describe("computeTicks", () => {
 
   it("uses formatLabel for tick labels", () => {
     const ticks = computeTicks(4, 0.25, (value) => `${value} cores`);
-    expect(ticks[0].label).toBe("0.25 cores");
-    expect(ticks[ticks.length - 1].label).toBe("4 cores");
+    expect(ticks[0]?.label).toBe("0.25 cores");
+    expect(ticks[ticks.length - 1]?.label).toBe("4 cores");
   });
 });

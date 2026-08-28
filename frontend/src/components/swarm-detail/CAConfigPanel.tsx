@@ -89,7 +89,7 @@ export function CAConfigPanel({
         <div className="space-y-2">
           <KVTable
             rows={[
-              spec.CAConfig.NodeCertExpiry !== 0 && [
+              !!spec.CAConfig.NodeCertExpiry && [
                 "Node Certificate Expiry",
                 formatDuration(spec.CAConfig.NodeCertExpiry),
               ],
@@ -126,7 +126,7 @@ export function CAConfigPanel({
         </div>
       }
       onOpen={() => {
-        setDraftCertExpiry(spec.CAConfig.NodeCertExpiry);
+        setDraftCertExpiry(spec.CAConfig.NodeCertExpiry ?? 0);
       }}
       onSave={async () => {
         await api.patchSwarmCAConfig({ NodeCertExpiry: draftCertExpiry });

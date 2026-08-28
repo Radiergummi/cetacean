@@ -44,7 +44,7 @@ describe("computeLayout (ELK)", () => {
     const result = await computeLayout(nodes, edges);
 
     expect(result.edges.length).toBe(1);
-    expect(result.edges[0].data!.bendPoints).toBeDefined();
-    expect((result.edges[0].data as any).bendPoints.length).toBeGreaterThanOrEqual(2);
+    expect(result.edges[0]?.data?.["bendPoints"]).toBeDefined();
+    expect((result.edges[0]!.data as any).bendPoints.length).toBeGreaterThanOrEqual(2);
   });
 });

@@ -6,7 +6,7 @@ export default function ResourceName({
   direction = "row",
 }: {
   name: string;
-  direction?: "row" | "column" | "responsive";
+  direction?: "row" | "column" | "responsive" | undefined;
 }) {
   const { prefix, name: rest } = splitStackPrefix(name);
 

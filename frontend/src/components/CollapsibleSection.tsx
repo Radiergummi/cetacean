@@ -18,10 +18,6 @@ function usePageScope(): string {
   const { pathname } = useLocation();
   const segments = pathname.split("/").filter(Boolean);
 
-  if (segments.length >= 2) {
-    return segments[0];
-  }
-
   return segments[0] ?? "root";
 }
 
@@ -70,7 +66,7 @@ export function SectionToggle({
   title: React.ReactNode;
   open: boolean;
   onToggle: () => void;
-  className?: string;
+  className?: string | undefined;
 }) {
   return (
     <button
@@ -100,8 +96,8 @@ export default function CollapsibleSection({
 }: {
   title: string;
   children: React.ReactNode;
-  controls?: React.ReactNode;
-  defaultOpen?: boolean;
+  controls?: React.ReactNode | undefined;
+  defaultOpen?: boolean | undefined;
 }) {
   const { open, toggle } = useSectionCollapse(title, defaultOpen);
 

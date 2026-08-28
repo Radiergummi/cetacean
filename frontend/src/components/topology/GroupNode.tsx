@@ -2,11 +2,11 @@ import type { NodeProps } from "@xyflow/react";
 
 type GroupData = {
   label: string;
-  role?: string;
-  state?: string;
-  availability?: string;
+  role?: string | undefined;
+  state?: string | undefined;
+  availability?: string | undefined;
   variant: "stack" | "node";
-  color?: string;
+  color?: string | undefined;
 };
 
 export default function GroupNode({ data }: NodeProps & { data: GroupData }) {

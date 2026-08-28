@@ -34,19 +34,20 @@ export function seriesLabel(metric: Record<string, string> | undefined, fallback
 export function parseRangeResult(
   response: PrometheusResponse,
   title: string,
-  colorOverride?: string,
+  colorOverride?: string | undefined,
 ): ParsedMetrics | null {
-  if (!response.data?.result?.length) {
+  const result = response.data?.result?.filter(({ values }) => values?.length);
+
+  if (!result?.length) {
     return null;
   }
 
-  const result = response.data.result;
-  const timestamps = result[0].values!.map(([value]) => Number(value));
+  const timestamps = (result[0]?.values ?? []).map(([value]) => Number(value));
   const labels = timestamps.map((timestamp) => new Date(timestamp * 1_000).toLocaleTimeString());
   const series = result.map(({ metric, values }, index) => ({
     label: seriesLabel(metric, result.length === 1 ? title : undefined),
     color: colorOverride ?? getChartColor(index),
-    data: values!.map(([, value]) => Number(value)),
+    data: (values ?? []).map(([, value]) => Number(value)),
   }));
 
   return { labels, timestamps, series };
@@ -84,6 +85,16 @@ export interface NormalizedMetricRow {
  * For vector results each row is one series; for matrix results the last value is used.
  */
 export function normalizePrometheusRows(data: PrometheusResponse["data"]): NormalizedMetricRow[] {
+  if (!data) {
+    return [];
+  }
+
+  if (data.resultType === "scalar" || data.resultType === "string") {
+    const [timestamp, value] = data.result as unknown as [number, string];
+
+    return timestamp == null ? [] : [{ metric: {}, value, timestamp }];
+  }
+
   return data.result
     .map(({ metric, value, values }) => {
       const point = value ?? values?.[values.length - 1];
@@ -92,7 +103,7 @@ export function normalizePrometheusRows(data: PrometheusResponse["data"]): Norma
         return null;
       }
 
-      return { metric, value: point[1], timestamp: point[0] };
+      return { metric: metric ?? {}, value: point[1], timestamp: point[0] };
     })
     .filter((row): row is NormalizedMetricRow => row !== null);
 }
@@ -103,5 +114,5 @@ export function seriesChanged(previous: ParsedMetrics | null, next: ParsedMetric
     return true;
   }
 
-  return previous.series.some(({ label }, index) => label !== next.series[index].label);
+  return previous.series.some(({ label }, index) => label !== next.series[index]?.label);
 }

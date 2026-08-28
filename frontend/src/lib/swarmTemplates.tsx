@@ -35,7 +35,7 @@ export function renderSwarmTemplate(text: string): React.ReactNode {
       parts.push(before);
     }
 
-    const key = match[1];
+    const key = match[1] ?? "";
     const raw = match[0];
     parts.push(
       <Tooltip key={match.index}>

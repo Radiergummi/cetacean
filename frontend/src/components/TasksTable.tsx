@@ -16,7 +16,7 @@ type Variant = "node" | "service";
 interface TasksTableProps {
   tasks: Task[];
   variant: Variant;
-  metrics?: Record<string, TaskMetricsData>;
+  metrics?: Record<string, TaskMetricsData> | undefined;
 }
 
 export default function TasksTable({ tasks, variant, metrics }: TasksTableProps) {

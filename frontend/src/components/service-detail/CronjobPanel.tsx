@@ -39,7 +39,7 @@ export function CronjobPanel({
   rawLabels: [string, string][];
   serviceId: string;
   onSaved: (updated: Record<string, string>) => void;
-  editable?: boolean;
+  editable?: boolean | undefined;
 }) {
   const { enabled, schedule, skipRunning, replicas, registryAuth, queryRegistry } = integration;
 

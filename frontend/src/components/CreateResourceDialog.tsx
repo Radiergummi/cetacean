@@ -20,7 +20,7 @@ interface CreateResourceDialogProps {
   children: ReactNode;
   canSubmit: boolean;
   onReset: () => void;
-  canCreate?: boolean;
+  canCreate?: boolean | undefined;
 }
 
 export default function CreateResourceDialog({
