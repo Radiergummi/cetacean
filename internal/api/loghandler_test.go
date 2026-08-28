@@ -506,3 +506,64 @@ func buildFrame(streamType byte, payload string) []byte {
 
 	return append(header, []byte(payload)...)
 }
+
+// TestHandleServiceLogs_JSON_AfterKeepsUntimestampedLines pins a deliberate
+// behaviour change: the old since/until compaction dropped lines with no
+// timestamp whenever ?after= was set (an empty timestamp compares <= any
+// non-empty cursor). logs.FilterSince keeps them instead, since a line with
+// no timestamp can't be placed relative to the cursor and dropping it would
+// silently lose output. This test pins that as intentional.
+func TestHandleServiceLogs_JSON_AfterKeepsUntimestampedLines(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+
+	var frames bytes.Buffer
+	frames.Write(buildFrame(1, "2024-01-01T00:00:00.000000000Z before\n"))
+	frames.Write(buildFrame(1, "no timestamp survives\n"))
+	frames.Write(buildFrame(1, "2024-01-01T00:00:02.000000000Z after\n"))
+
+	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{data: frames.Bytes()}))
+
+	req := httptest.NewRequest(
+		"GET",
+		"/services/svc1/logs?after=2024-01-01T00:00:01.000000000Z&limit=100",
+		nil,
+	)
+	req.SetPathValue("id", "svc1")
+	req.Header.Set("Accept", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleServiceLogs(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	var resp LogResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(resp.Lines) != 2 {
+		t.Fatalf(
+			"got %d lines, want 2 (untimestamped + after cursor): %+v",
+			len(resp.Lines),
+			resp.Lines,
+		)
+	}
+
+	var sawUntimestamped, sawBefore bool
+	for _, l := range resp.Lines {
+		if l.Message == "no timestamp survives" {
+			sawUntimestamped = true
+		}
+		if l.Message == "before" {
+			sawBefore = true
+		}
+	}
+	if !sawUntimestamped {
+		t.Errorf("lines = %+v, want the untimestamped line to survive", resp.Lines)
+	}
+	if sawBefore {
+		t.Errorf("lines = %+v, want the line before the cursor filtered out", resp.Lines)
+	}
+}

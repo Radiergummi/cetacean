@@ -238,3 +238,63 @@ func TestReadServiceLogsHonoursCursor(t *testing.T) {
 		t.Errorf("line = %q, want the line after the cursor", got.Lines[0].Message)
 	}
 }
+
+// nextCursor must skip lines with no timestamp when picking what to advance:
+// parseLine can leave Timestamp empty for a line that doesn't match the
+// expected shape, and nextCursor("") returns "". If the last returned line
+// happened to be one of those, the cursor would go empty, the client's next
+// call would send no since, and paging would loop on the newest lines again
+// — the exact bug this task exists to fix, just reintroduced from the other
+// end.
+func TestReadServiceLogsCursorSkipsUntimestampedTrailingLine(t *testing.T) {
+	c := cache.New(nil)
+	streamer := &fakeLogStreamer{
+		frames: append(
+			buildLogFrame(1, "2024-01-01T00:00:00.000000000Z first\n"),
+			buildLogFrame(1, "no timestamp last\n")...,
+		),
+	}
+	srv := newLogTestServer(t, c, streamer)
+
+	got, err := srv.readServiceLogsImpl(context.Background(), "svc1", logOptions{})
+	if err != nil {
+		t.Fatalf("readServiceLogsImpl: %v", err)
+	}
+
+	if len(got.Lines) != 2 {
+		t.Fatalf("got %d lines, want both returned: %+v", len(got.Lines), got.Lines)
+	}
+
+	want := nextCursor("2024-01-01T00:00:00.000000000Z")
+	if got.Cursor != want {
+		t.Errorf("cursor = %q, want %q (advanced from the last timestamped line)", got.Cursor, want)
+	}
+}
+
+// When no returned line carries a timestamp at all, the cursor must fall
+// back to the one the caller passed in rather than going empty — an empty
+// cursor tells the client to start over at the newest lines, losing its
+// place.
+func TestReadServiceLogsCursorFallsBackToIncomingSinceWhenNoneTimestamped(t *testing.T) {
+	c := cache.New(nil)
+	streamer := &fakeLogStreamer{
+		frames: buildLogFrame(1, "no timestamp only\n"),
+	}
+	srv := newLogTestServer(t, c, streamer)
+
+	got, err := srv.readServiceLogsImpl(
+		context.Background(),
+		"svc1",
+		logOptions{since: "2024-01-01T00:00:00.000000000Z"},
+	)
+	if err != nil {
+		t.Fatalf("readServiceLogsImpl: %v", err)
+	}
+
+	if len(got.Lines) != 1 {
+		t.Fatalf("got %d lines, want 1: %+v", len(got.Lines), got.Lines)
+	}
+	if got.Cursor != "2024-01-01T00:00:00.000000000Z" {
+		t.Errorf("cursor = %q, want the incoming since unchanged", got.Cursor)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -97,9 +98,12 @@ func (s *Server) readServiceLogsImpl(
 	lines = filterLogLines(lines, opts.level)
 	lines = logs.FilterSince(lines, opts.since)
 
-	resp := LogResourceResponse{Lines: lines}
-	if len(lines) > 0 {
-		resp.Cursor = nextCursor(lines[len(lines)-1].Timestamp)
+	resp := LogResourceResponse{Lines: lines, Cursor: opts.since}
+	for _, line := range slices.Backward(lines) {
+		if line.Timestamp != "" {
+			resp.Cursor = nextCursor(line.Timestamp)
+			break
+		}
 	}
 	return resp, nil
 }
