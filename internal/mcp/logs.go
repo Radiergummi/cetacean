@@ -61,6 +61,9 @@ func (s *Server) readServiceLogsImpl(
 	if tail <= 0 {
 		tail = defaultLogTail
 	}
+	if opts.since != "" {
+		tail = min(tail*10, maxLogTail)
+	}
 	if tail > maxLogTail {
 		tail = maxLogTail
 	}
@@ -92,6 +95,7 @@ func (s *Server) readServiceLogsImpl(
 	}
 
 	lines = filterLogLines(lines, opts.level)
+	lines = logs.FilterSince(lines, opts.since)
 
 	resp := LogResourceResponse{Lines: lines}
 	if len(lines) > 0 {

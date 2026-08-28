@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - Live pages, charts, and the connection indicator no longer stop updating for good when the server is momentarily at its connection limit. Resource streams and metrics charts now re-establish themselves after a rejected connection instead of staying silent until the page is reloaded; metrics charts additionally recover from ordinary network interruptions, which previously killed them outright
 - Live log tail no longer switches itself off without explanation when its connection drops. It now reconnects on its own with a growing delay between attempts, and picks up exactly where it left off — the lines produced while it was disconnected are filled in when it returns, with nothing repeated and nothing missing — and shows what it is doing while it retries. If the server is at its log-streaming connection limit, the viewer says so and counts down to the next attempt instead of showing a cryptic error, and waits as long as the server asks. After several failed attempts it stops and offers to resume.
+- AI agents reading service logs over MCP now advance through history correctly. Passing the returned cursor back fetched the same newest lines every time instead of the next page, so an agent paging through a log could loop on the same output.
 
 ## [0.12.0] - 2026-08-28
 

@@ -181,3 +181,25 @@ func ParseDockerLogsWithIdleCancel(
 	})
 	return lines, err
 }
+
+// FilterSince returns the lines strictly newer than the given cursor.
+//
+// Docker ignores the Since option for service logs, so every caller that
+// offers a cursor has to enforce it after parsing. This is that one place.
+// Lines without a timestamp are kept: they cannot be placed relative to the
+// cursor, and dropping them would silently lose output.
+func FilterSince(lines []LogLine, since string) []LogLine {
+	if since == "" {
+		return lines
+	}
+
+	filtered := lines[:0]
+	for _, line := range lines {
+		if line.Timestamp != "" && line.Timestamp <= since {
+			continue
+		}
+		filtered = append(filtered, line)
+	}
+
+	return filtered
+}

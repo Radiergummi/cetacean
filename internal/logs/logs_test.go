@@ -187,3 +187,37 @@ func TestParseDockerLogs_RejectsOversizedFrame(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
+
+func TestFilterSince(t *testing.T) {
+	lines := []LogLine{
+		{Timestamp: "2024-01-01T00:00:00.000000000Z", Message: "before"},
+		{Timestamp: "2024-01-01T00:00:01.000000000Z", Message: "at cursor"},
+		{Timestamp: "2024-01-01T00:00:02.000000000Z", Message: "after"},
+	}
+
+	t.Run("keeps only lines past the cursor", func(t *testing.T) {
+		got := FilterSince(lines, "2024-01-01T00:00:01.000000000Z")
+
+		if len(got) != 1 || got[0].Message != "after" {
+			t.Errorf("FilterSince = %v, want just the line after the cursor", got)
+		}
+	})
+
+	t.Run("returns everything when no cursor is given", func(t *testing.T) {
+		if got := FilterSince(lines, ""); len(got) != len(lines) {
+			t.Errorf(
+				"FilterSince with empty cursor dropped lines: got %d, want %d",
+				len(got),
+				len(lines),
+			)
+		}
+	})
+
+	t.Run("keeps lines that carry no timestamp", func(t *testing.T) {
+		untimed := []LogLine{{Message: "no timestamp"}}
+
+		if got := FilterSince(untimed, "2024-01-01T00:00:01.000000000Z"); len(got) != 1 {
+			t.Errorf("FilterSince dropped an untimestamped line")
+		}
+	})
+}

@@ -204,3 +204,37 @@ func TestGetLogsToolRequiresService(t *testing.T) {
 		t.Fatal("expected error when service arg missing")
 	}
 }
+
+// The get_logs cursor is only meaningful if passing it back returns newer
+// lines. Docker ignores Since for service logs, so the filter has to happen
+// here — without it every call returns the same newest lines and an agent
+// paging through a log loops on the same output.
+func TestReadServiceLogsHonoursCursor(t *testing.T) {
+	c := cache.New(nil)
+	streamer := &fakeLogStreamer{
+		frames: append(
+			append(
+				buildLogFrame(1, "2024-01-01T00:00:00.000000000Z before\n"),
+				buildLogFrame(1, "2024-01-01T00:00:01.000000000Z at cursor\n")...,
+			),
+			buildLogFrame(1, "2024-01-01T00:00:02.000000000Z after\n")...,
+		),
+	}
+	srv := newLogTestServer(t, c, streamer)
+
+	got, err := srv.readServiceLogsImpl(
+		context.Background(),
+		"svc1",
+		logOptions{since: "2024-01-01T00:00:01.000000000Z"},
+	)
+	if err != nil {
+		t.Fatalf("readServiceLogsImpl: %v", err)
+	}
+
+	if len(got.Lines) != 1 {
+		t.Fatalf("got %d lines, want only the one after the cursor: %+v", len(got.Lines), got.Lines)
+	}
+	if !strings.Contains(got.Lines[0].Message, "after") {
+		t.Errorf("line = %q, want the line after the cursor", got.Lines[0].Message)
+	}
+}

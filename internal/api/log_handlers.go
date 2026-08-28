@@ -138,13 +138,12 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	})
 
 	// Docker ignores since/until for service logs, so enforce them here.
-	if since != "" || until != "" {
+	lines = logs.FilterSince(lines, since)
+
+	if until != "" {
 		filtered := lines[:0]
 		for _, l := range lines {
-			if since != "" && l.Timestamp <= since {
-				continue
-			}
-			if until != "" && l.Timestamp >= until {
+			if l.Timestamp >= until {
 				continue
 			}
 			filtered = append(filtered, l)
@@ -250,7 +249,8 @@ func (h *Handlers) serveLogsSSE(
 			if streamFilter != "" && line.Stream != streamFilter {
 				continue
 			}
-			// Enforce the cursor here, as the paginated path does.
+			// The per-line form of logs.FilterSince; Docker ignores since for
+			// service logs, so a resumed stream has to enforce its own cursor.
 			if since != "" && line.Timestamp <= since {
 				continue
 			}
