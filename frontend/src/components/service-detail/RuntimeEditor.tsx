@@ -61,7 +61,7 @@ export function RuntimeEditor({
 
   function resetForm() {
     setHostnameInput(config.hostname);
-    setInitValue(config.init);
+    setInitValue(config.init ?? undefined);
     setTtyInput(config.tty);
     setReadOnlyInput(config.readOnly);
     setStopSignalInput(config.stopSignal);

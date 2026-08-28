@@ -75,7 +75,8 @@ export interface SwarmData {
   CreatedAt: string;
   UpdatedAt: string;
   Spec: {
-    Annotations: { Name: string; Labels: Record<string, string> };
+    Name: string;
+    Labels: Record<string, string>;
     Orchestration: { TaskHistoryRetentionLimit: number };
     Raft: {
       SnapshotInterval: number;
@@ -278,7 +279,8 @@ function buildSwarm(): SwarmData {
     CreatedAt: ago4d,
     UpdatedAt: ago3d,
     Spec: {
-      Annotations: { Name: "default", Labels: {} },
+      Name: "default",
+      Labels: {},
       Orchestration: { TaskHistoryRetentionLimit: 5 },
       Raft: {
         SnapshotInterval: 10000,

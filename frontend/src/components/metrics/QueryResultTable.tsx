@@ -70,14 +70,14 @@ export default function QueryResultTable({ data }: Props) {
  * Each series is a collapsible group showing every [timestamp, value] pair.
  */
 export function MatrixResultTable({ data }: Props) {
-  if (data.resultType !== "matrix" || data.result.length === 0) {
+  if (data?.resultType !== "matrix" || data.result.length === 0) {
     return <p className="py-4 text-center text-sm text-muted-foreground">No results</p>;
   }
 
   return (
     <div className="space-y-4">
       {data.result.map(({ metric, values }, seriesIndex) => {
-        const label = formatMetricIdentifier(metric);
+        const label = formatMetricIdentifier(metric ?? {});
         const points = values ?? [];
 
         return (

@@ -1,4 +1,5 @@
 import type { Plugin } from "../api/types";
+import { formatPluginInterfaceType } from "../lib/format";
 import { Link } from "react-router-dom";
 
 export default function PluginTable({ plugins }: { plugins: Plugin[] }) {
@@ -27,7 +28,7 @@ export default function PluginTable({ plugins }: { plugins: Plugin[] }) {
                 </Link>
               </td>
               <td className="p-3 text-sm text-muted-foreground">
-                {Interface.Types?.join(", ") || "—"}
+                {Interface.Types?.map(formatPluginInterfaceType).join(", ") || "—"}
               </td>
               <td className="p-3">
                 <span

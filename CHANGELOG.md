@@ -34,6 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Unexpected errors now show a clearer recovery screen with reload and try-again actions; technical details are tucked into a collapsible section
 - Confirmation dialogs (restart service, rollback, drain node, remove resource, rotate unlock key, …) now dismiss themselves after the action is confirmed instead of staying open
 - Service detail page no longer crashes when a service's task template is absent from the response
+- Resource pages no longer crash on fields the Docker Engine leaves out of its responses. The dashboard now expects them to be missing wherever Docker can omit them — nodes that have not reported their hostname, platform, resources, or address yet; tmpfs mounts, which carry no source; published ports and network gateways that are unset; and services with no image
+- Swarm CA and Raft panels no longer show `undefined` for settings Docker omits when they are left at their default
+- Plugin type now displays as `docker.volumedriver/1.0` rather than `[object Object]`
+- Metrics charts and the metrics console no longer break on Prometheus responses that carry no samples, and the console now renders scalar and string query results (e.g. `time()`) instead of reporting "No results"
 - MCP refresh-token store no longer accumulates rotation history indefinitely; theft detection keeps a bounded recent window and grants are cleaned up when tokens expire
 - MCP authorization codes are swept on each new issue so abandoned consent flows can no longer fill memory
 - MCP `search` tool now rejects empty queries instead of returning every cached resource

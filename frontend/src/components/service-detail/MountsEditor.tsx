@@ -31,7 +31,7 @@ const propagationOptions = ["private", "rprivate", "shared", "rshared", "slave",
 const selectClassName =
   "flex h-8 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
-function sourceLabel(type: string): string {
+function sourceLabel(type: string | undefined): string {
   switch (type) {
     case "bind":
       return "Host path";
@@ -462,7 +462,7 @@ export function MountsEditor({
   );
 }
 
-function MountTypeBadge({ type }: { type: string }) {
+function MountTypeBadge({ type }: { type?: string }) {
   return (
     <span
       data-type={type}

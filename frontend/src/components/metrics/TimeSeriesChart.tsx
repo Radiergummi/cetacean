@@ -348,7 +348,9 @@ export default function TimeSeriesChart({
       try {
         const response = JSON.parse(event.data) as PrometheusResponse;
 
-        if (!response.data?.result?.length) {
+        const result = response.data?.result?.filter(({ value }) => value);
+
+        if (!result?.length) {
           return;
         }
 
@@ -357,15 +359,13 @@ export default function TimeSeriesChart({
             return previous;
           }
 
-          const timestamp = Number(response.data.result[0].value![0]);
+          const timestamp = Number(result[0].value?.[0]);
           const timeLabel = new Date(timestamp * 1000).toLocaleTimeString();
           const newTimestamps = [...previous.timestamps.slice(1), timestamp];
           const newLabels = [...previous.labels.slice(1), timeLabel];
           const newSeries = previous.series.map((series) => {
-            const match = response.data.result.find(
-              ({ metric }) => seriesLabel(metric) === series.label,
-            );
-            const value = match ? Number(match.value![1]) : 0;
+            const match = result.find(({ metric }) => seriesLabel(metric) === series.label);
+            const value = match ? Number(match.value?.[1]) : 0;
 
             return { ...series, data: [...series.data.slice(1), value] };
           });

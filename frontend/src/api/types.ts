@@ -4,24 +4,25 @@ export interface Node {
   ID: string;
   Version: { Index: number };
   Spec: {
-    Role: "worker" | "manager";
-    Availability: string;
+    Role?: "worker" | "manager";
+    Availability?: string;
     Labels: Record<string, string> | null;
   };
   Description: {
-    Hostname: string;
-    Platform: { Architecture: string; OS: string };
-    Resources: { NanoCPUs: number; MemoryBytes: number };
-    Engine: { EngineVersion: string };
+    Hostname?: string;
+    Platform: { Architecture?: string; OS?: string };
+    Resources: { NanoCPUs?: number; MemoryBytes?: number };
+    Engine: { EngineVersion?: string };
   };
   Status: {
-    State: string;
-    Addr: string;
+    State?: string;
+    Message?: string;
+    Addr?: string;
   };
   ManagerStatus?: {
-    Leader: boolean;
-    Reachability: string;
-    Addr: string;
+    Leader?: boolean;
+    Reachability?: string;
+    Addr?: string;
   };
 }
 
@@ -35,7 +36,7 @@ export interface Service {
     Labels: Record<string, string> | null;
     TaskTemplate?: {
       ContainerSpec?: {
-        Image: string;
+        Image?: string;
         Command?: string[] | null;
         Args?: string[] | null;
         Env?: string[] | null;
@@ -91,8 +92,8 @@ export interface Service {
         Preferences?: Array<{ Spread?: { SpreadDescriptor: string } }> | null;
         MaxReplicas?: number;
       };
-      LogDriver?: { Name: string; Options?: Record<string, string> };
-      Networks?: Array<{ Target: string; Aliases?: string[] | null }> | null;
+      LogDriver?: { Name?: string; Options?: Record<string, string> };
+      Networks?: Array<{ Target?: string; Aliases?: string[] | null }> | null;
     };
     Mode: {
       Replicated?: { Replicas?: number };
@@ -117,23 +118,23 @@ export interface Service {
     EndpointSpec?: {
       Mode?: string;
       Ports?: Array<{
-        Protocol: string;
-        TargetPort: number;
-        PublishedPort: number;
-        PublishMode: string;
+        Protocol?: string;
+        TargetPort?: number;
+        PublishedPort?: number;
+        PublishMode?: string;
       }> | null;
     };
   };
   Endpoint?: {
     Ports?: Array<{
-      Protocol: string;
-      TargetPort: number;
-      PublishedPort: number;
-      PublishMode: string;
+      Protocol?: string;
+      TargetPort?: number;
+      PublishedPort?: number;
+      PublishMode?: string;
     }> | null;
     VirtualIPs?: Array<{
-      NetworkID: string;
-      Addr: string;
+      NetworkID?: string;
+      Addr?: string;
     }> | null;
   };
   PreviousSpec?: Service["Spec"];
@@ -164,7 +165,7 @@ export interface Task {
   Status: {
     Timestamp: string;
     State: string;
-    Message: string;
+    Message?: string;
     Err?: string;
     ContainerStatus?: {
       ContainerID: string;
@@ -174,7 +175,7 @@ export interface Task {
   DesiredState: string;
   Spec: {
     ContainerSpec?: {
-      Image: string;
+      Image?: string;
     } | null;
   };
 }
@@ -220,7 +221,7 @@ export interface Network {
   Ingress: boolean;
   IPAM: {
     Driver?: string;
-    Config: Array<{ Subnet: string; Gateway: string; IPRange?: string }> | null;
+    Config: Array<{ Subnet?: string; Gateway?: string; IPRange?: string }> | null;
   };
   Options: Record<string, string> | null;
   Labels: Record<string, string> | null;
@@ -444,34 +445,35 @@ export interface SwarmInfo {
     CreatedAt: string;
     UpdatedAt: string;
     Spec: {
-      Annotations: { Name: string; Labels: Record<string, string> | null };
+      Name?: string;
+      Labels: Record<string, string> | null;
       Orchestration: { TaskHistoryRetentionLimit?: number };
       Raft: {
-        SnapshotInterval: number;
+        SnapshotInterval?: number;
         KeepOldSnapshots?: number;
-        LogEntriesForSlowFollowers: number;
+        LogEntriesForSlowFollowers?: number;
         ElectionTick: number;
         HeartbeatTick: number;
       };
-      Dispatcher: { HeartbeatPeriod: number };
+      Dispatcher: { HeartbeatPeriod?: number };
       CAConfig: {
-        NodeCertExpiry: number;
+        NodeCertExpiry?: number;
         ExternalCAs?: Array<{
           Protocol: string;
           URL: string;
           Options?: Record<string, string>;
         }> | null;
-        ForceRotate: number;
+        ForceRotate?: number;
       };
       TaskDefaults: {
-        LogDriver?: { Name: string; Options?: Record<string, string> };
+        LogDriver?: { Name?: string; Options?: Record<string, string> };
       };
       EncryptionConfig: { AutoLockManagers: boolean };
     };
     TLSInfo: {
-      TrustRoot: string;
-      CertIssuerSubject: string;
-      CertIssuerPublicKey: string;
+      TrustRoot?: string;
+      CertIssuerSubject?: string;
+      CertIssuerPublicKey?: string;
     };
     RootRotationInProgress: boolean;
     DefaultAddrPool: string[] | null;
@@ -480,6 +482,12 @@ export interface SwarmInfo {
     JoinTokens: { Worker: string; Manager: string };
   };
   managerAddr: string;
+}
+
+export interface PluginInterfaceType {
+  Capability: string;
+  Prefix: string;
+  Version: string;
 }
 
 export interface PluginPrivilege {
@@ -531,9 +539,9 @@ export interface Plugin {
     Documentation?: string;
     Entrypoint: string[] | null;
     WorkDir: string;
-    User?: { UID: number; GID: number };
+    User?: { UID?: number; GID?: number };
     Interface: {
-      Types: string[] | null;
+      Types: PluginInterfaceType[] | null;
       Socket: string;
     };
     Network: { Type: string };
@@ -600,14 +608,29 @@ export interface PatchOp {
   value?: string;
 }
 
+/** One series of a Prometheus `vector` or `matrix` result. */
+export interface PrometheusSeries {
+  /** Absent on `scalar` and `string` results, which carry no labels. */
+  metric?: Record<string, string>;
+  /** Present on `vector` results (a single sample). */
+  value?: [number, string];
+  /** Present on `matrix` results (a sample list). */
+  values?: [number, string][];
+}
+
+/**
+ * The Prometheus HTTP API envelope, proxied verbatim through `/metrics`.
+ *
+ * `data` is absent when Prometheus answers with an error envelope
+ * (`{"status":"error","errorType":...,"error":...}`).
+ */
 export interface PrometheusResponse {
-  data: {
+  status?: "success" | "error";
+  errorType?: string;
+  error?: string;
+  data?: {
     resultType: "vector" | "matrix" | "scalar" | "string";
-    result: Array<{
-      metric: Record<string, string>;
-      value?: [number, string];
-      values?: [number, string][];
-    }>;
+    result: PrometheusSeries[];
   };
 }
 
@@ -623,25 +646,25 @@ export type UpdateConfig = NonNullable<Service["Spec"]["UpdateConfig"]>;
 export type LogDriver = NonNullable<TaskTemplate["LogDriver"]>;
 
 export interface ContainerConfig {
-  command?: string[];
-  args?: string[];
+  command?: string[] | null;
+  args?: string[] | null;
   dir: string;
   user: string;
   hostname: string;
-  init?: boolean;
+  init?: boolean | null;
   tty: boolean;
   readOnly: boolean;
   stopSignal: string;
-  stopGracePeriod?: number;
-  capabilityAdd?: string[];
-  capabilityDrop?: string[];
-  groups?: string[];
-  hosts?: string[];
+  stopGracePeriod?: number | null;
+  capabilityAdd?: string[] | null;
+  capabilityDrop?: string[] | null;
+  groups?: string[] | null;
+  hosts?: string[] | null;
   dnsConfig?: {
-    nameservers?: string[];
-    search?: string[];
-    options?: string[];
-  };
+    nameservers?: string[] | null;
+    search?: string[] | null;
+    options?: string[] | null;
+  } | null;
 }
 
 export interface ServiceConfigRef {
@@ -662,9 +685,9 @@ export interface ServiceNetworkRef {
 }
 
 export interface ServiceMount {
-  Type: string;
-  Source: string;
-  Target: string;
+  Type?: string;
+  Source?: string;
+  Target?: string;
   ReadOnly?: boolean;
   BindOptions?: {
     Propagation?: string;

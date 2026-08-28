@@ -28,7 +28,7 @@ function isValidHostname(value: string): boolean {
   return value.length > 0 && value.length <= 253 && hostnamePattern.test(value);
 }
 
-function parseHosts(hosts: string[] | undefined): HostRow[] {
+function parseHosts(hosts: string[] | null | undefined): HostRow[] {
   if (!hosts || hosts.length === 0) {
     return [];
   }

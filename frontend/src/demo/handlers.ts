@@ -214,8 +214,8 @@ function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
   let nodesDraining = 0;
 
   for (const node of dataset.nodes) {
-    totalCPU += node.Description.Resources.NanoCPUs;
-    totalMemory += node.Description.Resources.MemoryBytes;
+    totalCPU += node.Description.Resources.NanoCPUs ?? 0;
+    totalMemory += node.Description.Resources.MemoryBytes ?? 0;
 
     if (node.Status.State === "ready") {
       nodesReady++;
@@ -407,10 +407,10 @@ function searchDataset(
   collect(
     "nodes",
     dataset.nodes
-      .filter((node) => matches(node.Description.Hostname))
+      .filter((node) => matches(node.Description.Hostname ?? ""))
       .map((node) => ({
         id: node.ID,
-        name: node.Description.Hostname,
+        name: node.Description.Hostname ?? node.ID,
         detail: `${node.Spec.Role} (${node.Status.State})`,
       })),
   );
@@ -563,7 +563,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       const serviceNetworks = new Map<string, string[]>();
 
       for (const service of dataset.services) {
-        const targets = (service.Spec.TaskTemplate!.Networks ?? []).map(({ Target }) => Target);
+        const targets = (service.Spec.TaskTemplate!.Networks ?? []).flatMap(({ Target }) =>
+          Target ? [Target] : [],
+        );
         serviceNetworks.set(service.ID, targets);
       }
 
@@ -783,10 +785,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
-      const networks = (service.Spec.TaskTemplate!.Networks ?? []).map(({ Target, Aliases }) => ({
-        target: Target,
-        aliases: Aliases ?? undefined,
-      }));
+      const networks = (service.Spec.TaskTemplate!.Networks ?? []).flatMap(({ Target, Aliases }) =>
+        Target ? [{ target: Target, aliases: Aliases ?? undefined }] : [],
+      );
       return jsonResponse<{ networks: ServiceNetworkRef[] }>({ networks });
     }),
 
@@ -1197,7 +1198,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         name: dataset.services.map((service) => service.Spec.Name),
         instance: dataset.nodes.map((node) => `${node.Description.Hostname}:9100`),
         job: ["cadvisor", "node-exporter", "prometheus"],
-        nodename: dataset.nodes.map((node) => node.Description.Hostname),
+        nodename: dataset.nodes.map((node) => node.Description.Hostname ?? ""),
       };
       return jsonResponse<{ data: string[] }>({ data: valueMap[name] ?? [] });
     }),
