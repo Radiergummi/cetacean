@@ -34,6 +34,8 @@ import { SizingBanner } from "../components/SizingBanner";
 import TasksTable from "../components/TasksTable";
 import { useServiceDetail } from "../hooks/useServiceDetail";
 import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
+import { stackNamespaceLabel } from "../lib/parseStackLabels";
+import { resourceBreadcrumbs } from "../lib/resourceBreadcrumbs";
 import { useParams } from "react-router-dom";
 
 export default function ServiceDetail() {
@@ -70,10 +72,12 @@ export default function ServiceDetail() {
             direction="responsive"
           />
         }
-        breadcrumbs={[
-          { label: "Services", to: "/services" },
-          { label: <ResourceName name={detail.name} /> },
-        ]}
+        breadcrumbs={resourceBreadcrumbs({
+          listLabel: "Services",
+          listPath: "/services",
+          name: detail.name,
+          stack: labels?.[stackNamespaceLabel],
+        })}
         actions={
           <ServiceActions
             service={service}
