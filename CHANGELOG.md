@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Full third-party attribution document, covering every bundled Go module and frontend dependency's license text plus the NOTICE files that Apache-licensed dependencies ship, served at `/-/notices`
+
 ### Fixed
 - Breadcrumbs on a resource that belongs to a stack now lead through the stack: "Stacks › monitoring › prometheus" rather than "Services › monitoring/prometheus"
 - The Tasks page no longer flips between the task list and a "range start is beyond the total number of items" error every few seconds on a busy cluster

@@ -396,6 +396,21 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/ProblemDetail" }
+  /-/notices:
+    get:
+      tags: [Meta]
+      summary: Full third-party attribution document
+      description: >-
+        Returns the complete THIRD_PARTY_LICENSES document: the curated
+        preamble followed by every bundled dependency's license and any
+        NOTICE it ships. Public — no authentication required.
+      responses:
+        "200":
+          description: The third-party attribution document
+          content:
+            text/plain:
+              schema: { type: string }
+        "304": { description: Not modified }
   /-/sbom.cdx.json:
     get:
       summary: Software Bill of Materials (CycloneDX)

@@ -34,6 +34,39 @@ func TestHandleLicensesServesProjectedJSON(t *testing.T) {
 	}
 }
 
+func TestHandleNoticesServesTheAttributionDocument(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/-/notices", nil)
+	rec := httptest.NewRecorder()
+
+	HandleNotices(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "text/plain; charset=utf-8" {
+		t.Errorf("content-type = %q, want text/plain; charset=utf-8", ct)
+	}
+	if rec.Body.Len() == 0 {
+		t.Error("empty body")
+	}
+
+	etag := rec.Header().Get("ETag")
+	if etag == "" {
+		t.Fatal("expected ETag header")
+	}
+
+	// Conditional request with the same ETag must yield 304.
+	req2 := httptest.NewRequest(http.MethodGet, "/-/notices", nil)
+	req2.Header.Set("If-None-Match", etag)
+	rec2 := httptest.NewRecorder()
+
+	HandleNotices(rec2, req2)
+
+	if rec2.Code != http.StatusNotModified {
+		t.Fatalf("conditional status = %d, want 304", rec2.Code)
+	}
+}
+
 func TestHandleSBOMServesCycloneDXWithETag304(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/-/sbom.cdx.json", nil)
 	rec := httptest.NewRecorder()

@@ -72,7 +72,77 @@ func run(sbomPath, outPath, nodeModules string) error {
 		outPath, len(artifact.Components), len(artifact.Texts),
 	)
 
+	preamble, err := os.ReadFile("THIRD_PARTY_LICENSES.preamble")
+	if err != nil {
+		return fmt.Errorf("read preamble: %w", err)
+	}
+
+	rendered := renderNotices(doc, artifact, strings.TrimRight(string(preamble), "\n"))
+
+	// Both audiences read the same bytes: the repo file for anyone browsing
+	// the source, the embedded copy for GET /-/notices.
+	for _, path := range []string{"THIRD_PARTY_LICENSES", "internal/api/sbom/notices.txt"} {
+		if err := os.WriteFile(path, []byte(rendered), 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", path, err)
+		}
+	}
+
 	return nil
+}
+
+// renderNotices builds the attribution document: the curated preamble, then
+// one section per component with its license and any NOTICE it ships.
+func renderNotices(doc sbom.Document, artifact sbom.Artifact, preamble string) string {
+	var out strings.Builder
+
+	out.WriteString(preamble)
+	out.WriteString("\n\nBundled dependencies\n")
+	out.WriteString("====================\n\n")
+	out.WriteString(
+		"Generated from the committed software bill of materials. Do not edit by hand.\n\n",
+	)
+
+	for _, component := range doc.Components {
+		entry, ok := artifact.Components[sbom.ComponentKey(component)]
+		if !ok {
+			continue
+		}
+
+		title := component.Name
+		if component.Version != "" {
+			title += " " + component.Version
+		}
+
+		out.WriteString("\n" + strings.Repeat("-", 78) + "\n\n")
+		out.WriteString(title + "\n")
+
+		if component.Homepage != "" {
+			out.WriteString(component.Homepage + "\n")
+		} else if component.Repository != "" {
+			out.WriteString(component.Repository + "\n")
+		}
+
+		var ids []string
+		for _, license := range component.Licenses {
+			if id := license.ID; id != "" {
+				ids = append(ids, id)
+			} else if license.Name != "" {
+				ids = append(ids, license.Name)
+			}
+		}
+
+		if len(ids) > 0 {
+			out.WriteString("License: " + strings.Join(ids, ", ") + "\n")
+		}
+
+		out.WriteString("\n" + artifact.Texts[entry.License] + "\n")
+
+		if entry.Notice != "" {
+			out.WriteString("\nNOTICE:\n\n" + artifact.Texts[entry.Notice] + "\n")
+		}
+	}
+
+	return out.String()
 }
 
 func goEnv(name string) (string, error) {

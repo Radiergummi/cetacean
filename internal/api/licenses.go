@@ -30,6 +30,13 @@ func HandleLicenseText(w http.ResponseWriter, r *http.Request) {
 	writeRawWithETag(w, r, []byte(text))
 }
 
+// HandleNotices serves the full third-party attribution document. Public
+// (registered under the auth-exempt /-/ prefix).
+func HandleNotices(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	writeRawWithETag(w, r, []byte(sbom.Notices()))
+}
+
 // HandleSBOM serves the raw embedded CycloneDX SBOM for supply-chain tooling.
 // Public (registered under the auth-exempt /-/ prefix).
 func HandleSBOM(w http.ResponseWriter, r *http.Request) {
