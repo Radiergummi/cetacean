@@ -484,12 +484,6 @@ export interface SwarmInfo {
   managerAddr: string;
 }
 
-export interface PluginInterfaceType {
-  Capability: string;
-  Prefix: string;
-  Version: string;
-}
-
 export interface PluginPrivilege {
   Name: string;
   Description: string;
@@ -541,7 +535,7 @@ export interface Plugin {
     WorkDir: string;
     User?: { UID?: number; GID?: number } | undefined;
     Interface: {
-      Types: PluginInterfaceType[] | null;
+      Types: string[] | null;
       Socket: string;
     };
     Network: { Type: string };

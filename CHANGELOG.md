@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- Plugins on the Swarm page now show their type instead of "undefined.undefined/undefined"
 - Scoped npm packages on the licenses page now show their full name — "@floating-ui/core" rather than "core"
 - Live pages, charts, and the connection indicator no longer stop updating for good when the server is momentarily at its connection limit. Resource streams and metrics charts now re-establish themselves after a rejected connection instead of staying silent until the page is reloaded, and reload what they missed while they were down rather than showing frozen data behind a connected indicator; metrics charts additionally recover from ordinary network interruptions, which previously killed them outright
 - Live log tail no longer switches itself off without explanation when its connection drops. It now reconnects on its own with a growing delay between attempts, and picks up where it left off — the lines produced while it was disconnected are filled in when it returns, without repeating what was already shown (a very long disconnection may still leave a gap) — and shows what it is doing while it retries. If the server is at its log-streaming connection limit, the viewer says so and counts down to the next attempt instead of showing a cryptic error, and waits as long as the server asks. After several failed attempts it stops and offers to resume.
