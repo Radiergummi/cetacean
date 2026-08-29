@@ -1,6 +1,9 @@
 package cache
 
-import "sync"
+import (
+	"slices"
+	"sync"
+)
 
 // ResourceMap is a typed map for a single resource type that shares the
 // parent Cache's RWMutex. It provides the common Set/Get/Delete/List/Replace
@@ -47,10 +50,20 @@ func (r *ResourceMap[T]) del(key string) (name string) {
 	return name
 }
 
+// list returns every value ordered by map key (the resource ID, or the name
+// for volumes). Go randomizes map iteration, so without this the API's stable
+// sort would order equal sort keys differently on every request — and a client
+// paging through a list would see items shift between pages.
 func (r *ResourceMap[T]) list() []T {
-	out := make([]T, 0, len(r.items))
-	for _, v := range r.items {
-		out = append(out, v)
+	keys := make([]string, 0, len(r.items))
+	for k := range r.items {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+
+	out := make([]T, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, r.items[k])
 	}
 	return out
 }

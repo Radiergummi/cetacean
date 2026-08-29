@@ -1,6 +1,8 @@
 package cache
 
 import (
+	"cmp"
+	"slices"
 	"sync"
 	"time"
 
@@ -410,6 +412,7 @@ func (c *Cache) ListServices() []swarm.Service {
 	for _, s := range c.services {
 		out = append(out, s)
 	}
+	slices.SortFunc(out, func(a, b swarm.Service) int { return cmp.Compare(a.ID, b.ID) })
 	return out
 }
 
@@ -505,6 +508,7 @@ func (c *Cache) ListTasks() []swarm.Task {
 	for _, t := range c.tasks {
 		out = append(out, t)
 	}
+	slices.SortFunc(out, compareTasks)
 	return out
 }
 
@@ -597,6 +601,7 @@ func (c *Cache) ListStacks() []Stack {
 			Volumes:  append([]string{}, s.Volumes...),
 		})
 	}
+	slices.SortFunc(out, func(a, b Stack) int { return cmp.Compare(a.Name, b.Name) })
 	return out
 }
 
@@ -640,6 +645,22 @@ func (c *Cache) GetStackDetail(name string) (StackDetail, bool) {
 			detail.Volumes = append(detail.Volumes, vol)
 		}
 	}
+	slices.SortFunc(detail.Services, func(a, b swarm.Service) int {
+		return cmp.Compare(a.Spec.Name, b.Spec.Name)
+	})
+	slices.SortFunc(detail.Configs, func(a, b swarm.Config) int {
+		return cmp.Compare(a.Spec.Name, b.Spec.Name)
+	})
+	slices.SortFunc(detail.Secrets, func(a, b swarm.Secret) int {
+		return cmp.Compare(a.Spec.Name, b.Spec.Name)
+	})
+	slices.SortFunc(detail.Networks, func(a, b network.Summary) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
+	slices.SortFunc(detail.Volumes, func(a, b volume.Volume) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
+
 	// Secret data is nilled by the secrets map's onSet hook (see secret
 	// ResourceMap above), so detail.Secrets[*].Spec.Data is already nil here.
 	// Don't re-walk to be defensive — that duplicates the redaction contract
@@ -699,7 +720,19 @@ func (c *Cache) ListStackSummaries() []StackSummary {
 
 		out = append(out, s)
 	}
+	slices.SortFunc(out, func(a, b StackSummary) int { return cmp.Compare(a.Name, b.Name) })
 	return out
+}
+
+// compareTasks orders tasks by slot, then ID. Slot groups the replicas of a
+// service the way the UI lists them; the ID breaks ties between a slot's
+// historical tasks (and orders global-mode tasks, which have no slot).
+func compareTasks(a, b swarm.Task) int {
+	if bySlot := cmp.Compare(a.Slot, b.Slot); bySlot != 0 {
+		return bySlot
+	}
+
+	return cmp.Compare(a.ID, b.ID)
 }
 
 // --- Filtered task lists ---
@@ -714,6 +747,7 @@ func (c *Cache) ListTasksByService(serviceID string) []swarm.Task {
 			out = append(out, t)
 		}
 	}
+	slices.SortFunc(out, compareTasks)
 	return out
 }
 
@@ -740,6 +774,7 @@ func (c *Cache) ListTasksByNode(nodeID string) []swarm.Task {
 			out = append(out, t)
 		}
 	}
+	slices.SortFunc(out, compareTasks)
 	return out
 }
 

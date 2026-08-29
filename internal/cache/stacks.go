@@ -117,6 +117,14 @@ func (c *Cache) rebuildStacks() {
 
 	result := make(map[string]Stack, len(stacks))
 	for name, s := range stacks {
+		// Member IDs were collected by ranging over maps. Sort them so a stack's
+		// membership — and everything derived from it — is stable between calls.
+		slices.Sort(s.Services)
+		slices.Sort(s.Configs)
+		slices.Sort(s.Secrets)
+		slices.Sort(s.Networks)
+		slices.Sort(s.Volumes)
+
 		// Only include stacks that have at least one service; stacks with
 		// only leftover volumes/configs/secrets/networks are ghost stacks
 		// from removed deployments and should not appear in the stacks list.
@@ -128,11 +136,15 @@ func (c *Cache) rebuildStacks() {
 	c.stacks = result
 }
 
+// appendUnique inserts v in sorted position, keeping stack membership ordered
+// as resources arrive one event at a time. rebuildStacks sorts the same slices
+// after a full rebuild; between them the invariant holds for every read.
 func appendUnique(sl []string, v string) []string {
-	if slices.Contains(sl, v) {
+	i, found := slices.BinarySearch(sl, v)
+	if found {
 		return sl
 	}
-	return append(sl, v)
+	return slices.Insert(sl, i, v)
 }
 
 func removeStr(sl []string, v string) []string {

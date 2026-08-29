@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- Lists no longer come back in a different order every time you open them. Services, stacks, tasks, nodes, and the "Used by" tables on detail pages now hold a consistent order, so returning to a list after visiting a resource no longer means hunting for the row you clicked
 - Plugins on the Swarm page now show their type instead of "undefined.undefined/undefined"
 - Scoped npm packages on the licenses page now show their full name — "@floating-ui/core" rather than "core"
 - Live pages, charts, and the connection indicator no longer stop updating for good when the server is momentarily at its connection limit. Resource streams and metrics charts now re-establish themselves after a rejected connection instead of staying silent until the page is reloaded, and reload what they missed while they were down rather than showing frozen data behind a connected indicator; metrics charts additionally recover from ordinary network interruptions, which previously killed them outright
