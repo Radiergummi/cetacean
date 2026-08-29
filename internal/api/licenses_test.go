@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/radiergummi/cetacean/internal/api/sbom"
 )
 
 func TestHandleLicensesServesProjectedJSON(t *testing.T) {
@@ -106,6 +108,82 @@ func TestLicensesEndpointsRouteThroughNegotiate(t *testing.T) {
 		}
 		if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
 			t.Errorf("content-type = %q, want application/json", ct)
+		}
+	})
+}
+
+func TestHandleLicenseText(t *testing.T) {
+	doc, err := sbom.Project(sbom.Raw())
+	if err != nil {
+		t.Fatalf("Project: %v", err)
+	}
+
+	var id string
+	for _, component := range doc.Components {
+		if component.TextID != "" {
+			id = component.TextID
+
+			break
+		}
+	}
+
+	if id == "" {
+		t.Fatal("no component carries a text id")
+	}
+
+	t.Run("serves the text", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/-/licenses/texts/"+id, nil)
+		req.SetPathValue("id", id)
+		rec := httptest.NewRecorder()
+
+		HandleLicenseText(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", rec.Code)
+		}
+
+		if got := rec.Header().Get("Content-Type"); got != "text/plain; charset=utf-8" {
+			t.Errorf("Content-Type = %q", got)
+		}
+
+		if rec.Body.Len() == 0 {
+			t.Error("empty body")
+		}
+
+		// Content-addressed ids never point at different bytes, so the
+		// response is safe to cache forever.
+		if got := rec.Header().Get("Cache-Control"); !strings.Contains(got, "immutable") {
+			t.Errorf("Cache-Control = %q, want it to mark the response immutable", got)
+		}
+	})
+
+	t.Run("304s a matching ETag", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/-/licenses/texts/"+id, nil)
+		req.SetPathValue("id", id)
+		first := httptest.NewRecorder()
+		HandleLicenseText(first, req)
+
+		conditional := httptest.NewRequest(http.MethodGet, "/-/licenses/texts/"+id, nil)
+		conditional.SetPathValue("id", id)
+		conditional.Header.Set("If-None-Match", first.Header().Get("ETag"))
+		second := httptest.NewRecorder()
+
+		HandleLicenseText(second, conditional)
+
+		if second.Code != http.StatusNotModified {
+			t.Errorf("status = %d, want 304", second.Code)
+		}
+	})
+
+	t.Run("404s an unknown id", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/-/licenses/texts/deadbeef", nil)
+		req.SetPathValue("id", "deadbeef")
+		rec := httptest.NewRecorder()
+
+		HandleLicenseText(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("status = %d, want 404", rec.Code)
 		}
 	})
 }
