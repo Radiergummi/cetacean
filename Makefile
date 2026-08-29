@@ -47,8 +47,8 @@ sbom:
 
 ## Verify the committed SBOM is up to date (CI gate)
 sbom-check: sbom
-	@git diff --exit-code -- internal/api/sbom/sbom.cdx.json \
-	  || { echo "ERROR: internal/api/sbom/sbom.cdx.json is stale. Run 'make sbom' and commit." >&2; exit 1; }
+	@git diff --exit-code -- internal/api/sbom/sbom.cdx.json internal/api/sbom/licensetexts.json \
+	  || { echo "ERROR: SBOM artifacts are stale. Run 'make sbom' and commit." >&2; exit 1; }
 
 ## Install the repository git hooks (opt-in)
 hooks:

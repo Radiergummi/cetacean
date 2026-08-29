@@ -56,4 +56,12 @@ jq -s '
   }
 ' "$tmp/go.cdx.json" "$tmp/npm.cdx.json" > "$out"
 
+echo "==> harvest license + notice texts"
+# Reads the merged SBOM we just wrote and resolves each component back to its
+# unpacked sources, so it must run after the merge and with node_modules present.
+( cd "$repo_root" && go run ./scripts/licensetexts \
+    -sbom "$out" \
+    -out "$repo_root/internal/api/sbom/licensetexts.json" \
+    -node-modules "$repo_root/frontend/node_modules" )
+
 echo "wrote $out"

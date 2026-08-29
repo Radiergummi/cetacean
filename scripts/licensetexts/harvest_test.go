@@ -105,6 +105,29 @@ func TestHarvestNormalizesLineEndings(t *testing.T) {
 	}
 }
 
+func TestHarvestMatchesLowercaseLicenseFilename(t *testing.T) {
+	// npm packages commonly ship a lowercase "license" file (clsx,
+	// next-themes, the sindresorhus family, ...); the match must not depend
+	// on case.
+	doc := sbom.Document{Components: []sbom.Component{
+		{Name: "lowercased", Version: "1.0.0", Ecosystem: "npm"},
+	}}
+
+	artifact, err := Harvest(doc, testRoots())
+	if err != nil {
+		t.Fatalf("Harvest: %v", err)
+	}
+
+	entry, ok := artifact.Components["npm:lowercased@1.0.0"]
+	if !ok {
+		t.Fatalf("component missing from artifact: %+v", artifact.Components)
+	}
+
+	if got := artifact.Texts[entry.License]; got != "MIT License\n\nCopyright (c) 2026 Lowercased\n" {
+		t.Errorf("license text = %q", got)
+	}
+}
+
 func TestHarvestFailsOnMissingLicense(t *testing.T) {
 	doc := sbom.Document{Components: []sbom.Component{
 		{Name: "example.com/absent", Version: "v9.9.9", Ecosystem: "go"},
