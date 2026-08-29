@@ -46,4 +46,51 @@ describe("Licenses", () => {
     expect(screen.queryByText("github.com/foo/bar")).not.toBeInTheDocument();
     expect(screen.getByText("react-dom")).toBeInTheDocument();
   });
+
+  it("filters the grid by license", async () => {
+    (api.licenses as ReturnType<typeof vi.fn>).mockResolvedValue({
+      components: [
+        { name: "alpha", ecosystem: "npm", licenses: [{ id: "MIT" }] },
+        { name: "beta", ecosystem: "npm", licenses: [{ id: "Apache-2.0" }] },
+      ],
+    });
+
+    render(<Licenses />, { wrapper: createWrapper(createTestQueryClient()) });
+
+    await waitFor(() => expect(screen.getByText("alpha")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /all licenses/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Apache-2\.0/ }));
+
+    expect(screen.queryByText("alpha")).not.toBeInTheDocument();
+    expect(screen.getByText("beta")).toBeInTheDocument();
+  });
+
+  it("combines the license filter with search", async () => {
+    (api.licenses as ReturnType<typeof vi.fn>).mockResolvedValue({
+      components: [
+        { name: "alpha", ecosystem: "npm", licenses: [{ id: "MIT" }] },
+        { name: "alpine", ecosystem: "npm", licenses: [{ id: "Apache-2.0" }] },
+        { name: "beta", ecosystem: "npm", licenses: [{ id: "MIT" }] },
+      ],
+    });
+
+    render(<Licenses />, { wrapper: createWrapper(createTestQueryClient()) });
+
+    await waitFor(() => expect(screen.getByText("alpha")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /all licenses/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^MIT/ }));
+
+    fireEvent.change(screen.getByPlaceholderText(/search by name/i), {
+      target: { value: "alp" },
+    });
+
+    // "alpine" matches the search but not the MIT license filter; "beta" matches
+    // the license but not the search. Only "alpha" satisfies both, proving the
+    // two filters narrow together rather than one overriding the other.
+    expect(screen.queryByText("alpine")).not.toBeInTheDocument();
+    expect(screen.queryByText("beta")).not.toBeInTheDocument();
+    expect(screen.getByText("alpha")).toBeInTheDocument();
+  });
 });

@@ -7,6 +7,7 @@ import PageHeader from "@/components/PageHeader";
 import { SearchInput } from "@/components/search";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Combobox } from "@/components/ui/combobox";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
@@ -35,6 +36,7 @@ function browserUrl(url: string): string | null {
 export default function Licenses() {
   const [query, setQuery] = useState("");
   const [ecosystem, setEcosystem] = useState<EcosystemFilter>("all");
+  const [license, setLicense] = useState("all");
 
   const {
     data,
@@ -59,12 +61,38 @@ export default function Licenses() {
     return result;
   }, [components]);
 
+  const licenseOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    for (const component of components) {
+      for (const entry of component.licenses) {
+        const id = entry.id || entry.name || "Unknown";
+
+        counts.set(id, (counts.get(id) ?? 0) + 1);
+      }
+    }
+
+    const sorted = [...counts.entries()].sort(([a], [b]) => a.localeCompare(b));
+
+    return [
+      { value: "all", label: "All licenses" },
+      ...sorted.map(([id, count]) => ({ value: id, label: `${id} (${count})` })),
+    ];
+  }, [components]);
+
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
 
     return components
       .filter((component) => {
         if (ecosystem !== "all" && component.ecosystem !== ecosystem) {
+          return false;
+        }
+
+        if (
+          license !== "all" &&
+          !component.licenses.some((entry) => (entry.id || entry.name || "Unknown") === license)
+        ) {
           return false;
         }
 
@@ -75,7 +103,7 @@ export default function Licenses() {
         return true;
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [components, query, ecosystem]);
+  }, [components, query, ecosystem, license]);
 
   if (error) {
     return (
@@ -117,7 +145,15 @@ export default function Licenses() {
           className="sm:max-w-xs"
         />
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Combobox
+            value={license}
+            onChange={setLicense}
+            options={licenseOptions}
+            allowCustom={false}
+            className="sm:max-w-56"
+          />
+
           {ecosystems.map((value) => (
             <button
               key={value}
