@@ -27,6 +27,8 @@ type Component struct {
 	Licenses    []License `json:"licenses"`
 	Homepage    string    `json:"homepage,omitempty"`
 	Repository  string    `json:"repository,omitempty"`
+	TextID      string    `json:"textId,omitempty"`
+	NoticeID    string    `json:"noticeId,omitempty"`
 }
 
 // License is a single license entry for a component.
@@ -102,6 +104,8 @@ func Project(raw []byte) (Document, error) {
 		// a name (distinct versions) get a stable, total ordering.
 		return cmp.Compare(a.Version, b.Version)
 	})
+
+	Attach(components)
 
 	return Document{Components: components}, nil
 }

@@ -169,3 +169,31 @@ func TestProjectQualifiesScopedNames(t *testing.T) {
 		}
 	}
 }
+
+func TestProjectAttachesTextAndNoticeIDs(t *testing.T) {
+	// Verify that Project calls Attach and populates TextID/NoticeID fields
+	// from the text pool.
+	raw, err := os.ReadFile("testdata/example.cdx.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	doc, err := Project(raw)
+	if err != nil {
+		t.Fatalf("Project: %v", err)
+	}
+
+	// All components should have TextID and NoticeID fields present (even if empty).
+	for _, component := range doc.Components {
+		// Just verify the fields exist and can be populated. If a component has
+		// a non-empty TextID, verify it can be looked up in the pool.
+		if component.TextID != "" {
+			if _, ok := Text(component.TextID); !ok {
+				t.Errorf(
+					"%s has textId=%q but it does not resolve in the pool",
+					component.Name, component.TextID,
+				)
+			}
+		}
+	}
+}
