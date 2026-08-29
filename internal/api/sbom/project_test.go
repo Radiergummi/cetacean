@@ -170,30 +170,67 @@ func TestProjectQualifiesScopedNames(t *testing.T) {
 	}
 }
 
-func TestProjectAttachesTextAndNoticeIDs(t *testing.T) {
-	// Verify that Project calls Attach and populates TextID/NoticeID fields
-	// from the text pool.
-	raw, err := os.ReadFile("testdata/example.cdx.json")
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestAttachPopulatesTextAndNoticeIDs(t *testing.T) {
+	// Unit test of Attach: verify it correctly looks up and stamps components
+	// with TextID and NoticeID from the pool. Fails loudly if Attach is deleted
+	// or broken, and stays correct across dependency bumps (uses real pool data).
 
-	doc, err := Project(raw)
+	// Get the current projection to find a component that has ids populated.
+	doc, err := Project(Raw())
 	if err != nil {
 		t.Fatalf("Project: %v", err)
 	}
 
-	// All components should have TextID and NoticeID fields present (even if empty).
+	// Find a component that Attach populated in the projection.
+	var templateComponent Component
 	for _, component := range doc.Components {
-		// Just verify the fields exist and can be populated. If a component has
-		// a non-empty TextID, verify it can be looked up in the pool.
-		if component.TextID != "" {
-			if _, ok := Text(component.TextID); !ok {
-				t.Errorf(
-					"%s has textId=%q but it does not resolve in the pool",
-					component.Name, component.TextID,
-				)
-			}
+		if component.Ecosystem != "other" && component.TextID != "" {
+			templateComponent = component
+			break
+		}
+	}
+
+	if templateComponent.Name == "" {
+		// If no component was populated, Attach either isn't running or the pool
+		// is empty. Fail with a diagnostic message.
+		t.Fatal(
+			"no component with textId in the projection; " +
+				"Attach() is not populating components from the pool",
+		)
+	}
+
+	// Create a new component with the same identity but blank ids, simulating
+	// an unattached component, then verify Attach repopulates it.
+	testComponent := Component{
+		Name:      templateComponent.Name,
+		Version:   templateComponent.Version,
+		Ecosystem: templateComponent.Ecosystem,
+	}
+
+	components := []Component{testComponent}
+	Attach(components)
+
+	if components[0].TextID == "" {
+		t.Errorf(
+			"%s: Attach did not populate textId",
+			templateComponent.Name,
+		)
+	}
+
+	if components[0].TextID != templateComponent.TextID {
+		t.Errorf(
+			"%s: textId mismatch; Attach got %q, expected %q",
+			templateComponent.Name, components[0].TextID, templateComponent.TextID,
+		)
+	}
+
+	// NoticeID is optional; only verify if the template had one.
+	if templateComponent.NoticeID != "" {
+		if components[0].NoticeID != templateComponent.NoticeID {
+			t.Errorf(
+				"%s: noticeId mismatch; Attach got %q, expected %q",
+				templateComponent.Name, components[0].NoticeID, templateComponent.NoticeID,
+			)
 		}
 	}
 }

@@ -74,48 +74,46 @@ func TestNoticesArePresentForApacheComponents(t *testing.T) {
 }
 
 func TestProjectedJSONHasPopulatedTextIDs(t *testing.T) {
-	// Critical gap: TestEveryComponentResolvesToATextInThePool exercises a fresh
-	// Project() call that runs after all inits complete. But the server uses
-	// ProjectedJSON(), which is computed once at init time. If init-order causes
-	// Attach() to run before the text pool is ready, ProjectedJSON() will have
-	// zero textId values permanently. This test catches that by asserting over
-	// the actual cached document served at GET /-/licenses.
+	// Critical assertion: ProjectedJSON() is the cached document served at
+	// GET /-/licenses. It must have all text IDs populated. Unlike
+	// TestEveryComponentResolvesToATextInThePool (which exercises a fresh
+	// Project() call after all inits), this validates what the server actually
+	// returns. Catches init-order bugs or any refactor that drops ids from
+	// most components while leaving a few (still passes "at least one" logic).
 	var doc Document
 	if err := json.Unmarshal(ProjectedJSON(), &doc); err != nil {
 		t.Fatalf("unmarshal ProjectedJSON: %v", err)
 	}
 
-	withTextID := 0
+	var missing []string
 	for _, component := range doc.Components {
 		if component.Ecosystem == "other" {
 			continue
 		}
 
-		if component.TextID != "" {
-			withTextID++
+		if component.TextID == "" {
+			missing = append(missing, component.Name)
 
-			if _, ok := Text(component.TextID); !ok {
-				t.Errorf(
-					"ProjectedJSON component %s has unresolvable textId=%q",
-					component.Name, component.TextID,
-				)
-			}
+			continue
+		}
+
+		if _, ok := Text(component.TextID); !ok {
+			missing = append(missing, component.Name+" -> unresolvable "+component.TextID)
 		}
 
 		if component.NoticeID != "" {
 			if _, ok := Text(component.NoticeID); !ok {
-				t.Errorf(
-					"ProjectedJSON component %s has unresolvable noticeId=%q",
-					component.Name, component.NoticeID,
-				)
+				noticeMsg := component.Name + " notice -> unresolvable " +
+					component.NoticeID
+				missing = append(missing, noticeMsg)
 			}
 		}
 	}
 
-	if withTextID == 0 {
-		t.Error(
-			"ProjectedJSON has 0 components with textId (init-order bug: " +
-				"embed.go called Project() before texts.go populated the pool)",
+	if len(missing) > 0 {
+		t.Fatalf(
+			"ProjectedJSON: %d components missing or unresolvable text ids:\n  %s",
+			len(missing), strings.Join(missing[:min(len(missing), 5)], "\n  "),
 		)
 	}
 }
