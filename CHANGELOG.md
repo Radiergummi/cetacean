@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Live log tail now sends you to the login page when your session expires, as the rest of the dashboard does
 - Charts plotting a single value — node disk and network, task CPU — no longer drop to zero on every live update
 - Live metrics charts keep streaming after you switch to another browser tab and back
+- Resources created while a list page is open now appear in the list, instead of the page growing by a row that repeats the entry above it and the new resource showing up only after a reload
 - AI agents reading service logs over MCP now advance through history correctly. Passing the returned cursor back fetched the same newest lines every time instead of the next page, so an agent paging through a log could loop on the same output
 - AI agents reading service logs over MCP now receive at most the number of lines they asked for. A read that resumed from a cursor could return up to ten times as many
 
