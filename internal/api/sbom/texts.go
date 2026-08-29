@@ -10,11 +10,14 @@ import (
 var rawTexts []byte
 
 // textArtifact is the decoded licensetexts.json. Its shape is declared in
-// artifact.go, shared with the generator that writes it.
-var textArtifact Artifact
+// artifact.go, shared with the generator that writes it. Initialized at
+// package load time (before any init() functions run) to avoid init-order bugs.
+var textArtifact = decodeTextArtifact()
 
-func init() {
-	if err := json.Unmarshal(rawTexts, &textArtifact); err != nil {
+func decodeTextArtifact() Artifact {
+	var artifact Artifact
+
+	if err := json.Unmarshal(rawTexts, &artifact); err != nil {
 		// The licenses page degrades to the identifier-only inventory it
 		// served before texts existed rather than taking the process down.
 		slog.Warn(
@@ -24,13 +27,15 @@ func init() {
 		)
 	}
 
-	if textArtifact.Texts == nil {
-		textArtifact.Texts = map[string]string{}
+	if artifact.Texts == nil {
+		artifact.Texts = map[string]string{}
 	}
 
-	if textArtifact.Components == nil {
-		textArtifact.Components = map[string]ComponentTexts{}
+	if artifact.Components == nil {
+		artifact.Components = map[string]ComponentTexts{}
 	}
+
+	return artifact
 }
 
 // Text returns the pooled license or notice text for an id.

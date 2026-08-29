@@ -1,6 +1,7 @@
 package sbom
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -70,4 +71,51 @@ func TestNoticesArePresentForApacheComponents(t *testing.T) {
 	}
 
 	t.Skip("github.com/docker/docker is no longer a dependency")
+}
+
+func TestProjectedJSONHasPopulatedTextIDs(t *testing.T) {
+	// Critical gap: TestEveryComponentResolvesToATextInThePool exercises a fresh
+	// Project() call that runs after all inits complete. But the server uses
+	// ProjectedJSON(), which is computed once at init time. If init-order causes
+	// Attach() to run before the text pool is ready, ProjectedJSON() will have
+	// zero textId values permanently. This test catches that by asserting over
+	// the actual cached document served at GET /-/licenses.
+	var doc Document
+	if err := json.Unmarshal(ProjectedJSON(), &doc); err != nil {
+		t.Fatalf("unmarshal ProjectedJSON: %v", err)
+	}
+
+	withTextID := 0
+	for _, component := range doc.Components {
+		if component.Ecosystem == "other" {
+			continue
+		}
+
+		if component.TextID != "" {
+			withTextID++
+
+			if _, ok := Text(component.TextID); !ok {
+				t.Errorf(
+					"ProjectedJSON component %s has unresolvable textId=%q",
+					component.Name, component.TextID,
+				)
+			}
+		}
+
+		if component.NoticeID != "" {
+			if _, ok := Text(component.NoticeID); !ok {
+				t.Errorf(
+					"ProjectedJSON component %s has unresolvable noticeId=%q",
+					component.Name, component.NoticeID,
+				)
+			}
+		}
+	}
+
+	if withTextID == 0 {
+		t.Error(
+			"ProjectedJSON has 0 components with textId (init-order bug: " +
+				"embed.go called Project() before texts.go populated the pool)",
+		)
+	}
 }
