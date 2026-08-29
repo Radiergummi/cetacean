@@ -122,3 +122,50 @@ func TestProjectInvalidJSON(t *testing.T) {
 		t.Fatal("expected error for invalid JSON")
 	}
 }
+
+func TestProjectQualifiesScopedNames(t *testing.T) {
+	// CycloneDX splits a scoped npm package into group ("@floating-ui") and
+	// name ("core"). The projection must rejoin them, or the licenses page
+	// renders the scope-less tail and two distinct packages can collide on a
+	// single name.
+	raw := []byte(`{
+		"bomFormat": "CycloneDX",
+		"specVersion": "1.6",
+		"components": [
+			{
+				"group": "@floating-ui",
+				"name": "core",
+				"version": "1.7.4",
+				"purl": "pkg:npm/%40floating-ui/core@1.7.4"
+			},
+			{
+				"group": "@base-ui",
+				"name": "react",
+				"version": "1.7.0",
+				"purl": "pkg:npm/%40base-ui/react@1.7.0"
+			},
+			{"name": "react", "version": "19.0.0", "purl": "pkg:npm/react@19.0.0"}
+		]
+	}`)
+
+	doc, err := Project(raw)
+	if err != nil {
+		t.Fatalf("Project: %v", err)
+	}
+
+	var names []string
+	for _, component := range doc.Components {
+		names = append(names, component.Name)
+	}
+
+	want := []string{"@base-ui/react", "@floating-ui/core", "react"}
+	if len(names) != len(want) {
+		t.Fatalf("got %v, want %v", names, want)
+	}
+
+	for i, name := range want {
+		if names[i] != name {
+			t.Errorf("component %d = %q, want %q (full list %v)", i, names[i], name, names)
+		}
+	}
+}

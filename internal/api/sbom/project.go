@@ -61,13 +61,14 @@ func Project(raw []byte) (Document, error) {
 
 		for _, component := range *in {
 			ecosystem := ecosystemFromPurl(component.PackageURL)
+			name := qualifiedName(component)
 			// Key on ecosystem too: a Go module and an npm package can share a
 			// name@version, and they are distinct components.
-			key := ecosystem + ":" + component.Name + "@" + component.Version
+			key := ecosystem + ":" + name + "@" + component.Version
 			if ecosystem != "" && !seen[key] {
 				seen[key] = true
 				components = append(components, Component{
-					Name:        component.Name,
+					Name:        name,
 					Version:     component.Version,
 					Description: component.Description,
 					Ecosystem:   ecosystem,
@@ -103,6 +104,18 @@ func Project(raw []byte) (Document, error) {
 	})
 
 	return Document{Components: components}, nil
+}
+
+// qualifiedName rejoins the group CycloneDX splits off the component name. A
+// scoped npm package is recorded as group "@floating-ui" plus name "core"; on
+// its own the name is both unrecognizable and ambiguous — the SBOM holds
+// several components named "react". Go modules carry no group.
+func qualifiedName(component cyclonedx.Component) string {
+	if component.Group == "" {
+		return component.Name
+	}
+
+	return component.Group + "/" + component.Name
 }
 
 func ecosystemFromPurl(purl string) string {
