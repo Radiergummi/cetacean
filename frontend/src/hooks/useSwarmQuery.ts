@@ -86,31 +86,23 @@ export function useSwarmQuery<T>(
               return old;
             }
 
-            let removed = false;
-            const pages = old.pages.map((page) => {
-              const filtered = page.data.items.filter(
-                (item) => getIdRef.current(item) !== event.id,
-              );
-
-              if (filtered.length < page.data.items.length) {
-                removed = true;
-                return { ...page, data: { ...page.data, items: filtered } };
-              }
-
-              return page;
-            });
-
-            if (!removed) {
-              return old;
-            }
-
+            // The item may well live on a page that was never fetched, so a
+            // page holding no match is not a no-op: the collection still lost
+            // a member. Leaving the total high would keep the table's
+            // load-more sentinel chasing an offset past the end of the
+            // collection, which the server answers with a 416.
+            //
             // Decrement total on ALL pages so getNextPageParam
             // and the displayed count stay consistent.
             return {
               ...old,
-              pages: pages.map((page) => ({
+              pages: old.pages.map((page) => ({
                 ...page,
-                data: { ...page.data, total: page.data.total - 1 },
+                data: {
+                  ...page.data,
+                  items: page.data.items.filter((item) => getIdRef.current(item) !== event.id),
+                  total: page.data.total - 1,
+                },
               })),
             };
           });
@@ -147,6 +139,16 @@ export function useSwarmQuery<T>(
           } else {
             queryClient.setQueryData<InfinitePages<T>>(key, (old) => {
               if (!old) {
+                return old;
+              }
+
+              // Only a creation changes how many items the collection holds.
+              // An update for an item the pages don't hold means it sits on a
+              // page that was never fetched — the total already counts it, and
+              // counting it again inflates the collection without bound on a
+              // churning list. The sentinel then pages past the real end and
+              // the server answers 416.
+              if (event.action !== "create") {
                 return old;
               }
 

@@ -6681,7 +6681,11 @@ components:
           description: Resource type (node, service, task, etc.)
         action:
           type: string
-          description: Change action (update, remove)
+          enum: [create, update, remove, ref_changed]
+          description: >-
+            Change action. `create` means the resource appeared, `update` that
+            an existing one changed, `remove` that it is gone, and
+            `ref_changed` that a resource this one cross-references changed.
         resourceId:
           type: string
         name:
@@ -6770,7 +6774,13 @@ components:
           description: Event type string (node, service, task, etc.)
         action:
           type: string
-          description: Event action (update, remove)
+          enum: [create, update, remove, ref_changed, full_sync]
+          description: >-
+            Event action. `create` means the resource appeared, `update` that
+            an existing one changed, `remove` that it is gone, and
+            `ref_changed` that a resource this one cross-references changed.
+            `full_sync` accompanies a `sync` event and asks the client to
+            refetch, because the stream could not be replayed from its cursor.
         id:
           type: string
           description: Resource ID

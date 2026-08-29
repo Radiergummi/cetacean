@@ -401,6 +401,22 @@ async function fetchRange<T>(
       redirectToLoginAndStop();
     }
 
+    // 416 says the requested offset is past the end of the collection, which
+    // happens whenever the client's idea of the total is stale — items were
+    // removed between pages. That is a correct answer to a stale question, not
+    // a failure: report an empty page carrying the authoritative total from
+    // Content-Range so the caller stops paging instead of showing an error.
+    if (response.status === 416) {
+      const total = totalFromContentRange(response.headers.get("Content-Range"));
+
+      if (total !== null) {
+        return {
+          data: { items: [], total, limit: pageSize, offset },
+          allowedMethods: parseAllowHeader(response),
+        };
+      }
+    }
+
     await throwResponseError(response);
   }
 
@@ -408,6 +424,13 @@ async function fetchRange<T>(
   const data = await response.json();
 
   return { data, allowedMethods };
+}
+
+/** Reads the total out of an unsatisfied range response's Content-Range header. */
+function totalFromContentRange(header: string | null): number | null {
+  const match = /^items \*\/(\d+)$/.exec(header?.trim() ?? "");
+
+  return match ? Number(match[1]) : null;
 }
 
 export const api = {

@@ -68,16 +68,19 @@ func (r *ResourceMap[T]) list() []T {
 	return out
 }
 
-// Set stores a value, calling the onSet hook under the write lock.
+// Set stores a value, calling the onSet hook under the write lock. The event
+// reports whether the key was new, which is what lets a client distinguish a
+// resource appearing from one it already counts changing.
 func (r *ResourceMap[T]) Set(key string, v T, eventType EventType) Event {
 	r.mu.Lock()
+	_, existed := r.items[key]
 	r.set(key, &v)
 	r.mu.Unlock()
 	var name string
 	if r.nameFunc != nil {
 		name = r.nameFunc(v)
 	}
-	return Event{Type: eventType, Action: "update", ID: key, Name: name, Resource: v}
+	return Event{Type: eventType, Action: setAction(existed), ID: key, Name: name, Resource: v}
 }
 
 // Get retrieves a value by key.

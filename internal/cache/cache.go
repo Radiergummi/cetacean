@@ -366,7 +366,8 @@ func (c *Cache) SetService(s swarm.Service) {
 
 	c.mu.Lock()
 	var oldRefs refSet
-	if old, ok := c.services[s.ID]; ok {
+	old, existed := c.services[s.ID]
+	if existed {
 		oldRefs = serviceRefs(old)
 		c.removeFromStack(EventService, old.ID, old.Spec.Labels)
 		c.serviceRef.remove(old)
@@ -376,7 +377,7 @@ func (c *Cache) SetService(s swarm.Service) {
 	c.serviceRef.add(s)
 	c.mu.Unlock()
 
-	c.notify(Event{Type: EventService, Action: "update", ID: s.ID, Resource: s})
+	c.notify(Event{Type: EventService, Action: setAction(existed), ID: s.ID, Resource: s})
 	c.notifyRefChanges(oldRefs, newRefs)
 }
 
@@ -422,7 +423,8 @@ func (c *Cache) SetTask(t swarm.Task) {
 	c.mu.Lock()
 	changed := true
 	wasFailure := false
-	if old, ok := c.tasks[t.ID]; ok {
+	old, existed := c.tasks[t.ID]
+	if existed {
 		// Status.Message captures the human-readable transition reason
 		// ("started", "shutdown requested", "rejected: …"). Without it
 		// the SSE stream silently coalesces task error-message changes.
@@ -444,7 +446,7 @@ func (c *Cache) SetTask(t swarm.Task) {
 	}
 
 	if changed {
-		c.notify(Event{Type: EventTask, Action: "update", ID: t.ID, Resource: t})
+		c.notify(Event{Type: EventTask, Action: setAction(existed), ID: t.ID, Resource: t})
 	}
 }
 
@@ -722,6 +724,16 @@ func (c *Cache) ListStackSummaries() []StackSummary {
 	}
 	slices.SortFunc(out, func(a, b StackSummary) int { return cmp.Compare(a.Name, b.Name) })
 	return out
+}
+
+// setAction names what a Set did, so subscribers can tell a resource appearing
+// from one they already know about changing.
+func setAction(existed bool) string {
+	if existed {
+		return "update"
+	}
+
+	return "create"
 }
 
 // compareTasks orders tasks by slot, then ID. Slot groups the replicas of a

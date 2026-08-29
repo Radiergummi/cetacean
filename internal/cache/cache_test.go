@@ -79,7 +79,7 @@ func TestCache_OnChange_Called(t *testing.T) {
 	if !called {
 		t.Fatal("expected onChange to be called")
 	}
-	if gotEvent.Type != "node" || gotEvent.Action != "update" || gotEvent.ID != "node1" {
+	if gotEvent.Type != "node" || gotEvent.Action != "create" || gotEvent.ID != "node1" {
 		t.Errorf("unexpected event: %+v", gotEvent)
 	}
 }
@@ -725,12 +725,12 @@ func TestCache_OnChange_AllTypes(t *testing.T) {
 		typ    EventType
 		action string
 	}{
-		{EventService, "update"}, {EventService, "remove"},
-		{EventTask, "update"}, {EventTask, "remove"},
-		{EventConfig, "update"}, {EventConfig, "remove"},
-		{EventSecret, "update"}, {EventSecret, "remove"},
-		{EventNetwork, "update"}, {EventNetwork, "remove"},
-		{EventVolume, "update"}, {EventVolume, "remove"},
+		{EventService, "create"}, {EventService, "remove"},
+		{EventTask, "create"}, {EventTask, "remove"},
+		{EventConfig, "create"}, {EventConfig, "remove"},
+		{EventSecret, "create"}, {EventSecret, "remove"},
+		{EventNetwork, "create"}, {EventNetwork, "remove"},
+		{EventVolume, "create"}, {EventVolume, "remove"},
 	}
 	for i, exp := range expected {
 		if events[i].Type != exp.typ || events[i].Action != exp.action {
@@ -1140,8 +1140,8 @@ func TestCache_SetService_EmitsCrossRefEvents(t *testing.T) {
 	if len(events) != 3 {
 		t.Fatalf("expected 3 events, got %d: %+v", len(events), events)
 	}
-	if events[0].Type != "service" || events[0].Action != "update" {
-		t.Errorf("event[0]: expected service/update, got %s/%s", events[0].Type, events[0].Action)
+	if events[0].Type != "service" || events[0].Action != "create" {
+		t.Errorf("event[0]: expected service/create, got %s/%s", events[0].Type, events[0].Action)
 	}
 	refEvents := events[1:]
 	hasConfig := false

@@ -430,6 +430,16 @@ event: service
 data: {"@id":"/services/abc","@type":"Service","type":"service","action":"update","id":"abc","resource":{...}}
 ```
 
+The `action` field says what happened:
+
+| Action | Meaning |
+|---|---|
+| `create` | The resource appeared. Clients tracking a collection's size should increment it. |
+| `update` | An existing resource changed. The collection's size is unaffected. |
+| `remove` | The resource is gone. |
+| `ref_changed` | A resource this one cross-references changed. |
+| `full_sync` | Sent as a `sync` event when the stream could not be replayed from the client's cursor. Refetch. |
+
 When multiple events arrive within the batch interval (default 100ms), they are sent as a `batch` event:
 
 ```sse

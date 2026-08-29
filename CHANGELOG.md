@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- The Tasks page no longer flips between the task list and a "range start is beyond the total number of items" error every few seconds on a busy cluster
 - Lists no longer come back in a different order every time you open them. Services, stacks, tasks, nodes, and the "Used by" tables on detail pages now hold a consistent order, so returning to a list after visiting a resource no longer means hunting for the row you clicked
 - Plugins on the Swarm page now show their type instead of "undefined.undefined/undefined"
 - Scoped npm packages on the licenses page now show their full name — "@floating-ui/core" rather than "core"
