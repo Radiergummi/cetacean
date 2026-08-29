@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Full third-party attribution document, covering every bundled Go module and frontend dependency's license text plus the NOTICE files that Apache-licensed dependencies ship, served at `/-/notices`
+- The licenses page now shows the full license text and NOTICE of every bundled dependency, can be filtered by license, and offers the complete attribution document as a download
 
 ### Fixed
 - Breadcrumbs on a resource that belongs to a stack now lead through the stack: "Stacks › monitoring › prometheus" rather than "Services › monitoring/prometheus"

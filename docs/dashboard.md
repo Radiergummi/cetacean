@@ -65,6 +65,13 @@ in a new tab, or copy the URL to subscribe in a feed reader. Feeds include histo
 recommendations pages. See the [API reference](api.md#atom-feeds) for the full list of supported endpoints and
 pagination details.
 
+## Licenses
+
+The licenses page (linked from the footer) lists every open-source dependency bundled into Cetacean, both Go
+modules and frontend packages. Search by name, or filter by ecosystem and by license. Clicking a license badge
+opens the full license text for that dependency, along with its NOTICE file if it ships one. The page header
+also links to the complete attribution document for download.
+
 ## Topology
 
 The topology page offers two views: **logical** (services grouped by stack, connected by networks) and **physical**

@@ -7,8 +7,10 @@ import { LoadingDetail } from "@/components/LoadingSkeleton";
 import PageHeader from "@/components/PageHeader";
 import { SearchInput } from "@/components/search";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Combobox } from "@/components/ui/combobox";
+import { apiPath } from "@/lib/basePath";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
@@ -136,6 +138,15 @@ export default function Licenses() {
       <PageHeader
         title="Open-source licenses"
         subtitle="Every open-source project bundled into Cetacean."
+        actions={
+          <a
+            href={apiPath("/-/notices")}
+            download="THIRD_PARTY_LICENSES.txt"
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            Download all notices
+          </a>
+        }
       />
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
