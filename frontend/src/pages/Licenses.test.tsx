@@ -96,4 +96,29 @@ describe("Licenses", () => {
     expect(screen.queryByText("beta")).not.toBeInTheDocument();
     expect(screen.getByText("alpha")).toBeInTheDocument();
   });
+
+  it("opens the license text dialog when a badge with text is clicked", async () => {
+    (api.licenses as ReturnType<typeof vi.fn>).mockResolvedValue({
+      components: [
+        {
+          name: "alpha",
+          ecosystem: "npm",
+          licenses: [{ id: "MIT" }],
+          textId: "text-1",
+        },
+      ],
+    });
+    (api.licenseText as ReturnType<typeof vi.fn>).mockResolvedValue("MIT License body");
+
+    render(<Licenses />, { wrapper: createWrapper(createTestQueryClient()) });
+
+    await waitFor(() => expect(screen.getByText("alpha")).toBeInTheDocument());
+
+    // The license filter combobox is never opened in this test, so its own
+    // "MIT (…)" option button never mounts — this exact-name query can only
+    // match the card's own license badge.
+    fireEvent.click(screen.getByRole("button", { name: "MIT" }));
+
+    await waitFor(() => expect(screen.getByText("MIT License body")).toBeInTheDocument());
+  });
 });
